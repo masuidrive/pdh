@@ -1,7 +1,7 @@
-# ticket.sh configuration for PDH workflow
-# See: https://github.com/masuidrive/ticket.sh
+# Ticket system configuration
+# https://github.com/masuidrive/ticket.sh
 
-# Directory where tickets are stored
+# Directory settings
 tickets_dir: "tickets"
 
 # Git settings
@@ -20,8 +20,9 @@ new_success_message: |
   Ticket を作成しました。内容を編集してから `./ticket.sh start <ticket_name>` で作業を開始してください。
 
 start_success_message: |
-  チケットを開始しました。
+  @product-delivery-hierarchy.md のプロセスの一部として処理するチケットを開始しました。
   `current-ticket.md` の Acceptance Criteria を確認してから作業を開始してください。
+  Epic との整合性は `epics/` を参照。判断に迷ったら `product-brief.md` の Constraints を確認。
 
 restore_success_message: |
 
@@ -29,46 +30,38 @@ close_success_message: |
   Ticket をクローズしました。
   `./ticket.sh list` で残りの TODO ticket を確認してください。
 
-# Note template
+# Note template — 作業記録用。プロセス通過の証跡はセクション構造が担う
 note_content: |
   # Work Notes: $$TICKET_NAME$$
 
   ## C1. 調査結果
-  <!-- Explore Agent による変更対象の調査結果。 -->
+  <!-- Explore Agent による変更対象の調査結果。
+       git log で関連 ticket を特定し、背景・設計判断を記録する。 -->
 
   ## C1-b. 計画
-  <!-- 実装計画。変更するファイルと内容、テスト観点、設計判断とその理由。 -->
+  <!-- 実装計画。以下を含める:
+       - 変更するファイルと内容、ファイル所有権の分担
+       - テスト観点（unit / integration / e2e）
+       - E2E スモークテスト手順
+       - 設計判断とその理由 -->
 
   ### チケット固有の実装タスク
+  <!-- このチケットで実際にやることを箇条書きで。 -->
   - [ ] ...
 
   ## C2. 計画レビュー結果
-  <!-- DA×2 + Engineer + codex の結果を統合。
-       Critical/Major の指摘とその対応を記録する。 -->
+  <!-- Design Advisor×2 + Engineer + codex の結果を統合。
+       Critical/Major → 計画修正 → 再レビュー → 「問題なし」まで繰り返す。
+       ※ 「残存 Critical/Major なし」の記録がプロセス通過の証跡になる -->
 
   ## C4. 品質検証結果
-  <!-- DA×2 + CR×2 + codex の結果を統合。
-       Critical/Major の指摘とその対応を記録する。 -->
+  <!-- Design Advisor×2 + Code Reviewer×2 + codex の結果を統合。
+       Critical/Major → 修正 → テスト全件パス → 再レビュー → 「問題なし」まで繰り返す。
+       ※ 「残存 Critical/Major なし」の記録がプロセス通過の証跡になる -->
 
-  ## Debug Log
-  <!-- 調査中のメモ、デバッグ情報など。 -->
-
-# Ticket template — PDH の Ticket テンプレートに準拠
-# YAML frontmatter (created_at, started_at, closed_at) は ticket.sh が自動挿入
-default_content: |
-  ## $$TICKET_NAME$$
-
-  ### Why
-  <!-- なぜやるのか。Epic ベースの場合、どの Epic のどの問題を解くか明記する。 -->
-
-  ### What
-  <!-- 何をするのか。想定方針・関連 module / file / api / UI。
-       着手前の仮説でよい。変わったら更新する。 -->
-
-  ### Acceptance Criteria
-  <!-- 完了を判定できる条件。観察可能な振る舞いで書く。
-       coding agent はここを実装のゴールとして使う。 -->
-  - [ ] ...
+  ## プロセスチェックリスト
+  C5 完了処理時にチェックする。
+  問題修正などでプロセスを繰り返すときは、2回目以降のチェック項目をリストに追加すること。
   - [ ] 計画レビュー（C2）で Critical/Major が解消済み
   - [ ] 実装は Engineer が行い、リードは直接コードを書いていない
   - [ ] 品質検証（C4）で Critical/Major が解消済み
@@ -77,17 +70,51 @@ default_content: |
   - [ ] ドキュメント更新済み（/update-docs）
   - [ ] ユーザが確認手順を実施し、クローズを承認した
 
+  ## Debug Log
+  <!-- 調査中のメモ、デバッグ情報など。 -->
+
+# Ticket template — product-delivery-hierarchy.md の Ticket テンプレートに準拠
+# YAML frontmatter (created_at, started_at, closed_at) は ticket.sh が自動挿入
+#
+# AC にはプロダクトの振る舞いだけを書く。
+# プロセス要件（レビュー済み、テストパス等）は SKILL.md のワークフローが保証し、
+# note のセクション構造が通過証跡になるので、ticket の AC には書かない。
+default_content: |
+  ## $$TICKET_NAME$$
+
+  ### Why
+  <!-- なぜやるのか。Epic ベースの場合、どの Epic のどの部分を担うか明記する。
+       Epic の Outcome のうち、この Ticket が実現する範囲を書く。 -->
+
+  ### What
+  <!-- 何をするのか。想定方針・関連 module / file / api / UI。
+       着手前の仮説でよい。変わったら更新する。 -->
+
+  ### Acceptance Criteria
+  <!-- 完了を判定できる条件。プロダクトの観察可能な振る舞いだけを書く。
+       coding agent はここを実装のゴールとして使う。
+       例: 「/api/users に GET すると JSON 配列が返る」
+       例: 「画面幅 375px 以下でメニューがハンバーガーに切り替わる」
+
+       プロセス要件（C2レビュー済み、テストパス等）はここには書かない。
+       ワークフロー（SKILL.md）と作業ノート（note）が保証する。 -->
+  - [ ] ...
+
+  ▼ 以下は必要なときだけ ▼
+
   ### Implementation Notes
   <!-- 想定方針の詳細。関連ファイル・影響範囲など。
-       設計判断が必要な場合はここに理由を記録する。 -->
-
-  ### Tests
-  <!-- テスト観点。unit / integration / e2e / manual など。 -->
+       着手前の仮説でよい。変わったら更新する。
+       設計判断が必要な場合はここに理由を記録する。
+       試したが却下した方法も残す（後世への記録）。
+       coding agent はここを出発点にコードを書き始める。 -->
 
   ### Dependencies
   <!-- この ticket に着手するために完了が必要な他の ticket。
-       「参考情報」ではなく「ブロッカー」だけ書く。なければ省略。 -->
+       「参考情報」ではなく「ブロッカー」だけ書く。なければ省略。
+       coding agent は未完了の依存がある場合、着手せず報告する。 -->
 
-  ### Related Links
-  - Work notes: `$$NOTE_PATH$$`
-  - Epic link: XXX
+  ---
+  Work notes: `$$NOTE_PATH$$`
+
+# Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/.ticket-config.yaml

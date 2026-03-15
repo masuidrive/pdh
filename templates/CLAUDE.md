@@ -5,6 +5,12 @@
 - **リードがソースコードを直接編集しないこと。実装は必ず TeamCreate で行う**
 - **main ブランチでソースコードを書き換える作業を頼まれたら、まずチケット化するか確認すること**
 
+## ticket と note の役割
+
+- **ticket**（`current-ticket.md`）: 後世への記録。Why / What / プロダクトAC / 設計判断を残す。`ticket.sh close` 時にコミットメッセージになる
+- **note**（`current-note.md`）: 作業中のノート。調査結果・計画・レビュー結果・Debug Log を記録する。セッションをまたぐ引き継ぎ資料
+- AC にはプロダクトの観察可能な振る舞いだけを書く。プロセス要件（レビュー済み、テストパス等）は note のセクション構造が証跡になる
+
 ## チケット作成時の特記事項
 
 - Implementation Steps に **E2E テスト手順を必ず含める**（Playwright または curl で実際にアクセスして検証）
@@ -29,7 +35,7 @@
 ## 全チームメイト共通ルール
 
 - **最初に `product-brief.md` を読むこと。すべての判断・作業はこのドキュメントを基準にする**
-- 作業対象の Epic（`epics/`）と Ticket（`current-ticket.md` または `tickets/`）を読み、Acceptance Criteria を確認すること
+- 作業対象の Epic（`epics/`）と Ticket（`current-ticket.md`、`current-note.md` または `tickets/`）を読み、Acceptance Criteria を確認すること
 - spawn プロンプトで指定されたファイル範囲外を変更しない。必要な場合はリードに相談すること
 - product-brief.md を編集する場合は内容を提示しユーザの許可を取ること
 - **実装後は必ず実環境で動作確認すること。ビルド成功だけで完了としない**
@@ -69,3 +75,5 @@ epics/                      # Epic（大きな施策の what）
 tickets/                    # Ticket（実行作業。ticket.sh が管理）
   done/                     # 完了した Ticket
 ```
+
+# Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/CLAUDE.md

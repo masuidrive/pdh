@@ -31,6 +31,14 @@ Claude Code が以下を自動で行う:
 
 ### 方法 2: 手動でセットアップ
 
+#### 0. PDH リポジトリを clone する
+
+```bash
+git clone https://github.com/masuidrive/pdh.git tmp/pdh
+```
+
+以降のステップでは `tmp/pdh/` のファイルをコピー元として使う。
+
 #### 1. ticket.sh を導入する
 
 ```bash
@@ -46,48 +54,46 @@ bash ticket.sh init
 mkdir -p epics epics/done
 ```
 
-#### 2. PDH ドキュメントを配置する
+#### 2. ファイルを配置する
+
+以下のファイルを `tmp/pdh/` からプロジェクトにコピーする。
+**すでにファイルが存在する場合はコピーせず、ステップ 3 のアップデート手順に従う。**
+
+| コピー元 | コピー先 | 用途 |
+|---|---|---|
+| `tmp/pdh/docs/product-delivery-hierarchy.md` | `docs/product-delivery-hierarchy.md` | PDH 運用ルール・テンプレート |
+| `tmp/pdh/skills/pdh-dev/SKILL.md` | `.claude/skills/pdh-dev/SKILL.md` | PDH ワークフロースキル |
+| `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
+| `tmp/pdh/templates/.ticket-config.yaml` | `.ticket-config.yaml` | ticket.sh 設定 |
+| `tmp/pdh/templates/product-brief.md` | `product-brief.md` | Product Brief テンプレート |
+
+コピー時に、各ファイル末尾の `based on` 行の `XXXXXXX` を `tmp/pdh` の HEAD commit ID（7 桁）に置換する。
 
 ```bash
-mkdir -p docs
-
-# このリポジトリから PDH ドキュメントをダウンロード
-curl -sL https://raw.githubusercontent.com/masuidrive/pdh/main/docs/product-delivery-hierarchy.md \
-  -o docs/product-delivery-hierarchy.md
+COMMIT_ID=$(cd tmp/pdh && git rev-parse --short=7 HEAD)
+# 例: sed -i '' "s/XXXXXXX/$COMMIT_ID/g" CLAUDE.md
 ```
 
-#### 3. Claude Code スキルを配置する
+#### 3. 既存ファイルのアップデート
 
-`/pdh-dev` コマンドで PDH ワークフローを実行できるようになる。
+すでにファイルが存在し、末尾に `based on` 行がある場合:
 
-```bash
-mkdir -p .claude/skills/pdh-dev
+1. `based on` の URL から旧 commit ID を特定する
+2. `tmp/pdh` で旧 commit ID と最新の間のテンプレート差分を取得する:
+   ```bash
+   cd tmp/pdh && git diff <旧commit-id> HEAD -- <テンプレートファイルパス>
+   ```
+3. 差分をカスタマイズ済みファイルに反映する（ユーザーの変更を保持しつつ、テンプレートの更新を取り込む）
+4. `based on` 行の commit ID を最新に更新する
+5. 変更点をまとめてユーザに報告する
 
-curl -sL https://raw.githubusercontent.com/masuidrive/pdh/main/skills/pdh-dev/SKILL.md \
-  -o .claude/skills/pdh-dev/SKILL.md
-```
+#### 4. CLAUDE.md をカスタマイズする
 
-#### 4. CLAUDE.md を配置する
-
-プロジェクトルールを定義する。テンプレートをダウンロードし、プロジェクトに合わせてカスタマイズする。
-
-```bash
-curl -sL https://raw.githubusercontent.com/masuidrive/pdh/main/templates/CLAUDE.md -o CLAUDE.md
-```
-
-カスタマイズのポイント:
 - `## ディレクトリ構造` をプロジェクトの実際の構造に書き換える
 - テストコマンド（`uv run pytest`, `npm test` 等）をプロジェクトに合わせる
 - 開発サーバーの起動方法を追記する
 
-#### 5. ticket.sh の設定をカスタマイズする
-
-`.ticket-config.yaml` の `default_content` を PDH の Ticket テンプレートに合わせる。
-
-```bash
-curl -sL https://raw.githubusercontent.com/masuidrive/pdh/main/templates/.ticket-config.yaml \
-  -o .ticket-config.yaml
-```
+#### 5. .ticket-config.yaml をカスタマイズする
 
 設定項目:
 - `default_branch`: メインブランチ名（default: `main`）
@@ -98,22 +104,16 @@ curl -sL https://raw.githubusercontent.com/masuidrive/pdh/main/templates/.ticket
 
 #### 6. Product Brief を書く
 
-`product-brief.md` をプロジェクトルートに作成する。テンプレート:
+- **ファイルがない場合**: `tmp/pdh/templates/product-brief.md` をコピーし、`based on` 行の commit ID を置換する。内容を埋めるようユーザに促す
+- **ファイルがある場合**: テンプレートと見比べて、新しいセクションが増えていたら追記するようユーザに促す
+
+PDH の全判断は Product Brief を基準にするため、Background / Who / Problem / Solution / Constraints / Done のセクションが十分に記述されている必要がある。
+
+#### 7. 後片付け
 
 ```bash
-curl -sL https://raw.githubusercontent.com/masuidrive/pdh/main/templates/product-brief.md \
-  -o product-brief.md
+rm -rf tmp/pdh
 ```
-
-最低限必要なセクション:
-- **Background**: いまなぜこれを作るのか
-- **Who**: 誰がどんな場面で使うか
-- **Problem**: 何が困っているか
-- **Solution**: どう解くか
-- **Constraints**: 前提条件・技術的制約
-- **Done**: うまくいったと言える状態
-- **Non-goals**: やらないこと
-- **Open Questions**: まだ決まっていないこと
 
 ## ワークフロー
 
@@ -177,4 +177,4 @@ pdh/
 
 ## License
 
-MIT
+Apache License 2.0

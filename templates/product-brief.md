@@ -1,5 +1,7 @@
 # Product Brief: <product name>
 
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/product-brief.md
+
 ## Background
 
 いまなぜこれを作るのか。どんな状況・文脈があるか。
