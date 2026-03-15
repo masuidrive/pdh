@@ -1,0 +1,93 @@
+# ticket.sh configuration for PDH workflow
+# See: https://github.com/masuidrive/ticket.sh
+
+# Directory where tickets are stored
+tickets_dir: "tickets"
+
+# Git settings
+default_branch: "main"
+branch_prefix: "features/"
+repository: "origin"
+
+# Automatically push changes to remote repository during close command
+auto_push: true
+
+# Automatically delete remote feature branch after closing ticket
+delete_remote_on_close: true
+
+# Success messages
+new_success_message: |
+  Ticket を作成しました。内容を編集してから `./ticket.sh start <ticket_name>` で作業を開始してください。
+
+start_success_message: |
+  チケットを開始しました。
+  `current-ticket.md` の Acceptance Criteria を確認してから作業を開始してください。
+
+restore_success_message: |
+
+close_success_message: |
+  Ticket をクローズしました。
+  `./ticket.sh list` で残りの TODO ticket を確認してください。
+
+# Note template
+note_content: |
+  # Work Notes: $$TICKET_NAME$$
+
+  ## C1. 調査結果
+  <!-- Explore Agent による変更対象の調査結果。 -->
+
+  ## C1-b. 計画
+  <!-- 実装計画。変更するファイルと内容、テスト観点、設計判断とその理由。 -->
+
+  ### チケット固有の実装タスク
+  - [ ] ...
+
+  ## C2. 計画レビュー結果
+  <!-- DA×2 + Engineer + codex の結果を統合。
+       Critical/Major の指摘とその対応を記録する。 -->
+
+  ## C4. 品質検証結果
+  <!-- DA×2 + CR×2 + codex の結果を統合。
+       Critical/Major の指摘とその対応を記録する。 -->
+
+  ## Debug Log
+  <!-- 調査中のメモ、デバッグ情報など。 -->
+
+# Ticket template — PDH の Ticket テンプレートに準拠
+# YAML frontmatter (created_at, started_at, closed_at) は ticket.sh が自動挿入
+default_content: |
+  ## $$TICKET_NAME$$
+
+  ### Why
+  <!-- なぜやるのか。Epic ベースの場合、どの Epic のどの問題を解くか明記する。 -->
+
+  ### What
+  <!-- 何をするのか。想定方針・関連 module / file / api / UI。
+       着手前の仮説でよい。変わったら更新する。 -->
+
+  ### Acceptance Criteria
+  <!-- 完了を判定できる条件。観察可能な振る舞いで書く。
+       coding agent はここを実装のゴールとして使う。 -->
+  - [ ] ...
+  - [ ] 計画レビュー（C2）で Critical/Major が解消済み
+  - [ ] 実装は Engineer が行い、リードは直接コードを書いていない
+  - [ ] 品質検証（C4）で Critical/Major が解消済み
+  - [ ] コードの最終変更後に全てのテストが通った（backend / frontend / E2E）
+  - [ ] E2E: 実環境にアクセスして動作確認済み（UI: Playwright、API: curl）
+  - [ ] ドキュメント更新済み（/update-docs）
+  - [ ] ユーザが確認手順を実施し、クローズを承認した
+
+  ### Implementation Notes
+  <!-- 想定方針の詳細。関連ファイル・影響範囲など。
+       設計判断が必要な場合はここに理由を記録する。 -->
+
+  ### Tests
+  <!-- テスト観点。unit / integration / e2e / manual など。 -->
+
+  ### Dependencies
+  <!-- この ticket に着手するために完了が必要な他の ticket。
+       「参考情報」ではなく「ブロッカー」だけ書く。なければ省略。 -->
+
+  ### Related Links
+  - Work notes: `$$NOTE_PATH$$`
+  - Epic link: XXX
