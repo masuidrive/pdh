@@ -78,14 +78,19 @@ COMMIT_ID=$(cd tmp/pdh && git rev-parse --short=7 HEAD)
 
 すでにファイルが存在し、末尾に `based on` 行がある場合:
 
-1. `based on` の URL から旧 commit ID を特定する
-2. `tmp/pdh` で旧 commit ID と最新の間のテンプレート差分を取得する:
+1. PDH リポジトリを clone する（なければ）:
+   ```bash
+   git clone https://github.com/masuidrive/pdh.git tmp/pdh
+   ```
+2. `based on` の URL から旧 commit ID を特定する
+3. `tmp/pdh` で旧 commit ID と最新の間のテンプレート差分を取得する:
    ```bash
    cd tmp/pdh && git diff <旧commit-id> HEAD -- <テンプレートファイルパス>
    ```
-3. 差分をカスタマイズ済みファイルに反映する（ユーザーの変更を保持しつつ、テンプレートの更新を取り込む）
-4. `based on` 行の commit ID を最新に更新する
-5. 変更点をまとめてユーザに報告する
+4. 差分をカスタマイズ済みファイルに反映する（ユーザーの変更を保持しつつ、テンプレートの更新を取り込む）
+5. `based on` 行の commit ID を最新に更新する
+6. 変更点をまとめてユーザに報告する
+7. 後片付け: `rm -rf tmp/pdh`
 
 #### 4. CLAUDE.md をカスタマイズする
 
