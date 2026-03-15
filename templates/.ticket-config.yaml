@@ -50,12 +50,12 @@ note_content: |
   - [ ] ...
 
   ## C2. 計画レビュー結果
-  <!-- Design Advisor×2 + Engineer + codex の結果を統合。
+  <!-- Devil's Advocate×2 + Engineer + codex の結果を統合。
        Critical/Major → 計画修正 → 再レビュー → 「問題なし」まで繰り返す。
        ※ 「残存 Critical/Major なし」の記録がプロセス通過の証跡になる -->
 
   ## C4. 品質検証結果
-  <!-- Design Advisor×2 + Code Reviewer×2 + codex の結果を統合。
+  <!-- Devil's Advocate×2 + Code Reviewer×2 + codex の結果を統合。
        Critical/Major → 修正 → テスト全件パス → 再レビュー → 「問題なし」まで繰り返す。
        ※ 「残存 Critical/Major なし」の記録がプロセス通過の証跡になる -->
 
