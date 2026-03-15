@@ -90,7 +90,8 @@ COMMIT_ID=$(cd tmp/pdh && git rev-parse --short=7 HEAD)
 4. 差分をカスタマイズ済みファイルに反映する（ユーザーの変更を保持しつつ、テンプレートの更新を取り込む）
 5. `based on` 行の commit ID を最新に更新する
 6. 変更点をまとめてユーザに報告する
-7. 後片付け: `rm -rf tmp/pdh`
+7. AskUserQuestion で「既存の Epic や Ticket を新しいフォーマット・ルールに合わせて書き直すか？」を確認する。OK なら `epics/` と `tickets/` のファイルを新テンプレートに従って更新し、commit 前に変更点をユーザに伝えて確認を取る
+8. 後片付け: `rm -rf tmp/pdh`
 
 #### 4. CLAUDE.md をカスタマイズする
 

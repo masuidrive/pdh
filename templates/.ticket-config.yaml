@@ -74,7 +74,8 @@ note_content: |
   <!-- 調査中のメモ、デバッグ情報など。 -->
 
 # Ticket template — product-delivery-hierarchy.md の Ticket テンプレートに準拠
-# YAML frontmatter (created_at, started_at, closed_at) は ticket.sh が自動挿入
+# このテンプレートには frontmatter が含まれていない。
+# YAML frontmatter (created_at, started_at, closed_at) は ticket.sh が自動挿入する。
 #
 # AC にはプロダクトの振る舞いだけを書く。
 # プロセス要件（レビュー済み、テストパス等）は SKILL.md のワークフローが保証し、
