@@ -103,10 +103,10 @@ COMMIT_ID=$(cd tmp/pdh && git rev-parse --short=7 HEAD)
 
 設定項目:
 - `default_branch`: メインブランチ名（default: `main`）
-- `branch_prefix`: feature ブランチのプレフィックス（default: `features/`）
+- `branch_prefix`: feature ブランチのプレフィックス（default: `feature/`）
 - `auto_push`: close 時に自動 push するか
-- `default_content`: Ticket テンプレート（Why / What / Acceptance Criteria）
-- `note_content`: 作業メモテンプレート（PD-2〜PD-6 等のセクション）
+- `default_content`: Ticket テンプレート（Why / What / Acceptance Criteria + 任意: Implementation Notes / Dependencies）
+- `note_content`: 作業メモテンプレート（PD-2〜PD-7 等のセクション）
 
 #### 6. Product Brief を書く
 

@@ -191,7 +191,7 @@ main ← epic/在庫管理 ← feature/250711-091538-fix-auth
 
 ### Epic
 
-最小構成は **Outcome + Problem + Scope + Non-goals + Exit Criteria** で成立する。他は必要なときだけ書く。
+最小構成は **Outcome + Problem + Scope + Non-goals + Exit Criteria** で成立する。他は該当する情報がある場合のみ書く。
 
 ```md
 ---
@@ -241,7 +241,7 @@ created_at: YYYY-MM-DDTHH:MM:SSZ
      人間か AI がデプロイ後に手で確認して Yes/No 判定できる粒度で書く。
      数値目標を含む場合はその確認方法もインラインで添える。 -->
 
-▼ 以下は必要なときだけ ▼
+▼ 以下は該当する情報がある場合のみ ▼
 
 ### Dependencies
 <!-- 他の Epic・外部要因との依存関係。
@@ -256,7 +256,7 @@ created_at: YYYY-MM-DDTHH:MM:SSZ
 
 ### Ticket
 
-最小構成は **Why + What + Acceptance Criteria** で成立する。他は必要なときだけ書く。
+最小構成は **Why + What + Acceptance Criteria** で成立する。他は該当する情報がある場合のみ書く。
 
 ```md
 ---
@@ -285,7 +285,7 @@ created_at: YYYY-MM-DDTHH:MM:SSZ
 
 - [ ] ...
 
-▼ 以下は必要なときだけ ▼
+▼ 以下は該当する情報がある場合のみ ▼
 
 ### Implementation Notes
 <!-- 想定方針の詳細。関連ファイル・影響範囲など。
@@ -297,6 +297,9 @@ created_at: YYYY-MM-DDTHH:MM:SSZ
 ### Dependencies
 <!-- この ticket に着手するために完了が必要な他の ticket。
      「参考情報」ではなく「ブロッカー」だけ書く。なければ省略。
+     ブロッカー = これが未完了だと実装・テストが物理的にできない依存。
+     例: 「DB migration の ticket が先に必要」「認証 API が存在しないと結合できない」
+     参考情報（設計の参考にした ticket 等）は書かない。
      coding agent は未完了の依存がある場合、着手せず報告する。 -->
 ```
 
