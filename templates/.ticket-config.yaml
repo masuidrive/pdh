@@ -6,7 +6,7 @@ tickets_dir: "tickets"
 
 # Git settings
 default_branch: "main"
-branch_prefix: "features/"
+branch_prefix: "feature/"
 repository: "origin"
 
 # Automatically push changes to remote repository during close command
@@ -34,11 +34,11 @@ close_success_message: |
 note_content: |
   # Work Notes: $$TICKET_NAME$$
 
-  ## C1. 調査結果
+  ## PD-2. 調査結果
   <!-- Explore Agent による変更対象の調査結果。
        git log で関連 ticket を特定し、背景・設計判断を記録する。 -->
 
-  ## C1-b. 計画
+  ## PD-2b. 計画
   <!-- 実装計画。以下を含める:
        - 変更するファイルと内容、ファイル所有権の分担
        - テスト観点（unit / integration / e2e）
@@ -49,22 +49,22 @@ note_content: |
   <!-- このチケットで実際にやることを箇条書きで。 -->
   - [ ] ...
 
-  ## C2. 計画レビュー結果
+  ## PD-3. 計画レビュー結果
   <!-- Devil's Advocate×2 + Engineer + codex の結果を統合。
        Critical/Major → 計画修正 → 再レビュー → 「問題なし」まで繰り返す。
        ※ 「残存 Critical/Major なし」の記録がプロセス通過の証跡になる -->
 
-  ## C4. 品質検証結果
+  ## PD-5. 品質検証結果
   <!-- Devil's Advocate×2 + Code Reviewer×2 + codex の結果を統合。
        Critical/Major → 修正 → テスト全件パス → 再レビュー → 「問題なし」まで繰り返す。
        ※ 「残存 Critical/Major なし」の記録がプロセス通過の証跡になる -->
 
   ## プロセスチェックリスト
-  C5 完了処理時にチェックする。
+  PD-7 完了処理時にチェックする。
   問題修正などでプロセスを繰り返すときは、2回目以降のチェック項目をリストに追加すること。
-  - [ ] 計画レビュー（C2）で Critical/Major が解消済み
+  - [ ] 計画レビュー（PD-3）で Critical/Major が解消済み
   - [ ] 実装は Engineer が行い、リードは直接コードを書いていない
-  - [ ] 品質検証（C4）で Critical/Major が解消済み
+  - [ ] 品質検証（PD-5）で Critical/Major が解消済み
   - [ ] コードの最終変更後に全てのテストが通った（backend / frontend / E2E）
   - [ ] E2E: 実環境にアクセスして動作確認済み（UI: Playwright、API: curl）
   - [ ] ドキュメント更新済み（/update-docs）
@@ -77,9 +77,9 @@ note_content: |
 # このテンプレートには frontmatter が含まれていない。
 # YAML frontmatter (created_at, started_at, closed_at) は ticket.sh が自動挿入する。
 #
-# AC にはプロダクトの振る舞いだけを書く。
+# Acceptance Criteria にはプロダクトの振る舞いだけを書く。
 # プロセス要件（レビュー済み、テストパス等）は SKILL.md のワークフローが保証し、
-# note のセクション構造が通過証跡になるので、ticket の AC には書かない。
+# note のセクション構造が通過証跡になるので、ticket の Acceptance Criteria には書かない。
 default_content: |
   ## $$TICKET_NAME$$
 
@@ -97,7 +97,7 @@ default_content: |
        例: 「/api/users に GET すると JSON 配列が返る」
        例: 「画面幅 375px 以下でメニューがハンバーガーに切り替わる」
 
-       プロセス要件（C2レビュー済み、テストパス等）はここには書かない。
+       プロセス要件（PD-3レビュー済み、テストパス等）はここには書かない。
        ワークフロー（SKILL.md）と作業ノート（note）が保証する。 -->
   - [ ] ...
 

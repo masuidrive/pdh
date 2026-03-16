@@ -106,7 +106,7 @@ COMMIT_ID=$(cd tmp/pdh && git rev-parse --short=7 HEAD)
 - `branch_prefix`: feature ブランチのプレフィックス（default: `features/`）
 - `auto_push`: close 時に自動 push するか
 - `default_content`: Ticket テンプレート（Why / What / Acceptance Criteria）
-- `note_content`: 作業メモテンプレート（C1〜C4 セクション）
+- `note_content`: 作業メモテンプレート（PD-2〜PD-5 等のセクション）
 
 #### 6. Product Brief を書く
 
