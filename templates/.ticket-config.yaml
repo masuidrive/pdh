@@ -38,7 +38,7 @@ note_content: |
   <!-- Explore Agent による変更対象の調査結果。
        git log で関連 ticket を特定し、背景・設計判断を記録する。 -->
 
-  ## PD-2b. 計画
+  ## PD-3. 計画
   <!-- 実装計画。以下を含める:
        - 変更するファイルと内容、ファイル所有権の分担
        - テスト観点（unit / integration / e2e）
@@ -49,22 +49,22 @@ note_content: |
   <!-- このチケットで実際にやることを箇条書きで。 -->
   - [ ] ...
 
-  ## PD-3. 計画レビュー結果
+  ## PD-4. 計画レビュー結果
   <!-- Devil's Advocate×2 + Engineer + codex の結果を統合。
        Critical/Major → 計画修正 → 再レビュー → 「問題なし」まで繰り返す。
        ※ 「残存 Critical/Major なし」の記録がプロセス通過の証跡になる -->
 
-  ## PD-5. 品質検証結果
+  ## PD-6. 品質検証結果
   <!-- Devil's Advocate×2 + Code Reviewer×2 + codex の結果を統合。
        Critical/Major → 修正 → テスト全件パス → 再レビュー → 「問題なし」まで繰り返す。
        ※ 「残存 Critical/Major なし」の記録がプロセス通過の証跡になる -->
 
   ## プロセスチェックリスト
-  PD-7 完了処理時にチェックする。
+  PD-8 完了処理時にチェックする。
   問題修正などでプロセスを繰り返すときは、2回目以降のチェック項目をリストに追加すること。
-  - [ ] 計画レビュー（PD-3）で Critical/Major が解消済み
+  - [ ] 計画レビュー（PD-4）で Critical/Major が解消済み
   - [ ] 実装は Engineer が行い、リードは直接コードを書いていない
-  - [ ] 品質検証（PD-5）で Critical/Major が解消済み
+  - [ ] 品質検証（PD-6）で Critical/Major が解消済み
   - [ ] コードの最終変更後に全てのテストが通った（backend / frontend / E2E）
   - [ ] E2E: 実環境にアクセスして動作確認済み（UI: Playwright、API: curl）
   - [ ] ドキュメント更新済み（/update-docs）
@@ -97,7 +97,7 @@ default_content: |
        例: 「/api/users に GET すると JSON 配列が返る」
        例: 「画面幅 375px 以下でメニューがハンバーガーに切り替わる」
 
-       プロセス要件（PD-3レビュー済み、テストパス等）はここには書かない。
+       プロセス要件（PD-4レビュー済み、テストパス等）はここには書かない。
        ワークフロー（SKILL.md）と作業ノート（note）が保証する。 -->
   - [ ] ...
 
