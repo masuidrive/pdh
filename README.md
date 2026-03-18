@@ -1,3 +1,5 @@
+![PDH flow](pdh-header.png)
+
 # PDH — Product Delivery Hierarchy
 
 Product Brief / Epic / Ticket の 3 層で、**なぜ作るか**・**何を作るか**・**いま何をやるか** を構造化する仕組み。
