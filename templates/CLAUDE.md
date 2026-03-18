@@ -10,6 +10,7 @@
 - **ticket**（`current-ticket.md`）: 後世への記録。Why / What / プロダクトAC / Implementation Notes（設計判断）を残す。`ticket.sh close` 時にコミットメッセージになる
 - **note**（`current-note.md`）: 作業中のノート。調査結果・計画・レビュー結果・プロセスチェックリスト・Debug Log を記録する。セッションをまたぐ引き継ぎ資料
 - Acceptance Criteria にはプロダクトの観察可能な振る舞いだけを書く。プロセス要件（レビュー済み、テストパス等）は note のセクション構造が証跡になる
+- **Acceptance Criteria の変更（追加・削除・修正）は必ずユーザの承認を得ること。** レビュー等で AC の変更が必要と判断した場合は、変更内容を提示し AskUserQuestion で確認する
 
 ## チケット作成時の特記事項
 
