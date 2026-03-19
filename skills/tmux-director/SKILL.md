@@ -40,13 +40,7 @@ tmux で動いている別 window の Claude Code を管理・監督する。
 tmux send-keys -t WINDOW.PANE '/clear' Enter
 ```
 
-2秒待ってから:
-
-```
-tmux send-keys -t WINDOW.PANE '**重要** 以後ずっとAskUserQuestionツールは絶対に使わず、自分で選択肢を返答で維持すること' Enter
-```
-
-**重要**: 新しいチケットを始める時は、必ず `/clear` → 上記メッセージ → `/pdh-dev` の順で送信すること。コンテキストが蓄積すると window の性能が劣化する。
+**重要**: 新しいチケットを始める時は、必ず `/clear` → `/pdh-dev` の順で送信すること。コンテキストが蓄積すると window の性能が劣化する。
 
 ## Phase 3: 監督ループ（Monitor Agent 委任）
 
