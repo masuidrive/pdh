@@ -65,6 +65,7 @@ mkdir -p epics epics/done
 |---|---|---|
 | `tmp/pdh/docs/product-delivery-hierarchy.md` | `docs/product-delivery-hierarchy.md` | PDH 運用ルール・テンプレート |
 | `tmp/pdh/skills/pdh-dev/SKILL.md` | `.claude/skills/pdh-dev/SKILL.md` | PDH ワークフロースキル |
+| `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
 | `tmp/pdh/templates/.ticket-config.yaml` | `.ticket-config.yaml` | ticket.sh 設定 |
 | `tmp/pdh/templates/product-brief.md` | `product-brief.md` | Product Brief テンプレート |
@@ -140,6 +141,16 @@ Ticket ごとに:
 
 詳細は `docs/product-delivery-hierarchy.md` と `skills/pdh-dev/SKILL.md` を参照。
 
+## tmux Director
+
+tmux 上で複数の Claude Code セッションを走らせている場合に、別 window の Claude Code を監督・指示するためのスキル。
+
+- **Director（監督）** として振る舞い、自分ではコードを書かず、別 window の Claude Code に指示を出して作業を監視する
+- PDH ワークフロー（PD-1〜PD-8）の遵守を監視し、逸脱（テスト未実行、E2E 省略、AC 未達等）を検知して是正指示を出す
+- 画面監視は Sonnet Agent（Monitor）をバックグラウンドで起動して委任し、Director のコンテキストを節約する
+
+Claude Code で `tmux-director` と入力すると起動する。
+
 ## ファイル構成
 
 導入後のプロジェクト構造:
@@ -161,6 +172,7 @@ project-root/
   .claude/
     skills/
       pdh-dev/SKILL.md      ← PDH ワークフロースキル
+      tmux-director/SKILL.md ← tmux Director スキル
 ```
 
 ## このリポジトリの構成
@@ -172,6 +184,7 @@ pdh/
     product-delivery-hierarchy.md    ← PDH 本体ドキュメント
   skills/
     pdh-dev/SKILL.md                 ← Claude Code 用 PDH スキル
+    tmux-director/SKILL.md           ← tmux Director スキル
   templates/
     product-brief.md                 ← Product Brief テンプレート
     CLAUDE.md                        ← CLAUDE.md テンプレート
