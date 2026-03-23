@@ -168,7 +168,7 @@ codex exec --dangerously-bypass-approvals-and-sandbox \
 
 Epic 固有の事情がある場合は独自セクションを追加してよい（例: Key Design Decisions, Working Rules）。
 
-不明点は AskUserQuestion でユーザに確認しながら埋める。
+**ユーザへのインタビュー**: ユーザの依頼が抽象的・大まかな場合は、いきなりドラフトを書かず AskUserQuestion でインタビューする。技術的な実装方針、エッジケース、トレードオフなど、ユーザが考慮していない可能性がある論点を掘り下げる。自明な質問は避け、判断が分かれるポイントに集中する。十分な情報が集まってからドラフトを書く。
 
 ### A2. Epic レビューループ
 
