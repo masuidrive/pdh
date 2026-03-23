@@ -53,12 +53,12 @@ note_content: |
   ## PD-4. 計画レビュー結果
   <!-- Devil's Advocate×2 + Engineer + codex の結果を統合。
        Critical/Major → 計画修正 → 再レビュー → 「問題なし」まで繰り返す。
-       ※ 「残存 Critical/Major なし」の記録がプロセス通過の証跡になる -->
+       ※ 全レビュアーが Critical/Major = 0 を回答したことがプロセス通過の証跡になる -->
 
   ## PD-6. 品質検証結果
   <!-- Devil's Advocate×2 + Code Reviewer×2 + codex の結果を統合。
        Critical/Major → 修正 → テスト全件パス → 再レビュー → 「問題なし」まで繰り返す。
-       ※ 「残存 Critical/Major なし」の記録がプロセス通過の証跡になる -->
+       ※ 全レビュアーが Critical/Major = 0 を回答したことがプロセス通過の証跡になる -->
 
   ## PD-7. 目的妥当性確認
   <!-- 成果物がチケット目的を十分に達成しているか確認。
@@ -68,9 +68,9 @@ note_content: |
   ## プロセスチェックリスト
   PD-8 完了処理時にチェックする。
   問題修正などでプロセスを繰り返すときは、2回目以降のチェック項目をリストに追加すること。
-  - [ ] 計画レビュー（PD-4）で Critical/Major が解消済み
+  - [ ] 計画レビュー（PD-4）で全レビュアーが Critical/Major = 0 を回答
   - [ ] 実装は Engineer が行い、リードは直接コードを書いていない
-  - [ ] 品質検証（PD-6）で Critical/Major が解消済み
+  - [ ] 品質検証（PD-6）で全レビュアーが Critical/Major = 0 を回答
   - [ ] コードの最終変更後に全てのテストが通った（backend / frontend / E2E）
   - [ ] E2E: 実環境にアクセスして動作確認済み（UI: Playwright、API: curl）
   - [ ] ドキュメント更新済み（/update-docs）
