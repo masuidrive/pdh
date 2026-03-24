@@ -6,7 +6,7 @@ tickets_dir: "tickets"
 
 # Git settings
 default_branch: "main"
-branch_prefix: "feature/"
+branch_prefix: "features/"
 repository: "origin"
 
 # Automatically push changes to remote repository during close command
@@ -23,6 +23,7 @@ start_success_message: |
   @product-delivery-hierarchy.md のプロセスの一部として処理するチケットを開始しました。
   `current-ticket.md` の Acceptance Criteria を確認してから作業を開始してください。
   Epic との整合性は `epics/` を参照。判断に迷ったら `product-brief.md` の Constraints を確認。
+  PD-C ステップ: C-1 開始前→C-2 調査→C-3 計画→C-4 レビュー→C-5 実装承認→C-6 実装→C-7 品質検証→C-8 目的妥当性→C-9 完了検証→C-10 クローズ
 
 restore_success_message: |
 
@@ -34,12 +35,12 @@ close_success_message: |
 note_content: |
   # Work Notes: $$TICKET_NAME$$
 
-  ## PD-2. 調査結果
+  ## PD-C-2. 調査結果
   <!-- Explore Agent による変更対象の調査結果。
        git log で関連 ticket を特定し、背景・設計判断を記録する。
        技術的な懸念事項もここに記録する。 -->
 
-  ## PD-3. 計画
+  ## PD-C-3. 計画
   <!-- 実装計画。以下を含める:
        - 変更するファイルと内容、ファイル所有権の分担
        - テスト観点（unit / integration / e2e）
@@ -50,31 +51,31 @@ note_content: |
   <!-- このチケットで実際にやることを箇条書きで。 -->
   - [ ] ...
 
-  ## PD-4. 計画レビュー結果
+  ## PD-C-4. 計画レビュー結果
   <!-- Devil's Advocate×2 + Engineer + codex の結果を統合。
        Critical/Major → 計画修正 → 再レビュー → 「問題なし」まで繰り返す。
        ※ 全レビュアーが Critical/Major = 0 を回答したことがプロセス通過の証跡になる -->
 
-  ## PD-6. 品質検証結果
+  ## PD-C-7. 品質検証結果
   <!-- Devil's Advocate×2 + Code Reviewer×2 + codex の結果を統合。
        Critical/Major → 修正 → テスト全件パス → 再レビュー → 「問題なし」まで繰り返す。
        ※ 全レビュアーが Critical/Major = 0 を回答したことがプロセス通過の証跡になる -->
 
-  ## PD-7. 目的妥当性確認
+  ## PD-C-8. 目的妥当性確認
   <!-- 成果物がチケット目的を十分に達成しているか確認。
        AC の実質的達成・成果物の十分性・抜け漏れを棚卸し。
-       不足がある場合は追加実装 → テスト → PD-7 再確認。 -->
+       不足がある場合は追加実装 → テスト → PD-C-8 再確認。 -->
 
-  ## プロセスチェックリスト
-  PD-8 完了処理時にチェックする。
+  ## PD-C-9. プロセスチェックリスト
+  PD-C-9 完了検証時にチェックする。
   問題修正などでプロセスを繰り返すときは、2回目以降のチェック項目をリストに追加すること。
-  - [ ] 計画レビュー（PD-4）で全レビュアーが Critical/Major = 0 を回答
-  - [ ] 実装は Engineer が行い、リードは直接コードを書いていない
-  - [ ] 品質検証（PD-6）で全レビュアーが Critical/Major = 0 を回答
-  - [ ] コードの最終変更後に全てのテストが通った（backend / frontend / E2E）
-  - [ ] E2E: 実環境にアクセスして動作確認済み（UI: Playwright、API: curl）
-  - [ ] ドキュメント更新済み（/update-docs）
-  - [ ] ユーザが確認手順を実施し、クローズを承認した
+  - [ ] PD-C-4: 計画レビューで全レビュアーが Critical/Major = 0 を回答
+  - [ ] PD-C-6: 実装は Engineer が行い、リードは直接コードを書いていない
+  - [ ] PD-C-7: 品質検証で全レビュアーが Critical/Major = 0 を回答
+  - [ ] PD-C-6: コードの最終変更後に全てのテストが通った（backend / frontend / E2E）
+  - [ ] PD-C-6: E2E 実環境にアクセスして動作確認済み（UI: Playwright、API: curl）
+  - [ ] PD-C-9: ドキュメント更新済み（/update-docs）
+  - [ ] PD-C-10: ユーザが確認手順を実施し、クローズを承認した
 
   ## Debug Log
   <!-- 調査中のメモ、デバッグ情報など。 -->
@@ -103,7 +104,7 @@ default_content: |
        例: 「/api/users に GET すると JSON 配列が返る」
        例: 「画面幅 375px 以下でメニューがハンバーガーに切り替わる」
 
-       プロセス要件（PD-4レビュー済み、テストパス等）はここには書かない。
+       プロセス要件（PD-C-4レビュー済み、テストパス等）はここには書かない。
        ワークフロー（SKILL.md）と作業ノート（note）が保証する。 -->
   - [ ] ...
 
@@ -127,4 +128,4 @@ default_content: |
   ---
   Work notes: `$$NOTE_PATH$$`
 
-# Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/.ticket-config.yaml
+# Based on https://github.com/masuidrive/pdh/blob/8014894/templates/.ticket-config.yaml
