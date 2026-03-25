@@ -111,14 +111,19 @@ COMMIT_ID=$(cd tmp/pdh && git rev-parse --short=7 HEAD)
 - `default_content`: Ticket テンプレート（Why / What / Acceptance Criteria + 任意: Implementation Notes / Dependencies）
 - `note_content`: 作業メモテンプレート（PD-2〜PD-7 等のセクション）
 
-#### 6. Product Brief を書く
+#### 6. scripts/test-all.sh を作成する
+
+プロジェクトに `scripts/test-all.sh` を作成し、全テストスイート（backend / frontend / E2E / SDK 等）を一括実行できるようにする。
+このスクリプトは PD-C-6（実装完了時）と PD-C-9（完了検証）で実行される。
+
+#### 7. Product Brief を書く
 
 - **ファイルがない場合**: `tmp/pdh/templates/product-brief.md` をコピーし、`based on` 行の commit ID を置換する。内容を埋めるようユーザに促す
 - **ファイルがある場合**: テンプレートと見比べて、新しいセクションが増えていたら追記するようユーザに促す
 
 PDH の全判断は Product Brief を基準にするため、Background / Who / Problem / Solution / Constraints / Done のセクションが十分に記述されている必要がある。
 
-#### 7. 後片付け
+#### 8. 後片付け
 
 ```bash
 rm -rf tmp/pdh

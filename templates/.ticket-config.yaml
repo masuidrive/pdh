@@ -73,7 +73,7 @@ note_content: |
   - [ ] PD-C-6: 実装は Engineer が行い、リードは直接コードを書いていない
   - [ ] PD-C-7: 品質検証で全レビュアーが Critical/Major = 0 を回答
   - [ ] PD-C-6: コードの最終変更後に全てのテストが通った（backend / frontend / E2E）
-  - [ ] PD-C-6: テスト一括実行スクリプト（例: `scripts/test-all.sh`）がある場合は全スイートパス確認済み
+  - [ ] PD-C-6: `scripts/test-all.sh` 全スイートパス確認済み
   - [ ] PD-C-6: E2E 実環境にアクセスして動作確認済み（UI: Playwright、API: curl）
   - [ ] PD-C-9: ドキュメント更新済み（/update-docs）
   - [ ] PD-C-10: ユーザが確認手順を実施し、クローズを承認した
