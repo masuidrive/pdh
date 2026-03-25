@@ -167,6 +167,11 @@ tmux window {WINDOW.PANE} の画面を定期的にキャプチャし、以下の
 2. **AskUserQuestion**: 選択肢 UI（番号付きリスト）が表示されている
 3. **エラー**: エラーメッセージやスタックトレースが表示されている
 
+## フェーズ追跡
+- 画面キャプチャ内の `[PD-C-X] -> [PD-C-Y]` 形式のステップ遷移宣言を探し、最後に検知した宣言を報告する
+- **遷移宣言が見つからなければ、フェーズは {CURRENT_PHASE} のまま変わっていないと報告する。遷移宣言がない限り、フェーズが変わったと解釈しないこと**
+- 入力待ちを検知し、かつ遷移宣言が見つからない場合は `tmux send-keys -t {WINDOW.PANE} '今の作業フェーズを教えて' Enter` で window に確認し、その回答をキャプチャしてから報告する
+
 ## 監視方法
 sleep {WAIT_SECONDS} → `tmux capture-pane -t {WINDOW.PANE} -p -S -80 | tail -80` を最大 240 回（15秒間隔、約1時間）繰り返す。
 初回待ち時間: 単純応答 10s / ファイル操作 20s / build 45s / Agent spawn 90s / 大規模実装 150s
@@ -176,7 +181,7 @@ sleep {WAIT_SECONDS} → `tmux capture-pane -t {WINDOW.PANE} -p -S -80 | tail -8
 [入力待ち / AskUserQuestion / エラー / タイムアウト]
 
 ### 現在のフェーズ
-画面から読み取れるフェーズ（指示時と変わっている場合はそちらを記載）
+最後に検知した遷移宣言 `[PD-C-X] -> [PD-C-Y]`（なければ「遷移宣言なし、{CURRENT_PHASE} のまま」）
 
 ### 画面内容の要約
 [作業結果、選択肢、懸念事項など Director が意思決定に必要な情報をすべて含める]
