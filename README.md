@@ -68,6 +68,7 @@ mkdir -p epics epics/done
 | `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
 | `tmp/pdh/templates/.ticket-config.yaml` | `.ticket-config.yaml` | ticket.sh 設定 |
+| `tmp/pdh/templates/test-all.sh` | `scripts/test-all.sh` | テスト一括実行スクリプト |
 | `tmp/pdh/templates/product-brief.md` | `product-brief.md` | Product Brief テンプレート |
 
 コピー時に、各ファイル末尾の `based on` 行の `XXXXXXX` を `tmp/pdh` の HEAD commit ID（7 桁）に置換する。
@@ -113,8 +114,17 @@ COMMIT_ID=$(cd tmp/pdh && git rev-parse --short=7 HEAD)
 
 #### 6. scripts/test-all.sh を作成する
 
-プロジェクトに `scripts/test-all.sh` を作成し、全テストスイート（backend / frontend / E2E / SDK 等）を一括実行できるようにする。
+`tmp/pdh/templates/test-all.sh` をコピーし、プロジェクトのテストスイートに合わせてカスタマイズする。
+テンプレート内のコメントアウトされた `run` 行を参考に、プロジェクトの各テストスイートを追加する。
+
+```bash
+cp tmp/pdh/templates/test-all.sh scripts/test-all.sh
+chmod +x scripts/test-all.sh
+# scripts/test-all.sh を編集し、プロジェクトのテストコマンドを追加
+```
+
 このスクリプトは PD-C-6（実装完了時）と PD-C-9（完了検証）で実行される。
+`--parallel` フラグで並列実行が可能。
 
 #### 7. Product Brief を書く
 
@@ -193,6 +203,7 @@ pdh/
   templates/
     product-brief.md                 ← Product Brief テンプレート
     CLAUDE.md                        ← CLAUDE.md テンプレート
+    test-all.sh                      ← テスト一括実行テンプレート
     .ticket-config.yaml              ← ticket.sh 設定テンプレート
 ```
 
