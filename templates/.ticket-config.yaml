@@ -35,6 +35,8 @@ close_success_message: |
 note_content: |
   # Work Notes: $$TICKET_NAME$$
 
+  ## Status: PD-C-1 (Opening)
+
   ## PD-C-2. 調査結果
   <!-- Explore Agent による変更対象の調査結果。
        git log で関連 ticket を特定し、背景・設計判断を記録する。
@@ -78,8 +80,10 @@ note_content: |
   - [ ] PD-C-9: ドキュメント更新済み（/update-docs）
   - [ ] PD-C-10: ユーザが確認手順を実施し、クローズを承認した
 
-  ## Debug Log
-  <!-- 調査中のメモ、デバッグ情報など。 -->
+  ## Discoveries
+  <!-- 実装中に発見した想定外の事実を記録する。
+       例: API の未文書化の挙動、ライブラリの制約、既存コードの隠れた依存関係。
+       計画変更が必要なら PD-C-3 を更新し、ここには事実だけを残す。 -->
 
 # Ticket template — product-delivery-hierarchy.md の Ticket テンプレートに準拠
 # このテンプレートには frontmatter が含まれていない。
