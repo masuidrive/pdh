@@ -35,7 +35,7 @@ close_success_message: |
 note_content: |
   # Work Notes: $$TICKET_NAME$$
 
-  ## Status: PD-C-1 (Opening)
+  ## Status: PD-C-1 (Opening) | Flow: (light/full — PD-C-1 で選択)
 
   ## PD-C-2. 調査結果
   <!-- Explore Agent による変更対象の調査結果。
@@ -71,8 +71,9 @@ note_content: |
   ## PD-C-9. プロセスチェックリスト
   PD-C-9 完了検証時にチェックする。
   問題修正などでプロセスを繰り返すときは、2回目以降のチェック項目をリストに追加すること。
-  - [ ] PD-C-4: 計画レビューで全レビュアーが Critical/Major = 0 を回答
-  - [ ] PD-C-6: 実装は Engineer が行い、リードは直接コードを書いていない
+  Light フローでは (Full only) の項目はスキップしてよい。
+  - [ ] PD-C-4: 計画レビューで全レビュアーが Critical/Major = 0 を回答 (Full only)
+  - [ ] PD-C-6: 実装は Engineer が行い、リードは直接コードを書いていない (Full only)
   - [ ] PD-C-7: 品質検証で全レビュアーが Critical/Major = 0 を回答
   - [ ] PD-C-6: コードの最終変更後に全てのテストが通った（backend / frontend / E2E）
   - [ ] PD-C-6: `scripts/test-all.sh` 全スイートパス確認済み
