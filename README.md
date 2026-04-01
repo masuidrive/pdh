@@ -67,6 +67,7 @@ mkdir -p epics epics/done
 | `tmp/pdh/skills/pdh-dev/SKILL.md` | `.claude/skills/pdh-dev/SKILL.md` | PDH ワークフロースキル |
 | `tmp/pdh/skills/epic-creator/SKILL.md` | `.claude/skills/epic-creator/SKILL.md` | Epic 作成スキル |
 | `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
+| `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
 | `tmp/pdh/templates/.ticket-config.yaml` | `.ticket-config.yaml` | ticket.sh 設定 |
 | `tmp/pdh/templates/test-all.sh` | `scripts/test-all.sh` | テスト一括実行スクリプト |
@@ -188,7 +189,9 @@ project-root/
   .claude/
     skills/
       pdh-dev/SKILL.md      ← PDH ワークフロースキル
+      epic-creator/SKILL.md  ← Epic 作成スキル
       tmux-director/SKILL.md ← tmux Director スキル
+      pdh-update/SKILL.md    ← PDH アップデートスキル
 ```
 
 ## このリポジトリの構成
@@ -201,6 +204,7 @@ pdh/
   skills/
     pdh-dev/SKILL.md                 ← Claude Code 用 PDH スキル
     tmux-director/SKILL.md           ← tmux Director スキル
+    pdh-update/SKILL.md              ← PDH アップデートスキル
   templates/
     product-brief.md                 ← Product Brief テンプレート
     CLAUDE.md                        ← CLAUDE.md テンプレート
