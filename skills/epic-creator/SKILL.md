@@ -197,3 +197,6 @@ Critical/Major があれば修正し、**全レビュアーが「No Critical/Maj
 Epic を中止する場合:
 - frontmatter に `cancelled_at` を追加し、本文に中止理由を記録してから `epics/done/` に移動する
 - `done/` 内のファイルは消さない。判断の履歴として残す
+
+---
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/epic-creator/SKILL.md
