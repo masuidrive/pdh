@@ -193,7 +193,7 @@ Epic / Ticket を中止する場合:
 
 - **レビュー（PD-C-4・PD-C-7・PD-D-2）**: 直接 Agent spawn（戻り値で結果取得）を使う。TeamCreate / SendMessage は使わない。Team Agent は応答遅延・催促→re-spawn のコンテキスト浪費が発生しやすい
 - **実装（PD-C-6）**: TeamCreate でタスク管理する（従来通り）
-- **codex**: foreground 実行する（background は出力確認のツールコール数が増える）
+- **codex**: Agent ツール内で実行する（メインコンテキストの汚染を防ぐ）。Review Agent と並行して Agent spawn する
 
 ## レビューパターン（共通）
 
@@ -269,15 +269,18 @@ flowchart TD
 - Review Agent と codex は並行実行（依存関係なし）
 - 検出頻度は「信頼度のヒント」であり「重要度の指標」ではない
 
-### codex レビューコマンド
+### codex レビュー
+
+Agent ツールで codex 実行用のサブエージェントを spawn し、その中で codex を実行する。メインコンテキストに codex の出力を直接流さないこと。
 
 ```
-codex exec --dangerously-bypass-approvals-and-sandbox \
-  "<レビュー指示>。瑣末な点は無視し Critical/Major のみ指摘 (ref: CLAUDE.md)"
+Agent(
+  description: "codex review",
+  prompt: "以下のコマンドを Bash ツールで実行し、結果をそのまま返してください。
+    codex exec --dangerously-bypass-approvals-and-sandbox '<レビュー指示>。瑣末な点は無視し Critical/Major のみ指摘 (ref: CLAUDE.md)'
+    注意: 2>&1 を付けないこと（stdout が空になる）。Bash の timeout は 600000（10分）に設定すること。"
+)
 ```
-注意:
-- `2>&1` を付けないこと（stdout が空になる）
-- Bash ツールの `timeout` は `600000`（10分）に設定すること（codex はコードを大量に読むためデフォルトの2分では不足する）
 
 ---
 
