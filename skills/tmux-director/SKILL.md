@@ -48,7 +48,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    M1["sleep（待ち時間は作業内容に応じて調整）"] --> M2["tmux capture-pane でキャプチャ"]
+    M1["sleep 15（固定）"] --> M2["tmux capture-pane でキャプチャ"]
     M2 --> M3{"終了状態を検知?"}
     M3 -- "AskUserQuestion / エラー" --> M4["Director に報告"]
     M3 -- "❯ プロンプト検知" --> M3a{"ステータスラインに<br/>スピナー/Agent 表示あり?"}
@@ -209,8 +209,7 @@ tmux window {WINDOW.PANE} の画面を定期的にキャプチャし、以下の
 - 入力待ちを検知し、かつ遷移宣言が見つからない場合は `tmux send-keys -t {WINDOW.PANE} '今の作業フェーズを教えて' Enter` で window に確認し、その回答をキャプチャしてから報告する
 
 ## 監視方法
-`sleep 15` → `tmux capture-pane -t {WINDOW.PANE} -p -S -80 | tail -80` を最大 240 回（15秒間隔、約1時間）繰り返す。**監視間隔の 15秒は固定。変更しないこと。**
-初回待ち時間: 単純応答 10s / ファイル操作 20s / build 45s / Agent spawn 90s / 大規模実装 150s
+`sleep 15` → `tmux capture-pane -t {WINDOW.PANE} -p -S -80 | tail -80` を最大 240 回（15秒間隔、約1時間）繰り返す。**監視間隔の 15秒は固定。変更しないこと。初回も 15秒。**
 
 ## 報告フォーマット
 ### 状態
