@@ -80,6 +80,19 @@ COMMIT_ID=$(cd tmp/pdh && git rev-parse --short=7 HEAD)
 # 例: sed -i '' "s/XXXXXXX/$COMMIT_ID/g" CLAUDE.md
 ```
 
+#### 2.5. .claude/settings.json を設定する
+
+Agent Teams を使うために、`.claude/settings.json` に以下を追加する:
+
+```json
+{
+  "teammateMode": "in-process",
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}
+```
+
 #### 3. 既存ファイルのアップデート
 
 すでにファイルが存在し、末尾に `based on` 行がある場合:
