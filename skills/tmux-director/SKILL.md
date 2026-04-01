@@ -209,7 +209,7 @@ tmux window {WINDOW.PANE} の画面を定期的にキャプチャし、以下の
 - 入力待ちを検知し、かつ遷移宣言が見つからない場合は `tmux send-keys -t {WINDOW.PANE} '今の作業フェーズを教えて' Enter` で window に確認し、その回答をキャプチャしてから報告する
 
 ## 監視方法
-sleep {WAIT_SECONDS} → `tmux capture-pane -t {WINDOW.PANE} -p -S -80 | tail -80` を最大 240 回（15秒間隔、約1時間）繰り返す。
+`sleep 15` → `tmux capture-pane -t {WINDOW.PANE} -p -S -80 | tail -80` を最大 240 回（15秒間隔、約1時間）繰り返す。**監視間隔の 15秒は固定。変更しないこと。**
 初回待ち時間: 単純応答 10s / ファイル操作 20s / build 45s / Agent spawn 90s / 大規模実装 150s
 
 ## 報告フォーマット
