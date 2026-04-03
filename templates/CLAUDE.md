@@ -61,7 +61,7 @@
 
 ソースコードが実装の真実であり、設計意図は以下の経路で辿る:
 
-`git blame` → コミットメッセージの ticket 名 → `tickets/done/` → Epic（`epics/done/`）→ `product-brief.md`
+**「なぜこのコードがこうなっているか」を知りたい場合:** `git blame <file>` でコミットを特定 → コミットメッセージの ticket 名 → `tickets/done/` → Epic（`epics/done/`）→ `product-brief.md`
 
 ## ディレクトリ構造
 
