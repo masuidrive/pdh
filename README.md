@@ -65,10 +65,12 @@ mkdir -p epics epics/done
 |---|---|---|
 | `tmp/pdh/docs/product-delivery-hierarchy.md` | `docs/product-delivery-hierarchy.md` | PDH 運用ルール・テンプレート |
 | `tmp/pdh/skills/pdh-dev/SKILL.md` | `.claude/skills/pdh-dev/SKILL.md` | PDH ワークフロースキル |
+| `tmp/pdh/skills/pdh-coding/SKILL.md` | `.claude/skills/pdh-coding/SKILL.md` | コーディング標準スキル |
 | `tmp/pdh/skills/epic-creator/SKILL.md` | `.claude/skills/epic-creator/SKILL.md` | Epic 作成スキル |
 | `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
 | `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
+| `tmp/pdh/templates/AGENTS.md` | `AGENTS.md` | Codex CLI 向け設定（CLAUDE.md への thin pointer） |
 | `tmp/pdh/templates/.ticket-config.yaml` | `.ticket-config.yaml` | ticket.sh 設定 |
 | `tmp/pdh/templates/test-all.sh` | `scripts/test-all.sh` | テスト一括実行スクリプト |
 | `tmp/pdh/templates/product-brief.md` | `product-brief.md` | Product Brief テンプレート |
@@ -201,9 +203,11 @@ project-root/
   tickets/
     YYMMDD-hhmmss-slug.md   ← Ticket ファイル（ticket.sh が管理）
     done/                   ← 完了した Ticket
+  AGENTS.md                 ← Codex CLI 向け設定（CLAUDE.md への thin pointer）
   .claude/
     skills/
       pdh-dev/SKILL.md      ← PDH ワークフロースキル
+      pdh-coding/SKILL.md   ← コーディング標準スキル
       epic-creator/SKILL.md  ← Epic 作成スキル
       tmux-director/SKILL.md ← tmux Director スキル
       pdh-update/SKILL.md    ← PDH アップデートスキル
@@ -217,12 +221,15 @@ pdh/
   docs/
     product-delivery-hierarchy.md    ← PDH 本体ドキュメント
   skills/
-    pdh-dev/SKILL.md                 ← Claude Code 用 PDH スキル
+    pdh-dev/SKILL.md                 ← PDH ワークフロースキル
+    pdh-coding/SKILL.md              ← コーディング標準スキル
+    epic-creator/SKILL.md            ← Epic 作成スキル
     tmux-director/SKILL.md           ← tmux Director スキル
     pdh-update/SKILL.md              ← PDH アップデートスキル
   templates/
     product-brief.md                 ← Product Brief テンプレート
     CLAUDE.md                        ← CLAUDE.md テンプレート
+    AGENTS.md                        ← AGENTS.md テンプレート（Codex CLI 向け thin pointer）
     test-all.sh                      ← テスト一括実行テンプレート
     .ticket-config.yaml              ← ticket.sh 設定テンプレート
 ```
