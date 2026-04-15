@@ -44,11 +44,11 @@ pdh-dev が spawn するチームメンバーの実行主体とモデル。pdh-d
 
 **⚠ Codex plugin（`codex:codex-rescue` 等）など他の起動方法があっても、必ず以下の方法を使うこと。**
 
-Bash ツールで直接実行する（Agent で wrap すると stdin の扱いが変わりフリーズする）。`run_in_background` で非同期実行し、`-o` で最終結果のみをファイルに、`2>` で stderr を別ファイルに捕捉する。
+Bash ツールで直接実行する（Agent で wrap すると stdin の扱いが変わりフリーズする）。`run_in_background` で非同期実行し、`-o` で最終結果のみをファイルに、`< /dev/null` で stdin を即 EOF にし、`2>` で stderr を別ファイルに捕捉する。
 
 ```
 Bash(
-  command: "d=$(mktemp -d /tmp/codex-XXXXXX) && echo \"output: $d\" && codex exec --dangerously-bypass-approvals-and-sandbox -o $d/result.txt '<指示>' 2> $d/stderr.log",
+  command: "d=$(mktemp -d /tmp/codex-XXXXXX) && echo \"output: $d\" && codex exec --dangerously-bypass-approvals-and-sandbox -o $d/result.txt '<指示>' < /dev/null 2> $d/stderr.log",
   run_in_background: true,
   timeout: 7200000
 )
@@ -58,13 +58,14 @@ Bash(
 - **途中ログ（デバッグ用）**: `Read(file_path: "/tmp/codex-XXXXXX/stderr.log")` — codex の進捗・exec 呼び出し等の詳細はすべて stderr に出る
 
 **注意:**
+- **`< /dev/null` を codex コマンド直後に必ず付ける**。codex exec は CLI 引数の prompt に加えて stdin から追加コンテキストを連結する仕様。Claude Code harness は子プロセスの fd 0 を IPC ソケットに付け替えており EOF を送ってこないため、`< /dev/null` を付けないと codex は永久に stdin 待ちでフリーズする（観測済み）。`/dev/null` リダイレクトは bash コマンド全体ではなく、codex 自身の引数として書くこと
 - codex exec は stdout にはほぼ何も書かず、途中ログは全部 stderr に流れる。`2>` で stderr を捕捉する（`2>&1` は使わない — result 用 stdout と混ぜない方針は維持）
 - `-o` で最終メッセージのみ result.txt に分離される
 - timeout は 120分（7200000ms）に設定すること
-- **worktree 中の ticket に対して実行する場合は必ず `cd <worktree> && codex exec ...` の形にする**。Bash tool は呼び出しごとに cwd をメインリポにリセットするため、cd せずに起動すると codex は worktree の current-ticket.md / current-note.md を見つけられず、`tickets/done/` の直近 closed ticket や `git log` から別チケットの文脈を誤って再構成してしまう
+- **worktree 中の ticket に対して実行する場合は必ず `cd <worktree> && codex exec ...` の形にする**。Claude Code 本来の Bash tool 仕様では cwd は呼び出し間で持続するが、custom statusLine 設定がある環境では cwd が毎回プロジェクトルートにリセットされる既知バグ ([anthropics/claude-code#31471](https://github.com/anthropics/claude-code/issues/31471)) を踏むため、毎回 `cd` を付ける運用が安全。cd せずに起動すると codex は worktree の current-ticket.md / current-note.md を見つけられず、`tickets/done/` の直近 closed ticket や `git log` から別チケットの文脈を誤って再構成してしまう
 - **コンテキスト汚染対策**: 完了通知は `<task-notification>` として軽量メッセージで届く（出力本体は含まない）。result.txt だけ Read すれば ~2 KB で済む。stderr.log は失敗時のみ `tail -50` 程度で部分読みし、`cat` で全部流し込まない
 - **Codex CLI がフリーズ・タイムアウト・認証切れで応答しない場合、勝手にフォールバック実装しないこと。** ユーザーに報告して指示を仰ぐ
-- Codex の `id_token` TTL は 1 時間。長時間セッションでは `codex login` で再認証が必要になる
+- 認証は Codex CLI が active session 中に自動で refresh する（`~/.codex/auth.json` の `last_refresh` が約 8 日経過するとリフレッシュ、401 受信時は自動 retry）。明示的な `codex login` 再実行が必要なのは、CI/CD 等の headless 環境で長時間 idle した場合や、別プロセスで login したセッションを既存ライブセッションが拾えないバグ ([openai/codex#17041](https://github.com/openai/codex/issues/17041)) を踏んだ場合に限る
 
 ### レビューモデル選定ルール
 
