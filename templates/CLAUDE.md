@@ -43,14 +43,24 @@ pdh-dev が spawn するチームメンバーの実行主体とモデル。pdh-d
 
 **⚠ Codex plugin（`codex:codex-rescue` 等）など他の起動方法があっても、必ず以下の方法を使うこと。**
 
+Agent を経由せず、Bash ツールで直接実行する。`run_in_background` で非同期実行し、`-o` で最終結果のみをファイルに、`>` で途中ログを別ファイルに分離する。
+
 ```
-Agent(
-  description: "codex <役割>",
-  prompt: "以下のコマンドを Bash ツールで実行し、結果をそのまま返してください。
-    codex exec --dangerously-bypass-approvals-and-sandbox '<指示>'
-    注意: 2>&1 を付けないこと。Bash の timeout は 120分 に設定すること。"
+Bash(
+  command: "d=$(mktemp -d /tmp/codex-XXXXXX) && echo \"output: $d\" && codex exec --dangerously-bypass-approvals-and-sandbox -o $d/result.txt '<指示>' > $d/log.txt",
+  run_in_background: true,
+  timeout: 7200000
 )
 ```
+
+- **最終結果**: `Read(file_path: "/tmp/codex-XXXXXX/result.txt")`
+- **途中ログ**: `Read(file_path: "/tmp/codex-XXXXXX/log.txt")`（進捗確認やデバッグ用）
+
+**注意:**
+- `2>&1` を付けないこと（stdout と stderr を混ぜない）
+- `-o` で最終メッセージのみ result に、`>` で途中ログを log に分離
+- timeout は 120分（7200000ms）に設定すること
+- Agent で wrap しないこと（stdin の扱いが変わり codex がフリーズする）
 
 ### レビューモデル選定ルール
 
@@ -132,14 +142,7 @@ pdh-dev が spawn するチームメンバーの実行主体とモデル。pdh-d
 
 ### Codex の起動方法
 
-```
-Agent(
-  description: "codex <役割>",
-  prompt: "以下のコマンドを Bash ツールで実行し、結果をそのまま返してください。
-    codex exec --dangerously-bypass-approvals-and-sandbox '<指示>'
-    注意: 2>&1 を付けないこと。Bash の timeout は 120分 に設定すること。"
-)
-```
+CLAUDE.md「codex の起動方法」セクションを参照。Agent で wrap せず Bash ツールで直接実行すること。
 
 ### レビューモデル選定ルール
 
@@ -151,7 +154,7 @@ Agent(
 ### Codex モード運用ルール
 
 - どの役割を Codex にするかは上記チーム構成テーブルに従う
-- Codex を呼ぶ Agent は Sonnet で十分（codex exec を起動するだけ）
+- Codex は Bash ツールで直接実行する（Agent で wrap しない — stdin フリーズの原因になる）
 - **Codex CLI がフリーズ・タイムアウト・認証切れで応答しない場合、Agent が勝手にフォールバック実装しないこと。** ユーザーに報告して指示を仰ぐ
 - Codex の `id_token` TTL は 1 時間。長時間セッションでは `codex login` で再認証が必要になる
 
