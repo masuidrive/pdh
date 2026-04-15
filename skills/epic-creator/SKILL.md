@@ -132,13 +132,7 @@ flowchart TD
 
 ### codex レビューコマンド
 
-```
-codex exec --dangerously-bypass-approvals-and-sandbox \
-  "<レビュー指示>。瑣末な点は無視し Critical/Major のみ指摘 (ref: CLAUDE.md)"
-```
-注意:
-- `2>&1` を付けないこと（stdout が空になる）
-- Bash ツールの `timeout` は `600000`（10分）に設定すること
+CLAUDE.md「codex の起動方法」を参照。Bash ツールで `run_in_background` で直接実行する。Agent で wrap しない。
 
 ---
 
