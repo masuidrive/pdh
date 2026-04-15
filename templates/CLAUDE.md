@@ -44,23 +44,25 @@ pdh-dev が spawn するチームメンバーの実行主体とモデル。pdh-d
 
 **⚠ Codex plugin（`codex:codex-rescue` 等）など他の起動方法があっても、必ず以下の方法を使うこと。**
 
-Bash ツールで直接実行する（Agent で wrap すると stdin の扱いが変わりフリーズする）。`run_in_background` で非同期実行し、`-o` で最終結果のみをファイルに、`>` で途中ログを別ファイルに分離する。
+Bash ツールで直接実行する（Agent で wrap すると stdin の扱いが変わりフリーズする）。`run_in_background` で非同期実行し、`-o` で最終結果のみをファイルに、`2>` で stderr を別ファイルに捕捉する。
 
 ```
 Bash(
-  command: "d=$(mktemp -d /tmp/codex-XXXXXX) && echo \"output: $d\" && codex exec --dangerously-bypass-approvals-and-sandbox -o $d/result.txt '<指示>' > $d/log.txt",
+  command: "d=$(mktemp -d /tmp/codex-XXXXXX) && echo \"output: $d\" && codex exec --dangerously-bypass-approvals-and-sandbox -o $d/result.txt '<指示>' 2> $d/stderr.log",
   run_in_background: true,
   timeout: 7200000
 )
 ```
 
-- **最終結果**: `Read(file_path: "/tmp/codex-XXXXXX/result.txt")`
-- **途中ログ**: `Read(file_path: "/tmp/codex-XXXXXX/log.txt")`（進捗確認やデバッグ用）
+- **最終結果**: `Read(file_path: "/tmp/codex-XXXXXX/result.txt")` — 通常 ~2 KB
+- **途中ログ（デバッグ用）**: `Read(file_path: "/tmp/codex-XXXXXX/stderr.log")` — codex の進捗・exec 呼び出し等の詳細はすべて stderr に出る
 
 **注意:**
-- `2>&1` を付けないこと（stdout と stderr を混ぜない）
-- `-o` で最終メッセージのみ result に、`>` で途中ログを log に分離
+- codex exec は stdout にはほぼ何も書かず、途中ログは全部 stderr に流れる。`2>` で stderr を捕捉する（`2>&1` は使わない — result 用 stdout と混ぜない方針は維持）
+- `-o` で最終メッセージのみ result.txt に分離される
 - timeout は 120分（7200000ms）に設定すること
+- **worktree 中の ticket に対して実行する場合は必ず `cd <worktree> && codex exec ...` の形にする**。Bash tool は呼び出しごとに cwd をメインリポにリセットするため、cd せずに起動すると codex は worktree の current-ticket.md / current-note.md を見つけられず、`tickets/done/` の直近 closed ticket や `git log` から別チケットの文脈を誤って再構成してしまう
+- **コンテキスト汚染対策**: 完了通知は `<task-notification>` として軽量メッセージで届く（出力本体は含まない）。result.txt だけ Read すれば ~2 KB で済む。stderr.log は失敗時のみ `tail -50` 程度で部分読みし、`cat` で全部流し込まない
 - **Codex CLI がフリーズ・タイムアウト・認証切れで応答しない場合、勝手にフォールバック実装しないこと。** ユーザーに報告して指示を仰ぐ
 - Codex の `id_token` TTL は 1 時間。長時間セッションでは `codex login` で再認証が必要になる
 
