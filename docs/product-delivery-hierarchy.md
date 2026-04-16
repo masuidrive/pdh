@@ -139,8 +139,6 @@ main ← epic/在庫管理 ← feature/250711-091538-fix-auth
 - Epic はブランチではなくドキュメントで状態を管理する。main に Epic の一部だけが入っている状態は正常。
 - Epic ブランチを使う判断基準: **main に Ticket 単位でマージして、各 Ticket マージ後に main が壊れないか？** 壊れるなら Epic ブランチを使う。
 
-注意: Epic ブランチは長命化しやすい。Epic 間に依存関係がある場合は同期が破綻するリスクがある。原則は main 直マージであり、Epic ブランチは例外として使う。
-
 ### Coding agent 向け
 
 - Agent は Ticket の Acceptance Criteria と Implementation Notes を主な入力として使う。
