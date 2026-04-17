@@ -361,7 +361,7 @@ Claude Code で `tmux-director` と入力すると起動する。
 
 ### 監視パス (2 系統)
 
-1. **hookbus event stream (推奨、ms 単位で反応)** — `scripts/hookbus.js` と `.claude/settings.json` の hooks を配線しておくと、worker がアイドル / permission 待ちになった瞬間に `/tmp/claude-events-<socket_hash>/log.ndjson` に NDJSON が 1 行 append される。Director は Claude Code の **`Monitor` ツール** (deferred tool、stdout 1 行 = 1 通知として会話に push する組み込み streaming 機能) で `scripts/hookbus.js pull --follow` を bg 消費し、1 event = 1 通知として受け取る。ポーリング不要
+1. **hookbus event stream (推奨、ms 単位で反応)** — `scripts/hookbus.js` と `.claude/settings.json` の hooks を配線しておくと、worker がアイドル / permission 待ちになった瞬間に `/tmp/claude-events-<socket_hash>/log.ndjson` に NDJSON が 1 行 append される。Director は Claude Code の **`Monitor` ツール** (deferred tool、stdout 1 行 = 1 通知として会話に push する組み込み streaming 機能) で `scripts/hookbus.js pull --include <w1-key> --include <w2-key> ... --follow` を bg 消費し、対象 worker の event だけを通知として受け取る。無関係な pane は allow-list にないので自然に弾かれる。ポーリング不要
 2. **tmux capture-pane Monitor Agent (fallback、15 秒間隔)** — hookbus 未配線のプロジェクト用。Sonnet Agent を bg spawn して 15 秒ごとに画面 capture + 状態判定
 
 ### hookbus 活性化手順
@@ -380,15 +380,15 @@ Claude Code で `tmux-director` と入力すると起動する。
    ```
    (env 継承で Director の subagent も自動除外される)
 4. Worker window は通常どおり `claude` で起動
-5. Director セッション内で Monitor ツールを起動:
+5. Director セッション内で監視対象 worker の key を allow-list で指定して Monitor 起動:
    ```
    Monitor({
-     command: "scripts/hookbus.js pull --exclude $(scripts/hookbus.js whoami) --follow",
+     command: "scripts/hookbus.js pull --include <w1-key> --include <w2-key> --include <w3-key> --follow",
      description: "tmux worker events",
      persistent: true
    })
    ```
-   worker が Stop / Notification した瞬間、NDJSON 1 行が会話に通知として push される。
+   worker の key は `<socket_hash>:<pane_id>` (例: `a3f2e1:%10`)。pane_id は `tmux list-panes -a -F '#{pane_id}'` で取れる。socket_hash は Director の `scripts/hookbus.js whoami` の `:` 前部分と同じ。`--include` 省略時は全 event が流れる (無関係な pane 含む) ので、監視対象は明示推奨。cursor identity は default で `whoami` の key。worker が Stop / Notification した瞬間、NDJSON 1 行が会話に通知として push される。
 
 **動作確認** (Director 側で):
 ```bash

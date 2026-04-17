@@ -45,24 +45,30 @@
 //     key = <socket_hash>:<pane_id> (socket_hash は $TMUX から sha1 先頭 6 桁)。
 //     $TMUX_PANE 未継承時は SessionStart registry か `session-<id>` fallback + warn。
 //
-//   hookbus.js pull --exclude <key> [--follow]
-//     自 key を除外しつつログを stdout に流す。`--follow` で新規 append を
-//     `fs.watch` + polling で追跡、SIGTERM で cleanly 終了。cursor は
-//     `<root>/consumers/<urlencoded_key>.cursor` に per-consumer 永続化。
+//   hookbus.js pull [--include <key>]... [--cursor <key>] [--follow]
+//     イベントを stdout に NDJSON で流す。
+//     `--include <key>` (repeatable): allow-list。指定があれば該当 key の event のみ yield。
+//       未指定なら全 event を yield (director 以外のセッションが全て興味対象の場合)。
+//     `--cursor <key>`: consumer の read position 識別子 (default: whoami の key)。
+//       同じ cursor key で再起動しても続きから再開される。per-consumer に
+//       `<root>/consumers/<urlencoded_key>.cursor` に永続化。
+//     `--follow`: 新規 append を `fs.watch` + polling で追跡。SIGTERM で cleanly 終了。
 //
 //     Director 側は通常 Monitor ツール (Claude Code の streaming notification) で
-//     この出力を消費する:
+//     この出力を消費する。監視対象の worker key を明示的に --include で列挙する:
 //
 //       Monitor({
-//         command: "env -u CLAUDE_EVENT_DISABLE scripts/hookbus.js pull --exclude <my-key> --follow",
+//         command: "env -u CLAUDE_EVENT_DISABLE scripts/hookbus.js pull --include <w1-key> --include <w2-key> --include <w3-key> --follow",
 //         description: "tmux worker idle events",
 //         persistent: true
 //       })
 //
 //     1 event = 1 通知として会話に push される。director は他の作業をしつつ反応可能。
+//     監視対象外の pane (例: 無関係な w4) の event は allow-list にないので自然に弾かれる。
 //
 //   hookbus.js whoami
-//     `<socket_hash>:<pane_id>` を stdout 出力。Director が `--exclude` に使う自 key。
+//     `<socket_hash>:<pane_id>` を stdout 出力 ($TMUX_PANE 未設定時は `local-<pid>`)。
+//     Director の cursor identity default (`pull` で --cursor を省略した時) にもなる。
 //
 //   hookbus.js cleanup [--older-than <days>] [--dry-run]
 //     `/tmp/claude-events-*/` の古い root を削除 (default 7 日、log.ndjson mtime 基準)。
@@ -527,13 +533,27 @@ function parseArgs(argv) {
 }
 
 function parsePullArgs(argv) {
-  let exclude = null;
+  const includes = [];
+  let cursorKey = null;
   let follow = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === '--exclude') {
-      exclude = argv[index + 1] ?? null;
+    if (arg === '--include') {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error('--include requires a value');
+      }
+      includes.push(value);
+      index += 1;
+      continue;
+    }
+    if (arg === '--cursor') {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error('--cursor requires a value');
+      }
+      cursorKey = value;
       index += 1;
       continue;
     }
@@ -544,11 +564,7 @@ function parsePullArgs(argv) {
     throw new Error(`unknown argument: ${arg}`);
   }
 
-  if (!exclude) {
-    throw new Error('--exclude is required');
-  }
-
-  return { exclude, follow };
+  return { includes, cursorKey, follow };
 }
 
 function parseCleanupArgs(argv) {
@@ -608,13 +624,15 @@ async function eventCommand() {
 }
 
 async function pullCommand(argv) {
-  const { exclude, follow } = parsePullArgs(argv);
-  const socketHash = exclude.includes(':') ? exclude.split(':', 1)[0] : computeSocketHash(process.env.TMUX);
+  const { includes, cursorKey, follow } = parsePullArgs(argv);
+  const cursor = cursorKey ?? computeKey(process.env);
+  const socketHash = cursor.includes(':') ? cursor.split(':', 1)[0] : computeSocketHash(process.env.TMUX);
   const root = eventsRoot(socketHash);
   const logFile = logPath(root);
+  const allowSet = includes.length > 0 ? new Set(includes) : null;
 
   if (!fs.existsSync(logFile) && !follow) {
-    writeCursor(root, exclude, 0);
+    writeCursor(root, cursor, 0);
     return;
   }
 
@@ -623,7 +641,7 @@ async function pullCommand(argv) {
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);
 
-  let lastOffset = readCursor(root, exclude);
+  let lastOffset = readCursor(root, cursor);
   try {
     for await (const { line, offset } of tailLog(root, lastOffset, {
       follow,
@@ -636,18 +654,18 @@ async function pullCommand(argv) {
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         process.stderr.write(`warning: skipping invalid log line at offset ${offset}: ${reason}\n`);
-        writeCursor(root, exclude, lastOffset);
+        writeCursor(root, cursor, lastOffset);
         continue;
       }
 
-      if (event.key !== exclude) {
+      if (!allowSet || allowSet.has(event.key)) {
         process.stdout.write(`${line}\n`);
       }
 
-      writeCursor(root, exclude, lastOffset);
+      writeCursor(root, cursor, lastOffset);
     }
 
-    writeCursor(root, exclude, lastOffset);
+    writeCursor(root, cursor, lastOffset);
   } catch (error) {
     if (error?.name !== 'AbortError') {
       throw error;
@@ -1174,7 +1192,7 @@ if (import.meta.vitest) {
       });
     });
 
-    test('pull excludes self events, skips malformed lines without replay, and keeps sockets isolated', () => {
+    test('pull filters to include allow-list, skips malformed lines without replay, and keeps sockets isolated', () => {
       const tmpdir = setTmpdir(makeTempDir('claude-events-pull-'));
       const socketPathA = '/tmp/tmux-pull-a/default';
       const socketPathB = '/tmp/tmux-pull-b/default';
@@ -1203,7 +1221,7 @@ if (import.meta.vitest) {
         session_id: 'other-socket-session',
       });
 
-      const firstPull = runCmd(['pull', '--exclude', `${hashA}:%1`], {
+      const firstPull = runCmd(['pull', '--include', `${hashA}:%2`, '--cursor', `${hashA}:%1`], {
         env: {
           TMPDIR: tmpdir,
         },
@@ -1215,7 +1233,7 @@ if (import.meta.vitest) {
       expect(firstOutput[0].session_id).toBe('other-session');
       expect(readCursor(rootA, `${hashA}:%1`)).toBe(fs.statSync(logPath(rootA)).size);
 
-      const secondPull = runCmd(['pull', '--exclude', `${hashA}:%1`], {
+      const secondPull = runCmd(['pull', '--include', `${hashA}:%2`, '--cursor', `${hashA}:%1`], {
         env: {
           TMPDIR: tmpdir,
         },
@@ -1239,7 +1257,7 @@ if (import.meta.vitest) {
         session_id: 'self-follow',
       });
 
-      const child = spawn(process.execPath, [cmdPath, 'pull', '--exclude', `${hash}:%1`, '--follow'], {
+      const child = spawn(process.execPath, [cmdPath, 'pull', '--include', `${hash}:%2`, '--cursor', `${hash}:%1`, '--follow'], {
         cwd: repoRoot,
         env: (() => {
           const nextEnv = { ...process.env, TMPDIR: tmpdir };

@@ -188,15 +188,25 @@ ls scripts/hookbus.js && jq '.hooks.Stop' .claude/settings.json
 
 1. `.claude/settings.json` の `env.CLAUDE_EVENT_DISABLE` を `"1"` から外す or 削除 (1 回だけ、project 全体に反映)
 2. Director pane の Claude 起動時に `CLAUDE_EVENT_ROLE=director claude` で起動 — director 自身の hook を除外 (log 汚染防止、Monitor Agent subagent にも env 継承で自動伝播)
-3. Director セッション内で Monitor ツールを起動:
+3. Director セッション内で監視対象 worker の key を決定し、**`--include` で明示的に allow-list** を指定して Monitor 起動:
+
+   ```bash
+   # a) tmux socket hash を取得
+   SOCK_HASH=$(scripts/hookbus.js whoami | cut -d: -f1)
+
+   # b) 対象 window / pane の pane_id を tmux list-panes から取得 (TD-1 で選んだもの)
+   #    例: w1=%10、w2=%11、w3=%12 の場合、key は "<SOCK_HASH>:%10" 等になる
+   ```
 
    ```
    Monitor({
-     command: "env -u CLAUDE_EVENT_DISABLE scripts/hookbus.js pull --exclude $(scripts/hookbus.js whoami) --follow",
+     command: "env -u CLAUDE_EVENT_DISABLE scripts/hookbus.js pull --include <w1-key> --include <w2-key> --include <w3-key> --follow",
      description: "tmux worker idle events",
      persistent: true
    })
    ```
+
+   `--include` 未指定なら **全 worker の event** が流れる (無関係な pane も含む)。監視対象を絞るには明示必須。Director 自身の key は include list にないので自然に yield されない (`--exclude` は廃止)。cursor identity は省略時は `whoami` (= Director の key)。
 
    worker が Stop/Notification した瞬間、1 event = 1 通知として director の会話に push される。
 
