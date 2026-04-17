@@ -481,11 +481,13 @@ worker (別 window の Claude Code) の ctx が蓄積すると性能劣化 + aut
 
 | 状況 | 推奨アクション |
 |---|---|
-| worker ctx > 80% かつ Ticket / Epic の境目 (close 直後など) | 次タスクに入る前に /clear |
+| **Ticket close 直後 (ctx 関係なし)** | **必ず次 Ticket start 前に /clear** ← デフォルトルール |
 | worker ctx > 80% かつ bg task (codex exec 等) 実行中で Claude idle | **最低コスト /clear のベストタイミング** — ファイル state は durable、bg task 出力先は /tmp の mktemp dir に残る |
 | worker ctx > 90% | Ticket 途中でも /clear を検討。Ticket 内進捗が commit 済なら手戻りほぼゼロ |
 
-**手順**: Escape (在行 work 停止) → `send-keys '/clear' Enter` → `sleep 2` → `send-keys '<resume kickoff>'` → `send-keys Enter` (長文 resume kickoff は text と Enter を分離、TD-3.1 rule 参照)
+**⚠ autonomous 連続走行 (「T2-T6 + PD-D まで自律で進めて」等) でも /clear gate をスキップしない。** PM が「まとめて全部やって」と指示すると Director が各 ticket 境界に介入しない結果、/clear が送信されず ctx が 60-80% まで膨らむ事故が頻発する (実測)。必ず各 ticket close を PM が察知して `/clear` → 次 Ticket kickoff の 2 段階を挟むこと。hookbus Monitor から Stop event を受けたタイミング or base_branch 切替依頼の sendmsg を受けたタイミングで介入する。
+
+**手順**: Escape (在行 work 停止) → `send-keys '/clear'` → `send-keys Enter` → `sleep 2` → `send-keys '<resume kickoff>'` → `send-keys Enter` (長文 resume kickoff は text と Enter を分離、TD-3.1 rule 参照)
 
 resume kickoff には必ず以下を含める:
 - `EnterWorktree({path: "..."})` で worktree 再設定 (cwd は /clear で fallback する)
