@@ -162,9 +162,17 @@ send-keys '<kickoff message>'
 send-keys Enter
 ```
 
-**Worktree 運用** (複数 Epic 並列時):
-- window を新規起動する場合は `claude --worktree <epic-slug>` 経由で起動し直すのが最もクリーン
-- 既存 window で続行する場合は、初回指示に `EnterWorktree({name: "<epic-slug>"})` を含める
+**Worktree 運用** (デフォルト、全 ticket 対象):
+
+**⚠ 全 ticket で worktree 分離をデフォルトにする**。複数 Epic 並列時だけでなく、Epic なし単独 ticket / hotfix / infra ticket でも同じ。kickoff に必ず `ticket.sh start --worktree <ticket-name>` または `EnterWorktree({name: "<slug>"})` を含める。
+
+理由: worktree 無しで `ticket.sh start` すると main_repo /workspace の HEAD が feature branch に切り替わり、**PM (Director) が main 側で git 操作 (main 切替・他 ticket 差替え・demo restart 等) を並行できなくなる**。また worker session の cwd が feature branch 依存になり、close まで main_repo がロックされる。worktree 分離すれば main_repo HEAD = default_branch に居続けられ、Director と worker が独立に動ける。
+
+運用:
+- 新規 window 起動: `claude --worktree <slug>` 経由が最もクリーン
+- 既存 window 続行: 初回指示に `EnterWorktree({name: "<slug>"})` + `ticket.sh start --worktree` を含める
+- worktree path は `.worktrees/<slug>/` (ticket.sh default) or `.worktrees/<epic-slug>/` (Epic 専用)
+- close 時は `ticket.sh close --keep-worktree` で worktree path 維持 (cwd dangling 防止)
 - 詳細は CLAUDE.md 「multi-worktree 並列運用」
 
 ---
