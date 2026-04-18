@@ -40,10 +40,14 @@
 // ## サブコマンド
 //
 //   hookbus.js event
-//     stdin の hook JSON を読み、`{key, ts, session_id, hook_event_name, ...}` を
+//     stdin の hook JSON を読み、`{key, ts, session_id, hook_event_name, last_message, ...}` を
 //     log.ndjson に 1 行 atomic append。hook 側から呼ばれる想定。<100ms で exit。
 //     key = <socket_hash>:<pane_id> (socket_hash は $TMUX から sha1 先頭 6 桁)。
 //     $TMUX_PANE 未継承時は SessionStart registry か `session-<id>` fallback + warn。
+//     stdin に `transcript_path` が含まれていれば、その JSONL の末尾 assistant text メッセージを
+//     extract して `last_message: {text_snippet, text_full_length, uuid, timestamp}` を同梱する
+//     (tmux capture-pane なしで director が直接内容を読めるように)。`HOOKBUS_LAST_MESSAGE_MAX`
+//     env で snippet 長を設定可能 (default 2000、0 で抽出無効)。
 //
 //   hookbus.js pull [--include <key>]... [--cursor <key>] [--follow]
 //     イベントを stdout に NDJSON で流す。
@@ -499,6 +503,68 @@ function maxMtimeMsRecursive(targetPath) {
   return latest;
 }
 
+const DEFAULT_LAST_MESSAGE_MAX_CHARS = 2000;
+
+export function extractLastAssistantMessage(transcriptPath, { maxChars = DEFAULT_LAST_MESSAGE_MAX_CHARS } = {}) {
+  if (!transcriptPath || maxChars <= 0) {
+    return null;
+  }
+
+  let raw;
+  try {
+    raw = fs.readFileSync(transcriptPath, 'utf8');
+  } catch {
+    return null;
+  }
+
+  const lines = raw.split('\n');
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i];
+    if (!line) {
+      continue;
+    }
+
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+
+    if (entry?.type !== 'assistant') {
+      continue;
+    }
+
+    const content = entry.message?.content;
+    let text;
+    if (Array.isArray(content)) {
+      text = content
+        .filter((block) => block?.type === 'text' && typeof block.text === 'string')
+        .map((block) => block.text)
+        .join('\n')
+        .trim();
+    } else if (typeof content === 'string') {
+      text = content.trim();
+    } else {
+      text = '';
+    }
+
+    if (!text) {
+      continue;
+    }
+
+    return {
+      role: 'assistant',
+      uuid: entry.uuid ?? null,
+      timestamp: entry.timestamp ?? null,
+      text_full_length: text.length,
+      text_snippet: text.length > maxChars ? `${text.slice(0, maxChars)}...[truncated]` : text,
+    };
+  }
+
+  return null;
+}
+
 export function latestActivityMtimeMs(root) {
   const logFile = logPath(root);
   const logStat = statOrNull(logFile);
@@ -615,11 +681,19 @@ async function eventCommand() {
     process.stderr.write(`${message}\n`);
   });
 
+  const maxCharsRaw = process.env.HOOKBUS_LAST_MESSAGE_MAX;
+  const parsedMaxChars = maxCharsRaw !== undefined ? Number.parseInt(maxCharsRaw, 10) : DEFAULT_LAST_MESSAGE_MAX_CHARS;
+  const maxChars = Number.isFinite(parsedMaxChars) ? parsedMaxChars : DEFAULT_LAST_MESSAGE_MAX_CHARS;
+  const lastMessage = input.transcript_path
+    ? extractLastAssistantMessage(input.transcript_path, { maxChars })
+    : null;
+
   appendEvent(root, {
     key,
     ts: new Date().toISOString(),
     ...input,
     session_id: input.session_id ?? null,
+    last_message: lastMessage,
   });
 }
 
@@ -1057,6 +1131,62 @@ if (import.meta.vitest) {
       expect(latestActivityMtimeMs(root)).toBeCloseTo(newerMs, -2);
       expect(tmpdir).toContain('claude-events-activity-');
     });
+
+    test('extractLastAssistantMessage skips tool_use-only and thinking-only entries, preserves newlines, truncates long text', () => {
+      const tmpdir = setTmpdir(makeTempDir('claude-events-extract-'));
+      const transcriptPath = path.join(tmpdir, 'transcript.jsonl');
+      const longText = 'a'.repeat(3000);
+      const entries = [
+        { type: 'user', message: { role: 'user', content: 'hi' }, uuid: 'u1' },
+        {
+          type: 'assistant',
+          uuid: 'a1',
+          timestamp: '2026-04-17T10:00:00.000Z',
+          message: { role: 'assistant', content: [{ type: 'thinking', thinking: '...' }] },
+        },
+        {
+          type: 'assistant',
+          uuid: 'a2',
+          timestamp: '2026-04-17T10:00:01.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'line1\nline2\nline3' }] },
+        },
+        {
+          type: 'assistant',
+          uuid: 'a3',
+          timestamp: '2026-04-17T10:00:02.000Z',
+          message: { role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'X', input: {} }] },
+        },
+        {
+          type: 'assistant',
+          uuid: 'a4',
+          timestamp: '2026-04-17T10:00:03.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: longText }] },
+        },
+      ];
+      fs.writeFileSync(transcriptPath, entries.map((e) => JSON.stringify(e)).join('\n') + '\n');
+
+      const result = extractLastAssistantMessage(transcriptPath, { maxChars: 50 });
+      expect(result).not.toBeNull();
+      expect(result.uuid).toBe('a4');
+      expect(result.text_full_length).toBe(3000);
+      expect(result.text_snippet.endsWith('...[truncated]')).toBe(true);
+      expect(result.text_snippet.length).toBe(50 + '...[truncated]'.length);
+
+      // Remove the last (tool_use_only after text a4) so extractor must skip a3 and land on a2
+      const truncated = entries.slice(0, 4);
+      fs.writeFileSync(transcriptPath, truncated.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      const skipped = extractLastAssistantMessage(transcriptPath);
+      expect(skipped.uuid).toBe('a2');
+      expect(skipped.text_snippet).toBe('line1\nline2\nline3');  // newlines preserved
+      expect(skipped.text_full_length).toBe('line1\nline2\nline3'.length);
+
+      // Missing file → null
+      expect(extractLastAssistantMessage('/no/such/path.jsonl')).toBeNull();
+      // maxChars=0 disables
+      expect(extractLastAssistantMessage(transcriptPath, { maxChars: 0 })).toBeNull();
+
+      expect(tmpdir).toContain('claude-events-extract-');
+    });
   });
 
   describe('hookbus.js integration', () => {
@@ -1190,6 +1320,76 @@ if (import.meta.vitest) {
         hook_event_name: 'Stop',
         session_id: 'session-missing',
       });
+    });
+
+    test('event embeds last_message from transcript_path, honors HOOKBUS_LAST_MESSAGE_MAX', () => {
+      const tmpdir = setTmpdir(makeTempDir('claude-events-lastmsg-'));
+      const socketPath = '/tmp/tmux-lastmsg/default';
+      const hash = expectedHash(socketPath);
+      const transcriptPath = path.join(tmpdir, 'transcript.jsonl');
+      const messageText = 'hello\nmulti-line\nmessage';
+      fs.writeFileSync(
+        transcriptPath,
+        [
+          { type: 'user', message: { role: 'user', content: 'q' }, uuid: 'u1' },
+          {
+            type: 'assistant',
+            uuid: 'a-final',
+            timestamp: '2026-04-17T12:00:00.000Z',
+            message: { role: 'assistant', content: [{ type: 'text', text: messageText }] },
+          },
+        ].map((e) => JSON.stringify(e)).join('\n') + '\n',
+      );
+
+      const result = runCmd(['event'], {
+        env: {
+          TMPDIR: tmpdir,
+          TMUX: `${socketPath},1,0`,
+          TMUX_PANE: '%5',
+          CLAUDE_EVENT_DISABLE: undefined,
+        },
+        input: JSON.stringify({
+          hook_event_name: 'Stop',
+          session_id: 'lastmsg-session',
+          transcript_path: transcriptPath,
+          cwd: '/workspace',
+        }),
+      });
+      expect(result.status).toBe(0);
+
+      const logLines = fs
+        .readFileSync(logPath(eventsRoot(hash)), 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      expect(logLines).toHaveLength(1);
+      expect(logLines[0].last_message).toMatchObject({
+        role: 'assistant',
+        uuid: 'a-final',
+        text_full_length: messageText.length,
+        text_snippet: messageText,  // newlines preserved via JSON escape round-trip
+      });
+
+      // HOOKBUS_LAST_MESSAGE_MAX=0 disables extraction
+      const disabled = runCmd(['event'], {
+        env: {
+          TMPDIR: tmpdir,
+          TMUX: `${socketPath},1,0`,
+          TMUX_PANE: '%6',
+          CLAUDE_EVENT_DISABLE: undefined,
+          HOOKBUS_LAST_MESSAGE_MAX: '0',
+        },
+        input: JSON.stringify({
+          hook_event_name: 'Stop',
+          session_id: 'lastmsg-session-2',
+          transcript_path: transcriptPath,
+          cwd: '/workspace',
+        }),
+      });
+      expect(disabled.status).toBe(0);
+      const lines2 = fs.readFileSync(logPath(eventsRoot(hash)), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+      expect(lines2).toHaveLength(2);
+      expect(lines2[1].last_message).toBeNull();
     });
 
     test('pull filters to include allow-list, skips malformed lines without replay, and keeps sockets isolated', () => {

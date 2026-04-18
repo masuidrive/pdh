@@ -252,7 +252,22 @@ tmux send-keys -t WINDOW.PANE Enter
 TD-0 で活性化した hookbus Monitor から event が届いたら:
 
 ```json
-{"key":"<hash>:%N", "ts":"...", "session_id":"...", "hook_event_name":"Stop|Notification|SubagentStop", "transcript_path":"/home/.../projects/<proj>/<session_id>.jsonl", "cwd":"...", "message":"..."}
+{
+  "key": "<hash>:%N",
+  "ts": "...",
+  "session_id": "...",
+  "hook_event_name": "Stop|Notification|SubagentStop",
+  "transcript_path": "/home/.../projects/<proj>/<session_id>.jsonl",
+  "cwd": "...",
+  "message": "...",
+  "last_message": {
+    "role": "assistant",
+    "uuid": "...",
+    "timestamp": "...",
+    "text_full_length": 1234,
+    "text_snippet": "worker の最後の assistant テキスト (改行含む、default 2000 字で truncate)"
+  }
+}
 ```
 
 から以下を抽出して行動を決める:
@@ -262,10 +277,11 @@ TD-0 で活性化した hookbus Monitor から event が届いたら:
   - `Notification` + `matcher=permission_prompt` → permission UI 表示。TD-3.4 で応答
   - `Notification` + `matcher=idle_prompt` → idle reminder。通常無視可
   - `SubagentStop` → subagent 終了、main は動いているかもしれない。通常無視
-- `transcript_path` を Read で tail して、worker の最後のメッセージ内容を把握
+- **`last_message.text_snippet` を直接参照**して worker の最終メッセージを把握する (tmux capture-pane も transcript_path Read も原則不要)
+- `text_full_length > text_snippet.length` なら truncate 済なので、詳細必要なら `transcript_path` を Read で tail して full content 取得
 - `key` から `tmux list-panes -a -F '#{pane_id} #{session_name}:#{window_index}'` で pane_id → window index に解決、`tmux send-keys -t <pane_id>` で応答
 
-capture-pane は **情報不足の時のみ補助的に** 使う (permission UI の選択肢番号が transcript からは取れない場合など)。
+capture-pane は **情報不足の時のみ補助的に** 使う (permission UI の選択肢番号が last_message に入らない場合、画面に表示された UI 要素を見たい場合など)。`HOOKBUS_LAST_MESSAGE_MAX` env で snippet 長を調整可 (default 2000、0 で last_message 自体を無効化)。
 
 ### TD-3.2-fallback. Monitor Agent の起動 (hookbus 未配線時のみ)
 
