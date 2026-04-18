@@ -448,7 +448,7 @@ QA Engineer の結果を受けて:
 
 Critical / Major があれば:
 1. **修正** → Coding Engineer に委譲（PM が直接コードを編集しない）
-2. **テスト再実行** → QA Engineer に委譲
+2. **テスト再実行** → QA Engineer に委譲。**中間 round では変更の影響範囲に限定して再実行する**（変更ファイルと import chain 上で依存する test のみ）。フルスイート (`scripts/test-all.sh`) / E2E / 長時間走るスイートは中間 round ではスキップしてよい。フル実行は PD-C-9 の最終確認で 1 回だけ行い、regression 検出はそこで担保する。
 3. **再レビュー** を行い、全 reviewer role の最新結果が `No Critical/Major` になるまでループする。
 
 完了条件:
