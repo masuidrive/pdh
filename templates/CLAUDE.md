@@ -117,8 +117,8 @@ pdh-dev が spawn するチームメンバーの実行主体とモデル。pdh-d
 | 計画レビュー Engineer | C-4 | Claude/Opus | Codex | |
 | Coding Engineer | C-6 | Claude/Sonnet | Codex | pdh-coding 参照 |
 | QA Engineer | C-6,C-7,C-9 | Claude/Sonnet | Codex | テスト実行・E2E確認・ドキュメント再生成 |
-| 品質 DA | C-7 | Claude/Sonnet ×2 | Claude/Sonnet ×1 + Codex ×1 | Codex モードで異プロバイダ混合 |
-| 品質 Code Reviewer | C-7 | Claude/Sonnet ×2 | Claude/Sonnet ×1 + Codex ×1 | Codex モードで異プロバイダ混合 |
+| 品質 DA | C-7 | Claude/Sonnet ×2 | Codex ×2 | PD-C-7 は ticket 単位の局所欠陥検出。Codex 同プロバイダ×2 で十分、PD-D-2 の 3モデル混合が広い表面積を拾う |
+| 品質 Code Reviewer | C-7 | Claude/Sonnet ×2 | Codex ×2 | 同上 |
 | 目的妥当性 | C-8 | Claude/Opus | Claude/Opus | 常に Claude |
 | AC 裏取り | C-9 | Claude/Sonnet+Opus | Codex | |
 | ゼロベースレビュー DA | D-2 | Claude/Sonnet ×1 + Codex ×1 + Claude/Opus ×1 | Claude/Sonnet ×1 + Codex ×1 + Claude/Opus ×1 | 3モデル混合 |
