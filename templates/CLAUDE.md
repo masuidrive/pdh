@@ -63,6 +63,7 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 
 - **段階的実行を推奨**: まず高速なテスト（例: `pytest -x -q`）で早期フィードバックを得る → 修正があれば対応 → 全スイートは `scripts/test-all.sh` で一括実行
 - **E2E 実環境テスト（必須）**: ビルド成功・テストパスだけで完了としない。サーバー起動 → UI 変更はブラウザ確認、API 変更は curl でレスポンス検証
+  - `agent-browser` は CLI ツール (npm global install 済なら `which agent-browser` で確認可)。`agent-browser open <url>` / `snapshot` / `find role|testid|text ... click` / `screenshot` / `eval <js>` 等。MCP サーバではなく直接 Bash から起動する。ブラウザ UI の実動確認に使う
 
 ### テスト設計ルール
 
