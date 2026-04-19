@@ -157,8 +157,9 @@ tmux send-keys -t WINDOW.PANE Enter
 send-keys '/clear' Enter
 sleep 2
 send-keys '/effort max' Enter   # 必要なら
-sleep 1
+sleep 2
 send-keys '<kickoff message>'
+sleep 2                         # text と Enter の間に必ず sleep 2
 send-keys Enter
 ```
 
@@ -245,13 +246,20 @@ Default で dormant (`CLAUDE_EVENT_DISABLE=1`) なので配線しても既存 Cl
 
 ### TD-3.1. 指示の送信（Director が直接行う）
 
-window に指示を送信する (**text と Enter を別コマンドで送信**):
+window に指示を送信する (**text 送信 → sleep 2 → Enter を別コマンドで送信**):
 ```
 tmux send-keys -t WINDOW.PANE 'ここに指示内容'
+sleep 2
 tmux send-keys -t WINDOW.PANE Enter
 ```
 
-**⚠ text と Enter を同じ send-keys 呼び出しに混ぜない。** `send-keys '...' Enter` を 1 回で実行すると、長文や slash 混在テキストで Enter が text の一部として buffer に吸収され、prompt に text が残ったまま submit されない race が頻発する (複数回実測)。必ず 2 段階 (text だけ → Enter 単独)。送信後は capture-pane で `❯ Press up to edit queued messages` or spinner が出ているか確認する。
+**⚠ text と Enter を同じ send-keys 呼び出しに混ぜない。** `send-keys '...' Enter` を 1 回で実行すると、長文や slash 混在テキストで Enter が text の一部として buffer に吸収され、prompt に text が残ったまま submit されない race が頻発する (複数回実測)。必ず 2 段階 (text だけ → Enter 単独)。
+
+**⚠ text と Enter の間に `sleep 2` を必ず挟む。** text 送信直後に Enter を即時送ると、paste buffer の処理完了前に Enter が走って prompt に残る race が起きる (paste-buffer 経由の長文で頻発)。`sleep 1` では足りず、実測で `sleep 2` が必要。
+
+送信後は capture-pane で `❯ Press up to edit queued messages` or spinner が出ているか確認する。出ていなければ Enter が届いていないので `send-keys Enter` を単独で補助送信する。
+
+**長文 kickoff を `tmux load-buffer` + `tmux paste-buffer` で送る場合も同じ**: paste-buffer → `sleep 2` → `send-keys Enter` の 3 段で書く。paste 完了前に Enter を送ると取りこぼす。
 
 **重要: Window への指示は常に 1 フェーズ分のみ。** 「PD-C-4 をやって、その後実装も進めて」のように複数フェーズをまとめて指示しない。ユーザ確認 gate（PD-C-5, PD-C-10）を飛ばす原因になる。
 
