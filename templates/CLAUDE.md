@@ -111,15 +111,15 @@ pdh-dev が spawn するチームメンバーの実行主体とモデル。pdh-d
 
 | 役割 | step | 通常モード | Codex モード | 備考 |
 |---|---|---|---|---|
-| PM（リード） | 全体 | Claude/Opus | Claude/Opus | 常に Claude |
-| 調査・計画 | C-1〜C-3 | Claude/Opus | Claude/Opus | 常に Claude |
+| PM（リード） | 全体 | Claude/Sonnet | Claude/Sonnet | 常に Claude。進行・dispatch 専任。プロダクト判断は PdM に委譲 |
+| PdM（プロダクト判断） | C-8, D-2統合 | Claude/Opus | Claude/Opus | 常に Claude/Opus。PM が spawn して product-brief 整合・AC 妥当性・follow-up 優先度を判断 |
+| 調査・計画 | C-1〜C-3 | Claude/Sonnet | Claude/Sonnet | PM が担当 |
 | 計画レビュー DA | C-4 | Claude/Sonnet ×2 | Claude/Sonnet ×1 + Codex ×1 | 異プロバイダ混合 |
 | 計画レビュー Engineer | C-4 | Claude/Opus | Codex | |
 | Coding Engineer | C-6 | Claude/Sonnet | Codex | pdh-coding 参照 |
 | QA Engineer | C-6,C-7,C-9 | Claude/Sonnet | Codex | テスト実行・E2E確認・ドキュメント再生成 |
 | 品質 DA | C-7 | Claude/Sonnet ×2 | Codex ×2 | PD-C-7 は ticket 単位の局所欠陥検出。Codex 同プロバイダ×2 で十分、PD-D-2 の 3モデル混合が広い表面積を拾う |
 | 品質 Code Reviewer | C-7 | Claude/Sonnet ×2 | Codex ×2 | 同上 |
-| 目的妥当性 | C-8 | Claude/Opus | Claude/Opus | 常に Claude |
 | AC 裏取り | C-9 | Claude/Sonnet+Opus | Codex | |
 | ゼロベースレビュー DA | D-2 | Claude/Sonnet ×1 + Codex ×1 + Claude/Opus ×1 | Claude/Sonnet ×1 + Codex ×1 + Claude/Opus ×1 | 3モデル混合 |
 | ゼロベースレビュー CR | D-2 | Claude/Sonnet ×1 + Codex ×1 + Claude/Opus ×1 | Claude/Sonnet ×1 + Codex ×1 + Claude/Opus ×1 | 3モデル混合 |
