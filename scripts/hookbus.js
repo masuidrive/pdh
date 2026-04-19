@@ -15,9 +15,6 @@
 // ## セットアップ (プロジェクトの `.claude/settings.json` に追加)
 //
 //   {
-//     "env": {
-//       "CLAUDE_EVENT_DISABLE": "1"    // ← 配線直後は default で dormant、follow-up で外す
-//     },
 //     "hooks": {
 //       "SessionStart":       [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
 //       "Stop":               [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
@@ -33,15 +30,8 @@
 // send-keys 後 5-10 秒で該当 pane key の UserPromptSubmit event を待ち、来なければ
 // 補助 Enter を送り直す。
 //
-// 上記は **hook が発火してもログはまだ書かない** 状態 (kill-switch ON)。tmux-director
-// 側を hookbus 消費モードに切り替える時に `CLAUDE_EVENT_DISABLE` を env から外す。
-//
-// ## 制御 env
-//
-//   CLAUDE_EVENT_DISABLE=1     event サブコマンドを no-op exit。全 worker で事実上無効化。
-//   CLAUDE_EVENT_ROLE=director  director 自身の hook を除外 (log 汚染防止)。
-//                                director pane 起動時に export すること。
-//                                子 subagent (Monitor 等) にも env 継承で自動伝播。
+// Director 自身の event が log に混ざっても、pull --include で worker pane を明示 allow-list
+// するため consumption 時に自然に除外される。log file 容量への影響は pragmatic に小さい。
 //
 // ## サブコマンド
 //
@@ -68,7 +58,7 @@
 //     この出力を消費する。監視対象の worker key を明示的に --include で列挙する:
 //
 //       Monitor({
-//         command: "env -u CLAUDE_EVENT_DISABLE scripts/hookbus.js pull --include <w1-key> --include <w2-key> --include <w3-key> --follow",
+//         command: "scripts/hookbus.js pull --include <w1-key> --include <w2-key> --include <w3-key> --follow",
 //         description: "tmux worker idle events",
 //         persistent: true
 //       })
@@ -665,10 +655,6 @@ function parseCleanupArgs(argv) {
 }
 
 async function eventCommand() {
-  if (process.env.CLAUDE_EVENT_ROLE === 'director' || process.env.CLAUDE_EVENT_DISABLE === '1') {
-    return;
-  }
-
   const input = await readStdinJson();
   const socketHash = resolveSocketHash(input, process.env);
   const root = eventsRoot(socketHash);
@@ -1196,40 +1182,6 @@ if (import.meta.vitest) {
   });
 
   describe('hookbus.js integration', () => {
-    test('event command respects director and disable no-op guards', () => {
-      const tmpdir = setTmpdir(makeTempDir('claude-events-guards-'));
-      const socketPath = '/tmp/tmux-guards/default';
-      const env = {
-        TMPDIR: tmpdir,
-        TMUX: `${socketPath},1,0`,
-        TMUX_PANE: '%1',
-        CLAUDE_EVENT_DISABLE: '1',
-      };
-      const input = JSON.stringify({
-        hook_event_name: 'Stop',
-        session_id: 'guard-session',
-        transcript_path: '/tmp/transcript',
-        cwd: '/workspace',
-      });
-
-      const disabled = runCmd(['event'], { env, input });
-      expect(disabled.status).toBe(0);
-      expect(fs.existsSync(logPath(eventsRoot(expectedHash(socketPath))))).toBe(false);
-
-      const director = runCmd(['event'], {
-        env: {
-          TMPDIR: tmpdir,
-          TMUX: `${socketPath},1,0`,
-          TMUX_PANE: '%1',
-          CLAUDE_EVENT_DISABLE: undefined,
-          CLAUDE_EVENT_ROLE: 'director',
-        },
-        input,
-      });
-      expect(director.status).toBe(0);
-      expect(fs.existsSync(logPath(eventsRoot(expectedHash(socketPath))))).toBe(false);
-    });
-
     test('whoami prints socket hash and local pid fallback', () => {
       const socketPath = '/tmp/tmux-whoami/default';
       const withPane = runCmd(['whoami'], {
@@ -1261,7 +1213,6 @@ if (import.meta.vitest) {
           TMPDIR: tmpdir,
           TMUX: `${socketPathA},1,0`,
           TMUX_PANE: '%11',
-          CLAUDE_EVENT_DISABLE: undefined,
         },
         input: JSON.stringify({
           hook_event_name: 'SessionStart',
@@ -1276,7 +1227,6 @@ if (import.meta.vitest) {
           TMPDIR: tmpdir,
           TMUX: '',
           TMUX_PANE: '',
-          CLAUDE_EVENT_DISABLE: undefined,
         },
         input: JSON.stringify({
           hook_event_name: 'Stop',
@@ -1292,7 +1242,6 @@ if (import.meta.vitest) {
           TMPDIR: tmpdir,
           TMUX: `${socketPathB},2,0`,
           TMUX_PANE: '',
-          CLAUDE_EVENT_DISABLE: undefined,
         },
         input: JSON.stringify({
           hook_event_name: 'Stop',
@@ -1352,7 +1301,6 @@ if (import.meta.vitest) {
           TMPDIR: tmpdir,
           TMUX: `${socketPath},1,0`,
           TMUX_PANE: '%5',
-          CLAUDE_EVENT_DISABLE: undefined,
         },
         input: JSON.stringify({
           hook_event_name: 'Stop',
@@ -1382,7 +1330,6 @@ if (import.meta.vitest) {
           TMPDIR: tmpdir,
           TMUX: `${socketPath},1,0`,
           TMUX_PANE: '%6',
-          CLAUDE_EVENT_DISABLE: undefined,
           HOOKBUS_LAST_MESSAGE_MAX: '0',
         },
         input: JSON.stringify({
@@ -1467,7 +1414,6 @@ if (import.meta.vitest) {
         cwd: repoRoot,
         env: (() => {
           const nextEnv = { ...process.env, TMPDIR: tmpdir };
-          delete nextEnv.CLAUDE_EVENT_DISABLE;
           return nextEnv;
         })(),
         stdio: ['ignore', 'pipe', 'pipe'],

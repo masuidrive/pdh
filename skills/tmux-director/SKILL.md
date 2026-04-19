@@ -193,11 +193,9 @@ hookbus 配線済のプロジェクトでは常に 1 を使うこと。未配線
 ls scripts/hookbus.js && jq '.hooks.Stop' .claude/settings.json
 ```
 
-両方存在すれば配線済。`env.CLAUDE_EVENT_DISABLE == "1"` なら dormant (event 書込ゼロ) なので、director セッションで以下を実施して活性化:
+両方存在すれば配線済。Director セッションで以下を実施して Monitor を起動:
 
-1. `.claude/settings.json` の `env.CLAUDE_EVENT_DISABLE` を `"1"` から外す or 削除 (1 回だけ、project 全体に反映)
-2. Director pane の Claude 起動時に `CLAUDE_EVENT_ROLE=director claude` で起動 — director 自身の hook を除外 (log 汚染防止、Monitor Agent subagent にも env 継承で自動伝播)
-3. Director セッション内で監視対象 worker の key を決定し、**`--include` で明示的に allow-list** を指定して Monitor 起動:
+1. 監視対象 worker の key を決定し、**`--include` で明示的に allow-list** を指定して Monitor 起動:
 
    ```bash
    # a) tmux socket hash を取得
@@ -209,13 +207,13 @@ ls scripts/hookbus.js && jq '.hooks.Stop' .claude/settings.json
 
    ```
    Monitor({
-     command: "env -u CLAUDE_EVENT_DISABLE scripts/hookbus.js pull --include <w1-key> --include <w2-key> --include <w3-key> --follow",
+     command: "scripts/hookbus.js pull --include <w1-key> --include <w2-key> --include <w3-key> --follow",
      description: "tmux worker idle events",
      persistent: true
    })
    ```
 
-   `--include` 未指定なら **全 worker の event** が流れる (無関係な pane も含む)。監視対象を絞るには明示必須。Director 自身の key は include list にないので自然に yield されない (`--exclude` は廃止)。cursor identity は省略時は `whoami` (= Director の key)。
+   `--include` 未指定なら **全 worker の event** が流れる (無関係な pane も含む)。監視対象を絞るには明示必須。Director 自身の event が log に混ざっても include list にないので consumption 時に自然に除外される。cursor identity は省略時は `whoami` (= Director の key)。
 
    worker が Stop/Notification した瞬間、1 event = 1 通知として director の会話に push される。
 
@@ -225,20 +223,18 @@ scripts/hookbus.js をコピーして `.claude/settings.json` に以下を追加
 
 ```json
 {
-  "env": {
-    "CLAUDE_EVENT_DISABLE": "1"
-  },
   "hooks": {
-    "SessionStart":  [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
-    "Stop":          [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
-    "SubagentStop":  [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
-    "Notification":  [{"matcher":"idle_prompt|permission_prompt",
-                       "hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}]
+    "SessionStart":      [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
+    "Stop":              [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
+    "SubagentStop":      [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
+    "Notification":      [{"matcher":"idle_prompt|permission_prompt",
+                            "hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
+    "UserPromptSubmit":  [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}]
   }
 }
 ```
 
-Default で dormant (`CLAUDE_EVENT_DISABLE=1`) なので配線しても既存 Claude の挙動は変わらない。上記「配線チェック」→「活性化」手順で切替え。詳細は `scripts/hookbus.js` ヘッダコメント参照。
+詳細は `scripts/hookbus.js` ヘッダコメント参照。
 
 ---
 
@@ -263,7 +259,7 @@ tmux send-keys -t WINDOW.PANE Enter
 
 送信後 Enter が本当に worker に届いたかを **hookbus の `UserPromptSubmit` event で判定する**。
 
-settings.json に以下を配線する:
+settings.json に以下が配線済み:
 ```
 "UserPromptSubmit": [{"hooks": [{"type":"command", "command":"scripts/hookbus.js event", "timeout":5}]}]
 ```
@@ -565,4 +561,4 @@ active / idle の判断は Director が毎回行い、全 worker の状態が変
 - PDH ワークフローから大きく外れる場合は、window への指示を止め、ユーザにその旨を伝えて判断を仰ぐ
 
 ---
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/tmux-director/SKILL.md
+Based on https://github.com/masuidrive/pdh/blob/3b941a7/skills/tmux-director/SKILL.md
