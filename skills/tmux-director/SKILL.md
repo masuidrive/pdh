@@ -257,9 +257,29 @@ tmux send-keys -t WINDOW.PANE Enter
 
 **⚠ text と Enter の間に `sleep 2` を必ず挟む。** text 送信直後に Enter を即時送ると、paste buffer の処理完了前に Enter が走って prompt に残る race が起きる (paste-buffer 経由の長文で頻発)。`sleep 1` では足りず、実測で `sleep 2` が必要。
 
-送信後は capture-pane で `❯ Press up to edit queued messages` or spinner が出ているか確認する。出ていなければ Enter が届いていないので `send-keys Enter` を単独で補助送信する。
-
 **長文 kickoff を `tmux load-buffer` + `tmux paste-buffer` で送る場合も同じ**: paste-buffer → `sleep 2` → `send-keys Enter` の 3 段で書く。paste 完了前に Enter を送ると取りこぼす。
+
+### TD-3.1a. Enter 受領確認 — UserPromptSubmit hookbus 監視
+
+送信後 Enter が本当に worker に届いたかを **hookbus の `UserPromptSubmit` event で判定する**。
+
+settings.json に以下を配線する:
+```
+"UserPromptSubmit": [{"hooks": [{"type":"command", "command":"scripts/hookbus.js event", "timeout":5}]}]
+```
+
+これで Claude Code worker の入力が submit されるたびに hookbus へ `{hook_event_name: "UserPromptSubmit", key: "<hash>:<pane_id>", ...}` が流れる。
+
+**検証フロー** (送信後 5-10 秒以内):
+1. `tmux send-keys` + sleep 2 + Enter 送信
+2. hookbus pull で該当 pane の `UserPromptSubmit` event が 5-10 秒以内に来るか監視
+   - 来る → Enter 受領成功、worker 処理開始
+   - 来ない → Enter 取りこぼし、**補助 `send-keys Enter` を単独送信** → 再度 UserPromptSubmit 待ち
+3. UserPromptSubmit 後 `Stop` event (通常 30s-数分後) で完了判定
+
+**補足**: `UserPromptSubmit` event には `prompt` フィールドに送信された prompt 先頭が含まれる場合がある。送信した approval 文の冒頭と一致すれば確度が増す (pane_id 一致で通常十分)。
+
+Enter 取りこぼしが続く場合は paste-buffer 経由でなく、短いテキストに分割して `send-keys "..."` + `sleep 2` + `send-keys Enter` を複数回に分ける。
 
 **重要: Window への指示は常に 1 フェーズ分のみ。** 「PD-C-4 をやって、その後実装も進めて」のように複数フェーズをまとめて指示しない。ユーザ確認 gate（PD-C-5, PD-C-10）を飛ばす原因になる。
 

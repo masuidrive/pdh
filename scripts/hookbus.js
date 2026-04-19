@@ -19,13 +19,19 @@
 //       "CLAUDE_EVENT_DISABLE": "1"    // ← 配線直後は default で dormant、follow-up で外す
 //     },
 //     "hooks": {
-//       "SessionStart":  [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
-//       "Stop":          [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
-//       "SubagentStop":  [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
-//       "Notification":  [{"matcher":"idle_prompt|permission_prompt",
-//                          "hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}]
+//       "SessionStart":       [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
+//       "Stop":               [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
+//       "SubagentStop":       [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
+//       "Notification":       [{"matcher":"idle_prompt|permission_prompt",
+//                                "hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
+//       "UserPromptSubmit":   [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}]
 //     }
 //   }
+//
+// UserPromptSubmit は director が tmux send-keys で Enter 送信した直後に worker pane で
+// 入力が submit されたかを verify するために使う (Enter 取りこぼし検出)。director は
+// send-keys 後 5-10 秒で該当 pane key の UserPromptSubmit event を待ち、来なければ
+// 補助 Enter を送り直す。
 //
 // 上記は **hook が発火してもログはまだ書かない** 状態 (kill-switch ON)。tmux-director
 // 側を hookbus 消費モードに切り替える時に `CLAUDE_EVENT_DISABLE` を env から外す。
