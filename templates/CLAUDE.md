@@ -121,7 +121,8 @@ pdh-dev が spawn するチームメンバーの実行主体とモデル。pdh-d
 | 品質 DA | C-7 | Claude/Sonnet ×2 | Codex ×2 | PD-C-7 は ticket 単位の局所欠陥検出。Codex 同プロバイダ×2 で十分、PD-D-2 の 3モデル混合が広い表面積を拾う |
 | 品質 Code Reviewer | C-7 | Claude/Sonnet ×2 | Codex ×2 | 同上 |
 | AC 裏取り | C-9 | Claude/Sonnet+Opus | Codex | |
-| Surface Observer | C-9 | Claude/Sonnet | Claude/Sonnet | PD-C-10 直前に実機で UI / HTTP API / SDK を consumer 視点で観察。agent-browser / curl / 実 SDK 使用。純 backend 変更のみなら skip 可 |
+| Surface Observer | C-9 | Claude/Sonnet | Claude/Sonnet | PD-C-10 直前に実機で UI / HTTP API / SDK を consumer 視点で観察。実ブラウザ / browser automation CLI / curl / 実 SDK 使用。純 backend 変更のみなら skip 可 |
+| ユーザケーステスト QA | D-3 | Claude/Sonnet | Codex | Epic 単位で主要ユーザジャーニーを実環境で end-to-end 実行し verification.md を作成。PM は結果を読んで判断 |
 | ゼロベースレビュー DA | D-2 | Claude/Sonnet ×1 + Codex ×1 + Claude/Opus ×1 | Claude/Sonnet ×1 + Codex ×1 + Claude/Opus ×1 | 3モデル混合 |
 | ゼロベースレビュー CR | D-2 | Claude/Sonnet ×1 + Codex ×1 + Claude/Opus ×1 | Claude/Sonnet ×1 + Codex ×1 + Claude/Opus ×1 | 3モデル混合 |
 | Document Owner | — | Claude/Sonnet | Claude/Sonnet | |
