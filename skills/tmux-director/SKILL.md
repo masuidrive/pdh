@@ -15,6 +15,12 @@ tmux で動いている別 window の Claude Code を管理・監督する。
 
 **重要: 監視ループは Monitor Agent に委任する。**
 
+## 実行モードの選択 (Claude / Codex)
+
+tmux-director skill を起動した直後、現在のモードが明確でない場合（ユーザが明示的に指定しておらず、会話履歴にも記録がない等）は、`which codex` を実行して codex CLI の存在を確認し、ユーザに「Claude モードで進めますか、Codex モードで進めますか」と選択を求める。ユーザが既に「codex モード」または「Claude モード」と指示済みの場合は確認不要。
+
+選択したモードは window 側 pdh-dev にも引き継がれる前提。TD-2 で window に `/pdh-dev` を送る際にユーザが同じモードを選ぶのが自然。director 側と window 側で異なるモードを使う意図がある場合のみ、ユーザに都度確認する。
+
 ## 概要フロー
 
 ```mermaid
