@@ -37,6 +37,8 @@ try {
     await cmdRunCodex(args);
   } else if (command === "run-claude") {
     await cmdRunClaude(args);
+  } else if (command === "run-provider") {
+    await cmdRunProvider(args);
   } else if (command === "guards") {
     await cmdGuards(args);
   } else if (command === "advance") {
@@ -72,6 +74,7 @@ Usage:
   pdh-flowchart init [--repo DIR]
   pdh-flowchart flow [--variant full|light]
   pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5]
+  pdh-flowchart run-provider RUN_ID --prompt-file FILE [--repo DIR]
   pdh-flowchart run-codex [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-6]
   pdh-flowchart run-claude [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-4]
   pdh-flowchart guards --repo DIR --step PD-C-9
@@ -419,6 +422,37 @@ async function cmdRunCodex(argv) {
   console.log(`Raw log: ${rawLogPath}`);
 }
 
+async function cmdRunProvider(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("run-provider requires RUN_ID");
+  }
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const store = openStore(defaultStateDir(repo));
+  const run = store.getRun(runId);
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+  const stepId = options.step ?? run.current_step_id;
+  if (!stepId) {
+    throw new Error(`Run has no current step: ${runId}`);
+  }
+  assertCurrentStep(run, stepId, options);
+  const flow = loadFlow(options.flow ?? run.flow_id);
+  const step = getStep(flow, stepId);
+  if (step.provider === "codex") {
+    await cmdRunCodex(argv);
+    return;
+  }
+  if (step.provider === "claude") {
+    await cmdRunClaude(argv);
+    return;
+  }
+  throw new Error(`${stepId} uses provider ${step.provider}; run-provider only supports codex and claude steps`);
+}
+
 async function cmdRunClaude(argv) {
   const { openStore, defaultStateDir } = await import("./db.mjs");
   const positionalRunId = argv.find((value) => !value.startsWith("--"));
@@ -638,10 +672,10 @@ function humanDecisionCommands(runId, stepId, repo = null) {
 function nextProviderCommand(runId, step, repo = null) {
   const repoArg = repo ? ` --repo ${shellQuote(repo)}` : "";
   if (step.provider === "codex") {
-    return `node src/cli.mjs run-codex ${runId}${repoArg} --prompt-file <prompt.md> --step ${step.id}`;
+    return `node src/cli.mjs run-provider ${runId}${repoArg} --prompt-file <prompt.md>`;
   }
   if (step.provider === "claude") {
-    return `node src/cli.mjs run-claude ${runId}${repoArg} --prompt-file <prompt.md> --step ${step.id}`;
+    return `node src/cli.mjs run-provider ${runId}${repoArg} --prompt-file <prompt.md>`;
   }
   return null;
 }

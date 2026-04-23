@@ -616,6 +616,7 @@ Manual smoke tests:
 - `run-codex <run-id>` は current step を実行対象にし、provider mismatch / step mismatch を通常拒否するようにした。
 - `run-next <run-id>` は current step の guard を評価して通過済み step を進め、PD-C-5 のような human gate では summary を生成して `needs_human` で停止し、未実行 provider step では実行待ちとして停止する。
 - `run-claude <run-id>` は Claude Code `stream-json` を raw log として保存し、session id、assistant message、result、rate limit event を progress event に正規化する。
+- `run-provider <run-id>` は flow の current step provider を読み、Codex / Claude の個別 adapter に振り分ける。
 
 ### 未解決
 
