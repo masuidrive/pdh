@@ -3,11 +3,13 @@ import { dirname } from "node:path";
 import { spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 
-export async function runCodex({ cwd, prompt, rawLogPath, env = {}, bypass = true, model = null, onEvent = () => {} }) {
+export async function runCodex({ cwd, prompt, rawLogPath, env = {}, bypass = true, model = null, resume = null, onEvent = () => {} }) {
   mkdirSync(dirname(rawLogPath), { recursive: true });
   const raw = createWriteStream(rawLogPath, { flags: "a" });
   const effectiveEnv = { ...process.env, ...env };
-  const args = ["exec", "--json", "--cd", cwd, "--skip-git-repo-check"];
+  const args = resume
+    ? ["exec", "resume", "--json", "--skip-git-repo-check"]
+    : ["exec", "--json", "--cd", cwd, "--skip-git-repo-check"];
   for (const key of ["PATH", "TMPDIR", "UV_CACHE_DIR"]) {
     if (effectiveEnv[key]) {
       args.push("-c", `shell_environment_policy.set.${key}=${JSON.stringify(effectiveEnv[key])}`);
@@ -17,6 +19,9 @@ export async function runCodex({ cwd, prompt, rawLogPath, env = {}, bypass = tru
     args.push("--model", model);
   }
   args.push(bypass ? "--dangerously-bypass-approvals-and-sandbox" : "--full-auto");
+  if (resume) {
+    args.push(resume);
+  }
   args.push("-");
 
   const child = spawn(process.env.CODEX_BIN || "codex", args, {

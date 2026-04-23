@@ -162,6 +162,16 @@ export class Store {
     `).run(runId, stepId, attempt, provider, sessionId, resumeToken, rawLogPath);
   }
 
+  latestProviderSession(runId, stepId, provider) {
+    return this.db.prepare(`
+      SELECT *
+      FROM provider_sessions
+      WHERE run_id = ? AND step_id = ? AND provider = ?
+      ORDER BY attempt DESC
+      LIMIT 1
+    `).get(runId, stepId, provider);
+  }
+
   openHumanGate({ runId, stepId, prompt, summary }) {
     const now = new Date().toISOString();
     this.db.prepare(`

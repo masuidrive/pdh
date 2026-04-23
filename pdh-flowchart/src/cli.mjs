@@ -44,6 +44,8 @@ try {
     await cmdRunClaude(args);
   } else if (command === "run-provider") {
     await cmdRunProvider(args);
+  } else if (command === "resume") {
+    await cmdResume(args);
   } else if (command === "prompt") {
     await cmdPrompt(args);
   } else if (command === "metadata") {
@@ -92,6 +94,7 @@ Usage:
   pdh-flowchart judgement RUN_ID [--repo DIR] [--step PD-C-4] [--kind plan_review] [--status "No Critical/Major"] [--summary TEXT]
   pdh-flowchart verify RUN_ID [--repo DIR] [--command "scripts/test-all.sh"]
   pdh-flowchart run-provider RUN_ID [--prompt-file FILE] [--repo DIR]
+  pdh-flowchart resume RUN_ID [--prompt-file FILE] [--repo DIR]
   pdh-flowchart run-codex [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-6]
   pdh-flowchart run-claude [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-4]
   pdh-flowchart guards --repo DIR --step PD-C-9
@@ -457,6 +460,7 @@ async function cmdRunCodex(argv) {
   }
   const attempt = Number(options.attempt ?? "1");
   const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "codex.raw.jsonl");
+  const resumeSession = resolveProviderResume({ store, runId, stepId, provider: "codex", option: options.resume ?? null });
   store.updateRun(runId, { status: "running", current_step_id: stepId });
   syncRunMetadata({ store, repo, runId });
   const noteTicketBefore = snapshotNoteTicketFiles({ repoPath: repo });
@@ -467,6 +471,7 @@ async function cmdRunCodex(argv) {
     rawLogPath,
     bypass: options.bypass !== "false",
     model: options.model ?? null,
+    resume: resumeSession,
     onEvent(event) {
       store.addEvent({ runId, stepId, attempt, type: event.type, provider: "codex", message: event.message, payload: event.payload ?? {} });
     }
@@ -482,6 +487,14 @@ async function cmdRunCodex(argv) {
   syncRunMetadata({ store, repo, runId });
   console.log(`${runId} ${stepId} ${status}`);
   console.log(`Raw log: ${rawLogPath}`);
+}
+
+async function cmdResume(argv) {
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("resume requires RUN_ID");
+  }
+  await cmdRunProvider([...argv, "--resume", "latest"]);
 }
 
 async function cmdRunProvider(argv) {
@@ -660,6 +673,7 @@ async function cmdRunClaude(argv) {
   const attempt = Number(options.attempt ?? "1");
   const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "claude.raw.jsonl");
   const permissionMode = options["permission-mode"] ?? (options.bypass === "true" ? "bypassPermissions" : "acceptEdits");
+  const resumeSession = resolveProviderResume({ store, runId, stepId, provider: "claude", option: options.resume ?? null });
   store.updateRun(runId, { status: "running", current_step_id: stepId });
   syncRunMetadata({ store, repo, runId });
   const noteTicketBefore = snapshotNoteTicketFiles({ repoPath: repo });
@@ -672,7 +686,7 @@ async function cmdRunClaude(argv) {
     includePartialMessages: options["include-partial-messages"] === "true",
     model: options.model ?? null,
     permissionMode,
-    resume: options.resume ?? null,
+    resume: resumeSession,
     onEvent(event) {
       store.addEvent({ runId, stepId, attempt, type: event.type, provider: "claude", message: event.message, payload: event.payload ?? {} });
     }
@@ -934,6 +948,21 @@ function nextProviderCommand(runId, step, repo = null) {
     return `node src/cli.mjs run-provider ${runId}${repoArg}`;
   }
   return null;
+}
+
+function resolveProviderResume({ store, runId, stepId, provider, option }) {
+  if (!option) {
+    return null;
+  }
+  if (!["true", "latest", "last"].includes(option)) {
+    return option;
+  }
+  const session = store.latestProviderSession(runId, stepId, provider);
+  const token = session?.resume_token ?? session?.session_id ?? null;
+  if (!token) {
+    throw new Error(`No saved ${provider} session for ${stepId}; cannot resume`);
+  }
+  return token;
 }
 
 function shellQuote(value) {

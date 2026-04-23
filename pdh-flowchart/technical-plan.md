@@ -625,6 +625,7 @@ Manual smoke tests:
 - `judgement <run-id>` が PD-C-4/7/8 の structured judgement artifact を保存し、guard runner が `plan_review` / `quality_review` / `purpose_validation` status を読む。
 - AC verification guard は `AC 裏取り結果` markdown table を parse し、`verified` は evidence 必須、`deferred` は deferral ticket 必須、`unverified` は `allowUnverified: false` で fail とする。
 - `verify <run-id>` が PD-C-9 の final verification command と AC parse 結果を `final-verification.json` に保存し、`PD-C-9. プロセスチェックリスト` を runtime 更新する。
+- `resume <run-id>` は current provider step の最新 `provider_sessions` を読み、Codex は `codex exec resume <session> -`、Claude は `--resume <session>` で再実行する。
 
 ### 未解決
 
