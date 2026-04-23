@@ -27,6 +27,8 @@ node src/cli.mjs advance <run-id> --step PD-C-5
 node src/cli.mjs commit-step --step PD-C-6 --message Implementation
 node src/cli.mjs ticket-start --ticket ticket-id
 node src/cli.mjs ticket-close
+node src/cli.mjs prompt <run-id>
+node src/cli.mjs run-provider <run-id>
 node src/cli.mjs run-provider <run-id> --prompt-file prompt.md
 node src/cli.mjs run-codex <run-id> --prompt-file prompt.md
 node src/cli.mjs run-codex --repo /path/to/repo --prompt-file prompt.md --step PD-C-6
@@ -48,7 +50,8 @@ node src/cli.mjs smoke-calc
 - `advance` evaluates deterministic guards and only then moves the run to the next step.
 - `run-next` executes runtime-owned current-step work, advances through passing guards, and stops at human gates or provider steps that still need execution.
 - Runtime commands refuse to operate on a non-current step unless `--force` is provided.
-- `run-provider <run-id>` selects Codex or Claude from the run's current flow step.
+- PD-C provider prompt templates are generated from `pdh-dev` semantics and saved under the run step artifacts.
+- `run-provider <run-id>` selects Codex or Claude from the run's current flow step and generates the step prompt when `--prompt-file` is omitted.
 - `run-codex <run-id>` executes the run's current step and refuses provider/step mismatches unless `--force` is provided.
 - `commit-step`, `ticket-start`, and `ticket-close` provide the first direct runtime action hooks.
 - Full transition execution is partial; current implementation focuses on Phase 0 provider/state/guard/action groundwork.

@@ -7,6 +7,7 @@ import { runCodex } from "./codex-adapter.mjs";
 import { runClaude } from "./claude-adapter.mjs";
 import { runCalcSmoke } from "./smoke-calc.mjs";
 import { createGateSummary, commitStep, ticketStart, ticketClose } from "./actions.mjs";
+import { writeStepPrompt } from "./prompt-templates.mjs";
 
 const emitWarning = process.emitWarning.bind(process);
 process.emitWarning = (warning, ...warningArgs) => {
@@ -39,6 +40,8 @@ try {
     await cmdRunClaude(args);
   } else if (command === "run-provider") {
     await cmdRunProvider(args);
+  } else if (command === "prompt") {
+    await cmdPrompt(args);
   } else if (command === "guards") {
     await cmdGuards(args);
   } else if (command === "advance") {
@@ -74,7 +77,8 @@ Usage:
   pdh-flowchart init [--repo DIR]
   pdh-flowchart flow [--variant full|light]
   pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5]
-  pdh-flowchart run-provider RUN_ID --prompt-file FILE [--repo DIR]
+  pdh-flowchart prompt RUN_ID [--repo DIR] [--step PD-C-6]
+  pdh-flowchart run-provider RUN_ID [--prompt-file FILE] [--repo DIR]
   pdh-flowchart run-codex [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-6]
   pdh-flowchart run-claude [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-4]
   pdh-flowchart guards --repo DIR --step PD-C-9
@@ -442,15 +446,45 @@ async function cmdRunProvider(argv) {
   assertCurrentStep(run, stepId, options);
   const flow = loadFlow(options.flow ?? run.flow_id);
   const step = getStep(flow, stepId);
+  let providerArgv = argv;
+  if (!options["prompt-file"] && step.provider !== "runtime") {
+    const prompt = writeStepPrompt({ repoPath: repo, stateDir: store.stateDir, run, flow, stepId });
+    store.addEvent({ runId, stepId, type: "artifact", provider: "runtime", message: `prompt generated ${prompt.artifactPath}`, payload: { path: prompt.artifactPath } });
+    providerArgv = [...argv, "--prompt-file", prompt.artifactPath];
+  }
   if (step.provider === "codex") {
-    await cmdRunCodex(argv);
+    await cmdRunCodex(providerArgv);
     return;
   }
   if (step.provider === "claude") {
-    await cmdRunClaude(argv);
+    await cmdRunClaude(providerArgv);
     return;
   }
   throw new Error(`${stepId} uses provider ${step.provider}; run-provider only supports codex and claude steps`);
+}
+
+async function cmdPrompt(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("prompt requires RUN_ID");
+  }
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const store = openStore(defaultStateDir(repo));
+  const run = store.getRun(runId);
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+  const flow = loadFlow(options.flow ?? run.flow_id);
+  const stepId = options.step ?? run.current_step_id;
+  if (!stepId) {
+    throw new Error(`Run has no current step: ${runId}`);
+  }
+  assertCurrentStep(run, stepId, options);
+  const prompt = writeStepPrompt({ repoPath: repo, stateDir: store.stateDir, run, flow, stepId });
+  store.addEvent({ runId, stepId, type: "artifact", provider: "runtime", message: `prompt generated ${prompt.artifactPath}`, payload: { path: prompt.artifactPath } });
+  console.log(prompt.artifactPath);
 }
 
 async function cmdRunClaude(argv) {
@@ -672,10 +706,10 @@ function humanDecisionCommands(runId, stepId, repo = null) {
 function nextProviderCommand(runId, step, repo = null) {
   const repoArg = repo ? ` --repo ${shellQuote(repo)}` : "";
   if (step.provider === "codex") {
-    return `node src/cli.mjs run-provider ${runId}${repoArg} --prompt-file <prompt.md>`;
+    return `node src/cli.mjs run-provider ${runId}${repoArg}`;
   }
   if (step.provider === "claude") {
-    return `node src/cli.mjs run-provider ${runId}${repoArg} --prompt-file <prompt.md>`;
+    return `node src/cli.mjs run-provider ${runId}${repoArg}`;
   }
   return null;
 }
