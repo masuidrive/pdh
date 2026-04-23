@@ -12,6 +12,7 @@ import { writeRuntimeMetadata } from "./metadata.mjs";
 import { captureNoteTicketPatchProposal, snapshotNoteTicketFiles } from "./patch-proposals.mjs";
 import { defaultJudgementKind, loadJudgements, writeJudgement } from "./judgements.mjs";
 import { runFinalVerification } from "./final-verification.mjs";
+import { formatDoctor, runDoctor } from "./doctor.mjs";
 
 const emitWarning = process.emitWarning.bind(process);
 process.emitWarning = (warning, ...warningArgs) => {
@@ -40,6 +41,8 @@ try {
     await cmdLogs(args);
   } else if (command === "show-gate") {
     await cmdShowGate(args);
+  } else if (command === "doctor") {
+    cmdDoctor(args);
   } else if (command === "run") {
     await cmdRun(args);
   } else if (command === "run-codex") {
@@ -115,6 +118,7 @@ Usage:
   pdh-flowchart status RUN_ID [--repo DIR]
   pdh-flowchart logs RUN_ID [--repo DIR] [--follow] [--json]
   pdh-flowchart show-gate RUN_ID [--repo DIR] [--step PD-C-5] [--path]
+  pdh-flowchart doctor [--repo DIR] [--json]
   pdh-flowchart smoke-calc [--workdir DIR]
 
 Notes:
@@ -809,6 +813,20 @@ async function cmdShowGate(argv) {
     return;
   }
   console.log(readFileSync(gate.summary, "utf8"));
+}
+
+function cmdDoctor(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  const result = runDoctor({ repoPath: repo });
+  if (options.json === "true") {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(formatDoctor(result));
+  }
+  if (result.status === "fail") {
+    process.exitCode = 1;
+  }
 }
 
 async function cmdSmokeCalc(argv) {
