@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { getStep } from "./flow.mjs";
+import { evaluateAcVerificationTable } from "./ac-verification.mjs";
 
 export function evaluateStepGuards(flow, stepId, context = {}) {
   const step = getStep(flow, stepId);
@@ -86,15 +87,11 @@ function checkCommand(guard, repo) {
 }
 
 function checkAcVerificationTable(guard, repo) {
-  const path = join(repo, "current-note.md");
-  if (!existsSync(path)) {
-    return passIf(guard, false, "current-note.md missing");
-  }
-  const text = readFileSync(path, "utf8");
-  const hasTable = text.includes("AC 裏取り結果") || text.includes("AC Verification");
-  const hasUnverified = /\bunverified\b/i.test(text);
-  const ok = hasTable && (guard.allowUnverified || !hasUnverified);
-  return passIf(guard, ok, `hasTable=${hasTable} hasUnverified=${hasUnverified}`);
+  const result = evaluateAcVerificationTable({ repoPath: repo, allowUnverified: guard.allowUnverified === true });
+  const evidence = result.ok
+    ? `rows=${result.rows.length} verified=${result.counts.verified} deferred=${result.counts.deferred} unverified=${result.counts.unverified}`
+    : result.errors.join("; ");
+  return passIf(guard, result.ok, evidence);
 }
 
 function checkArtifact(guard, context) {
