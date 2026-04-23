@@ -29,6 +29,7 @@ Do not run provider smoke checks as part of normal unit-style verification. Use 
 ## Runtime Rules
 
 - Full flow is the MVP baseline. Light flow remains a variant.
+- Flow steps must keep stable `PD-C-*` ids and may add YAML `label`, `summary`, and `userAction` metadata for display.
 - Runtime commands must not operate on non-current steps unless `--force` is explicitly used.
 - Human gates require a gate summary before approval.
 - Provider and runtime steps directly update `current-note.md` and `current-ticket.md`; review those changes with `git diff` and run artifacts.

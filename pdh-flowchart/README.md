@@ -16,6 +16,8 @@ Provider smoke checks load `.env` from the repo root. `.env` is ignored by git a
 
 ```sh
 node src/cli.mjs flow --variant full
+node src/cli.mjs flow-graph --variant full
+node src/cli.mjs flow-graph --variant full --format json
 node src/cli.mjs init
 node src/cli.mjs run --ticket ticket-id --variant full
 node src/cli.mjs run --ticket ticket-id --variant full --start-step PD-C-5
@@ -108,6 +110,7 @@ Next:
 ## Current Scope
 
 - Full `pdh-ticket-core` flow definition is represented in `flows/pdh-ticket-core.yaml`.
+- Flow steps keep their stable `PD-C-*` ids and add human-facing labels, summaries, and user-action hints for CLI/Web display.
 - SQLite state is stored under `.pdh-flowchart/state.sqlite`.
 - State schema changes are tracked in the `schema_migrations` table; current schema version is `1`.
 - Codex JSONL output is saved as raw provider logs.
@@ -128,6 +131,7 @@ Next:
 - `verify <run-id>` runs PD-C-9 final verification, writes `final-verification.json`, and updates the PD-C-9 process checklist.
 - `logs <run-id> --follow` streams normalized progress events, and `show-gate <run-id>` prints the current gate summary.
 - `web --repo <dir>` serves a local read-only dashboard for run progress, logs, gates, interruptions, and git diff. Runtime execution, approvals, resumes, and interruption answers remain CLI-only.
+- `flow-graph` exports the labeled flow as Mermaid or JSON for users who know PDH overall but do not remember each `PD-C-*` detail.
 - `doctor` checks local Node, Codex, Claude Code, uv, git, provider auth, `.env`, and git repository readiness without printing secrets.
 - `examples/fake-pdh-dev` provides a tiny fake target repository for user-perspective flow checks.
 - Blocked `advance` / `run-next` output is concise by default; pass `--json` for full guard payloads.

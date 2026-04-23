@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { URL } from "node:url";
 import { Store, defaultStateDir } from "./db.mjs";
-import { loadFlow, getStep } from "./flow.mjs";
+import { buildFlowView, loadFlow, getStep, renderMermaidFlow } from "./flow.mjs";
 import { loadStepInterruptions } from "./interruptions.mjs";
 import { createRedactor } from "./redaction.mjs";
 
@@ -45,6 +45,10 @@ function handleRequest({ request, response, repo }) {
   }
   if (url.pathname === "/api/state") {
     sendJson(response, 200, collectState({ repo, runId: url.searchParams.get("run") }));
+    return;
+  }
+  if (url.pathname === "/api/flow.mmd") {
+    sendText(response, 200, collectMermaid({ repo, runId: url.searchParams.get("run"), variant: url.searchParams.get("variant") }));
     return;
   }
   sendJson(response, 404, { error: "not_found" });
@@ -95,6 +99,7 @@ function runDetail({ store, stateDir, repo, runId, redactor }) {
   }
   const flow = loadFlow(run.flow_id);
   const currentStep = run.current_step_id ? getStep(flow, run.current_step_id) : null;
+  const flowView = buildFlowView(flow, run.flow_variant, run.current_step_id);
   const events = store.recentEvents(runId, 120).map((event) => normalizeEvent(event, redactor));
   const steps = store.db.prepare(`
     SELECT id, run_id, step_id, attempt, round, provider, mode, status, started_at, finished_at, exit_code, summary, error
@@ -123,9 +128,8 @@ function runDetail({ store, stateDir, repo, runId, redactor }) {
   return {
     run,
     flow: {
-      id: flow.flow,
-      variant: run.flow_variant,
-      sequence: flow.variants?.[run.flow_variant]?.sequence ?? []
+      ...flowView,
+      mermaid: renderMermaidFlow(flow, run.flow_variant, run.current_step_id)
     },
     currentStep,
     steps,
@@ -135,6 +139,24 @@ function runDetail({ store, stateDir, repo, runId, redactor }) {
     events,
     cli: nextCliCommands({ run, currentStep, repo })
   };
+}
+
+function collectMermaid({ repo, runId = null, variant = null }) {
+  const stateDir = defaultStateDir(repo);
+  const store = openReadOnlyStore(stateDir);
+  let flowId = "pdh-ticket-core";
+  let selectedVariant = variant ?? "full";
+  let currentStepId = null;
+  if (store && runId) {
+    const run = store.getRun(runId);
+    if (run) {
+      flowId = run.flow_id;
+      selectedVariant = variant ?? run.flow_variant;
+      currentStepId = run.current_step_id;
+    }
+  }
+  store?.db.close();
+  return renderMermaidFlow(loadFlow(flowId), selectedVariant, currentStepId);
 }
 
 function gitState(repo, redactor) {
@@ -259,6 +281,14 @@ function sendJson(response, status, body) {
   response.end(`${JSON.stringify(body, null, 2)}\n`);
 }
 
+function sendText(response, status, body) {
+  response.writeHead(status, {
+    "Content-Type": "text/plain; charset=utf-8",
+    "Cache-Control": "no-store"
+  });
+  response.end(body);
+}
+
 function renderHtml() {
   return `<!doctype html>
 <html lang="en">
@@ -364,15 +394,15 @@ function renderHtml() {
       margin-bottom: 14px;
     }
     .step {
-      min-height: 44px;
+      min-height: 58px;
       border: 1px solid var(--line);
       border-radius: 6px;
       background: var(--panel);
       padding: 8px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 12px;
-      text-align: center;
     }
+    .step-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+    .step-label { font-weight: 700; margin-top: 3px; }
     .step.current { border-color: var(--accent-2); box-shadow: inset 0 -3px 0 var(--accent-2); }
     .tabs {
       display: flex;
@@ -414,13 +444,21 @@ function renderHtml() {
       line-height: 1.45;
     }
     .diff pre, .log pre { color: #e8edf2; background: var(--code); border-radius: 6px; padding: 12px; }
-    .event, .gate, .interrupt, .command {
+    .event, .gate, .interrupt, .command, .flow-card {
       border: 1px solid var(--line);
       border-radius: 6px;
       padding: 10px;
       margin-bottom: 8px;
       background: #ffffff;
     }
+    .flow-map { display: grid; gap: 10px; }
+    .flow-card.current { border-color: var(--accent-2); box-shadow: inset 4px 0 0 var(--accent-2); }
+    .flow-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+    .flow-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); font-size: 12px; }
+    .flow-label { font-weight: 700; font-size: 15px; }
+    .flow-summary { color: var(--ink); margin: 6px 0; }
+    .flow-action { color: var(--muted); font-size: 13px; }
+    .flow-arrow { color: var(--muted); text-align: center; font-size: 18px; line-height: 1; }
     .event-meta { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
     .empty { color: var(--muted); padding: 12px; }
     @media (max-width: 900px) {
@@ -454,8 +492,8 @@ function renderHtml() {
     </section>
   </main>
   <script>
-    const state = { runId: new URLSearchParams(location.search).get('run'), tab: 'logs', data: null };
-    const tabs = ['logs', 'diff', 'gates', 'interruptions', 'commands'];
+    const state = { runId: new URLSearchParams(location.search).get('run'), tab: 'flow', data: null };
+    const tabs = ['flow', 'logs', 'diff', 'gates', 'interruptions', 'commands'];
 
     function esc(value) {
       return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -504,7 +542,7 @@ function renderHtml() {
       const current = data.run?.currentStep;
       document.getElementById('overview').innerHTML = [
         metric('Status', run ? badge(run.status) : '-'),
-        metric('Current Step', esc(run?.current_step_id || '-')),
+        metric('Current Step', esc(current ? current.id + ' ' + (current.label || '') : '-')),
         metric('Provider', esc(current?.provider || '-')),
         metric('Branch', esc(data.git?.branch || '-'))
       ].join('');
@@ -513,10 +551,13 @@ function renderHtml() {
       return '<div class="metric"><div class="label">' + esc(label) + '</div><div class="value">' + value + '</div></div>';
     }
     function renderSteps(detail) {
-      const sequence = detail?.flow?.sequence || [];
+      const steps = detail?.flow?.steps || [];
       const current = detail?.run?.current_step_id;
-      document.getElementById('steps').innerHTML = sequence.map((step) => (
-        '<div class="step ' + (step === current ? 'current' : '') + '">' + esc(step) + '</div>'
+      document.getElementById('steps').innerHTML = steps.map((step) => (
+        '<div class="step ' + (step.id === current ? 'current' : '') + '" title="' + esc(step.summary || '') + '">' +
+        '<div class="step-id">' + esc(step.id) + '</div>' +
+        '<div class="step-label">' + esc(step.label || step.id) + '</div>' +
+        '</div>'
       )).join('');
     }
     function renderTabs() {
@@ -534,7 +575,10 @@ function renderHtml() {
         primary.innerHTML = '<h2>Run</h2><div class="empty">No run selected</div>';
         return;
       }
-      if (state.tab === 'logs') {
+      if (state.tab === 'flow') {
+        primary.className = 'section';
+        primary.innerHTML = '<h2>Flow</h2><div class="section-body">' + renderFlow(detail.flow || {}) + '</div>';
+      } else if (state.tab === 'logs') {
         primary.innerHTML = '<h2>Logs</h2><div class="section-body">' + (detail.events || []).map(renderEvent).join('') + '</div>';
       } else if (state.tab === 'diff') {
         primary.className = 'section diff';
@@ -554,7 +598,10 @@ function renderHtml() {
     }
     function renderSecondary(data) {
       const detail = data.run;
-      const lines = [
+      const lines = state.tab === 'flow' ? [
+        'Mermaid:',
+        detail?.flow?.mermaid || ''
+      ] : [
         'Git status:',
         data.git?.status || 'clean',
         '',
@@ -565,6 +612,17 @@ function renderHtml() {
         ...(detail?.sessions || []).map((session) => session.step_id + ' attempt ' + session.attempt + ' ' + session.provider + ' ' + (session.raw_log_path || ''))
       ];
       document.getElementById('secondary').innerHTML = '<h2>Repository</h2><div class="section-body"><pre>' + esc(lines.join('\\n')) + '</pre></div>';
+    }
+    function renderFlow(flow) {
+      const steps = flow.steps || [];
+      if (!steps.length) return '<div class="empty">No flow</div>';
+      return '<div class="flow-map">' + steps.map((step, index) => (
+        '<div class="flow-card ' + (step.current ? 'current' : '') + '">' +
+        '<div class="flow-head"><span class="flow-id">' + esc(step.id) + '</span><span class="flow-label">' + esc(step.label || step.id) + '</span>' + badge(step.provider + '/' + step.mode) + '</div>' +
+        '<div class="flow-summary">' + esc(step.summary || '') + '</div>' +
+        '<div class="flow-action">' + esc(step.userAction || '') + '</div>' +
+        '</div>' + (index < steps.length - 1 ? '<div class="flow-arrow">↓</div>' : '')
+      )).join('') + '</div>';
     }
     function renderEvent(event) {
       return '<div class="event"><div class="event-meta">#' + esc(event.id) + ' ' + esc(event.ts) + ' ' + esc(event.stepId || '-') + ' ' + esc(event.type) + ' ' + esc(event.provider || '') + '</div><div>' + esc(event.message || '') + '</div></div>';

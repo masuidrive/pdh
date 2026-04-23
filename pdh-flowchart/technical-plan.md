@@ -608,6 +608,7 @@ Manual smoke tests:
 - 開発中は Docker 外で直接実行してよい。Codex smoke は既存の認証済み Codex CLI session を使い、`codex login` は実行しない。
 - 当面はこの開発環境での直接実行を優先し、Docker runtime / egress / version pinning は deferred operations とする。
 - Web UI は read-only viewer とし、実行・承認・再開・割り込み回答は CLI に残す。
+- Flow step は `PD-C-*` id を正本として残し、YAML の `label` / `summary` / `userAction` を CLI/Web 表示用に持つ。想定ユーザは PDH の概要を知っているが各 step の詳細は覚えていない。
 
 ### 実装済みメモ
 
@@ -630,6 +631,7 @@ Manual smoke tests:
 - `resume <run-id>` は current provider step の最新 `provider_sessions` を読み、Codex は `codex exec resume <session> -`、Claude は `--resume <session>` で再実行する。
 - `logs <run-id> --follow` が normalized progress events を stream し、`show-gate <run-id>` が current human gate summary を表示する。
 - `web --repo <dir>` は local read-only dashboard として run progress、logs、human gates、interruptions、git diff を表示する。server-side mutation endpoint は持たない。
+- `flow-graph` は `pdh-ticket-core.yaml` から Mermaid/JSON を出力し、Web UI は同じ label metadata で flow view を表示する。
 - blocked guard output は通常 concise summary を出し、`--json` 指定時だけ full guard payload を出す。
 - provider failure と guard failure は `failure-summary.md` artifact に failed guards、provider output、raw log、復旧用 CLI command を保存する。
 - `doctor` が Node、Codex、Claude Code、uv、git、provider auth、`.env`、git repo 状態を secret 非表示で確認する。

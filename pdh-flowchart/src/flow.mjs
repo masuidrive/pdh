@@ -57,3 +57,110 @@ export function describeFlow(flow, variant = "full") {
   }
   return `${flow.flow}@v${flow.version} ${variant}: ${selected.sequence.join(" -> ")}`;
 }
+
+export function buildFlowView(flow, variant = "full", currentStepId = null) {
+  const selected = flow.variants?.[variant];
+  if (!selected) {
+    throw new Error(`Unknown flow variant: ${variant}`);
+  }
+  const steps = selected.sequence.map((stepId) => {
+    const step = getStep(flow, stepId);
+    return {
+      id: step.id,
+      label: step.label ?? step.id,
+      summary: step.summary ?? "",
+      userAction: step.userAction ?? "",
+      provider: step.provider,
+      mode: step.mode,
+      current: step.id === currentStepId
+    };
+  });
+  return {
+    id: flow.flow,
+    version: flow.version,
+    variant,
+    initial: selected.initial,
+    sequence: selected.sequence,
+    steps,
+    edges: flowEdges(flow, variant)
+  };
+}
+
+export function flowEdges(flow, variant = "full") {
+  const sequence = flow.variants?.[variant]?.sequence ?? [];
+  const allowed = new Set(sequence);
+  const edges = [];
+  for (const stepId of sequence) {
+    const outcomes = ["success", "failure", "human_approved", "human_changes_requested", "human_rejected"];
+    for (const outcome of outcomes) {
+      const target = nextStep(flow, variant, stepId, outcome);
+      if (!target) {
+        continue;
+      }
+      if (target !== "COMPLETE" && !allowed.has(target)) {
+        continue;
+      }
+      edges.push({ from: stepId, to: target, outcome, label: edgeLabel(outcome) });
+    }
+  }
+  return dedupeEdges(edges);
+}
+
+export function renderMermaidFlow(flow, variant = "full", currentStepId = null) {
+  const view = buildFlowView(flow, variant, currentStepId);
+  const lines = ["flowchart TD"];
+  for (const step of view.steps) {
+    const nodeId = mermaidNodeId(step.id);
+    const label = `${step.id}<br/>${step.label}<br/><small>${step.provider}/${step.mode}</small>`;
+    lines.push(`  ${nodeId}["${escapeMermaidLabel(label)}"]`);
+  }
+  if (view.edges.some((edge) => edge.to === "COMPLETE")) {
+    lines.push('  COMPLETE["Complete"]');
+  }
+  for (const edge of view.edges) {
+    lines.push(`  ${mermaidNodeId(edge.from)} -->|${escapeMermaidLabel(edge.label)}| ${mermaidNodeId(edge.to)}`);
+  }
+  lines.push("  classDef current fill:#fff8e8,stroke:#bf4f43,stroke-width:2px");
+  lines.push("  classDef gate fill:#eef8f2,stroke:#247a4d,stroke-width:1px");
+  if (currentStepId) {
+    lines.push(`  class ${mermaidNodeId(currentStepId)} current`);
+  }
+  for (const step of view.steps.filter((item) => item.mode === "human")) {
+    lines.push(`  class ${mermaidNodeId(step.id)} gate`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function edgeLabel(outcome) {
+  const labels = {
+    success: "success",
+    failure: "failure",
+    human_approved: "approved",
+    human_changes_requested: "changes requested",
+    human_rejected: "rejected"
+  };
+  return labels[outcome] ?? outcome;
+}
+
+function dedupeEdges(edges) {
+  const seen = new Set();
+  return edges.filter((edge) => {
+    const key = `${edge.from}\0${edge.to}\0${edge.outcome}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function mermaidNodeId(stepId) {
+  if (stepId === "COMPLETE") {
+    return "COMPLETE";
+  }
+  return stepId.replace(/[^A-Za-z0-9_]/g, "_");
+}
+
+function escapeMermaidLabel(value) {
+  return String(value).replaceAll('"', "#quot;");
+}

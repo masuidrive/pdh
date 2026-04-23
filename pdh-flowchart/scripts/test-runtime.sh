@@ -59,7 +59,7 @@ test_blocked_run() {
   grep -q "provider_step_requires_execution" "$TMP_ROOT/$run_id.blocked.txt"
   node "$ROOT/src/cli.mjs" status "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.status.txt"
   grep -q "Status: blocked" "$TMP_ROOT/$run_id.status.txt"
-  grep -q "Current Step: PD-C-6" "$TMP_ROOT/$run_id.status.txt"
+  grep -q "Current Step: PD-C-6 実装" "$TMP_ROOT/$run_id.status.txt"
 }
 
 test_failed_run() {
@@ -160,6 +160,9 @@ if (!state.runs.some((run) => run.id === runId)) throw new Error("run missing fr
 const selected = await (await fetch(`${url}api/state?run=${encodeURIComponent(runId)}`)).json();
 if (selected.selectedRunId !== runId) throw new Error("selected run mismatch");
 if (!selected.run?.events?.length) throw new Error("events missing from web state");
+if (!selected.run?.flow?.steps?.some((step) => step.id === "PD-C-6" && step.label === "実装")) throw new Error("flow labels missing");
+const mermaid = await (await fetch(`${url}api/flow.mmd?run=${encodeURIComponent(runId)}`)).text();
+if (!mermaid.includes("PD-C-6") || !mermaid.includes("実装")) throw new Error("mermaid flow labels missing");
 const html = await (await fetch(url)).text();
 if (!html.includes("pdh-flowchart")) throw new Error("html shell missing");
 const mutation = await fetch(`${url}api/state`, { method: "POST" });
@@ -170,6 +173,9 @@ NODE
 }
 
 test_blocked_run
+node "$ROOT/src/cli.mjs" flow-graph --variant light >"$TMP_ROOT/flow-graph.mmd"
+grep -q "PD-C-3" "$TMP_ROOT/flow-graph.mmd"
+grep -q "計画" "$TMP_ROOT/flow-graph.mmd"
 test_failed_run
 test_resumed_run
 test_interrupted_run

@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { loadDotEnv } from "./env.mjs";
-import { loadFlow, getInitialStep, getStep, describeFlow, nextStep, outcomeFromDecision } from "./flow.mjs";
+import { loadFlow, getInitialStep, getStep, describeFlow, nextStep, outcomeFromDecision, buildFlowView, renderMermaidFlow } from "./flow.mjs";
 import { runCodex } from "./codex-adapter.mjs";
 import { runClaude } from "./claude-adapter.mjs";
 import { runCalcSmoke } from "./smoke-calc.mjs";
@@ -92,6 +92,8 @@ try {
     await cmdSmokeCalc(args);
   } else if (command === "flow") {
     cmdFlow(args);
+  } else if (command === "flow-graph") {
+    cmdFlowGraph(args);
   } else {
     throw new Error(`Unknown command: ${command}`);
   }
@@ -106,6 +108,7 @@ function printHelp() {
 Usage:
   pdh-flowchart init [--repo DIR]
   pdh-flowchart flow [--variant full|light]
+  pdh-flowchart flow-graph [--variant full|light] [--format mermaid|json]
   pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5] [--require-ticket-start]
   pdh-flowchart prompt RUN_ID [--repo DIR] [--step PD-C-6]
   pdh-flowchart metadata RUN_ID [--repo DIR]
@@ -158,6 +161,18 @@ function cmdFlow(argv) {
   const variant = options.variant ?? "full";
   const flow = loadFlow(options.flow ?? "pdh-ticket-core");
   console.log(describeFlow(flow, variant));
+}
+
+function cmdFlowGraph(argv) {
+  const options = parseOptions(argv);
+  const variant = options.variant ?? "full";
+  const flow = loadFlow(options.flow ?? "pdh-ticket-core");
+  const currentStepId = options.current ?? null;
+  if (options.format === "json") {
+    console.log(JSON.stringify(buildFlowView(flow, variant, currentStepId), null, 2));
+    return;
+  }
+  console.log(renderMermaidFlow(flow, variant, currentStepId));
 }
 
 async function cmdGuards(argv) {
@@ -384,8 +399,9 @@ async function cmdRun(argv) {
   store.addEvent({ runId, stepId: initial, type: "status", message: `Created ${describeFlow(flow, variant)}` });
   maybeStartTicket({ store, runId, repo, ticket: options.ticket ?? null, required: options["require-ticket-start"] === "true" });
   syncRunMetadata({ store, repo, runId });
+  const initialStep = getStep(flow, initial);
   console.log(runId);
-  console.log(`Current step: ${initial}`);
+  console.log(`Current step: ${formatStepName(initialStep)}`);
   console.log(`Next: ${runNextCommand(runId, repo)}`);
 }
 
@@ -1003,10 +1019,20 @@ async function cmdStatus(argv) {
   }
   console.log(`Run: ${run.id}`);
   console.log(`Status: ${run.status}`);
-  console.log(`Current Step: ${run.current_step_id ?? "-"}`);
+  let currentStep = null;
   if (run.current_step_id) {
     const flow = loadFlow(run.flow_id);
-    const step = getStep(flow, run.current_step_id);
+    currentStep = getStep(flow, run.current_step_id);
+  }
+  console.log(`Current Step: ${currentStep ? formatStepName(currentStep) : "-"}`);
+  if (run.current_step_id) {
+    const step = currentStep;
+    if (step.summary) {
+      console.log(`Step Summary: ${step.summary}`);
+    }
+    if (step.userAction) {
+      console.log(`User Action: ${step.userAction}`);
+    }
     console.log(`Provider: ${step.provider}`);
     console.log(`Mode: ${step.mode}`);
     if (step.guards?.length) {
@@ -1581,6 +1607,10 @@ function resumeCommand(runId, repo = null) {
 function showGateCommand(runId, stepId, repo = null) {
   const repoArg = repo ? ` --repo ${shellQuote(repo)}` : "";
   return `node src/cli.mjs show-gate ${runId}${repoArg} --step ${stepId}`;
+}
+
+function formatStepName(step) {
+  return step.label ? `${step.id} ${step.label}` : step.id;
 }
 
 function interruptAnswerCommands(runId, stepId, repo = null) {

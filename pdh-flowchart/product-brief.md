@@ -157,6 +157,7 @@ runtime は `PD-C-5` または `PD-C-10` 相当の gate に到達した時点で
 ユーザーは provider に依らない progress view で、いま何をしているか、どの step にいるか、何ファイル変わったかを見られる。
 
 Web UI はこの progress view の read-only viewer とする。run 開始、provider 実行、approve/reject、resume、割り込み回答は CLI の責務に残す。
+表示では `PD-C-*` の既存 ID を残しつつ、ユーザーが詳細を覚えていなくても判断できる短いラベル、目的、次に見るべきことを併記する。
 
 ### UC-5: レビュー結果に応じて自動で差し戻す
 
