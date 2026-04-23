@@ -46,16 +46,19 @@
 - [x] Add state schema migrations.
 - [x] Add tests around failed/blocked/resumed runs.
 
-## Next: Operations Hardening
+## Next: Local Runtime Hardening
 
-- [ ] Build a reproducible Docker runtime image for permission-bypass provider execution.
-- [ ] Enforce Docker egress policy for provider APIs, package registries, and git remotes.
-- [ ] Pin exact Codex CLI, Claude Code, Node.js, and uv versions in the Docker image.
 - [ ] Decide whether `.pdh-flowchart/state.sqlite` remains repo-local or moves to a shared volume.
 - [ ] Strengthen direct `current-note.md` / `current-ticket.md` update summaries using `git diff` and artifacts.
 - [ ] Add failed-step artifact summaries for user-facing recovery.
 - [ ] Refine structured review report schema.
 - [ ] Evaluate optional Codex SDK / Claude Agent SDK adapters.
+
+## Deferred: Docker Operations
+
+- [ ] Build a reproducible Docker runtime image for permission-bypass provider execution.
+- [ ] Enforce Docker egress policy for provider APIs, package registries, and git remotes.
+- [ ] Pin exact Codex CLI, Claude Code, Node.js, and uv versions in the Docker image.
 
 ## Phase 3: UI and Flow Expansion
 
@@ -66,6 +69,4 @@
 
 ## Open Decisions
 
-- [ ] Decide Docker egress policy for permission-bypass profile.
-- [ ] Decide exact Codex CLI and Claude Code version pinning for Docker image.
 - [ ] Decide whether `.pdh-flowchart/state.sqlite` remains repo-local or moves to a separate volume for multi-repo use.

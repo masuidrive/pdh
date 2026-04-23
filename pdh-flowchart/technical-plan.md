@@ -606,6 +606,7 @@ Manual smoke tests:
 - 意味的判断には LLM を使う。ただし LLM 出力は evidence artifact であり、最終 gate は Flow Engine guard が判定する。
 - `.env` の `OPENAI_API_KEY` は provider smoke / 動作確認でのみ使用する。通常の unit-style check では実 API を叩かない。
 - 開発中は Docker 外で直接実行してよい。Codex smoke は既存の認証済み Codex CLI session を使い、`codex login` は実行しない。
+- 当面はこの開発環境での直接実行を優先し、Docker runtime / egress / version pinning は deferred operations とする。
 
 ### 実装済みメモ
 

@@ -84,4 +84,4 @@ npm run test:runtime
 - After PD-C-10 approval, runtime invokes `./ticket.sh close` once other close guards pass and records `ticket-close.json`.
 - `run-codex <run-id>` executes the run's current step and refuses provider/step mismatches unless `--force` is provided.
 - `commit-step`, `ticket-start`, and `ticket-close` provide the first direct runtime action hooks.
-- Full transition execution is partial; current implementation focuses on Phase 0 provider/state/guard/action groundwork.
+- Full transition execution is available for the CLI runtime path; Docker hardening is intentionally deferred while local direct execution remains the active development mode.
