@@ -14,6 +14,7 @@ import { defaultJudgementKind, loadJudgements, writeJudgement } from "./judgemen
 import { runFinalVerification } from "./final-verification.mjs";
 import { formatDoctor, runDoctor } from "./doctor.mjs";
 import { withRunLock } from "./locks.mjs";
+import { answerLatestInterruption, createInterruption, latestOpenInterruption, loadStepInterruptions, renderInterruptionMarkdown } from "./interruptions.mjs";
 
 const emitWarning = process.emitWarning.bind(process);
 process.emitWarning = (warning, ...warningArgs) => {
@@ -70,6 +71,12 @@ try {
     await cmdRunNext(args);
   } else if (command === "gate-summary") {
     await cmdGateSummary(args);
+  } else if (command === "interrupt") {
+    await cmdInterrupt(args);
+  } else if (command === "answer") {
+    await cmdAnswer(args);
+  } else if (command === "show-interrupts") {
+    await cmdShowInterrupts(args);
   } else if (["approve", "reject", "request-changes", "cancel"].includes(command)) {
     await cmdHumanDecision(command, args);
   } else if (command === "commit-step") {
@@ -109,6 +116,9 @@ Usage:
   pdh-flowchart advance RUN_ID [--repo DIR] [--step PD-C-5]
   pdh-flowchart run-next RUN_ID [--repo DIR] [--limit 20]
   pdh-flowchart gate-summary RUN_ID --step PD-C-5 [--repo DIR]
+  pdh-flowchart interrupt RUN_ID (--message TEXT | --file FILE) [--repo DIR] [--step PD-C-6]
+  pdh-flowchart answer RUN_ID (--message TEXT | --file FILE) [--repo DIR] [--step PD-C-6]
+  pdh-flowchart show-interrupts RUN_ID [--repo DIR] [--step PD-C-6] [--all] [--path]
   pdh-flowchart approve RUN_ID --step PD-C-5 [--reason TEXT]
   pdh-flowchart reject RUN_ID --step PD-C-5 [--reason TEXT]
   pdh-flowchart request-changes RUN_ID --step PD-C-10 [--reason TEXT]
@@ -234,6 +244,9 @@ async function cmdRunNext(argv) {
       }
       const flow = loadFlow(options.flow ?? run.flow_id);
       const step = getStep(flow, stepId);
+      if (blockIfOpenInterruption({ store, runId, stepId, options, repo, step })) {
+        return;
+      }
 
       if (isHumanGateStep(step)) {
         const humanGate = store.latestHumanGate(runId, stepId);
@@ -412,6 +425,119 @@ async function cmdHumanDecision(command, argv) {
   } });
 }
 
+async function cmdInterrupt(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("interrupt requires RUN_ID");
+  }
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const store = openStore(defaultStateDir(repo));
+  await withCommandRunLock({ store, runId, options, action: async () => {
+    const run = store.getRun(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    const stepId = options.step ?? run.current_step_id;
+    if (!stepId) {
+      throw new Error(`Run has no current step: ${runId}`);
+    }
+    assertCurrentStep(run, stepId, options);
+    const message = readMessageOption(options, "interrupt");
+    const interruption = createInterruption({
+      stateDir: store.stateDir,
+      runId,
+      stepId,
+      message,
+      source: options.source ?? "user",
+      kind: options.kind ?? "clarification"
+    });
+    store.updateRun(runId, { status: "interrupted", current_step_id: stepId });
+    syncRunMetadata({ store, repo, runId });
+    store.addEvent({ runId, stepId, type: "interrupted", provider: "runtime", message: `${stepId} interrupted`, payload: interruption });
+    console.log(`${runId} ${stepId} interrupted`);
+    console.log(`Interrupt: ${interruption.artifactPath}`);
+    console.log("Next:");
+    for (const command of interruptAnswerCommands(runId, stepId, repo)) {
+      console.log(`- ${command}`);
+    }
+  } });
+}
+
+async function cmdAnswer(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("answer requires RUN_ID");
+  }
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const store = openStore(defaultStateDir(repo));
+  await withCommandRunLock({ store, runId, options, action: async () => {
+    const run = store.getRun(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    const stepId = options.step ?? run.current_step_id;
+    if (!stepId) {
+      throw new Error(`Run has no current step: ${runId}`);
+    }
+    assertCurrentStep(run, stepId, options);
+    const message = readMessageOption(options, "answer");
+    const interruption = answerLatestInterruption({
+      stateDir: store.stateDir,
+      runId,
+      stepId,
+      message,
+      source: options.source ?? "user"
+    });
+    store.updateRun(runId, { status: "running", current_step_id: stepId });
+    syncRunMetadata({ store, repo, runId });
+    store.addEvent({ runId, stepId, type: "interrupt_answered", provider: "runtime", message: `${stepId} interrupt answered`, payload: interruption });
+    const flow = loadFlow(options.flow ?? run.flow_id);
+    const step = getStep(flow, stepId);
+    console.log(`${runId} ${stepId} answered`);
+    console.log(`Answer: ${interruption.answerPath}`);
+    if (step.provider !== "runtime") {
+      console.log(`Next: ${resumeOrProviderCommand({ store, runId, stepId, step, repo })}`);
+    }
+  } });
+}
+
+async function cmdShowInterrupts(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("show-interrupts requires RUN_ID");
+  }
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const store = openStore(defaultStateDir(repo));
+  const run = store.getRun(runId);
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+  const stepId = options.step ?? run.current_step_id;
+  if (!stepId) {
+    throw new Error(`Run has no current step: ${runId}`);
+  }
+  assertCurrentStep(run, stepId, options);
+  const interruptions = loadStepInterruptions({ stateDir: store.stateDir, runId, stepId });
+  const selected = options.all === "true" ? interruptions : interruptions.slice(-1);
+  if (!selected.length) {
+    console.log(`No interruptions for ${stepId}`);
+    return;
+  }
+  if (options.path === "true") {
+    for (const interruption of selected) {
+      console.log(interruption.artifactPath);
+    }
+    return;
+  }
+  console.log(selected.map(renderInterruptionMarkdown).join("\n"));
+}
+
 function cmdCommitStep(argv) {
   const options = parseOptions(argv);
   const repo = resolve(options.repo ?? process.cwd());
@@ -482,6 +608,9 @@ async function cmdRunCodex(argv, context = {}) {
     const step = getStep(flow, stepId);
     if (step.provider !== "codex" && options.force !== "true") {
       throw new Error(`${stepId} uses provider ${step.provider}; refusing to run Codex without --force`);
+    }
+    if (blockIfOpenInterruption({ store, runId, stepId, options, repo, step })) {
+      return;
     }
     const timeoutMs = providerTimeoutMs({ options, flow, step });
     let attempt = providerStartAttempt({ store, runId, stepId, provider: "codex", options });
@@ -566,6 +695,9 @@ async function cmdRunProvider(argv, context = {}) {
     assertCurrentStep(run, stepId, options);
     const flow = loadFlow(options.flow ?? run.flow_id);
     const step = getStep(flow, stepId);
+    if (blockIfOpenInterruption({ store, runId, stepId, options, repo, step })) {
+      return;
+    }
     let providerArgv = argv;
     if (!options["prompt-file"] && step.provider !== "runtime") {
       const prompt = writeStepPrompt({ repoPath: repo, stateDir: store.stateDir, run, flow, stepId });
@@ -732,6 +864,9 @@ async function cmdRunClaude(argv, context = {}) {
     if (step.provider !== "claude" && options.force !== "true") {
       throw new Error(`${stepId} uses provider ${step.provider}; refusing to run Claude without --force`);
     }
+    if (blockIfOpenInterruption({ store, runId, stepId, options, repo, step })) {
+      return;
+    }
     const timeoutMs = providerTimeoutMs({ options, flow, step });
     const permissionMode = options["permission-mode"] ?? (options.bypass === "true" ? "bypassPermissions" : "acceptEdits");
     let attempt = providerStartAttempt({ store, runId, stepId, provider: "claude", options });
@@ -819,6 +954,11 @@ async function cmdStatus(argv) {
       if (gate.summary) {
         console.log(`Gate Summary: ${gate.summary}`);
       }
+    }
+    const interruption = latestOpenInterruption({ stateDir: store.stateDir, runId, stepId: run.current_step_id });
+    if (interruption) {
+      console.log(`Interruption: open ${interruption.id}`);
+      console.log(`Interruption File: ${interruption.artifactPath}`);
     }
   }
   console.log("Recent Events:");
@@ -1070,6 +1210,32 @@ function printBlocked(result, trace = [], options = {}) {
   console.log("Use --json for full guard details.");
 }
 
+function blockIfOpenInterruption({ store, runId, stepId, options = {}, repo, step }) {
+  if (options.force === "true") {
+    return false;
+  }
+  const interruption = latestOpenInterruption({ stateDir: store.stateDir, runId, stepId });
+  if (!interruption) {
+    return false;
+  }
+  const result = {
+    status: "interrupted",
+    runId,
+    stepId,
+    reason: "needs_interrupt_answer",
+    provider: step.provider,
+    message: `Open interruption ${interruption.id} must be answered before ${stepId} continues.`,
+    artifactPath: interruption.artifactPath,
+    nextCommands: interruptAnswerCommands(runId, stepId, repo)
+  };
+  store.updateRun(runId, { status: "interrupted", current_step_id: stepId });
+  syncRunMetadata({ store, repo, runId });
+  store.addEvent({ runId, stepId, type: "interrupted", provider: "runtime", message: `${stepId} needs interrupt answer`, payload: result });
+  printBlocked(result, [], options);
+  process.exitCode = 1;
+  return true;
+}
+
 function normalizeEvent(event) {
   return {
     id: event.id,
@@ -1093,6 +1259,16 @@ function required(options, key) {
     throw new Error(`Missing --${key}`);
   }
   return options[key];
+}
+
+function readMessageOption(options, command) {
+  if (options.message !== undefined) {
+    return options.message;
+  }
+  if (options.file) {
+    return readFileSync(resolve(options.file), "utf8");
+  }
+  throw new Error(`${command} requires --message TEXT or --file FILE`);
 }
 
 function collectStepArtifacts(stateDir, runId, stepId) {
@@ -1238,6 +1414,23 @@ function humanDecisionCommands(runId, stepId, repo = null) {
     `node src/cli.mjs request-changes ${runId}${repoArg} --step ${stepId} --reason "<reason>"`,
     `node src/cli.mjs reject ${runId}${repoArg} --step ${stepId} --reason "<reason>"`
   ];
+}
+
+function interruptAnswerCommands(runId, stepId, repo = null) {
+  const repoArg = repo ? ` --repo ${shellQuote(repo)}` : "";
+  return [
+    `node src/cli.mjs show-interrupts ${runId}${repoArg} --step ${stepId}`,
+    `node src/cli.mjs answer ${runId}${repoArg} --step ${stepId} --message "<answer>"`
+  ];
+}
+
+function resumeOrProviderCommand({ store, runId, stepId, step, repo = null }) {
+  const repoArg = repo ? ` --repo ${shellQuote(repo)}` : "";
+  const session = store.latestProviderSession(runId, stepId, step.provider);
+  if (session?.session_id || session?.resume_token) {
+    return `node src/cli.mjs resume ${runId}${repoArg}`;
+  }
+  return nextProviderCommand(runId, step, repo);
 }
 
 function nextProviderCommand(runId, step, repo = null) {

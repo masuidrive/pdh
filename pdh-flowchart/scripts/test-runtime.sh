@@ -87,8 +87,44 @@ test_resumed_run() {
   grep -q "fake-thread" "$second_args"
 }
 
+test_interrupted_run() {
+  local repo run_id fake args prompt_path
+  repo="$(seed_repo interrupted)"
+  run_id="$(advance_to_provider_step "$repo")"
+  fake="$(write_fake_codex_success)"
+  args="$TMP_ROOT/$run_id.interrupted-args.txt"
+
+  node "$ROOT/src/cli.mjs" interrupt "$run_id" --repo "$repo" --message "Should multiplication use integer arithmetic?" >"$TMP_ROOT/$run_id.interrupt.txt"
+  grep -q "interrupted" "$TMP_ROOT/$run_id.interrupt.txt"
+
+  node "$ROOT/src/cli.mjs" status "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.interrupted-status.txt"
+  grep -q "Status: interrupted" "$TMP_ROOT/$run_id.interrupted-status.txt"
+  grep -q "Interruption: open" "$TMP_ROOT/$run_id.interrupted-status.txt"
+
+  if CODEX_BIN="$fake" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-provider "$run_id" --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.open-interrupt-provider.txt" 2>&1; then
+    echo "run-provider should block while an interruption is open" >&2
+    exit 1
+  fi
+  grep -q "needs_interrupt_answer" "$TMP_ROOT/$run_id.open-interrupt-provider.txt"
+  test ! -f "$args"
+
+  node "$ROOT/src/cli.mjs" show-interrupts "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.show-interrupts.txt"
+  grep -q "Should multiplication use integer arithmetic" "$TMP_ROOT/$run_id.show-interrupts.txt"
+
+  node "$ROOT/src/cli.mjs" answer "$run_id" --repo "$repo" --message "Yes. Preserve integer arithmetic for this fixture." >"$TMP_ROOT/$run_id.answer.txt"
+  grep -q "answered" "$TMP_ROOT/$run_id.answer.txt"
+
+  prompt_path="$(node "$ROOT/src/cli.mjs" prompt "$run_id" --repo "$repo")"
+  grep -q "Should multiplication use integer arithmetic" "$prompt_path"
+  grep -q "Preserve integer arithmetic" "$prompt_path"
+
+  CODEX_BIN="$fake" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-provider "$run_id" --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.answered-provider.txt"
+  grep -q "completed" "$TMP_ROOT/$run_id.answered-provider.txt"
+}
+
 test_blocked_run
 test_failed_run
 test_resumed_run
+test_interrupted_run
 
 echo "runtime tests passed"

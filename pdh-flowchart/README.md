@@ -20,6 +20,9 @@ node src/cli.mjs init
 node src/cli.mjs run --ticket ticket-id --variant full
 node src/cli.mjs run --ticket ticket-id --variant full --start-step PD-C-5
 node src/cli.mjs run-next <run-id>
+node src/cli.mjs interrupt <run-id> --message "Need clarification on the edge case"
+node src/cli.mjs show-interrupts <run-id>
+node src/cli.mjs answer <run-id> --message "Use the existing fallback behavior"
 node src/cli.mjs guards --step PD-C-3
 node src/cli.mjs logs <run-id> --follow
 node src/cli.mjs gate-summary <run-id> --step PD-C-5
@@ -62,6 +65,8 @@ npm run test:runtime
 - Human gate commands can create a summary artifact and record approve/reject/request-changes/cancel decisions.
 - `advance` evaluates deterministic guards and only then moves the run to the next step.
 - `run-next` executes runtime-owned current-step work, advances through passing guards, and stops at human gates or provider steps that still need execution.
+- `interrupt` records a step-level clarification artifact, marks the run `interrupted`, and blocks provider execution until `answer` resolves it.
+- Answered interruptions are injected into the next provider prompt for the same step.
 - Runtime commands refuse to operate on a non-current step unless `--force` is provided.
 - PD-C provider prompt templates are generated from `pdh-dev` semantics and saved under the run step artifacts.
 - `run-provider <run-id>` selects Codex or Claude from the run's current flow step and generates the step prompt when `--prompt-file` is omitted.

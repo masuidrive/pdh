@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getStep, nextStep } from "./flow.mjs";
+import { loadStepInterruptions, renderInterruptionsForPrompt } from "./interruptions.mjs";
 
 export function writeStepPrompt({ repoPath, stateDir, run, flow, stepId }) {
   const step = getStep(flow, stepId);
@@ -10,12 +11,13 @@ export function writeStepPrompt({ repoPath, stateDir, run, flow, stepId }) {
   const artifactDir = join(stateDir, "runs", run.id, "steps", stepId);
   mkdirSync(artifactDir, { recursive: true });
   const artifactPath = join(artifactDir, "prompt.md");
-  const body = renderStepPrompt({ repoPath, run, flow, step });
+  const interruptions = loadStepInterruptions({ stateDir, runId: run.id, stepId });
+  const body = renderStepPrompt({ repoPath, run, flow, step, interruptions });
   writeFileSync(artifactPath, body);
   return { artifactPath, body };
 }
 
-export function renderStepPrompt({ repoPath, run, flow, step }) {
+export function renderStepPrompt({ repoPath, run, flow, step, interruptions = [] }) {
   const ticket = readRepoFile(repoPath, "current-ticket.md");
   const note = readRepoFile(repoPath, "current-note.md");
   const instructions = stepInstructions(step.id);
@@ -43,8 +45,14 @@ export function renderStepPrompt({ repoPath, run, flow, step }) {
     `- Before finishing, satisfy every guard listed for ${step.id}.`,
     `- If you commit, the commit subject must start with \`[${step.id}]\`.`,
     "- If a guard cannot be satisfied, record the blocker in `current-note.md` and explain what is missing.",
+    "- If answered interruptions are listed below, treat them as user instructions for this step.",
+    "- If an open interruption is listed, stop and report that user input is still required.",
     "- Do not ask the user to choose among implementation options if local evidence is enough to decide.",
     "- Do not mark PD-C-5 or PD-C-10 approved; those are explicit human gates.",
+    "",
+    "## Interruptions",
+    "",
+    ...renderInterruptionsForPrompt(interruptions),
     "",
     "## Step Instructions",
     "",

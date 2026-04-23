@@ -36,6 +36,7 @@
 - [x] Make blocked guard output concise by default, with `--json` for full detail.
 - [x] Add `doctor` to check Node, Codex, Claude, uv, git, and auth status.
 - [x] Add example fixtures for a tiny fake `pdh-dev` repository.
+- [x] Add interruption and answer commands for step-level clarification.
 
 ## Phase 2: Reliability
 
