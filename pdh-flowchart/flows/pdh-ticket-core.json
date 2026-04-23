@@ -96,6 +96,7 @@
       "mode": "review",
       "guards": [
         {"id": "purpose-recorded", "type": "note_section_updated", "path": "current-note.md", "section": "PD-C-8. 目的妥当性確認"},
+        {"id": "purpose-validation-accepted", "type": "judgement_status", "artifactKind": "purpose_validation", "accepted": ["No Unverified", "user_accepted"]},
         {"id": "no-unverified", "type": "ac_verification_table", "allowUnverified": false},
         {"id": "step-commit", "type": "git_commit_exists", "pattern": "^\\[PD-C-8\\]"}
       ],

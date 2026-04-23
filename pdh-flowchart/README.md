@@ -29,6 +29,7 @@ node src/cli.mjs ticket-start --ticket ticket-id
 node src/cli.mjs ticket-close
 node src/cli.mjs prompt <run-id>
 node src/cli.mjs metadata <run-id>
+node src/cli.mjs judgement <run-id> --status "No Critical/Major" --summary ok
 node src/cli.mjs run-provider <run-id>
 node src/cli.mjs run-provider <run-id> --prompt-file prompt.md
 node src/cli.mjs run-codex <run-id> --prompt-file prompt.md
@@ -55,6 +56,7 @@ node src/cli.mjs smoke-calc
 - `run-provider <run-id>` selects Codex or Claude from the run's current flow step and generates the step prompt when `--prompt-file` is omitted.
 - Runtime-managed metadata blocks in `current-note.md` and `current-ticket.md` track run id, flow, status, and current step.
 - Provider changes to `current-note.md` and `current-ticket.md` are captured as `note-ticket.patch` step artifacts.
+- Structured judgement artifacts back PD-C-4 plan review, PD-C-7 quality review, and PD-C-8 purpose validation guards.
 - `run --ticket <id>` invokes `./ticket.sh start <id>` when `ticket.sh` exists, and records a skip event otherwise.
 - After PD-C-10 approval, runtime invokes `./ticket.sh close` once other close guards pass and records `ticket-close.json`.
 - `run-codex <run-id>` executes the run's current step and refuses provider/step mismatches unless `--force` is provided.

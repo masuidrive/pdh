@@ -10,6 +10,7 @@ import { createGateSummary, commitStep, ticketStart, ticketClose } from "./actio
 import { writeStepPrompt } from "./prompt-templates.mjs";
 import { writeRuntimeMetadata } from "./metadata.mjs";
 import { captureNoteTicketPatchProposal, snapshotNoteTicketFiles } from "./patch-proposals.mjs";
+import { defaultJudgementKind, loadJudgements, writeJudgement } from "./judgements.mjs";
 
 const emitWarning = process.emitWarning.bind(process);
 process.emitWarning = (warning, ...warningArgs) => {
@@ -46,6 +47,8 @@ try {
     await cmdPrompt(args);
   } else if (command === "metadata") {
     await cmdMetadata(args);
+  } else if (command === "judgement") {
+    await cmdJudgement(args);
   } else if (command === "guards") {
     await cmdGuards(args);
   } else if (command === "advance") {
@@ -83,6 +86,7 @@ Usage:
   pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5] [--require-ticket-start]
   pdh-flowchart prompt RUN_ID [--repo DIR] [--step PD-C-6]
   pdh-flowchart metadata RUN_ID [--repo DIR]
+  pdh-flowchart judgement RUN_ID [--repo DIR] [--step PD-C-4] [--kind plan_review] [--status "No Critical/Major"] [--summary TEXT]
   pdh-flowchart run-provider RUN_ID [--prompt-file FILE] [--repo DIR]
   pdh-flowchart run-codex [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-6]
   pdh-flowchart run-claude [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-4]
@@ -550,6 +554,39 @@ async function cmdMetadata(argv) {
   console.log(JSON.stringify(metadata, null, 2));
 }
 
+async function cmdJudgement(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("judgement requires RUN_ID");
+  }
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const store = openStore(defaultStateDir(repo));
+  const run = store.getRun(runId);
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+  const stepId = options.step ?? run.current_step_id;
+  if (!stepId) {
+    throw new Error(`Run has no current step: ${runId}`);
+  }
+  assertCurrentStep(run, stepId, options);
+  const kind = options.kind ?? defaultJudgementKind(stepId);
+  const result = writeJudgement({
+    stateDir: store.stateDir,
+    runId,
+    stepId,
+    kind,
+    status: options.status ?? null,
+    summary: options.summary ?? null,
+    source: options.source ?? "runtime",
+    details: { reason: options.reason ?? null }
+  });
+  store.addEvent({ runId, stepId, type: "artifact", provider: "runtime", message: `judgement ${result.judgement.kind}: ${result.judgement.status}`, payload: { artifactPath: result.artifactPath, judgement: result.judgement } });
+  console.log(JSON.stringify(result, null, 2));
+}
+
 async function cmdRunClaude(argv) {
   const { openStore, defaultStateDir } = await import("./db.mjs");
   const positionalRunId = argv.find((value) => !value.startsWith("--"));
@@ -706,7 +743,11 @@ function required(options, key) {
 function collectStepArtifacts(stateDir, runId, stepId) {
   const stepDir = join(stateDir, "runs", runId, "steps", stepId);
   return [
-    { kind: "human_gate_summary", path: join(stepDir, "human-gate-summary.md") }
+    { kind: "human_gate_summary", path: join(stepDir, "human-gate-summary.md") },
+    ...loadJudgements({ stateDir, runId, stepId }).map((judgement) => ({
+      kind: judgement.kind,
+      path: judgement.artifactPath
+    }))
   ];
 }
 
@@ -717,6 +758,7 @@ async function evaluateCurrentStep({ store, flow, runId, stepId, repo }) {
   const guardResults = evaluateStepGuards(flow, stepId, {
     repoPath: repo,
     artifacts,
+    judgements: loadJudgements({ stateDir: store.stateDir, runId, stepId }),
     humanDecision: humanGate?.decision ?? null,
     ticketClosed: hasTicketClosedArtifact(store.stateDir, runId, stepId)
   });

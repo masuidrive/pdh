@@ -23,7 +23,7 @@
 - [x] Implement provider patch proposal artifacts for note/ticket updates.
 - [x] Implement `ticket.sh start` integration from `run --ticket`.
 - [x] Implement `ticket.sh close` integration after PD-C-10 approval.
-- [ ] Add structured judgement artifacts for PD-C-4, PD-C-7, and PD-C-8.
+- [x] Add structured judgement artifacts for PD-C-4, PD-C-7, and PD-C-8.
 - [ ] Add AC verification table parser with real `verified` / `deferred` / `unverified` rows.
 - [ ] Add `PD-C-9` final verification runner for test commands and AC evidence.
 - [ ] Add resume behavior for interrupted provider steps.

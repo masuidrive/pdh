@@ -622,6 +622,7 @@ Manual smoke tests:
 - provider 実行前後の `current-note.md` / `current-ticket.md` 差分を `note-ticket.patch` artifact として保存する。
 - `run --ticket <id>` は `ticket.sh` がある repo で `./ticket.sh start <id>` を実行し、ない repo では skip event を残す。
 - PD-C-10 approval 後、AC/gate guards が通り `ticket_closed` だけが残った場合に `./ticket.sh close` を実行し、`ticket-close.json` artifact を guard evidence にする。
+- `judgement <run-id>` が PD-C-4/7/8 の structured judgement artifact を保存し、guard runner が `plan_review` / `quality_review` / `purpose_validation` status を読む。
 
 ### 未解決
 
