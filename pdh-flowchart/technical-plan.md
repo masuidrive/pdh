@@ -618,6 +618,7 @@ Manual smoke tests:
 - `run-claude <run-id>` は Claude Code `stream-json` を raw log として保存し、session id、assistant message、result、rate limit event を progress event に正規化する。
 - `run-provider <run-id>` は flow の current step provider を読み、Codex / Claude の個別 adapter に振り分ける。
 - `prompt <run-id>` と `run-provider <run-id>` は `pdh-dev` の PD-C semantics から current step 用 prompt を生成し、run step artifact として保存する。
+- runtime が `current-note.md` / `current-ticket.md` の管理 metadata block を更新し、run id、flow、status、current step を同期する。
 
 ### 未解決
 

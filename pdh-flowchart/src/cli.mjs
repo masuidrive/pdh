@@ -8,6 +8,7 @@ import { runClaude } from "./claude-adapter.mjs";
 import { runCalcSmoke } from "./smoke-calc.mjs";
 import { createGateSummary, commitStep, ticketStart, ticketClose } from "./actions.mjs";
 import { writeStepPrompt } from "./prompt-templates.mjs";
+import { writeRuntimeMetadata } from "./metadata.mjs";
 
 const emitWarning = process.emitWarning.bind(process);
 process.emitWarning = (warning, ...warningArgs) => {
@@ -42,6 +43,8 @@ try {
     await cmdRunProvider(args);
   } else if (command === "prompt") {
     await cmdPrompt(args);
+  } else if (command === "metadata") {
+    await cmdMetadata(args);
   } else if (command === "guards") {
     await cmdGuards(args);
   } else if (command === "advance") {
@@ -78,6 +81,7 @@ Usage:
   pdh-flowchart flow [--variant full|light]
   pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5]
   pdh-flowchart prompt RUN_ID [--repo DIR] [--step PD-C-6]
+  pdh-flowchart metadata RUN_ID [--repo DIR]
   pdh-flowchart run-provider RUN_ID [--prompt-file FILE] [--repo DIR]
   pdh-flowchart run-codex [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-6]
   pdh-flowchart run-claude [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-4]
@@ -155,6 +159,7 @@ async function cmdAdvance(argv) {
   const failed = blockingGuardFailures(step, evaluation.guardResults, evaluation.humanGate);
   if (failed.length > 0) {
     store.updateRun(runId, { status: "blocked", current_step_id: stepId });
+    syncRunMetadata({ store, repo, runId });
     console.log(JSON.stringify({ status: "blocked", stepId, guardResults: evaluation.guardResults }, null, 2));
     process.exitCode = 1;
     return;
@@ -162,7 +167,7 @@ async function cmdAdvance(argv) {
   if (!outcome) {
     throw new Error(`Human gate has no terminal decision for ${stepId}`);
   }
-  console.log(JSON.stringify(advanceRun({ store, flow, run, stepId, outcome }), null, 2));
+  console.log(JSON.stringify(advanceRun({ store, flow, run, stepId, outcome, repoPath: repo }), null, 2));
 }
 
 async function cmdRunNext(argv) {
@@ -206,6 +211,7 @@ async function cmdRunNext(argv) {
           prompt: step.human_gate?.prompt ?? `${stepId} human gate`,
           summary: summary.artifactPath
         });
+        syncRunMetadata({ store, repo, runId });
         const result = {
           status: "needs_human",
           runId,
@@ -246,6 +252,7 @@ async function cmdRunNext(argv) {
         nextCommand: nextProviderCommand(runId, step, repo)
       };
       store.updateRun(runId, { status: "blocked", current_step_id: stepId });
+      syncRunMetadata({ store, repo, runId });
       store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} ${reason}`, payload: result });
       trace.push(result);
       console.log(JSON.stringify({ ...result, trace }, null, 2));
@@ -261,13 +268,14 @@ async function cmdRunNext(argv) {
         nextCommands: humanDecisionCommands(runId, stepId, repo)
       };
       store.updateRun(runId, { status: "blocked", current_step_id: stepId });
+      syncRunMetadata({ store, repo, runId });
       store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} human_decision_required`, payload: result });
       trace.push(result);
       console.log(JSON.stringify({ ...result, trace }, null, 2));
       return;
     }
 
-    const advanced = advanceRun({ store, flow, run, stepId, outcome });
+    const advanced = advanceRun({ store, flow, run, stepId, outcome, repoPath: repo });
     trace.push(advanced);
     if (advanced.status === "completed") {
       console.log(JSON.stringify({ ...advanced, trace }, null, 2));
@@ -296,9 +304,10 @@ async function cmdRun(argv) {
     currentStepId: initial
   });
   store.addEvent({ runId, stepId: initial, type: "status", message: `Created ${describeFlow(flow, variant)}` });
+  syncRunMetadata({ store, repo, runId });
   console.log(runId);
   console.log(`Current step: ${initial}`);
-  console.log("Run provider steps with run-codex while the Full flow engine is being expanded.");
+  console.log("Use run-next to advance runtime steps and run-provider for the current provider step.");
 }
 
 async function cmdGateSummary(argv) {
@@ -318,6 +327,7 @@ async function cmdGateSummary(argv) {
   assertCurrentStep(run, stepId, options);
   const summary = createGateSummary({ repoPath: repo, stateDir: store.stateDir, runId, stepId });
   store.openHumanGate({ runId, stepId, prompt: `${stepId} human gate`, summary: summary.artifactPath });
+  syncRunMetadata({ store, repo, runId });
   console.log(summary.artifactPath);
 }
 
@@ -350,6 +360,7 @@ async function cmdHumanDecision(command, argv) {
     throw new Error(`Human gate for ${stepId} is already ${latestGate.status}; pass --force to override`);
   }
   store.resolveHumanGate({ runId, stepId, decision: decisionByCommand[command], reason: options.reason ?? null });
+  syncRunMetadata({ store, repo, runId });
   console.log(`${runId} ${stepId} ${decisionByCommand[command]}`);
 }
 
@@ -407,6 +418,7 @@ async function cmdRunCodex(argv) {
   const attempt = Number(options.attempt ?? "1");
   const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "codex.raw.jsonl");
   store.updateRun(runId, { status: "running", current_step_id: stepId });
+  syncRunMetadata({ store, repo, runId });
   store.startStep({ runId, stepId, attempt, provider: "codex", mode: "edit" });
   const result = await runCodex({
     cwd: repo,
@@ -422,6 +434,7 @@ async function cmdRunCodex(argv) {
   const status = result.exitCode === 0 ? "completed" : "failed";
   store.finishStep({ runId, stepId, attempt, provider: "codex", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
   store.updateRun(runId, { status: result.exitCode === 0 ? "running" : "failed", current_step_id: stepId });
+  syncRunMetadata({ store, repo, runId });
   console.log(`${runId} ${stepId} ${status}`);
   console.log(`Raw log: ${rawLogPath}`);
 }
@@ -487,6 +500,19 @@ async function cmdPrompt(argv) {
   console.log(prompt.artifactPath);
 }
 
+async function cmdMetadata(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("metadata requires RUN_ID");
+  }
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const store = openStore(defaultStateDir(repo));
+  const metadata = syncRunMetadata({ store, repo, runId });
+  console.log(JSON.stringify(metadata, null, 2));
+}
+
 async function cmdRunClaude(argv) {
   const { openStore, defaultStateDir } = await import("./db.mjs");
   const positionalRunId = argv.find((value) => !value.startsWith("--"));
@@ -521,6 +547,7 @@ async function cmdRunClaude(argv) {
   const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "claude.raw.jsonl");
   const permissionMode = options["permission-mode"] ?? (options.bypass === "true" ? "bypassPermissions" : "acceptEdits");
   store.updateRun(runId, { status: "running", current_step_id: stepId });
+  syncRunMetadata({ store, repo, runId });
   store.startStep({ runId, stepId, attempt, provider: "claude", mode: step.mode ?? "review" });
   const result = await runClaude({
     cwd: repo,
@@ -539,6 +566,7 @@ async function cmdRunClaude(argv) {
   const status = result.exitCode === 0 ? "completed" : "failed";
   store.finishStep({ runId, stepId, attempt, provider: "claude", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
   store.updateRun(runId, { status: result.exitCode === 0 ? "running" : "failed", current_step_id: stepId });
+  syncRunMetadata({ store, repo, runId });
   console.log(`${runId} ${stepId} ${status}`);
   console.log(`Raw log: ${rawLogPath}`);
 }
@@ -676,18 +704,33 @@ function outcomeForStep(step, humanGate) {
   return "success";
 }
 
-function advanceRun({ store, flow, run, stepId, outcome }) {
+function advanceRun({ store, flow, run, stepId, outcome, repoPath = null }) {
   const target = nextStep(flow, run.flow_variant, stepId, outcome);
   if (!target) {
     throw new Error(`No transition from ${stepId} for ${outcome}`);
   }
+  const status = target === "COMPLETE" ? "completed" : "running";
+  const currentStepId = target === "COMPLETE" ? stepId : target;
   if (target === "COMPLETE") {
-    store.updateRun(run.id, { status: "completed", current_step_id: stepId, completed_at: new Date().toISOString() });
+    store.updateRun(run.id, { status, current_step_id: currentStepId, completed_at: new Date().toISOString() });
   } else {
-    store.updateRun(run.id, { status: "running", current_step_id: target });
+    store.updateRun(run.id, { status, current_step_id: currentStepId });
+  }
+  if (repoPath) {
+    syncRunMetadata({ store, repo: repoPath, runId: run.id });
   }
   store.addEvent({ runId: run.id, stepId, type: "status", provider: "runtime", message: `[${stepId}] -> [${target}]`, payload: { outcome, target } });
   return { status: target === "COMPLETE" ? "completed" : "advanced", from: stepId, to: target, outcome };
+}
+
+function syncRunMetadata({ store, repo, runId }) {
+  const current = store.getRun(runId);
+  if (!current) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+  const metadata = writeRuntimeMetadata({ repoPath: repo, run: current });
+  store.addEvent({ runId, stepId: current.current_step_id, type: "artifact", provider: "runtime", message: "metadata synced", payload: metadata });
+  return metadata;
 }
 
 function isHumanGateStep(step) {

@@ -19,7 +19,7 @@
 - [x] Add Claude adapter with `stream-json` normalization and raw log capture.
 - [x] Add provider selection from `flows/pdh-ticket-core.json` instead of command-specific provider calls.
 - [x] Generate PD-C prompt templates from `pdh-dev` semantics.
-- [ ] Implement runtime-controlled note/ticket metadata writes.
+- [x] Implement runtime-controlled note/ticket metadata writes.
 - [ ] Implement provider patch proposal artifacts for note/ticket updates.
 - [ ] Implement `ticket.sh start` integration from `run --ticket`.
 - [ ] Implement `ticket.sh close` integration after PD-C-10 approval.
