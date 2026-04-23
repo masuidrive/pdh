@@ -1,0 +1,16 @@
+{
+  "name": "pdh-flowchart",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "pdh-flowchart": "./src/cli.mjs"
+  },
+  "scripts": {
+    "check": "node --check src/cli.mjs && node --check src/db.mjs && node --check src/env.mjs && node --check src/codex-adapter.mjs && node --check src/flow.mjs && node --check src/guards.mjs && node --check src/smoke-calc.mjs",
+    "smoke:calc": "node src/cli.mjs smoke-calc"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

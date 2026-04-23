@@ -1,0 +1,7 @@
+.env
+.codex
+.pdh-flowchart/
+node_modules/
+dist/
+coverage/
+smoke-output/
