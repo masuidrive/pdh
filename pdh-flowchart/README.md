@@ -130,7 +130,7 @@ Next:
 - AC verification guards parse the `AC 裏取り結果` markdown table and validate `verified` / `deferred` / `unverified` rows.
 - `verify <run-id>` runs PD-C-9 final verification, writes `final-verification.json`, and updates the PD-C-9 process checklist.
 - `logs <run-id> --follow` streams normalized progress events, and `show-gate <run-id>` prints the current gate summary.
-- `web --repo <dir>` serves a local read-only dashboard for run progress, logs, gates, interruptions, and git diff. Runtime execution, approvals, resumes, and interruption answers remain CLI-only.
+- `web --repo <dir>` serves a local read-only dashboard for run progress, step status, next CLI action, logs, gates, interruptions, and git diff. Runtime execution, approvals, resumes, and interruption answers remain CLI-only.
 - `flow-graph` exports the labeled flow as Mermaid or JSON for users who know PDH overall but do not remember each `PD-C-*` detail.
 - `doctor` checks local Node, Codex, Claude Code, uv, git, provider auth, `.env`, and git repository readiness without printing secrets.
 - `examples/fake-pdh-dev` provides a tiny fake target repository for user-perspective flow checks.

@@ -65,6 +65,7 @@
 
 - [x] Add simple read-only web status UI for progress, logs, gates, interruptions, and git diff.
 - [x] Add labeled flow graph export and Web UI flow view.
+- [x] Show per-step progress and next CLI action in the Web UI flow view.
 - [ ] Add Epic flow support.
 - [ ] Add parallel reviewer support.
 

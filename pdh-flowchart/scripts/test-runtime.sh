@@ -161,6 +161,10 @@ const selected = await (await fetch(`${url}api/state?run=${encodeURIComponent(ru
 if (selected.selectedRunId !== runId) throw new Error("selected run mismatch");
 if (!selected.run?.events?.length) throw new Error("events missing from web state");
 if (!selected.run?.flow?.steps?.some((step) => step.id === "PD-C-6" && step.label === "実装")) throw new Error("flow labels missing");
+const currentStep = selected.run?.flow?.steps?.find((step) => step.id === "PD-C-6");
+if (currentStep?.progress?.status !== "blocked") throw new Error("flow progress status missing");
+if (selected.run?.nextAction?.targetTab !== "commands") throw new Error("next action target missing");
+if (!selected.run?.nextAction?.commands?.some((command) => command.includes("run-provider"))) throw new Error("next action command missing");
 const mermaid = await (await fetch(`${url}api/flow.mmd?run=${encodeURIComponent(runId)}`)).text();
 if (!mermaid.includes("PD-C-6") || !mermaid.includes("実装")) throw new Error("mermaid flow labels missing");
 const html = await (await fetch(url)).text();

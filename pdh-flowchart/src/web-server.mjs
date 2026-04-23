@@ -99,7 +99,6 @@ function runDetail({ store, stateDir, repo, runId, redactor }) {
   }
   const flow = loadFlow(run.flow_id);
   const currentStep = run.current_step_id ? getStep(flow, run.current_step_id) : null;
-  const flowView = buildFlowView(flow, run.flow_variant, run.current_step_id);
   const events = store.recentEvents(runId, 120).map((event) => normalizeEvent(event, redactor));
   const steps = store.db.prepare(`
     SELECT id, run_id, step_id, attempt, round, provider, mode, status, started_at, finished_at, exit_code, summary, error
@@ -116,6 +115,10 @@ function runDetail({ store, stateDir, repo, runId, redactor }) {
     ...redactObject(row, redactor),
     summaryText: readStateFile(row.summary, stateDir, redactor)
   }));
+  const flowView = annotateFlowProgress(
+    buildFlowView(flow, run.flow_variant, run.current_step_id),
+    { run, steps, gates, events }
+  );
   const sessions = store.db.prepare(`
     SELECT run_id, step_id, attempt, provider, session_id, resume_token, raw_log_path
     FROM provider_sessions
@@ -125,6 +128,7 @@ function runDetail({ store, stateDir, repo, runId, redactor }) {
   const interruptions = run.current_step_id
     ? loadStepInterruptions({ stateDir, runId, stepId: run.current_step_id }).map((item) => redactObject(item, redactor))
     : [];
+  const cli = nextCliCommands({ run, currentStep, repo });
   return {
     run,
     flow: {
@@ -137,7 +141,189 @@ function runDetail({ store, stateDir, repo, runId, redactor }) {
     sessions,
     interruptions,
     events,
-    cli: nextCliCommands({ run, currentStep, repo })
+    cli,
+    nextAction: describeNextAction({ run, currentStep, cli })
+  };
+}
+
+function annotateFlowProgress(flowView, { run, steps, gates, events }) {
+  const latestStep = latestByStepId(steps);
+  const latestGate = latestByStepId(gates);
+  const transitionedFrom = new Set();
+  for (const event of events) {
+    const match = String(event.message ?? "").match(/^\[([^\]]+)\] -> \[([^\]]+)\]$/);
+    if (event.type === "status" && match) {
+      transitionedFrom.add(match[1]);
+    }
+  }
+  const initialStepId = events.find((event) => event.type === "status" && String(event.message ?? "").startsWith("Created "))?.stepId ?? flowView.initial;
+  const initialIndex = flowView.sequence.indexOf(initialStepId);
+  return {
+    ...flowView,
+    steps: flowView.steps.map((step, index) => ({
+      ...step,
+      progress: stepProgress({
+        run,
+        step,
+        index,
+        initialIndex,
+        latestStep: latestStep.get(step.id),
+        latestGate: latestGate.get(step.id),
+        transitioned: transitionedFrom.has(step.id)
+      })
+    }))
+  };
+}
+
+function latestByStepId(rows) {
+  const latest = new Map();
+  for (const row of rows) {
+    latest.set(row.step_id, row);
+  }
+  return latest;
+}
+
+function stepProgress({ run, step, index, initialIndex, latestStep, latestGate, transitioned }) {
+  if (initialIndex >= 0 && index < initialIndex && !latestStep && !latestGate && !transitioned) {
+    return progress("skipped", "Not run", "Run started after this step.");
+  }
+  if (run.status === "completed" && (step.current || transitioned || latestGate?.status === "resolved" || latestStep?.status === "completed")) {
+    return progress("done", "Done", completionNote({ latestStep, latestGate, transitioned }));
+  }
+  if (step.current) {
+    if (run.status === "needs_human") {
+      return progress("needs_human", "Needs decision", gateNote(latestGate));
+    }
+    if (run.status === "interrupted") {
+      return progress("interrupted", "Needs answer", "Open interruption must be answered.");
+    }
+    if (run.status === "blocked") {
+      return progress("blocked", "Blocked", latestStep?.error || "Check failed guards or required commands.");
+    }
+    if (run.status === "failed") {
+      return progress("failed", "Failed", latestStep?.error || "Provider step failed.");
+    }
+    if (latestStep?.status === "completed") {
+      return progress("ready", "Ready", "Provider completed; advance the runtime.");
+    }
+    if (latestStep?.status === "running") {
+      return progress("running", "Running", "Provider execution is in progress.");
+    }
+    return progress("current", "Current", "This is the active step for the selected run.");
+  }
+  if (transitioned || latestGate?.status === "resolved" || latestStep?.status === "completed") {
+    return progress("done", "Done", completionNote({ latestStep, latestGate, transitioned }));
+  }
+  if (latestStep?.status === "failed") {
+    return progress("failed", "Failed", latestStep.error || "Provider step failed.");
+  }
+  if (latestStep?.status === "running") {
+    return progress("running", "Running", "Provider execution is in progress.");
+  }
+  return progress("pending", "Pending", "Not reached yet.");
+}
+
+function progress(status, label, note = "") {
+  return { status, label, note };
+}
+
+function completionNote({ latestStep, latestGate, transitioned }) {
+  if (latestGate?.decision) {
+    return `Gate decision: ${latestGate.decision}`;
+  }
+  if (latestStep?.summary) {
+    return latestStep.summary;
+  }
+  if (transitioned) {
+    return "Advanced to the next step.";
+  }
+  return "Completed.";
+}
+
+function gateNote(gate) {
+  if (!gate) {
+    return "Gate summary is being prepared.";
+  }
+  if (gate.decision) {
+    return `Gate decision: ${gate.decision}`;
+  }
+  return "Review the gate summary and decide.";
+}
+
+function describeNextAction({ run, currentStep, cli }) {
+  if (!run || !currentStep) {
+    return null;
+  }
+  const stepName = currentStep.label ? `${currentStep.id} ${currentStep.label}` : currentStep.id;
+  if (run.status === "completed") {
+    return {
+      status: "done",
+      title: "完了",
+      detail: `${stepName} まで完了しています。`,
+      targetTab: "diff",
+      targetLabel: "Diff",
+      commands: []
+    };
+  }
+  if (run.status === "needs_human") {
+    return {
+      status: "needs_human",
+      title: `${stepName}の gate 判断`,
+      detail: "Gate summary と差分を見て、approve / request-changes / reject を CLI で実行します。",
+      targetTab: "gates",
+      targetLabel: "Gates",
+      commands: cli
+    };
+  }
+  if (run.status === "interrupted") {
+    return {
+      status: "interrupted",
+      title: `${stepName}の割り込み回答`,
+      detail: "Interruptions の質問を見て、answer を CLI で実行します。",
+      targetTab: "interruptions",
+      targetLabel: "Interruptions",
+      commands: cli
+    };
+  }
+  if (run.status === "blocked") {
+    return {
+      status: "blocked",
+      title: `${stepName}の block 解消`,
+      detail: currentStep.provider === "runtime"
+        ? "Gates または Logs で止まった理由を見て、必要な CLI 操作を実行します。"
+        : "Logs で理由を見て、Commands の provider 実行または復旧コマンドを使います。",
+      targetTab: currentStep.provider === "runtime" ? "gates" : "commands",
+      targetLabel: currentStep.provider === "runtime" ? "Gates" : "Commands",
+      commands: cli
+    };
+  }
+  if (run.status === "failed") {
+    return {
+      status: "failed",
+      title: `${stepName}の provider 失敗`,
+      detail: "Logs と failure summary を見て、resume または run-provider を CLI で実行します。",
+      targetTab: "logs",
+      targetLabel: "Logs",
+      commands: cli
+    };
+  }
+  if (currentStep.provider !== "runtime") {
+    return {
+      status: "current",
+      title: `${stepName}を実行`,
+      detail: "Commands の run-provider を実行し、完了後に run-next で次へ進めます。",
+      targetTab: "commands",
+      targetLabel: "Commands",
+      commands: cli
+    };
+  }
+  return {
+    status: "current",
+    title: `${stepName}を進める`,
+    detail: "Commands の run-next を CLI で実行します。",
+    targetTab: "commands",
+    targetLabel: "Commands",
+    commands: cli
   };
 }
 
@@ -387,6 +573,9 @@ function renderHtml() {
     .badge.running, .badge.completed { color: var(--ok); border-color: #9fd2b8; background: #eef8f2; }
     .badge.blocked, .badge.needs_human, .badge.interrupted { color: var(--warn); border-color: #e7c47f; background: #fff8e8; }
     .badge.failed { color: var(--bad); border-color: #dda1a1; background: #fff0f0; }
+    .badge.done, .badge.ready { color: var(--ok); border-color: #9fd2b8; background: #eef8f2; }
+    .badge.current { color: var(--accent); border-color: #86bfd0; background: #eef7fa; }
+    .badge.pending, .badge.skipped { color: var(--muted); border-color: var(--line); background: #f7f8fa; }
     .step-rail {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
@@ -451,13 +640,42 @@ function renderHtml() {
       margin-bottom: 8px;
       background: #ffffff;
     }
+    .next-action {
+      border: 1px solid #86bfd0;
+      border-radius: 6px;
+      background: #eef7fa;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .next-action.status-needs_human, .next-action.status-interrupted, .next-action.status-blocked {
+      border-color: #e7c47f;
+      background: #fff8e8;
+    }
+    .next-action.status-failed {
+      border-color: #dda1a1;
+      background: #fff0f0;
+    }
+    .next-action.status-done {
+      border-color: #9fd2b8;
+      background: #eef8f2;
+    }
+    .next-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+    .next-title { font-weight: 700; font-size: 15px; }
+    .next-detail { color: var(--ink); margin-bottom: 8px; }
+    .next-target { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
     .flow-map { display: grid; gap: 10px; }
     .flow-card.current { border-color: var(--accent-2); box-shadow: inset 4px 0 0 var(--accent-2); }
+    .flow-card.status-done { background: #fbfdfc; }
+    .flow-card.status-current, .flow-card.status-ready { border-color: #86bfd0; }
+    .flow-card.status-blocked, .flow-card.status-needs_human, .flow-card.status-interrupted { border-color: #e7c47f; background: #fffdf7; }
+    .flow-card.status-failed { border-color: #dda1a1; background: #fff8f8; }
+    .flow-card.status-pending, .flow-card.status-skipped { background: #fafbfc; }
     .flow-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
     .flow-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); font-size: 12px; }
     .flow-label { font-weight: 700; font-size: 15px; }
     .flow-summary { color: var(--ink); margin: 6px 0; }
-    .flow-action { color: var(--muted); font-size: 13px; }
+    .flow-action, .flow-progress-note { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .flow-field { color: var(--muted); font-size: 12px; font-weight: 700; margin-right: 6px; }
     .flow-arrow { color: var(--muted); text-align: center; font-size: 18px; line-height: 1; }
     .event-meta { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
     .empty { color: var(--muted); padding: 12px; }
@@ -557,6 +775,7 @@ function renderHtml() {
         '<div class="step ' + (step.id === current ? 'current' : '') + '" title="' + esc(step.summary || '') + '">' +
         '<div class="step-id">' + esc(step.id) + '</div>' +
         '<div class="step-label">' + esc(step.label || step.id) + '</div>' +
+        '<div>' + badge(step.progress?.label || '-') + '</div>' +
         '</div>'
       )).join('');
     }
@@ -566,6 +785,7 @@ function renderHtml() {
       root.querySelectorAll('[data-tab]').forEach((item) => item.addEventListener('click', () => {
         state.tab = item.dataset.tab;
         renderPrimary(state.data);
+        renderSecondary(state.data);
       }));
     }
     function renderPrimary(data) {
@@ -577,7 +797,7 @@ function renderHtml() {
       }
       if (state.tab === 'flow') {
         primary.className = 'section';
-        primary.innerHTML = '<h2>Flow</h2><div class="section-body">' + renderFlow(detail.flow || {}) + '</div>';
+        primary.innerHTML = '<h2>Flow</h2><div class="section-body">' + renderNextAction(detail.nextAction) + renderFlow(detail.flow || {}) + '</div>';
       } else if (state.tab === 'logs') {
         primary.innerHTML = '<h2>Logs</h2><div class="section-body">' + (detail.events || []).map(renderEvent).join('') + '</div>';
       } else if (state.tab === 'diff') {
@@ -617,12 +837,26 @@ function renderHtml() {
       const steps = flow.steps || [];
       if (!steps.length) return '<div class="empty">No flow</div>';
       return '<div class="flow-map">' + steps.map((step, index) => (
-        '<div class="flow-card ' + (step.current ? 'current' : '') + '">' +
-        '<div class="flow-head"><span class="flow-id">' + esc(step.id) + '</span><span class="flow-label">' + esc(step.label || step.id) + '</span>' + badge(step.provider + '/' + step.mode) + '</div>' +
-        '<div class="flow-summary">' + esc(step.summary || '') + '</div>' +
-        '<div class="flow-action">' + esc(step.userAction || '') + '</div>' +
+        '<div class="flow-card status-' + esc(step.progress?.status || 'pending') + ' ' + (step.current ? 'current' : '') + '">' +
+        '<div class="flow-head"><span class="flow-id">' + esc(step.id) + '</span><span class="flow-label">' + esc(step.label || step.id) + '</span>' + badge(step.progress?.label || '-') + badge(step.provider + '/' + step.mode) + '</div>' +
+        '<div class="flow-summary"><span class="flow-field">見るもの</span>' + esc(step.summary || '') + '</div>' +
+        '<div class="flow-action"><span class="flow-field">次</span>' + esc(step.userAction || '') + '</div>' +
+        '<div class="flow-progress-note">' + esc(step.progress?.note || '') + '</div>' +
         '</div>' + (index < steps.length - 1 ? '<div class="flow-arrow">↓</div>' : '')
       )).join('') + '</div>';
+    }
+    function renderNextAction(action) {
+      if (!action) return '';
+      const commands = action.commands || [];
+      const commandHtml = commands.length
+        ? commands.map((command) => '<div class="command"><pre>' + esc(command) + '</pre></div>').join('')
+        : '';
+      return '<div class="next-action status-' + esc(action.status || 'current') + '">' +
+        '<div class="next-head">' + badge('Next') + '<span class="next-title">' + esc(action.title || '-') + '</span></div>' +
+        '<div class="next-detail">' + esc(action.detail || '') + '</div>' +
+        '<div class="next-target">見る場所: ' + esc(action.targetLabel || '-') + '</div>' +
+        commandHtml +
+        '</div>';
     }
     function renderEvent(event) {
       return '<div class="event"><div class="event-meta">#' + esc(event.id) + ' ' + esc(event.ts) + ' ' + esc(event.stepId || '-') + ' ' + esc(event.type) + ' ' + esc(event.provider || '') + '</div><div>' + esc(event.message || '') + '</div></div>';
