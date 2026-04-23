@@ -16,6 +16,7 @@
 ## Phase 1: Full Flow MVP
 
 - [x] Implement a single `run-next` loop that executes the current step, evaluates guards, and advances until blocked.
+- [x] Make `run-next` auto-run provider steps by default, stopping only for gates, interruptions, failed guards, provider failures, or completion.
 - [x] Add Claude adapter with `stream-json` normalization and raw log capture.
 - [x] Add provider selection from `flows/pdh-ticket-core.yaml` instead of command-specific provider calls.
 - [x] Generate PD-C prompt templates from `pdh-dev` semantics.

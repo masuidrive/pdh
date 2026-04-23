@@ -609,6 +609,7 @@ Manual smoke tests:
 - 当面はこの開発環境での直接実行を優先し、Docker runtime / egress / version pinning は deferred operations とする。
 - Web UI は read-only viewer とし、実行・承認・再開・割り込み回答は CLI に残す。
 - Flow step は `PD-C-*` id を正本として残し、YAML の `label` / `summary` / `userAction` を CLI/Web 表示用に持つ。想定ユーザは PDH の概要を知っているが各 step の詳細は覚えていない。
+- `run-next` はデフォルトの自動運転入口とし、provider step も実行する。人間 gate、open interruption、failed guard、provider failure、完了で停止する。provider 手動実行は `run-provider` または `run-next --manual-provider` をデバッグ用途として残す。
 
 ### 実装済みメモ
 

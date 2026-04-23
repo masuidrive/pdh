@@ -120,7 +120,7 @@ Usage:
   pdh-flowchart run-claude [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-4] [--timeout-ms MS] [--max-attempts N]
   pdh-flowchart guards --repo DIR --step PD-C-9
   pdh-flowchart advance RUN_ID [--repo DIR] [--step PD-C-5]
-  pdh-flowchart run-next RUN_ID [--repo DIR] [--limit 20]
+  pdh-flowchart run-next RUN_ID [--repo DIR] [--limit 20] [--manual-provider]
   pdh-flowchart gate-summary RUN_ID --step PD-C-5 [--repo DIR]
   pdh-flowchart interrupt RUN_ID (--message TEXT | --file FILE) [--repo DIR] [--step PD-C-6]
   pdh-flowchart answer RUN_ID (--message TEXT | --file FILE) [--repo DIR] [--step PD-C-6]
@@ -267,6 +267,17 @@ async function cmdRunNext(argv) {
         console.log(JSON.stringify({ status: "completed", runId, trace }, null, 2));
         return;
       }
+      if (run.status === "failed") {
+        printBlocked({
+          status: "failed",
+          runId,
+          stepId: run.current_step_id,
+          reason: "provider_failed",
+          nextCommands: [statusCommand(runId, repo), resumeCommand(runId, repo)]
+        }, trace, options);
+        process.exitCode = 1;
+        return;
+      }
       const stepId = run.current_step_id;
       if (!stepId) {
         throw new Error(`Run has no current step: ${runId}`);
@@ -275,6 +286,41 @@ async function cmdRunNext(argv) {
       const step = getStep(flow, stepId);
       if (blockIfOpenInterruption({ store, runId, stepId, options, repo, step })) {
         return;
+      }
+      if (step.provider !== "runtime" && !hasCompletedProviderAttempt({ store, runId, stepId, provider: step.provider })) {
+        if (options["manual-provider"] === "true") {
+          const result = {
+            status: "blocked",
+            runId,
+            stepId,
+            reason: "provider_step_requires_execution",
+            provider: step.provider,
+            nextCommand: nextProviderCommand(runId, step, repo)
+          };
+          store.updateRun(runId, { status: "blocked", current_step_id: stepId });
+          syncRunMetadata({ store, repo, runId });
+          store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} provider_step_requires_execution`, payload: result });
+          trace.push(result);
+          printBlocked(result, trace, options);
+          return;
+        }
+        trace.push({ status: "provider_started", runId, stepId, provider: step.provider });
+        await cmdRunProvider(providerRunNextArgs({ runId, repo, options }), { lockHeld: true });
+        const afterProvider = store.getRun(runId);
+        if (afterProvider?.status === "failed") {
+          trace.push({ status: "failed", runId, stepId, provider: step.provider });
+          printBlocked({
+            status: "failed",
+            runId,
+            stepId,
+            reason: "provider_failed",
+            provider: step.provider,
+            nextCommands: [statusCommand(runId, repo), resumeCommand(runId, repo)]
+          }, trace, options);
+          process.exitCode = 1;
+          return;
+        }
+        continue;
       }
 
       if (isHumanGateStep(step)) {
@@ -327,22 +373,17 @@ async function cmdRunNext(argv) {
         return;
       }
       if (failed.length > 0) {
-        const providerAttempted = step.provider !== "runtime"
-          && store.nextStepAttempt({ runId, stepId, provider: step.provider }) > 1;
-        const reason = step.provider === "runtime" || providerAttempted ? "guard_failed" : "provider_step_requires_execution";
+        const reason = "guard_failed";
         const result = {
           status: "blocked",
           runId,
           stepId,
           reason,
           provider: step.provider,
-          failedGuards: failed,
-          nextCommand: nextProviderCommand(runId, step, repo)
+          failedGuards: failed
         };
-        if (reason === "guard_failed") {
-          const summary = createFailureSummaryForBlock({ store, repo, runId, stepId, step, block: result });
-          result.failureSummary = summary.artifactPath;
-        }
+        const summary = createFailureSummaryForBlock({ store, repo, runId, stepId, step, block: result });
+        result.failureSummary = summary.artifactPath;
         store.updateRun(runId, { status: "blocked", current_step_id: stepId });
         syncRunMetadata({ store, repo, runId });
         store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} ${reason}`, payload: result });
@@ -1234,6 +1275,37 @@ function providerStartAttempt({ store, runId, stepId, provider, options }) {
   return store.nextStepAttempt({ runId, stepId, provider });
 }
 
+function hasCompletedProviderAttempt({ store, runId, stepId, provider }) {
+  const row = store.db.prepare(`
+    SELECT 1 AS found
+    FROM run_steps
+    WHERE run_id = ? AND step_id = ? AND provider = ? AND status = 'completed'
+    LIMIT 1
+  `).get(runId, stepId, provider);
+  return Boolean(row);
+}
+
+function providerRunNextArgs({ runId, repo, options }) {
+  const args = [runId, "--repo", repo];
+  for (const key of [
+    "timeout-ms",
+    "max-attempts",
+    "retry-backoff-ms",
+    "retry-backoff-max-ms",
+    "kill-grace-ms",
+    "model",
+    "bypass",
+    "bare",
+    "permission-mode",
+    "include-partial-messages"
+  ]) {
+    if (options[key] !== undefined) {
+      args.push(`--${key}`, options[key]);
+    }
+  }
+  return args;
+}
+
 function providerMaxAttempts({ options, flow, step, startAttempt }) {
   if (options["max-attempts"] !== undefined) {
     return positiveInteger(options["max-attempts"], "--max-attempts");
@@ -1286,7 +1358,8 @@ function printBlocked(result, trace = [], options = {}) {
   }
   const step = result.stepId ? ` ${result.stepId}` : "";
   const reason = result.reason ? ` (${result.reason})` : "";
-  console.log(`Blocked:${step}${reason}`);
+  const label = result.status === "failed" ? "Failed" : "Blocked";
+  console.log(`${label}:${step}${reason}`);
   if (result.provider) {
     console.log(`Provider: ${result.provider}`);
   }

@@ -22,6 +22,7 @@ node src/cli.mjs init
 node src/cli.mjs run --ticket ticket-id --variant full
 node src/cli.mjs run --ticket ticket-id --variant full --start-step PD-C-5
 node src/cli.mjs run-next <run-id>
+node src/cli.mjs run-next <run-id> --manual-provider
 node src/cli.mjs interrupt <run-id> --message "Need clarification on the edge case"
 node src/cli.mjs show-interrupts <run-id>
 node src/cli.mjs answer <run-id> --message "Use the existing fallback behavior"
@@ -61,12 +62,15 @@ Current step: PD-C-5
 Next: node src/cli.mjs run-next run-20260423123000-abc123 --repo /path/to/repo
 ```
 
-When a provider step still needs execution:
+By default, `run-next` executes provider steps automatically and continues until a gate, interruption, failed guard, provider failure, or completion:
 
 ```text
-Blocked: PD-C-6 (provider_step_requires_execution)
+run-20260423123000-abc123 PD-C-6 completed
+Attempt: 1/2
+Raw log: /path/to/repo/.pdh-flowchart/runs/run-20260423123000-abc123/steps/PD-C-6/attempt-1/codex.raw.jsonl
+Blocked: PD-C-6 (guard_failed)
 Provider: codex
-Next: node src/cli.mjs run-provider run-20260423123000-abc123 --repo /path/to/repo
+Failure Summary: /path/to/repo/.pdh-flowchart/runs/run-20260423123000-abc123/steps/PD-C-6/failure-summary.md
 Use --json for full guard details.
 ```
 
@@ -82,7 +86,7 @@ When a human gate opens:
 }
 ```
 
-Provider completion points back to the runtime:
+`run-provider` remains available for manual provider execution, debugging, and custom prompt-file runs:
 
 ```text
 run-20260423123000-abc123 PD-C-6 completed
@@ -103,7 +107,7 @@ Next:
 
 ## Example Fixture
 
-`examples/fake-pdh-dev` is a tiny throwaway target repo with a `uv run calc` CLI, `current-ticket.md`, `current-note.md`, `ticket.sh`, and a failing multiplication AC. Copy it to `/tmp`, initialize git, and follow its README to exercise `doctor`, `run`, `run-next`, `show-gate`, `approve`, and optional `run-provider` from a user perspective.
+`examples/fake-pdh-dev` is a tiny throwaway target repo with a `uv run calc` CLI, `current-ticket.md`, `current-note.md`, `ticket.sh`, and a failing multiplication AC. Copy it to `/tmp`, initialize git, and follow its README to exercise `doctor`, `run`, `run-next`, `show-gate`, and `approve` from a user perspective.
 
 `smoke-calc` creates `/tmp/pdh-flowchart-calc-smoke`, uses the existing authenticated Codex CLI session, asks Codex to build a tiny `uv run calc "1+2"` CLI app, and verifies the result. It does not run `codex login`; `.env` remains available for other provider checks that need explicit API-key auth.
 
@@ -118,7 +122,7 @@ Next:
 - Deterministic guard skeletons exist for note/ticket sections, commits, commands, human approval, AC verification tables, and judgement artifacts.
 - Human gate commands can create a summary artifact and record approve/reject/request-changes/cancel decisions.
 - `advance` evaluates deterministic guards and only then moves the run to the next step.
-- `run-next` executes runtime-owned current-step work, advances through passing guards, and stops at human gates or provider steps that still need execution.
+- `run-next` executes runtime-owned current-step work, runs provider steps by default, advances through passing guards, and stops at human gates, interruptions, failed guards, provider failures, or completion. Pass `--manual-provider` to stop before provider execution.
 - `interrupt` records a step-level clarification artifact, marks the run `interrupted`, and blocks provider execution until `answer` resolves it.
 - Answered interruptions are injected into the next provider prompt for the same step.
 - Runtime commands refuse to operate on a non-current step unless `--force` is provided.

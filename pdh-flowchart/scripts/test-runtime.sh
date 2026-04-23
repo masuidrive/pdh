@@ -23,7 +23,7 @@ advance_to_provider_step() {
   run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant light --start-step PD-C-5 | sed -n '1p')"
   node "$ROOT/src/cli.mjs" run-next "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.gate.json"
   node "$ROOT/src/cli.mjs" approve "$run_id" --repo "$repo" --step PD-C-5 --reason ok >/dev/null
-  node "$ROOT/src/cli.mjs" run-next "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.blocked.txt" || true
+  node "$ROOT/src/cli.mjs" run-next "$run_id" --repo "$repo" --manual-provider >"$TMP_ROOT/$run_id.blocked.txt" || true
   printf '%s\n' "$run_id"
 }
 
@@ -60,6 +60,18 @@ test_blocked_run() {
   node "$ROOT/src/cli.mjs" status "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.status.txt"
   grep -q "Status: blocked" "$TMP_ROOT/$run_id.status.txt"
   grep -q "Current Step: PD-C-6 実装" "$TMP_ROOT/$run_id.status.txt"
+}
+
+test_auto_provider_run() {
+  local repo run_id fake args
+  repo="$(seed_repo auto-provider)"
+  run_id="$(advance_to_provider_step "$repo")"
+  fake="$(write_fake_codex_success)"
+  args="$TMP_ROOT/$run_id.auto-provider-args.txt"
+  CODEX_BIN="$fake" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-next "$run_id" --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.auto-provider.txt" || true
+  test -f "$args"
+  grep -q "PD-C-6 completed" "$TMP_ROOT/$run_id.auto-provider.txt"
+  grep -q "guard_failed" "$TMP_ROOT/$run_id.auto-provider.txt"
 }
 
 test_failed_run() {
@@ -164,7 +176,7 @@ if (!selected.run?.flow?.steps?.some((step) => step.id === "PD-C-6" && step.labe
 const currentStep = selected.run?.flow?.steps?.find((step) => step.id === "PD-C-6");
 if (currentStep?.progress?.status !== "blocked") throw new Error("flow progress status missing");
 if (selected.run?.nextAction?.targetTab !== "commands") throw new Error("next action target missing");
-if (!selected.run?.nextAction?.commands?.some((command) => command.includes("run-provider"))) throw new Error("next action command missing");
+if (!selected.run?.nextAction?.commands?.some((command) => command.includes("run-next"))) throw new Error("next action command missing");
 const mermaid = await (await fetch(`${url}api/flow.mmd?run=${encodeURIComponent(runId)}`)).text();
 if (!mermaid.includes("PD-C-6") || !mermaid.includes("実装")) throw new Error("mermaid flow labels missing");
 const html = await (await fetch(url)).text();
@@ -177,6 +189,7 @@ NODE
 }
 
 test_blocked_run
+test_auto_provider_run
 node "$ROOT/src/cli.mjs" flow-graph --variant light >"$TMP_ROOT/flow-graph.mmd"
 grep -q "PD-C-3" "$TMP_ROOT/flow-graph.mmd"
 grep -q "計画" "$TMP_ROOT/flow-graph.mmd"

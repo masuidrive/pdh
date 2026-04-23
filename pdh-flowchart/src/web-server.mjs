@@ -291,7 +291,7 @@ function describeNextAction({ run, currentStep, cli }) {
       title: `${stepName}の block 解消`,
       detail: currentStep.provider === "runtime"
         ? "Gates または Logs で止まった理由を見て、必要な CLI 操作を実行します。"
-        : "Logs で理由を見て、Commands の provider 実行または復旧コマンドを使います。",
+        : "Logs で理由を見て、Commands の run-next または復旧コマンドを使います。",
       targetTab: currentStep.provider === "runtime" ? "gates" : "commands",
       targetLabel: currentStep.provider === "runtime" ? "Gates" : "Commands",
       commands: cli
@@ -311,7 +311,7 @@ function describeNextAction({ run, currentStep, cli }) {
     return {
       status: "current",
       title: `${stepName}を実行`,
-      detail: "Commands の run-provider を実行し、完了後に run-next で次へ進めます。",
+      detail: "Commands の run-next を実行します。Provider 実行と次の遷移は gate / interruption / block まで自動で進みます。",
       targetTab: "commands",
       targetLabel: "Commands",
       commands: cli
@@ -408,6 +408,12 @@ function nextCliCommands({ run, currentStep, repo }) {
     return [];
   }
   const repoArg = ` --repo ${shellQuote(repo)}`;
+  if (run.status === "failed") {
+    return [
+      `node src/cli.mjs status ${run.id}${repoArg}`,
+      `node src/cli.mjs resume ${run.id}${repoArg}`
+    ];
+  }
   if (run.status === "needs_human") {
     return [
       `node src/cli.mjs show-gate ${run.id}${repoArg} --step ${run.current_step_id}`,
@@ -423,7 +429,6 @@ function nextCliCommands({ run, currentStep, repo }) {
   }
   if (currentStep.provider !== "runtime") {
     return [
-      `node src/cli.mjs run-provider ${run.id}${repoArg}`,
       `node src/cli.mjs run-next ${run.id}${repoArg}`
     ];
   }
