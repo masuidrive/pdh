@@ -43,7 +43,7 @@
 - [x] Add provider timeout and orphan process cleanup.
 - [x] Add retry/backoff policy per step.
 - [x] Add secret redaction for raw logs and summaries.
-- [ ] Add state schema migrations.
+- [x] Add state schema migrations.
 - [ ] Add tests around failed/blocked/resumed runs.
 
 ## Open Decisions

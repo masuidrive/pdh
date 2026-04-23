@@ -2,6 +2,77 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
+export const CURRENT_SCHEMA_VERSION = 1;
+
+const MIGRATIONS = [
+  {
+    version: 1,
+    name: "initial_state_schema",
+    up: `
+      CREATE TABLE IF NOT EXISTS runs (
+        id TEXT PRIMARY KEY,
+        flow_id TEXT NOT NULL,
+        flow_variant TEXT NOT NULL,
+        ticket_id TEXT,
+        status TEXT NOT NULL,
+        current_step_id TEXT,
+        repo_path TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        completed_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS run_steps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT NOT NULL,
+        step_id TEXT NOT NULL,
+        attempt INTEGER NOT NULL,
+        round INTEGER NOT NULL DEFAULT 1,
+        provider TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        status TEXT NOT NULL,
+        started_at TEXT,
+        finished_at TEXT,
+        exit_code INTEGER,
+        summary TEXT,
+        error TEXT
+      );
+      CREATE TABLE IF NOT EXISTS progress_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT NOT NULL,
+        step_id TEXT,
+        attempt INTEGER NOT NULL DEFAULT 1,
+        ts TEXT NOT NULL,
+        type TEXT NOT NULL,
+        provider TEXT,
+        message TEXT,
+        payload_json TEXT
+      );
+      CREATE TABLE IF NOT EXISTS provider_sessions (
+        run_id TEXT NOT NULL,
+        step_id TEXT NOT NULL,
+        attempt INTEGER NOT NULL,
+        provider TEXT NOT NULL,
+        session_id TEXT,
+        resume_token TEXT,
+        raw_log_path TEXT,
+        PRIMARY KEY (run_id, step_id, attempt, provider)
+      );
+      CREATE TABLE IF NOT EXISTS human_gates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT NOT NULL,
+        step_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        prompt TEXT,
+        summary TEXT,
+        decision TEXT,
+        reason TEXT,
+        created_at TEXT NOT NULL,
+        resolved_at TEXT
+      );
+    `
+  }
+];
+
 export function defaultStateDir(repoPath = process.cwd()) {
   return join(repoPath, ".pdh-flowchart");
 }
@@ -12,70 +83,38 @@ export function openStore(stateDir = defaultStateDir()) {
   const dbPath = join(stateDir, "state.sqlite");
   mkdirSync(dirname(dbPath), { recursive: true });
   const db = new DatabaseSync(dbPath);
+  runMigrations(db);
+  return new Store(db, stateDir);
+}
+
+export function runMigrations(db) {
   db.exec(`
     PRAGMA journal_mode = WAL;
-    CREATE TABLE IF NOT EXISTS runs (
-      id TEXT PRIMARY KEY,
-      flow_id TEXT NOT NULL,
-      flow_variant TEXT NOT NULL,
-      ticket_id TEXT,
-      status TEXT NOT NULL,
-      current_step_id TEXT,
-      repo_path TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      completed_at TEXT
-    );
-    CREATE TABLE IF NOT EXISTS run_steps (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      run_id TEXT NOT NULL,
-      step_id TEXT NOT NULL,
-      attempt INTEGER NOT NULL,
-      round INTEGER NOT NULL DEFAULT 1,
-      provider TEXT NOT NULL,
-      mode TEXT NOT NULL,
-      status TEXT NOT NULL,
-      started_at TEXT,
-      finished_at TEXT,
-      exit_code INTEGER,
-      summary TEXT,
-      error TEXT
-    );
-    CREATE TABLE IF NOT EXISTS progress_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      run_id TEXT NOT NULL,
-      step_id TEXT,
-      attempt INTEGER NOT NULL DEFAULT 1,
-      ts TEXT NOT NULL,
-      type TEXT NOT NULL,
-      provider TEXT,
-      message TEXT,
-      payload_json TEXT
-    );
-    CREATE TABLE IF NOT EXISTS provider_sessions (
-      run_id TEXT NOT NULL,
-      step_id TEXT NOT NULL,
-      attempt INTEGER NOT NULL,
-      provider TEXT NOT NULL,
-      session_id TEXT,
-      resume_token TEXT,
-      raw_log_path TEXT,
-      PRIMARY KEY (run_id, step_id, attempt, provider)
-    );
-    CREATE TABLE IF NOT EXISTS human_gates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      run_id TEXT NOT NULL,
-      step_id TEXT NOT NULL,
-      status TEXT NOT NULL,
-      prompt TEXT,
-      summary TEXT,
-      decision TEXT,
-      reason TEXT,
-      created_at TEXT NOT NULL,
-      resolved_at TEXT
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at TEXT NOT NULL
     );
   `);
-  return new Store(db, stateDir);
+  const applied = new Set(db.prepare("SELECT version FROM schema_migrations").all().map((row) => row.version));
+  for (const migration of MIGRATIONS) {
+    if (applied.has(migration.version)) {
+      continue;
+    }
+    try {
+      db.exec("BEGIN");
+      db.exec(migration.up);
+      db.prepare("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)").run(
+        migration.version,
+        migration.name,
+        new Date().toISOString()
+      );
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw new Error(`Migration ${migration.version} (${migration.name}) failed: ${error.message}`);
+    }
+  }
 }
 
 export class Store {

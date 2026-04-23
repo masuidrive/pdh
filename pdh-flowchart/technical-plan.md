@@ -634,6 +634,7 @@ Manual smoke tests:
 - Provider adapter は flow の `timeoutMinutes` または `--timeout-ms` に従って timeout event を記録し、detached process group に `SIGTERM`、猶予後に `SIGKILL` を送って orphan を残さない。
 - Provider commands は flow の `maxAttempts` または `--max-attempts` に従って failed attempt を retry し、`retry` progress event と exponential backoff (`--retry-backoff-ms`, `--retry-backoff-max-ms`) を記録する。
 - Provider raw logs と human gate summary は common token/API key pattern と repo `.env` / process env 由来の exact secret を `[REDACTED]` に置換して保存する。
+- SQLite state store は `schema_migrations` table で migration version/name/applied_at を記録し、v1 initial schema を idempotent に適用する。
 
 ### 未解決
 

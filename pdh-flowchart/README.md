@@ -54,6 +54,7 @@ node src/cli.mjs smoke-calc
 
 - Full `pdh-ticket-core` flow definition is represented in `flows/pdh-ticket-core.json`.
 - SQLite state is stored under `.pdh-flowchart/state.sqlite`.
+- State schema changes are tracked in the `schema_migrations` table; current schema version is `1`.
 - Codex JSONL output is saved as raw provider logs.
 - Claude Code `stream-json` output is saved as raw provider logs and normalized into progress events.
 - Deterministic guard skeletons exist for note/ticket sections, commits, commands, human approval, AC verification tables, and judgement artifacts.
