@@ -631,6 +631,7 @@ Manual smoke tests:
 - `logs <run-id> --follow` が normalized progress events を stream し、`show-gate <run-id>` が current human gate summary を表示する。
 - `web --repo <dir>` は local read-only dashboard として run progress、logs、human gates、interruptions、git diff を表示する。server-side mutation endpoint は持たない。
 - blocked guard output は通常 concise summary を出し、`--json` 指定時だけ full guard payload を出す。
+- provider failure と guard failure は `failure-summary.md` artifact に failed guards、provider output、raw log、復旧用 CLI command を保存する。
 - `doctor` が Node、Codex、Claude Code、uv、git、provider auth、`.env`、git repo 状態を secret 非表示で確認する。
 - `examples/fake-pdh-dev` は `uv run calc`、`current-ticket.md`、`current-note.md`、`ticket.sh`、failing AC を持つ小さい target repo として、gate と provider handoff のユーザ目線確認に使う。
 - Mutating run commands は `.pdh-flowchart/locks/<run-id>.lock` の atomic lockfile を取り、同一 run の二重 mutation を拒否する。`--lock-wait-ms` / `PDH_FLOWCHART_LOCK_WAIT_MS` で待機を指定できる。

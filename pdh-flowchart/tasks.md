@@ -51,7 +51,7 @@
 
 - [ ] Decide whether `.pdh-flowchart/state.sqlite` remains repo-local or moves to a shared volume.
 - [ ] Strengthen direct `current-note.md` / `current-ticket.md` update summaries using `git diff` and artifacts.
-- [ ] Add failed-step artifact summaries for user-facing recovery.
+- [x] Add failed-step artifact summaries for user-facing recovery.
 - [ ] Refine structured review report schema.
 - [ ] Evaluate optional Codex SDK / Claude Agent SDK adapters.
 

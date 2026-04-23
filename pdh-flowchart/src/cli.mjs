@@ -15,6 +15,7 @@ import { runFinalVerification } from "./final-verification.mjs";
 import { formatDoctor, runDoctor } from "./doctor.mjs";
 import { withRunLock } from "./locks.mjs";
 import { answerLatestInterruption, createInterruption, latestOpenInterruption, loadStepInterruptions, renderInterruptionMarkdown } from "./interruptions.mjs";
+import { writeFailureSummary } from "./failure-summary.mjs";
 
 const emitWarning = process.emitWarning.bind(process);
 process.emitWarning = (warning, ...warningArgs) => {
@@ -196,6 +197,8 @@ async function cmdAdvance(argv) {
     const { evaluation, failed, actionBlock } = await evaluateStepWithRuntimeActions({ store, flow, runId, stepId, repo, step });
     const outcome = outcomeForStep(step, evaluation.humanGate);
     if (actionBlock) {
+      const summary = createFailureSummaryForBlock({ store, repo, runId, stepId, step, block: actionBlock });
+      actionBlock.failureSummary = summary.artifactPath;
       store.updateRun(runId, { status: "blocked", current_step_id: stepId });
       syncRunMetadata({ store, repo, runId });
       printBlocked(actionBlock, [], options);
@@ -203,9 +206,17 @@ async function cmdAdvance(argv) {
       return;
     }
     if (failed.length > 0) {
+      const summary = createFailureSummaryForBlock({
+        store,
+        repo,
+        runId,
+        stepId,
+        step,
+        block: { reason: "guard_failed", provider: step.provider, failedGuards: failed }
+      });
       store.updateRun(runId, { status: "blocked", current_step_id: stepId });
       syncRunMetadata({ store, repo, runId });
-      printBlocked({ status: "blocked", runId, stepId, reason: "guard_failed", provider: step.provider, failedGuards: failed, guardResults: evaluation.guardResults }, [], options);
+      printBlocked({ status: "blocked", runId, stepId, reason: "guard_failed", provider: step.provider, failedGuards: failed, guardResults: evaluation.guardResults, failureSummary: summary.artifactPath }, [], options);
       process.exitCode = 1;
       return;
     }
@@ -291,6 +302,8 @@ async function cmdRunNext(argv) {
       const outcome = outcomeForStep(step, evaluation.humanGate);
       if (actionBlock) {
         const result = actionBlock;
+        const summary = createFailureSummaryForBlock({ store, repo, runId, stepId, step, block: result });
+        result.failureSummary = summary.artifactPath;
         store.updateRun(runId, { status: "blocked", current_step_id: stepId });
         syncRunMetadata({ store, repo, runId });
         store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} ${result.reason}`, payload: result });
@@ -299,7 +312,9 @@ async function cmdRunNext(argv) {
         return;
       }
       if (failed.length > 0) {
-        const reason = step.provider === "runtime" ? "guard_failed" : "provider_step_requires_execution";
+        const providerAttempted = step.provider !== "runtime"
+          && store.nextStepAttempt({ runId, stepId, provider: step.provider }) > 1;
+        const reason = step.provider === "runtime" || providerAttempted ? "guard_failed" : "provider_step_requires_execution";
         const result = {
           status: "blocked",
           runId,
@@ -309,6 +324,10 @@ async function cmdRunNext(argv) {
           failedGuards: failed,
           nextCommand: nextProviderCommand(runId, step, repo)
         };
+        if (reason === "guard_failed") {
+          const summary = createFailureSummaryForBlock({ store, repo, runId, stepId, step, block: result });
+          result.failureSummary = summary.artifactPath;
+        }
         store.updateRun(runId, { status: "blocked", current_step_id: stepId });
         syncRunMetadata({ store, repo, runId });
         store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} ${reason}`, payload: result });
@@ -628,6 +647,7 @@ async function cmdRunCodex(argv, context = {}) {
     }
     let status = "failed";
     let rawLogPath = null;
+    let lastResult = null;
     while (attempt <= maxAttempts) {
       rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "codex.raw.jsonl");
       const resumeSession = resolveProviderResume({ store, runId, stepId, provider: "codex", option: options.resume ?? null });
@@ -648,6 +668,7 @@ async function cmdRunCodex(argv, context = {}) {
           store.addEvent({ runId, stepId, attempt, type: event.type, provider: "codex", message: event.message, payload: event.payload ?? {} });
         }
       });
+      lastResult = result;
       store.saveProviderSession({ runId, stepId, attempt, provider: "codex", sessionId: result.sessionId, rawLogPath });
       status = result.exitCode === 0 ? "completed" : "failed";
       store.finishStep({ runId, stepId, attempt, provider: "codex", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
@@ -671,6 +692,18 @@ async function cmdRunCodex(argv, context = {}) {
     if (status === "completed") {
       console.log(`Next: ${runNextCommand(runId, repo)}`);
     } else {
+      const summary = createProviderFailureSummary({
+        store,
+        repo,
+        runId,
+        stepId,
+        step,
+        attempt,
+        maxAttempts,
+        rawLogPath,
+        result: lastResult
+      });
+      console.log(`Failure Summary: ${summary.artifactPath}`);
       console.log(`Next: ${statusCommand(runId, repo)}`);
       console.log(`Retry: ${resumeCommand(runId, repo)}`);
     }
@@ -890,6 +923,7 @@ async function cmdRunClaude(argv, context = {}) {
     }
     let status = "failed";
     let rawLogPath = null;
+    let lastResult = null;
     while (attempt <= maxAttempts) {
       rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "claude.raw.jsonl");
       const resumeSession = resolveProviderResume({ store, runId, stepId, provider: "claude", option: options.resume ?? null });
@@ -912,6 +946,7 @@ async function cmdRunClaude(argv, context = {}) {
           store.addEvent({ runId, stepId, attempt, type: event.type, provider: "claude", message: event.message, payload: event.payload ?? {} });
         }
       });
+      lastResult = result;
       store.saveProviderSession({ runId, stepId, attempt, provider: "claude", sessionId: result.sessionId, rawLogPath });
       status = result.exitCode === 0 ? "completed" : "failed";
       store.finishStep({ runId, stepId, attempt, provider: "claude", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
@@ -935,6 +970,18 @@ async function cmdRunClaude(argv, context = {}) {
     if (status === "completed") {
       console.log(`Next: ${runNextCommand(runId, repo)}`);
     } else {
+      const summary = createProviderFailureSummary({
+        store,
+        repo,
+        runId,
+        stepId,
+        step,
+        attempt,
+        maxAttempts,
+        rawLogPath,
+        result: lastResult
+      });
+      console.log(`Failure Summary: ${summary.artifactPath}`);
       console.log(`Next: ${statusCommand(runId, repo)}`);
       console.log(`Retry: ${resumeCommand(runId, repo)}`);
     }
@@ -1231,6 +1278,9 @@ function printBlocked(result, trace = [], options = {}) {
   if (result.message) {
     console.log(`Message: ${result.message}`);
   }
+  if (result.failureSummary) {
+    console.log(`Failure Summary: ${result.failureSummary}`);
+  }
   if (result.nextCommand) {
     console.log(`Next: ${result.nextCommand}`);
   }
@@ -1270,6 +1320,67 @@ function blockIfOpenInterruption({ store, runId, stepId, options = {}, repo, ste
   printBlocked(result, [], options);
   process.exitCode = 1;
   return true;
+}
+
+function createFailureSummaryForBlock({ store, repo, runId, stepId, step, block }) {
+  const nextCommands = [
+    ...(block.nextCommand ? [block.nextCommand] : []),
+    ...(block.nextCommands ?? [])
+  ];
+  const summary = writeFailureSummary({
+    stateDir: store.stateDir,
+    repoPath: repo,
+    runId,
+    stepId,
+    reason: block.reason ?? "blocked",
+    provider: block.provider ?? step.provider ?? "runtime",
+    status: block.status ?? "blocked",
+    failedGuards: block.failedGuards ?? [],
+    nextCommands
+  });
+  store.addEvent({
+    runId,
+    stepId,
+    type: "artifact",
+    provider: "runtime",
+    message: `failure summary ${summary.artifactPath}`,
+    payload: { artifactPath: summary.artifactPath, reason: block.reason ?? "blocked" }
+  });
+  return summary;
+}
+
+function createProviderFailureSummary({ store, repo, runId, stepId, step, attempt, maxAttempts, rawLogPath, result }) {
+  const summary = writeFailureSummary({
+    stateDir: store.stateDir,
+    repoPath: repo,
+    runId,
+    stepId,
+    reason: result?.timedOut ? "provider_timeout" : "provider_failed",
+    provider: step.provider,
+    status: "failed",
+    attempt,
+    maxAttempts,
+    exitCode: result?.exitCode ?? null,
+    timedOut: result?.timedOut === true,
+    signal: result?.signal ?? null,
+    rawLogPath,
+    finalMessage: result?.finalMessage ?? null,
+    stderr: result?.stderr ?? null,
+    nextCommands: [
+      statusCommand(runId, repo),
+      resumeCommand(runId, repo)
+    ]
+  });
+  store.addEvent({
+    runId,
+    stepId,
+    attempt,
+    type: "artifact",
+    provider: "runtime",
+    message: `failure summary ${summary.artifactPath}`,
+    payload: { artifactPath: summary.artifactPath, reason: result?.timedOut ? "provider_timeout" : "provider_failed" }
+  });
+  return summary;
 }
 
 function normalizeEvent(event) {

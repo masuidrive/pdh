@@ -63,18 +63,22 @@ test_blocked_run() {
 }
 
 test_failed_run() {
-  local repo run_id fake
+  local repo run_id fake summary_path
   repo="$(seed_repo failed)"
   run_id="$(advance_to_provider_step "$repo")"
   fake="$(write_fake_codex_fail)"
   CODEX_BIN="$fake" node "$ROOT/src/cli.mjs" run-provider "$run_id" --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.provider.txt"
   grep -q "failed" "$TMP_ROOT/$run_id.provider.txt"
+  grep -q "Failure Summary:" "$TMP_ROOT/$run_id.provider.txt"
+  summary_path="$(sed -n 's/^Failure Summary: //p' "$TMP_ROOT/$run_id.provider.txt")"
+  test -f "$summary_path"
+  grep -q "Exit code: 9" "$summary_path"
   node "$ROOT/src/cli.mjs" status "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.failed-status.txt"
   grep -q "Status: failed" "$TMP_ROOT/$run_id.failed-status.txt"
 }
 
 test_resumed_run() {
-  local repo run_id fake first_args second_args
+  local repo run_id fake first_args second_args summary_path
   repo="$(seed_repo resumed)"
   run_id="$(advance_to_provider_step "$repo")"
   fake="$(write_fake_codex_success)"
@@ -85,6 +89,12 @@ test_resumed_run() {
   grep -q "completed" "$TMP_ROOT/$run_id.resume-provider.txt"
   grep -q "resume" "$second_args"
   grep -q "fake-thread" "$second_args"
+  node "$ROOT/src/cli.mjs" run-next "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.guard-failed.txt" || true
+  grep -q "guard_failed" "$TMP_ROOT/$run_id.guard-failed.txt"
+  grep -q "Failure Summary:" "$TMP_ROOT/$run_id.guard-failed.txt"
+  summary_path="$(sed -n 's/^Failure Summary: //p' "$TMP_ROOT/$run_id.guard-failed.txt")"
+  test -f "$summary_path"
+  grep -q "Failed Guards" "$summary_path"
 }
 
 test_interrupted_run() {

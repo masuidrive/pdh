@@ -134,6 +134,7 @@ Next:
 - Mutating run commands use a per-run lock under `.pdh-flowchart/locks`; set `PDH_FLOWCHART_LOCK_WAIT_MS` or pass `--lock-wait-ms` to wait instead of failing immediately.
 - Provider commands use flow `timeoutMinutes` by default, can be overridden with `--timeout-ms`, and terminate the provider process group on timeout.
 - Provider failures retry up to flow `maxAttempts` by default with exponential backoff; use `--max-attempts` and `--retry-backoff-ms` to override.
+- Provider failures and guard failures write `failure-summary.md` artifacts with failed guards, provider output, raw log path, and next recovery commands.
 - Provider raw logs and human gate summaries redact common API key/token patterns and exact secret values loaded from `.env`.
 - `npm run test:runtime` exercises blocked, failed, and resumed run paths with fake providers.
 - `resume <run-id>` resumes the current provider step from the latest saved Codex/Claude session id.
