@@ -41,7 +41,7 @@
 
 - [x] Add file locking so two runtimes cannot mutate the same run.
 - [x] Add provider timeout and orphan process cleanup.
-- [ ] Add retry/backoff policy per step.
+- [x] Add retry/backoff policy per step.
 - [ ] Add secret redaction for raw logs and summaries.
 - [ ] Add state schema migrations.
 - [ ] Add tests around failed/blocked/resumed runs.

@@ -130,6 +130,15 @@ export class Store {
     this.addEvent({ runId, stepId, attempt, type: "step_finished", provider, message: `${stepId} ${status}`, payload: { exitCode, summary, error } });
   }
 
+  nextStepAttempt({ runId, stepId, provider }) {
+    const row = this.db.prepare(`
+      SELECT MAX(attempt) AS attempt
+      FROM run_steps
+      WHERE run_id = ? AND step_id = ? AND provider = ?
+    `).get(runId, stepId, provider);
+    return Number(row?.attempt ?? 0) + 1;
+  }
+
   addEvent({ runId, stepId = null, attempt = 1, type, provider = null, message = null, payload = {} }) {
     this.db.prepare(`
       INSERT INTO progress_events (run_id, step_id, attempt, ts, type, provider, message, payload_json)

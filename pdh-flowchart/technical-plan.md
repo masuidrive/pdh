@@ -632,6 +632,7 @@ Manual smoke tests:
 - `examples/fake-pdh-dev` は `uv run calc`、`current-ticket.md`、`current-note.md`、`ticket.sh`、failing AC を持つ小さい target repo として、gate と provider handoff のユーザ目線確認に使う。
 - Mutating run commands は `.pdh-flowchart/locks/<run-id>.lock` の atomic lockfile を取り、同一 run の二重 mutation を拒否する。`--lock-wait-ms` / `PDH_FLOWCHART_LOCK_WAIT_MS` で待機を指定できる。
 - Provider adapter は flow の `timeoutMinutes` または `--timeout-ms` に従って timeout event を記録し、detached process group に `SIGTERM`、猶予後に `SIGKILL` を送って orphan を残さない。
+- Provider commands は flow の `maxAttempts` または `--max-attempts` に従って failed attempt を retry し、`retry` progress event と exponential backoff (`--retry-backoff-ms`, `--retry-backoff-max-ms`) を記録する。
 
 ### 未解決
 

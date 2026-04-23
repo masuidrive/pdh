@@ -101,10 +101,10 @@ Usage:
   pdh-flowchart metadata RUN_ID [--repo DIR]
   pdh-flowchart judgement RUN_ID [--repo DIR] [--step PD-C-4] [--kind plan_review] [--status "No Critical/Major"] [--summary TEXT]
   pdh-flowchart verify RUN_ID [--repo DIR] [--command "scripts/test-all.sh"]
-  pdh-flowchart run-provider RUN_ID [--prompt-file FILE] [--repo DIR] [--timeout-ms MS]
+  pdh-flowchart run-provider RUN_ID [--prompt-file FILE] [--repo DIR] [--timeout-ms MS] [--max-attempts N] [--retry-backoff-ms MS]
   pdh-flowchart resume RUN_ID [--prompt-file FILE] [--repo DIR]
-  pdh-flowchart run-codex [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-6] [--timeout-ms MS]
-  pdh-flowchart run-claude [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-4] [--timeout-ms MS]
+  pdh-flowchart run-codex [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-6] [--timeout-ms MS] [--max-attempts N]
+  pdh-flowchart run-claude [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-4] [--timeout-ms MS] [--max-attempts N]
   pdh-flowchart guards --repo DIR --step PD-C-9
   pdh-flowchart advance RUN_ID [--repo DIR] [--step PD-C-5]
   pdh-flowchart run-next RUN_ID [--repo DIR] [--limit 20]
@@ -125,6 +125,7 @@ Usage:
 Notes:
   - .env is loaded for provider commands only.
   - Provider commands use flow timeoutMinutes unless --timeout-ms is set.
+  - Provider retries use flow maxAttempts unless --max-attempts is set.
   - Unit-style commands do not call external providers.
 `);
 }
@@ -483,36 +484,55 @@ async function cmdRunCodex(argv, context = {}) {
       throw new Error(`${stepId} uses provider ${step.provider}; refusing to run Codex without --force`);
     }
     const timeoutMs = providerTimeoutMs({ options, flow, step });
-    const attempt = Number(options.attempt ?? "1");
-    const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "codex.raw.jsonl");
-    const resumeSession = resolveProviderResume({ store, runId, stepId, provider: "codex", option: options.resume ?? null });
-    store.updateRun(runId, { status: "running", current_step_id: stepId });
-    syncRunMetadata({ store, repo, runId });
-    const noteTicketBefore = snapshotNoteTicketFiles({ repoPath: repo });
-    store.startStep({ runId, stepId, attempt, provider: "codex", mode: "edit" });
-    const result = await runCodex({
-      cwd: repo,
-      prompt,
-      rawLogPath,
-      bypass: options.bypass !== "false",
-      model: options.model ?? null,
-      resume: resumeSession,
-      timeoutMs,
-      killGraceMs: providerKillGraceMs(options),
-      onEvent(event) {
-        store.addEvent({ runId, stepId, attempt, type: event.type, provider: "codex", message: event.message, payload: event.payload ?? {} });
+    let attempt = providerStartAttempt({ store, runId, stepId, provider: "codex", options });
+    let maxAttempts = providerMaxAttempts({ options, flow, step, startAttempt: attempt });
+    if (attempt > maxAttempts) {
+      if (options.force !== "true") {
+        throw new Error(`${stepId} exhausted max attempts (${maxAttempts}); pass --force, --attempt, or --max-attempts to override.`);
       }
-    });
-    store.saveProviderSession({ runId, stepId, attempt, provider: "codex", sessionId: result.sessionId, rawLogPath });
-    const status = result.exitCode === 0 ? "completed" : "failed";
-    store.finishStep({ runId, stepId, attempt, provider: "codex", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
-    const patchProposal = captureNoteTicketPatchProposal({ repoPath: repo, stateDir: store.stateDir, runId, stepId, attempt, before: noteTicketBefore });
-    if (patchProposal.status === "written") {
-      store.addEvent({ runId, stepId, attempt, type: "artifact", provider: "runtime", message: `note/ticket patch proposal ${patchProposal.artifactPath}`, payload: patchProposal });
+      maxAttempts = attempt;
     }
-    store.updateRun(runId, { status: result.exitCode === 0 ? "running" : "failed", current_step_id: stepId });
+    let status = "failed";
+    let rawLogPath = null;
+    while (attempt <= maxAttempts) {
+      rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "codex.raw.jsonl");
+      const resumeSession = resolveProviderResume({ store, runId, stepId, provider: "codex", option: options.resume ?? null });
+      store.updateRun(runId, { status: "running", current_step_id: stepId });
+      syncRunMetadata({ store, repo, runId });
+      const noteTicketBefore = snapshotNoteTicketFiles({ repoPath: repo });
+      store.startStep({ runId, stepId, attempt, provider: "codex", mode: "edit" });
+      const result = await runCodex({
+        cwd: repo,
+        prompt,
+        rawLogPath,
+        bypass: options.bypass !== "false",
+        model: options.model ?? null,
+        resume: resumeSession,
+        timeoutMs,
+        killGraceMs: providerKillGraceMs(options),
+        onEvent(event) {
+          store.addEvent({ runId, stepId, attempt, type: event.type, provider: "codex", message: event.message, payload: event.payload ?? {} });
+        }
+      });
+      store.saveProviderSession({ runId, stepId, attempt, provider: "codex", sessionId: result.sessionId, rawLogPath });
+      status = result.exitCode === 0 ? "completed" : "failed";
+      store.finishStep({ runId, stepId, attempt, provider: "codex", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
+      const patchProposal = captureNoteTicketPatchProposal({ repoPath: repo, stateDir: store.stateDir, runId, stepId, attempt, before: noteTicketBefore });
+      if (patchProposal.status === "written") {
+        store.addEvent({ runId, stepId, attempt, type: "artifact", provider: "runtime", message: `note/ticket patch proposal ${patchProposal.artifactPath}`, payload: patchProposal });
+      }
+      if (status === "completed" || attempt >= maxAttempts) {
+        break;
+      }
+      const delayMs = retryDelayMs(options, attempt);
+      store.addEvent({ runId, stepId, attempt, type: "retry", provider: "runtime", message: `retrying codex attempt ${attempt + 1} after ${delayMs}ms`, payload: { nextAttempt: attempt + 1, maxAttempts, delayMs, exitCode: result.exitCode, timedOut: result.timedOut === true } });
+      await sleep(delayMs);
+      attempt += 1;
+    }
+    store.updateRun(runId, { status: status === "completed" ? "running" : "failed", current_step_id: stepId });
     syncRunMetadata({ store, repo, runId });
     console.log(`${runId} ${stepId} ${status}`);
+    console.log(`Attempt: ${attempt}/${maxAttempts}`);
     console.log(`Raw log: ${rawLogPath}`);
   } });
 }
@@ -713,39 +733,58 @@ async function cmdRunClaude(argv, context = {}) {
       throw new Error(`${stepId} uses provider ${step.provider}; refusing to run Claude without --force`);
     }
     const timeoutMs = providerTimeoutMs({ options, flow, step });
-    const attempt = Number(options.attempt ?? "1");
-    const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "claude.raw.jsonl");
     const permissionMode = options["permission-mode"] ?? (options.bypass === "true" ? "bypassPermissions" : "acceptEdits");
-    const resumeSession = resolveProviderResume({ store, runId, stepId, provider: "claude", option: options.resume ?? null });
-    store.updateRun(runId, { status: "running", current_step_id: stepId });
-    syncRunMetadata({ store, repo, runId });
-    const noteTicketBefore = snapshotNoteTicketFiles({ repoPath: repo });
-    store.startStep({ runId, stepId, attempt, provider: "claude", mode: step.mode ?? "review" });
-    const result = await runClaude({
-      cwd: repo,
-      prompt,
-      rawLogPath,
-      bare: options.bare === "true",
-      includePartialMessages: options["include-partial-messages"] === "true",
-      model: options.model ?? null,
-      permissionMode,
-      resume: resumeSession,
-      timeoutMs,
-      killGraceMs: providerKillGraceMs(options),
-      onEvent(event) {
-        store.addEvent({ runId, stepId, attempt, type: event.type, provider: "claude", message: event.message, payload: event.payload ?? {} });
+    let attempt = providerStartAttempt({ store, runId, stepId, provider: "claude", options });
+    let maxAttempts = providerMaxAttempts({ options, flow, step, startAttempt: attempt });
+    if (attempt > maxAttempts) {
+      if (options.force !== "true") {
+        throw new Error(`${stepId} exhausted max attempts (${maxAttempts}); pass --force, --attempt, or --max-attempts to override.`);
       }
-    });
-    store.saveProviderSession({ runId, stepId, attempt, provider: "claude", sessionId: result.sessionId, rawLogPath });
-    const status = result.exitCode === 0 ? "completed" : "failed";
-    store.finishStep({ runId, stepId, attempt, provider: "claude", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
-    const patchProposal = captureNoteTicketPatchProposal({ repoPath: repo, stateDir: store.stateDir, runId, stepId, attempt, before: noteTicketBefore });
-    if (patchProposal.status === "written") {
-      store.addEvent({ runId, stepId, attempt, type: "artifact", provider: "runtime", message: `note/ticket patch proposal ${patchProposal.artifactPath}`, payload: patchProposal });
+      maxAttempts = attempt;
     }
-    store.updateRun(runId, { status: result.exitCode === 0 ? "running" : "failed", current_step_id: stepId });
+    let status = "failed";
+    let rawLogPath = null;
+    while (attempt <= maxAttempts) {
+      rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "claude.raw.jsonl");
+      const resumeSession = resolveProviderResume({ store, runId, stepId, provider: "claude", option: options.resume ?? null });
+      store.updateRun(runId, { status: "running", current_step_id: stepId });
+      syncRunMetadata({ store, repo, runId });
+      const noteTicketBefore = snapshotNoteTicketFiles({ repoPath: repo });
+      store.startStep({ runId, stepId, attempt, provider: "claude", mode: step.mode ?? "review" });
+      const result = await runClaude({
+        cwd: repo,
+        prompt,
+        rawLogPath,
+        bare: options.bare === "true",
+        includePartialMessages: options["include-partial-messages"] === "true",
+        model: options.model ?? null,
+        permissionMode,
+        resume: resumeSession,
+        timeoutMs,
+        killGraceMs: providerKillGraceMs(options),
+        onEvent(event) {
+          store.addEvent({ runId, stepId, attempt, type: event.type, provider: "claude", message: event.message, payload: event.payload ?? {} });
+        }
+      });
+      store.saveProviderSession({ runId, stepId, attempt, provider: "claude", sessionId: result.sessionId, rawLogPath });
+      status = result.exitCode === 0 ? "completed" : "failed";
+      store.finishStep({ runId, stepId, attempt, provider: "claude", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
+      const patchProposal = captureNoteTicketPatchProposal({ repoPath: repo, stateDir: store.stateDir, runId, stepId, attempt, before: noteTicketBefore });
+      if (patchProposal.status === "written") {
+        store.addEvent({ runId, stepId, attempt, type: "artifact", provider: "runtime", message: `note/ticket patch proposal ${patchProposal.artifactPath}`, payload: patchProposal });
+      }
+      if (status === "completed" || attempt >= maxAttempts) {
+        break;
+      }
+      const delayMs = retryDelayMs(options, attempt);
+      store.addEvent({ runId, stepId, attempt, type: "retry", provider: "runtime", message: `retrying claude attempt ${attempt + 1} after ${delayMs}ms`, payload: { nextAttempt: attempt + 1, maxAttempts, delayMs, exitCode: result.exitCode, timedOut: result.timedOut === true } });
+      await sleep(delayMs);
+      attempt += 1;
+    }
+    store.updateRun(runId, { status: status === "completed" ? "running" : "failed", current_step_id: stepId });
     syncRunMetadata({ store, repo, runId });
     console.log(`${runId} ${stepId} ${status}`);
+    console.log(`Attempt: ${attempt}/${maxAttempts}`);
     console.log(`Raw log: ${rawLogPath}`);
   } });
 }
@@ -931,6 +970,31 @@ function nonNegativeInteger(value, label) {
   return number;
 }
 
+function positiveInteger(value, label) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 1) {
+    throw new Error(`${label} must be a positive integer`);
+  }
+  return number;
+}
+
+function providerStartAttempt({ store, runId, stepId, provider, options }) {
+  if (options.attempt !== undefined) {
+    return positiveInteger(options.attempt, "--attempt");
+  }
+  return store.nextStepAttempt({ runId, stepId, provider });
+}
+
+function providerMaxAttempts({ options, flow, step, startAttempt }) {
+  if (options["max-attempts"] !== undefined) {
+    return positiveInteger(options["max-attempts"], "--max-attempts");
+  }
+  if (options.attempt !== undefined) {
+    return startAttempt;
+  }
+  return positiveInteger(step.maxAttempts ?? flow.defaults?.maxAttempts ?? 1, "maxAttempts");
+}
+
 function providerTimeoutMs({ options, flow, step }) {
   if (options["timeout-ms"] !== undefined) {
     return nonNegativeInteger(options["timeout-ms"], "--timeout-ms");
@@ -948,6 +1012,12 @@ function providerTimeoutMs({ options, flow, step }) {
 
 function providerKillGraceMs(options) {
   return nonNegativeInteger(options["kill-grace-ms"] ?? "5000", "--kill-grace-ms");
+}
+
+function retryDelayMs(options, attempt) {
+  const baseMs = nonNegativeInteger(options["retry-backoff-ms"] ?? "1000", "--retry-backoff-ms");
+  const maxMs = nonNegativeInteger(options["retry-backoff-max-ms"] ?? "30000", "--retry-backoff-max-ms");
+  return Math.min(maxMs, baseMs * (2 ** Math.max(0, attempt - 1)));
 }
 
 function printEvent(event, json = false) {
