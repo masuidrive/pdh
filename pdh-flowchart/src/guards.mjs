@@ -65,7 +65,7 @@ function checkSection(guard, repo) {
 }
 
 function checkGitCommit(guard, repo) {
-  const result = spawnSync("git", ["log", "--oneline", "-50"], { cwd: repo, text: true, encoding: "utf8" });
+  const result = spawnSync("git", ["log", "--format=%s", "-50"], { cwd: repo, text: true, encoding: "utf8" });
   if (result.status !== 0) {
     return passIf(guard, false, result.stderr.trim() || "git log failed");
   }
