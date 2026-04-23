@@ -614,6 +614,7 @@ Manual smoke tests:
 - `node src/cli.mjs smoke-calc` により Codex が `/tmp/pdh-flowchart-calc-smoke` に `uv run calc "1+2"` 対応の小アプリを作成し、Codex 内と wrapper verification の両方で `3` を確認済み。
 - ユーザ目線の gate 操作確認で、非 current step への gate 作成・advance は拒否し、`gate-summary` 前の `approve` も拒否するようにした。
 - `run-codex <run-id>` は current step を実行対象にし、provider mismatch / step mismatch を通常拒否するようにした。
+- `run-next <run-id>` は current step の guard を評価して通過済み step を進め、PD-C-5 のような human gate では summary を生成して `needs_human` で停止し、未実行 provider step では実行待ちとして停止する。
 
 ### 未解決
 

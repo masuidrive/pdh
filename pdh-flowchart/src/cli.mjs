@@ -38,6 +38,8 @@ try {
     await cmdGuards(args);
   } else if (command === "advance") {
     await cmdAdvance(args);
+  } else if (command === "run-next") {
+    await cmdRunNext(args);
   } else if (command === "gate-summary") {
     await cmdGateSummary(args);
   } else if (["approve", "reject", "request-changes", "cancel"].includes(command)) {
@@ -70,6 +72,7 @@ Usage:
   pdh-flowchart run-codex [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-6]
   pdh-flowchart guards --repo DIR --step PD-C-9
   pdh-flowchart advance RUN_ID [--repo DIR] [--step PD-C-5]
+  pdh-flowchart run-next RUN_ID [--repo DIR] [--limit 20]
   pdh-flowchart gate-summary RUN_ID --step PD-C-5 [--repo DIR]
   pdh-flowchart approve RUN_ID --step PD-C-5 [--reason TEXT]
   pdh-flowchart reject RUN_ID --step PD-C-5 [--reason TEXT]
@@ -118,7 +121,6 @@ async function cmdGuards(argv) {
 
 async function cmdAdvance(argv) {
   const { openStore, defaultStateDir } = await import("./db.mjs");
-  const { evaluateStepGuards } = await import("./guards.mjs");
   const runId = argv.find((value) => !value.startsWith("--"));
   if (!runId) {
     throw new Error("advance requires RUN_ID");
@@ -136,44 +138,134 @@ async function cmdAdvance(argv) {
     throw new Error(`Run has no current step: ${runId}`);
   }
   assertCurrentStep(run, stepId, options);
-  const humanGate = store.latestHumanGate(runId, stepId);
-  const artifacts = collectStepArtifacts(store.stateDir, runId, stepId);
-  const guardResults = evaluateStepGuards(flow, stepId, {
-    repoPath: repo,
-    artifacts,
-    humanDecision: humanGate?.decision ?? null
-  });
-  for (const result of guardResults) {
-    store.addEvent({
-      runId,
-      stepId,
-      type: result.status === "passed" || result.status === "skipped" ? "guard_finished" : "guard_failed",
-      provider: "runtime",
-      message: `${result.guardId}: ${result.status}`,
-      payload: result
-    });
-  }
-  const failed = guardResults.filter((result) => result.status === "failed");
+  const step = getStep(flow, stepId);
+  const evaluation = await evaluateCurrentStep({ store, flow, runId, stepId, repo });
+  const outcome = outcomeForStep(step, evaluation.humanGate);
+  const failed = blockingGuardFailures(step, evaluation.guardResults, evaluation.humanGate);
   if (failed.length > 0) {
-    console.log(JSON.stringify({ status: "blocked", stepId, guardResults }, null, 2));
+    store.updateRun(runId, { status: "blocked", current_step_id: stepId });
+    console.log(JSON.stringify({ status: "blocked", stepId, guardResults: evaluation.guardResults }, null, 2));
     process.exitCode = 1;
     return;
   }
-  const outcome = humanGate ? outcomeFromDecision(humanGate.decision) : "success";
   if (!outcome) {
     throw new Error(`Human gate has no terminal decision for ${stepId}`);
   }
-  const target = nextStep(flow, run.flow_variant, stepId, outcome);
-  if (!target) {
-    throw new Error(`No transition from ${stepId} for ${outcome}`);
+  console.log(JSON.stringify(advanceRun({ store, flow, run, stepId, outcome }), null, 2));
+}
+
+async function cmdRunNext(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("run-next requires RUN_ID");
   }
-  if (target === "COMPLETE") {
-    store.updateRun(runId, { status: "completed", current_step_id: stepId, completed_at: new Date().toISOString() });
-  } else {
-    store.updateRun(runId, { status: "running", current_step_id: target });
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const store = openStore(defaultStateDir(repo));
+  const limit = Number(options.limit ?? "20");
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new Error("--limit must be a positive integer");
   }
-  store.addEvent({ runId, stepId, type: "status", provider: "runtime", message: `[${stepId}] -> [${target}]`, payload: { outcome, target } });
-  console.log(JSON.stringify({ status: target === "COMPLETE" ? "completed" : "advanced", from: stepId, to: target, outcome }, null, 2));
+
+  const trace = [];
+  for (let count = 0; count < limit; count += 1) {
+    const run = store.getRun(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    if (run.status === "completed") {
+      console.log(JSON.stringify({ status: "completed", runId, trace }, null, 2));
+      return;
+    }
+    const stepId = run.current_step_id;
+    if (!stepId) {
+      throw new Error(`Run has no current step: ${runId}`);
+    }
+    const flow = loadFlow(options.flow ?? run.flow_id);
+    const step = getStep(flow, stepId);
+
+    if (isHumanGateStep(step)) {
+      const humanGate = store.latestHumanGate(runId, stepId);
+      if (!humanGate) {
+        const summary = createGateSummary({ repoPath: repo, stateDir: store.stateDir, runId, stepId });
+        store.openHumanGate({
+          runId,
+          stepId,
+          prompt: step.human_gate?.prompt ?? `${stepId} human gate`,
+          summary: summary.artifactPath
+        });
+        const result = {
+          status: "needs_human",
+          runId,
+          stepId,
+          summary: summary.artifactPath,
+          nextCommands: humanDecisionCommands(runId, stepId, repo)
+        };
+        trace.push(result);
+        console.log(JSON.stringify({ ...result, trace }, null, 2));
+        return;
+      }
+      if (humanGate.status === "needs_human") {
+        const result = {
+          status: "needs_human",
+          runId,
+          stepId,
+          summary: humanGate.summary,
+          nextCommands: humanDecisionCommands(runId, stepId, repo)
+        };
+        trace.push(result);
+        console.log(JSON.stringify({ ...result, trace }, null, 2));
+        return;
+      }
+    }
+
+    const evaluation = await evaluateCurrentStep({ store, flow, runId, stepId, repo });
+    const outcome = outcomeForStep(step, evaluation.humanGate);
+    const failed = blockingGuardFailures(step, evaluation.guardResults, evaluation.humanGate);
+    if (failed.length > 0) {
+      const reason = step.provider === "runtime" ? "guard_failed" : "provider_step_requires_execution";
+      const result = {
+        status: "blocked",
+        runId,
+        stepId,
+        reason,
+        provider: step.provider,
+        failedGuards: failed,
+        nextCommand: nextProviderCommand(runId, step, repo)
+      };
+      store.updateRun(runId, { status: "blocked", current_step_id: stepId });
+      store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} ${reason}`, payload: result });
+      trace.push(result);
+      console.log(JSON.stringify({ ...result, trace }, null, 2));
+      return;
+    }
+    if (!outcome) {
+      const result = {
+        status: "blocked",
+        runId,
+        stepId,
+        reason: "human_decision_required",
+        provider: step.provider,
+        nextCommands: humanDecisionCommands(runId, stepId, repo)
+      };
+      store.updateRun(runId, { status: "blocked", current_step_id: stepId });
+      store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} human_decision_required`, payload: result });
+      trace.push(result);
+      console.log(JSON.stringify({ ...result, trace }, null, 2));
+      return;
+    }
+
+    const advanced = advanceRun({ store, flow, run, stepId, outcome });
+    trace.push(advanced);
+    if (advanced.status === "completed") {
+      console.log(JSON.stringify({ ...advanced, trace }, null, 2));
+      return;
+    }
+  }
+
+  console.log(JSON.stringify({ status: "blocked", runId, reason: "limit_reached", limit, trace }, null, 2));
+  process.exitCode = 1;
 }
 
 async function cmdRun(argv) {
@@ -303,6 +395,7 @@ async function cmdRunCodex(argv) {
   }
   const attempt = Number(options.attempt ?? "1");
   const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "codex.raw.jsonl");
+  store.updateRun(runId, { status: "running", current_step_id: stepId });
   store.startStep({ runId, stepId, attempt, provider: "codex", mode: "edit" });
   const result = await runCodex({
     cwd: repo,
@@ -317,6 +410,7 @@ async function cmdRunCodex(argv) {
   store.saveProviderSession({ runId, stepId, attempt, provider: "codex", sessionId: result.sessionId, rawLogPath });
   const status = result.exitCode === 0 ? "completed" : "failed";
   store.finishStep({ runId, stepId, attempt, provider: "codex", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
+  store.updateRun(runId, { status: result.exitCode === 0 ? "running" : "failed", current_step_id: stepId });
   console.log(`${runId} ${stepId} ${status}`);
   console.log(`Raw log: ${rawLogPath}`);
 }
@@ -416,6 +510,87 @@ function collectStepArtifacts(stateDir, runId, stepId) {
   return [
     { kind: "human_gate_summary", path: join(stepDir, "human-gate-summary.md") }
   ];
+}
+
+async function evaluateCurrentStep({ store, flow, runId, stepId, repo }) {
+  const { evaluateStepGuards } = await import("./guards.mjs");
+  const humanGate = store.latestHumanGate(runId, stepId);
+  const artifacts = collectStepArtifacts(store.stateDir, runId, stepId);
+  const guardResults = evaluateStepGuards(flow, stepId, {
+    repoPath: repo,
+    artifacts,
+    humanDecision: humanGate?.decision ?? null
+  });
+  for (const result of guardResults) {
+    store.addEvent({
+      runId,
+      stepId,
+      type: result.status === "passed" || result.status === "skipped" ? "guard_finished" : "guard_failed",
+      provider: "runtime",
+      message: `${result.guardId}: ${result.status}`,
+      payload: result
+    });
+  }
+  return { humanGate, artifacts, guardResults };
+}
+
+function blockingGuardFailures(step, guardResults, humanGate) {
+  if (isHumanGateStep(step) && humanGate?.decision && humanGate.decision !== "approved") {
+    return [];
+  }
+  return guardResults.filter((result) => result.status === "failed");
+}
+
+function outcomeForStep(step, humanGate) {
+  if (isHumanGateStep(step)) {
+    return humanGate?.decision ? outcomeFromDecision(humanGate.decision) : null;
+  }
+  return "success";
+}
+
+function advanceRun({ store, flow, run, stepId, outcome }) {
+  const target = nextStep(flow, run.flow_variant, stepId, outcome);
+  if (!target) {
+    throw new Error(`No transition from ${stepId} for ${outcome}`);
+  }
+  if (target === "COMPLETE") {
+    store.updateRun(run.id, { status: "completed", current_step_id: stepId, completed_at: new Date().toISOString() });
+  } else {
+    store.updateRun(run.id, { status: "running", current_step_id: target });
+  }
+  store.addEvent({ runId: run.id, stepId, type: "status", provider: "runtime", message: `[${stepId}] -> [${target}]`, payload: { outcome, target } });
+  return { status: target === "COMPLETE" ? "completed" : "advanced", from: stepId, to: target, outcome };
+}
+
+function isHumanGateStep(step) {
+  return step.provider === "runtime" && step.mode === "human" && Boolean(step.human_gate);
+}
+
+function humanDecisionCommands(runId, stepId, repo = null) {
+  const repoArg = repo ? ` --repo ${shellQuote(repo)}` : "";
+  return [
+    `node src/cli.mjs approve ${runId}${repoArg} --step ${stepId} --reason ok`,
+    `node src/cli.mjs request-changes ${runId}${repoArg} --step ${stepId} --reason "<reason>"`,
+    `node src/cli.mjs reject ${runId}${repoArg} --step ${stepId} --reason "<reason>"`
+  ];
+}
+
+function nextProviderCommand(runId, step, repo = null) {
+  const repoArg = repo ? ` --repo ${shellQuote(repo)}` : "";
+  if (step.provider === "codex") {
+    return `node src/cli.mjs run-codex ${runId}${repoArg} --prompt-file <prompt.md> --step ${step.id}`;
+  }
+  if (step.provider === "claude") {
+    return `Claude adapter is pending; create the required ${step.id} artifacts and commit, then rerun run-next.`;
+  }
+  return null;
+}
+
+function shellQuote(value) {
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(value)) {
+    return value;
+  }
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function assertStepInVariant(flow, variant, stepId) {
