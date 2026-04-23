@@ -26,6 +26,7 @@ node src/cli.mjs advance <run-id> --step PD-C-5
 node src/cli.mjs commit-step --step PD-C-6 --message Implementation
 node src/cli.mjs ticket-start --ticket ticket-id
 node src/cli.mjs ticket-close
+node src/cli.mjs run-codex <run-id> --prompt-file prompt.md
 node src/cli.mjs run-codex --repo /path/to/repo --prompt-file prompt.md --step PD-C-6
 node src/cli.mjs smoke-calc
 ```
@@ -41,5 +42,6 @@ node src/cli.mjs smoke-calc
 - Human gate commands can create a summary artifact and record approve/reject/request-changes/cancel decisions.
 - `advance` evaluates deterministic guards and only then moves the run to the next step.
 - Runtime commands refuse to operate on a non-current step unless `--force` is provided.
+- `run-codex <run-id>` executes the run's current step and refuses provider/step mismatches unless `--force` is provided.
 - `commit-step`, `ticket-start`, and `ticket-close` provide the first direct runtime action hooks.
 - Full transition execution is partial; current implementation focuses on Phase 0 provider/state/guard/action groundwork.

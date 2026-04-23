@@ -2,7 +2,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { loadDotEnv } from "./env.mjs";
-import { loadFlow, getInitialStep, describeFlow, nextStep, outcomeFromDecision } from "./flow.mjs";
+import { loadFlow, getInitialStep, getStep, describeFlow, nextStep, outcomeFromDecision } from "./flow.mjs";
 import { runCodex } from "./codex-adapter.mjs";
 import { runCalcSmoke } from "./smoke-calc.mjs";
 import { createGateSummary, commitStep, ticketStart, ticketClose } from "./actions.mjs";
@@ -67,7 +67,7 @@ Usage:
   pdh-flowchart init [--repo DIR]
   pdh-flowchart flow [--variant full|light]
   pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5]
-  pdh-flowchart run-codex --repo DIR --prompt-file FILE [--step PD-C-6]
+  pdh-flowchart run-codex [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-6]
   pdh-flowchart guards --repo DIR --step PD-C-9
   pdh-flowchart advance RUN_ID [--repo DIR] [--step PD-C-5]
   pdh-flowchart gate-summary RUN_ID --step PD-C-5 [--repo DIR]
@@ -273,21 +273,34 @@ function cmdTicketClose(argv) {
 
 async function cmdRunCodex(argv) {
   const { openStore, defaultStateDir } = await import("./db.mjs");
-  const options = parseOptions(argv);
-  const repo = resolve(required(options, "repo"));
-  const stepId = options.step ?? "PD-C-6";
+  const positionalRunId = argv.find((value) => !value.startsWith("--"));
+  const optionArgs = positionalRunId ? argv.filter((value) => value !== positionalRunId) : argv;
+  const options = parseOptions(optionArgs);
+  const repo = resolve(options.repo ?? process.cwd());
   const promptPath = resolve(required(options, "prompt-file"));
   const prompt = readFileSync(promptPath, "utf8");
   loadDotEnv();
 
   const store = openStore(defaultStateDir(repo));
-  const runId = options.run ?? store.createRun({
+  let run = positionalRunId ? store.getRun(positionalRunId) : null;
+  if (positionalRunId && !run) {
+    throw new Error(`Run not found: ${positionalRunId}`);
+  }
+  const runId = positionalRunId ?? options.run ?? store.createRun({
     flowId: "pdh-ticket-core",
     flowVariant: options.variant ?? "full",
     ticketId: options.ticket ?? null,
     repoPath: repo,
-    currentStepId: stepId
+    currentStepId: options.step ?? "PD-C-6"
   });
+  run ??= store.getRun(runId);
+  const stepId = options.step ?? run.current_step_id ?? "PD-C-6";
+  assertCurrentStep(run, stepId, options);
+  const flow = loadFlow(options.flow ?? run.flow_id);
+  const step = getStep(flow, stepId);
+  if (step.provider !== "codex" && options.force !== "true") {
+    throw new Error(`${stepId} uses provider ${step.provider}; refusing to run Codex without --force`);
+  }
   const attempt = Number(options.attempt ?? "1");
   const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "codex.raw.jsonl");
   store.startStep({ runId, stepId, attempt, provider: "codex", mode: "edit" });
