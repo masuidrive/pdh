@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { loadDotEnv } from "./env.mjs";
 import { loadFlow, getInitialStep, getStep, describeFlow, nextStep, outcomeFromDecision } from "./flow.mjs";
@@ -80,7 +80,7 @@ function printHelp() {
 Usage:
   pdh-flowchart init [--repo DIR]
   pdh-flowchart flow [--variant full|light]
-  pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5]
+  pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5] [--require-ticket-start]
   pdh-flowchart prompt RUN_ID [--repo DIR] [--step PD-C-6]
   pdh-flowchart metadata RUN_ID [--repo DIR]
   pdh-flowchart run-provider RUN_ID [--prompt-file FILE] [--repo DIR]
@@ -305,6 +305,7 @@ async function cmdRun(argv) {
     currentStepId: initial
   });
   store.addEvent({ runId, stepId: initial, type: "status", message: `Created ${describeFlow(flow, variant)}` });
+  maybeStartTicket({ store, runId, repo, ticket: options.ticket ?? null, required: options["require-ticket-start"] === "true" });
   syncRunMetadata({ store, repo, runId });
   console.log(runId);
   console.log(`Current step: ${initial}`);
@@ -384,6 +385,22 @@ function cmdTicketClose(argv) {
   const repo = resolve(options.repo ?? process.cwd());
   const result = ticketClose({ repoPath: repo });
   console.log(JSON.stringify(result, null, 2));
+}
+
+function maybeStartTicket({ store, runId, repo, ticket, required = false }) {
+  if (!ticket) {
+    return;
+  }
+  if (!existsSync(join(repo, "ticket.sh"))) {
+    const message = "ticket.sh start skipped: ticket.sh not found";
+    if (required) {
+      throw new Error(message);
+    }
+    store.addEvent({ runId, type: "status", provider: "runtime", message, payload: { ticket } });
+    return;
+  }
+  const result = ticketStart({ repoPath: repo, ticket });
+  store.addEvent({ runId, type: "tool_finished", provider: "runtime", message: `ticket.sh start ${ticket}`, payload: result });
 }
 
 async function cmdRunCodex(argv) {

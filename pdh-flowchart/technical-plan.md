@@ -620,6 +620,7 @@ Manual smoke tests:
 - `prompt <run-id>` と `run-provider <run-id>` は `pdh-dev` の PD-C semantics から current step 用 prompt を生成し、run step artifact として保存する。
 - runtime が `current-note.md` / `current-ticket.md` の管理 metadata block を更新し、run id、flow、status、current step を同期する。
 - provider 実行前後の `current-note.md` / `current-ticket.md` 差分を `note-ticket.patch` artifact として保存する。
+- `run --ticket <id>` は `ticket.sh` がある repo で `./ticket.sh start <id>` を実行し、ない repo では skip event を残す。
 
 ### 未解決
 
