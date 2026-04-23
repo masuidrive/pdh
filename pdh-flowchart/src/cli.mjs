@@ -11,6 +11,7 @@ import { writeStepPrompt } from "./prompt-templates.mjs";
 import { writeRuntimeMetadata } from "./metadata.mjs";
 import { captureNoteTicketPatchProposal, snapshotNoteTicketFiles } from "./patch-proposals.mjs";
 import { defaultJudgementKind, loadJudgements, writeJudgement } from "./judgements.mjs";
+import { runFinalVerification } from "./final-verification.mjs";
 
 const emitWarning = process.emitWarning.bind(process);
 process.emitWarning = (warning, ...warningArgs) => {
@@ -49,6 +50,8 @@ try {
     await cmdMetadata(args);
   } else if (command === "judgement") {
     await cmdJudgement(args);
+  } else if (command === "verify") {
+    await cmdVerify(args);
   } else if (command === "guards") {
     await cmdGuards(args);
   } else if (command === "advance") {
@@ -87,6 +90,7 @@ Usage:
   pdh-flowchart prompt RUN_ID [--repo DIR] [--step PD-C-6]
   pdh-flowchart metadata RUN_ID [--repo DIR]
   pdh-flowchart judgement RUN_ID [--repo DIR] [--step PD-C-4] [--kind plan_review] [--status "No Critical/Major"] [--summary TEXT]
+  pdh-flowchart verify RUN_ID [--repo DIR] [--command "scripts/test-all.sh"]
   pdh-flowchart run-provider RUN_ID [--prompt-file FILE] [--repo DIR]
   pdh-flowchart run-codex [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-6]
   pdh-flowchart run-claude [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-4]
@@ -585,6 +589,42 @@ async function cmdJudgement(argv) {
   });
   store.addEvent({ runId, stepId, type: "artifact", provider: "runtime", message: `judgement ${result.judgement.kind}: ${result.judgement.status}`, payload: { artifactPath: result.artifactPath, judgement: result.judgement } });
   console.log(JSON.stringify(result, null, 2));
+}
+
+async function cmdVerify(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("verify requires RUN_ID");
+  }
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const store = openStore(defaultStateDir(repo));
+  const run = store.getRun(runId);
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+  const stepId = options.step ?? run.current_step_id;
+  if (!stepId) {
+    throw new Error(`Run has no current step: ${runId}`);
+  }
+  assertCurrentStep(run, stepId, options);
+  if (stepId !== "PD-C-9" && options.force !== "true") {
+    throw new Error(`verify is for PD-C-9; current step is ${stepId}. Pass --force to override.`);
+  }
+  const result = runFinalVerification({
+    repoPath: repo,
+    stateDir: store.stateDir,
+    runId,
+    stepId,
+    command: options.command ?? null
+  });
+  store.addEvent({ runId, stepId, type: "artifact", provider: "runtime", message: `final verification ${result.result.status}`, payload: result });
+  syncRunMetadata({ store, repo, runId });
+  console.log(JSON.stringify(result, null, 2));
+  if (result.result.status !== "passed") {
+    process.exitCode = 1;
+  }
 }
 
 async function cmdRunClaude(argv) {

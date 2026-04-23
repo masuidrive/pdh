@@ -624,6 +624,7 @@ Manual smoke tests:
 - PD-C-10 approval 後、AC/gate guards が通り `ticket_closed` だけが残った場合に `./ticket.sh close` を実行し、`ticket-close.json` artifact を guard evidence にする。
 - `judgement <run-id>` が PD-C-4/7/8 の structured judgement artifact を保存し、guard runner が `plan_review` / `quality_review` / `purpose_validation` status を読む。
 - AC verification guard は `AC 裏取り結果` markdown table を parse し、`verified` は evidence 必須、`deferred` は deferral ticket 必須、`unverified` は `allowUnverified: false` で fail とする。
+- `verify <run-id>` が PD-C-9 の final verification command と AC parse 結果を `final-verification.json` に保存し、`PD-C-9. プロセスチェックリスト` を runtime 更新する。
 
 ### 未解決
 

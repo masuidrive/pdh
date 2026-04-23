@@ -30,6 +30,7 @@ node src/cli.mjs ticket-close
 node src/cli.mjs prompt <run-id>
 node src/cli.mjs metadata <run-id>
 node src/cli.mjs judgement <run-id> --status "No Critical/Major" --summary ok
+node src/cli.mjs verify <run-id> --command "scripts/test-all.sh"
 node src/cli.mjs run-provider <run-id>
 node src/cli.mjs run-provider <run-id> --prompt-file prompt.md
 node src/cli.mjs run-codex <run-id> --prompt-file prompt.md
@@ -58,6 +59,7 @@ node src/cli.mjs smoke-calc
 - Provider changes to `current-note.md` and `current-ticket.md` are captured as `note-ticket.patch` step artifacts.
 - Structured judgement artifacts back PD-C-4 plan review, PD-C-7 quality review, and PD-C-8 purpose validation guards.
 - AC verification guards parse the `AC 裏取り結果` markdown table and validate `verified` / `deferred` / `unverified` rows.
+- `verify <run-id>` runs PD-C-9 final verification, writes `final-verification.json`, and updates the PD-C-9 process checklist.
 - `run --ticket <id>` invokes `./ticket.sh start <id>` when `ticket.sh` exists, and records a skip event otherwise.
 - After PD-C-10 approval, runtime invokes `./ticket.sh close` once other close guards pass and records `ticket-close.json`.
 - `run-codex <run-id>` executes the run's current step and refuses provider/step mismatches unless `--force` is provided.
