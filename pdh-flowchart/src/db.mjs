@@ -146,6 +146,15 @@ export class Store {
     `).all(runId, limit).reverse();
   }
 
+  eventsAfter(runId, afterId = 0, limit = 100) {
+    return this.db.prepare(`
+      SELECT * FROM progress_events
+      WHERE run_id = ? AND id > ?
+      ORDER BY id ASC
+      LIMIT ?
+    `).all(runId, afterId, limit);
+  }
+
   latestHumanGate(runId, stepId) {
     return this.db.prepare(`
       SELECT * FROM human_gates

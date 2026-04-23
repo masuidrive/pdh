@@ -36,6 +36,10 @@ try {
     await cmdInit(args);
   } else if (command === "status") {
     await cmdStatus(args);
+  } else if (command === "logs") {
+    await cmdLogs(args);
+  } else if (command === "show-gate") {
+    await cmdShowGate(args);
   } else if (command === "run") {
     await cmdRun(args);
   } else if (command === "run-codex") {
@@ -109,6 +113,8 @@ Usage:
   pdh-flowchart ticket-start --ticket ID [--repo DIR]
   pdh-flowchart ticket-close [--repo DIR]
   pdh-flowchart status RUN_ID [--repo DIR]
+  pdh-flowchart logs RUN_ID [--repo DIR] [--follow] [--json]
+  pdh-flowchart show-gate RUN_ID [--repo DIR] [--step PD-C-5] [--path]
   pdh-flowchart smoke-calc [--workdir DIR]
 
 Notes:
@@ -742,6 +748,69 @@ async function cmdStatus(argv) {
   }
 }
 
+async function cmdLogs(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("logs requires RUN_ID");
+  }
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const store = openStore(defaultStateDir(repo));
+  const run = store.getRun(runId);
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+  let cursor = 0;
+  for (const event of store.recentEvents(runId, Number(options.limit ?? "50"))) {
+    printEvent(event, options.json === "true");
+    cursor = Math.max(cursor, event.id);
+  }
+  if (options.follow !== "true") {
+    return;
+  }
+  const intervalMs = Number(options.interval ?? "1000");
+  while (true) {
+    await sleep(intervalMs);
+    for (const event of store.eventsAfter(runId, cursor, 100)) {
+      printEvent(event, options.json === "true");
+      cursor = Math.max(cursor, event.id);
+    }
+  }
+}
+
+async function cmdShowGate(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("show-gate requires RUN_ID");
+  }
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const store = openStore(defaultStateDir(repo));
+  const run = store.getRun(runId);
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+  const stepId = options.step ?? run.current_step_id;
+  if (!stepId) {
+    throw new Error(`Run has no current step: ${runId}`);
+  }
+  assertCurrentStep(run, stepId, options);
+  const gate = store.latestHumanGate(runId, stepId);
+  if (!gate) {
+    throw new Error(`No human gate found for ${stepId}`);
+  }
+  if (!gate.summary) {
+    throw new Error(`Human gate for ${stepId} has no summary`);
+  }
+  if (options.path === "true") {
+    console.log(gate.summary);
+    return;
+  }
+  console.log(readFileSync(gate.summary, "utf8"));
+}
+
 async function cmdSmokeCalc(argv) {
   const options = parseOptions(argv);
   loadDotEnv();
@@ -785,6 +854,34 @@ function parseOptions(argv) {
     }
   }
   return options;
+}
+
+function printEvent(event, json = false) {
+  if (json) {
+    console.log(JSON.stringify(normalizeEvent(event)));
+    return;
+  }
+  const provider = event.provider ? ` ${event.provider}` : "";
+  const message = event.message ? ` ${event.message}` : "";
+  console.log(`#${event.id} ${event.ts} ${event.step_id ?? "-"} ${event.type}${provider}${message}`);
+}
+
+function normalizeEvent(event) {
+  return {
+    id: event.id,
+    runId: event.run_id,
+    stepId: event.step_id,
+    attempt: event.attempt,
+    ts: event.ts,
+    type: event.type,
+    provider: event.provider,
+    message: event.message,
+    payload: event.payload_json ? JSON.parse(event.payload_json) : null
+  };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function required(options, key) {

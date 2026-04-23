@@ -21,7 +21,9 @@ node src/cli.mjs run --ticket ticket-id --variant full
 node src/cli.mjs run --ticket ticket-id --variant full --start-step PD-C-5
 node src/cli.mjs run-next <run-id>
 node src/cli.mjs guards --step PD-C-3
+node src/cli.mjs logs <run-id> --follow
 node src/cli.mjs gate-summary <run-id> --step PD-C-5
+node src/cli.mjs show-gate <run-id>
 node src/cli.mjs approve <run-id> --step PD-C-5 --reason ok
 node src/cli.mjs advance <run-id> --step PD-C-5
 node src/cli.mjs commit-step --step PD-C-6 --message Implementation
@@ -61,6 +63,7 @@ node src/cli.mjs smoke-calc
 - Structured judgement artifacts back PD-C-4 plan review, PD-C-7 quality review, and PD-C-8 purpose validation guards.
 - AC verification guards parse the `AC 裏取り結果` markdown table and validate `verified` / `deferred` / `unverified` rows.
 - `verify <run-id>` runs PD-C-9 final verification, writes `final-verification.json`, and updates the PD-C-9 process checklist.
+- `logs <run-id> --follow` streams normalized progress events, and `show-gate <run-id>` prints the current gate summary.
 - `resume <run-id>` resumes the current provider step from the latest saved Codex/Claude session id.
 - `run --ticket <id>` invokes `./ticket.sh start <id>` when `ticket.sh` exists, and records a skip event otherwise.
 - After PD-C-10 approval, runtime invokes `./ticket.sh close` once other close guards pass and records `ticket-close.json`.
