@@ -337,6 +337,22 @@ async function cmdStatus(argv) {
   console.log(`Run: ${run.id}`);
   console.log(`Status: ${run.status}`);
   console.log(`Current Step: ${run.current_step_id ?? "-"}`);
+  if (run.current_step_id) {
+    const flow = loadFlow(run.flow_id);
+    const step = getStep(flow, run.current_step_id);
+    console.log(`Provider: ${step.provider}`);
+    console.log(`Mode: ${step.mode}`);
+    if (step.guards?.length) {
+      console.log(`Guards: ${step.guards.map((guard) => guard.id).join(", ")}`);
+    }
+    const gate = store.latestHumanGate(runId, run.current_step_id);
+    if (gate) {
+      console.log(`Human Gate: ${gate.status}${gate.decision ? ` (${gate.decision})` : ""}`);
+      if (gate.summary) {
+        console.log(`Gate Summary: ${gate.summary}`);
+      }
+    }
+  }
   console.log("Recent Events:");
   for (const event of store.recentEvents(runId, Number(options.limit ?? "20"))) {
     console.log(`- ${event.ts} ${event.step_id ?? "-"} ${event.type} ${event.message ?? ""}`);
