@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { runCodex } from "./codex-adapter.mjs";
 import { loadDotEnv } from "./env.mjs";
 
-export async function runCalcSmoke({ rootDir = "/tmp/pdh-flowchart-calc-smoke", stateDir = null, store = null, bypass = true } = {}) {
+export async function runCalcSmoke({ rootDir = "/tmp/pdh-flowchart-calc-smoke", stateDir = null, store = null, bypass = true, timeoutMs = 10 * 60 * 1000 } = {}) {
   loadDotEnv();
   const uvCache = "/tmp/pdh-flowchart-uv-cache";
   rmSync(rootDir, { recursive: true, force: true });
@@ -74,6 +74,7 @@ Constraints:
       TMPDIR: providerEnv.TMPDIR,
       UV_CACHE_DIR: providerEnv.UV_CACHE_DIR
     },
+    timeoutMs,
     onEvent(event) {
       events.push(event);
       if (store) {

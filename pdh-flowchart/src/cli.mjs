@@ -101,10 +101,10 @@ Usage:
   pdh-flowchart metadata RUN_ID [--repo DIR]
   pdh-flowchart judgement RUN_ID [--repo DIR] [--step PD-C-4] [--kind plan_review] [--status "No Critical/Major"] [--summary TEXT]
   pdh-flowchart verify RUN_ID [--repo DIR] [--command "scripts/test-all.sh"]
-  pdh-flowchart run-provider RUN_ID [--prompt-file FILE] [--repo DIR]
+  pdh-flowchart run-provider RUN_ID [--prompt-file FILE] [--repo DIR] [--timeout-ms MS]
   pdh-flowchart resume RUN_ID [--prompt-file FILE] [--repo DIR]
-  pdh-flowchart run-codex [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-6]
-  pdh-flowchart run-claude [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-4]
+  pdh-flowchart run-codex [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-6] [--timeout-ms MS]
+  pdh-flowchart run-claude [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-4] [--timeout-ms MS]
   pdh-flowchart guards --repo DIR --step PD-C-9
   pdh-flowchart advance RUN_ID [--repo DIR] [--step PD-C-5]
   pdh-flowchart run-next RUN_ID [--repo DIR] [--limit 20]
@@ -124,6 +124,7 @@ Usage:
 
 Notes:
   - .env is loaded for provider commands only.
+  - Provider commands use flow timeoutMinutes unless --timeout-ms is set.
   - Unit-style commands do not call external providers.
 `);
 }
@@ -481,6 +482,7 @@ async function cmdRunCodex(argv, context = {}) {
     if (step.provider !== "codex" && options.force !== "true") {
       throw new Error(`${stepId} uses provider ${step.provider}; refusing to run Codex without --force`);
     }
+    const timeoutMs = providerTimeoutMs({ options, flow, step });
     const attempt = Number(options.attempt ?? "1");
     const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "codex.raw.jsonl");
     const resumeSession = resolveProviderResume({ store, runId, stepId, provider: "codex", option: options.resume ?? null });
@@ -495,6 +497,8 @@ async function cmdRunCodex(argv, context = {}) {
       bypass: options.bypass !== "false",
       model: options.model ?? null,
       resume: resumeSession,
+      timeoutMs,
+      killGraceMs: providerKillGraceMs(options),
       onEvent(event) {
         store.addEvent({ runId, stepId, attempt, type: event.type, provider: "codex", message: event.message, payload: event.payload ?? {} });
       }
@@ -708,6 +712,7 @@ async function cmdRunClaude(argv, context = {}) {
     if (step.provider !== "claude" && options.force !== "true") {
       throw new Error(`${stepId} uses provider ${step.provider}; refusing to run Claude without --force`);
     }
+    const timeoutMs = providerTimeoutMs({ options, flow, step });
     const attempt = Number(options.attempt ?? "1");
     const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "claude.raw.jsonl");
     const permissionMode = options["permission-mode"] ?? (options.bypass === "true" ? "bypassPermissions" : "acceptEdits");
@@ -725,6 +730,8 @@ async function cmdRunClaude(argv, context = {}) {
       model: options.model ?? null,
       permissionMode,
       resume: resumeSession,
+      timeoutMs,
+      killGraceMs: providerKillGraceMs(options),
       onEvent(event) {
         store.addEvent({ runId, stepId, attempt, type: event.type, provider: "claude", message: event.message, payload: event.payload ?? {} });
       }
@@ -863,7 +870,8 @@ async function cmdSmokeCalc(argv) {
   loadDotEnv();
   const result = await runCalcSmoke({
     rootDir: resolve(options.workdir ?? "/tmp/pdh-flowchart-calc-smoke"),
-    bypass: options.bypass !== "false"
+    bypass: options.bypass !== "false",
+    timeoutMs: nonNegativeInteger(options["timeout-ms"] ?? String(10 * 60 * 1000), "--timeout-ms")
   });
   writeFileSync(join(result.rootDir, "smoke-result.json"), JSON.stringify(result, null, 2));
   console.log(`Codex exit: ${result.codexExitCode}`);
@@ -921,6 +929,25 @@ function nonNegativeInteger(value, label) {
     throw new Error(`${label} must be a non-negative integer`);
   }
   return number;
+}
+
+function providerTimeoutMs({ options, flow, step }) {
+  if (options["timeout-ms"] !== undefined) {
+    return nonNegativeInteger(options["timeout-ms"], "--timeout-ms");
+  }
+  const minutes = step.timeoutMinutes ?? flow.defaults?.timeoutMinutes ?? null;
+  if (minutes === null) {
+    return null;
+  }
+  const number = Number(minutes);
+  if (!Number.isFinite(number) || number < 0) {
+    throw new Error("provider timeoutMinutes must be a non-negative number");
+  }
+  return Math.round(number * 60 * 1000);
+}
+
+function providerKillGraceMs(options) {
+  return nonNegativeInteger(options["kill-grace-ms"] ?? "5000", "--kill-grace-ms");
 }
 
 function printEvent(event, json = false) {

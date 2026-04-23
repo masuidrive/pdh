@@ -1,9 +1,9 @@
 import { createWriteStream, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
+import { createProcessTimeout, spawnProvider } from "./process-control.mjs";
 
-export async function runCodex({ cwd, prompt, rawLogPath, env = {}, bypass = true, model = null, resume = null, onEvent = () => {} }) {
+export async function runCodex({ cwd, prompt, rawLogPath, env = {}, bypass = true, model = null, resume = null, timeoutMs = null, killGraceMs = 5000, onEvent = () => {} }) {
   mkdirSync(dirname(rawLogPath), { recursive: true });
   const raw = createWriteStream(rawLogPath, { flags: "a" });
   const effectiveEnv = { ...process.env, ...env };
@@ -24,7 +24,7 @@ export async function runCodex({ cwd, prompt, rawLogPath, env = {}, bypass = tru
   }
   args.push("-");
 
-  const child = spawn(process.env.CODEX_BIN || "codex", args, {
+  const child = spawnProvider(process.env.CODEX_BIN || "codex", args, {
     cwd,
     env: effectiveEnv,
     stdio: ["pipe", "pipe", "pipe"]
@@ -35,6 +35,23 @@ export async function runCodex({ cwd, prompt, rawLogPath, env = {}, bypass = tru
   let stdoutRemainder = "";
   let stderr = "";
   const decoder = new StringDecoder("utf8");
+  const timeout = createProcessTimeout({
+    child,
+    timeoutMs,
+    killGraceMs,
+    onTimeout({ timeoutMs: ms, signal }) {
+      const message = `codex timed out after ${ms}ms; sent ${signal}`;
+      stderr += `${message}\n`;
+      raw.write(JSON.stringify({ type: "timeout", provider: "codex", timeoutMs: ms, signal, message }) + "\n");
+      onEvent({ type: "run_failed", message, payload: { timeoutMs: ms, signal } });
+    },
+    onKill({ timeoutMs: ms, signal }) {
+      const message = `codex did not exit after timeout; sent ${signal}`;
+      stderr += `${message}\n`;
+      raw.write(JSON.stringify({ type: "timeout_kill", provider: "codex", timeoutMs: ms, signal, message }) + "\n");
+      onEvent({ type: "run_failed", message, payload: { timeoutMs: ms, signal } });
+    }
+  });
 
   child.stdin.write(prompt);
   child.stdin.end();
@@ -66,10 +83,15 @@ export async function runCodex({ cwd, prompt, rawLogPath, env = {}, bypass = tru
     raw.write(JSON.stringify({ stream: "stderr", text }) + "\n");
   });
 
-  const exitCode = await new Promise((resolve, reject) => {
-    child.on("error", reject);
-    child.on("close", resolve);
-  });
+  let closed;
+  try {
+    closed = await new Promise((resolve, reject) => {
+      child.on("error", reject);
+      child.on("close", (code, signal) => resolve({ code, signal }));
+    });
+  } finally {
+    timeout.clear();
+  }
   if (stdoutRemainder.trim()) {
     raw.write(`${stdoutRemainder}\n`);
     const normalized = normalizeCodexLine(stdoutRemainder);
@@ -81,9 +103,10 @@ export async function runCodex({ cwd, prompt, rawLogPath, env = {}, bypass = tru
     }
     onEvent(normalized);
   }
-  raw.end();
+  await new Promise((resolve) => raw.end(resolve));
 
-  return { exitCode, finalMessage, sessionId, stderr };
+  const exitCode = timeout.timedOut ? 124 : (closed.code ?? (closed.signal ? 1 : 0));
+  return { exitCode, finalMessage, sessionId, stderr, timedOut: timeout.timedOut, signal: closed.signal };
 }
 
 export function normalizeCodexLine(line) {

@@ -34,7 +34,7 @@ node src/cli.mjs prompt <run-id>
 node src/cli.mjs metadata <run-id>
 node src/cli.mjs judgement <run-id> --status "No Critical/Major" --summary ok
 node src/cli.mjs verify <run-id> --command "scripts/test-all.sh"
-node src/cli.mjs run-provider <run-id>
+node src/cli.mjs run-provider <run-id> --timeout-ms 3600000
 node src/cli.mjs resume <run-id>
 node src/cli.mjs run-provider <run-id> --prompt-file prompt.md
 node src/cli.mjs run-codex <run-id> --prompt-file prompt.md
@@ -73,6 +73,7 @@ node src/cli.mjs smoke-calc
 - `examples/fake-pdh-dev` provides a tiny fake target repository for user-perspective flow checks.
 - Blocked `advance` / `run-next` output is concise by default; pass `--json` for full guard payloads.
 - Mutating run commands use a per-run lock under `.pdh-flowchart/locks`; set `PDH_FLOWCHART_LOCK_WAIT_MS` or pass `--lock-wait-ms` to wait instead of failing immediately.
+- Provider commands use flow `timeoutMinutes` by default, can be overridden with `--timeout-ms`, and terminate the provider process group on timeout.
 - `resume <run-id>` resumes the current provider step from the latest saved Codex/Claude session id.
 - `run --ticket <id>` invokes `./ticket.sh start <id>` when `ticket.sh` exists, and records a skip event otherwise.
 - After PD-C-10 approval, runtime invokes `./ticket.sh close` once other close guards pass and records `ticket-close.json`.

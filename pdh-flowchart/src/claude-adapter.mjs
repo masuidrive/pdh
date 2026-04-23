@@ -1,7 +1,7 @@
 import { createWriteStream, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
+import { createProcessTimeout, spawnProvider } from "./process-control.mjs";
 
 export async function runClaude({
   cwd,
@@ -13,6 +13,8 @@ export async function runClaude({
   model = null,
   permissionMode = "acceptEdits",
   resume = null,
+  timeoutMs = null,
+  killGraceMs = 5000,
   onEvent = () => {}
 }) {
   mkdirSync(dirname(rawLogPath), { recursive: true });
@@ -34,7 +36,7 @@ export async function runClaude({
     args.push("--resume", resume);
   }
 
-  const child = spawn(process.env.CLAUDE_BIN || "claude", args, {
+  const child = spawnProvider(process.env.CLAUDE_BIN || "claude", args, {
     cwd,
     env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"]
@@ -45,6 +47,23 @@ export async function runClaude({
   let stdoutRemainder = "";
   let stderr = "";
   const decoder = new StringDecoder("utf8");
+  const timeout = createProcessTimeout({
+    child,
+    timeoutMs,
+    killGraceMs,
+    onTimeout({ timeoutMs: ms, signal }) {
+      const message = `claude timed out after ${ms}ms; sent ${signal}`;
+      stderr += `${message}\n`;
+      raw.write(JSON.stringify({ type: "timeout", provider: "claude", timeoutMs: ms, signal, message }) + "\n");
+      onEvent({ type: "run_failed", message, payload: { timeoutMs: ms, signal } });
+    },
+    onKill({ timeoutMs: ms, signal }) {
+      const message = `claude did not exit after timeout; sent ${signal}`;
+      stderr += `${message}\n`;
+      raw.write(JSON.stringify({ type: "timeout_kill", provider: "claude", timeoutMs: ms, signal, message }) + "\n");
+      onEvent({ type: "run_failed", message, payload: { timeoutMs: ms, signal } });
+    }
+  });
 
   child.stdout.on("data", (chunk) => {
     const text = decoder.write(chunk);
@@ -73,10 +92,15 @@ export async function runClaude({
     raw.write(JSON.stringify({ stream: "stderr", text }) + "\n");
   });
 
-  const exitCode = await new Promise((resolve, reject) => {
-    child.on("error", reject);
-    child.on("close", resolve);
-  });
+  let closed;
+  try {
+    closed = await new Promise((resolve, reject) => {
+      child.on("error", reject);
+      child.on("close", (code, signal) => resolve({ code, signal }));
+    });
+  } finally {
+    timeout.clear();
+  }
   if (stdoutRemainder.trim()) {
     raw.write(`${stdoutRemainder}\n`);
     const normalized = normalizeClaudeLine(stdoutRemainder);
@@ -88,9 +112,10 @@ export async function runClaude({
     }
     onEvent(normalized);
   }
-  raw.end();
+  await new Promise((resolve) => raw.end(resolve));
 
-  return { exitCode, finalMessage, sessionId, stderr };
+  const exitCode = timeout.timedOut ? 124 : (closed.code ?? (closed.signal ? 1 : 0));
+  return { exitCode, finalMessage, sessionId, stderr, timedOut: timeout.timedOut, signal: closed.signal };
 }
 
 export function normalizeClaudeLine(line) {

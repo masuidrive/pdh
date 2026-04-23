@@ -631,6 +631,7 @@ Manual smoke tests:
 - `doctor` が Node、Codex、Claude Code、uv、git、provider auth、`.env`、git repo 状態を secret 非表示で確認する。
 - `examples/fake-pdh-dev` は `uv run calc`、`current-ticket.md`、`current-note.md`、`ticket.sh`、failing AC を持つ小さい target repo として、gate と provider handoff のユーザ目線確認に使う。
 - Mutating run commands は `.pdh-flowchart/locks/<run-id>.lock` の atomic lockfile を取り、同一 run の二重 mutation を拒否する。`--lock-wait-ms` / `PDH_FLOWCHART_LOCK_WAIT_MS` で待機を指定できる。
+- Provider adapter は flow の `timeoutMinutes` または `--timeout-ms` に従って timeout event を記録し、detached process group に `SIGTERM`、猶予後に `SIGKILL` を送って orphan を残さない。
 
 ### 未解決
 
