@@ -5,6 +5,20 @@ import { loadDotEnv } from "./env.mjs";
 import { loadFlow, getInitialStep, describeFlow } from "./flow.mjs";
 import { runCodex } from "./codex-adapter.mjs";
 import { runCalcSmoke } from "./smoke-calc.mjs";
+import { createGateSummary, commitStep, ticketStart, ticketClose } from "./actions.mjs";
+
+const emitWarning = process.emitWarning.bind(process);
+process.emitWarning = (warning, ...warningArgs) => {
+  const warningName =
+    typeof warning === "object" && warning !== null
+      ? warning.name
+      : typeof warningArgs[0] === "string"
+        ? warningArgs[0]
+        : warningArgs[0]?.type;
+  if (warningName !== "ExperimentalWarning") {
+    emitWarning(warning, ...warningArgs);
+  }
+};
 
 const args = process.argv.slice(2);
 const command = args.shift();
@@ -22,6 +36,16 @@ try {
     await cmdRunCodex(args);
   } else if (command === "guards") {
     await cmdGuards(args);
+  } else if (command === "gate-summary") {
+    await cmdGateSummary(args);
+  } else if (["approve", "reject", "request-changes", "cancel"].includes(command)) {
+    await cmdHumanDecision(command, args);
+  } else if (command === "commit-step") {
+    cmdCommitStep(args);
+  } else if (command === "ticket-start") {
+    cmdTicketStart(args);
+  } else if (command === "ticket-close") {
+    cmdTicketClose(args);
   } else if (command === "smoke-calc") {
     await cmdSmokeCalc(args);
   } else if (command === "flow") {
@@ -43,6 +67,14 @@ Usage:
   pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light]
   pdh-flowchart run-codex --repo DIR --prompt-file FILE [--step PD-C-6]
   pdh-flowchart guards --repo DIR --step PD-C-9
+  pdh-flowchart gate-summary RUN_ID --step PD-C-5 [--repo DIR]
+  pdh-flowchart approve RUN_ID --step PD-C-5 [--reason TEXT]
+  pdh-flowchart reject RUN_ID --step PD-C-5 [--reason TEXT]
+  pdh-flowchart request-changes RUN_ID --step PD-C-10 [--reason TEXT]
+  pdh-flowchart cancel RUN_ID --step PD-C-10 [--reason TEXT]
+  pdh-flowchart commit-step --step PD-C-6 --message Implementation [--repo DIR]
+  pdh-flowchart ticket-start --ticket ID [--repo DIR]
+  pdh-flowchart ticket-close [--repo DIR]
   pdh-flowchart status RUN_ID [--repo DIR]
   pdh-flowchart smoke-calc [--workdir DIR]
 
@@ -100,6 +132,66 @@ async function cmdRun(argv) {
   console.log(runId);
   console.log(`Current step: ${initial}`);
   console.log("Run provider steps with run-codex while the Full flow engine is being expanded.");
+}
+
+async function cmdGateSummary(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("gate-summary requires RUN_ID");
+  }
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const stepId = required(options, "step");
+  const store = openStore(defaultStateDir(repo));
+  const run = store.getRun(runId);
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+  const summary = createGateSummary({ repoPath: repo, stateDir: store.stateDir, runId, stepId });
+  store.openHumanGate({ runId, stepId, prompt: `${stepId} human gate`, summary: summary.artifactPath });
+  console.log(summary.artifactPath);
+}
+
+async function cmdHumanDecision(command, argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error(`${command} requires RUN_ID`);
+  }
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const stepId = required(options, "step");
+  const decisionByCommand = {
+    approve: "approved",
+    reject: "rejected",
+    "request-changes": "changes_requested",
+    cancel: "cancelled"
+  };
+  const store = openStore(defaultStateDir(repo));
+  store.resolveHumanGate({ runId, stepId, decision: decisionByCommand[command], reason: options.reason ?? null });
+  console.log(`${runId} ${stepId} ${decisionByCommand[command]}`);
+}
+
+function cmdCommitStep(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  const result = commitStep({ repoPath: repo, stepId: required(options, "step"), message: options.message ?? null });
+  console.log(JSON.stringify(result, null, 2));
+}
+
+function cmdTicketStart(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  const result = ticketStart({ repoPath: repo, ticket: required(options, "ticket") });
+  console.log(JSON.stringify(result, null, 2));
+}
+
+function cmdTicketClose(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  const result = ticketClose({ repoPath: repo });
+  console.log(JSON.stringify(result, null, 2));
 }
 
 async function cmdRunCodex(argv) {

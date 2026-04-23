@@ -152,4 +152,38 @@ export class Store {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(runId, stepId, attempt, provider, sessionId, resumeToken, rawLogPath);
   }
+
+  openHumanGate({ runId, stepId, prompt, summary }) {
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      INSERT INTO human_gates (run_id, step_id, status, prompt, summary, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(runId, stepId, "needs_human", prompt ?? null, summary ?? null, now);
+    this.updateRun(runId, { status: "needs_human", current_step_id: stepId });
+    this.addEvent({ runId, stepId, type: "ask_human", provider: "runtime", message: prompt ?? `${stepId} needs human decision` });
+  }
+
+  resolveHumanGate({ runId, stepId, decision, reason = null }) {
+    const now = new Date().toISOString();
+    const existing = this.db.prepare(`
+      SELECT id FROM human_gates
+      WHERE run_id = ? AND step_id = ?
+      ORDER BY id DESC
+      LIMIT 1
+    `).get(runId, stepId);
+    if (existing) {
+      this.db.prepare(`
+        UPDATE human_gates
+        SET status = ?, decision = ?, reason = ?, resolved_at = ?
+        WHERE id = ?
+      `).run("resolved", decision, reason, now, existing.id);
+    } else {
+      this.db.prepare(`
+        INSERT INTO human_gates (run_id, step_id, status, decision, reason, created_at, resolved_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(runId, stepId, "resolved", decision, reason, now, now);
+    }
+    this.updateRun(runId, { status: decision === "approved" ? "running" : "blocked", current_step_id: stepId });
+    this.addEvent({ runId, stepId, type: "human_decision", provider: "runtime", message: `${stepId} ${decision}`, payload: { reason } });
+  }
 }

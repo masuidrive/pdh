@@ -7,7 +7,7 @@
     "pdh-flowchart": "./src/cli.mjs"
   },
   "scripts": {
-    "check": "node --check src/cli.mjs && node --check src/db.mjs && node --check src/env.mjs && node --check src/codex-adapter.mjs && node --check src/flow.mjs && node --check src/guards.mjs && node --check src/smoke-calc.mjs",
+    "check": "node --check src/cli.mjs && node --check src/actions.mjs && node --check src/db.mjs && node --check src/env.mjs && node --check src/codex-adapter.mjs && node --check src/flow.mjs && node --check src/guards.mjs && node --check src/smoke-calc.mjs",
     "smoke:calc": "node src/cli.mjs smoke-calc"
   },
   "engines": {
