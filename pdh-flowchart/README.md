@@ -48,6 +48,56 @@ node src/cli.mjs smoke-calc
 npm run test:runtime
 ```
 
+## Output Examples
+
+Run creation keeps the run id on the first line so shell capture stays simple:
+
+```text
+run-20260423123000-abc123
+Current step: PD-C-5
+Next: node src/cli.mjs run-next run-20260423123000-abc123 --repo /path/to/repo
+```
+
+When a provider step still needs execution:
+
+```text
+Blocked: PD-C-6 (provider_step_requires_execution)
+Provider: codex
+Next: node src/cli.mjs run-provider run-20260423123000-abc123 --repo /path/to/repo
+Use --json for full guard details.
+```
+
+When a human gate opens:
+
+```text
+{
+  "status": "needs_human",
+  "stepId": "PD-C-5",
+  "nextCommands": [
+    "node src/cli.mjs approve run-20260423123000-abc123 --repo /path/to/repo --step PD-C-5 --reason ok"
+  ]
+}
+```
+
+Provider completion points back to the runtime:
+
+```text
+run-20260423123000-abc123 PD-C-6 completed
+Attempt: 1/2
+Raw log: /path/to/repo/.pdh-flowchart/runs/run-20260423123000-abc123/steps/PD-C-6/attempt-1/codex.raw.jsonl
+Next: node src/cli.mjs run-next run-20260423123000-abc123 --repo /path/to/repo
+```
+
+Interruptions show what the user must answer before the step can continue:
+
+```text
+run-20260423123000-abc123 PD-C-6 interrupted
+Interrupt: /path/to/repo/.pdh-flowchart/runs/run-20260423123000-abc123/steps/PD-C-6/interruptions/interrupt-20260423123100-abcd1234.md
+Next:
+- node src/cli.mjs show-interrupts run-20260423123000-abc123 --repo /path/to/repo --step PD-C-6
+- node src/cli.mjs answer run-20260423123000-abc123 --repo /path/to/repo --step PD-C-6 --message "<answer>"
+```
+
 ## Example Fixture
 
 `examples/fake-pdh-dev` is a tiny throwaway target repo with a `uv run calc` CLI, `current-ticket.md`, `current-note.md`, `ticket.sh`, and a failing multiplication AC. Copy it to `/tmp`, initialize git, and follow its README to exercise `doctor`, `run`, `run-next`, `show-gate`, `approve`, and optional `run-provider` from a user perspective.

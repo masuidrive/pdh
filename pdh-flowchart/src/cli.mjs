@@ -364,7 +364,7 @@ async function cmdRun(argv) {
   syncRunMetadata({ store, repo, runId });
   console.log(runId);
   console.log(`Current step: ${initial}`);
-  console.log("Use run-next to advance runtime steps and run-provider for the current provider step.");
+  console.log(`Next: ${runNextCommand(runId, repo)}`);
 }
 
 async function cmdGateSummary(argv) {
@@ -387,6 +387,7 @@ async function cmdGateSummary(argv) {
     store.openHumanGate({ runId, stepId, prompt: `${stepId} human gate`, summary: summary.artifactPath });
     syncRunMetadata({ store, repo, runId });
     console.log(summary.artifactPath);
+    console.log(`Next: ${showGateCommand(runId, stepId, repo)}`);
   } });
 }
 
@@ -422,6 +423,7 @@ async function cmdHumanDecision(command, argv) {
     store.resolveHumanGate({ runId, stepId, decision: decisionByCommand[command], reason: options.reason ?? null });
     syncRunMetadata({ store, repo, runId });
     console.log(`${runId} ${stepId} ${decisionByCommand[command]}`);
+    console.log(`Next: ${runNextCommand(runId, repo)}`);
   } });
 }
 
@@ -663,6 +665,12 @@ async function cmdRunCodex(argv, context = {}) {
     console.log(`${runId} ${stepId} ${status}`);
     console.log(`Attempt: ${attempt}/${maxAttempts}`);
     console.log(`Raw log: ${rawLogPath}`);
+    if (status === "completed") {
+      console.log(`Next: ${runNextCommand(runId, repo)}`);
+    } else {
+      console.log(`Next: ${statusCommand(runId, repo)}`);
+      console.log(`Retry: ${resumeCommand(runId, repo)}`);
+    }
   } });
 }
 
@@ -921,6 +929,12 @@ async function cmdRunClaude(argv, context = {}) {
     console.log(`${runId} ${stepId} ${status}`);
     console.log(`Attempt: ${attempt}/${maxAttempts}`);
     console.log(`Raw log: ${rawLogPath}`);
+    if (status === "completed") {
+      console.log(`Next: ${runNextCommand(runId, repo)}`);
+    } else {
+      console.log(`Next: ${statusCommand(runId, repo)}`);
+      console.log(`Retry: ${resumeCommand(runId, repo)}`);
+    }
   } });
 }
 
@@ -1414,6 +1428,26 @@ function humanDecisionCommands(runId, stepId, repo = null) {
     `node src/cli.mjs request-changes ${runId}${repoArg} --step ${stepId} --reason "<reason>"`,
     `node src/cli.mjs reject ${runId}${repoArg} --step ${stepId} --reason "<reason>"`
   ];
+}
+
+function runNextCommand(runId, repo = null) {
+  const repoArg = repo ? ` --repo ${shellQuote(repo)}` : "";
+  return `node src/cli.mjs run-next ${runId}${repoArg}`;
+}
+
+function statusCommand(runId, repo = null) {
+  const repoArg = repo ? ` --repo ${shellQuote(repo)}` : "";
+  return `node src/cli.mjs status ${runId}${repoArg}`;
+}
+
+function resumeCommand(runId, repo = null) {
+  const repoArg = repo ? ` --repo ${shellQuote(repo)}` : "";
+  return `node src/cli.mjs resume ${runId}${repoArg}`;
+}
+
+function showGateCommand(runId, stepId, repo = null) {
+  const repoArg = repo ? ` --repo ${shellQuote(repo)}` : "";
+  return `node src/cli.mjs show-gate ${runId}${repoArg} --step ${stepId}`;
 }
 
 function interruptAnswerCommands(runId, stepId, repo = null) {
