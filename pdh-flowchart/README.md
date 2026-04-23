@@ -44,6 +44,10 @@ node src/cli.mjs run-claude --repo /path/to/repo --prompt-file prompt.md --step 
 node src/cli.mjs smoke-calc
 ```
 
+## Example Fixture
+
+`examples/fake-pdh-dev` is a tiny throwaway target repo with a `uv run calc` CLI, `current-ticket.md`, `current-note.md`, `ticket.sh`, and a failing multiplication AC. Copy it to `/tmp`, initialize git, and follow its README to exercise `doctor`, `run`, `run-next`, `show-gate`, `approve`, and optional `run-provider` from a user perspective.
+
 `smoke-calc` creates `/tmp/pdh-flowchart-calc-smoke`, uses the existing authenticated Codex CLI session, asks Codex to build a tiny `uv run calc "1+2"` CLI app, and verifies the result. It does not run `codex login`; `.env` remains available for other provider checks that need explicit API-key auth.
 
 ## Current Scope
@@ -66,6 +70,7 @@ node src/cli.mjs smoke-calc
 - `verify <run-id>` runs PD-C-9 final verification, writes `final-verification.json`, and updates the PD-C-9 process checklist.
 - `logs <run-id> --follow` streams normalized progress events, and `show-gate <run-id>` prints the current gate summary.
 - `doctor` checks local Node, Codex, Claude Code, uv, git, provider auth, `.env`, and git repository readiness without printing secrets.
+- `examples/fake-pdh-dev` provides a tiny fake target repository for user-perspective flow checks.
 - Blocked `advance` / `run-next` output is concise by default; pass `--json` for full guard payloads.
 - `resume <run-id>` resumes the current provider step from the latest saved Codex/Claude session id.
 - `run --ticket <id>` invokes `./ticket.sh start <id>` when `ticket.sh` exists, and records a skip event otherwise.

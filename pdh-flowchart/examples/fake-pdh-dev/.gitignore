@@ -1,0 +1,8 @@
+.pdh-flowchart/
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+.tickets/
+dist/
+*.egg-info/
