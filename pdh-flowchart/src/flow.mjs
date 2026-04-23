@@ -36,6 +36,19 @@ export function nextStep(flow, variant, stepId, outcome = "success") {
   return target ?? null;
 }
 
+export function outcomeFromDecision(decision) {
+  if (decision === "approved") {
+    return "human_approved";
+  }
+  if (decision === "changes_requested") {
+    return "human_changes_requested";
+  }
+  if (decision === "rejected" || decision === "cancelled") {
+    return "human_rejected";
+  }
+  return null;
+}
+
 export function describeFlow(flow, variant = "full") {
   const selected = flow.variants?.[variant];
   if (!selected) {

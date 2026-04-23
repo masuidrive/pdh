@@ -2,7 +2,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { loadDotEnv } from "./env.mjs";
-import { loadFlow, getInitialStep, describeFlow } from "./flow.mjs";
+import { loadFlow, getInitialStep, describeFlow, nextStep, outcomeFromDecision } from "./flow.mjs";
 import { runCodex } from "./codex-adapter.mjs";
 import { runCalcSmoke } from "./smoke-calc.mjs";
 import { createGateSummary, commitStep, ticketStart, ticketClose } from "./actions.mjs";
@@ -36,6 +36,8 @@ try {
     await cmdRunCodex(args);
   } else if (command === "guards") {
     await cmdGuards(args);
+  } else if (command === "advance") {
+    await cmdAdvance(args);
   } else if (command === "gate-summary") {
     await cmdGateSummary(args);
   } else if (["approve", "reject", "request-changes", "cancel"].includes(command)) {
@@ -67,6 +69,7 @@ Usage:
   pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light]
   pdh-flowchart run-codex --repo DIR --prompt-file FILE [--step PD-C-6]
   pdh-flowchart guards --repo DIR --step PD-C-9
+  pdh-flowchart advance RUN_ID [--repo DIR] [--step PD-C-5]
   pdh-flowchart gate-summary RUN_ID --step PD-C-5 [--repo DIR]
   pdh-flowchart approve RUN_ID --step PD-C-5 [--reason TEXT]
   pdh-flowchart reject RUN_ID --step PD-C-5 [--reason TEXT]
@@ -111,6 +114,65 @@ async function cmdGuards(argv) {
   if (results.some((result) => result.status === "failed")) {
     process.exitCode = 1;
   }
+}
+
+async function cmdAdvance(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const { evaluateStepGuards } = await import("./guards.mjs");
+  const runId = argv.find((value) => !value.startsWith("--"));
+  if (!runId) {
+    throw new Error("advance requires RUN_ID");
+  }
+  const options = parseOptions(argv.filter((value) => value !== runId));
+  const repo = resolve(options.repo ?? process.cwd());
+  const store = openStore(defaultStateDir(repo));
+  const run = store.getRun(runId);
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+  const flow = loadFlow(options.flow ?? run.flow_id);
+  const stepId = options.step ?? run.current_step_id;
+  if (!stepId) {
+    throw new Error(`Run has no current step: ${runId}`);
+  }
+  const humanGate = store.latestHumanGate(runId, stepId);
+  const artifacts = collectStepArtifacts(store.stateDir, runId, stepId);
+  const guardResults = evaluateStepGuards(flow, stepId, {
+    repoPath: repo,
+    artifacts,
+    humanDecision: humanGate?.decision ?? null
+  });
+  for (const result of guardResults) {
+    store.addEvent({
+      runId,
+      stepId,
+      type: result.status === "passed" || result.status === "skipped" ? "guard_finished" : "guard_failed",
+      provider: "runtime",
+      message: `${result.guardId}: ${result.status}`,
+      payload: result
+    });
+  }
+  const failed = guardResults.filter((result) => result.status === "failed");
+  if (failed.length > 0) {
+    console.log(JSON.stringify({ status: "blocked", stepId, guardResults }, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+  const outcome = humanGate ? outcomeFromDecision(humanGate.decision) : "success";
+  if (!outcome) {
+    throw new Error(`Human gate has no terminal decision for ${stepId}`);
+  }
+  const target = nextStep(flow, run.flow_variant, stepId, outcome);
+  if (!target) {
+    throw new Error(`No transition from ${stepId} for ${outcome}`);
+  }
+  if (target === "COMPLETE") {
+    store.updateRun(runId, { status: "completed", current_step_id: stepId, completed_at: new Date().toISOString() });
+  } else {
+    store.updateRun(runId, { status: "running", current_step_id: target });
+  }
+  store.addEvent({ runId, stepId, type: "status", provider: "runtime", message: `[${stepId}] -> [${target}]`, payload: { outcome, target } });
+  console.log(JSON.stringify({ status: target === "COMPLETE" ? "completed" : "advanced", from: stepId, to: target, outcome }, null, 2));
 }
 
 async function cmdRun(argv) {
@@ -300,4 +362,11 @@ function required(options, key) {
     throw new Error(`Missing --${key}`);
   }
   return options[key];
+}
+
+function collectStepArtifacts(stateDir, runId, stepId) {
+  const stepDir = join(stateDir, "runs", runId, "steps", stepId);
+  return [
+    { kind: "human_gate_summary", path: join(stepDir, "human-gate-summary.md") }
+  ];
 }

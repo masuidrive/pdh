@@ -146,6 +146,15 @@ export class Store {
     `).all(runId, limit).reverse();
   }
 
+  latestHumanGate(runId, stepId) {
+    return this.db.prepare(`
+      SELECT * FROM human_gates
+      WHERE run_id = ? AND step_id = ?
+      ORDER BY id DESC
+      LIMIT 1
+    `).get(runId, stepId);
+  }
+
   saveProviderSession({ runId, stepId, attempt = 1, provider, sessionId = null, resumeToken = null, rawLogPath = null }) {
     this.db.prepare(`
       INSERT OR REPLACE INTO provider_sessions (run_id, step_id, attempt, provider, session_id, resume_token, raw_log_path)
