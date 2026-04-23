@@ -630,6 +630,7 @@ Manual smoke tests:
 - blocked guard output は通常 concise summary を出し、`--json` 指定時だけ full guard payload を出す。
 - `doctor` が Node、Codex、Claude Code、uv、git、provider auth、`.env`、git repo 状態を secret 非表示で確認する。
 - `examples/fake-pdh-dev` は `uv run calc`、`current-ticket.md`、`current-note.md`、`ticket.sh`、failing AC を持つ小さい target repo として、gate と provider handoff のユーザ目線確認に使う。
+- Mutating run commands は `.pdh-flowchart/locks/<run-id>.lock` の atomic lockfile を取り、同一 run の二重 mutation を拒否する。`--lock-wait-ms` / `PDH_FLOWCHART_LOCK_WAIT_MS` で待機を指定できる。
 
 ### 未解決
 

@@ -13,6 +13,7 @@ import { captureNoteTicketPatchProposal, snapshotNoteTicketFiles } from "./patch
 import { defaultJudgementKind, loadJudgements, writeJudgement } from "./judgements.mjs";
 import { runFinalVerification } from "./final-verification.mjs";
 import { formatDoctor, runDoctor } from "./doctor.mjs";
+import { withRunLock } from "./locks.mjs";
 
 const emitWarning = process.emitWarning.bind(process);
 process.emitWarning = (warning, ...warningArgs) => {
@@ -165,37 +166,39 @@ async function cmdAdvance(argv) {
   const options = parseOptions(argv.filter((value) => value !== runId));
   const repo = resolve(options.repo ?? process.cwd());
   const store = openStore(defaultStateDir(repo));
-  const run = store.getRun(runId);
-  if (!run) {
-    throw new Error(`Run not found: ${runId}`);
-  }
-  const flow = loadFlow(options.flow ?? run.flow_id);
-  const stepId = options.step ?? run.current_step_id;
-  if (!stepId) {
-    throw new Error(`Run has no current step: ${runId}`);
-  }
-  assertCurrentStep(run, stepId, options);
-  const step = getStep(flow, stepId);
-  const { evaluation, failed, actionBlock } = await evaluateStepWithRuntimeActions({ store, flow, runId, stepId, repo, step });
-  const outcome = outcomeForStep(step, evaluation.humanGate);
-  if (actionBlock) {
-    store.updateRun(runId, { status: "blocked", current_step_id: stepId });
-    syncRunMetadata({ store, repo, runId });
-    printBlocked(actionBlock, [], options);
-    process.exitCode = 1;
-    return;
-  }
-  if (failed.length > 0) {
-    store.updateRun(runId, { status: "blocked", current_step_id: stepId });
-    syncRunMetadata({ store, repo, runId });
-    printBlocked({ status: "blocked", runId, stepId, reason: "guard_failed", provider: step.provider, failedGuards: failed, guardResults: evaluation.guardResults }, [], options);
-    process.exitCode = 1;
-    return;
-  }
-  if (!outcome) {
-    throw new Error(`Human gate has no terminal decision for ${stepId}`);
-  }
-  console.log(JSON.stringify(advanceRun({ store, flow, run, stepId, outcome, repoPath: repo }), null, 2));
+  await withCommandRunLock({ store, runId, options, action: async () => {
+    const run = store.getRun(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    const flow = loadFlow(options.flow ?? run.flow_id);
+    const stepId = options.step ?? run.current_step_id;
+    if (!stepId) {
+      throw new Error(`Run has no current step: ${runId}`);
+    }
+    assertCurrentStep(run, stepId, options);
+    const step = getStep(flow, stepId);
+    const { evaluation, failed, actionBlock } = await evaluateStepWithRuntimeActions({ store, flow, runId, stepId, repo, step });
+    const outcome = outcomeForStep(step, evaluation.humanGate);
+    if (actionBlock) {
+      store.updateRun(runId, { status: "blocked", current_step_id: stepId });
+      syncRunMetadata({ store, repo, runId });
+      printBlocked(actionBlock, [], options);
+      process.exitCode = 1;
+      return;
+    }
+    if (failed.length > 0) {
+      store.updateRun(runId, { status: "blocked", current_step_id: stepId });
+      syncRunMetadata({ store, repo, runId });
+      printBlocked({ status: "blocked", runId, stepId, reason: "guard_failed", provider: step.provider, failedGuards: failed, guardResults: evaluation.guardResults }, [], options);
+      process.exitCode = 1;
+      return;
+    }
+    if (!outcome) {
+      throw new Error(`Human gate has no terminal decision for ${stepId}`);
+    }
+    console.log(JSON.stringify(advanceRun({ store, flow, run, stepId, outcome, repoPath: repo }), null, 2));
+  } });
 }
 
 async function cmdRunNext(argv) {
@@ -212,115 +215,117 @@ async function cmdRunNext(argv) {
     throw new Error("--limit must be a positive integer");
   }
 
-  const trace = [];
-  for (let count = 0; count < limit; count += 1) {
-    const run = store.getRun(runId);
-    if (!run) {
-      throw new Error(`Run not found: ${runId}`);
-    }
-    if (run.status === "completed") {
-      console.log(JSON.stringify({ status: "completed", runId, trace }, null, 2));
-      return;
-    }
-    const stepId = run.current_step_id;
-    if (!stepId) {
-      throw new Error(`Run has no current step: ${runId}`);
-    }
-    const flow = loadFlow(options.flow ?? run.flow_id);
-    const step = getStep(flow, stepId);
+  await withCommandRunLock({ store, runId, options, action: async () => {
+    const trace = [];
+    for (let count = 0; count < limit; count += 1) {
+      const run = store.getRun(runId);
+      if (!run) {
+        throw new Error(`Run not found: ${runId}`);
+      }
+      if (run.status === "completed") {
+        console.log(JSON.stringify({ status: "completed", runId, trace }, null, 2));
+        return;
+      }
+      const stepId = run.current_step_id;
+      if (!stepId) {
+        throw new Error(`Run has no current step: ${runId}`);
+      }
+      const flow = loadFlow(options.flow ?? run.flow_id);
+      const step = getStep(flow, stepId);
 
-    if (isHumanGateStep(step)) {
-      const humanGate = store.latestHumanGate(runId, stepId);
-      if (!humanGate) {
-        const summary = createGateSummary({ repoPath: repo, stateDir: store.stateDir, runId, stepId });
-        store.openHumanGate({
-          runId,
-          stepId,
-          prompt: step.human_gate?.prompt ?? `${stepId} human gate`,
-          summary: summary.artifactPath
-        });
+      if (isHumanGateStep(step)) {
+        const humanGate = store.latestHumanGate(runId, stepId);
+        if (!humanGate) {
+          const summary = createGateSummary({ repoPath: repo, stateDir: store.stateDir, runId, stepId });
+          store.openHumanGate({
+            runId,
+            stepId,
+            prompt: step.human_gate?.prompt ?? `${stepId} human gate`,
+            summary: summary.artifactPath
+          });
+          syncRunMetadata({ store, repo, runId });
+          const result = {
+            status: "needs_human",
+            runId,
+            stepId,
+            summary: summary.artifactPath,
+            nextCommands: humanDecisionCommands(runId, stepId, repo)
+          };
+          trace.push(result);
+          console.log(JSON.stringify({ ...result, trace }, null, 2));
+          return;
+        }
+        if (humanGate.status === "needs_human") {
+          const result = {
+            status: "needs_human",
+            runId,
+            stepId,
+            summary: humanGate.summary,
+            nextCommands: humanDecisionCommands(runId, stepId, repo)
+          };
+          trace.push(result);
+          console.log(JSON.stringify({ ...result, trace }, null, 2));
+          return;
+        }
+      }
+
+      const { evaluation, failed, actionBlock } = await evaluateStepWithRuntimeActions({ store, flow, runId, stepId, repo, step });
+      const outcome = outcomeForStep(step, evaluation.humanGate);
+      if (actionBlock) {
+        const result = actionBlock;
+        store.updateRun(runId, { status: "blocked", current_step_id: stepId });
         syncRunMetadata({ store, repo, runId });
-        const result = {
-          status: "needs_human",
-          runId,
-          stepId,
-          summary: summary.artifactPath,
-          nextCommands: humanDecisionCommands(runId, stepId, repo)
-        };
+        store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} ${result.reason}`, payload: result });
         trace.push(result);
-        console.log(JSON.stringify({ ...result, trace }, null, 2));
+        printBlocked(result, trace, options);
         return;
       }
-      if (humanGate.status === "needs_human") {
+      if (failed.length > 0) {
+        const reason = step.provider === "runtime" ? "guard_failed" : "provider_step_requires_execution";
         const result = {
-          status: "needs_human",
+          status: "blocked",
           runId,
           stepId,
-          summary: humanGate.summary,
+          reason,
+          provider: step.provider,
+          failedGuards: failed,
+          nextCommand: nextProviderCommand(runId, step, repo)
+        };
+        store.updateRun(runId, { status: "blocked", current_step_id: stepId });
+        syncRunMetadata({ store, repo, runId });
+        store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} ${reason}`, payload: result });
+        trace.push(result);
+        printBlocked(result, trace, options);
+        return;
+      }
+      if (!outcome) {
+        const result = {
+          status: "blocked",
+          runId,
+          stepId,
+          reason: "human_decision_required",
+          provider: step.provider,
           nextCommands: humanDecisionCommands(runId, stepId, repo)
         };
+        store.updateRun(runId, { status: "blocked", current_step_id: stepId });
+        syncRunMetadata({ store, repo, runId });
+        store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} human_decision_required`, payload: result });
         trace.push(result);
-        console.log(JSON.stringify({ ...result, trace }, null, 2));
+        printBlocked(result, trace, options);
+        return;
+      }
+
+      const advanced = advanceRun({ store, flow, run, stepId, outcome, repoPath: repo });
+      trace.push(advanced);
+      if (advanced.status === "completed") {
+        console.log(JSON.stringify({ ...advanced, trace }, null, 2));
         return;
       }
     }
 
-    const { evaluation, failed, actionBlock } = await evaluateStepWithRuntimeActions({ store, flow, runId, stepId, repo, step });
-    const outcome = outcomeForStep(step, evaluation.humanGate);
-    if (actionBlock) {
-      const result = actionBlock;
-      store.updateRun(runId, { status: "blocked", current_step_id: stepId });
-      syncRunMetadata({ store, repo, runId });
-      store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} ${result.reason}`, payload: result });
-      trace.push(result);
-      printBlocked(result, trace, options);
-      return;
-    }
-    if (failed.length > 0) {
-      const reason = step.provider === "runtime" ? "guard_failed" : "provider_step_requires_execution";
-      const result = {
-        status: "blocked",
-        runId,
-        stepId,
-        reason,
-        provider: step.provider,
-        failedGuards: failed,
-        nextCommand: nextProviderCommand(runId, step, repo)
-      };
-      store.updateRun(runId, { status: "blocked", current_step_id: stepId });
-      syncRunMetadata({ store, repo, runId });
-      store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} ${reason}`, payload: result });
-      trace.push(result);
-      printBlocked(result, trace, options);
-      return;
-    }
-    if (!outcome) {
-      const result = {
-        status: "blocked",
-        runId,
-        stepId,
-        reason: "human_decision_required",
-        provider: step.provider,
-        nextCommands: humanDecisionCommands(runId, stepId, repo)
-      };
-      store.updateRun(runId, { status: "blocked", current_step_id: stepId });
-      syncRunMetadata({ store, repo, runId });
-      store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} human_decision_required`, payload: result });
-      trace.push(result);
-      printBlocked(result, trace, options);
-      return;
-    }
-
-    const advanced = advanceRun({ store, flow, run, stepId, outcome, repoPath: repo });
-    trace.push(advanced);
-    if (advanced.status === "completed") {
-      console.log(JSON.stringify({ ...advanced, trace }, null, 2));
-      return;
-    }
-  }
-
-  printBlocked({ status: "blocked", runId, reason: "limit_reached", limit }, trace, options);
-  process.exitCode = 1;
+    printBlocked({ status: "blocked", runId, reason: "limit_reached", limit }, trace, options);
+    process.exitCode = 1;
+  } });
 }
 
 async function cmdRun(argv) {
@@ -357,15 +362,17 @@ async function cmdGateSummary(argv) {
   const repo = resolve(options.repo ?? process.cwd());
   const stepId = required(options, "step");
   const store = openStore(defaultStateDir(repo));
-  const run = store.getRun(runId);
-  if (!run) {
-    throw new Error(`Run not found: ${runId}`);
-  }
-  assertCurrentStep(run, stepId, options);
-  const summary = createGateSummary({ repoPath: repo, stateDir: store.stateDir, runId, stepId });
-  store.openHumanGate({ runId, stepId, prompt: `${stepId} human gate`, summary: summary.artifactPath });
-  syncRunMetadata({ store, repo, runId });
-  console.log(summary.artifactPath);
+  await withCommandRunLock({ store, runId, options, action: async () => {
+    const run = store.getRun(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    assertCurrentStep(run, stepId, options);
+    const summary = createGateSummary({ repoPath: repo, stateDir: store.stateDir, runId, stepId });
+    store.openHumanGate({ runId, stepId, prompt: `${stepId} human gate`, summary: summary.artifactPath });
+    syncRunMetadata({ store, repo, runId });
+    console.log(summary.artifactPath);
+  } });
 }
 
 async function cmdHumanDecision(command, argv) {
@@ -384,21 +391,23 @@ async function cmdHumanDecision(command, argv) {
     cancel: "cancelled"
   };
   const store = openStore(defaultStateDir(repo));
-  const run = store.getRun(runId);
-  if (!run) {
-    throw new Error(`Run not found: ${runId}`);
-  }
-  assertCurrentStep(run, stepId, options);
-  const latestGate = store.latestHumanGate(runId, stepId);
-  if (!latestGate && options.force !== "true") {
-    throw new Error(`No open human gate for ${stepId}; run gate-summary first or pass --force`);
-  }
-  if (latestGate && latestGate.status !== "needs_human" && options.force !== "true") {
-    throw new Error(`Human gate for ${stepId} is already ${latestGate.status}; pass --force to override`);
-  }
-  store.resolveHumanGate({ runId, stepId, decision: decisionByCommand[command], reason: options.reason ?? null });
-  syncRunMetadata({ store, repo, runId });
-  console.log(`${runId} ${stepId} ${decisionByCommand[command]}`);
+  await withCommandRunLock({ store, runId, options, action: async () => {
+    const run = store.getRun(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    assertCurrentStep(run, stepId, options);
+    const latestGate = store.latestHumanGate(runId, stepId);
+    if (!latestGate && options.force !== "true") {
+      throw new Error(`No open human gate for ${stepId}; run gate-summary first or pass --force`);
+    }
+    if (latestGate && latestGate.status !== "needs_human" && options.force !== "true") {
+      throw new Error(`Human gate for ${stepId} is already ${latestGate.status}; pass --force to override`);
+    }
+    store.resolveHumanGate({ runId, stepId, decision: decisionByCommand[command], reason: options.reason ?? null });
+    syncRunMetadata({ store, repo, runId });
+    console.log(`${runId} ${stepId} ${decisionByCommand[command]}`);
+  } });
 }
 
 function cmdCommitStep(argv) {
@@ -438,7 +447,7 @@ function maybeStartTicket({ store, runId, repo, ticket, required = false }) {
   store.addEvent({ runId, type: "tool_finished", provider: "runtime", message: `ticket.sh start ${ticket}`, payload: result });
 }
 
-async function cmdRunCodex(argv) {
+async function cmdRunCodex(argv, context = {}) {
   const { openStore, defaultStateDir } = await import("./db.mjs");
   const positionalRunId = argv.find((value) => !value.startsWith("--"));
   const optionArgs = positionalRunId ? argv.filter((value) => value !== positionalRunId) : argv;
@@ -460,43 +469,48 @@ async function cmdRunCodex(argv) {
     repoPath: repo,
     currentStepId: options.step ?? "PD-C-6"
   });
-  run ??= store.getRun(runId);
-  const stepId = options.step ?? run.current_step_id ?? "PD-C-6";
-  assertCurrentStep(run, stepId, options);
-  const flow = loadFlow(options.flow ?? run.flow_id);
-  const step = getStep(flow, stepId);
-  if (step.provider !== "codex" && options.force !== "true") {
-    throw new Error(`${stepId} uses provider ${step.provider}; refusing to run Codex without --force`);
-  }
-  const attempt = Number(options.attempt ?? "1");
-  const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "codex.raw.jsonl");
-  const resumeSession = resolveProviderResume({ store, runId, stepId, provider: "codex", option: options.resume ?? null });
-  store.updateRun(runId, { status: "running", current_step_id: stepId });
-  syncRunMetadata({ store, repo, runId });
-  const noteTicketBefore = snapshotNoteTicketFiles({ repoPath: repo });
-  store.startStep({ runId, stepId, attempt, provider: "codex", mode: "edit" });
-  const result = await runCodex({
-    cwd: repo,
-    prompt,
-    rawLogPath,
-    bypass: options.bypass !== "false",
-    model: options.model ?? null,
-    resume: resumeSession,
-    onEvent(event) {
-      store.addEvent({ runId, stepId, attempt, type: event.type, provider: "codex", message: event.message, payload: event.payload ?? {} });
+  await withCommandRunLock({ store, runId, options, context, action: async () => {
+    run = store.getRun(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
     }
-  });
-  store.saveProviderSession({ runId, stepId, attempt, provider: "codex", sessionId: result.sessionId, rawLogPath });
-  const status = result.exitCode === 0 ? "completed" : "failed";
-  store.finishStep({ runId, stepId, attempt, provider: "codex", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
-  const patchProposal = captureNoteTicketPatchProposal({ repoPath: repo, stateDir: store.stateDir, runId, stepId, attempt, before: noteTicketBefore });
-  if (patchProposal.status === "written") {
-    store.addEvent({ runId, stepId, attempt, type: "artifact", provider: "runtime", message: `note/ticket patch proposal ${patchProposal.artifactPath}`, payload: patchProposal });
-  }
-  store.updateRun(runId, { status: result.exitCode === 0 ? "running" : "failed", current_step_id: stepId });
-  syncRunMetadata({ store, repo, runId });
-  console.log(`${runId} ${stepId} ${status}`);
-  console.log(`Raw log: ${rawLogPath}`);
+    const stepId = options.step ?? run.current_step_id ?? "PD-C-6";
+    assertCurrentStep(run, stepId, options);
+    const flow = loadFlow(options.flow ?? run.flow_id);
+    const step = getStep(flow, stepId);
+    if (step.provider !== "codex" && options.force !== "true") {
+      throw new Error(`${stepId} uses provider ${step.provider}; refusing to run Codex without --force`);
+    }
+    const attempt = Number(options.attempt ?? "1");
+    const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "codex.raw.jsonl");
+    const resumeSession = resolveProviderResume({ store, runId, stepId, provider: "codex", option: options.resume ?? null });
+    store.updateRun(runId, { status: "running", current_step_id: stepId });
+    syncRunMetadata({ store, repo, runId });
+    const noteTicketBefore = snapshotNoteTicketFiles({ repoPath: repo });
+    store.startStep({ runId, stepId, attempt, provider: "codex", mode: "edit" });
+    const result = await runCodex({
+      cwd: repo,
+      prompt,
+      rawLogPath,
+      bypass: options.bypass !== "false",
+      model: options.model ?? null,
+      resume: resumeSession,
+      onEvent(event) {
+        store.addEvent({ runId, stepId, attempt, type: event.type, provider: "codex", message: event.message, payload: event.payload ?? {} });
+      }
+    });
+    store.saveProviderSession({ runId, stepId, attempt, provider: "codex", sessionId: result.sessionId, rawLogPath });
+    const status = result.exitCode === 0 ? "completed" : "failed";
+    store.finishStep({ runId, stepId, attempt, provider: "codex", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
+    const patchProposal = captureNoteTicketPatchProposal({ repoPath: repo, stateDir: store.stateDir, runId, stepId, attempt, before: noteTicketBefore });
+    if (patchProposal.status === "written") {
+      store.addEvent({ runId, stepId, attempt, type: "artifact", provider: "runtime", message: `note/ticket patch proposal ${patchProposal.artifactPath}`, payload: patchProposal });
+    }
+    store.updateRun(runId, { status: result.exitCode === 0 ? "running" : "failed", current_step_id: stepId });
+    syncRunMetadata({ store, repo, runId });
+    console.log(`${runId} ${stepId} ${status}`);
+    console.log(`Raw log: ${rawLogPath}`);
+  } });
 }
 
 async function cmdResume(argv) {
@@ -507,7 +521,7 @@ async function cmdResume(argv) {
   await cmdRunProvider([...argv, "--resume", "latest"]);
 }
 
-async function cmdRunProvider(argv) {
+async function cmdRunProvider(argv, context = {}) {
   const { openStore, defaultStateDir } = await import("./db.mjs");
   const runId = argv.find((value) => !value.startsWith("--"));
   if (!runId) {
@@ -516,32 +530,34 @@ async function cmdRunProvider(argv) {
   const options = parseOptions(argv.filter((value) => value !== runId));
   const repo = resolve(options.repo ?? process.cwd());
   const store = openStore(defaultStateDir(repo));
-  const run = store.getRun(runId);
-  if (!run) {
-    throw new Error(`Run not found: ${runId}`);
-  }
-  const stepId = options.step ?? run.current_step_id;
-  if (!stepId) {
-    throw new Error(`Run has no current step: ${runId}`);
-  }
-  assertCurrentStep(run, stepId, options);
-  const flow = loadFlow(options.flow ?? run.flow_id);
-  const step = getStep(flow, stepId);
-  let providerArgv = argv;
-  if (!options["prompt-file"] && step.provider !== "runtime") {
-    const prompt = writeStepPrompt({ repoPath: repo, stateDir: store.stateDir, run, flow, stepId });
-    store.addEvent({ runId, stepId, type: "artifact", provider: "runtime", message: `prompt generated ${prompt.artifactPath}`, payload: { path: prompt.artifactPath } });
-    providerArgv = [...argv, "--prompt-file", prompt.artifactPath];
-  }
-  if (step.provider === "codex") {
-    await cmdRunCodex(providerArgv);
-    return;
-  }
-  if (step.provider === "claude") {
-    await cmdRunClaude(providerArgv);
-    return;
-  }
-  throw new Error(`${stepId} uses provider ${step.provider}; run-provider only supports codex and claude steps`);
+  await withCommandRunLock({ store, runId, options, context, action: async () => {
+    const run = store.getRun(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    const stepId = options.step ?? run.current_step_id;
+    if (!stepId) {
+      throw new Error(`Run has no current step: ${runId}`);
+    }
+    assertCurrentStep(run, stepId, options);
+    const flow = loadFlow(options.flow ?? run.flow_id);
+    const step = getStep(flow, stepId);
+    let providerArgv = argv;
+    if (!options["prompt-file"] && step.provider !== "runtime") {
+      const prompt = writeStepPrompt({ repoPath: repo, stateDir: store.stateDir, run, flow, stepId });
+      store.addEvent({ runId, stepId, type: "artifact", provider: "runtime", message: `prompt generated ${prompt.artifactPath}`, payload: { path: prompt.artifactPath } });
+      providerArgv = [...argv, "--prompt-file", prompt.artifactPath];
+    }
+    if (step.provider === "codex") {
+      await cmdRunCodex(providerArgv, { lockHeld: true });
+      return;
+    }
+    if (step.provider === "claude") {
+      await cmdRunClaude(providerArgv, { lockHeld: true });
+      return;
+    }
+    throw new Error(`${stepId} uses provider ${step.provider}; run-provider only supports codex and claude steps`);
+  } });
 }
 
 async function cmdPrompt(argv) {
@@ -553,19 +569,21 @@ async function cmdPrompt(argv) {
   const options = parseOptions(argv.filter((value) => value !== runId));
   const repo = resolve(options.repo ?? process.cwd());
   const store = openStore(defaultStateDir(repo));
-  const run = store.getRun(runId);
-  if (!run) {
-    throw new Error(`Run not found: ${runId}`);
-  }
-  const flow = loadFlow(options.flow ?? run.flow_id);
-  const stepId = options.step ?? run.current_step_id;
-  if (!stepId) {
-    throw new Error(`Run has no current step: ${runId}`);
-  }
-  assertCurrentStep(run, stepId, options);
-  const prompt = writeStepPrompt({ repoPath: repo, stateDir: store.stateDir, run, flow, stepId });
-  store.addEvent({ runId, stepId, type: "artifact", provider: "runtime", message: `prompt generated ${prompt.artifactPath}`, payload: { path: prompt.artifactPath } });
-  console.log(prompt.artifactPath);
+  await withCommandRunLock({ store, runId, options, action: async () => {
+    const run = store.getRun(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    const flow = loadFlow(options.flow ?? run.flow_id);
+    const stepId = options.step ?? run.current_step_id;
+    if (!stepId) {
+      throw new Error(`Run has no current step: ${runId}`);
+    }
+    assertCurrentStep(run, stepId, options);
+    const prompt = writeStepPrompt({ repoPath: repo, stateDir: store.stateDir, run, flow, stepId });
+    store.addEvent({ runId, stepId, type: "artifact", provider: "runtime", message: `prompt generated ${prompt.artifactPath}`, payload: { path: prompt.artifactPath } });
+    console.log(prompt.artifactPath);
+  } });
 }
 
 async function cmdMetadata(argv) {
@@ -577,8 +595,10 @@ async function cmdMetadata(argv) {
   const options = parseOptions(argv.filter((value) => value !== runId));
   const repo = resolve(options.repo ?? process.cwd());
   const store = openStore(defaultStateDir(repo));
-  const metadata = syncRunMetadata({ store, repo, runId });
-  console.log(JSON.stringify(metadata, null, 2));
+  await withCommandRunLock({ store, runId, options, action: async () => {
+    const metadata = syncRunMetadata({ store, repo, runId });
+    console.log(JSON.stringify(metadata, null, 2));
+  } });
 }
 
 async function cmdJudgement(argv) {
@@ -590,28 +610,30 @@ async function cmdJudgement(argv) {
   const options = parseOptions(argv.filter((value) => value !== runId));
   const repo = resolve(options.repo ?? process.cwd());
   const store = openStore(defaultStateDir(repo));
-  const run = store.getRun(runId);
-  if (!run) {
-    throw new Error(`Run not found: ${runId}`);
-  }
-  const stepId = options.step ?? run.current_step_id;
-  if (!stepId) {
-    throw new Error(`Run has no current step: ${runId}`);
-  }
-  assertCurrentStep(run, stepId, options);
-  const kind = options.kind ?? defaultJudgementKind(stepId);
-  const result = writeJudgement({
-    stateDir: store.stateDir,
-    runId,
-    stepId,
-    kind,
-    status: options.status ?? null,
-    summary: options.summary ?? null,
-    source: options.source ?? "runtime",
-    details: { reason: options.reason ?? null }
-  });
-  store.addEvent({ runId, stepId, type: "artifact", provider: "runtime", message: `judgement ${result.judgement.kind}: ${result.judgement.status}`, payload: { artifactPath: result.artifactPath, judgement: result.judgement } });
-  console.log(JSON.stringify(result, null, 2));
+  await withCommandRunLock({ store, runId, options, action: async () => {
+    const run = store.getRun(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    const stepId = options.step ?? run.current_step_id;
+    if (!stepId) {
+      throw new Error(`Run has no current step: ${runId}`);
+    }
+    assertCurrentStep(run, stepId, options);
+    const kind = options.kind ?? defaultJudgementKind(stepId);
+    const result = writeJudgement({
+      stateDir: store.stateDir,
+      runId,
+      stepId,
+      kind,
+      status: options.status ?? null,
+      summary: options.summary ?? null,
+      source: options.source ?? "runtime",
+      details: { reason: options.reason ?? null }
+    });
+    store.addEvent({ runId, stepId, type: "artifact", provider: "runtime", message: `judgement ${result.judgement.kind}: ${result.judgement.status}`, payload: { artifactPath: result.artifactPath, judgement: result.judgement } });
+    console.log(JSON.stringify(result, null, 2));
+  } });
 }
 
 async function cmdVerify(argv) {
@@ -623,34 +645,36 @@ async function cmdVerify(argv) {
   const options = parseOptions(argv.filter((value) => value !== runId));
   const repo = resolve(options.repo ?? process.cwd());
   const store = openStore(defaultStateDir(repo));
-  const run = store.getRun(runId);
-  if (!run) {
-    throw new Error(`Run not found: ${runId}`);
-  }
-  const stepId = options.step ?? run.current_step_id;
-  if (!stepId) {
-    throw new Error(`Run has no current step: ${runId}`);
-  }
-  assertCurrentStep(run, stepId, options);
-  if (stepId !== "PD-C-9" && options.force !== "true") {
-    throw new Error(`verify is for PD-C-9; current step is ${stepId}. Pass --force to override.`);
-  }
-  const result = runFinalVerification({
-    repoPath: repo,
-    stateDir: store.stateDir,
-    runId,
-    stepId,
-    command: options.command ?? null
-  });
-  store.addEvent({ runId, stepId, type: "artifact", provider: "runtime", message: `final verification ${result.result.status}`, payload: result });
-  syncRunMetadata({ store, repo, runId });
-  console.log(JSON.stringify(result, null, 2));
-  if (result.result.status !== "passed") {
-    process.exitCode = 1;
-  }
+  await withCommandRunLock({ store, runId, options, action: async () => {
+    const run = store.getRun(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    const stepId = options.step ?? run.current_step_id;
+    if (!stepId) {
+      throw new Error(`Run has no current step: ${runId}`);
+    }
+    assertCurrentStep(run, stepId, options);
+    if (stepId !== "PD-C-9" && options.force !== "true") {
+      throw new Error(`verify is for PD-C-9; current step is ${stepId}. Pass --force to override.`);
+    }
+    const result = runFinalVerification({
+      repoPath: repo,
+      stateDir: store.stateDir,
+      runId,
+      stepId,
+      command: options.command ?? null
+    });
+    store.addEvent({ runId, stepId, type: "artifact", provider: "runtime", message: `final verification ${result.result.status}`, payload: result });
+    syncRunMetadata({ store, repo, runId });
+    console.log(JSON.stringify(result, null, 2));
+    if (result.result.status !== "passed") {
+      process.exitCode = 1;
+    }
+  } });
 }
 
-async function cmdRunClaude(argv) {
+async function cmdRunClaude(argv, context = {}) {
   const { openStore, defaultStateDir } = await import("./db.mjs");
   const positionalRunId = argv.find((value) => !value.startsWith("--"));
   const optionArgs = positionalRunId ? argv.filter((value) => value !== positionalRunId) : argv;
@@ -672,46 +696,51 @@ async function cmdRunClaude(argv) {
     repoPath: repo,
     currentStepId: options.step ?? "PD-C-4"
   });
-  run ??= store.getRun(runId);
-  const stepId = options.step ?? run.current_step_id ?? "PD-C-4";
-  assertCurrentStep(run, stepId, options);
-  const flow = loadFlow(options.flow ?? run.flow_id);
-  const step = getStep(flow, stepId);
-  if (step.provider !== "claude" && options.force !== "true") {
-    throw new Error(`${stepId} uses provider ${step.provider}; refusing to run Claude without --force`);
-  }
-  const attempt = Number(options.attempt ?? "1");
-  const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "claude.raw.jsonl");
-  const permissionMode = options["permission-mode"] ?? (options.bypass === "true" ? "bypassPermissions" : "acceptEdits");
-  const resumeSession = resolveProviderResume({ store, runId, stepId, provider: "claude", option: options.resume ?? null });
-  store.updateRun(runId, { status: "running", current_step_id: stepId });
-  syncRunMetadata({ store, repo, runId });
-  const noteTicketBefore = snapshotNoteTicketFiles({ repoPath: repo });
-  store.startStep({ runId, stepId, attempt, provider: "claude", mode: step.mode ?? "review" });
-  const result = await runClaude({
-    cwd: repo,
-    prompt,
-    rawLogPath,
-    bare: options.bare === "true",
-    includePartialMessages: options["include-partial-messages"] === "true",
-    model: options.model ?? null,
-    permissionMode,
-    resume: resumeSession,
-    onEvent(event) {
-      store.addEvent({ runId, stepId, attempt, type: event.type, provider: "claude", message: event.message, payload: event.payload ?? {} });
+  await withCommandRunLock({ store, runId, options, context, action: async () => {
+    run = store.getRun(runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
     }
-  });
-  store.saveProviderSession({ runId, stepId, attempt, provider: "claude", sessionId: result.sessionId, rawLogPath });
-  const status = result.exitCode === 0 ? "completed" : "failed";
-  store.finishStep({ runId, stepId, attempt, provider: "claude", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
-  const patchProposal = captureNoteTicketPatchProposal({ repoPath: repo, stateDir: store.stateDir, runId, stepId, attempt, before: noteTicketBefore });
-  if (patchProposal.status === "written") {
-    store.addEvent({ runId, stepId, attempt, type: "artifact", provider: "runtime", message: `note/ticket patch proposal ${patchProposal.artifactPath}`, payload: patchProposal });
-  }
-  store.updateRun(runId, { status: result.exitCode === 0 ? "running" : "failed", current_step_id: stepId });
-  syncRunMetadata({ store, repo, runId });
-  console.log(`${runId} ${stepId} ${status}`);
-  console.log(`Raw log: ${rawLogPath}`);
+    const stepId = options.step ?? run.current_step_id ?? "PD-C-4";
+    assertCurrentStep(run, stepId, options);
+    const flow = loadFlow(options.flow ?? run.flow_id);
+    const step = getStep(flow, stepId);
+    if (step.provider !== "claude" && options.force !== "true") {
+      throw new Error(`${stepId} uses provider ${step.provider}; refusing to run Claude without --force`);
+    }
+    const attempt = Number(options.attempt ?? "1");
+    const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "claude.raw.jsonl");
+    const permissionMode = options["permission-mode"] ?? (options.bypass === "true" ? "bypassPermissions" : "acceptEdits");
+    const resumeSession = resolveProviderResume({ store, runId, stepId, provider: "claude", option: options.resume ?? null });
+    store.updateRun(runId, { status: "running", current_step_id: stepId });
+    syncRunMetadata({ store, repo, runId });
+    const noteTicketBefore = snapshotNoteTicketFiles({ repoPath: repo });
+    store.startStep({ runId, stepId, attempt, provider: "claude", mode: step.mode ?? "review" });
+    const result = await runClaude({
+      cwd: repo,
+      prompt,
+      rawLogPath,
+      bare: options.bare === "true",
+      includePartialMessages: options["include-partial-messages"] === "true",
+      model: options.model ?? null,
+      permissionMode,
+      resume: resumeSession,
+      onEvent(event) {
+        store.addEvent({ runId, stepId, attempt, type: event.type, provider: "claude", message: event.message, payload: event.payload ?? {} });
+      }
+    });
+    store.saveProviderSession({ runId, stepId, attempt, provider: "claude", sessionId: result.sessionId, rawLogPath });
+    const status = result.exitCode === 0 ? "completed" : "failed";
+    store.finishStep({ runId, stepId, attempt, provider: "claude", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
+    const patchProposal = captureNoteTicketPatchProposal({ repoPath: repo, stateDir: store.stateDir, runId, stepId, attempt, before: noteTicketBefore });
+    if (patchProposal.status === "written") {
+      store.addEvent({ runId, stepId, attempt, type: "artifact", provider: "runtime", message: `note/ticket patch proposal ${patchProposal.artifactPath}`, payload: patchProposal });
+    }
+    store.updateRun(runId, { status: result.exitCode === 0 ? "running" : "failed", current_step_id: stepId });
+    syncRunMetadata({ store, repo, runId });
+    console.log(`${runId} ${stepId} ${status}`);
+    console.log(`Raw log: ${rawLogPath}`);
+  } });
 }
 
 async function cmdStatus(argv) {
@@ -872,6 +901,26 @@ function parseOptions(argv) {
     }
   }
   return options;
+}
+
+async function withCommandRunLock({ store, runId, options = {}, context = {}, action }) {
+  if (context.lockHeld) {
+    return await action();
+  }
+  return await withRunLock({
+    stateDir: store.stateDir,
+    runId,
+    waitMs: nonNegativeInteger(options["lock-wait-ms"] ?? process.env.PDH_FLOWCHART_LOCK_WAIT_MS ?? "0", "--lock-wait-ms"),
+    staleMs: nonNegativeInteger(options["lock-stale-ms"] ?? process.env.PDH_FLOWCHART_LOCK_STALE_MS ?? String(12 * 60 * 60 * 1000), "--lock-stale-ms")
+  }, action);
+}
+
+function nonNegativeInteger(value, label) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0) {
+    throw new Error(`${label} must be a non-negative integer`);
+  }
+  return number;
 }
 
 function printEvent(event, json = false) {

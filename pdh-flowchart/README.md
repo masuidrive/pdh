@@ -72,6 +72,7 @@ node src/cli.mjs smoke-calc
 - `doctor` checks local Node, Codex, Claude Code, uv, git, provider auth, `.env`, and git repository readiness without printing secrets.
 - `examples/fake-pdh-dev` provides a tiny fake target repository for user-perspective flow checks.
 - Blocked `advance` / `run-next` output is concise by default; pass `--json` for full guard payloads.
+- Mutating run commands use a per-run lock under `.pdh-flowchart/locks`; set `PDH_FLOWCHART_LOCK_WAIT_MS` or pass `--lock-wait-ms` to wait instead of failing immediately.
 - `resume <run-id>` resumes the current provider step from the latest saved Codex/Claude session id.
 - `run --ticket <id>` invokes `./ticket.sh start <id>` when `ticket.sh` exists, and records a skip event otherwise.
 - After PD-C-10 approval, runtime invokes `./ticket.sh close` once other close guards pass and records `ticket-close.json`.
