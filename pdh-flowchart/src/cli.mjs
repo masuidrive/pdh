@@ -66,7 +66,7 @@ function printHelp() {
 Usage:
   pdh-flowchart init [--repo DIR]
   pdh-flowchart flow [--variant full|light]
-  pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light]
+  pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5]
   pdh-flowchart run-codex --repo DIR --prompt-file FILE [--step PD-C-6]
   pdh-flowchart guards --repo DIR --step PD-C-9
   pdh-flowchart advance RUN_ID [--repo DIR] [--step PD-C-5]
@@ -135,6 +135,7 @@ async function cmdAdvance(argv) {
   if (!stepId) {
     throw new Error(`Run has no current step: ${runId}`);
   }
+  assertCurrentStep(run, stepId, options);
   const humanGate = store.latestHumanGate(runId, stepId);
   const artifacts = collectStepArtifacts(store.stateDir, runId, stepId);
   const guardResults = evaluateStepGuards(flow, stepId, {
@@ -181,7 +182,8 @@ async function cmdRun(argv) {
   const repo = resolve(options.repo ?? process.cwd());
   const variant = options.variant ?? "full";
   const flow = loadFlow(options.flow ?? "pdh-ticket-core");
-  const initial = getInitialStep(flow, variant);
+  const initial = options["start-step"] ?? getInitialStep(flow, variant);
+  assertStepInVariant(flow, variant, initial);
   const store = openStore(defaultStateDir(repo));
   const runId = store.createRun({
     flowId: flow.flow,
@@ -210,6 +212,7 @@ async function cmdGateSummary(argv) {
   if (!run) {
     throw new Error(`Run not found: ${runId}`);
   }
+  assertCurrentStep(run, stepId, options);
   const summary = createGateSummary({ repoPath: repo, stateDir: store.stateDir, runId, stepId });
   store.openHumanGate({ runId, stepId, prompt: `${stepId} human gate`, summary: summary.artifactPath });
   console.log(summary.artifactPath);
@@ -231,6 +234,18 @@ async function cmdHumanDecision(command, argv) {
     cancel: "cancelled"
   };
   const store = openStore(defaultStateDir(repo));
+  const run = store.getRun(runId);
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+  assertCurrentStep(run, stepId, options);
+  const latestGate = store.latestHumanGate(runId, stepId);
+  if (!latestGate && options.force !== "true") {
+    throw new Error(`No open human gate for ${stepId}; run gate-summary first or pass --force`);
+  }
+  if (latestGate && latestGate.status !== "needs_human" && options.force !== "true") {
+    throw new Error(`Human gate for ${stepId} is already ${latestGate.status}; pass --force to override`);
+  }
   store.resolveHumanGate({ runId, stepId, decision: decisionByCommand[command], reason: options.reason ?? null });
   console.log(`${runId} ${stepId} ${decisionByCommand[command]}`);
 }
@@ -306,9 +321,12 @@ async function cmdStatus(argv) {
   if (!run) {
     throw new Error(`Run not found: ${runId}`);
   }
-  console.log(`${run.id} ${run.status} ${run.current_step_id ?? ""}`);
+  console.log(`Run: ${run.id}`);
+  console.log(`Status: ${run.status}`);
+  console.log(`Current Step: ${run.current_step_id ?? "-"}`);
+  console.log("Recent Events:");
   for (const event of store.recentEvents(runId, Number(options.limit ?? "20"))) {
-    console.log(`${event.ts} ${event.step_id ?? "-"} ${event.type} ${event.message ?? ""}`);
+    console.log(`- ${event.ts} ${event.step_id ?? "-"} ${event.type} ${event.message ?? ""}`);
   }
 }
 
@@ -369,4 +387,20 @@ function collectStepArtifacts(stateDir, runId, stepId) {
   return [
     { kind: "human_gate_summary", path: join(stepDir, "human-gate-summary.md") }
   ];
+}
+
+function assertStepInVariant(flow, variant, stepId) {
+  const sequence = flow.variants?.[variant]?.sequence ?? [];
+  if (!sequence.includes(stepId)) {
+    throw new Error(`${stepId} is not in ${variant} flow`);
+  }
+}
+
+function assertCurrentStep(run, stepId, options = {}) {
+  if (options.force === "true") {
+    return;
+  }
+  if (run.current_step_id !== stepId) {
+    throw new Error(`Current step is ${run.current_step_id}; refusing to operate on ${stepId}. Pass --force to override.`);
+  }
 }

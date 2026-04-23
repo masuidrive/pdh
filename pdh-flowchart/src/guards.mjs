@@ -30,7 +30,7 @@ export function evaluateGuard(guard, context = {}) {
       case "artifact_exists":
         return checkArtifact(guard, context);
       case "human_approved":
-        return passIf(guard, context.humanDecision === "approved", "human approval present");
+        return passIf(guard, context.humanDecision === "approved", `decision=${context.humanDecision ?? "none"}`);
       case "judgement_status":
         return checkJudgementStatus(guard, context);
       case "ticket_closed":
