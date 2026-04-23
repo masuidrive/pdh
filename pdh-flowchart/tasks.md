@@ -44,7 +44,7 @@
 - [x] Add retry/backoff policy per step.
 - [x] Add secret redaction for raw logs and summaries.
 - [x] Add state schema migrations.
-- [ ] Add tests around failed/blocked/resumed runs.
+- [x] Add tests around failed/blocked/resumed runs.
 
 ## Open Decisions
 

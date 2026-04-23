@@ -42,6 +42,7 @@ node src/cli.mjs run-codex --repo /path/to/repo --prompt-file prompt.md --step P
 node src/cli.mjs run-claude <run-id> --prompt-file prompt.md
 node src/cli.mjs run-claude --repo /path/to/repo --prompt-file prompt.md --step PD-C-4
 node src/cli.mjs smoke-calc
+npm run test:runtime
 ```
 
 ## Example Fixture
@@ -77,6 +78,7 @@ node src/cli.mjs smoke-calc
 - Provider commands use flow `timeoutMinutes` by default, can be overridden with `--timeout-ms`, and terminate the provider process group on timeout.
 - Provider failures retry up to flow `maxAttempts` by default with exponential backoff; use `--max-attempts` and `--retry-backoff-ms` to override.
 - Provider raw logs and human gate summaries redact common API key/token patterns and exact secret values loaded from `.env`.
+- `npm run test:runtime` exercises blocked, failed, and resumed run paths with fake providers.
 - `resume <run-id>` resumes the current provider step from the latest saved Codex/Claude session id.
 - `run --ticket <id>` invokes `./ticket.sh start <id>` when `ticket.sh` exists, and records a skip event otherwise.
 - After PD-C-10 approval, runtime invokes `./ticket.sh close` once other close guards pass and records `ticket-close.json`.

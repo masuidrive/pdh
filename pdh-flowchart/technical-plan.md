@@ -635,6 +635,7 @@ Manual smoke tests:
 - Provider commands は flow の `maxAttempts` または `--max-attempts` に従って failed attempt を retry し、`retry` progress event と exponential backoff (`--retry-backoff-ms`, `--retry-backoff-max-ms`) を記録する。
 - Provider raw logs と human gate summary は common token/API key pattern と repo `.env` / process env 由来の exact secret を `[REDACTED]` に置換して保存する。
 - SQLite state store は `schema_migrations` table で migration version/name/applied_at を記録し、v1 initial schema を idempotent に適用する。
+- `npm run test:runtime` は fake provider を使って blocked provider handoff、provider failure、saved session からの resume を検証する。
 
 ### 未解決
 
