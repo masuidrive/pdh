@@ -45,6 +45,8 @@ try {
     await cmdShowGate(args);
   } else if (command === "doctor") {
     cmdDoctor(args);
+  } else if (command === "web") {
+    await cmdWeb(args);
   } else if (command === "run") {
     await cmdRun(args);
   } else if (command === "run-codex") {
@@ -130,6 +132,7 @@ Usage:
   pdh-flowchart logs RUN_ID [--repo DIR] [--follow] [--json]
   pdh-flowchart show-gate RUN_ID [--repo DIR] [--step PD-C-5] [--path]
   pdh-flowchart doctor [--repo DIR] [--json]
+  pdh-flowchart web [--repo DIR] [--host 127.0.0.1] [--port 8765]
   pdh-flowchart smoke-calc [--workdir DIR]
 
 Notes:
@@ -1056,6 +1059,25 @@ function cmdDoctor(argv) {
   if (result.status === "fail") {
     process.exitCode = 1;
   }
+}
+
+async function cmdWeb(argv) {
+  const { startWebServer } = await import("./web-server.mjs");
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  const host = options.host ?? "127.0.0.1";
+  const port = nonNegativeInteger(options.port ?? "8765", "--port");
+  const { server, url } = await startWebServer({ repoPath: repo, host, port });
+  console.log(`Web UI: ${url}`);
+  console.log("Mode: read-only");
+  console.log(`Repo: ${repo}`);
+  await new Promise((resolveServer) => {
+    const shutdown = () => {
+      server.close(resolveServer);
+    };
+    process.once("SIGINT", shutdown);
+    process.once("SIGTERM", shutdown);
+  });
 }
 
 async function cmdSmokeCalc(argv) {

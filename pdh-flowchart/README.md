@@ -44,6 +44,7 @@ node src/cli.mjs run-codex <run-id> --prompt-file prompt.md
 node src/cli.mjs run-codex --repo /path/to/repo --prompt-file prompt.md --step PD-C-6
 node src/cli.mjs run-claude <run-id> --prompt-file prompt.md
 node src/cli.mjs run-claude --repo /path/to/repo --prompt-file prompt.md --step PD-C-4
+node src/cli.mjs web --repo /path/to/repo --host 127.0.0.1 --port 8765
 node src/cli.mjs smoke-calc
 npm run test:runtime
 ```
@@ -126,6 +127,7 @@ Next:
 - AC verification guards parse the `AC 裏取り結果` markdown table and validate `verified` / `deferred` / `unverified` rows.
 - `verify <run-id>` runs PD-C-9 final verification, writes `final-verification.json`, and updates the PD-C-9 process checklist.
 - `logs <run-id> --follow` streams normalized progress events, and `show-gate <run-id>` prints the current gate summary.
+- `web --repo <dir>` serves a local read-only dashboard for run progress, logs, gates, interruptions, and git diff. Runtime execution, approvals, resumes, and interruption answers remain CLI-only.
 - `doctor` checks local Node, Codex, Claude Code, uv, git, provider auth, `.env`, and git repository readiness without printing secrets.
 - `examples/fake-pdh-dev` provides a tiny fake target repository for user-perspective flow checks.
 - Blocked `advance` / `run-next` output is concise by default; pass `--json` for full guard payloads.

@@ -33,6 +33,7 @@ Do not run provider smoke checks as part of normal unit-style verification. Use 
 - Human gates require a gate summary before approval.
 - Provider and runtime steps directly update `current-note.md` and `current-ticket.md`; review those changes with `git diff` and run artifacts.
 - Open interruptions block the current step until `answer` resolves them; resolved interruption context is included in the next provider prompt.
+- The Web UI is read-only. It may display progress, logs, gates, interruptions, artifacts, and diffs, but runtime execution and decisions stay in CLI commands.
 - LLM output is evidence, not authority. Guards decide transitions.
 - `.env`, `.codex`, `.pdh-flowchart/`, generated smoke repos, and provider logs must not be committed.
 

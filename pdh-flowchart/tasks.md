@@ -63,7 +63,7 @@
 
 ## Phase 3: UI and Flow Expansion
 
-- [ ] Add simple web status UI.
+- [x] Add simple read-only web status UI for progress, logs, gates, interruptions, and git diff.
 - [ ] Add flow graph export.
 - [ ] Add Epic flow support.
 - [ ] Add parallel reviewer support.

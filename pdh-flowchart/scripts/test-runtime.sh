@@ -122,9 +122,47 @@ test_interrupted_run() {
   grep -q "completed" "$TMP_ROOT/$run_id.answered-provider.txt"
 }
 
+test_web_readonly() {
+  local repo run_id server_log server_pid url
+  repo="$(seed_repo web)"
+  run_id="$(advance_to_provider_step "$repo")"
+  server_log="$TMP_ROOT/$run_id.web.log"
+  node "$ROOT/src/cli.mjs" web --repo "$repo" --host 127.0.0.1 --port 0 >"$server_log" 2>&1 &
+  server_pid="$!"
+  for _ in $(seq 1 50); do
+    url="$(sed -n 's/^Web UI: //p' "$server_log" | tail -1)"
+    if [ -n "$url" ]; then
+      break
+    fi
+    sleep 0.1
+  done
+  if [ -z "$url" ]; then
+    cat "$server_log" >&2
+    kill "$server_pid" 2>/dev/null || true
+    exit 1
+  fi
+  node - "$url" "$run_id" <<'NODE'
+const url = process.argv[2];
+const runId = process.argv[3];
+const state = await (await fetch(`${url}api/state`)).json();
+if (state.mode !== "read-only") throw new Error("web mode is not read-only");
+if (!state.runs.some((run) => run.id === runId)) throw new Error("run missing from web state");
+const selected = await (await fetch(`${url}api/state?run=${encodeURIComponent(runId)}`)).json();
+if (selected.selectedRunId !== runId) throw new Error("selected run mismatch");
+if (!selected.run?.events?.length) throw new Error("events missing from web state");
+const html = await (await fetch(url)).text();
+if (!html.includes("pdh-flowchart")) throw new Error("html shell missing");
+const mutation = await fetch(`${url}api/state`, { method: "POST" });
+if (mutation.status !== 405) throw new Error(`mutation endpoint should be rejected, got ${mutation.status}`);
+NODE
+  kill "$server_pid" 2>/dev/null || true
+  wait "$server_pid" 2>/dev/null || true
+}
+
 test_blocked_run
 test_failed_run
 test_resumed_run
 test_interrupted_run
+test_web_readonly
 
 echo "runtime tests passed"

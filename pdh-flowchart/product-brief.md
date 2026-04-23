@@ -156,6 +156,8 @@ runtime は `PD-C-5` または `PD-C-10` 相当の gate に到達した時点で
 
 ユーザーは provider に依らない progress view で、いま何をしているか、どの step にいるか、何ファイル変わったかを見られる。
 
+Web UI はこの progress view の read-only viewer とする。run 開始、provider 実行、approve/reject、resume、割り込み回答は CLI の責務に残す。
+
 ### UC-5: レビュー結果に応じて自動で差し戻す
 
 review step で NG が出た場合、runtime は fix step に戻し、再レビューへ遷移する。
@@ -478,7 +480,7 @@ MVP では CLI を主要インターフェースとする。
 ### Phase 3: 拡張
 
 * Epic フロー対応
-* Web UI
+* read-only Web UI
 * 複数 reviewer 並列
 
 ---
@@ -486,8 +488,7 @@ MVP では CLI を主要インターフェースとする。
 ## 19. オープンクエスチョン
 
 1. review step で複数 reviewer を MVP に含めるか
-2. human gate は CLI のみで十分か、簡易 Web UI を先に入れるか
-3. repo ごとの差分設定をどう吸収するか
+2. repo ごとの差分設定をどう吸収するか
 
 ---
 

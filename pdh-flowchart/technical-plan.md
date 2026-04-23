@@ -363,7 +363,7 @@ Gate summary requirements:
 - PD-C-10 は AC 裏取り表、確認手順、作業サマリ、テスト結果、懸念事項、チケット化候補、Epic 残チケット状況を提示する。
 - `current-note.md` の Status が gate 未達の後続 step に進んでいる場合は guard failure とする。
 
-MVP では CLI のみ。簡易 Web UI は Phase 3 以降。
+MVP の実行・承認・再開操作は CLI を正本にする。簡易 Web UI は Phase 3 以降の read-only viewer とし、progress、logs、gate summary、interruptions、artifacts、git diff を表示するだけで、provider 実行・approve/reject・resume・answer の endpoint は持たない。
 
 ## 8.5 LLM 判定ポリシー
 
@@ -607,6 +607,7 @@ Manual smoke tests:
 - `.env` の `OPENAI_API_KEY` は provider smoke / 動作確認でのみ使用する。通常の unit-style check では実 API を叩かない。
 - 開発中は Docker 外で直接実行してよい。Codex smoke は既存の認証済み Codex CLI session を使い、`codex login` は実行しない。
 - 当面はこの開発環境での直接実行を優先し、Docker runtime / egress / version pinning は deferred operations とする。
+- Web UI は read-only viewer とし、実行・承認・再開・割り込み回答は CLI に残す。
 
 ### 実装済みメモ
 
@@ -628,6 +629,7 @@ Manual smoke tests:
 - `verify <run-id>` が PD-C-9 の final verification command と AC parse 結果を `final-verification.json` に保存し、`PD-C-9. プロセスチェックリスト` を runtime 更新する。
 - `resume <run-id>` は current provider step の最新 `provider_sessions` を読み、Codex は `codex exec resume <session> -`、Claude は `--resume <session>` で再実行する。
 - `logs <run-id> --follow` が normalized progress events を stream し、`show-gate <run-id>` が current human gate summary を表示する。
+- `web --repo <dir>` は local read-only dashboard として run progress、logs、human gates、interruptions、git diff を表示する。server-side mutation endpoint は持たない。
 - blocked guard output は通常 concise summary を出し、`--json` 指定時だけ full guard payload を出す。
 - `doctor` が Node、Codex、Claude Code、uv、git、provider auth、`.env`、git repo 状態を secret 非表示で確認する。
 - `examples/fake-pdh-dev` は `uv run calc`、`current-ticket.md`、`current-note.md`、`ticket.sh`、failing AC を持つ小さい target repo として、gate と provider handoff のユーザ目線確認に使う。
