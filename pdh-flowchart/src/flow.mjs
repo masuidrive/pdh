@@ -72,6 +72,8 @@ export function buildFlowView(flow, variant = "full", currentStepId = null) {
       userAction: step.userAction ?? "",
       provider: step.provider,
       mode: step.mode,
+      guards: (step.guards ?? []).map((guard) => ({ ...guard })),
+      humanGate: Boolean(step.human_gate),
       current: step.id === currentStepId
     };
   });
@@ -79,6 +81,14 @@ export function buildFlowView(flow, variant = "full", currentStepId = null) {
     id: flow.flow,
     version: flow.version,
     variant,
+    variants: Object.fromEntries(Object.entries(flow.variants ?? {}).map(([name, spec]) => [
+      name,
+      {
+        initial: spec.initial,
+        sequence: [...(spec.sequence ?? [])],
+        count: Number(spec.sequence?.length ?? 0)
+      }
+    ])),
     initial: selected.initial,
     sequence: selected.sequence,
     steps,
