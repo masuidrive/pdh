@@ -17,10 +17,10 @@
 
 - [x] Implement a single `run-next` loop that executes the current step, evaluates guards, and advances until blocked.
 - [x] Add Claude adapter with `stream-json` normalization and raw log capture.
-- [x] Add provider selection from `flows/pdh-ticket-core.json` instead of command-specific provider calls.
+- [x] Add provider selection from `flows/pdh-ticket-core.yaml` instead of command-specific provider calls.
 - [x] Generate PD-C prompt templates from `pdh-dev` semantics.
 - [x] Implement runtime-controlled note/ticket metadata writes.
-- [x] Implement provider patch proposal artifacts for note/ticket updates.
+- [x] Capture provider note/ticket direct-update diffs as artifacts.
 - [x] Implement `ticket.sh start` integration from `run --ticket`.
 - [x] Implement `ticket.sh close` integration after PD-C-10 approval.
 - [x] Add structured judgement artifacts for PD-C-4, PD-C-7, and PD-C-8.
@@ -45,6 +45,24 @@
 - [x] Add secret redaction for raw logs and summaries.
 - [x] Add state schema migrations.
 - [x] Add tests around failed/blocked/resumed runs.
+
+## Next: Operations Hardening
+
+- [ ] Build a reproducible Docker runtime image for permission-bypass provider execution.
+- [ ] Enforce Docker egress policy for provider APIs, package registries, and git remotes.
+- [ ] Pin exact Codex CLI, Claude Code, Node.js, and uv versions in the Docker image.
+- [ ] Decide whether `.pdh-flowchart/state.sqlite` remains repo-local or moves to a shared volume.
+- [ ] Strengthen direct `current-note.md` / `current-ticket.md` update summaries using `git diff` and artifacts.
+- [ ] Add failed-step artifact summaries for user-facing recovery.
+- [ ] Refine structured review report schema.
+- [ ] Evaluate optional Codex SDK / Claude Agent SDK adapters.
+
+## Phase 3: UI and Flow Expansion
+
+- [ ] Add simple web status UI.
+- [ ] Add flow graph export.
+- [ ] Add Epic flow support.
+- [ ] Add parallel reviewer support.
 
 ## Open Decisions
 

@@ -66,7 +66,7 @@ MVP 方針:
 
 1. XState v5
    - 長所: TypeScript と相性が良く、actor persistence があり、状態機械として表現しやすい。
-   - 短所: PRD の flow は YAML/JSON の data-driven step graph であり、guard は外部コマンドやファイル差分評価が中心。XState の snapshot だけでは provider raw log、artifacts、resume token の正本にならない。
+   - 短所: PRD の flow は YAML の data-driven step graph であり、guard は外部コマンドやファイル差分評価が中心。XState の snapshot だけでは provider raw log、artifacts、resume token の正本にならない。
 
 2. 専用 Flow Engine
    - 長所: `pdh-dev` の step/gate/note/ticket semantics を直接モデル化できる。永続化と guard evidence を DB schema に合わせやすい。
@@ -533,7 +533,7 @@ Tasks:
 - AC 裏取り表 guard
 - step 完了 commit guard
 - `./ticket.sh start/close` の runtime 実行
-- provider step は patch 提案、runtime-controlled metadata と gate summary は自動書込する update policy
+- provider step と runtime step は `current-note.md` / `current-ticket.md` を直接更新し、差分確認は `git diff` と step artifact に集約する
 - LLM judgement artifact と evidence guard
 - PD-C core flow と prompt templates
 - unit tests for transition / guards / adapters mapper
@@ -557,7 +557,7 @@ Tasks:
 - retry/backoff policy
 - secret redaction
 - provider timeout と orphan process cleanup
-- `current-note.md` / `current-ticket.md` patch apply mode と auto-write mode の policy 分離
+- `current-note.md` / `current-ticket.md` direct write policy の徹底と diff artifact summary
 - failed step の artifact summary
 - structured review report schema
 - optional Codex SDK / Claude Agent SDK adapter 評価
@@ -572,7 +572,6 @@ Tasks:
 - flow graph export
 - Epic flow support
 - parallel reviewer
-- GitHub/Slack/Linear integration
 
 ## 13. テスト計画
 
@@ -602,7 +601,7 @@ Manual smoke tests:
 ### 決定済み
 
 - MVP の初期実行対象は Full flow。Light は variant としてサポートする。
-- note/ticket 更新の default policy は、provider step は patch 提案、runtime-controlled metadata と gate summary は自動書込。
+- note/ticket 更新の default policy は直接書込。provider step と runtime step は `current-note.md` / `current-ticket.md` を更新し、確認は `git diff` と step artifact で行う。
 - `./ticket.sh start/close` と step commit は runtime が直接実行する。
 - 意味的判断には LLM を使う。ただし LLM 出力は evidence artifact であり、最終 gate は Flow Engine guard が判定する。
 - `.env` の `OPENAI_API_KEY` は provider smoke / 動作確認でのみ使用する。通常の unit-style check では実 API を叩かない。
@@ -610,7 +609,7 @@ Manual smoke tests:
 
 ### 実装済みメモ
 
-- Node.js CLI skeleton、Codex adapter、SQLite state store、Full flow JSON、guard skeleton、human gate commands、guard-based `advance`、direct action hooks、calculator smoke を追加済み。
+- Node.js CLI skeleton、Codex adapter、SQLite state store、Full flow YAML、guard skeleton、human gate commands、guard-based `advance`、direct action hooks、calculator smoke を追加済み。
 - `node src/cli.mjs smoke-calc` により Codex が `/tmp/pdh-flowchart-calc-smoke` に `uv run calc "1+2"` 対応の小アプリを作成し、Codex 内と wrapper verification の両方で `3` を確認済み。
 - ユーザ目線の gate 操作確認で、非 current step への gate 作成・advance は拒否し、`gate-summary` 前の `approve` も拒否するようにした。
 - `run-codex <run-id>` は current step を実行対象にし、provider mismatch / step mismatch を通常拒否するようにした。

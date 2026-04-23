@@ -9,7 +9,7 @@
 - `product-brief.md`: product requirements.
 - `technical-plan.md`: architecture, decisions, risks, and implementation notes.
 - `tasks.md`: active checklist.
-- `flows/pdh-ticket-core.json`: machine-readable Full/Light PD-C flow.
+- `flows/pdh-ticket-core.yaml`: machine-readable Full/Light PD-C flow.
 - `README.md`: local commands and current scope.
 - `../skills/pdh-dev/SKILL.md` and `../skills/tmux-director/SKILL.md`: source semantics for PD-C steps and gates.
 
@@ -31,6 +31,7 @@ Do not run provider smoke checks as part of normal unit-style verification. Use 
 - Full flow is the MVP baseline. Light flow remains a variant.
 - Runtime commands must not operate on non-current steps unless `--force` is explicitly used.
 - Human gates require a gate summary before approval.
+- Provider and runtime steps directly update `current-note.md` and `current-ticket.md`; review those changes with `git diff` and run artifacts.
 - LLM output is evidence, not authority. Guards decide transitions.
 - `.env`, `.codex`, `.pdh-flowchart/`, generated smoke repos, and provider logs must not be committed.
 

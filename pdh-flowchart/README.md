@@ -53,7 +53,7 @@ npm run test:runtime
 
 ## Current Scope
 
-- Full `pdh-ticket-core` flow definition is represented in `flows/pdh-ticket-core.json`.
+- Full `pdh-ticket-core` flow definition is represented in `flows/pdh-ticket-core.yaml`.
 - SQLite state is stored under `.pdh-flowchart/state.sqlite`.
 - State schema changes are tracked in the `schema_migrations` table; current schema version is `1`.
 - Codex JSONL output is saved as raw provider logs.

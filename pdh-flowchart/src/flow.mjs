@@ -1,13 +1,14 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse } from "yaml";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = dirname(here);
 
 export function loadFlow(flowId = "pdh-ticket-core") {
-  const path = join(root, "flows", `${flowId}.json`);
-  return JSON.parse(readFileSync(path, "utf8"));
+  const path = join(root, "flows", `${flowId}.yaml`);
+  return parse(readFileSync(path, "utf8"));
 }
 
 export function getInitialStep(flow, variant = "full") {
