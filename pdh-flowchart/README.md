@@ -64,6 +64,7 @@ node src/cli.mjs smoke-calc
 - AC verification guards parse the `AC 裏取り結果` markdown table and validate `verified` / `deferred` / `unverified` rows.
 - `verify <run-id>` runs PD-C-9 final verification, writes `final-verification.json`, and updates the PD-C-9 process checklist.
 - `logs <run-id> --follow` streams normalized progress events, and `show-gate <run-id>` prints the current gate summary.
+- Blocked `advance` / `run-next` output is concise by default; pass `--json` for full guard payloads.
 - `resume <run-id>` resumes the current provider step from the latest saved Codex/Claude session id.
 - `run --ticket <id>` invokes `./ticket.sh start <id>` when `ticket.sh` exists, and records a skip event otherwise.
 - After PD-C-10 approval, runtime invokes `./ticket.sh close` once other close guards pass and records `ticket-close.json`.

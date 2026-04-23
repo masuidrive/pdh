@@ -627,6 +627,7 @@ Manual smoke tests:
 - `verify <run-id>` が PD-C-9 の final verification command と AC parse 結果を `final-verification.json` に保存し、`PD-C-9. プロセスチェックリスト` を runtime 更新する。
 - `resume <run-id>` は current provider step の最新 `provider_sessions` を読み、Codex は `codex exec resume <session> -`、Claude は `--resume <session>` で再実行する。
 - `logs <run-id> --follow` が normalized progress events を stream し、`show-gate <run-id>` が current human gate summary を表示する。
+- blocked guard output は通常 concise summary を出し、`--json` 指定時だけ full guard payload を出す。
 
 ### 未解決
 

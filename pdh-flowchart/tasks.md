@@ -33,7 +33,7 @@
 - [x] `status` shows current step, provider, mode, guards, human gate state, and recent events.
 - [x] Add `logs --follow` for normalized progress events.
 - [x] Add `show-gate` to print the current gate summary.
-- [ ] Make blocked guard output concise by default, with `--json` for full detail.
+- [x] Make blocked guard output concise by default, with `--json` for full detail.
 - [ ] Add `doctor` to check Node, Codex, Claude, uv, git, and auth status.
 - [ ] Add example fixtures for a tiny fake `pdh-dev` repository.
 

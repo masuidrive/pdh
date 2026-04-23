@@ -177,14 +177,14 @@ async function cmdAdvance(argv) {
   if (actionBlock) {
     store.updateRun(runId, { status: "blocked", current_step_id: stepId });
     syncRunMetadata({ store, repo, runId });
-    console.log(JSON.stringify(actionBlock, null, 2));
+    printBlocked(actionBlock, [], options);
     process.exitCode = 1;
     return;
   }
   if (failed.length > 0) {
     store.updateRun(runId, { status: "blocked", current_step_id: stepId });
     syncRunMetadata({ store, repo, runId });
-    console.log(JSON.stringify({ status: "blocked", stepId, guardResults: evaluation.guardResults }, null, 2));
+    printBlocked({ status: "blocked", runId, stepId, reason: "guard_failed", provider: step.provider, failedGuards: failed, guardResults: evaluation.guardResults }, [], options);
     process.exitCode = 1;
     return;
   }
@@ -269,7 +269,7 @@ async function cmdRunNext(argv) {
       syncRunMetadata({ store, repo, runId });
       store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} ${result.reason}`, payload: result });
       trace.push(result);
-      console.log(JSON.stringify({ ...result, trace }, null, 2));
+      printBlocked(result, trace, options);
       return;
     }
     if (failed.length > 0) {
@@ -287,7 +287,7 @@ async function cmdRunNext(argv) {
       syncRunMetadata({ store, repo, runId });
       store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} ${reason}`, payload: result });
       trace.push(result);
-      console.log(JSON.stringify({ ...result, trace }, null, 2));
+      printBlocked(result, trace, options);
       return;
     }
     if (!outcome) {
@@ -303,7 +303,7 @@ async function cmdRunNext(argv) {
       syncRunMetadata({ store, repo, runId });
       store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} human_decision_required`, payload: result });
       trace.push(result);
-      console.log(JSON.stringify({ ...result, trace }, null, 2));
+      printBlocked(result, trace, options);
       return;
     }
 
@@ -315,7 +315,7 @@ async function cmdRunNext(argv) {
     }
   }
 
-  console.log(JSON.stringify({ status: "blocked", runId, reason: "limit_reached", limit, trace }, null, 2));
+  printBlocked({ status: "blocked", runId, reason: "limit_reached", limit }, trace, options);
   process.exitCode = 1;
 }
 
@@ -864,6 +864,46 @@ function printEvent(event, json = false) {
   const provider = event.provider ? ` ${event.provider}` : "";
   const message = event.message ? ` ${event.message}` : "";
   console.log(`#${event.id} ${event.ts} ${event.step_id ?? "-"} ${event.type}${provider}${message}`);
+}
+
+function printBlocked(result, trace = [], options = {}) {
+  if (options.json === "true") {
+    console.log(JSON.stringify({ ...result, trace }, null, 2));
+    return;
+  }
+  const step = result.stepId ? ` ${result.stepId}` : "";
+  const reason = result.reason ? ` (${result.reason})` : "";
+  console.log(`Blocked:${step}${reason}`);
+  if (result.provider) {
+    console.log(`Provider: ${result.provider}`);
+  }
+  const transitions = trace.filter((entry) => entry.status === "advanced");
+  if (transitions.length > 0) {
+    console.log(`Trace: ${transitions.map((entry) => `${entry.from} -> ${entry.to}`).join(", ")}`);
+  }
+  const failed = result.failedGuards ?? (result.guardResults ?? []).filter((guard) => guard.status === "failed");
+  if (failed.length > 0) {
+    console.log("Failed Guards:");
+    for (const guard of failed) {
+      console.log(`- ${guard.guardId}: ${guard.evidence}`);
+    }
+  }
+  if (result.message) {
+    console.log(`Message: ${result.message}`);
+  }
+  if (result.nextCommand) {
+    console.log(`Next: ${result.nextCommand}`);
+  }
+  if (result.nextCommands?.length) {
+    console.log("Next:");
+    for (const command of result.nextCommands) {
+      console.log(`- ${command}`);
+    }
+  }
+  if (result.reason === "limit_reached") {
+    console.log(`Limit: ${result.limit}`);
+  }
+  console.log("Use --json for full guard details.");
 }
 
 function normalizeEvent(event) {
