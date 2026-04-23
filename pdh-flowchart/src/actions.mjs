@@ -1,12 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { createRedactor } from "./redaction.mjs";
 
 export function createGateSummary({ repoPath, stateDir, runId, stepId }) {
   const ticketPath = join(repoPath, "current-ticket.md");
   const notePath = join(repoPath, "current-note.md");
-  const ticket = existsSync(ticketPath) ? readFileSync(ticketPath, "utf8") : "(missing current-ticket.md)";
-  const note = existsSync(notePath) ? readFileSync(notePath, "utf8") : "(missing current-note.md)";
+  const redact = createRedactor({ repoPath });
+  const ticket = redact(existsSync(ticketPath) ? readFileSync(ticketPath, "utf8") : "(missing current-ticket.md)");
+  const note = redact(existsSync(notePath) ? readFileSync(notePath, "utf8") : "(missing current-note.md)");
   const artifactDir = join(stateDir, "runs", runId, "steps", stepId);
   mkdirSync(artifactDir, { recursive: true });
   const artifactPath = join(artifactDir, "human-gate-summary.md");

@@ -2,11 +2,13 @@ import { createWriteStream, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { createProcessTimeout, spawnProvider } from "./process-control.mjs";
+import { createRedactor } from "./redaction.mjs";
 
 export async function runCodex({ cwd, prompt, rawLogPath, env = {}, bypass = true, model = null, resume = null, timeoutMs = null, killGraceMs = 5000, onEvent = () => {} }) {
   mkdirSync(dirname(rawLogPath), { recursive: true });
   const raw = createWriteStream(rawLogPath, { flags: "a" });
   const effectiveEnv = { ...process.env, ...env };
+  const redact = createRedactor({ repoPath: cwd, env: effectiveEnv });
   const args = resume
     ? ["exec", "resume", "--json", "--skip-git-repo-check"]
     : ["exec", "--json", "--cd", cwd, "--skip-git-repo-check"];
@@ -65,8 +67,9 @@ export async function runCodex({ cwd, prompt, rawLogPath, env = {}, bypass = tru
       if (!line.trim()) {
         continue;
       }
-      raw.write(`${line}\n`);
-      const normalized = normalizeCodexLine(line);
+      const redactedLine = redact(line);
+      raw.write(`${redactedLine}\n`);
+      const normalized = normalizeCodexLine(redactedLine);
       if (normalized.sessionId) {
         sessionId = normalized.sessionId;
       }
@@ -78,7 +81,7 @@ export async function runCodex({ cwd, prompt, rawLogPath, env = {}, bypass = tru
   });
 
   child.stderr.on("data", (chunk) => {
-    const text = chunk.toString("utf8");
+    const text = redact(chunk.toString("utf8"));
     stderr += text;
     raw.write(JSON.stringify({ stream: "stderr", text }) + "\n");
   });
@@ -93,8 +96,9 @@ export async function runCodex({ cwd, prompt, rawLogPath, env = {}, bypass = tru
     timeout.clear();
   }
   if (stdoutRemainder.trim()) {
-    raw.write(`${stdoutRemainder}\n`);
-    const normalized = normalizeCodexLine(stdoutRemainder);
+    const redactedLine = redact(stdoutRemainder);
+    raw.write(`${redactedLine}\n`);
+    const normalized = normalizeCodexLine(redactedLine);
     if (normalized.sessionId) {
       sessionId = normalized.sessionId;
     }

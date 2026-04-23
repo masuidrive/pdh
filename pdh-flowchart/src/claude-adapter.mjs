@@ -2,6 +2,7 @@ import { createWriteStream, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { createProcessTimeout, spawnProvider } from "./process-control.mjs";
+import { createRedactor } from "./redaction.mjs";
 
 export async function runClaude({
   cwd,
@@ -19,6 +20,8 @@ export async function runClaude({
 }) {
   mkdirSync(dirname(rawLogPath), { recursive: true });
   const raw = createWriteStream(rawLogPath, { flags: "a" });
+  const effectiveEnv = { ...process.env, ...env };
+  const redact = createRedactor({ repoPath: cwd, env: effectiveEnv });
   const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
   if (bare) {
     args.unshift("--bare");
@@ -38,7 +41,7 @@ export async function runClaude({
 
   const child = spawnProvider(process.env.CLAUDE_BIN || "claude", args, {
     cwd,
-    env: { ...process.env, ...env },
+    env: effectiveEnv,
     stdio: ["ignore", "pipe", "pipe"]
   });
 
@@ -74,8 +77,9 @@ export async function runClaude({
       if (!line.trim()) {
         continue;
       }
-      raw.write(`${line}\n`);
-      const normalized = normalizeClaudeLine(line);
+      const redactedLine = redact(line);
+      raw.write(`${redactedLine}\n`);
+      const normalized = normalizeClaudeLine(redactedLine);
       if (normalized.sessionId) {
         sessionId = normalized.sessionId;
       }
@@ -87,7 +91,7 @@ export async function runClaude({
   });
 
   child.stderr.on("data", (chunk) => {
-    const text = chunk.toString("utf8");
+    const text = redact(chunk.toString("utf8"));
     stderr += text;
     raw.write(JSON.stringify({ stream: "stderr", text }) + "\n");
   });
@@ -102,8 +106,9 @@ export async function runClaude({
     timeout.clear();
   }
   if (stdoutRemainder.trim()) {
-    raw.write(`${stdoutRemainder}\n`);
-    const normalized = normalizeClaudeLine(stdoutRemainder);
+    const redactedLine = redact(stdoutRemainder);
+    raw.write(`${redactedLine}\n`);
+    const normalized = normalizeClaudeLine(redactedLine);
     if (normalized.sessionId) {
       sessionId = normalized.sessionId;
     }

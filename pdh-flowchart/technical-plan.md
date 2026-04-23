@@ -633,6 +633,7 @@ Manual smoke tests:
 - Mutating run commands は `.pdh-flowchart/locks/<run-id>.lock` の atomic lockfile を取り、同一 run の二重 mutation を拒否する。`--lock-wait-ms` / `PDH_FLOWCHART_LOCK_WAIT_MS` で待機を指定できる。
 - Provider adapter は flow の `timeoutMinutes` または `--timeout-ms` に従って timeout event を記録し、detached process group に `SIGTERM`、猶予後に `SIGKILL` を送って orphan を残さない。
 - Provider commands は flow の `maxAttempts` または `--max-attempts` に従って failed attempt を retry し、`retry` progress event と exponential backoff (`--retry-backoff-ms`, `--retry-backoff-max-ms`) を記録する。
+- Provider raw logs と human gate summary は common token/API key pattern と repo `.env` / process env 由来の exact secret を `[REDACTED]` に置換して保存する。
 
 ### 未解決
 
