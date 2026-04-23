@@ -9,6 +9,7 @@ import { runCalcSmoke } from "./smoke-calc.mjs";
 import { createGateSummary, commitStep, ticketStart, ticketClose } from "./actions.mjs";
 import { writeStepPrompt } from "./prompt-templates.mjs";
 import { writeRuntimeMetadata } from "./metadata.mjs";
+import { captureNoteTicketPatchProposal, snapshotNoteTicketFiles } from "./patch-proposals.mjs";
 
 const emitWarning = process.emitWarning.bind(process);
 process.emitWarning = (warning, ...warningArgs) => {
@@ -419,6 +420,7 @@ async function cmdRunCodex(argv) {
   const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "codex.raw.jsonl");
   store.updateRun(runId, { status: "running", current_step_id: stepId });
   syncRunMetadata({ store, repo, runId });
+  const noteTicketBefore = snapshotNoteTicketFiles({ repoPath: repo });
   store.startStep({ runId, stepId, attempt, provider: "codex", mode: "edit" });
   const result = await runCodex({
     cwd: repo,
@@ -433,6 +435,10 @@ async function cmdRunCodex(argv) {
   store.saveProviderSession({ runId, stepId, attempt, provider: "codex", sessionId: result.sessionId, rawLogPath });
   const status = result.exitCode === 0 ? "completed" : "failed";
   store.finishStep({ runId, stepId, attempt, provider: "codex", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
+  const patchProposal = captureNoteTicketPatchProposal({ repoPath: repo, stateDir: store.stateDir, runId, stepId, attempt, before: noteTicketBefore });
+  if (patchProposal.status === "written") {
+    store.addEvent({ runId, stepId, attempt, type: "artifact", provider: "runtime", message: `note/ticket patch proposal ${patchProposal.artifactPath}`, payload: patchProposal });
+  }
   store.updateRun(runId, { status: result.exitCode === 0 ? "running" : "failed", current_step_id: stepId });
   syncRunMetadata({ store, repo, runId });
   console.log(`${runId} ${stepId} ${status}`);
@@ -548,6 +554,7 @@ async function cmdRunClaude(argv) {
   const permissionMode = options["permission-mode"] ?? (options.bypass === "true" ? "bypassPermissions" : "acceptEdits");
   store.updateRun(runId, { status: "running", current_step_id: stepId });
   syncRunMetadata({ store, repo, runId });
+  const noteTicketBefore = snapshotNoteTicketFiles({ repoPath: repo });
   store.startStep({ runId, stepId, attempt, provider: "claude", mode: step.mode ?? "review" });
   const result = await runClaude({
     cwd: repo,
@@ -565,6 +572,10 @@ async function cmdRunClaude(argv) {
   store.saveProviderSession({ runId, stepId, attempt, provider: "claude", sessionId: result.sessionId, rawLogPath });
   const status = result.exitCode === 0 ? "completed" : "failed";
   store.finishStep({ runId, stepId, attempt, provider: "claude", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
+  const patchProposal = captureNoteTicketPatchProposal({ repoPath: repo, stateDir: store.stateDir, runId, stepId, attempt, before: noteTicketBefore });
+  if (patchProposal.status === "written") {
+    store.addEvent({ runId, stepId, attempt, type: "artifact", provider: "runtime", message: `note/ticket patch proposal ${patchProposal.artifactPath}`, payload: patchProposal });
+  }
   store.updateRun(runId, { status: result.exitCode === 0 ? "running" : "failed", current_step_id: stepId });
   syncRunMetadata({ store, repo, runId });
   console.log(`${runId} ${stepId} ${status}`);

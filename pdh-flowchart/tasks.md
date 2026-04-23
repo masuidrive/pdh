@@ -20,7 +20,7 @@
 - [x] Add provider selection from `flows/pdh-ticket-core.json` instead of command-specific provider calls.
 - [x] Generate PD-C prompt templates from `pdh-dev` semantics.
 - [x] Implement runtime-controlled note/ticket metadata writes.
-- [ ] Implement provider patch proposal artifacts for note/ticket updates.
+- [x] Implement provider patch proposal artifacts for note/ticket updates.
 - [ ] Implement `ticket.sh start` integration from `run --ticket`.
 - [ ] Implement `ticket.sh close` integration after PD-C-10 approval.
 - [ ] Add structured judgement artifacts for PD-C-4, PD-C-7, and PD-C-8.

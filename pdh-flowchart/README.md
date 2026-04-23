@@ -54,6 +54,7 @@ node src/cli.mjs smoke-calc
 - PD-C provider prompt templates are generated from `pdh-dev` semantics and saved under the run step artifacts.
 - `run-provider <run-id>` selects Codex or Claude from the run's current flow step and generates the step prompt when `--prompt-file` is omitted.
 - Runtime-managed metadata blocks in `current-note.md` and `current-ticket.md` track run id, flow, status, and current step.
+- Provider changes to `current-note.md` and `current-ticket.md` are captured as `note-ticket.patch` step artifacts.
 - `run-codex <run-id>` executes the run's current step and refuses provider/step mismatches unless `--force` is provided.
 - `commit-step`, `ticket-start`, and `ticket-close` provide the first direct runtime action hooks.
 - Full transition execution is partial; current implementation focuses on Phase 0 provider/state/guard/action groundwork.
