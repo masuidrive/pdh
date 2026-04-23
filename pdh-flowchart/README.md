@@ -29,6 +29,8 @@ node src/cli.mjs ticket-start --ticket ticket-id
 node src/cli.mjs ticket-close
 node src/cli.mjs run-codex <run-id> --prompt-file prompt.md
 node src/cli.mjs run-codex --repo /path/to/repo --prompt-file prompt.md --step PD-C-6
+node src/cli.mjs run-claude <run-id> --prompt-file prompt.md
+node src/cli.mjs run-claude --repo /path/to/repo --prompt-file prompt.md --step PD-C-4
 node src/cli.mjs smoke-calc
 ```
 
@@ -39,6 +41,7 @@ node src/cli.mjs smoke-calc
 - Full `pdh-ticket-core` flow definition is represented in `flows/pdh-ticket-core.json`.
 - SQLite state is stored under `.pdh-flowchart/state.sqlite`.
 - Codex JSONL output is saved as raw provider logs.
+- Claude Code `stream-json` output is saved as raw provider logs and normalized into progress events.
 - Deterministic guard skeletons exist for note/ticket sections, commits, commands, human approval, AC verification tables, and judgement artifacts.
 - Human gate commands can create a summary artifact and record approve/reject/request-changes/cancel decisions.
 - `advance` evaluates deterministic guards and only then moves the run to the next step.

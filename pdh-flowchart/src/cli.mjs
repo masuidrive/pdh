@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { loadDotEnv } from "./env.mjs";
 import { loadFlow, getInitialStep, getStep, describeFlow, nextStep, outcomeFromDecision } from "./flow.mjs";
 import { runCodex } from "./codex-adapter.mjs";
+import { runClaude } from "./claude-adapter.mjs";
 import { runCalcSmoke } from "./smoke-calc.mjs";
 import { createGateSummary, commitStep, ticketStart, ticketClose } from "./actions.mjs";
 
@@ -34,6 +35,8 @@ try {
     await cmdRun(args);
   } else if (command === "run-codex") {
     await cmdRunCodex(args);
+  } else if (command === "run-claude") {
+    await cmdRunClaude(args);
   } else if (command === "guards") {
     await cmdGuards(args);
   } else if (command === "advance") {
@@ -70,6 +73,7 @@ Usage:
   pdh-flowchart flow [--variant full|light]
   pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5]
   pdh-flowchart run-codex [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-6]
+  pdh-flowchart run-claude [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-4]
   pdh-flowchart guards --repo DIR --step PD-C-9
   pdh-flowchart advance RUN_ID [--repo DIR] [--step PD-C-5]
   pdh-flowchart run-next RUN_ID [--repo DIR] [--limit 20]
@@ -415,6 +419,62 @@ async function cmdRunCodex(argv) {
   console.log(`Raw log: ${rawLogPath}`);
 }
 
+async function cmdRunClaude(argv) {
+  const { openStore, defaultStateDir } = await import("./db.mjs");
+  const positionalRunId = argv.find((value) => !value.startsWith("--"));
+  const optionArgs = positionalRunId ? argv.filter((value) => value !== positionalRunId) : argv;
+  const options = parseOptions(optionArgs);
+  const repo = resolve(options.repo ?? process.cwd());
+  const promptPath = resolve(required(options, "prompt-file"));
+  const prompt = readFileSync(promptPath, "utf8");
+  loadDotEnv();
+
+  const store = openStore(defaultStateDir(repo));
+  let run = positionalRunId ? store.getRun(positionalRunId) : null;
+  if (positionalRunId && !run) {
+    throw new Error(`Run not found: ${positionalRunId}`);
+  }
+  const runId = positionalRunId ?? options.run ?? store.createRun({
+    flowId: "pdh-ticket-core",
+    flowVariant: options.variant ?? "full",
+    ticketId: options.ticket ?? null,
+    repoPath: repo,
+    currentStepId: options.step ?? "PD-C-4"
+  });
+  run ??= store.getRun(runId);
+  const stepId = options.step ?? run.current_step_id ?? "PD-C-4";
+  assertCurrentStep(run, stepId, options);
+  const flow = loadFlow(options.flow ?? run.flow_id);
+  const step = getStep(flow, stepId);
+  if (step.provider !== "claude" && options.force !== "true") {
+    throw new Error(`${stepId} uses provider ${step.provider}; refusing to run Claude without --force`);
+  }
+  const attempt = Number(options.attempt ?? "1");
+  const rawLogPath = join(store.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, "claude.raw.jsonl");
+  const permissionMode = options["permission-mode"] ?? (options.bypass === "true" ? "bypassPermissions" : "acceptEdits");
+  store.updateRun(runId, { status: "running", current_step_id: stepId });
+  store.startStep({ runId, stepId, attempt, provider: "claude", mode: step.mode ?? "review" });
+  const result = await runClaude({
+    cwd: repo,
+    prompt,
+    rawLogPath,
+    bare: options.bare === "true",
+    includePartialMessages: options["include-partial-messages"] === "true",
+    model: options.model ?? null,
+    permissionMode,
+    resume: options.resume ?? null,
+    onEvent(event) {
+      store.addEvent({ runId, stepId, attempt, type: event.type, provider: "claude", message: event.message, payload: event.payload ?? {} });
+    }
+  });
+  store.saveProviderSession({ runId, stepId, attempt, provider: "claude", sessionId: result.sessionId, rawLogPath });
+  const status = result.exitCode === 0 ? "completed" : "failed";
+  store.finishStep({ runId, stepId, attempt, provider: "claude", status, exitCode: result.exitCode, summary: result.finalMessage, error: result.stderr || null });
+  store.updateRun(runId, { status: result.exitCode === 0 ? "running" : "failed", current_step_id: stepId });
+  console.log(`${runId} ${stepId} ${status}`);
+  console.log(`Raw log: ${rawLogPath}`);
+}
+
 async function cmdStatus(argv) {
   const { openStore, defaultStateDir } = await import("./db.mjs");
   const runId = argv.find((value) => !value.startsWith("--"));
@@ -581,7 +641,7 @@ function nextProviderCommand(runId, step, repo = null) {
     return `node src/cli.mjs run-codex ${runId}${repoArg} --prompt-file <prompt.md> --step ${step.id}`;
   }
   if (step.provider === "claude") {
-    return `Claude adapter is pending; create the required ${step.id} artifacts and commit, then rerun run-next.`;
+    return `node src/cli.mjs run-claude ${runId}${repoArg} --prompt-file <prompt.md> --step ${step.id}`;
   }
   return null;
 }

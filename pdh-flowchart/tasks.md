@@ -16,7 +16,7 @@
 ## Phase 1: Full Flow MVP
 
 - [x] Implement a single `run-next` loop that executes the current step, evaluates guards, and advances until blocked.
-- [ ] Add Claude adapter with `stream-json` normalization and raw log capture.
+- [x] Add Claude adapter with `stream-json` normalization and raw log capture.
 - [ ] Add provider selection from `flows/pdh-ticket-core.json` instead of command-specific provider calls.
 - [ ] Generate PD-C prompt templates from `pdh-dev` semantics.
 - [ ] Implement runtime-controlled note/ticket metadata writes.
