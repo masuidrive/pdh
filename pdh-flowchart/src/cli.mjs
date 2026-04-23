@@ -155,9 +155,15 @@ async function cmdAdvance(argv) {
   }
   assertCurrentStep(run, stepId, options);
   const step = getStep(flow, stepId);
-  const evaluation = await evaluateCurrentStep({ store, flow, runId, stepId, repo });
+  const { evaluation, failed, actionBlock } = await evaluateStepWithRuntimeActions({ store, flow, runId, stepId, repo, step });
   const outcome = outcomeForStep(step, evaluation.humanGate);
-  const failed = blockingGuardFailures(step, evaluation.guardResults, evaluation.humanGate);
+  if (actionBlock) {
+    store.updateRun(runId, { status: "blocked", current_step_id: stepId });
+    syncRunMetadata({ store, repo, runId });
+    console.log(JSON.stringify(actionBlock, null, 2));
+    process.exitCode = 1;
+    return;
+  }
   if (failed.length > 0) {
     store.updateRun(runId, { status: "blocked", current_step_id: stepId });
     syncRunMetadata({ store, repo, runId });
@@ -238,9 +244,17 @@ async function cmdRunNext(argv) {
       }
     }
 
-    const evaluation = await evaluateCurrentStep({ store, flow, runId, stepId, repo });
+    const { evaluation, failed, actionBlock } = await evaluateStepWithRuntimeActions({ store, flow, runId, stepId, repo, step });
     const outcome = outcomeForStep(step, evaluation.humanGate);
-    const failed = blockingGuardFailures(step, evaluation.guardResults, evaluation.humanGate);
+    if (actionBlock) {
+      const result = actionBlock;
+      store.updateRun(runId, { status: "blocked", current_step_id: stepId });
+      syncRunMetadata({ store, repo, runId });
+      store.addEvent({ runId, stepId, type: "blocked", provider: "runtime", message: `${stepId} ${result.reason}`, payload: result });
+      trace.push(result);
+      console.log(JSON.stringify({ ...result, trace }, null, 2));
+      return;
+    }
     if (failed.length > 0) {
       const reason = step.provider === "runtime" ? "guard_failed" : "provider_step_requires_execution";
       const result = {
@@ -703,7 +717,8 @@ async function evaluateCurrentStep({ store, flow, runId, stepId, repo }) {
   const guardResults = evaluateStepGuards(flow, stepId, {
     repoPath: repo,
     artifacts,
-    humanDecision: humanGate?.decision ?? null
+    humanDecision: humanGate?.decision ?? null,
+    ticketClosed: hasTicketClosedArtifact(store.stateDir, runId, stepId)
   });
   for (const result of guardResults) {
     store.addEvent({
@@ -716,6 +731,60 @@ async function evaluateCurrentStep({ store, flow, runId, stepId, repo }) {
     });
   }
   return { humanGate, artifacts, guardResults };
+}
+
+async function evaluateStepWithRuntimeActions({ store, flow, runId, stepId, repo, step }) {
+  let evaluation = await evaluateCurrentStep({ store, flow, runId, stepId, repo });
+  let failed = blockingGuardFailures(step, evaluation.guardResults, evaluation.humanGate);
+  if (shouldCloseTicket(step, evaluation.humanGate, failed)) {
+    const closeResult = closeTicketAfterApproval({ store, repo, runId, stepId });
+    if (closeResult.status === "missing") {
+      return {
+        evaluation,
+        failed,
+        actionBlock: {
+          status: "blocked",
+          runId,
+          stepId,
+          reason: "ticket_close_unavailable",
+          provider: "runtime",
+          failedGuards: failed,
+          message: "ticket.sh is required to close PD-C-10 but was not found"
+        }
+      };
+    }
+    evaluation = await evaluateCurrentStep({ store, flow, runId, stepId, repo });
+    failed = blockingGuardFailures(step, evaluation.guardResults, evaluation.humanGate);
+  }
+  return { evaluation, failed, actionBlock: null };
+}
+
+function shouldCloseTicket(step, humanGate, failed) {
+  return step.id === "PD-C-10"
+    && humanGate?.decision === "approved"
+    && failed.length === 1
+    && failed[0].type === "ticket_closed";
+}
+
+function closeTicketAfterApproval({ store, repo, runId, stepId }) {
+  const artifactDir = join(store.stateDir, "runs", runId, "steps", stepId);
+  const artifactPath = join(artifactDir, "ticket-close.json");
+  if (existsSync(artifactPath)) {
+    return { status: "already_closed", artifactPath };
+  }
+  if (!existsSync(join(repo, "ticket.sh"))) {
+    return { status: "missing" };
+  }
+  const result = ticketClose({ repoPath: repo });
+  mkdirSync(artifactDir, { recursive: true });
+  const body = { status: "closed", at: new Date().toISOString(), result };
+  writeFileSync(artifactPath, JSON.stringify(body, null, 2));
+  store.addEvent({ runId, stepId, type: "tool_finished", provider: "runtime", message: "ticket.sh close", payload: { ...body, artifactPath } });
+  return { status: "closed", artifactPath };
+}
+
+function hasTicketClosedArtifact(stateDir, runId, stepId) {
+  return existsSync(join(stateDir, "runs", runId, "steps", stepId, "ticket-close.json"));
 }
 
 function blockingGuardFailures(step, guardResults, humanGate) {

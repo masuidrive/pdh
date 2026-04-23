@@ -621,6 +621,7 @@ Manual smoke tests:
 - runtime が `current-note.md` / `current-ticket.md` の管理 metadata block を更新し、run id、flow、status、current step を同期する。
 - provider 実行前後の `current-note.md` / `current-ticket.md` 差分を `note-ticket.patch` artifact として保存する。
 - `run --ticket <id>` は `ticket.sh` がある repo で `./ticket.sh start <id>` を実行し、ない repo では skip event を残す。
+- PD-C-10 approval 後、AC/gate guards が通り `ticket_closed` だけが残った場合に `./ticket.sh close` を実行し、`ticket-close.json` artifact を guard evidence にする。
 
 ### 未解決
 
