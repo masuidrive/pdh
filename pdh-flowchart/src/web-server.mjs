@@ -931,6 +931,82 @@ function renderHtml() {
     return flow?.steps?.find((step) => step.id === state.selectedId) || null;
   }
 
+  function viewerMock(stepId) {
+    const common = {
+      role: '開発者',
+      question: 'この step を次に進めるために、何が足りているかを見る。',
+      show: ['この step の要点', '次に実行する CLI', 'この step 固有の証跡'],
+      ready: ['次 step に進める条件が明確', '不足があれば何を埋めるか分かる'],
+      avoid: ['過去 step の長い履歴']
+    };
+    const table = {
+      'PD-C-2': {
+        role: '実装担当',
+        question: 'どこを読めば blast radius とリスクを固められるか。',
+        show: ['変更対象ファイル', '影響範囲', '既知リスク', '後続 planning に必要な未解決点'],
+        ready: ['計画に必要な事実が揃っている', '追加で見るべきファイルが明確'],
+        avoid: ['過去の gate 履歴', '細かい provider event 全件']
+      },
+      'PD-C-3': {
+        role: '実装担当',
+        question: 'この ticket で実際にどのファイルをどう触るか。',
+        show: ['実装方針', '変更ファイル', 'テスト方針', 'リスク対応', 'Implementation Notes に残す判断'],
+        ready: ['PD-C-6 がそのまま着手できる', '人に相談しないと決められない点が残っていない'],
+        avoid: ['過去 step の history 一覧']
+      },
+      'PD-C-4': {
+        role: 'レビュー担当',
+        question: 'この計画で本当に実装に入ってよいか。',
+        show: ['計画要約', '想定 diff surface', '検証不足', 'Critical/Major 指摘'],
+        ready: ['No Critical/Major か、差し戻し理由が明確'],
+        avoid: ['実装ログの時系列']
+      },
+      'PD-C-5': {
+        role: '承認者',
+        question: 'この計画で実装に入ってよいか。',
+        show: ['計画サマリ', '変更対象', '主要リスク', 'テスト計画', 'approve / request-changes の CLI'],
+        ready: ['承認の判断材料がこの画面で足りる'],
+        avoid: ['生ログ全件', 'step history']
+      },
+      'PD-C-6': {
+        role: '実装担当',
+        question: 'いま何を実装し、何で止まっているか。',
+        show: ['承認済み計画の要点', '現在の provider 結果', '未通過 guard', '必要な test / commit', '割り込み質問'],
+        ready: ['次の編集か次の CLI が明確', 'blocker があれば理由が分かる'],
+        avoid: ['古い gate 決定の履歴']
+      },
+      'PD-C-7': {
+        role: 'レビュー担当',
+        question: 'この実装に Critical/Major が残っていないか。',
+        show: ['diff summary', 'テスト結果', 'レビュー指摘', '設計逸脱', 'security / data-integrity の懸念'],
+        ready: ['No Critical/Major か、PD-C-6 に戻す理由が明確'],
+        avoid: ['過去 step の長文ノート']
+      },
+      'PD-C-8': {
+        role: 'PdM / 批判的レビュアー',
+        question: '正しく動いていても close すべきでない理由が残っていないか。',
+        show: ['Product AC ごとの到達状況', '目的ずれ', '未検証の仮定', 'follow-up が必要な点'],
+        ready: ['close してよいか、まだ早いかが判断できる'],
+        avoid: ['実装イベントの生時系列']
+      },
+      'PD-C-9': {
+        role: '完了確認者',
+        question: 'AC 裏取りと最終検証の証跡が揃っているか。',
+        show: ['AC table', 'verify 結果', '外部 surface の確認結果', 'deferred / unverified の扱い'],
+        ready: ['PD-C-10 に進める根拠が揃っている'],
+        avoid: ['古い review round の全履歴']
+      },
+      'PD-C-10': {
+        role: '承認者',
+        question: 'この ticket を close してよいか。',
+        show: ['AC 裏取りの最終状態', '残リスク', 'close 前 cleanup の結果', 'approve / reject の CLI'],
+        ready: ['close 判断に必要な情報が一画面で足りる'],
+        avoid: ['step history', '細かい provider raw log']
+      }
+    };
+    return table[stepId] || common;
+  }
+
   function fetchState() {
     return fetch('/api/state', { cache: 'no-store' }).then((response) => response.json());
   }
@@ -1142,13 +1218,30 @@ function renderHtml() {
       html += '</div></div>';
     }
 
-    if (state.data.history?.length) {
-      html += '<div class="detail-section"><div class="detail-section-title">Step History</div><div class="history-list">';
-      state.data.history.slice(-12).reverse().forEach((entry) => {
-        html += '<div class="history-item"><span class="history-text">' + esc(entry.stepId + ' | ' + entry.status + ' | ' + entry.summary) + '</span><span class="history-meta">' + esc(entry.updatedAt) + '</span></div>';
-      });
-      html += '</div></div>';
-    }
+    const mock = viewerMock(step.id);
+    html += '<div class="detail-section"><div class="detail-section-title">実行結果 Mock</div>' +
+      '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
+      '<div><strong>誰が見る:</strong> ' + esc(mock.role) + '</div>' +
+      '<div style="margin-top:6px;"><strong>判断したいこと:</strong> ' + esc(mock.question) + '</div>' +
+      '</div></div>';
+
+    html += '<div class="detail-section"><div class="detail-section-title">この step で出すべきもの Mock</div><div class="artifacts">';
+    mock.show.forEach((item) => {
+      html += '<div class="artifact"><span class="artifact-name">' + esc(item) + '</span><span class="artifact-size">show</span></div>';
+    });
+    html += '</div></div>';
+
+    html += '<div class="detail-section"><div class="detail-section-title">揃っていれば進める Mock</div><div class="artifacts">';
+    mock.ready.forEach((item) => {
+      html += '<div class="artifact"><span class="artifact-name">' + esc(item) + '</span><span class="artifact-size">ready</span></div>';
+    });
+    html += '</div></div>';
+
+    html += '<div class="detail-section"><div class="detail-section-title">ここでは出さない Mock</div><div class="artifacts">';
+    mock.avoid.forEach((item) => {
+      html += '<div class="artifact"><span class="artifact-name">' + esc(item) + '</span><span class="artifact-size">omit</span></div>';
+    });
+    html += '</div></div>';
 
     html += '<div class="detail-section"><div class="detail-section-title">Repo</div><div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
       '<div>note: <span class="mono">' + esc(state.data.files.note) + '</span></div>' +
