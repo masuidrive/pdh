@@ -138,6 +138,7 @@ Provider prompts now include:
 - required guards
 - canonical file paths for `current-ticket.md` and `current-note.md`
 - a YAML contract for step-local UI output written to `.pdh-flowchart/.../ui-output.yaml`
+- a review-step judgement block in `ui-output.yaml` when the step guard requires one
 
 They do not inline the full contents of `current-ticket.md` or `current-note.md`.
 
@@ -223,11 +224,12 @@ node src/cli.mjs web --repo . --host 0.0.0.0 --port 8765
 The UI shows:
 
 - current step and next CLI action
-- Full / Light flow
+- the active flow variant for the current run
 - per-step progress
 - step-specific viewer / decision contract from flow YAML
 - provider-written semantic UI output from `ui-output.yaml`
 - runtime-written fact summary from `ui-runtime.yaml`
+- clickable detail rows for `mustShow` items backed by note, ticket, gate, or runtime evidence
 - gate or interruption state
 - recent events
 - step artifacts

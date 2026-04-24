@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { parse, stringify } from "yaml";
-import { loadJudgements } from "./judgements.mjs";
+import { defaultJudgementKind, loadJudgements } from "./judgements.mjs";
 import { loadStepInterruptions } from "./interruptions.mjs";
 import { collectStepArtifacts, latestAttemptResult } from "./runtime-state.mjs";
 
@@ -50,10 +50,24 @@ export function writeStepUiRuntime({ repoPath, runtime, step, guardResults = nul
   return { artifactPath: path, data };
 }
 
+export function judgementFromUiOutput(stepId, uiOutput) {
+  const kind = asString(uiOutput?.judgement?.kind) || defaultJudgementKind(stepId);
+  const status = asString(uiOutput?.judgement?.status);
+  if (!kind || !status) {
+    return null;
+  }
+  return {
+    kind,
+    status,
+    summary: asString(uiOutput?.judgement?.summary)
+  };
+}
+
 export function renderUiOutputPromptSection({ run, step }) {
   const relativePath = `.pdh-flowchart/runs/${run.id}/steps/${step.id}/ui-output.yaml`;
   const contract = stepUiContract(step);
-  const template = stringify({
+  const judgementKind = defaultJudgementKind(step.id);
+  const templateObject = {
     summary: [
       "2-4 concrete bullets about what changed or what was found in this step"
     ],
@@ -64,7 +78,15 @@ export function renderUiOutputPromptSection({ run, step }) {
       "Concrete conditions that mean this step is ready to advance"
     ],
     notes: "Optional free text. Use a block scalar when needed."
-  }).trimEnd();
+  };
+  if (judgementKind) {
+    templateObject.judgement = {
+      kind: judgementKind,
+      status: "Exact guard-facing status for this review step",
+      summary: "Short rationale for that judgement"
+    };
+  }
+  const template = stringify(templateObject).trimEnd();
 
   return [
     "## UI Output Artifact",
@@ -77,6 +99,9 @@ export function renderUiOutputPromptSection({ run, step }) {
     "- `risks`: unresolved risks only. Use `[]` when there are none.",
     "- `ready_when`: concrete conditions that mean this step is ready to advance.",
     "- `notes`: optional free text. Use a block scalar when it helps.",
+    ...(judgementKind
+      ? [`- \`judgement\`: required for this review step. Use \`kind: ${judgementKind}\`, the exact guard-facing \`status\`, and a short \`summary\`.`]
+      : []),
     "",
     "Step-specific contract:",
     `- viewer: ${contract.viewer || "(unspecified)"}`,
@@ -183,7 +208,14 @@ function normalizeUiOutput(value) {
     summary: asStringList(source.summary),
     risks: asStringList(source.risks),
     readyWhen: asStringList(source.ready_when ?? source.readyWhen),
-    notes: asString(source.notes)
+    notes: asString(source.notes),
+    judgement: source.judgement
+      ? {
+          kind: asString(source.judgement.kind),
+          status: asString(source.judgement.status),
+          summary: asString(source.judgement.summary)
+        }
+      : null
   };
 }
 

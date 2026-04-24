@@ -66,6 +66,44 @@ SH
   printf '%s\n' "$path"
 }
 
+write_fake_claude_success() {
+  local path="$TMP_ROOT/fake-claude-success.sh"
+  cat >"$path" <<'SH'
+#!/usr/bin/env bash
+prompt=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-p" ]; then
+    prompt="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+ui_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*ui-output.yaml\)`\.$/\1/p' | head -1)"
+if [ -n "$ui_path" ]; then
+  mkdir -p "$(dirname "$ui_path")"
+  cat >"$ui_path" <<'YAML'
+summary:
+  - fake review summary
+risks: []
+ready_when:
+  - fake review ready condition
+notes: |
+  fake review notes
+judgement:
+  kind: plan_review
+  status: No Critical/Major
+  summary: fake review accepted
+YAML
+fi
+printf '%s\n' '{"type":"system","subtype":"init","session_id":"fake-session"}'
+printf '%s\n' '{"type":"assistant","message":{"content":"fake review success"}}'
+printf '%s\n' '{"type":"result","subtype":"success","result":"fake review success"}'
+SH
+  chmod +x "$path"
+  printf '%s\n' "$path"
+}
+
 test_frontmatter_run() {
   local repo
   repo="$(seed_repo frontmatter)"
@@ -123,6 +161,17 @@ test_auto_provider_run() {
   test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/ui-output.yaml"
   test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/ui-runtime.yaml"
   grep -q "guard_failed" "$TMP_ROOT/$run_id.auto-provider.txt"
+}
+
+test_auto_review_judgement() {
+  local repo run_id fake
+  repo="$(seed_repo auto-review-judgement)"
+  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-4 | sed -n '1p')"
+  fake="$(write_fake_claude_success)"
+  CLAUDE_BIN="$fake" node "$ROOT/src/cli.mjs" run-provider --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.review.txt"
+  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/ui-output.yaml"
+  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
+  grep -q '"status": "No Critical/Major"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
 }
 
 test_failed_run() {
@@ -222,6 +271,8 @@ const mermaid = await (await fetch(`${url}api/flow.mmd`)).text();
 if (!mermaid.includes("PD-C-6") || !mermaid.includes("実装")) throw new Error("mermaid flow labels missing");
 const html = await (await fetch(url)).text();
 if (!html.includes("PDH Dev Dashboard")) throw new Error("html shell missing");
+if (html.includes("flow-toggle")) throw new Error("flow toggle should not be rendered");
+if (!html.includes("detail-modal")) throw new Error("detail modal shell missing");
 const mutation = await fetch(`${url}api/state`, { method: "POST" });
 if (mutation.status !== 405) throw new Error(`mutation endpoint should be rejected, got ${mutation.status}`);
 NODE
@@ -234,6 +285,7 @@ test_prompt_context
 test_stop_after_step
 test_blocked_run
 test_auto_provider_run
+test_auto_review_judgement
 test_failed_run
 test_resumed_run
 test_interrupted_run

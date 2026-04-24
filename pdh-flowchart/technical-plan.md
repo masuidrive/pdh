@@ -194,6 +194,7 @@ The prompt includes:
 - required guards
 - canonical file references for `current-ticket.md` and `current-note.md`
 - a YAML contract for `.pdh-flowchart/.../ui-output.yaml`
+- a required judgement payload for review steps whose guards consume judgement artifacts
 
 The prompt does not inline the full contents of canonical files. The provider is expected to read those files directly inside the repo.
 

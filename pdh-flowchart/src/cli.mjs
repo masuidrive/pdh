@@ -18,7 +18,7 @@ import { withRunLock } from "./locks.mjs";
 import { answerLatestInterruption, createInterruption, latestOpenInterruption, loadStepInterruptions, renderInterruptionMarkdown } from "./interruptions.mjs";
 import { writeFailureSummary } from "./failure-summary.mjs";
 import { appendStepHistoryEntry, loadCurrentNote, saveCurrentNote } from "./note-state.mjs";
-import { writeStepUiRuntime } from "./step-ui.mjs";
+import { judgementFromUiOutput, loadStepUiOutput, writeStepUiRuntime } from "./step-ui.mjs";
 import {
   appendProgressEvent,
   cleanupRunArtifacts,
@@ -1006,6 +1006,14 @@ async function executeProviderStep({ repo, runtime, step, options }) {
         payload: patchProposal
       });
     }
+    if (status === "completed") {
+      materializeJudgementFromUiOutput({
+        repo,
+        runtime,
+        step,
+        providerResult: result
+      });
+    }
     if (status === "completed" || attempt >= maxAttempts) {
       break;
     }
@@ -1045,6 +1053,54 @@ async function executeProviderStep({ repo, runtime, step, options }) {
     result: lastResult,
     failureSummary
   };
+}
+
+function materializeJudgementFromUiOutput({ repo, runtime, step, providerResult }) {
+  const defaultKind = defaultJudgementKind(step.id);
+  if (!defaultKind || !runtime.run?.id) {
+    return null;
+  }
+  const existing = loadJudgements({
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    stepId: step.id
+  });
+  if (existing.some((item) => item.kind === defaultKind)) {
+    return null;
+  }
+  const uiOutput = loadStepUiOutput({
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    stepId: step.id
+  });
+  const judgement = judgementFromUiOutput(step.id, uiOutput);
+  if (!judgement) {
+    return null;
+  }
+  const summary = judgement.summary || uiOutput?.notes || providerResult?.finalMessage || "";
+  const result = writeJudgement({
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    stepId: step.id,
+    kind: judgement.kind,
+    status: judgement.status,
+    summary,
+    source: `${step.provider}:ui-output`,
+    details: {
+      provider: step.provider,
+      notes: uiOutput?.notes || null
+    }
+  });
+  appendProgressEvent({
+    repoPath: repo,
+    runId: runtime.run.id,
+    stepId: step.id,
+    type: "artifact",
+    provider: "runtime",
+    message: `judgement ${result.judgement.kind}: ${result.judgement.status}`,
+    payload: { artifactPath: result.artifactPath, judgement: result.judgement }
+  });
+  return result;
 }
 
 function evaluateCurrentGuards({ repo, runtime, step, gate = null }) {

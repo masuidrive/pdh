@@ -7,7 +7,7 @@ import { evaluateAcVerificationTable } from "./ac-verification.mjs";
 import { buildFlowView, getStep, renderMermaidFlow } from "./flow.mjs";
 import { loadStepInterruptions } from "./interruptions.mjs";
 import { loadJudgements } from "./judgements.mjs";
-import { loadCurrentNote, parseStepHistory } from "./note-state.mjs";
+import { extractSection, loadCurrentNote, parseStepHistory } from "./note-state.mjs";
 import { createRedactor } from "./redaction.mjs";
 import { loadStepUiOutput, loadStepUiRuntime } from "./step-ui.mjs";
 import { hasCompletedProviderAttempt, latestAttemptResult, latestHumanGate, loadRuntime, readProgressEvents, stepDir } from "./runtime-state.mjs";
@@ -61,6 +61,7 @@ function collectState({ repo }) {
   const runtime = loadRuntime(repo);
   const redactor = createRedactor({ repoPath: repo });
   const note = runtime.note;
+  const ticketText = existsSync(join(repo, "current-ticket.md")) ? readFileSync(join(repo, "current-ticket.md"), "utf8") : "";
   const run = runtime.run;
   const currentStep = run?.current_step_id ? getStep(runtime.flow, run.current_step_id) : null;
   const currentGate = run?.id && currentStep ? latestHumanGate({ stateDir: runtime.stateDir, runId: run.id, stepId: currentStep.id }) : null;
@@ -72,7 +73,7 @@ function collectState({ repo }) {
   const ac = evaluateAcVerificationTable({ repoPath: repo, allowUnverified: true });
   const variants = Object.fromEntries(["full", "light"].map((variant) => [
     variant,
-    buildVariantState({ repo, runtime, variant, history, events, redactor })
+    buildVariantState({ repo, runtime, variant, history, events, redactor, noteBody: note.body, ticketText, ac })
   ]));
   const activeVariant = run?.flow_variant ?? note.pdh.variant ?? "full";
   const summary = buildSummary({ runtime, activeVariant: variants[activeVariant], ac, currentStep, currentGate, interruptions });
@@ -112,10 +113,11 @@ function collectState({ repo }) {
   };
 }
 
-function buildVariantState({ repo, runtime, variant, history, events, redactor }) {
+function buildVariantState({ repo, runtime, variant, history, events, redactor, noteBody, ticketText, ac }) {
   const view = buildFlowView(runtime.flow, variant, runtime.run?.current_step_id ?? null);
   const sequenceSet = new Set(view.sequence);
   const historyByStep = latestHistoryByStep(history);
+  const ticketImplementationNotes = redactSection(extractSection(ticketText, "Implementation Notes"), redactor);
   const steps = view.steps.map((step, index) => {
     const historyEntry = historyByStep.get(step.id) ?? null;
     const current = runtime.run?.current_step_id === step.id;
@@ -146,6 +148,13 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor }
       uiContract: step.ui ?? null,
       uiOutput: uiOutput ? redactObject(uiOutput, redactor) : null,
       uiRuntime: uiRuntime ? redactObject(uiRuntime, redactor) : null,
+      noteSection: redactSection(resolveStepNoteSection(noteBody, step.id), redactor),
+      ticketImplementationNotes,
+      acSummary: {
+        verified: ac.counts?.verified ?? 0,
+        deferred: ac.counts?.deferred ?? 0,
+        unverified: ac.counts?.unverified ?? 0
+      },
       historyEntry,
       latestAttempt: attempt ? redactObject(attempt, redactor) : null,
       gate: gate ? gatePayload(gate, redactor) : null,
@@ -292,6 +301,25 @@ function stepMeta(step) {
     provider: step.provider,
     mode: step.mode
   };
+}
+
+function resolveStepNoteSection(noteBody, stepId) {
+  const headingByStep = {
+    "PD-C-2": "PD-C-2. 調査結果",
+    "PD-C-3": "PD-C-3. 計画",
+    "PD-C-4": "PD-C-4. 計画レビュー結果",
+    "PD-C-6": "PD-C-6",
+    "PD-C-7": "PD-C-7. 品質検証結果",
+    "PD-C-8": "PD-C-8. 目的妥当性確認",
+    "PD-C-9": "PD-C-9. プロセスチェックリスト",
+    "PD-C-10": "PD-C-10"
+  };
+  const heading = headingByStep[stepId];
+  return heading ? extractSection(noteBody, heading) ?? "" : "";
+}
+
+function redactSection(text, redactor) {
+  return clampText(redactor(String(text ?? "")), 16000);
 }
 
 function describeNextAction({ repo, runtime, currentStep, currentGate, interruptions }) {
@@ -577,7 +605,7 @@ function renderHtml() {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.45; transform: scale(1.3); }
   }
-  .main { display: grid; grid-template-columns: 1fr 380px; min-height: 0; flex: 1; }
+  .main { display: grid; grid-template-columns: minmax(280px, 0.82fr) minmax(620px, 1.68fr); min-height: 0; flex: 1; }
   .panel-left { padding: 18px 20px 32px; border-right: 1px solid var(--border); min-width: 0; }
   .panel-right { background: var(--surface); min-width: 0; }
   .summary {
@@ -638,22 +666,6 @@ function renderHtml() {
   .overview-node:hover { transform: translateY(-1px); border-color: var(--border-strong); }
   .overview-node.selected { outline: 2px solid #1c1b18; outline-offset: 1px; }
   .overview-arrow { color: var(--text-dim); flex: 0 0 auto; font-size: 12px; }
-  .flow-toggle {
-    display: inline-flex; background: var(--surface-2);
-    border-radius: 8px; padding: 3px; gap: 2px;
-  }
-  .flow-toggle button {
-    border: 0; background: transparent;
-    padding: 5px 12px; border-radius: 6px;
-    cursor: pointer; color: var(--text-muted);
-    font-family: inherit; font-size: 12px; font-weight: 500;
-    white-space: nowrap;
-  }
-  .flow-toggle button.on {
-    background: var(--bg); color: var(--text);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  }
-  .flow-toggle button .count { color: var(--text-dim); font-weight: 400; margin-left: 4px; }
   .pdc-list { display: flex; flex-direction: column; gap: 8px; }
   .node {
     position: relative; background: var(--bg);
@@ -840,6 +852,32 @@ function renderHtml() {
     min-width: 0;
   }
   .artifact-size, .history-meta { color: var(--text-muted); font-size: 11px; flex: 0 0 auto; }
+  .artifact-button {
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .artifact-button:hover { border-color: var(--border-strong); }
+  .artifact-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+  }
+  .artifact-preview {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .artifact-source {
+    color: var(--text-muted);
+    font-size: 11px;
+    flex: 0 0 auto;
+  }
   .review-table { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .review-row {
     display: grid;
@@ -864,6 +902,67 @@ function renderHtml() {
     font-family: ui-monospace, 'SF Mono', Menlo, monospace;
     background: var(--surface-2);
     padding: 1px 5px; border-radius: 3px;
+  }
+  .detail-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(28, 27, 24, 0.38);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 20;
+  }
+  .detail-modal.hidden { display: none; }
+  .detail-dialog {
+    width: min(860px, 100%);
+    max-height: 88vh;
+    overflow: auto;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+  }
+  .detail-dialog-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-dialog-title {
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .detail-dialog-close {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font: inherit;
+    color: var(--text-muted);
+  }
+  .detail-dialog-body { padding: 16px; }
+  .detail-dialog-grid {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 8px 12px;
+    font-size: 12px;
+    margin-bottom: 14px;
+  }
+  .detail-dialog-grid .key { color: var(--text-muted); }
+  .detail-dialog-pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    padding: 14px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
   }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -909,18 +1008,23 @@ function renderHtml() {
         </div>
         <div class="section-head">
           <div class="section-title">PD-C: Ticket 開発<span class="subtitle">ステップ詳細</span></div>
-          <div class="flow-toggle" id="flow-toggle">
-            <button class="on" data-flow="full">Full<span class="count" id="full-count"></span></button>
-            <button data-flow="light">Light<span class="count" id="light-count"></span></button>
-          </div>
         </div>
         <div class="flow-container"><div class="pdc-list" id="pdc-list"></div></div>
       </section>
       <aside class="panel-right"><div class="detail" id="detail"></div></aside>
     </div>
   </div>
+  <div class="detail-modal hidden" id="detail-modal">
+    <div class="detail-dialog" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title">
+      <div class="detail-dialog-head">
+        <div class="detail-dialog-title" id="detail-modal-title">Detail</div>
+        <button class="detail-dialog-close" id="detail-modal-close" type="button">Close</button>
+      </div>
+      <div class="detail-dialog-body" id="detail-modal-body"></div>
+    </div>
+  </div>
 <script>
-  const state = { data: null, currentFlow: 'full', selectedId: null };
+  const state = { data: null, selectedId: null, modalItem: null };
 
   function esc(value) {
     return String(value ?? '')
@@ -939,7 +1043,8 @@ function renderHtml() {
   }
 
   function variantData() {
-    return state.data?.flow?.variants?.[state.currentFlow];
+    const activeVariant = state.data?.flow?.activeVariant;
+    return activeVariant ? state.data?.flow?.variants?.[activeVariant] : null;
   }
 
   function selectedStep() {
@@ -951,31 +1056,68 @@ function renderHtml() {
     return Array.isArray(value) ? value.filter(Boolean) : [];
   }
 
+  function textPreview(value) {
+    return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 140) || '未記録';
+  }
+
+  function joinedText(lines) {
+    return listOf(lines).join('\\n');
+  }
+
+  function buildShowItem(label, type, source, detail) {
+    return {
+      label,
+      type,
+      source,
+      detail: String(detail ?? '').trim(),
+      preview: textPreview(detail)
+    };
+  }
+
+  function resolveContractItem(label, step, nextAction) {
+    const lower = String(label).toLowerCase();
+    const noteSection = step.noteSection || '';
+    const ticketNotes = step.ticketImplementationNotes || '';
+    const changedFiles = joinedText(step.uiRuntime?.changedFiles);
+    const diffStat = joinedText(step.uiRuntime?.diffStat);
+    const risks = joinedText(step.uiOutput?.risks);
+    const summary = joinedText(step.uiOutput?.summary);
+    const ready = joinedText(step.uiOutput?.readyWhen);
+    const commands = joinedText(nextAction?.commands);
+    const judgements = listOf(step.judgements).map((item) => {
+      const summaryLine = item.summary ? ' - ' + item.summary : '';
+      return item.kind + ': ' + item.status + summaryLine;
+    }).join('\\n');
+
+    if (lower.includes('変更ファイル')) {
+      return buildShowItem(label, 'changed_files', 'git diff --name-only', changedFiles || diffStat);
+    }
+    if (lower.includes('diff')) {
+      return buildShowItem(label, 'diff', 'git diff --stat', diffStat || changedFiles);
+    }
+    if (lower.includes('risk') || lower.includes('リスク') || lower.includes('懸念')) {
+      return buildShowItem(label, 'risks', 'ui-output.yaml / current-note.md', risks || noteSection);
+    }
+    if (lower.includes('テスト') || lower.includes('verify') || lower.includes('検証')) {
+      return buildShowItem(label, 'verification', 'current-note.md / ui-output.yaml', ready || noteSection);
+    }
+    if (lower.includes('設計判断') || lower.includes('durable')) {
+      return buildShowItem(label, 'ticket_notes', 'current-ticket.md#Implementation Notes', ticketNotes);
+    }
+    if (lower.includes('approve') || lower.includes('reject') || lower.includes('cli')) {
+      return buildShowItem(label, 'commands', 'CLI', commands);
+    }
+    if (lower.includes('review') || lower.includes('指摘') || lower.includes('目的ずれ') || lower.includes('security')) {
+      return buildShowItem(label, 'review', 'judgements / current-note.md', judgements || noteSection);
+    }
+    if (lower.includes('ac')) {
+      return buildShowItem(label, 'ac', 'AC summary', 'verified: ' + (step.acSummary?.verified || 0) + '\\ndeferred: ' + (step.acSummary?.deferred || 0) + '\\nunverified: ' + (step.acSummary?.unverified || 0) + (noteSection ? '\\n\\n' + noteSection : ''));
+    }
+    return buildShowItem(label, 'note', 'current-note.md', noteSection || summary || ticketNotes);
+  }
+
   function stepShowItems(step, nextAction) {
-    const items = [];
-    const contract = step.uiContract || {};
-    listOf(contract.mustShow).forEach((item) => items.push({ label: item, kind: 'contract' }));
-    listOf(step.uiOutput?.summary).forEach((item) => items.push({ label: item, kind: 'summary' }));
-    listOf(step.uiOutput?.risks).forEach((item) => items.push({ label: item, kind: 'risk' }));
-    listOf(step.uiRuntime?.changedFiles).forEach((item) => items.push({ label: item, kind: 'changed file' }));
-    listOf(step.uiRuntime?.diffStat).forEach((item) => items.push({ label: item, kind: 'diff' }));
-    if (step.uiRuntime?.latestAttempt?.status) {
-      items.push({
-        label: (step.uiRuntime.latestAttempt.provider || 'provider') + ' attempt ' + (step.uiRuntime.latestAttempt.attempt || '?') + ': ' + step.uiRuntime.latestAttempt.status,
-        kind: 'attempt'
-      });
-    }
-    listOf(step.uiRuntime?.judgements).forEach((item) => {
-      items.push({ label: item.kind + ': ' + item.status, kind: 'judgement' });
-    });
-    if (step.uiRuntime?.gate?.summary) {
-      items.push({ label: step.uiRuntime.gate.summary, kind: 'gate' });
-    }
-    listOf(step.uiRuntime?.interruptions).forEach((item) => {
-      items.push({ label: item.message || item.artifact || item.id, kind: 'interrupt' });
-    });
-    listOf(nextAction?.commands).forEach((item) => items.push({ label: item, kind: 'command' }));
-    return items;
+    return listOf(step.uiContract?.mustShow).map((label) => resolveContractItem(label, step, nextAction));
   }
 
   function stepReadyItems(step) {
@@ -995,16 +1137,11 @@ function renderHtml() {
   function refresh() {
     fetchState().then((data) => {
       state.data = data;
-      document.getElementById('full-count').textContent = data.flow.variants.full.count;
-      document.getElementById('light-count').textContent = data.flow.variants.light.count;
-      state.currentFlow = data.flow.activeVariant || state.currentFlow;
-      const currentId = data.runtime?.run?.current_step_id || data.flow.variants[state.currentFlow].steps?.[0]?.id || null;
-      state.selectedId = state.selectedId && data.flow.variants[state.currentFlow].steps.some((step) => step.id === state.selectedId)
+      const flow = variantData();
+      const currentId = data.runtime?.run?.current_step_id || flow?.steps?.[0]?.id || null;
+      state.selectedId = state.selectedId && flow?.steps?.some((step) => step.id === state.selectedId)
         ? state.selectedId
         : currentId;
-      document.querySelectorAll('#flow-toggle button').forEach((button) => {
-        button.classList.toggle('on', button.dataset.flow === state.currentFlow);
-      });
       render();
     });
   }
@@ -1015,6 +1152,7 @@ function renderHtml() {
     renderOverview();
     renderSteps();
     renderDetail();
+    renderModal();
   }
 
   function renderHeader() {
@@ -1025,7 +1163,7 @@ function renderHtml() {
       '<span class="sep">/</span>' +
       '<span class="current">' + esc(data.runtime.run?.ticket_id || 'no-ticket') + '</span>';
 
-    const variant = state.currentFlow.toUpperCase();
+    const variant = (data.flow.activeVariant || 'full').toUpperCase();
     const status = data.runtime.run?.status || 'idle';
     const waitingClass = status === 'failed' ? 'waiting-indicator critical' : 'waiting-indicator';
     const indicatorText = current
@@ -1080,11 +1218,33 @@ function renderHtml() {
         '</div>';
       el.addEventListener('click', () => {
         state.selectedId = step.id;
+        state.modalItem = null;
         renderSteps();
         renderDetail();
+        renderModal();
       });
       root.appendChild(el);
     });
+  }
+
+  function renderModal() {
+    const modal = document.getElementById('detail-modal');
+    const title = document.getElementById('detail-modal-title');
+    const body = document.getElementById('detail-modal-body');
+    if (!state.modalItem) {
+      modal.classList.add('hidden');
+      title.textContent = 'Detail';
+      body.innerHTML = '';
+      return;
+    }
+    modal.classList.remove('hidden');
+    title.textContent = state.modalItem.label;
+    body.innerHTML =
+      '<div class="detail-dialog-grid">' +
+        '<div class="key">Type</div><div>' + esc(state.modalItem.type || 'detail') + '</div>' +
+        '<div class="key">Source</div><div>' + esc(state.modalItem.source || '-') + '</div>' +
+      '</div>' +
+      '<div class="detail-dialog-pre">' + esc(state.modalItem.detail || '未記録') + '</div>';
   }
 
   function renderDetail() {
@@ -1203,10 +1363,22 @@ function renderHtml() {
     const showItems = stepShowItems(step, current && current.id === step.id ? nextAction : null);
     const readyItems = stepReadyItems(step);
     const omitItems = listOf(contract.omit);
+    const outputSummary = listOf(step.uiOutput?.summary);
+    const outputRisks = listOf(step.uiOutput?.risks);
+    const outputNotes = step.uiOutput?.notes || '';
     html += '<div class="detail-section"><div class="detail-section-title">実行結果</div>' +
       '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
       '<div><strong>誰が見る:</strong> ' + esc(contract.viewer || '開発者') + '</div>' +
       '<div style="margin-top:6px;"><strong>判断したいこと:</strong> ' + esc(contract.decision || step.summary || '') + '</div>' +
+      (outputSummary.length
+        ? '<div style="margin-top:10px;"><strong>Summary:</strong><div style="margin-top:4px;">' + outputSummary.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
+        : '') +
+      (outputRisks.length
+        ? '<div style="margin-top:10px;"><strong>Risks:</strong><div style="margin-top:4px;">' + outputRisks.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
+        : '') +
+      (outputNotes
+        ? '<div style="margin-top:10px;"><strong>Notes:</strong><div style="margin-top:4px;white-space:pre-wrap;">' + esc(outputNotes) + '</div></div>'
+        : '') +
       '</div></div>';
 
     html += '<div class="detail-section"><div class="detail-section-title">この step で出すべきもの</div><div class="artifacts">';
@@ -1214,7 +1386,14 @@ function renderHtml() {
       html += '<div class="artifact"><span class="artifact-name">まだありません</span><span class="artifact-size">pending</span></div>';
     }
     showItems.forEach((item) => {
-      html += '<div class="artifact"><span class="artifact-name">' + esc(item.label) + '</span><span class="artifact-size">' + esc(item.kind) + '</span></div>';
+      html +=
+        '<button class="artifact artifact-button" type="button">' +
+          '<div class="artifact-copy">' +
+            '<span class="artifact-name">' + esc(item.label) + '</span>' +
+            '<span class="artifact-preview">' + esc(item.preview) + '</span>' +
+          '</div>' +
+          '<span class="artifact-source">' + esc(item.source || item.type) + '</span>' +
+        '</button>';
     });
     html += '</div></div>';
 
@@ -1243,20 +1422,28 @@ function renderHtml() {
       '</div></div>';
 
     root.innerHTML = html;
+    root.querySelectorAll('.artifact-button').forEach((button, index) => {
+      button.addEventListener('click', () => {
+        state.modalItem = showItems[index];
+        renderModal();
+      });
+    });
   }
 
-  document.getElementById('flow-toggle').addEventListener('click', (event) => {
-    const button = event.target.closest('button');
-    if (!button) return;
-    state.currentFlow = button.dataset.flow;
-    document.querySelectorAll('#flow-toggle button').forEach((item) => {
-      item.classList.toggle('on', item.dataset.flow === state.currentFlow);
-    });
-    const flow = variantData();
-    if (!flow.steps.some((step) => step.id === state.selectedId)) {
-      state.selectedId = flow.steps[0]?.id || null;
+  document.getElementById('detail-modal-close').addEventListener('click', () => {
+    state.modalItem = null;
+    renderModal();
+  });
+  document.getElementById('detail-modal').addEventListener('click', (event) => {
+    if (event.target.id !== 'detail-modal') return;
+    state.modalItem = null;
+    renderModal();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && state.modalItem) {
+      state.modalItem = null;
+      renderModal();
     }
-    render();
   });
 
   refresh();

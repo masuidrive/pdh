@@ -155,10 +155,11 @@ The Web UI must remain read-only and show:
 
 - current step
 - next CLI action
-- Full / Light flow
+- the active flow variant for the current run
 - step contract from flow YAML
 - provider-written `ui-output.yaml`
 - runtime-written `ui-runtime.yaml`
+- clickable detail rows for `mustShow` items backed by current artifacts
 - logs
 - gate or interruption state
 - step artifacts
