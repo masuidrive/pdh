@@ -2047,7 +2047,7 @@ function renderHtml() {
       if (mode === 'raw') {
         return '<div class="detail-doc-raw detail-doc-segment ' + segmentClass + '"' + attr + '>' + esc(value) + '</div>';
       }
-      return '<div class="detail-doc-markdown detail-doc-segment ' + segmentClass + '"' + attr + '>' + renderMarkdownExcerpt(value) + '</div>';
+      return '<div class="detail-doc-markdown detail-doc-segment ' + segmentClass + '"' + attr + '>' + renderMarkdownExcerpt(markdownizeDocumentSegment(value)) + '</div>';
     };
     const before = range.highlightStart >= 0 ? range.lines.slice(0, range.highlightStart).join('\\n') : '';
     const focus = range.highlightStart >= 0 ? range.lines.slice(range.highlightStart, range.highlightEnd + 1).join('\\n') : document.text;
@@ -2055,32 +2055,14 @@ function renderHtml() {
     const viewer = range.highlightStart >= 0
       ? renderSegment(before, 'dim') + renderSegment(focus, 'focus', true) + renderSegment(after, 'dim')
       : renderSegment(document.text, 'focus', true);
-    return (
-      '<div class="detail-dialog-section">' +
-        '<div class="detail-dialog-label">Document</div>' +
-        '<div class="detail-doc-meta">' +
-          '<div class="key">Path</div><div>' + esc(document.path || target.label || '-') + '</div>' +
-          '<div class="key">Focus</div><div>' + esc(target.heading || 'full file') + '</div>' +
-        '</div>' +
-        '<div class="detail-doc-viewer">' + viewer + '</div>' +
-      '</div>'
-    );
+    return '<div class="detail-doc-viewer">' + viewer + '</div>';
   }
 
   function renderArtifactViewer(payload, mode = 'raw') {
     const viewer = mode === 'markdown' && payload?.markdown
       ? '<div class="detail-doc-markdown">' + renderMarkdownExcerpt(payload?.text || '未記録') + '</div>'
       : '<div class="detail-doc-raw">' + esc(payload?.text || '未記録') + '</div>';
-    return (
-      '<div class="detail-dialog-section">' +
-        '<div class="detail-dialog-label">Artifact</div>' +
-        '<div class="detail-doc-meta">' +
-          '<div class="key">Path</div><div>' + esc(payload?.path || '-') + '</div>' +
-          '<div class="key">File</div><div>' + esc(payload?.name || '-') + '</div>' +
-        '</div>' +
-        '<div class="detail-doc-viewer">' + viewer + '</div>' +
-      '</div>'
-    );
+    return '<div class="detail-doc-viewer">' + viewer + '</div>';
   }
 
   function renderDiffPretty(text) {
@@ -2112,24 +2094,10 @@ function renderHtml() {
   }
 
   function renderDiffViewer(payload, mode = 'pretty') {
-    const statLines = listOf(payload?.diffStat);
-    const fileLines = listOf(payload?.changedFiles);
-    const stat = statLines.map((line) => '<div>' + esc(line) + '</div>').join('');
-    const files = fileLines.map((line) => '<div>' + esc(line) + '</div>').join('');
     const viewer = mode === 'raw'
       ? '<div class="detail-doc-raw">' + esc(payload?.patch || '差分なし') + '</div>'
       : renderDiffPretty(payload?.patch || 'diff is empty');
-    return (
-      '<div class="detail-dialog-section">' +
-        '<div class="detail-dialog-label">Diff</div>' +
-        '<div class="detail-doc-meta">' +
-          '<div class="key">Base</div><div>' + esc(payload?.baseLabel || '-') + (payload?.baseCommit ? ' <span style="color: var(--text-muted);">(' + esc(payload.baseCommit) + ')</span>' : '') + '</div>' +
-          '<div class="key">Files</div><div>' + (files ? '<div class="detail-meta-list">' + files + '</div>' : '<span style="color: var(--text-muted);">変更なし</span>') + (fileLines.length ? '<div style="margin-top:4px;color:var(--text-muted);">' + esc(String(fileLines.length)) + ' files</div>' : '') + '</div>' +
-          '<div class="key">Summary</div><div>' + (stat ? '<div class="detail-meta-list">' + stat + '</div>' : '<span style="color: var(--text-muted);">変更なし</span>') + '</div>' +
-        '</div>' +
-        '<div class="detail-doc-viewer">' + viewer + '</div>' +
-      '</div>'
-    );
+    return '<div class="detail-doc-viewer">' + viewer + '</div>';
   }
 
   function artifactModalItem(step, artifact) {
@@ -2399,18 +2367,8 @@ function renderHtml() {
     return 'markdown';
   }
 
-  function renderModalShell(item, viewerHtml) {
-    const hasDetail = String(item.detail || '').trim().length > 0;
-    return (
-      '<div class="detail-dialog-grid">' +
-        '<div class="key">Type</div><div>' + esc(item.type || 'detail') + '</div>' +
-        '<div class="key">Source</div><div>' + esc(item.source || '-') + '</div>' +
-      '</div>' +
-      (hasDetail
-        ? '<div class="detail-dialog-section"><div class="detail-dialog-label">Detail</div><div class="detail-dialog-pre">' + esc(item.detail || '未記録') + '</div></div>'
-        : '') +
-      viewerHtml
-    );
+  function renderModalShell(_item, viewerHtml) {
+    return viewerHtml;
   }
 
   async function loadRemoteModalBody(item) {
@@ -2443,6 +2401,27 @@ function renderHtml() {
 
   function fetchState() {
     return fetch('/api/state', { cache: 'no-store' }).then((response) => response.json());
+  }
+
+  function markdownizeDocumentSegment(text) {
+    const source = String(text || '');
+    const match = source.match(/^---\\r?\\n([\\s\\S]*?)\\r?\\n---\\r?\\n?/);
+    if (!match) {
+      return source;
+    }
+    const frontmatter = match[1].trimEnd();
+    const body = source.slice(match[0].length).trimStart();
+    const parts = [
+      '## Frontmatter',
+      '',
+      '\`\`\`yaml',
+      frontmatter,
+      '\`\`\`'
+    ];
+    if (body) {
+      parts.push('', body);
+    }
+    return parts.join('\\n');
   }
 
   function refresh() {
@@ -2906,7 +2885,12 @@ function renderHtml() {
   });
 
   refresh();
-  setInterval(refresh, 5000);
+  setInterval(() => {
+    if (state.modalItem) {
+      return;
+    }
+    refresh();
+  }, 5000);
 </script>
 </body>
 </html>`;
