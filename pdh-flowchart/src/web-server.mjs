@@ -1570,7 +1570,7 @@ function renderHtml() {
     const codeTick = String.fromCharCode(96);
     const inlineCodePattern = new RegExp(codeTick + '([^' + codeTick + ']+)' + codeTick, 'g');
     return esc(text)
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>')
       .replace(inlineCodePattern, '<code>$1</code>');
   }
 
@@ -1608,7 +1608,7 @@ function renderHtml() {
       if (!tableRows.length) {
         return;
       }
-      const rows = tableRows.map((line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim()));
+      const rows = tableRows.map((line) => line.trim().replace(/^\\|/, '').replace(/\\|$/, '').split('|').map((cell) => cell.trim()));
       const divider = rows[1] && rows[1].every((cell) => /^:?-{3,}:?$/.test(cell));
       const head = rows[0] || [];
       const body = divider ? rows.slice(2) : rows.slice(1);
