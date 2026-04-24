@@ -150,6 +150,7 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor, 
       uiRuntime: uiRuntime ? redactObject(uiRuntime, redactor) : null,
       noteSection: redactSection(resolveStepNoteSection(noteBody, step.id), redactor),
       ticketImplementationNotes,
+      acTableText: redactSection(extractSection(noteBody, "AC 裏取り結果"), redactor),
       acSummary: {
         verified: ac.counts?.verified ?? 0,
         deferred: ac.counts?.deferred ?? 0,
@@ -1056,12 +1057,138 @@ function renderHtml() {
     return Array.isArray(value) ? value.filter(Boolean) : [];
   }
 
+  function stepById(stepId) {
+    return variantData()?.steps?.find((step) => step.id === stepId) || null;
+  }
+
+  function preferredText(...values) {
+    for (const value of values) {
+      const text = String(value ?? '').trim();
+      if (text) {
+        return text;
+      }
+    }
+    return '';
+  }
+
+  function bulletsFromText(text, limit = 4) {
+    const lines = String(text ?? '')
+      .split(/\\r?\\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((line) => !line.startsWith('#') && !line.startsWith('|') && !/^---+$/.test(line))
+      .map((line) => line.replace(/^[-*]\\s+/, '').replace(/^\\d+\\.\\s+/, ''))
+      .filter(Boolean);
+    return lines.slice(0, limit);
+  }
+
   function textPreview(value) {
-    return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 140) || '未記録';
+    return String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 140) || '未記録';
   }
 
   function joinedText(lines) {
     return listOf(lines).join('\\n');
+  }
+
+  function stepJudgementText(stepId) {
+    return listOf(stepById(stepId)?.judgements).map((item) => {
+      const summaryLine = item.summary ? ' - ' + item.summary : '';
+      return item.kind + ': ' + item.status + summaryLine;
+    }).join('\\n');
+  }
+
+  function formatGuardText(step, onlyFailed = false) {
+    return listOf(step.uiRuntime?.guards)
+      .filter((guard) => !onlyFailed || guard.status !== 'passed')
+      .map((guard) => guard.id + ': ' + guard.status + (guard.evidence ? ' · ' + guard.evidence : ''))
+      .join('\\n');
+  }
+
+  function stepFocusText(step) {
+    switch (step.id) {
+      case 'PD-C-2':
+        return '調査として、変更対象と blast radius が後続の計画を拘束できる粒度まで固まっているかを見ます。';
+      case 'PD-C-3':
+        return '実装者として、変更ファイル・検証方針・リスク対応がこの ticket でそのまま実行できるかを見ます。';
+      case 'PD-C-4':
+        return 'レビュアーとして、実装前に残る Critical/Major や計画の穴がないかを見ます。';
+      case 'PD-C-5':
+        return '承認者として、計画・レビュー結果・テスト方針を見て PD-C-6 に進めてよいかを決めます。';
+      case 'PD-C-6':
+        return '実装担当として、承認済み計画との差分、未通過 guard、検証の残りを見て次の手を決めます。';
+      case 'PD-C-7':
+        return 'レビュアーとして、品質・回帰・security の懸念が残っていないかを見ます。';
+      case 'PD-C-8':
+        return 'PdM 視点で、動いていても close すべきでない理由が残っていないかを見ます。';
+      case 'PD-C-9':
+        return '完了確認者として、AC 裏取りと最終検証の証跡が close 判断に足るかを見ます。';
+      case 'PD-C-10':
+        return '承認者として、close-ready かどうかを最終確認します。';
+      default:
+        return step.userAction || step.summary || '';
+    }
+  }
+
+  function derivedSummaryLines(step) {
+    const own = listOf(step.uiOutput?.summary);
+    if (own.length) {
+      return own;
+    }
+    switch (step.id) {
+      case 'PD-C-4':
+        return bulletsFromText(stepById('PD-C-3')?.noteSection, 4);
+      case 'PD-C-5':
+        return [
+          ...bulletsFromText(stepById('PD-C-3')?.noteSection, 3),
+          ...bulletsFromText(preferredText(stepById('PD-C-4')?.noteSection, stepJudgementText('PD-C-4')), 1)
+        ].slice(0, 4);
+      case 'PD-C-6':
+        return bulletsFromText(preferredText(step.noteSection, stepById('PD-C-3')?.noteSection), 4);
+      case 'PD-C-7':
+        return bulletsFromText(preferredText(step.noteSection, stepById('PD-C-6')?.noteSection), 4);
+      case 'PD-C-8':
+        return bulletsFromText(preferredText(step.noteSection, step.acTableText), 4);
+      case 'PD-C-9':
+        return bulletsFromText(preferredText(step.noteSection, step.acTableText), 4);
+      case 'PD-C-10':
+        return bulletsFromText(preferredText(step.acTableText, stepById('PD-C-9')?.noteSection), 4);
+      default:
+        return bulletsFromText(step.noteSection, 4);
+    }
+  }
+
+  function derivedRiskLines(step) {
+    const own = listOf(step.uiOutput?.risks);
+    if (own.length) {
+      return own;
+    }
+    switch (step.id) {
+      case 'PD-C-3':
+      case 'PD-C-4':
+      case 'PD-C-5':
+        return bulletsFromText(preferredText(stepById('PD-C-2')?.noteSection, stepById('PD-C-4')?.noteSection), 3);
+      case 'PD-C-6':
+        return bulletsFromText(preferredText(step.noteSection, stepById('PD-C-2')?.noteSection), 3);
+      case 'PD-C-7':
+      case 'PD-C-8':
+      case 'PD-C-10':
+        return bulletsFromText(preferredText(step.noteSection, stepJudgementText(step.id), stepById('PD-C-7')?.noteSection), 3);
+      default:
+        return [];
+    }
+  }
+
+  function derivedNotesText(step, nextAction) {
+    if (step.uiOutput?.notes) {
+      return step.uiOutput.notes;
+    }
+    if (step.mode === 'human' && nextAction?.commands?.length) {
+      return '判断はこの UI ではなく terminal の CLI で行います。必要なコマンドは下の Next に出します。';
+    }
+    if (step.id === 'PD-C-6') {
+      return preferredText(formatGuardText(step, true), step.noteSection);
+    }
+    return '';
   }
 
   function buildShowItem(label, type, source, detail) {
@@ -1074,7 +1201,7 @@ function renderHtml() {
     };
   }
 
-  function resolveContractItem(label, step, nextAction) {
+  function resolveGenericContractItem(label, step, nextAction) {
     const lower = String(label).toLowerCase();
     const noteSection = step.noteSection || '';
     const ticketNotes = step.ticketImplementationNotes || '';
@@ -1114,6 +1241,154 @@ function renderHtml() {
       return buildShowItem(label, 'ac', 'AC summary', 'verified: ' + (step.acSummary?.verified || 0) + '\\ndeferred: ' + (step.acSummary?.deferred || 0) + '\\nunverified: ' + (step.acSummary?.unverified || 0) + (noteSection ? '\\n\\n' + noteSection : ''));
     }
     return buildShowItem(label, 'note', 'current-note.md', noteSection || summary || ticketNotes);
+  }
+
+  function resolveInvestigationItem(label, step, nextAction) {
+    return resolveGenericContractItem(label, step, nextAction);
+  }
+
+  function resolvePlanItem(label, step, nextAction) {
+    const lower = String(label).toLowerCase();
+    if (lower.includes('設計判断') || lower.includes('durable')) {
+      return buildShowItem(label, 'ticket_notes', 'current-ticket.md#Implementation Notes', step.ticketImplementationNotes);
+    }
+    return buildShowItem(label, 'plan', 'current-note.md#PD-C-3. 計画', preferredText(step.noteSection, step.ticketImplementationNotes));
+  }
+
+  function resolvePlanReviewItem(label, step, nextAction) {
+    const lower = String(label).toLowerCase();
+    const planText = stepById('PD-C-3')?.noteSection || '';
+    const reviewText = preferredText(stepJudgementText('PD-C-4'), step.noteSection);
+    if (lower.includes('critical') || lower.includes('major')) {
+      return buildShowItem(label, 'review', 'judgements/plan_review + current-note.md#PD-C-4', reviewText);
+    }
+    if (lower.includes('検証不足')) {
+      return buildShowItem(label, 'review', 'current-note.md#PD-C-4. 計画レビュー結果', preferredText(step.noteSection, planText));
+    }
+    return buildShowItem(label, 'plan', 'current-note.md#PD-C-3. 計画', planText);
+  }
+
+  function resolveImplementationApprovalItem(label, step, nextAction) {
+    const lower = String(label).toLowerCase();
+    const planText = stepById('PD-C-3')?.noteSection || '';
+    const reviewText = preferredText(stepById('PD-C-4')?.noteSection, stepJudgementText('PD-C-4'));
+    const riskText = preferredText(stepById('PD-C-2')?.noteSection, reviewText, planText);
+    if (lower.includes('変更対象')) {
+      return buildShowItem(label, 'plan', 'current-note.md#PD-C-3. 計画', planText);
+    }
+    if (lower.includes('主要リスク')) {
+      return buildShowItem(label, 'risk', 'current-note.md#PD-C-2 / PD-C-4', riskText);
+    }
+    if (lower.includes('テスト')) {
+      return buildShowItem(label, 'verification', 'current-note.md#PD-C-3. 計画', planText);
+    }
+    if (lower.includes('approve') || lower.includes('request-changes') || lower.includes('cli')) {
+      return buildShowItem(label, 'commands', 'CLI', joinedText(nextAction?.commands));
+    }
+    return buildShowItem(label, 'plan', 'current-note.md#PD-C-3 / PD-C-4', preferredText(planText, reviewText));
+  }
+
+  function resolveImplementationItem(label, step, nextAction) {
+    const lower = String(label).toLowerCase();
+    const planText = stepById('PD-C-3')?.noteSection || '';
+    if (lower.includes('provider')) {
+      return buildShowItem(label, 'provider', 'ui-output.yaml / latest attempt', preferredText(joinedText(step.uiOutput?.summary), step.uiRuntime?.latestAttempt ? step.uiRuntime.latestAttempt.provider + ' attempt ' + step.uiRuntime.latestAttempt.attempt + ': ' + step.uiRuntime.latestAttempt.status : '', step.noteSection));
+    }
+    if (lower.includes('guard')) {
+      return buildShowItem(label, 'guards', 'ui-runtime.yaml', preferredText(formatGuardText(step, true), formatGuardText(step, false)));
+    }
+    if (lower.includes('割り込み')) {
+      return buildShowItem(label, 'interruptions', 'ui-runtime.yaml', joinedText(listOf(step.uiRuntime?.interruptions).map((item) => item.message || item.artifact || item.id)));
+    }
+    if (lower.includes('test') || lower.includes('commit')) {
+      return buildShowItem(label, 'verification', 'current-note.md#PD-C-6 / ui-runtime.yaml', preferredText(step.noteSection, formatGuardText(step, true)));
+    }
+    if (lower.includes('承認済み計画')) {
+      return buildShowItem(label, 'plan', 'current-note.md#PD-C-3. 計画', planText);
+    }
+    return resolveGenericContractItem(label, step, nextAction);
+  }
+
+  function resolveQualityReviewItem(label, step, nextAction) {
+    const lower = String(label).toLowerCase();
+    const implText = stepById('PD-C-6')?.noteSection || '';
+    const reviewText = preferredText(stepJudgementText('PD-C-7'), step.noteSection);
+    if (lower.includes('diff')) {
+      return buildShowItem(label, 'diff', 'git diff --stat', preferredText(joinedText(step.uiRuntime?.diffStat), joinedText(step.uiRuntime?.changedFiles), implText));
+    }
+    if (lower.includes('テスト')) {
+      return buildShowItem(label, 'verification', 'current-note.md#PD-C-6 / PD-C-7', preferredText(implText, step.noteSection));
+    }
+    if (lower.includes('review') || lower.includes('指摘')) {
+      return buildShowItem(label, 'review', 'judgements/quality_review + current-note.md#PD-C-7', reviewText);
+    }
+    if (lower.includes('設計逸脱') || lower.includes('security')) {
+      return buildShowItem(label, 'review', 'current-note.md#PD-C-7. 品質検証結果', preferredText(step.noteSection, reviewText, implText));
+    }
+    return resolveGenericContractItem(label, step, nextAction);
+  }
+
+  function resolvePurposeValidationItem(label, step, nextAction) {
+    const lower = String(label).toLowerCase();
+    if (lower.includes('ac')) {
+      return buildShowItem(label, 'ac', 'current-note.md#AC 裏取り結果', preferredText(step.acTableText, step.noteSection));
+    }
+    return buildShowItem(label, 'purpose', 'current-note.md#PD-C-8. 目的妥当性確認', preferredText(step.noteSection, stepJudgementText('PD-C-8'), step.acTableText));
+  }
+
+  function resolveFinalVerificationItem(label, step, nextAction) {
+    const lower = String(label).toLowerCase();
+    if (lower.includes('ac')) {
+      return buildShowItem(label, 'ac', 'current-note.md#AC 裏取り結果', step.acTableText);
+    }
+    if (lower.includes('deferred') || lower.includes('unverified')) {
+      return buildShowItem(label, 'ac', 'AC summary', 'verified: ' + (step.acSummary?.verified || 0) + '\\ndeferred: ' + (step.acSummary?.deferred || 0) + '\\nunverified: ' + (step.acSummary?.unverified || 0) + (step.acTableText ? '\\n\\n' + step.acTableText : ''));
+    }
+    return buildShowItem(label, 'verification', 'current-note.md#PD-C-9. プロセスチェックリスト', preferredText(step.noteSection, step.acTableText));
+  }
+
+  function resolveCloseApprovalItem(label, step, nextAction) {
+    const lower = String(label).toLowerCase();
+    const verificationText = preferredText(stepById('PD-C-9')?.noteSection, step.acTableText);
+    const riskText = preferredText(stepById('PD-C-8')?.noteSection, stepById('PD-C-7')?.noteSection, verificationText);
+    if (lower.includes('ac')) {
+      return buildShowItem(label, 'ac', 'current-note.md#AC 裏取り結果', step.acTableText);
+    }
+    if (lower.includes('risk')) {
+      return buildShowItem(label, 'risk', 'current-note.md#PD-C-8 / PD-C-9', riskText);
+    }
+    if (lower.includes('cleanup')) {
+      return buildShowItem(label, 'cleanup', 'current-note.md#Step History', preferredText(step.noteSection, joinedText((state.data.history || []).slice(-4).map((entry) => entry.updatedAt + ' | ' + entry.stepId + ' | ' + entry.summary))));
+    }
+    if (lower.includes('approve') || lower.includes('reject') || lower.includes('cli')) {
+      return buildShowItem(label, 'commands', 'CLI', joinedText(nextAction?.commands));
+    }
+    return buildShowItem(label, 'verification', 'current-note.md#PD-C-9', verificationText);
+  }
+
+  function resolveContractItem(label, step, nextAction) {
+    switch (step.id) {
+      case 'PD-C-2':
+        return resolveInvestigationItem(label, step, nextAction);
+      case 'PD-C-3':
+        return resolvePlanItem(label, step, nextAction);
+      case 'PD-C-4':
+        return resolvePlanReviewItem(label, step, nextAction);
+      case 'PD-C-5':
+        return resolveImplementationApprovalItem(label, step, nextAction);
+      case 'PD-C-6':
+        return resolveImplementationItem(label, step, nextAction);
+      case 'PD-C-7':
+        return resolveQualityReviewItem(label, step, nextAction);
+      case 'PD-C-8':
+        return resolvePurposeValidationItem(label, step, nextAction);
+      case 'PD-C-9':
+        return resolveFinalVerificationItem(label, step, nextAction);
+      case 'PD-C-10':
+        return resolveCloseApprovalItem(label, step, nextAction);
+      default:
+        return resolveGenericContractItem(label, step, nextAction);
+    }
   }
 
   function stepShowItems(step, nextAction) {
@@ -1270,10 +1545,8 @@ function renderHtml() {
       const isError = state.data.runtime.run.status === 'failed';
       const questionBody = [];
       if (state.data.runtime.run.status === 'needs_human') {
-        questionBody.push('<p>この step は human gate です。要約を確認して terminal から判断してください。</p>');
-        if (currentGate?.summaryText) {
-          questionBody.push('<p>' + esc(currentGate.summaryText.slice(0, 1200)) + '</p>');
-        }
+        questionBody.push('<p>' + esc(nextAction.body || 'この step は human gate です。terminal から判断してください。') + '</p>');
+        questionBody.push('<p>判断材料は下の「この step の判断材料」と Next に集約しています。gate summary の生テキストは必要なときだけ成果物から開けば十分です。</p>');
       } else if (state.data.runtime.run.status === 'interrupted') {
         const latest = interruptions[interruptions.length - 1];
         questionBody.push('<p>割り込み質問に未回答です。CLI の <code>answer</code> で回答してください。</p>');
@@ -1297,29 +1570,48 @@ function renderHtml() {
     }
 
     html +=
-      '<div class="detail-section"><div class="detail-section-title">見るもの</div>' +
+      '<div class="detail-section"><div class="detail-section-title">この step の観点</div>' +
       '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
-      esc(step.userAction || 'この step の summary と event log を確認してください。') +
+      esc(stepFocusText(step)) +
       '</div></div>';
 
-    if (nextAction?.commands?.length && current && current.id === step.id) {
-      html += '<div class="detail-section"><div class="detail-section-title">Next</div><div class="commands">';
-      nextAction.commands.forEach((command) => {
-        html += '<div class="command"><span class="command-text">' + esc(command) + '</span></div>';
-      });
-      html += '</div></div>';
-    }
+    const contract = step.uiContract || {};
+    const showItems = stepShowItems(step, current && current.id === step.id ? nextAction : null);
+    const readyItems = stepReadyItems(step);
+    const omitItems = listOf(contract.omit);
+    const outputSummary = derivedSummaryLines(step);
+    const outputRisks = derivedRiskLines(step);
+    const outputNotes = derivedNotesText(step, current && current.id === step.id ? nextAction : null);
+    html += '<div class="detail-section"><div class="detail-section-title">判断の前提</div>' +
+      '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
+      '<div><strong>誰が見る:</strong> ' + esc(contract.viewer || '開発者') + '</div>' +
+      '<div style="margin-top:6px;"><strong>判断したいこと:</strong> ' + esc(contract.decision || step.summary || '') + '</div>' +
+      (outputSummary.length
+        ? '<div style="margin-top:10px;"><strong>Summary:</strong><div style="margin-top:4px;">' + outputSummary.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
+        : '') +
+      (outputRisks.length
+        ? '<div style="margin-top:10px;"><strong>Risks:</strong><div style="margin-top:4px;">' + outputRisks.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
+        : '') +
+      (outputNotes
+        ? '<div style="margin-top:10px;"><strong>Notes:</strong><div style="margin-top:4px;white-space:pre-wrap;">' + esc(outputNotes) + '</div></div>'
+        : '') +
+      '</div></div>';
 
-    if (step.gate || step.interruptions?.length) {
-      html += '<div class="detail-section"><div class="detail-section-title">現在の待ち状態</div><div class="artifacts">';
-      if (step.gate?.summary) {
-        html += '<div class="artifact"><span class="artifact-name">' + esc(step.gate.summary) + '</span><span class="artifact-size">' + esc(step.gate.decision || step.gate.status) + '</span></div>';
-      }
-      step.interruptions.forEach((item) => {
-        html += '<div class="artifact"><span class="artifact-name">' + esc(item.artifactPath) + '</span><span class="artifact-size">' + esc(item.status || item.kind || 'open') + '</span></div>';
-      });
-      html += '</div></div>';
+    html += '<div class="detail-section"><div class="detail-section-title">この step の判断材料</div><div class="artifacts">';
+    if (!showItems.length) {
+      html += '<div class="artifact"><span class="artifact-name">まだありません</span><span class="artifact-size">pending</span></div>';
     }
+    showItems.forEach((item) => {
+      html +=
+        '<button class="artifact artifact-button" type="button">' +
+          '<div class="artifact-copy">' +
+            '<span class="artifact-name">' + esc(item.label) + '</span>' +
+            '<span class="artifact-preview">' + esc(item.preview) + '</span>' +
+          '</div>' +
+          '<span class="artifact-source">' + esc(item.source || item.type) + '</span>' +
+        '</button>';
+    });
+    html += '</div></div>';
 
     if (step.judgements?.length) {
       html += '<div class="detail-section"><div class="detail-section-title">レビュー結果</div><div class="review-table">';
@@ -1335,67 +1627,24 @@ function renderHtml() {
       html += '</div></div>';
     }
 
-    if (step.events?.length) {
-      html += '<div class="detail-section"><div class="detail-section-title">エージェント実行ログ</div><div class="activity">';
-      step.events.forEach((event) => {
-        const highlight = event.type === 'interrupted' || event.type === 'guard_failed' || event.type === 'human_gate_resolved';
-        html +=
-          '<div class="activity-item' + (highlight ? ' highlight' : '') + '">' +
-            '<div class="activity-meta">' +
-              '<span class="activity-time">' + esc((event.ts || '').replace('T', ' ').replace('Z', '')) + '</span>' +
-              '<span class="activity-actor ' + esc(event.provider || 'runtime') + '">' + esc((event.provider || 'runtime').toUpperCase()) + '</span>' +
-            '</div>' +
-            '<div class="activity-msg">' + esc(event.message || event.type) + '</div>' +
-          '</div>';
+    if (nextAction?.commands?.length && current && current.id === step.id) {
+      html += '<div class="detail-section"><div class="detail-section-title">Next</div><div class="commands">';
+      nextAction.commands.forEach((command) => {
+        html += '<div class="command"><span class="command-text">' + esc(command) + '</span></div>';
       });
       html += '</div></div>';
     }
 
-    if (step.artifacts?.length) {
-      html += '<div class="detail-section"><div class="detail-section-title">成果物</div><div class="artifacts">';
-      step.artifacts.forEach((artifact) => {
-        html += '<div class="artifact"><span class="artifact-name">' + esc(artifact.name) + '</span><span class="artifact-size">' + esc(artifact.size) + '</span></div>';
+    if (step.gate || step.interruptions?.length) {
+      html += '<div class="detail-section"><div class="detail-section-title">現在の待ち状態</div><div class="artifacts">';
+      if (step.gate?.summary) {
+        html += '<div class="artifact"><span class="artifact-name">human gate summary</span><span class="artifact-size">' + esc(step.gate.decision || step.gate.status) + '</span></div>';
+      }
+      step.interruptions.forEach((item) => {
+        html += '<div class="artifact"><span class="artifact-name">' + esc(item.message || item.kind || 'interruption') + '</span><span class="artifact-size">' + esc(item.status || item.kind || 'open') + '</span></div>';
       });
       html += '</div></div>';
     }
-
-    const contract = step.uiContract || {};
-    const showItems = stepShowItems(step, current && current.id === step.id ? nextAction : null);
-    const readyItems = stepReadyItems(step);
-    const omitItems = listOf(contract.omit);
-    const outputSummary = listOf(step.uiOutput?.summary);
-    const outputRisks = listOf(step.uiOutput?.risks);
-    const outputNotes = step.uiOutput?.notes || '';
-    html += '<div class="detail-section"><div class="detail-section-title">実行結果</div>' +
-      '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
-      '<div><strong>誰が見る:</strong> ' + esc(contract.viewer || '開発者') + '</div>' +
-      '<div style="margin-top:6px;"><strong>判断したいこと:</strong> ' + esc(contract.decision || step.summary || '') + '</div>' +
-      (outputSummary.length
-        ? '<div style="margin-top:10px;"><strong>Summary:</strong><div style="margin-top:4px;">' + outputSummary.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
-        : '') +
-      (outputRisks.length
-        ? '<div style="margin-top:10px;"><strong>Risks:</strong><div style="margin-top:4px;">' + outputRisks.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
-        : '') +
-      (outputNotes
-        ? '<div style="margin-top:10px;"><strong>Notes:</strong><div style="margin-top:4px;white-space:pre-wrap;">' + esc(outputNotes) + '</div></div>'
-        : '') +
-      '</div></div>';
-
-    html += '<div class="detail-section"><div class="detail-section-title">この step で出すべきもの</div><div class="artifacts">';
-    if (!showItems.length) {
-      html += '<div class="artifact"><span class="artifact-name">まだありません</span><span class="artifact-size">pending</span></div>';
-    }
-    showItems.forEach((item) => {
-      html +=
-        '<button class="artifact artifact-button" type="button">' +
-          '<div class="artifact-copy">' +
-            '<span class="artifact-name">' + esc(item.label) + '</span>' +
-            '<span class="artifact-preview">' + esc(item.preview) + '</span>' +
-          '</div>' +
-          '<span class="artifact-source">' + esc(item.source || item.type) + '</span>' +
-        '</button>';
-    });
-    html += '</div></div>';
 
     html += '<div class="detail-section"><div class="detail-section-title">揃っていれば進める</div><div class="artifacts">';
     if (!readyItems.length) {
@@ -1415,11 +1664,29 @@ function renderHtml() {
     });
     html += '</div></div>';
 
-    html += '<div class="detail-section"><div class="detail-section-title">Repo</div><div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
-      '<div>note: <span class="mono">' + esc(state.data.files.note) + '</span></div>' +
-      '<div style="margin-top:4px;">ticket: <span class="mono">' + esc(state.data.files.ticket) + '</span></div>' +
-      '<div style="margin-top:4px;">branch: <span class="mono">' + esc(state.data.git.branch) + '</span></div>' +
-      '</div></div>';
+    if (step.events?.length) {
+      html += '<div class="detail-section"><div class="detail-section-title">補足ログ</div><div class="activity">';
+      step.events.forEach((event) => {
+        const highlight = event.type === 'interrupted' || event.type === 'guard_failed' || event.type === 'human_gate_resolved';
+        html +=
+          '<div class="activity-item' + (highlight ? ' highlight' : '') + '">' +
+            '<div class="activity-meta">' +
+              '<span class="activity-time">' + esc((event.ts || '').replace('T', ' ').replace('Z', '')) + '</span>' +
+              '<span class="activity-actor ' + esc(event.provider || 'runtime') + '">' + esc((event.provider || 'runtime').toUpperCase()) + '</span>' +
+            '</div>' +
+            '<div class="activity-msg">' + esc(textPreview(event.message || event.type)) + '</div>' +
+          '</div>';
+      });
+      html += '</div></div>';
+    }
+
+    if (step.artifacts?.length) {
+      html += '<div class="detail-section"><div class="detail-section-title">補足成果物</div><div class="artifacts">';
+      step.artifacts.forEach((artifact) => {
+        html += '<div class="artifact"><span class="artifact-name">' + esc(artifact.name) + '</span><span class="artifact-size">' + esc(artifact.size) + '</span></div>';
+      });
+      html += '</div></div>';
+    }
 
     root.innerHTML = html;
     root.querySelectorAll('.artifact-button').forEach((button, index) => {
