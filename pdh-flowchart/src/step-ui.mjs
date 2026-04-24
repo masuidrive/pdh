@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { parse, stringify } from "yaml";
+import { parseDocument, stringify } from "yaml";
 import { defaultJudgementKind, loadJudgements } from "./judgements.mjs";
 import { loadStepInterruptions } from "./interruptions.mjs";
 import { collectStepArtifacts, latestAttemptResult } from "./runtime-state.mjs";
@@ -100,6 +100,7 @@ export function renderUiOutputPromptSection({ run, step }) {
     "- `ready_when`: concrete conditions that mean this step is ready to advance.",
     "- `notes`: optional free text. Use a block scalar when it helps.",
     "- Match the primary language used in `current-ticket.md` for all human-readable text in this file.",
+    "- Quote any YAML string that starts with punctuation or contains backticks, brackets, or colons.",
     ...(judgementKind
       ? [`- \`judgement\`: required for this review step. Use \`kind: ${judgementKind}\`, the exact guard-facing \`status\`, and a short \`summary\`.`]
       : []),
@@ -196,14 +197,21 @@ function loadYamlArtifact({ path, normalizer }) {
     return null;
   }
   try {
-    const raw = parse(readFileSync(path, "utf8")) ?? {};
-    return normalizer(raw);
+    const rawText = readFileSync(path, "utf8");
+    const doc = parseDocument(rawText, { prettyErrors: false });
+    const raw = doc.toJS() ?? {};
+    return normalizer(raw, {
+      artifactPath: path,
+      rawText,
+      parseErrors: doc.errors.map((error) => error.message),
+      parseWarnings: doc.warnings.map((warning) => warning.message)
+    });
   } catch {
     return null;
   }
 }
 
-function normalizeUiOutput(value) {
+function normalizeUiOutput(value, meta = {}) {
   const source = value ?? {};
   return {
     summary: asStringList(source.summary),
@@ -216,11 +224,15 @@ function normalizeUiOutput(value) {
           status: asString(source.judgement.status),
           summary: asString(source.judgement.summary)
         }
-      : null
+      : null,
+    artifactPath: asString(meta.artifactPath),
+    parseErrors: asStringList(meta.parseErrors),
+    parseWarnings: asStringList(meta.parseWarnings),
+    rawText: asString(meta.rawText)
   };
 }
 
-function normalizeUiRuntime(value) {
+function normalizeUiRuntime(value, meta = {}) {
   const source = value ?? {};
   return {
     generatedAt: asString(source.generated_at ?? source.generatedAt),
@@ -263,7 +275,11 @@ function normalizeUiRuntime(value) {
       name: asString(item.name),
       path: asString(item.path)
     })),
-    nextCommands: asStringList(source.next_commands ?? source.nextCommands)
+    nextCommands: asStringList(source.next_commands ?? source.nextCommands),
+    artifactPath: asString(meta.artifactPath),
+    parseErrors: asStringList(meta.parseErrors),
+    parseWarnings: asStringList(meta.parseWarnings),
+    rawText: asString(meta.rawText)
   };
 }
 

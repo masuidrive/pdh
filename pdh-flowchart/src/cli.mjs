@@ -228,6 +228,7 @@ async function cmdGuards(argv) {
   }
   const step = getStep(runtime.flow, stepId);
   const gate = runtime.run?.id ? latestHumanGate({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId }) : null;
+  hydrateStepArtifactsBeforeGuards({ repo, runtime, step });
   const results = evaluateCurrentGuards({ repo, runtime, step, gate });
   console.log(JSON.stringify(results, null, 2));
   if (results.some((result) => result.status === "failed")) {
@@ -329,6 +330,7 @@ async function cmdRunNext(argv) {
       }
 
       const gate = isHumanGateStep(step) ? latestHumanGate({ stateDir, runId: run.id, stepId: step.id }) : null;
+      hydrateStepArtifactsBeforeGuards({ repo, runtime, step });
       const guardResults = evaluateCurrentGuards({ repo, runtime, step, gate });
       const failed = guardResults.filter((guard) => guard.status === "failed");
       if (failed.length > 0) {
@@ -1144,6 +1146,20 @@ function materializeJudgementFromUiOutput({ repo, runtime, step, providerResult 
     runId: runtime.run.id,
     stepId: step.id
   });
+  if (uiOutput?.parseErrors?.length) {
+    appendProgressEvent({
+      repoPath: repo,
+      runId: runtime.run.id,
+      stepId: step.id,
+      type: "warning",
+      provider: "runtime",
+      message: `ui-output parse recovered with ${uiOutput.parseErrors.length} error(s)`,
+      payload: {
+        artifactPath: uiOutput.artifactPath,
+        parseErrors: uiOutput.parseErrors
+      }
+    });
+  }
   const judgement = judgementFromUiOutput(step.id, uiOutput);
   if (!judgement) {
     return null;
@@ -1172,6 +1188,15 @@ function materializeJudgementFromUiOutput({ repo, runtime, step, providerResult 
     payload: { artifactPath: result.artifactPath, judgement: result.judgement }
   });
   return result;
+}
+
+function hydrateStepArtifactsBeforeGuards({ repo, runtime, step }) {
+  materializeJudgementFromUiOutput({
+    repo,
+    runtime,
+    step,
+    providerResult: null
+  });
 }
 
 function evaluateCurrentGuards({ repo, runtime, step, gate = null }) {
