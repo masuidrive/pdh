@@ -448,6 +448,15 @@ function shellQuote(value) {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
+function humanDecisionCommands(repo, stepId) {
+  const repoArg = ` --repo ${shellQuote(repo)}`;
+  return [
+    `node src/cli.mjs approve${repoArg} --step ${stepId} --reason ok`,
+    `node src/cli.mjs request-changes${repoArg} --step ${stepId} --reason "<reason>"`,
+    `node src/cli.mjs reject${repoArg} --step ${stepId} --reason "<reason>"`
+  ];
+}
+
 function sendJson(response, statusCode, payload) {
   const body = JSON.stringify(payload);
   response.writeHead(statusCode, {
