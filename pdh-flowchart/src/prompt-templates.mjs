@@ -21,6 +21,7 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
   const ticket = readRepoFile(repoPath, "current-ticket.md");
   const note = readRepoFile(repoPath, "current-note.md");
   const instructions = stepInstructions(step.id);
+  const promptContext = mergePromptContext(flow, step);
 
   return [
     "# pdh-flowchart Provider Prompt",
@@ -36,6 +37,7 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
     `- Current step: ${step.id}`,
     `- Provider: ${step.provider}`,
     `- Mode: ${step.mode}`,
+    ...(step.summary ? [`- Step summary: ${step.summary}`] : []),
     `- Success transition: ${nextStep(flow, run.flow_variant, step.id, "success") ?? "(none)"}`,
     "",
     "## Operating Rules",
@@ -57,6 +59,10 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
     "## Step Instructions",
     "",
     ...instructions.map((line) => `- ${line}`),
+    "",
+    "## Compiled Context",
+    "",
+    ...(renderPromptContext(promptContext)),
     "",
     "## Required Guards",
     "",
@@ -93,6 +99,63 @@ function formatGuards(step) {
       .join(" ");
     return `- ${guard.id}: ${guard.type}${details ? ` (${details})` : ""}`;
   });
+}
+
+function mergePromptContext(flow, step) {
+  const defaults = flow.defaults?.promptContext ?? {};
+  const specific = step.promptContext ?? {};
+  return {
+    contextSummary: specific.contextSummary ?? defaults.contextSummary ?? "",
+    semanticRules: [
+      ...(defaults.semanticRules ?? []),
+      ...(specific.semanticRules ?? [])
+    ],
+    requiredRefs: dedupeRequiredRefs([
+      ...(defaults.requiredRefs ?? []),
+      ...(specific.requiredRefs ?? [])
+    ])
+  };
+}
+
+function dedupeRequiredRefs(entries) {
+  const seen = new Set();
+  const result = [];
+  for (const entry of entries) {
+    if (!entry?.path) {
+      continue;
+    }
+    if (seen.has(entry.path)) {
+      continue;
+    }
+    seen.add(entry.path);
+    result.push(entry);
+  }
+  return result;
+}
+
+function renderPromptContext(promptContext) {
+  const lines = [];
+  if (promptContext.contextSummary) {
+    lines.push(`- Context summary: ${promptContext.contextSummary}`);
+  }
+  if (promptContext.semanticRules.length > 0) {
+    lines.push("- Semantic rules:");
+    for (const rule of promptContext.semanticRules) {
+      lines.push(`  - ${rule}`);
+    }
+  } else {
+    lines.push("- Semantic rules: (none)");
+  }
+  if (promptContext.requiredRefs.length > 0) {
+    lines.push("- Required references to read when canonical files are insufficient:");
+    for (const ref of promptContext.requiredRefs) {
+      const reason = ref.reason ? ` - ${ref.reason}` : "";
+      lines.push(`  - \`${ref.path}\`${reason}`);
+    }
+  } else {
+    lines.push("- Required references: (none)");
+  }
+  return lines;
 }
 
 function stepInstructions(stepId) {

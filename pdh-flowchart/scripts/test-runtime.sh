@@ -62,6 +62,33 @@ test_blocked_run() {
   grep -q "Current Step: PD-C-6 実装" "$TMP_ROOT/$run_id.status.txt"
 }
 
+test_prompt_context() {
+  local repo run_id prompt_path
+  repo="$(seed_repo prompt-context)"
+  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-3 | sed -n '1p')"
+  prompt_path="$(node "$ROOT/src/cli.mjs" prompt "$run_id" --repo "$repo")"
+  grep -q "## Compiled Context" "$prompt_path"
+  grep -q "Semantic rules:" "$prompt_path"
+  grep -q "../skills/pdh-dev/SKILL.md" "$prompt_path"
+  grep -q "Explicit human approval only happens at PD-C-5 and PD-C-10" "$prompt_path"
+}
+
+test_stop_after_step() {
+  local repo run_id next_prompt
+  repo="$(seed_repo stop-after-step)"
+  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant light --start-step PD-C-5 | sed -n '1p')"
+  node "$ROOT/src/cli.mjs" run-next "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.stop-gate.json"
+  node "$ROOT/src/cli.mjs" approve "$run_id" --repo "$repo" --step PD-C-5 --reason ok >/dev/null
+  node "$ROOT/src/cli.mjs" run-next "$run_id" --repo "$repo" --stop-after-step >"$TMP_ROOT/$run_id.stop-after-step.txt"
+  grep -q "Stopped After Step: PD-C-5 -> PD-C-6" "$TMP_ROOT/$run_id.stop-after-step.txt"
+  grep -q "Current step: PD-C-6 実装" "$TMP_ROOT/$run_id.stop-after-step.txt"
+  next_prompt="$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/prompt.md"
+  test ! -f "$next_prompt"
+  node "$ROOT/src/cli.mjs" status "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.stop-status.txt"
+  grep -q "Status: running" "$TMP_ROOT/$run_id.stop-status.txt"
+  grep -q "Current Step: PD-C-6 実装" "$TMP_ROOT/$run_id.stop-status.txt"
+}
+
 test_auto_provider_run() {
   local repo run_id fake args
   repo="$(seed_repo auto-provider)"
@@ -188,6 +215,8 @@ NODE
   wait "$server_pid" 2>/dev/null || true
 }
 
+test_prompt_context
+test_stop_after_step
 test_blocked_run
 test_auto_provider_run
 node "$ROOT/src/cli.mjs" flow-graph --variant light >"$TMP_ROOT/flow-graph.mmd"

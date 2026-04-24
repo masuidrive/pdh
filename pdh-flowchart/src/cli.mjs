@@ -120,7 +120,7 @@ Usage:
   pdh-flowchart run-claude [RUN_ID] --prompt-file FILE [--repo DIR] [--step PD-C-4] [--timeout-ms MS] [--max-attempts N]
   pdh-flowchart guards --repo DIR --step PD-C-9
   pdh-flowchart advance RUN_ID [--repo DIR] [--step PD-C-5]
-  pdh-flowchart run-next RUN_ID [--repo DIR] [--limit 20] [--manual-provider]
+  pdh-flowchart run-next RUN_ID [--repo DIR] [--limit 20] [--manual-provider] [--stop-after-step]
   pdh-flowchart gate-summary RUN_ID --step PD-C-5 [--repo DIR]
   pdh-flowchart interrupt RUN_ID (--message TEXT | --file FILE) [--repo DIR] [--step PD-C-6]
   pdh-flowchart answer RUN_ID (--message TEXT | --file FILE) [--repo DIR] [--step PD-C-6]
@@ -252,6 +252,7 @@ async function cmdRunNext(argv) {
   const repo = resolve(options.repo ?? process.cwd());
   const store = openStore(defaultStateDir(repo));
   const limit = Number(options.limit ?? "20");
+  const stopAfterStep = options["stop-after-step"] === "true";
   if (!Number.isInteger(limit) || limit < 1) {
     throw new Error("--limit must be a positive integer");
   }
@@ -412,6 +413,19 @@ async function cmdRunNext(argv) {
       trace.push(advanced);
       if (advanced.status === "completed") {
         console.log(JSON.stringify({ ...advanced, trace }, null, 2));
+        return;
+      }
+      if (stopAfterStep) {
+        const nextStep = getStep(flow, advanced.to);
+        printStoppedAfterStep({
+          runId,
+          completedStepId: stepId,
+          nextStepId: advanced.to,
+          nextStep,
+          repo,
+          trace,
+          options
+        });
         return;
       }
     }
@@ -1393,6 +1407,24 @@ function printBlocked(result, trace = [], options = {}) {
     console.log(`Limit: ${result.limit}`);
   }
   console.log("Use --json for full guard details.");
+}
+
+function printStoppedAfterStep({ runId, completedStepId, nextStepId, nextStep, repo = null, trace = [], options = {} }) {
+  const result = {
+    status: "stopped",
+    runId,
+    reason: "stop_after_step",
+    completedStepId,
+    currentStepId: nextStepId,
+    nextCommand: runNextCommand(runId, repo)
+  };
+  if (options.json === "true") {
+    console.log(JSON.stringify({ ...result, trace }, null, 2));
+    return;
+  }
+  console.log(`Stopped After Step: ${completedStepId} -> ${nextStepId}`);
+  console.log(`Current step: ${formatStepName(nextStep)}`);
+  console.log(`Next: ${result.nextCommand}`);
 }
 
 function blockIfOpenInterruption({ store, runId, stepId, options = {}, repo, step }) {

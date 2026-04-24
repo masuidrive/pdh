@@ -28,6 +28,7 @@
 - [x] Add AC verification table parser with real `verified` / `deferred` / `unverified` rows.
 - [x] Add `PD-C-9` final verification runner for test commands and AC evidence.
 - [x] Add resume behavior for interrupted provider steps.
+- [x] Compile stable semantic rules and required reference paths into provider prompts from flow YAML.
 
 ## Phase 1: User Experience
 
@@ -38,6 +39,7 @@
 - [x] Add `doctor` to check Node, Codex, Claude, uv, git, and auth status.
 - [x] Add example fixtures for a tiny fake `pdh-dev` repository.
 - [x] Add interruption and answer commands for step-level clarification.
+- [x] Add `run-next --stop-after-step` for one-step user-flow demos without spilling into the next provider step.
 
 ## Phase 2: Reliability
 

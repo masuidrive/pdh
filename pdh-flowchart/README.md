@@ -22,6 +22,7 @@ node src/cli.mjs init
 node src/cli.mjs run --ticket ticket-id --variant full
 node src/cli.mjs run --ticket ticket-id --variant full --start-step PD-C-5
 node src/cli.mjs run-next <run-id>
+node src/cli.mjs run-next <run-id> --stop-after-step
 node src/cli.mjs run-next <run-id> --manual-provider
 node src/cli.mjs interrupt <run-id> --message "Need clarification on the edge case"
 node src/cli.mjs show-interrupts <run-id>
@@ -74,6 +75,14 @@ Failure Summary: /path/to/repo/.pdh-flowchart/runs/run-20260423123000-abc123/ste
 Use --json for full guard details.
 ```
 
+If you want to execute exactly one completed step and stop before the next provider starts, use `--stop-after-step`:
+
+```text
+Stopped After Step: PD-C-5 -> PD-C-6
+Current step: PD-C-6 実装
+Next: node src/cli.mjs run-next run-20260423123000-abc123 --repo /path/to/repo
+```
+
 When a human gate opens:
 
 ```text
@@ -123,10 +132,12 @@ Next:
 - Human gate commands can create a summary artifact and record approve/reject/request-changes/cancel decisions.
 - `advance` evaluates deterministic guards and only then moves the run to the next step.
 - `run-next` executes runtime-owned current-step work, runs provider steps by default, advances through passing guards, and stops at human gates, interruptions, failed guards, provider failures, or completion. Pass `--manual-provider` to stop before provider execution.
+- `run-next --stop-after-step` stops after one successfully completed step and leaves the run on the next current step without starting its provider.
 - `interrupt` records a step-level clarification artifact, marks the run `interrupted`, and blocks provider execution until `answer` resolves it.
 - Answered interruptions are injected into the next provider prompt for the same step.
 - Runtime commands refuse to operate on a non-current step unless `--force` is provided.
 - PD-C provider prompt templates are generated from `pdh-dev` semantics and saved under the run step artifacts.
+- Flow YAML can compile stable semantic rules, step context summaries, and required reference files directly into provider prompts so providers do not need the full skill text inline every run.
 - `run-provider <run-id>` selects Codex or Claude from the run's current flow step and generates the step prompt when `--prompt-file` is omitted.
 - Runtime-managed metadata blocks in `current-note.md` and `current-ticket.md` track run id, flow, status, and current step.
 - Provider changes to `current-note.md` and `current-ticket.md` are captured as `note-ticket.patch` step artifacts.

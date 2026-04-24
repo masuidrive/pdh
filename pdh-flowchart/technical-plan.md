@@ -92,6 +92,7 @@ MVP 方針:
 - `PD-C-9` では AC 裏取り表が必須で、`unverified` が 1 件でもあれば `PD-C-10` に進めない。
 
 このため、MVP の flow 定義は PRD 付録の単純 graph だけでなく、Light / Full variant、required note section、required ticket update、required commit、required human gate summary を表現できる必要がある。
+さらに provider prompt には skill 全文を毎回埋め込まず、flow YAML から compile した stable semantic rules、step context summary、required reference paths を含める。これにより、毎回 provider が skill 文書を探索しなくても外せないルールを prompt に固定しつつ、詳細が必要なときだけ参照ファイルを読み足せる。
 
 ## 3. 採用技術
 
