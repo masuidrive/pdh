@@ -50,6 +50,6 @@
 
 - [ ] Dockerized execution and hardening.
 - [ ] Epic flow support.
-- [ ] Parallel reviewer support.
+- [x] Parallel reviewer support.
 - [ ] Richer review result schemas.
 - [ ] Optional SDK adapters after the CLI path is stable.

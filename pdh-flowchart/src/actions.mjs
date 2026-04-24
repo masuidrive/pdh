@@ -38,7 +38,7 @@ export function commitStep({ repoPath, stepId, message }) {
     throw new Error("stepId is required");
   }
   const summary = message || stepId;
-  run("git", ["add", "-A", "--", ".", ":(exclude).pdh-flowchart", ":(exclude).env"], repoPath);
+  stageCommitChanges(repoPath);
   const status = spawnSync("git", ["status", "--porcelain"], { cwd: repoPath, text: true, encoding: "utf8" });
   if (status.status !== 0) {
     throw new Error((status.stderr || status.stdout || "git status failed").trim());
@@ -78,6 +78,28 @@ function run(command, args, cwd) {
     throw new Error((result.stderr || result.stdout || `${command} failed with ${result.status}`).trim());
   }
   return result;
+}
+
+function stageCommitChanges(repoPath) {
+  run("git", ["add", "-u", "--", "."], repoPath);
+  const untracked = spawnSync("git", ["ls-files", "-o", "--exclude-standard", "-z"], {
+    cwd: repoPath,
+    encoding: "utf8"
+  });
+  if (untracked.status !== 0) {
+    throw new Error((untracked.stderr || untracked.stdout || "git ls-files failed").trim());
+  }
+  if (!untracked.stdout) {
+    return;
+  }
+  const add = spawnSync("git", ["add", "--pathspec-from-file=-", "--pathspec-file-nul"], {
+    cwd: repoPath,
+    input: untracked.stdout,
+    encoding: "utf8"
+  });
+  if (add.status !== 0) {
+    throw new Error((add.stderr || add.stdout || "git add failed").trim());
+  }
 }
 
 function gateDecisionText(stepId) {

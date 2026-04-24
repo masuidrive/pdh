@@ -178,6 +178,7 @@ In scope:
 - note frontmatter state model
 - transient `.pdh-flowchart/` artifacts
 - Codex / Claude provider adapters
+- parallel reviewer execution for review steps
 - explicit human gates and interruptions
 - read-only Web dashboard
 - fixture-based user-flow tests
@@ -186,7 +187,6 @@ Deferred:
 
 - Docker hardening
 - Epic flow support
-- parallel reviewers
 - centralized or multi-repo state services
 
 ## 10. Success Criteria

@@ -8,24 +8,31 @@ defaults:
   reviewRoles:
     devils_advocate:
       label: Devil's Advocate
+      provider: claude
       remit: ユーザ側の立場から、見落とし、論理矛盾、セキュリティや設計上の危険を厳しく見る。
     coding_engineer_reviewer:
       label: Coding Engineer Reviewer
+      provider: claude
       remit: 技術的実現可能性、依存関係、実装量、既存パターンとの整合を見る。
     code_reviewer:
       label: Code Reviewer
+      provider: claude
       remit: コード品質、回帰、認可漏れ、整合性、エラーハンドリング、テスト妥当性を見る。
     codex_critical:
       label: codex Critical Reviewer
+      provider: codex
       remit: 致命的な問題だけを短く指摘する。
     pdm_counterexample:
       label: PdM Counterexample Reviewer
+      provider: claude
       remit: close してはいけない理由、未達 AC、目的ずれを反証要求型で探す。
     ac_verifier:
       label: AC Verifier
+      provider: claude
       remit: AC ごとの証跡、裏取り表、最終検証の妥当性を確認する。
     surface_observer:
       label: Surface Observer
+      provider: claude
       remit: UI / HTTP API / SDK / CLI の consumer 視点で、自動テストでは拾いにくい違和感を観察する。
   promptContext:
     semanticRules:

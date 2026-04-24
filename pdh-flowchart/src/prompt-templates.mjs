@@ -1,6 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildFlowView, getStep, nextStep } from "./flow.mjs";
+import { stringify } from "yaml";
+import { buildFlowView, getStep, nextStep, resolveStepReviewPlan } from "./flow.mjs";
+import { defaultAcceptedJudgementStatus, defaultJudgementKind } from "./judgements.mjs";
 import { loadStepInterruptions, renderInterruptionsForPrompt } from "./interruptions.mjs";
 import { renderUiOutputPromptSection } from "./step-ui.mjs";
 
@@ -14,6 +16,19 @@ export function writeStepPrompt({ repoPath, stateDir, run, flow, stepId }) {
   const artifactPath = join(artifactDir, "prompt.md");
   const interruptions = loadStepInterruptions({ stateDir, runId: run.id, stepId });
   const body = renderStepPrompt({ repoPath, run, flow, step, interruptions });
+  writeFileSync(artifactPath, body);
+  return { artifactPath, body };
+}
+
+export function writeReviewerPromptArtifact({ repoPath, stateDir, run, flow, stepId, reviewer }) {
+  const step = getStep(flow, stepId);
+  const reviewPlan = resolveStepReviewPlan(flow, run.flow_variant, stepId);
+  if (!reviewPlan) {
+    throw new Error(`${stepId} does not define runtime review semantics`);
+  }
+  const artifactPath = join(stateDir, "runs", run.id, "steps", stepId, "reviewers", reviewer.reviewerId, "prompt.md");
+  mkdirSync(join(artifactPath, ".."), { recursive: true });
+  const body = renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, reviewer });
   writeFileSync(artifactPath, body);
   return { artifactPath, body };
 }
@@ -193,6 +208,84 @@ function renderReviewSemantics(step, reviewPlan) {
   }
   lines.push("- Keep your output aligned with this runtime-owned review contract.");
   return lines;
+}
+
+export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, reviewer }) {
+  const acceptedStatus = acceptedReviewerStatus(step.id);
+  const outputPath = `.pdh-flowchart/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.yaml`;
+  return [
+    "# pdh-flowchart Reviewer Prompt",
+    "",
+    `You are ${reviewer.label} for ${step.id}.`,
+    "This is a fresh reviewer role owned by pdh-flowchart runtime semantics.",
+    "",
+    "## Run Context",
+    "",
+    `- Run: ${run.id}`,
+    `- Ticket: ${run.ticket_id ?? "(none)"}`,
+    `- Flow: ${run.flow_id}@${run.flow_variant}`,
+    `- Step: ${step.id}`,
+    `- Reviewer role: ${reviewer.label}`,
+    ...(reviewer.provider ? [`- Provider: ${reviewer.provider}`] : []),
+    ...(reviewer.remit ? [`- Remit: ${reviewer.remit}`] : []),
+    "",
+    "## Reviewer Rules",
+    "",
+    "- Review the current repo state for this step only.",
+    "- Read `current-ticket.md` and `current-note.md` before concluding.",
+    "- Do not edit repo files.",
+    "- Do not commit.",
+    "- Do not run `ticket.sh` or `node src/cli.mjs ...`.",
+    "- You may inspect git diff, read files, and run narrowly scoped verification commands when needed.",
+    "- This repo owns review semantics. Do not rely on external `pdh-dev` or `tmux-director` skills for missing rules.",
+    ...(reviewPlan.intent ? [`- Review intent: ${reviewPlan.intent}`] : []),
+    ...(reviewPlan.passWhen?.length ? ["- Step pass conditions:", ...reviewPlan.passWhen.map((item) => `  - ${item}`)] : []),
+    ...(reviewPlan.onFindings?.length ? ["- If findings remain:", ...reviewPlan.onFindings.map((item) => `  - ${item}`)] : []),
+    ...(reviewer.focus?.length ? ["- Your focus:", ...reviewer.focus.map((item) => `  - ${item}`)] : ["- Your focus: (none)"]),
+    "",
+    "## Canonical Files",
+    "",
+    "- `current-ticket.md` at repo root: durable ticket intent, Product AC, and implementation notes.",
+    "- `current-note.md` at repo root: workflow state in frontmatter plus process evidence and step history.",
+    "- Read both files before acting. Use repo-local references called out there when you need additional context.",
+    "",
+    "## Output Artifact",
+    "",
+    `Write plain YAML to \`${outputPath}\`.`,
+    "Do not use markdown fences. Do not add extra top-level keys.",
+    "",
+    "Field rules:",
+    "- `status`: exact reviewer conclusion string.",
+    "- `summary`: one short sentence.",
+    "- `findings`: use `[]` when there are no findings.",
+    "- `notes`: optional free text.",
+    "- Each finding must have `severity`, `title`, `evidence`, and `recommendation`.",
+    "- Allowed severities: `critical`, `major`, `minor`, `note`, `none`.",
+    "- Match the primary language used in `current-ticket.md` for all human-readable text in this file.",
+    ...(acceptedStatus ? [`- Use \`status: ${acceptedStatus}\` only when your latest review has no unresolved blocker at that threshold.`] : []),
+    "",
+    "Use this YAML shape:",
+    "",
+    stringify({
+      status: acceptedStatus || "Ready",
+      summary: "Short reviewer summary",
+      findings: [
+        {
+          severity: "major",
+          title: "Concrete issue title",
+          evidence: "Concrete evidence",
+          recommendation: "Concrete correction or follow-up"
+        }
+      ],
+      notes: "Optional free text"
+    }).trimEnd(),
+    ""
+  ].join("\n");
+}
+
+function acceptedReviewerStatus(stepId) {
+  const kind = defaultJudgementKind(stepId);
+  return kind ? defaultAcceptedJudgementStatus(kind) : null;
 }
 
 function stepInstructions(stepId) {

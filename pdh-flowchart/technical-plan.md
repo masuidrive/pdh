@@ -13,6 +13,7 @@
 - Web UI is read-only and derives state from note frontmatter plus transient artifacts.
 - Flow semantics are internalized in this repo; runtime execution does not depend on external `pdh-dev` or `tmux-director` skills.
 - Review-step orchestration semantics (reviewer roster, pass conditions, loop-back intent) are defined in flow YAML and compiled into runtime-owned prompts.
+- Review-step reviewer rosters execute in parallel and are aggregated by the runtime into canonical note sections and structured judgement artifacts.
 
 ### Rejected
 
@@ -291,6 +292,4 @@ This remains an explicit smoke path and is not part of normal unit-style verific
 - Dockerized execution and hardening
 - richer review schemas
 - Epic flow support
-- parallel reviewer support
-- parallel reviewer process execution (the reviewer contract is already runtime-owned, but the executor is still single-provider today)
 - optional SDK-based adapters after the CLI path is stable

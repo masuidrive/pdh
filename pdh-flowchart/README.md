@@ -11,6 +11,7 @@
 - The Web UI is read-only. Decisions and execution stay in the CLI.
 - Runtime semantics are owned by this repo's flow YAML and prompt/runtime code. `pdh-dev` and `tmux-director` are not runtime dependencies.
 - Reviewer rosters, review-loop pass conditions, and review-step intent are also defined in this repo's flow YAML and compiled into provider prompts.
+- Review steps execute their configured reviewer roster in parallel, and the runtime aggregates those reviewer outputs into note sections, UI output, and guard-facing judgements.
 
 ## Local Setup
 
@@ -261,5 +262,4 @@ See [examples/fake-pdh-dev/README.md](examples/fake-pdh-dev/README.md) for a com
 
 - Dockerized execution and hardening
 - Epic flow support
-- parallel reviewer support
 - richer review schemas

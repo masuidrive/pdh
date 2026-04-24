@@ -99,6 +99,11 @@ export function buildFlowView(flow, variant = "full", currentStepId = null) {
   };
 }
 
+export function resolveStepReviewPlan(flow, variant = "full", stepId) {
+  const view = buildFlowView(flow, variant, stepId);
+  return view.steps.find((step) => step.id === stepId)?.review ?? null;
+}
+
 export function flowEdges(flow, variant = "full") {
   const sequence = flow.variants?.[variant]?.sequence ?? [];
   const allowed = new Set(sequence);
@@ -195,6 +200,7 @@ function normalizeReviewRoleCatalog(reviewRoles) {
     {
       id,
       label: normalizeString(entry?.label ?? id),
+      provider: normalizeString(entry?.provider),
       remit: normalizeString(entry?.remit)
     }
   ]));
@@ -221,6 +227,7 @@ function normalizeReviewer(reviewer, roleCatalog) {
   return {
     roleId,
     label: normalizeString(reviewer?.label ?? base.label ?? roleId),
+    provider: normalizeString(reviewer?.provider ?? base.provider),
     remit: normalizeString(reviewer?.remit ?? base.remit),
     count: Number.isFinite(Number(reviewer?.count)) ? Number(reviewer.count) : 1,
     focus: normalizeStringList(reviewer?.focus)

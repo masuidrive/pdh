@@ -46,6 +46,7 @@ write_fake_codex_success() {
 printf '%s\n' "$@" > "${FAKE_ARGS_FILE:?}"
 prompt="$(cat || true)"
 ui_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*ui-output.yaml\)`\.$/\1/p' | head -1)"
+review_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*review.yaml\)`\.$/\1/p' | head -1)"
 if [ -n "$ui_path" ]; then
   mkdir -p "$(dirname "$ui_path")"
   cat >"$ui_path" <<'YAML'
@@ -57,6 +58,15 @@ ready_when:
   - fake provider ready condition
 notes: |
   fake notes
+YAML
+fi
+if [ -n "$review_path" ]; then
+  mkdir -p "$(dirname "$review_path")"
+  cat >"$review_path" <<'YAML'
+status: No Critical/Major
+summary: codex reviewer found no blocking issues
+findings: []
+notes: codex review notes
 YAML
 fi
 printf '%s\n' '{"type":"thread.started","thread_id":"fake-thread"}'
@@ -106,6 +116,7 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 ui_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*ui-output.yaml\)`\.$/\1/p' | head -1)"
+review_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*review.yaml\)`\.$/\1/p' | head -1)"
 if [ -n "$ui_path" ]; then
   mkdir -p "$(dirname "$ui_path")"
   cat >"$ui_path" <<'YAML'
@@ -120,6 +131,15 @@ judgement:
   kind: plan_review
   status: No Critical/Major
   summary: fake review accepted
+YAML
+fi
+if [ -n "$review_path" ]; then
+  mkdir -p "$(dirname "$review_path")"
+  cat >"$review_path" <<'YAML'
+status: No Critical/Major
+summary: claude reviewer found no blocking issues
+findings: []
+notes: claude review notes
 YAML
 fi
 printf '%s\n' '{"type":"system","subtype":"init","session_id":"fake-session"}'
@@ -191,14 +211,18 @@ test_auto_provider_run() {
 }
 
 test_auto_review_judgement() {
-  local repo run_id fake
+  local repo run_id fake_claude fake_codex
   repo="$(seed_repo auto-review-judgement)"
   run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-4 | sed -n '1p')"
-  fake="$(write_fake_claude_success)"
-  CLAUDE_BIN="$fake" node "$ROOT/src/cli.mjs" run-provider --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.review.txt"
+  fake_claude="$(write_fake_claude_success)"
+  fake_codex="$(write_fake_codex_success)"
+  CLAUDE_BIN="$fake_claude" CODEX_BIN="$fake_codex" FAKE_ARGS_FILE="$TMP_ROOT/$run_id.review-codex-args.txt" \
+    node "$ROOT/src/cli.mjs" run-provider --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.review.txt"
   test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/ui-output.yaml"
   test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
   grep -q '"status": "No Critical/Major"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
+  grep -q "Devil's Advocate" "$repo/current-note.md"
+  grep -q "codex reviewer found no blocking issues" "$repo/current-note.md"
 }
 
 test_failed_run() {
