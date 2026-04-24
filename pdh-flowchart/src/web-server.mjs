@@ -3,6 +3,7 @@ import { basename, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { URL } from "node:url";
+import { renderMermaidSVG } from "beautiful-mermaid";
 import { evaluateAcVerificationTable } from "./ac-verification.mjs";
 import { buildFlowView, getStep, renderMermaidFlow } from "./flow.mjs";
 import { loadStepInterruptions } from "./interruptions.mjs";
@@ -52,6 +53,16 @@ function handleRequest({ request, response, repo }) {
   }
   if (url.pathname === "/api/flow.mmd") {
     sendText(response, 200, collectMermaid({ repo, variant: url.searchParams.get("variant") }));
+    return;
+  }
+  if (url.pathname === "/api/render-mermaid") {
+    const code = url.searchParams.get("code") ?? "";
+    const svg = renderBeautifulMermaid(code);
+    if (!svg) {
+      sendJson(response, 400, { error: "invalid_mermaid" });
+      return;
+    }
+    sendSvg(response, 200, svg);
     return;
   }
   sendJson(response, 404, { error: "not_found" });
@@ -496,6 +507,27 @@ function humanDecisionCommands(repo, stepId) {
   ];
 }
 
+function renderBeautifulMermaid(code) {
+  const diagram = String(code ?? "").trim();
+  if (!diagram || diagram.length > 20000) {
+    return "";
+  }
+  try {
+    return renderMermaidSVG(diagram, {
+      bg: "var(--surface)",
+      fg: "var(--text)",
+      accent: "#ba7517",
+      muted: "#6d6b64",
+      surface: "#f5f4ef",
+      border: "#d6d3c8",
+      line: "#a3a097",
+      transparent: true
+    });
+  } catch {
+    return "";
+  }
+}
+
 function sendJson(response, statusCode, payload) {
   const body = JSON.stringify(payload);
   response.writeHead(statusCode, {
@@ -508,6 +540,14 @@ function sendJson(response, statusCode, payload) {
 function sendText(response, statusCode, body) {
   response.writeHead(statusCode, {
     "content-type": "text/plain; charset=utf-8",
+    "cache-control": "no-store"
+  });
+  response.end(body);
+}
+
+function sendSvg(response, statusCode, body) {
+  response.writeHead(statusCode, {
+    "content-type": "image/svg+xml; charset=utf-8",
     "cache-control": "no-store"
   });
   response.end(body);
@@ -1947,6 +1987,11 @@ function renderHtml() {
       state.selectedId = state.selectedId && flow?.steps?.some((step) => step.id === state.selectedId)
         ? state.selectedId
         : currentId;
+      const requested = requestedModalItem();
+      if (requested) {
+        state.modalItem = requested.item;
+        state.modalDocumentMode = requested.mode;
+      }
       render();
     });
   }
@@ -2048,33 +2093,30 @@ function renderHtml() {
     };
   }
 
+  function requestedModalItem() {
+    const params = new URLSearchParams(window.location.search);
+    const doc = params.get('doc');
+    if (doc === 'note' || doc === 'ticket') {
+      return {
+        item: documentModalItem(doc, params.get('heading') || null),
+        mode: params.get('mode') === 'raw' ? 'raw' : 'markdown'
+      };
+    }
+    return null;
+  }
+
+  function clearRequestedModalQuery() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('doc');
+    url.searchParams.delete('heading');
+    url.searchParams.delete('mode');
+    window.history.replaceState({}, '', url);
+  }
+
   function openModalItem(item, mode = 'markdown') {
     state.modalItem = item;
     state.modalDocumentMode = mode;
     renderModal();
-  }
-
-  let mermaidApiPromise = null;
-
-  async function ensureMermaid() {
-    if (!mermaidApiPromise) {
-      mermaidApiPromise = import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')
-        .then((module) => {
-          const mermaid = module.default || module;
-          mermaid.initialize({
-            startOnLoad: false,
-            securityLevel: 'strict',
-            theme: 'neutral',
-            flowchart: {
-              useMaxWidth: true,
-              curve: 'basis'
-            }
-          });
-          return mermaid;
-        })
-        .catch(() => null);
-    }
-    return mermaidApiPromise;
   }
 
   function wireCopyButtons(root) {
@@ -2104,18 +2146,15 @@ function renderHtml() {
     if (!blocks.length) {
       return;
     }
-    const mermaid = await ensureMermaid();
     for (let index = 0; index < blocks.length; index += 1) {
       const block = blocks[index];
       const source = decodeURIComponent(block.dataset.mermaid || '');
-      if (!mermaid) {
-        block.innerHTML = '<div class="detail-mermaid-fallback">' + esc(source) + '</div>';
-        continue;
-      }
       try {
-        const id = 'detail-mermaid-' + Date.now() + '-' + index;
-        const rendered = await mermaid.render(id, source);
-        block.innerHTML = rendered.svg;
+        const response = await fetch('/api/render-mermaid?code=' + encodeURIComponent(source), { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error('render failed');
+        }
+        block.innerHTML = await response.text();
       } catch {
         block.innerHTML = '<div class="detail-mermaid-fallback">' + esc(source) + '</div>';
       }
@@ -2371,18 +2410,21 @@ function renderHtml() {
   document.getElementById('detail-modal-close').addEventListener('click', () => {
     state.modalItem = null;
     state.modalDocumentMode = 'markdown';
+    clearRequestedModalQuery();
     renderModal();
   });
   document.getElementById('detail-modal').addEventListener('click', (event) => {
     if (event.target.id !== 'detail-modal') return;
     state.modalItem = null;
     state.modalDocumentMode = 'markdown';
+    clearRequestedModalQuery();
     renderModal();
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && state.modalItem) {
       state.modalItem = null;
       state.modalDocumentMode = 'markdown';
+      clearRequestedModalQuery();
       renderModal();
     }
   });
