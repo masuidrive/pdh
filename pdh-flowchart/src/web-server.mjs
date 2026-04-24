@@ -1684,58 +1684,76 @@ function renderHtml() {
     return /\\.(md|markdown)$/i.test(String(name || ''));
   }
 
-  function documentExcerptText(docId, heading = null) {
+  function normalizeHeadings(headingOrHeadings) {
+    if (Array.isArray(headingOrHeadings)) {
+      return headingOrHeadings.map((value) => String(value || '').trim()).filter(Boolean);
+    }
+    const heading = String(headingOrHeadings || '').trim();
+    return heading ? [heading] : [];
+  }
+
+  function documentExcerptText(docId, headingOrHeadings = null) {
     const document = documentData(docId);
     if (!document?.text) {
       return '';
     }
-    const range = findDocumentSectionRange(document.text, heading);
-    return range.lines.slice(range.start, range.end + 1).join('\\n').trim();
+    const headings = normalizeHeadings(headingOrHeadings);
+    if (!headings.length) {
+      const range = findDocumentSectionRange(document.text, null);
+      return range.lines.slice(range.start, range.end + 1).join('\\n').trim();
+    }
+    return headings.map((heading) => {
+      const range = findDocumentSectionRange(document.text, heading);
+      return range.lines.slice(range.start, range.end + 1).join('\\n').trim();
+    }).filter(Boolean).join('\\n\\n');
   }
 
-  function noteFocusHeading(step) {
+  function noteFocusHeadings(step) {
     switch (step.id) {
       case 'PD-C-4':
+        return ['PD-C-3. 計画', 'PD-C-4. 計画レビュー結果'];
       case 'PD-C-5':
-        return 'PD-C-3. 計画';
+        return ['PD-C-3. 計画', 'PD-C-4. 計画レビュー結果'];
       case 'PD-C-7':
-        return 'PD-C-6';
+        return ['PD-C-6', 'PD-C-7. 品質検証結果'];
       case 'PD-C-8':
-        return 'PD-C-8. 目的妥当性確認';
+        return ['PD-C-8. 目的妥当性確認'];
       case 'PD-C-9':
       case 'PD-C-10':
-        return 'AC 裏取り結果';
+        return ['AC 裏取り結果'];
       default:
-        return step.id;
+        return [step.id];
     }
   }
 
   function noteMaterialItem(step) {
-    const heading = noteFocusHeading(step);
-    const item = documentModalItem('note', heading);
-    const preview = documentExcerptText('note', heading) || documentData('note')?.text || '';
+    const headings = noteFocusHeadings(step);
+    const item = documentModalItem('note', headings);
+    const preview = documentExcerptText('note', headings) || documentData('note')?.text || '';
+    const focusText = headings.join(' / ');
     return {
       ...item,
       label: 'current-note.md',
       type: 'document',
-      source: heading ? 'current-note.md#' + heading : 'current-note.md',
-      detail: heading ? 'focus: ' + heading : 'full file view',
+      source: focusText ? 'current-note.md#' + focusText : 'current-note.md',
+      detail: focusText ? 'focus: ' + focusText : 'full file view',
       preview: textPreview(preview)
     };
   }
 
   function ticketMaterialItem(step) {
-    const heading = step.id === 'PD-C-8' || step.id === 'PD-C-9' || step.id === 'PD-C-10'
-      ? 'Product AC'
-      : 'Implementation Notes';
-    const item = documentModalItem('ticket', heading);
-    const preview = documentExcerptText('ticket', heading) || documentData('ticket')?.text || '';
+    const headings = step.id === 'PD-C-8' || step.id === 'PD-C-9' || step.id === 'PD-C-10'
+      ? ['Product AC']
+      : ['Implementation Notes'];
+    const item = documentModalItem('ticket', headings);
+    const preview = documentExcerptText('ticket', headings) || documentData('ticket')?.text || '';
+    const focusText = headings.join(' / ');
     return {
       ...item,
       label: 'current-ticket.md',
       type: 'document',
-      source: heading ? 'current-ticket.md#' + heading : 'current-ticket.md',
-      detail: heading ? 'focus: ' + heading : 'full file view',
+      source: focusText ? 'current-ticket.md#' + focusText : 'current-ticket.md',
+      detail: focusText ? 'focus: ' + focusText : 'full file view',
       preview: textPreview(preview)
     };
   }
@@ -1785,9 +1803,33 @@ function renderHtml() {
     const docName = useNote ? 'current-note.md' : 'current-ticket.md';
     const docId = useNote ? 'note' : 'ticket';
     const fragment = text.slice(text.indexOf(docName) + docName.length);
-    const fragmentMatch = fragment.match(/^#([^/]+)/);
-    const heading = fragmentMatch?.[1]?.trim() || null;
-    return { docId, heading, label: docName };
+    const fragmentMatch = fragment.match(/^#(.+)/);
+    const headings = fragmentMatch?.[1]
+      ? fragmentMatch[1].split(/\s+\/\s+/).map((value) => value.trim()).filter(Boolean)
+      : [];
+    return { docId, heading: headings[0] || null, headings, label: docName };
+  }
+
+  function findDocumentHighlightRanges(text, headingOrHeadings) {
+    const headings = normalizeHeadings(headingOrHeadings);
+    const ranges = headings.map((heading) => findDocumentSectionRange(text, heading))
+      .filter((range) => range.highlightStart >= 0)
+      .map((range) => ({ start: range.highlightStart, end: range.highlightEnd }))
+      .sort((left, right) => left.start - right.start);
+    if (!ranges.length) {
+      return [];
+    }
+    const merged = [ranges[0]];
+    for (let index = 1; index < ranges.length; index += 1) {
+      const range = ranges[index];
+      const previous = merged[merged.length - 1];
+      if (range.start <= previous.end + 1) {
+        previous.end = Math.max(previous.end, range.end);
+        continue;
+      }
+      merged.push(range);
+    }
+    return merged;
   }
 
   function findDocumentSectionRange(text, heading) {
@@ -2037,7 +2079,6 @@ function renderHtml() {
     if (!document?.text) {
       return '';
     }
-    const range = findDocumentSectionRange(document.text, target.heading);
     const renderSegment = (text, segmentClass, focused = false) => {
       const value = String(text ?? '').trim();
       if (!value) {
@@ -2049,12 +2090,20 @@ function renderHtml() {
       }
       return '<div class="detail-doc-markdown detail-doc-segment ' + segmentClass + '"' + attr + '>' + renderMarkdownExcerpt(markdownizeDocumentSegment(value, document)) + '</div>';
     };
-    const before = range.highlightStart >= 0 ? range.lines.slice(0, range.highlightStart).join('\\n') : '';
-    const focus = range.highlightStart >= 0 ? range.lines.slice(range.highlightStart, range.highlightEnd + 1).join('\\n') : document.text;
-    const after = range.highlightEnd >= 0 ? range.lines.slice(range.highlightEnd + 1).join('\\n') : '';
-    const viewer = range.highlightStart >= 0
-      ? renderSegment(before, 'dim') + renderSegment(focus, 'focus', true) + renderSegment(after, 'dim')
-      : renderSegment(document.text, 'focus', true);
+    const lines = String(document.text ?? '').split(/\\r?\\n/);
+    const highlightRanges = findDocumentHighlightRanges(document.text, target.headings || target.heading);
+    let viewer = '';
+    if (!highlightRanges.length) {
+      viewer = renderSegment(document.text, 'focus', true);
+    } else {
+      let cursor = 0;
+      highlightRanges.forEach((range) => {
+        viewer += renderSegment(lines.slice(cursor, range.start).join('\\n'), 'dim');
+        viewer += renderSegment(lines.slice(range.start, range.end + 1).join('\\n'), 'focus', true);
+        cursor = range.end + 1;
+      });
+      viewer += renderSegment(lines.slice(cursor).join('\\n'), 'dim');
+    }
     return '<div class="detail-doc-viewer">' + viewer + '</div>';
   }
 
@@ -2535,17 +2584,20 @@ function renderHtml() {
     });
   }
 
-  function documentModalItem(docId, heading = null) {
+  function documentModalItem(docId, headingOrHeadings = null) {
     const document = documentData(docId);
     const fileLabel = docId === 'ticket' ? 'current-ticket.md' : 'current-note.md';
+    const headings = normalizeHeadings(headingOrHeadings);
+    const headingText = headings.join(' / ');
     return {
-      label: heading ? fileLabel + ' · ' + heading : fileLabel,
+      label: fileLabel,
       type: 'document',
       source: document?.path || fileLabel,
-      detail: heading ? 'document focus: ' + heading : 'full file view',
+      detail: headingText ? 'document focus: ' + headingText : 'full file view',
       documentTarget: {
         docId,
-        heading,
+        heading: headings[0] || null,
+        headings,
         label: fileLabel
       }
     };
