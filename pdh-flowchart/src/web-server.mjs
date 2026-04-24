@@ -973,6 +973,35 @@ function renderHtml() {
     font-size: 14px;
     font-weight: 500;
   }
+  .detail-dialog-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .detail-view-toggle {
+    display: inline-flex;
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .detail-view-toggle button {
+    border: 0;
+    background: transparent;
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .detail-view-toggle button.on {
+    background: var(--bg);
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
   .detail-dialog-close {
     border: 1px solid var(--border);
     background: var(--bg);
@@ -1023,28 +1052,152 @@ function renderHtml() {
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--surface);
-    overflow: hidden;
+    padding: 14px 16px;
   }
-  .detail-doc-line {
-    display: grid;
-    grid-template-columns: 56px 1fr;
-    gap: 12px;
-    padding: 4px 12px;
+  .detail-doc-raw {
+    white-space: pre-wrap;
+    word-break: break-word;
     font-family: ui-monospace, 'SF Mono', Menlo, monospace;
     font-size: 11px;
     line-height: 1.55;
-    border-bottom: 1px solid rgba(214, 211, 200, 0.5);
+    color: var(--text);
   }
-  .detail-doc-line:last-child { border-bottom: 0; }
-  .detail-doc-line.highlight { background: var(--waiting-bg); }
-  .detail-doc-line-number {
-    color: var(--text-dim);
-    text-align: right;
+  .detail-doc-markdown {
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.7;
   }
-  .detail-doc-line-text {
+  .detail-doc-markdown > *:first-child { margin-top: 0; }
+  .detail-doc-markdown > *:last-child { margin-bottom: 0; }
+  .detail-doc-markdown h1,
+  .detail-doc-markdown h2,
+  .detail-doc-markdown h3,
+  .detail-doc-markdown h4,
+  .detail-doc-markdown h5,
+  .detail-doc-markdown h6 {
+    margin: 1.1em 0 0.45em;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .detail-doc-markdown h1 { font-size: 15px; }
+  .detail-doc-markdown h2 { font-size: 14px; }
+  .detail-doc-markdown h3,
+  .detail-doc-markdown h4,
+  .detail-doc-markdown h5,
+  .detail-doc-markdown h6 { font-size: 13px; }
+  .detail-doc-markdown p,
+  .detail-doc-markdown ul,
+  .detail-doc-markdown ol,
+  .detail-doc-markdown pre,
+  .detail-doc-markdown table,
+  .detail-doc-markdown blockquote {
+    margin: 0 0 12px;
+  }
+  .detail-doc-markdown ul,
+  .detail-doc-markdown ol {
+    padding-left: 20px;
+  }
+  .detail-doc-markdown li + li {
+    margin-top: 4px;
+  }
+  .detail-doc-markdown code {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 11px;
+    background: rgba(255,255,255,0.8);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .detail-doc-markdown pre {
+    margin: 0;
+  }
+  .detail-doc-markdown pre code {
+    background: transparent;
+    padding: 0;
+  }
+  .detail-code-block {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #f3f2ed;
+    overflow: hidden;
+  }
+  .detail-code-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(214, 211, 200, 0.8);
+    background: rgba(255,255,255,0.5);
+  }
+  .detail-code-language {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .detail-copy-button {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .detail-copy-button:hover { border-color: var(--border-strong); color: var(--text); }
+  .detail-code-block pre {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding: 12px;
+    background: #f3f2ed;
+  }
+  .detail-mermaid-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.75);
+    overflow: hidden;
+  }
+  .detail-mermaid {
+    padding: 14px 16px;
+    overflow: auto;
+    display: flex;
+    justify-content: center;
+  }
+  .detail-mermaid svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .detail-mermaid-fallback {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 11px;
+    line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;
     color: var(--text);
+  }
+  .detail-doc-markdown blockquote {
+    padding-left: 12px;
+    border-left: 3px solid var(--waiting-border);
+    color: var(--text-muted);
+  }
+  .detail-doc-markdown table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+  }
+  .detail-doc-markdown th,
+  .detail-doc-markdown td {
+    border: 1px solid var(--border);
+    padding: 6px 8px;
+    vertical-align: top;
+  }
+  .detail-doc-markdown th {
+    background: rgba(255,255,255,0.6);
+    text-align: left;
   }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -1100,13 +1253,16 @@ function renderHtml() {
     <div class="detail-dialog" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title">
       <div class="detail-dialog-head">
         <div class="detail-dialog-title" id="detail-modal-title">Detail</div>
-        <button class="detail-dialog-close" id="detail-modal-close" type="button">Close</button>
+        <div class="detail-dialog-actions">
+          <div id="detail-view-toggle-slot"></div>
+          <button class="detail-dialog-close" id="detail-modal-close" type="button">Close</button>
+        </div>
       </div>
       <div class="detail-dialog-body" id="detail-modal-body"></div>
     </div>
   </div>
 <script>
-  const state = { data: null, selectedId: null, modalItem: null };
+  const state = { data: null, selectedId: null, modalItem: null, modalDocumentMode: 'markdown' };
 
   function esc(value) {
     return String(value ?? '')
@@ -1370,22 +1526,188 @@ function renderHtml() {
     };
   }
 
-  function renderDocumentViewer(target) {
+  function renderInlineMarkdown(text) {
+    const codeTick = String.fromCharCode(96);
+    const inlineCodePattern = new RegExp(codeTick + '([^' + codeTick + ']+)' + codeTick, 'g');
+    return esc(text)
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(inlineCodePattern, '<code>$1</code>');
+  }
+
+  function renderMarkdownExcerpt(text) {
+    const codeFence = String.fromCharCode(96).repeat(3);
+    const lines = String(text ?? '').split(/\\r?\\n/);
+    const blocks = [];
+    let paragraph = [];
+    let listType = null;
+    let listItems = [];
+    let tableRows = [];
+    let inCode = false;
+    let codeLines = [];
+    let codeFenceInfo = '';
+
+    function pushParagraph() {
+      if (!paragraph.length) {
+        return;
+      }
+      blocks.push('<p>' + renderInlineMarkdown(paragraph.join(' ')) + '</p>');
+      paragraph = [];
+    }
+
+    function pushList() {
+      if (!listItems.length) {
+        return;
+      }
+      const tag = listType === 'ol' ? 'ol' : 'ul';
+      blocks.push('<' + tag + '>' + listItems.map((item) => '<li>' + renderInlineMarkdown(item) + '</li>').join('') + '</' + tag + '>');
+      listType = null;
+      listItems = [];
+    }
+
+    function pushTable() {
+      if (!tableRows.length) {
+        return;
+      }
+      const rows = tableRows.map((line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim()));
+      const divider = rows[1] && rows[1].every((cell) => /^:?-{3,}:?$/.test(cell));
+      const head = rows[0] || [];
+      const body = divider ? rows.slice(2) : rows.slice(1);
+      blocks.push(
+        '<table>' +
+          (head.length ? '<thead><tr>' + head.map((cell) => '<th>' + renderInlineMarkdown(cell) + '</th>').join('') + '</tr></thead>' : '') +
+          '<tbody>' + body.map((row) => '<tr>' + row.map((cell) => '<td>' + renderInlineMarkdown(cell) + '</td>').join('') + '</tr>').join('') + '</tbody>' +
+        '</table>'
+      );
+      tableRows = [];
+    }
+
+    function pushCode() {
+      if (!codeLines.length && !codeFenceInfo) {
+        return;
+      }
+      const source = codeLines.join('\\n');
+      const language = codeFenceInfo || 'text';
+      const encoded = encodeURIComponent(source);
+      if (codeFenceInfo === 'mermaid') {
+        blocks.push(
+          '<div class="detail-mermaid-card">' +
+            '<div class="detail-code-toolbar">' +
+              '<span class="detail-code-language">mermaid</span>' +
+              '<button class="detail-copy-button" type="button" data-copy="' + encoded + '">Copy</button>' +
+            '</div>' +
+            '<div class="detail-mermaid" data-mermaid="' + encoded + '">' +
+              '<div class="detail-mermaid-fallback">' + esc(source) + '</div>' +
+            '</div>' +
+          '</div>'
+        );
+      } else {
+        blocks.push(
+          '<div class="detail-code-block">' +
+            '<div class="detail-code-toolbar">' +
+              '<span class="detail-code-language">' + esc(language) + '</span>' +
+              '<button class="detail-copy-button" type="button" data-copy="' + encoded + '">Copy</button>' +
+            '</div>' +
+            '<pre><code>' + esc(source) + '</code></pre>' +
+          '</div>'
+        );
+      }
+      codeLines = [];
+      codeFenceInfo = '';
+    }
+
+    for (const rawLine of lines) {
+      const line = rawLine.replace(/\\t/g, '  ');
+      const trimmed = line.trim();
+      if (trimmed.startsWith(codeFence)) {
+        pushParagraph();
+        pushList();
+        pushTable();
+        if (inCode) {
+          pushCode();
+          inCode = false;
+        } else {
+          codeFenceInfo = trimmed.slice(codeFence.length).trim().toLowerCase();
+          inCode = true;
+        }
+        continue;
+      }
+      if (inCode) {
+        codeLines.push(rawLine);
+        continue;
+      }
+      if (!trimmed) {
+        pushParagraph();
+        pushList();
+        pushTable();
+        continue;
+      }
+      if (trimmed.startsWith('> ')) {
+        pushParagraph();
+        pushList();
+        pushTable();
+        blocks.push('<blockquote>' + renderInlineMarkdown(trimmed.slice(2)) + '</blockquote>');
+        continue;
+      }
+      const headingMatch = trimmed.match(/^(#{1,6})\\s+(.*)$/);
+      if (headingMatch) {
+        pushParagraph();
+        pushList();
+        pushTable();
+        const level = Math.min(6, headingMatch[1].length);
+        blocks.push('<h' + level + '>' + renderInlineMarkdown(headingMatch[2]) + '</h' + level + '>');
+        continue;
+      }
+      const orderedMatch = trimmed.match(/^\\d+\\.\\s+(.*)$/);
+      if (orderedMatch) {
+        pushParagraph();
+        pushTable();
+        if (listType && listType !== 'ol') {
+          pushList();
+        }
+        listType = 'ol';
+        listItems.push(orderedMatch[1]);
+        continue;
+      }
+      const unorderedMatch = trimmed.match(/^[-*]\\s+(.*)$/);
+      if (unorderedMatch) {
+        pushParagraph();
+        pushTable();
+        if (listType && listType !== 'ul') {
+          pushList();
+        }
+        listType = 'ul';
+        listItems.push(unorderedMatch[1]);
+        continue;
+      }
+      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+        pushParagraph();
+        pushList();
+        tableRows.push(trimmed);
+        continue;
+      }
+      pushList();
+      pushTable();
+      paragraph.push(trimmed);
+    }
+    pushParagraph();
+    pushList();
+    pushTable();
+    if (inCode) {
+      pushCode();
+    }
+    return blocks.join('');
+  }
+
+  function renderDocumentViewer(target, mode = 'markdown') {
     const document = documentData(target?.docId);
     if (!document?.text) {
       return '';
     }
     const range = findDocumentSectionRange(document.text, target.heading);
-    const lineHtml = [];
-    for (let index = range.start; index <= range.end; index += 1) {
-      const highlighted = range.highlightStart >= 0 && index >= range.highlightStart && index <= range.highlightEnd;
-      lineHtml.push(
-        '<div class="detail-doc-line' + (highlighted ? ' highlight' : '') + '">' +
-          '<div class="detail-doc-line-number">' + esc(String(index + 1)) + '</div>' +
-          '<div class="detail-doc-line-text">' + esc(range.lines[index]) + '</div>' +
-        '</div>'
-      );
-    }
+    const excerpt = range.lines.slice(range.start, range.end + 1).join('\\n').trim();
+    const viewer = mode === 'raw'
+      ? '<div class="detail-doc-raw">' + esc(excerpt || '未記録') + '</div>'
+      : '<div class="detail-doc-markdown">' + renderMarkdownExcerpt(excerpt || '未記録') + '</div>';
     return (
       '<div class="detail-dialog-section">' +
         '<div class="detail-dialog-label">Document</div>' +
@@ -1393,7 +1715,7 @@ function renderHtml() {
           '<div class="key">Path</div><div>' + esc(document.path || target.label || '-') + '</div>' +
           '<div class="key">Focus</div><div>' + esc(target.heading || 'full file') + (range.clipped ? ' <span style="color: var(--text-muted);">excerpt</span>' : '') + '</div>' +
         '</div>' +
-        '<div class="detail-doc-viewer">' + lineHtml.join('') + '</div>' +
+        '<div class="detail-doc-viewer">' + viewer + '</div>' +
       '</div>'
     );
   }
@@ -1726,18 +2048,115 @@ function renderHtml() {
     };
   }
 
+  function openModalItem(item, mode = 'markdown') {
+    state.modalItem = item;
+    state.modalDocumentMode = mode;
+    renderModal();
+  }
+
+  let mermaidApiPromise = null;
+
+  async function ensureMermaid() {
+    if (!mermaidApiPromise) {
+      mermaidApiPromise = import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')
+        .then((module) => {
+          const mermaid = module.default || module;
+          mermaid.initialize({
+            startOnLoad: false,
+            securityLevel: 'strict',
+            theme: 'neutral',
+            flowchart: {
+              useMaxWidth: true,
+              curve: 'basis'
+            }
+          });
+          return mermaid;
+        })
+        .catch(() => null);
+    }
+    return mermaidApiPromise;
+  }
+
+  function wireCopyButtons(root) {
+    root.querySelectorAll('.detail-copy-button').forEach((button) => {
+      if (button.dataset.bound === 'true') {
+        return;
+      }
+      button.dataset.bound = 'true';
+      button.addEventListener('click', async () => {
+        const original = button.textContent;
+        const value = decodeURIComponent(button.dataset.copy || '');
+        try {
+          await navigator.clipboard.writeText(value);
+          button.textContent = 'Copied';
+        } catch {
+          button.textContent = 'Copy failed';
+        }
+        window.setTimeout(() => {
+          button.textContent = original;
+        }, 1200);
+      });
+    });
+  }
+
+  async function hydrateMermaidBlocks(root) {
+    const blocks = Array.from(root.querySelectorAll('.detail-mermaid[data-mermaid]'));
+    if (!blocks.length) {
+      return;
+    }
+    const mermaid = await ensureMermaid();
+    for (let index = 0; index < blocks.length; index += 1) {
+      const block = blocks[index];
+      const source = decodeURIComponent(block.dataset.mermaid || '');
+      if (!mermaid) {
+        block.innerHTML = '<div class="detail-mermaid-fallback">' + esc(source) + '</div>';
+        continue;
+      }
+      try {
+        const id = 'detail-mermaid-' + Date.now() + '-' + index;
+        const rendered = await mermaid.render(id, source);
+        block.innerHTML = rendered.svg;
+      } catch {
+        block.innerHTML = '<div class="detail-mermaid-fallback">' + esc(source) + '</div>';
+      }
+    }
+  }
+
+  function hydrateModalBody() {
+    const body = document.getElementById('detail-modal-body');
+    wireCopyButtons(body);
+    hydrateMermaidBlocks(body);
+  }
+
   function renderModal() {
     const modal = document.getElementById('detail-modal');
     const title = document.getElementById('detail-modal-title');
     const body = document.getElementById('detail-modal-body');
+    const toggleSlot = document.getElementById('detail-view-toggle-slot');
     if (!state.modalItem) {
       modal.classList.add('hidden');
       title.textContent = 'Detail';
       body.innerHTML = '';
+      toggleSlot.innerHTML = '';
       return;
     }
     modal.classList.remove('hidden');
     title.textContent = state.modalItem.label;
+    if (state.modalItem.documentTarget) {
+      toggleSlot.innerHTML =
+        '<div class="detail-view-toggle">' +
+          '<button type="button" data-mode="markdown"' + (state.modalDocumentMode === 'markdown' ? ' class="on"' : '') + '>Markdown</button>' +
+          '<button type="button" data-mode="raw"' + (state.modalDocumentMode === 'raw' ? ' class="on"' : '') + '>Raw</button>' +
+        '</div>';
+      toggleSlot.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.modalDocumentMode = button.dataset.mode || 'markdown';
+          renderModal();
+        });
+      });
+    } else {
+      toggleSlot.innerHTML = '';
+    }
     const hasDetail = String(state.modalItem.detail || '').trim().length > 0;
     body.innerHTML =
       '<div class="detail-dialog-grid">' +
@@ -1747,7 +2166,8 @@ function renderHtml() {
       (hasDetail
         ? '<div class="detail-dialog-section"><div class="detail-dialog-label">Detail</div><div class="detail-dialog-pre">' + esc(state.modalItem.detail || '未記録') + '</div></div>'
         : '') +
-      (state.modalItem.documentTarget ? renderDocumentViewer(state.modalItem.documentTarget) : '');
+      (state.modalItem.documentTarget ? renderDocumentViewer(state.modalItem.documentTarget, state.modalDocumentMode) : '');
+    hydrateModalBody();
   }
 
   function renderDetail() {
@@ -1938,30 +2358,31 @@ function renderHtml() {
     root.innerHTML = html;
     root.querySelectorAll('.artifact-button').forEach((button, index) => {
       button.addEventListener('click', () => {
-        state.modalItem = showItems[index];
-        renderModal();
+        openModalItem(showItems[index], 'markdown');
       });
     });
     root.querySelectorAll('.document-button').forEach((button) => {
       button.addEventListener('click', () => {
-        state.modalItem = documentModalItem(button.dataset.doc);
-        renderModal();
+        openModalItem(documentModalItem(button.dataset.doc), 'markdown');
       });
     });
   }
 
   document.getElementById('detail-modal-close').addEventListener('click', () => {
     state.modalItem = null;
+    state.modalDocumentMode = 'markdown';
     renderModal();
   });
   document.getElementById('detail-modal').addEventListener('click', (event) => {
     if (event.target.id !== 'detail-modal') return;
     state.modalItem = null;
+    state.modalDocumentMode = 'markdown';
     renderModal();
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && state.modalItem) {
       state.modalItem = null;
+      state.modalDocumentMode = 'markdown';
       renderModal();
     }
   });
