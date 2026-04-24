@@ -374,41 +374,76 @@ function redactSection(text, redactor) {
 
 function describeNextAction({ repo, runtime, currentStep, currentGate, interruptions }) {
   if (!runtime.run || !currentStep) {
+    const command = `node src/cli.mjs run --repo ${shellQuote(repo)} --ticket <ticket-id> --variant full`;
     return {
       title: "最初にすること",
       body: "repo root で `run` を実行して current-note.md の frontmatter を初期化します。",
-      commands: [`node src/cli.mjs run --repo ${shellQuote(repo)} --ticket <ticket-id> --variant full`],
+      commands: [command],
+      actions: [
+        nextActionChoice({
+          label: "Run",
+          description: "新しい flow を開始して current-note.md の state を初期化します。",
+          command
+        })
+      ],
+      selection: "single",
       targetTab: "commands"
     };
   }
   if (runtime.run.status === "needs_human") {
+    const actions = humanDecisionActions(repo, currentStep.id);
     return {
       title: `${currentStep.id} の判断`,
       body: "Web UI は read-only です。gate summary を読んで terminal から判断します。",
-      commands: humanDecisionCommands(repo, currentStep.id),
+      commands: actions.map((item) => item.command),
+      actions,
+      selection: "choose_one",
       targetTab: "gate"
     };
   }
   if (interruptions.length > 0 || runtime.run.status === "interrupted") {
+    const actions = interruptAnswerActions(repo, currentStep.id);
     return {
       title: `${currentStep.id} の割り込み回答`,
       body: "質問内容を確認して CLI の `answer` で返答します。",
-      commands: interruptAnswerCommands(repo, currentStep.id),
+      commands: actions.map((item) => item.command),
+      actions,
+      selection: "ordered",
       targetTab: "detail"
     };
   }
   if (runtime.run.status === "failed") {
+    const command = `node src/cli.mjs resume --repo ${shellQuote(repo)}`;
     return {
       title: `${currentStep.id} の再実行`,
       body: "失敗 summary を確認して `resume` か `run-provider` を再実行します。",
-      commands: [`node src/cli.mjs resume --repo ${shellQuote(repo)}`],
+      commands: [command],
+      actions: [
+        nextActionChoice({
+          label: "Resume",
+          description: "保存済み provider session から再開します。summary を確認してから使います。",
+          command,
+          tone: "revise"
+        })
+      ],
+      selection: "single",
       targetTab: "commands"
     };
   }
+  const command = `node src/cli.mjs run-next --repo ${shellQuote(repo)}`;
   return {
     title: `${currentStep.id} を進める`,
     body: "通常は `run-next` だけで、gate や割り込みまで自動で進みます。",
-    commands: [`node src/cli.mjs run-next --repo ${shellQuote(repo)}`],
+    commands: [command],
+    actions: [
+      nextActionChoice({
+        label: "Run Next",
+        description: "通常進行です。次の gate / interruption / failure / complete まで自動で進めます。",
+        command,
+        tone: "approve"
+      })
+    ],
+    selection: "single",
     targetTab: "commands"
   };
 }
@@ -664,6 +699,60 @@ function humanDecisionCommands(repo, stepId) {
     `node src/cli.mjs approve${repoArg} --step ${stepId} --reason ok`,
     `node src/cli.mjs request-changes${repoArg} --step ${stepId} --reason "<reason>"`,
     `node src/cli.mjs reject${repoArg} --step ${stepId} --reason "<reason>"`
+  ];
+}
+
+function interruptAnswerCommands(repo, stepId) {
+  const repoArg = ` --repo ${shellQuote(repo)}`;
+  return [
+    `node src/cli.mjs show-interrupts${repoArg} --step ${stepId}`,
+    `node src/cli.mjs answer${repoArg} --step ${stepId} --message "<answer>"`
+  ];
+}
+
+function nextActionChoice({ label, description, command, tone = "neutral" }) {
+  return { label, description, command, tone };
+}
+
+function humanDecisionActions(repo, stepId) {
+  const [approve, requestChanges, reject] = humanDecisionCommands(repo, stepId);
+  return [
+    nextActionChoice({
+      label: "Approve",
+      description: "計画・レビュー結果・差分に問題がなければこれを選びます。PD-C-6 に進みます。",
+      command: approve,
+      tone: "approve"
+    }),
+    nextActionChoice({
+      label: "Request Changes",
+      description: "方向性はよいが、実装前に計画の修正が必要なときに選びます。PD-C-3 に戻します。",
+      command: requestChanges,
+      tone: "revise"
+    }),
+    nextActionChoice({
+      label: "Reject",
+      description: "この計画では進めるべきではないときに選びます。スコープや進め方が間違っている場合です。",
+      command: reject,
+      tone: "reject"
+    })
+  ];
+}
+
+function interruptAnswerActions(repo, stepId) {
+  const [showInterrupts, answer] = interruptAnswerCommands(repo, stepId);
+  return [
+    nextActionChoice({
+      label: "Show Interrupt",
+      description: "未回答の質問内容を terminal で確認します。",
+      command: showInterrupts,
+      tone: "neutral"
+    }),
+    nextActionChoice({
+      label: "Answer",
+      description: "質問への回答を返して current step を再開します。",
+      command: answer,
+      tone: "approve"
+    })
   ];
 }
 
@@ -1115,6 +1204,87 @@ function renderHtml() {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .next-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .next-actions-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .next-action {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    padding: 10px 12px;
+  }
+  .next-action.approve { border-color: #9fe1cb; background: #f7fcfa; }
+  .next-action.revise { border-color: var(--waiting-border); background: #fffaf2; }
+  .next-action.reject { border-color: #f0b7b7; background: #fff8f8; }
+  .next-action-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .next-action-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .next-action-choice {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .next-action-description {
+    font-size: 12px;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .next-action-command {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .detail-diagnostics {
+    margin-top: 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+  }
+  .detail-diagnostics > summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .detail-diagnostics > summary::-webkit-details-marker { display: none; }
+  .detail-diagnostics-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+  .detail-diagnostics-body {
+    padding: 0 12px 12px;
   }
   .review-table { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .review-row {
@@ -1674,6 +1844,29 @@ function renderHtml() {
       return preferredText(formatGuardText(step, true), step.noteSection);
     }
     return '';
+  }
+
+  function nextActionItems(nextAction) {
+    const actions = listOf(nextAction?.actions);
+    if (actions.length) {
+      return actions;
+    }
+    return listOf(nextAction?.commands).map((command) => ({
+      label: 'Run',
+      description: nextAction?.body || '',
+      command,
+      tone: 'neutral'
+    }));
+  }
+
+  function nextActionNote(nextAction) {
+    if (nextAction?.selection === 'choose_one') {
+      return 'Choose one. 3つとも実行するのではなく、1つだけ選びます。';
+    }
+    if (nextAction?.selection === 'ordered') {
+      return '上から順に使います。必要なら先に確認コマンド、その後に回答コマンドです。';
+    }
+    return '通常はこのコマンドを実行します。';
   }
 
   function documentData(docId) {
@@ -2792,6 +2985,7 @@ function renderHtml() {
     const outputSummary = derivedSummaryLines(step);
     const outputRisks = derivedRiskLines(step);
     const outputNotes = derivedNotesText(step, current && current.id === step.id ? nextAction : null);
+    const nextItems = current && current.id === step.id ? nextActionItems(nextAction) : [];
     html += '<div class="detail-section"><div class="detail-section-title">判断の前提</div>' +
       '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
       '<div><strong>Viewer:</strong> ' + esc(contract.viewer || '開発者') + '</div>' +
@@ -2837,48 +3031,49 @@ function renderHtml() {
       html += '</div></div>';
     }
 
-    if (nextAction?.commands?.length && current && current.id === step.id) {
-      html += '<div class="detail-section"><div class="detail-section-title">Next</div><div class="commands">';
-      nextAction.commands.forEach((command) => {
-        html += '<div class="command"><span class="command-text">' + esc(command) + '</span></div>';
+    if (nextItems.length) {
+      html += '<div class="detail-section"><div class="detail-section-title">Next</div>';
+      html += '<div class="next-actions-note">' + esc(nextActionNote(nextAction)) + '</div>';
+      html += '<div class="next-actions">';
+      nextItems.forEach((item, index) => {
+        html +=
+          '<div class="next-action ' + esc(item.tone || 'neutral') + '">' +
+            '<div class="next-action-head">' +
+              '<span class="next-action-label">' + esc(item.label || ('Action ' + String(index + 1))) + '</span>' +
+              '<span class="next-action-choice">' + esc(nextAction?.selection === 'choose_one' ? 'choose one' : nextAction?.selection === 'ordered' ? 'run in order' : 'run this') + '</span>' +
+            '</div>' +
+            (item.description ? '<div class="next-action-description">' + esc(item.description) + '</div>' : '') +
+            '<div class="next-action-command">' + esc(item.command || '') + '</div>' +
+          '</div>';
       });
       html += '</div></div>';
     }
 
+    const diagnostics = [];
     if (step.gate || step.interruptions?.length) {
-      html += '<div class="detail-section"><div class="detail-section-title">現在の待ち状態</div><div class="artifacts">';
+      let section = '<div class="detail-section"><div class="detail-section-title">Current State</div><div class="artifacts">';
       if (step.gate?.summary) {
-        html += '<div class="artifact"><span class="artifact-name">human gate summary</span><span class="artifact-size">' + esc(step.gate.decision || step.gate.status) + '</span></div>';
+        section += '<div class="artifact"><span class="artifact-name">human gate summary</span><span class="artifact-size">' + esc(step.gate.decision || step.gate.status) + '</span></div>';
       }
       step.interruptions.forEach((item) => {
-        html += '<div class="artifact"><span class="artifact-name">' + esc(item.message || item.kind || 'interruption') + '</span><span class="artifact-size">' + esc(item.status || item.kind || 'open') + '</span></div>';
+        section += '<div class="artifact"><span class="artifact-name">' + esc(item.message || item.kind || 'interruption') + '</span><span class="artifact-size">' + esc(item.status || item.kind || 'open') + '</span></div>';
       });
-      html += '</div></div>';
+      section += '</div></div>';
+      diagnostics.push(section);
     }
-
-    html += '<div class="detail-section"><div class="detail-section-title">揃っていれば進める</div><div class="artifacts">';
-    if (!readyItems.length) {
-      html += '<div class="artifact"><span class="artifact-name">guard 評価待ち</span><span class="artifact-size">pending</span></div>';
+    if (readyItems.length) {
+      let section = '<div class="detail-section"><div class="detail-section-title">Ready When</div><div class="artifacts">';
+      readyItems.forEach((item) => {
+        section += '<div class="artifact"><span class="artifact-name">' + esc(item.label) + '</span><span class="artifact-size">' + esc(item.kind) + '</span></div>';
+      });
+      section += '</div></div>';
+      diagnostics.push(section);
     }
-    readyItems.forEach((item) => {
-      html += '<div class="artifact"><span class="artifact-name">' + esc(item.label) + '</span><span class="artifact-size">' + esc(item.kind) + '</span></div>';
-    });
-    html += '</div></div>';
-
-    html += '<div class="detail-section"><div class="detail-section-title">ここでは出さない</div><div class="artifacts">';
-    if (!omitItems.length) {
-      html += '<div class="artifact"><span class="artifact-name">特になし</span><span class="artifact-size">omit</span></div>';
-    }
-    omitItems.forEach((item) => {
-      html += '<div class="artifact"><span class="artifact-name">' + esc(item) + '</span><span class="artifact-size">omit</span></div>';
-    });
-    html += '</div></div>';
-
     if (step.events?.length) {
-      html += '<div class="detail-section"><div class="detail-section-title">補足ログ</div><div class="activity">';
+      let section = '<div class="detail-section"><div class="detail-section-title">Logs</div><div class="activity">';
       step.events.forEach((event) => {
         const highlight = event.type === 'interrupted' || event.type === 'guard_failed' || event.type === 'human_gate_resolved';
-        html +=
+        section +=
           '<div class="activity-item' + (highlight ? ' highlight' : '') + '">' +
             '<div class="activity-meta">' +
               '<span class="activity-time">' + esc((event.ts || '').replace('T', ' ').replace('Z', '')) + '</span>' +
@@ -2887,13 +3082,13 @@ function renderHtml() {
             '<div class="activity-msg">' + esc(textPreview(event.message || event.type)) + '</div>' +
           '</div>';
       });
-      html += '</div></div>';
+      section += '</div></div>';
+      diagnostics.push(section);
     }
-
     if (step.artifacts?.length) {
-      html += '<div class="detail-section"><div class="detail-section-title">補足成果物</div><div class="artifacts">';
+      let section = '<div class="detail-section"><div class="detail-section-title">Artifacts</div><div class="artifacts">';
       step.artifacts.forEach((artifact, index) => {
-        html +=
+        section +=
           '<button class="artifact artifact-button supplemental-artifact-button" type="button" data-artifact-index="' + esc(String(index)) + '">' +
             '<div class="artifact-copy">' +
               '<span class="artifact-name">' + esc(artifact.name) + '</span>' +
@@ -2902,7 +3097,23 @@ function renderHtml() {
             '<span class="artifact-source">open</span>' +
           '</button>';
       });
-      html += '</div></div>';
+      section += '</div></div>';
+      diagnostics.push(section);
+    }
+    if (omitItems.length) {
+      let section = '<div class="detail-section"><div class="detail-section-title">Omitted From Main View</div><div class="artifacts">';
+      omitItems.forEach((item) => {
+        section += '<div class="artifact"><span class="artifact-name">' + esc(item) + '</span><span class="artifact-size">omit</span></div>';
+      });
+      section += '</div></div>';
+      diagnostics.push(section);
+    }
+    if (diagnostics.length) {
+      html +=
+        '<details class="detail-diagnostics">' +
+          '<summary><span>Diagnostics</span><span class="detail-diagnostics-sub">state / logs / artifacts</span></summary>' +
+          '<div class="detail-diagnostics-body">' + diagnostics.join('') + '</div>' +
+        '</details>';
     }
 
     root.innerHTML = html;
