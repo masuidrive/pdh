@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { getStep, nextStep } from "./flow.mjs";
+import { buildFlowView, getStep, nextStep } from "./flow.mjs";
 import { loadStepInterruptions, renderInterruptionsForPrompt } from "./interruptions.mjs";
 import { renderUiOutputPromptSection } from "./step-ui.mjs";
 
@@ -21,6 +21,9 @@ export function writeStepPrompt({ repoPath, stateDir, run, flow, stepId }) {
 export function renderStepPrompt({ repoPath, run, flow, step, interruptions = [] }) {
   const instructions = stepInstructions(step.id);
   const promptContext = mergePromptContext(flow, step);
+  const flowView = buildFlowView(flow, run.flow_variant, step.id);
+  const flowStep = flowView.steps.find((item) => item.id === step.id);
+  const reviewPlan = flowStep?.review ?? null;
 
   return [
     "# pdh-flowchart Provider Prompt",
@@ -73,6 +76,8 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
     "",
     ...formatGuards(step),
     "",
+    ...renderReviewSemantics(step, reviewPlan),
+    ...((step.mode === "review" || reviewPlan?.reviewers?.length) ? [""] : []),
     ...renderUiOutputPromptSection({ run, step }),
     ""
   ].join("\n");
@@ -145,6 +150,48 @@ function renderPromptContext(promptContext) {
   } else {
     lines.push("- Required references: (none)");
   }
+  return lines;
+}
+
+function renderReviewSemantics(step, reviewPlan) {
+  if (step.mode !== "review" && !reviewPlan?.reviewers?.length) {
+    return [];
+  }
+  const lines = [
+    "## Runtime Review Semantics",
+    "",
+    "- This repo owns the review semantics for this step. Do not rely on external `pdh-dev` or `tmux-director` skills for missing rules."
+  ];
+  if (reviewPlan?.intent) {
+    lines.push(`- Review intent: ${reviewPlan.intent}`);
+  }
+  if (reviewPlan?.passWhen?.length) {
+    lines.push("- Pass conditions:");
+    for (const item of reviewPlan.passWhen) {
+      lines.push(`  - ${item}`);
+    }
+  }
+  if (reviewPlan?.onFindings?.length) {
+    lines.push("- If findings remain:");
+    for (const item of reviewPlan.onFindings) {
+      lines.push(`  - ${item}`);
+    }
+  }
+  if (reviewPlan?.reviewers?.length) {
+    lines.push("- Reviewer roster for this run variant:");
+    for (const reviewer of reviewPlan.reviewers) {
+      lines.push(`  - ${reviewer.label} x${reviewer.count}`);
+      if (reviewer.remit) {
+        lines.push(`    - remit: ${reviewer.remit}`);
+      }
+      for (const focus of reviewer.focus) {
+        lines.push(`    - focus: ${focus}`);
+      }
+    }
+  } else {
+    lines.push("- Reviewer roster for this run variant: (unspecified)");
+  }
+  lines.push("- Keep your output aligned with this runtime-owned review contract.");
   return lines;
 }
 

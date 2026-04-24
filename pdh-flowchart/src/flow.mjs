@@ -63,6 +63,7 @@ export function buildFlowView(flow, variant = "full", currentStepId = null) {
   if (!selected) {
     throw new Error(`Unknown flow variant: ${variant}`);
   }
+  const roleCatalog = normalizeReviewRoleCatalog(flow.defaults?.reviewRoles);
   const steps = selected.sequence.map((stepId) => {
     const step = getStep(flow, stepId);
     return {
@@ -71,6 +72,7 @@ export function buildFlowView(flow, variant = "full", currentStepId = null) {
       summary: step.summary ?? "",
       userAction: step.userAction ?? "",
       ui: normalizeUiContract(step.ui),
+      review: normalizeReviewPlan(step.review, variant, roleCatalog),
       provider: step.provider,
       mode: step.mode,
       guards: (step.guards ?? []).map((guard) => ({ ...guard })),
@@ -183,6 +185,45 @@ function normalizeUiContract(ui) {
     decision: normalizeString(source.decision),
     mustShow: normalizeStringList(source.mustShow),
     omit: normalizeStringList(source.omit)
+  };
+}
+
+function normalizeReviewRoleCatalog(reviewRoles) {
+  const source = reviewRoles ?? {};
+  return Object.fromEntries(Object.entries(source).map(([id, entry]) => [
+    id,
+    {
+      id,
+      label: normalizeString(entry?.label ?? id),
+      remit: normalizeString(entry?.remit)
+    }
+  ]));
+}
+
+function normalizeReviewPlan(review, variant, roleCatalog) {
+  const source = review ?? {};
+  const reviewers = Array.isArray(source.reviewers)
+    ? source.reviewers
+    : (source.reviewersByVariant?.[variant] ?? source.reviewersByVariant?.default ?? []);
+  return {
+    intent: normalizeString(source.intent),
+    passWhen: normalizeStringList(source.passWhen),
+    onFindings: normalizeStringList(source.onFindings),
+    reviewers: Array.isArray(reviewers)
+      ? reviewers.map((reviewer) => normalizeReviewer(reviewer, roleCatalog)).filter((entry) => entry.roleId || entry.label)
+      : []
+  };
+}
+
+function normalizeReviewer(reviewer, roleCatalog) {
+  const roleId = normalizeString(reviewer?.role);
+  const base = roleCatalog[roleId] ?? {};
+  return {
+    roleId,
+    label: normalizeString(reviewer?.label ?? base.label ?? roleId),
+    remit: normalizeString(reviewer?.remit ?? base.remit),
+    count: Number.isFinite(Number(reviewer?.count)) ? Number(reviewer.count) : 1,
+    focus: normalizeStringList(reviewer?.focus)
   };
 }
 

@@ -5,6 +5,28 @@ defaults:
   idleTimeoutMinutes: 5
   maxAttempts: 2
   transitionLogFormat: "[{from}] -> [{to}]"
+  reviewRoles:
+    devils_advocate:
+      label: Devil's Advocate
+      remit: ユーザ側の立場から、見落とし、論理矛盾、セキュリティや設計上の危険を厳しく見る。
+    coding_engineer_reviewer:
+      label: Coding Engineer Reviewer
+      remit: 技術的実現可能性、依存関係、実装量、既存パターンとの整合を見る。
+    code_reviewer:
+      label: Code Reviewer
+      remit: コード品質、回帰、認可漏れ、整合性、エラーハンドリング、テスト妥当性を見る。
+    codex_critical:
+      label: codex Critical Reviewer
+      remit: 致命的な問題だけを短く指摘する。
+    pdm_counterexample:
+      label: PdM Counterexample Reviewer
+      remit: close してはいけない理由、未達 AC、目的ずれを反証要求型で探す。
+    ac_verifier:
+      label: AC Verifier
+      remit: AC ごとの証跡、裏取り表、最終検証の妥当性を確認する。
+    surface_observer:
+      label: Surface Observer
+      remit: UI / HTTP API / SDK / CLI の consumer 視点で、自動テストでは拾いにくい違和感を観察する。
   promptContext:
     semanticRules:
       - current-ticket.md and current-note.md are the canonical records for the active ticket.
@@ -123,6 +145,31 @@ steps:
         - 実装ログの時系列
     provider: claude
     mode: review
+    review:
+      intent: 実装前レビューとして、計画の穴、検証不足、目的ずれを潰してから実装承認へ進む。
+      passWhen:
+        - "全 reviewer role の最新結果が `No Critical/Major` である"
+        - または未解消点についてユーザが明示的に受け入れている
+      onFindings:
+        - Critical/Major は PD-C-3 に差し戻して計画を修正する
+        - vague な caution ではなく、修正すべき内容を具体化する
+      reviewersByVariant:
+        full:
+          - role: devils_advocate
+            count: 2
+            focus:
+              - 計画の修正方針に矛盾や見落としがないか
+              - セキュリティや設計上の懸念を先回りして潰せているか
+          - role: coding_engineer_reviewer
+            count: 1
+            focus:
+              - 技術的実現可能性
+              - 依存関係と既存パターンとの整合
+              - 実装量と検証量の妥当性
+          - role: codex_critical
+            count: 1
+            focus:
+              - 致命的な問題だけを短く指摘する
     promptContext:
       contextSummary: 実装前レビューとして、計画の穴、検証不足、目的ずれを潰してから PD-C-5 に進める。
       semanticRules:
@@ -238,6 +285,43 @@ steps:
         - 過去 step の長文ノート
     provider: claude
     mode: review
+    review:
+      intent: 実装済み変更の品質、回帰、テスト妥当性、設計逸脱を複数視点で洗う。
+      passWhen:
+        - 全 reviewer role の最新結果が `No Critical/Major` である
+        - または未解消点についてユーザが明示的に受け入れている
+      onFindings:
+        - Critical/Major があれば PD-C-6 に戻して修正、必要な再テスト、再レビューを行う
+        - 中間 round では変更の影響範囲に絞って再テストし、フル実行は最終検証で担保してよい
+      reviewersByVariant:
+        full:
+          - role: devils_advocate
+            count: 2
+            focus:
+              - セキュリティ脆弱性
+              - 設計上の論理バグ
+              - 目的から見た危険な抜け
+          - role: code_reviewer
+            count: 2
+            focus:
+              - コード品質
+              - 回帰
+              - 認可漏れと整合性
+              - エラーハンドリングとテスト妥当性
+          - role: codex_critical
+            count: 1
+            focus:
+              - 致命的な問題だけを短く指摘する
+        light:
+          - role: devils_advocate
+            count: 1
+            focus:
+              - セキュリティ脆弱性
+              - 設計上の論理バグ
+          - role: codex_critical
+            count: 1
+            focus:
+              - 致命的な問題だけを短く指摘する
     promptContext:
       contextSummary: 実装済み変更の品質、回帰、テスト妥当性、設計逸脱を判定する。
       semanticRules:
@@ -276,6 +360,22 @@ steps:
         - 実装イベントの生時系列
     provider: claude
     mode: review
+    review:
+      intent: 正しく動いて見えても close してはいけない理由を反証要求型で探す。
+      passWhen:
+        - "`No Unverified` である"
+        - または未解消点についてユーザが明示的に受け入れている
+      onFindings:
+        - 未検証 AC や目的ずれがあれば PD-C-6 に戻して不足を埋める
+        - follow-up で済ませる判断を reviewer 側で勝手に正当化しない
+      reviewersByVariant:
+        full:
+          - role: pdm_counterexample
+            count: 1
+            focus:
+              - close してはいけない理由を AC ごとに探す
+              - 未検証項目を証跡付きで分類する
+              - 目的ずれや成果物不足を明文化する
     promptContext:
       contextSummary: 実装が正しく見えても close すべきでない理由が残っていないかを洗う。
       semanticRules:
@@ -317,6 +417,30 @@ steps:
         - 古い review round の全履歴
     provider: codex
     mode: review
+    review:
+      intent: 完了承認に必要な AC 裏取りと consumer 視点の最終検証証跡を揃える。
+      passWhen:
+        - AC 裏取り表が完成し、`unverified` が 0 件である
+        - 変更した外部 surface に対する最終観察結果が揃っている
+      onFindings:
+        - 裏取り不足や surface blocker があれば PD-C-6 に戻す
+      reviewersByVariant:
+        full:
+          - role: ac_verifier
+            count: 1
+            focus:
+              - AC ごとの証跡、分類、deferred の妥当性
+              - 最終検証コマンドと結果
+          - role: surface_observer
+            count: 1
+            focus:
+              - UI / HTTP API / SDK / CLI の consumer 視点の違和感
+              - エラー文言や情報ヒエラルキーの破綻
+        light:
+          - role: ac_verifier
+            count: 1
+            focus:
+              - AC ごとの証跡、分類、最終検証結果
     promptContext:
       contextSummary: 完了承認に必要な AC 裏取りと最終検証証跡を揃える。
       semanticRules:

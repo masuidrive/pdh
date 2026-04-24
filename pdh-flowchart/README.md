@@ -10,6 +10,7 @@
 - The CLI operates on a repo, not on a separate SQLite run database.
 - The Web UI is read-only. Decisions and execution stay in the CLI.
 - Runtime semantics are owned by this repo's flow YAML and prompt/runtime code. `pdh-dev` and `tmux-director` are not runtime dependencies.
+- Reviewer rosters, review-loop pass conditions, and review-step intent are also defined in this repo's flow YAML and compiled into provider prompts.
 
 ## Local Setup
 
