@@ -484,6 +484,24 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
       targetTab: "commands"
     };
   }
+  if (runtime.run.status === "blocked") {
+    const command = `node src/cli.mjs run-next --repo ${shellQuote(repo)}`;
+    return {
+      title: `${currentStep.id} の不足を解消`,
+      body: blockedActionBody(currentStep),
+      commands: [command],
+      actions: [
+        nextActionChoice({
+          label: "Run Next",
+          description: "不足している guard-facing artifact を補完したうえで、この step を再評価します。",
+          command,
+          tone: "revise"
+        })
+      ],
+      selection: "single",
+      targetTab: "detail"
+    };
+  }
   const command = `node src/cli.mjs run-next --repo ${shellQuote(repo)}`;
   return {
     title: `${currentStep.id} を進める`,
@@ -500,6 +518,25 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
     selection: "single",
     targetTab: "commands"
   };
+}
+
+function blockedActionBody(step) {
+  const failed = Array.isArray(step?.uiRuntime?.guards) ? step.uiRuntime.guards.filter((guard) => guard.status === "failed") : [];
+  const first = failed[0];
+  if (!first) {
+    return "必須 guard が不足しています。詳細を確認して `run-next` を再実行します。";
+  }
+  const evidence = String(first.evidence || "");
+  if (/ui-output\.yaml has parse errors/i.test(evidence)) {
+    return "provider は完了していますが、ui-output.yaml の構文エラーで review judgement を guard 用 artifact に落とせていません。通常は `run-next` の再実行で補完されます。繰り返す場合は ui-output.yaml を確認します。";
+  }
+  if (/present in ui-output\.yaml/i.test(evidence)) {
+    return "provider は judgement 自体を書いていますが、guard が読む judgement artifact が不足しています。通常は `run-next` の再実行で補完されます。繰り返す場合は ui-output.yaml と judgements/ を確認します。";
+  }
+  if (/provider step completed/i.test(evidence)) {
+    return "provider step は完了していますが、guard が必要とする structured evidence が不足しています。step artifacts を確認してから `run-next` を再実行します。";
+  }
+  return `必須 guard が不足しています: ${evidence || first.id || first.guardId || "unknown"}`;
 }
 
 function gatePayload(gate, redactor) {
@@ -3287,7 +3324,7 @@ function renderHtml() {
       } else if (state.data.runtime.run.status === 'failed') {
         questionBody.push('<p>provider が失敗しています。summary を確認して <code>resume</code> か <code>run-provider</code> を再実行します。</p>');
       } else {
-        questionBody.push('<p>guard が通っていません。必要な note/ticket 更新、commit、検証を追加してから <code>run-next</code> を再実行します。</p>');
+        questionBody.push('<p>' + esc(nextAction.body || 'guard が通っていません。必要な note/ticket 更新、commit、検証を追加してから run-next を再実行します。') + '</p>');
       }
       html +=
         '<div class="question-card' + (isError ? ' error' : '') + '">' +

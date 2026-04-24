@@ -20,6 +20,7 @@ export function writeFailureSummary({
   finalMessage = null,
   stderr = null,
   failedGuards = [],
+  message = null,
   nextCommands = []
 }) {
   const artifactDir = join(stateDir, "runs", runId, "steps", stepId);
@@ -42,6 +43,7 @@ export function writeFailureSummary({
     finalMessage,
     stderr,
     failedGuards,
+    message,
     nextCommands
   }));
   writeFileSync(artifactPath, body);
@@ -64,6 +66,7 @@ function renderFailureSummary({
   finalMessage,
   stderr,
   failedGuards,
+  message,
   nextCommands
 }) {
   const lines = [
@@ -91,6 +94,10 @@ function renderFailureSummary({
     }
   } else {
     lines.push("- (none)");
+  }
+
+  if (message) {
+    lines.push("", "## Diagnosis", "", `- ${message}`);
   }
 
   lines.push("", "## Provider Output", "");

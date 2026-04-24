@@ -104,7 +104,33 @@ function checkJudgementStatus(guard, context) {
   const judgements = context.judgements ?? [];
   const found = judgements.find((judgement) => judgement.kind === guard.artifactKind);
   const accepted = found && (guard.accepted ?? []).includes(found.status);
-  return passIf(guard, Boolean(accepted), found ? `${found.kind}: ${found.status}` : `${guard.artifactKind} missing`);
+  if (found) {
+    return passIf(guard, Boolean(accepted), `${found.kind}: ${found.status}`);
+  }
+  const uiJudgement = context.uiOutput?.judgement;
+  if (uiJudgement?.kind === guard.artifactKind) {
+    const parseErrors = context.uiOutput?.parseErrors ?? [];
+    if (parseErrors.length > 0) {
+      return passIf(
+        guard,
+        false,
+        `${guard.artifactKind} not materialized because ui-output.yaml has parse errors: ${parseErrors[0]}`
+      );
+    }
+    return passIf(
+      guard,
+      false,
+      `${guard.artifactKind} is present in ui-output.yaml (${uiJudgement.status}) but the judgement artifact was not written`
+    );
+  }
+  if (context.latestAttempt?.status === "completed") {
+    return passIf(
+      guard,
+      false,
+      `${guard.artifactKind} is still missing even though the provider step completed; inspect ui-output.yaml and judgements/`
+    );
+  }
+  return passIf(guard, false, `${guard.artifactKind} missing`);
 }
 
 function passIf(guard, condition, evidence) {

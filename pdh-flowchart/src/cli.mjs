@@ -335,13 +335,15 @@ async function cmdRunNext(argv) {
       const failed = guardResults.filter((guard) => guard.status === "failed");
       if (failed.length > 0) {
         updateRun(repo, { status: "blocked", current_step_id: step.id });
-        const summary = createFailureSummaryForBlock({ repo, runtime, step, failedGuards: failed });
+        const message = describeGuardFailureMessage(failed);
+        const summary = createFailureSummaryForBlock({ repo, runtime, step, failedGuards: failed, message });
         syncStepUiRuntime({ repo, stepId: step.id, guardResults, nextCommands: [runNextCommand(repo)] });
         const block = {
           status: "blocked",
           stepId: step.id,
           reason: "guard_failed",
           provider: step.provider,
+          message,
           failedGuards: failed,
           failureSummary: summary.artifactPath,
           nextCommand: runNextCommand(repo)
@@ -1200,10 +1202,16 @@ function hydrateStepArtifactsBeforeGuards({ repo, runtime, step }) {
 }
 
 function evaluateCurrentGuards({ repo, runtime, step, gate = null }) {
+  const uiOutput = runtime.run.id ? loadStepUiOutput({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }) : null;
+  const latestAttempt = step.provider === "runtime"
+    ? null
+    : latestAttemptResult({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id, provider: step.provider });
   const guardResults = evaluateStepGuards(runtime.flow, step.id, {
     repoPath: repo,
     artifacts: collectGuardArtifacts(runtime, step.id),
     judgements: runtime.run.id ? loadJudgements({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }) : [],
+    uiOutput,
+    latestAttempt,
     humanDecision: gate?.decision ?? null,
     ticketClosed: false
   });
@@ -1342,7 +1350,27 @@ function writePromptArtifact({ repo, runtime, stepId }) {
   return prompt.artifactPath;
 }
 
-function createFailureSummaryForBlock({ repo, runtime, step, failedGuards }) {
+function describeGuardFailureMessage(failedGuards) {
+  if (!failedGuards?.length) {
+    return null;
+  }
+  if (failedGuards.length > 1) {
+    return `Multiple required checks are still incomplete. Start with: ${failedGuards[0].guardId} — ${failedGuards[0].evidence}`;
+  }
+  const [guard] = failedGuards;
+  if (guard.type === "judgement_status" && /ui-output\.yaml has parse errors/i.test(guard.evidence || "")) {
+    return `The provider finished, but the guard-facing judgement could not be materialized because ui-output.yaml is malformed. Re-run \`run-next\`; if it repeats, inspect ui-output.yaml and the step prompt.`;
+  }
+  if (guard.type === "judgement_status" && /present in ui-output\.yaml/i.test(guard.evidence || "")) {
+    return `The provider wrote a review judgement into ui-output.yaml, but the runtime judgement artifact is missing. Re-run \`run-next\`; if it repeats, inspect ui-output.yaml and judgements/.`;
+  }
+  if (guard.type === "judgement_status" && /provider step completed/i.test(guard.evidence || "")) {
+    return `The provider step completed, but the review evidence needed by the guard is still missing. Inspect ui-output.yaml and judgements/ before retrying.`;
+  }
+  return `${guard.guardId} is still incomplete: ${guard.evidence}`;
+}
+
+function createFailureSummaryForBlock({ repo, runtime, step, failedGuards, message = null }) {
   const summary = writeFailureSummary({
     stateDir: runtime.stateDir,
     repoPath: repo,
@@ -1352,6 +1380,7 @@ function createFailureSummaryForBlock({ repo, runtime, step, failedGuards }) {
     provider: step.provider,
     status: "blocked",
     failedGuards,
+    message,
     nextCommands: [statusCommand(repo), runNextCommand(repo)]
   });
   appendProgressEvent({
