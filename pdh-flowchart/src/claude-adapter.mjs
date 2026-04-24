@@ -15,6 +15,7 @@ export async function runClaude({
   permissionMode = "bypassPermissions",
   resume = null,
   timeoutMs = null,
+  idleTimeoutMs = null,
   killGraceMs = 5000,
   onEvent = () => {}
 }) {
@@ -53,22 +54,26 @@ export async function runClaude({
   const timeout = createProcessTimeout({
     child,
     timeoutMs,
+    idleTimeoutMs,
     killGraceMs,
-    onTimeout({ timeoutMs: ms, signal }) {
-      const message = `claude timed out after ${ms}ms; sent ${signal}`;
+    onTimeout({ timeoutMs: ms, signal, kind }) {
+      const label = kind === "idle" ? "idle timeout" : "timed out";
+      const message = `claude ${label} after ${ms}ms; sent ${signal}`;
       stderr += `${message}\n`;
-      raw.write(JSON.stringify({ type: "timeout", provider: "claude", timeoutMs: ms, signal, message }) + "\n");
-      onEvent({ type: "run_failed", message, payload: { timeoutMs: ms, signal } });
+      raw.write(JSON.stringify({ type: "timeout", provider: "claude", timeoutMs: ms, signal, kind, message }) + "\n");
+      onEvent({ type: "run_failed", message, payload: { timeoutMs: ms, signal, kind } });
     },
-    onKill({ timeoutMs: ms, signal }) {
-      const message = `claude did not exit after timeout; sent ${signal}`;
+    onKill({ timeoutMs: ms, signal, kind }) {
+      const label = kind === "idle" ? "idle timeout" : "timeout";
+      const message = `claude did not exit after ${label}; sent ${signal}`;
       stderr += `${message}\n`;
-      raw.write(JSON.stringify({ type: "timeout_kill", provider: "claude", timeoutMs: ms, signal, message }) + "\n");
-      onEvent({ type: "run_failed", message, payload: { timeoutMs: ms, signal } });
+      raw.write(JSON.stringify({ type: "timeout_kill", provider: "claude", timeoutMs: ms, signal, kind, message }) + "\n");
+      onEvent({ type: "run_failed", message, payload: { timeoutMs: ms, signal, kind } });
     }
   });
 
   child.stdout.on("data", (chunk) => {
+    timeout.touch();
     const text = decoder.write(chunk);
     stdoutRemainder += text;
     const lines = stdoutRemainder.split(/\r?\n/);
@@ -91,6 +96,7 @@ export async function runClaude({
   });
 
   child.stderr.on("data", (chunk) => {
+    timeout.touch();
     const text = redact(chunk.toString("utf8"));
     stderr += text;
     raw.write(JSON.stringify({ stream: "stderr", text }) + "\n");
@@ -120,7 +126,15 @@ export async function runClaude({
   await new Promise((resolve) => raw.end(resolve));
 
   const exitCode = timeout.timedOut ? 124 : (closed.code ?? (closed.signal ? 1 : 0));
-  return { exitCode, finalMessage, sessionId, stderr, timedOut: timeout.timedOut, signal: closed.signal };
+  return {
+    exitCode,
+    finalMessage,
+    sessionId,
+    stderr,
+    timedOut: timeout.timedOut,
+    timeoutKind: timeout.timeoutKind,
+    signal: closed.signal
+  };
 }
 
 export function normalizeClaudeLine(line) {

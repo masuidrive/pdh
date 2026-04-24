@@ -66,6 +66,32 @@ SH
   printf '%s\n' "$path"
 }
 
+write_fake_codex_hang_then_resume() {
+  local path="$TMP_ROOT/fake-codex-hang-then-resume.sh"
+  cat >"$path" <<'SH'
+#!/usr/bin/env bash
+count_file="${FAKE_COUNT_FILE:?}"
+args_dir="${FAKE_ARGS_DIR:?}"
+mkdir -p "$args_dir"
+count=0
+if [ -f "$count_file" ]; then
+  count="$(cat "$count_file")"
+fi
+count="$((count + 1))"
+printf '%s\n' "$count" >"$count_file"
+printf '%s\n' "$@" >"$args_dir/args-$count.txt"
+cat >/dev/null || true
+printf '%s\n' '{"type":"thread.started","thread_id":"fake-resume-thread"}'
+if [ "$count" -eq 1 ]; then
+  sleep 5
+  exit 0
+fi
+printf '%s\n' '{"type":"turn.completed","final_message":"fake resumed success"}'
+SH
+  chmod +x "$path"
+  printf '%s\n' "$path"
+}
+
 write_fake_claude_success() {
   local path="$TMP_ROOT/fake-claude-success.sh"
   cat >"$path" <<'SH'
@@ -190,6 +216,24 @@ test_failed_run() {
   grep -q "Status: failed" "$TMP_ROOT/$run_id.failed-status.txt"
 }
 
+test_auto_resume_after_idle_timeout() {
+  local repo run_id fake args_dir count_file
+  repo="$(seed_repo auto-resume-idle)"
+  run_id="$(advance_to_provider_step "$repo")"
+  fake="$(write_fake_codex_hang_then_resume)"
+  args_dir="$TMP_ROOT/$run_id.auto-resume-args"
+  count_file="$TMP_ROOT/$run_id.auto-resume-count.txt"
+  CODEX_BIN="$fake" FAKE_ARGS_DIR="$args_dir" FAKE_COUNT_FILE="$count_file" \
+    node "$ROOT/src/cli.mjs" run-provider --repo "$repo" --max-attempts 2 --retry-backoff-ms 0 --timeout-ms 5000 --idle-timeout-ms 200 \
+    >"$TMP_ROOT/$run_id.auto-resume.txt"
+  grep -q "completed" "$TMP_ROOT/$run_id.auto-resume.txt"
+  grep -q "resume" "$args_dir/args-2.txt"
+  grep -q "fake-resume-thread" "$args_dir/args-2.txt"
+  grep -q '"status": "failed"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/attempt-1/result.json"
+  grep -q '"sessionId": "fake-resume-thread"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/attempt-1/result.json"
+  grep -q '"timeoutKind": "idle"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/attempt-1/result.json"
+}
+
 test_resumed_run() {
   local repo run_id fake first_args second_args
   repo="$(seed_repo resumed)"
@@ -298,6 +342,7 @@ test_blocked_run
 test_auto_provider_run
 test_auto_review_judgement
 test_failed_run
+test_auto_resume_after_idle_timeout
 test_resumed_run
 test_interrupted_run
 test_web_readonly

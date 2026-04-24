@@ -2,6 +2,7 @@ flow: pdh-ticket-core
 version: 1
 defaults:
   timeoutMinutes: 60
+  idleTimeoutMinutes: 5
   maxAttempts: 2
   transitionLogFormat: "[{from}] -> [{to}]"
   promptContext:

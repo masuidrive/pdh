@@ -7,36 +7,95 @@ export function spawnProvider(command, args, options) {
   });
 }
 
-export function createProcessTimeout({ child, timeoutMs = null, killGraceMs = 5000, onTimeout = () => {}, onKill = () => {}, onTerminateError = () => {} }) {
-  if (!timeoutMs || timeoutMs <= 0) {
+export function createProcessTimeout({
+  child,
+  timeoutMs = null,
+  idleTimeoutMs = null,
+  killGraceMs = 5000,
+  onTimeout = () => {},
+  onKill = () => {},
+  onTerminateError = () => {}
+}) {
+  if ((!timeoutMs || timeoutMs <= 0) && (!idleTimeoutMs || idleTimeoutMs <= 0)) {
     return {
       get timedOut() {
         return false;
       },
+      get timeoutKind() {
+        return null;
+      },
+      touch() {},
       clear() {}
     };
   }
 
   let timedOut = false;
+  let timeoutKind = null;
   let killTimer = null;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    onTimeout({ timeoutMs, signal: "SIGTERM" });
-    tryTerminateProcessTree(child, "SIGTERM", (error) => onTerminateError({ timeoutMs, signal: "SIGTERM", error }));
+  let idleTimer = null;
+
+  const armKillTimer = (budgetMs, kind) => {
     killTimer = setTimeout(() => {
-      onKill({ timeoutMs, signal: "SIGKILL" });
-      tryTerminateProcessTree(child, "SIGKILL", (error) => onTerminateError({ timeoutMs, signal: "SIGKILL", error }));
+      onKill({ timeoutMs: budgetMs, signal: "SIGKILL", kind });
+      tryTerminateProcessTree(child, "SIGKILL", (error) => onTerminateError({ timeoutMs: budgetMs, signal: "SIGKILL", kind, error }));
     }, killGraceMs);
     killTimer.unref?.();
-  }, timeoutMs);
-  timer.unref?.();
+  };
+
+  const triggerTimeout = (budgetMs, kind) => {
+    if (timedOut) {
+      return;
+    }
+    timedOut = true;
+    timeoutKind = kind;
+    clearTimeout(timer);
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+    }
+    onTimeout({ timeoutMs: budgetMs, signal: "SIGTERM", kind });
+    tryTerminateProcessTree(child, "SIGTERM", (error) => onTerminateError({ timeoutMs: budgetMs, signal: "SIGTERM", kind, error }));
+    armKillTimer(budgetMs, kind);
+  };
+
+  const timer = timeoutMs > 0 ? setTimeout(() => {
+    triggerTimeout(timeoutMs, "wall");
+  }, timeoutMs) : null;
+  if (timer) {
+    timer.unref?.();
+  }
+
+  const armIdleTimer = () => {
+    if (!idleTimeoutMs || idleTimeoutMs <= 0 || timedOut) {
+      return;
+    }
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+    }
+    idleTimer = setTimeout(() => {
+      triggerTimeout(idleTimeoutMs, "idle");
+    }, idleTimeoutMs);
+    idleTimer.unref?.();
+  };
+
+  armIdleTimer();
 
   return {
     get timedOut() {
       return timedOut;
     },
+    get timeoutKind() {
+      return timeoutKind;
+    },
+    touch() {
+      armIdleTimer();
+    },
     clear() {
-      clearTimeout(timer);
+      if (timer) {
+        clearTimeout(timer);
+      }
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+      }
       if (killTimer) {
         clearTimeout(killTimer);
       }

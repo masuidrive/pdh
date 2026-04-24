@@ -129,8 +129,8 @@ function printHelp() {
 Usage:
   pdh-flowchart init [--repo DIR]
   pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5] [--force-reset]
-  pdh-flowchart run-next [--repo DIR] [--limit 20] [--manual-provider] [--stop-after-step]
-  pdh-flowchart run-provider [--repo DIR] [--step PD-C-6] [--prompt-file FILE] [--timeout-ms MS] [--max-attempts N]
+  pdh-flowchart run-next [--repo DIR] [--limit 20] [--manual-provider] [--stop-after-step] [--timeout-ms MS] [--idle-timeout-ms MS]
+  pdh-flowchart run-provider [--repo DIR] [--step PD-C-6] [--prompt-file FILE] [--timeout-ms MS] [--idle-timeout-ms MS] [--max-attempts N]
   pdh-flowchart resume [--repo DIR] [--step PD-C-6]
   pdh-flowchart prompt [--repo DIR] [--step PD-C-6]
   pdh-flowchart metadata [--repo DIR]
@@ -873,9 +873,11 @@ async function executeProviderStep({ repo, runtime, step, options }) {
     : writePromptArtifact({ repo, runtime, stepId });
   const prompt = readFileSync(promptPath, "utf8");
   const timeoutMs = providerTimeoutMs({ options, flow: runtime.flow, step });
+  const idleTimeoutMs = providerIdleTimeoutMs({ options, flow: runtime.flow, step });
   let attempt = options.attempt !== undefined
     ? positiveInteger(options.attempt, "--attempt")
     : nextStepAttempt({ stateDir: runtime.stateDir, runId, stepId });
+  const startAttempt = attempt;
   let maxAttempts = providerMaxAttempts({ options, flow: runtime.flow, step, startAttempt: attempt });
   if (attempt > maxAttempts && options.force !== "true") {
     throw new Error(`${stepId} exhausted max attempts (${maxAttempts}); pass --force, --attempt, or --max-attempts to override.`);
@@ -889,9 +891,37 @@ async function executeProviderStep({ repo, runtime, step, options }) {
   let lastResult = null;
   while (attempt <= maxAttempts) {
     rawLogPath = join(runtime.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, `${step.provider}.raw.jsonl`);
-    const resume = resolveProviderResume({ runtime, stepId, provider: step.provider, option: options.resume ?? null });
+    const resume = resolveProviderResume({
+      runtime,
+      stepId,
+      provider: step.provider,
+      option: options.resume ?? (attempt > startAttempt ? "latest" : null),
+      allowMissing: options.resume === undefined && attempt > startAttempt
+    });
     const before = snapshotNoteTicketFiles({ repoPath: repo });
     updateRun(repo, { status: "running", current_step_id: stepId });
+    let attemptState = {
+      provider: step.provider,
+      status: "running",
+      exitCode: null,
+      finalMessage: null,
+      stderr: "",
+      timedOut: false,
+      timeoutKind: null,
+      signal: null,
+      sessionId: null,
+      resumeToken: null,
+      rawLogPath,
+      startedAt: new Date().toISOString(),
+      lastEventAt: null
+    };
+    writeAttemptResult({
+      stateDir: runtime.stateDir,
+      runId,
+      stepId,
+      attempt,
+      result: attemptState
+    });
     appendProgressEvent({
       repoPath: repo,
       runId,
@@ -911,8 +941,23 @@ async function executeProviderStep({ repo, runtime, step, options }) {
           model: options.model ?? null,
           resume,
           timeoutMs,
+          idleTimeoutMs,
           killGraceMs: providerKillGraceMs(options),
           onEvent(event) {
+            attemptState = {
+              ...attemptState,
+              finalMessage: event.finalMessage ?? attemptState.finalMessage,
+              sessionId: event.sessionId ?? attemptState.sessionId,
+              resumeToken: event.sessionId ?? attemptState.resumeToken,
+              lastEventAt: new Date().toISOString()
+            };
+            writeAttemptResult({
+              stateDir: runtime.stateDir,
+              runId,
+              stepId,
+              attempt,
+              result: attemptState
+            });
             appendProgressEvent({
               repoPath: repo,
               runId,
@@ -935,8 +980,23 @@ async function executeProviderStep({ repo, runtime, step, options }) {
           permissionMode: options["permission-mode"] ?? (options.bypass !== "false" ? "bypassPermissions" : "acceptEdits"),
           resume,
           timeoutMs,
+          idleTimeoutMs,
           killGraceMs: providerKillGraceMs(options),
           onEvent(event) {
+            attemptState = {
+              ...attemptState,
+              finalMessage: event.finalMessage ?? attemptState.finalMessage,
+              sessionId: event.sessionId ?? attemptState.sessionId,
+              resumeToken: event.sessionId ?? attemptState.resumeToken,
+              lastEventAt: new Date().toISOString()
+            };
+            writeAttemptResult({
+              stateDir: runtime.stateDir,
+              runId,
+              stepId,
+              attempt,
+              result: attemptState
+            });
             appendProgressEvent({
               repoPath: repo,
               runId,
@@ -964,10 +1024,13 @@ async function executeProviderStep({ repo, runtime, step, options }) {
         finalMessage: result.finalMessage,
         stderr: result.stderr,
         timedOut: result.timedOut === true,
+        timeoutKind: result.timeoutKind ?? null,
         signal: result.signal ?? null,
-        sessionId: result.sessionId ?? null,
-        resumeToken: result.sessionId ?? null,
+        sessionId: result.sessionId ?? attemptState.sessionId ?? null,
+        resumeToken: result.sessionId ?? attemptState.resumeToken ?? null,
         rawLogPath,
+        startedAt: attemptState.startedAt,
+        lastEventAt: attemptState.lastEventAt,
         finishedAt: new Date().toISOString()
       }
     });
@@ -1026,7 +1089,15 @@ async function executeProviderStep({ repo, runtime, step, options }) {
       type: "retry",
       provider: "runtime",
       message: `retrying ${step.provider} attempt ${attempt + 1} after ${delayMs}ms`,
-      payload: { nextAttempt: attempt + 1, maxAttempts, delayMs, exitCode: result.exitCode, timedOut: result.timedOut === true }
+      payload: {
+        nextAttempt: attempt + 1,
+        maxAttempts,
+        delayMs,
+        exitCode: result.exitCode,
+        timedOut: result.timedOut === true,
+        timeoutKind: result.timeoutKind ?? null,
+        resume: resume ?? null
+      }
     });
     await sleep(delayMs);
     attempt += 1;
@@ -1283,6 +1354,7 @@ function createProviderFailureSummary({ repo, runtime, step, attempt, maxAttempt
     maxAttempts,
     exitCode: result?.exitCode ?? null,
     timedOut: result?.timedOut === true,
+    timeoutKind: result?.timeoutKind ?? null,
     signal: result?.signal ?? null,
     rawLogPath,
     finalMessage: result?.finalMessage ?? null,
@@ -1566,6 +1638,21 @@ function providerTimeoutMs({ options, flow, step }) {
   return Math.round(number * 60 * 1000);
 }
 
+function providerIdleTimeoutMs({ options, flow, step }) {
+  if (options["idle-timeout-ms"] !== undefined) {
+    return nonNegativeInteger(options["idle-timeout-ms"], "--idle-timeout-ms");
+  }
+  const minutes = step.idleTimeoutMinutes ?? flow.defaults?.idleTimeoutMinutes ?? null;
+  if (minutes === null || minutes === undefined) {
+    return null;
+  }
+  const number = Number(minutes);
+  if (!Number.isFinite(number) || number < 0) {
+    throw new Error("provider idleTimeoutMinutes must be a non-negative number");
+  }
+  return Math.round(number * 60 * 1000);
+}
+
 function providerKillGraceMs(options) {
   return nonNegativeInteger(options["kill-grace-ms"] ?? "5000", "--kill-grace-ms");
 }
@@ -1576,7 +1663,7 @@ function retryDelayMs(options, attempt) {
   return Math.min(maxMs, baseMs * (2 ** Math.max(0, attempt - 1)));
 }
 
-function resolveProviderResume({ runtime, stepId, provider, option }) {
+function resolveProviderResume({ runtime, stepId, provider, option, allowMissing = false }) {
   if (!option) {
     return null;
   }
@@ -1586,6 +1673,9 @@ function resolveProviderResume({ runtime, stepId, provider, option }) {
   const session = latestProviderSession({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId, provider });
   const token = session?.resume_token ?? session?.session_id ?? null;
   if (!token) {
+    if (allowMissing) {
+      return null;
+    }
     throw new Error(`No saved ${provider} session for ${stepId}; cannot resume`);
   }
   return token;

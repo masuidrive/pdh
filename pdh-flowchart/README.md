@@ -128,6 +128,8 @@ node src/cli.mjs resume --repo .
 node src/cli.mjs prompt --repo .
 ```
 
+Provider retries now reuse the latest saved session automatically when a retry happens after a failed or timed-out attempt. The runtime also saves the provider session id as soon as the CLI emits it, so `resume` can work even when a provider stalled before clean exit. Use `--idle-timeout-ms` to shorten or disable the no-output stall detector for debugging.
+
 ## Prompt Model
 
 Provider prompts now include:
