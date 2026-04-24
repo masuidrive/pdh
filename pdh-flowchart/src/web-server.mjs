@@ -96,6 +96,19 @@ function handleRequest({ request, response, repo }) {
     sendJson(response, 200, payload);
     return;
   }
+  if (url.pathname === "/api/file") {
+    const payload = collectRepoFilePayload({
+      repo,
+      stepId: url.searchParams.get("step"),
+      path: url.searchParams.get("path")
+    });
+    if (!payload) {
+      sendJson(response, 404, { error: "file_not_found" });
+      return;
+    }
+    sendJson(response, 200, payload);
+    return;
+  }
   sendJson(response, 404, { error: "not_found" });
 }
 
@@ -564,7 +577,7 @@ function collectArtifactPayload({ repo, stepId, name }) {
   };
 }
 
-function collectDiffPayload({ repo, stepId, includePatch = true }) {
+function resolveDiffBaseline({ repo, stepId }) {
   const runtime = loadRuntime(repo);
   const run = runtime.run;
   if (!run?.id || !stepId) {
@@ -579,16 +592,31 @@ function collectDiffPayload({ repo, stepId, includePatch = true }) {
   const history = parseStepHistory(runtime.note.body).entries
     .filter((entry) => entry.commit && entry.commit !== "-");
   const gateIds = view.steps.filter((step) => step.mode === "human").map((step) => step.id);
-  const gateIndex = gateIds.indexOf(stepId);
-  if (gateIndex < 0) {
-    return null;
-  }
+  const anchorGateId = gateIds.includes(stepId)
+    ? stepId
+    : gateIds.filter((id) => view.sequence.indexOf(id) < stepIndex).at(-1) ?? null;
 
   let baseRef = null;
   let baseLabel = null;
   let baseCommit = null;
 
-  if (gateIndex === 0) {
+  if (!anchorGateId) {
+    const firstCommit = history
+      .filter((entry) => {
+        const index = view.sequence.indexOf(entry.stepId);
+        return index >= 0 && index < stepIndex;
+      })
+      .sort((left, right) => view.sequence.indexOf(left.stepId) - view.sequence.indexOf(right.stepId))[0];
+    if (!firstCommit) {
+      baseRef = currentHead(repo) ?? "HEAD";
+      baseLabel = "ticket start";
+      baseCommit = currentHead(repo);
+    } else {
+      baseRef = parentCommit(repo, firstCommit.commit) ?? emptyTreeHash(repo);
+      baseLabel = "ticket start";
+      baseCommit = firstCommit.commit;
+    }
+  } else if (gateIds.indexOf(anchorGateId) === 0) {
     const firstCommit = history
       .filter((entry) => {
         const index = view.sequence.indexOf(entry.stepId);
@@ -605,6 +633,7 @@ function collectDiffPayload({ repo, stepId, includePatch = true }) {
       baseCommit = firstCommit.commit;
     }
   } else {
+    const gateIndex = gateIds.indexOf(anchorGateId);
     const previousGateId = gateIds[gateIndex - 1];
     const previousGateIndex = view.sequence.indexOf(previousGateId);
     const baseline = history
@@ -618,9 +647,24 @@ function collectDiffPayload({ repo, stepId, includePatch = true }) {
       return null;
     }
     baseRef = baseline.commit;
-    baseLabel = `${previousGateId} gate baseline`;
+    const previousGateIsFirst = gateIds.indexOf(previousGateId) === 0;
+    baseLabel = previousGateIsFirst ? `${previousGateId} gate baseline (ticket start)` : `${previousGateId} gate baseline`;
     baseCommit = baseline.commit;
   }
+
+  return {
+    baseRef,
+    baseLabel,
+    baseCommit
+  };
+}
+
+function collectDiffPayload({ repo, stepId, includePatch = true }) {
+  const baseline = resolveDiffBaseline({ repo, stepId });
+  if (!baseline) {
+    return null;
+  }
+  const { baseRef, baseLabel, baseCommit } = baseline;
 
   const diffArgs = ["diff", "--no-ext-diff", "--submodule=diff", "--unified=3", baseRef, "--"];
   const statArgs = ["diff", "--stat", baseRef, "--"];
@@ -636,6 +680,42 @@ function collectDiffPayload({ repo, stepId, includePatch = true }) {
     diffStat: splitLines(stat.stdout),
     changedFiles: splitLines(files.stdout),
     patch: includePatch ? clampText(diff.stdout, MAX_TEXT) : null
+  };
+}
+
+function resolveRepoFilePath(repo, relativePath) {
+  if (!relativePath) {
+    return null;
+  }
+  const fullPath = resolve(repo, relativePath);
+  if (fullPath !== repo && !fullPath.startsWith(`${repo}/`)) {
+    return null;
+  }
+  return existsSync(fullPath) ? fullPath : null;
+}
+
+function collectRepoFilePayload({ repo, stepId, path }) {
+  const fullPath = resolveRepoFilePath(repo, path);
+  if (!fullPath) {
+    return null;
+  }
+  const baseline = resolveDiffBaseline({ repo, stepId });
+  const redactor = createRedactor({ repoPath: repo });
+  const relativePath = String(path).replace(/^\.\/+/, "");
+  const patch = baseline
+    ? clampText(runGit(repo, ["diff", "--no-ext-diff", "--submodule=diff", "--unified=3", baseline.baseRef, "--", relativePath]).stdout, MAX_TEXT)
+    : "";
+  return {
+    stepId,
+    path: relativePath,
+    text: safeReadText(fullPath, redactor),
+    markdown: MARKDOWN_EXTENSIONS.has(extname(relativePath).toLowerCase()),
+    size: safeSize(fullPath),
+    diff: {
+      baseLabel: baseline?.baseLabel || "working tree",
+      baseCommit: baseline?.baseCommit ? baseline.baseCommit.slice(0, 7) : null,
+      patch
+    }
   };
 }
 
@@ -1573,6 +1653,16 @@ function renderHtml() {
     padding: 1px 5px;
     border-radius: 4px;
   }
+  .detail-inline-file {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .detail-inline-file code {
+    border: 1px solid #d6d3c8;
+    background: #f5f4ef;
+  }
   .detail-doc-markdown pre {
     margin: 0;
   }
@@ -2380,6 +2470,13 @@ function renderHtml() {
     return '<div class="detail-doc-viewer">' + viewer + '</div>';
   }
 
+  function renderRepoFileViewer(payload, mode = 'file') {
+    if (mode === 'diff') {
+      return renderDiffViewer(payload?.diff || {}, 'pretty');
+    }
+    return renderArtifactViewer({ text: payload?.text || '', markdown: false }, 'raw');
+  }
+
   function renderDiffPretty(text) {
     const lines = String(text || '').split(/\\r?\\n/);
     return (
@@ -2445,6 +2542,14 @@ function renderHtml() {
     return response.json();
   }
 
+  async function fetchFilePayload(target) {
+    const response = await fetch('/api/file?step=' + encodeURIComponent(target.stepId) + '&path=' + encodeURIComponent(target.path), { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('file fetch failed');
+    }
+    return response.json();
+  }
+
   function buildShowItem(label, type, source, detail) {
     return {
       label,
@@ -2453,6 +2558,19 @@ function renderHtml() {
       detail: String(detail ?? '').trim(),
       preview: textPreview(detail),
       documentTarget: resolveDocumentTarget(source)
+    };
+  }
+
+  function fileModalItem(stepId, path) {
+    return {
+      label: path,
+      type: 'repo_file',
+      source: path,
+      detail: 'repo file',
+      fileTarget: {
+        stepId,
+        path
+      }
     };
   }
 
@@ -2575,7 +2693,10 @@ function renderHtml() {
     const implText = stepById('PD-C-6')?.noteSection || '';
     const reviewText = preferredText(stepJudgementText('PD-C-7'), step.noteSection);
     if (lower.includes('diff')) {
-      return buildShowItem(label, 'diff', 'git diff --stat', preferredText(joinedText(step.uiRuntime?.diffStat), joinedText(step.uiRuntime?.changedFiles), implText));
+      const diff = step.reviewDiff;
+      const item = buildShowItem(label, 'diff', diff?.baseLabel || 'PD-C-5 gate baseline', preferredText(joinedText(diff?.diffStat), joinedText(diff?.changedFiles), implText));
+      item.diffTarget = diff ? { stepId: step.id } : null;
+      return item;
     }
     if (lower.includes('テスト')) {
       return buildShowItem(label, 'verification', 'current-note.md#PD-C-6 / PD-C-7', preferredText(implText, step.noteSection));
@@ -2662,6 +2783,39 @@ function renderHtml() {
     return listOf(step.uiContract?.mustShow).map((label) => resolveContractItem(label, step, nextAction));
   }
 
+  function isProbableRepoFilePath(value) {
+    const text = String(value || '').trim();
+    return /[/.]/.test(text)
+      && /\.(md|markdown|txt|json|ya?ml|patch|diff|log|mmd|mjs|cjs|js|jsx|ts|tsx|py|sh|toml|lock)$/i.test(text)
+      && !text.includes(' ')
+      && !text.startsWith('http');
+  }
+
+  function renderInlineRichText(text, step) {
+    const source = String(text ?? '');
+    const pieces = [];
+    let lastIndex = 0;
+    const tick = String.fromCharCode(96);
+    const pattern = new RegExp(tick + '([^' + tick + ']+)' + tick, 'g');
+    let match;
+    while ((match = pattern.exec(source))) {
+      pieces.push(esc(source.slice(lastIndex, match.index)));
+      const code = match[1];
+      if (isProbableRepoFilePath(code)) {
+        pieces.push(
+          '<button type="button" class="detail-inline-file" data-file-path="' + esc(code) + '" data-step-id="' + esc(step.id) + '">' +
+            '<code>' + esc(code) + '</code>' +
+          '</button>'
+        );
+      } else {
+        pieces.push('<code>' + esc(code) + '</code>');
+      }
+      lastIndex = match.index + match[0].length;
+    }
+    pieces.push(esc(source.slice(lastIndex)));
+    return pieces.join('');
+  }
+
   function stepReadyItems(step) {
     const items = [];
     listOf(step.uiOutput?.readyWhen).forEach((item) => items.push({ label: item, kind: 'ready' }));
@@ -2675,6 +2829,9 @@ function renderHtml() {
   function defaultModalMode(item) {
     if (item?.diffTarget) {
       return 'pretty';
+    }
+    if (item?.fileTarget) {
+      return 'file';
     }
     if (item?.artifactTarget) {
       return item.artifactTarget.markdown ? 'markdown' : 'raw';
@@ -2691,15 +2848,21 @@ function renderHtml() {
     try {
       const payload = item.diffTarget
         ? await fetchDiffPayload(item.diffTarget.stepId)
-        : await fetchArtifactPayload(item.artifactTarget);
+        : item.fileTarget
+          ? await fetchFilePayload(item.fileTarget)
+          : await fetchArtifactPayload(item.artifactTarget);
       if (state.modalItem !== item) {
         return;
       }
       const mode = item.diffTarget
         ? (state.modalViewMode === 'raw' ? 'raw' : 'pretty')
+        : item.fileTarget
+          ? (state.modalViewMode === 'diff' ? 'diff' : 'file')
         : (state.modalViewMode === 'raw' ? 'raw' : 'markdown');
       const viewer = item.diffTarget
         ? renderDiffViewer(payload, mode)
+        : item.fileTarget
+          ? renderRepoFileViewer(payload, mode)
         : renderArtifactViewer(payload, mode);
       body.innerHTML = renderModalShell(item, viewer);
     } catch {
@@ -3056,12 +3219,13 @@ function renderHtml() {
     title.textContent = state.modalItem.label;
     const allowsMarkdown = Boolean(state.modalItem.documentTarget || state.modalItem.artifactTarget?.markdown);
     const isDiff = Boolean(state.modalItem.diffTarget);
-    if (allowsMarkdown || isDiff) {
-      const primaryMode = isDiff ? 'pretty' : 'markdown';
+    const isFile = Boolean(state.modalItem.fileTarget);
+    if (allowsMarkdown || isDiff || isFile) {
+      const primaryMode = isDiff ? 'pretty' : isFile ? 'file' : 'markdown';
       toggleSlot.innerHTML =
         '<div class="detail-view-toggle">' +
-          '<button type="button" data-mode="' + primaryMode + '"' + (state.modalViewMode === primaryMode ? ' class="on"' : '') + '>' + (isDiff ? 'Pretty' : 'Markdown') + '</button>' +
-          '<button type="button" data-mode="raw"' + (state.modalViewMode === 'raw' ? ' class="on"' : '') + '>Raw</button>' +
+          '<button type="button" data-mode="' + primaryMode + '"' + (state.modalViewMode === primaryMode ? ' class="on"' : '') + '>' + (isDiff ? 'Pretty' : isFile ? 'File' : 'Markdown') + '</button>' +
+          '<button type="button" data-mode="' + (isFile ? 'diff' : 'raw') + '"' + (state.modalViewMode === (isFile ? 'diff' : 'raw') ? ' class="on"' : '') + '>' + (isFile ? 'Diff' : 'Raw') + '</button>' +
         '</div>';
       toggleSlot.querySelectorAll('button').forEach((button) => {
         button.addEventListener('click', () => {
@@ -3077,7 +3241,7 @@ function renderHtml() {
       hydrateModalBody();
       return;
     }
-    if (state.modalItem.artifactTarget || state.modalItem.diffTarget) {
+    if (state.modalItem.artifactTarget || state.modalItem.diffTarget || state.modalItem.fileTarget) {
       body.innerHTML = renderModalShell(
         state.modalItem,
         '<div class="detail-dialog-section"><div class="detail-dialog-label">Viewer</div><div class="detail-doc-viewer"><div class="detail-doc-raw">Loading…</div></div></div>'
@@ -3155,13 +3319,13 @@ function renderHtml() {
       '<div><strong>Viewer:</strong> ' + esc(contract.viewer || '開発者') + '</div>' +
       '<div style="margin-top:6px;"><strong>Decision:</strong> ' + esc(contract.decision || step.summary || '') + '</div>' +
       (outputSummary.length
-        ? '<div style="margin-top:10px;"><strong>Summary:</strong><div style="margin-top:4px;">' + outputSummary.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
+        ? '<div style="margin-top:10px;"><strong>Summary:</strong><div style="margin-top:4px;">' + outputSummary.map((item) => '&#8226; ' + renderInlineRichText(item, step)).join('<br>') + '</div></div>'
         : '') +
       (outputRisks.length
-        ? '<div style="margin-top:10px;"><strong>Risks:</strong><div style="margin-top:4px;">' + outputRisks.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
+        ? '<div style="margin-top:10px;"><strong>Risks:</strong><div style="margin-top:4px;">' + outputRisks.map((item) => '&#8226; ' + renderInlineRichText(item, step)).join('<br>') + '</div></div>'
         : '') +
       (outputNotes
-        ? '<div style="margin-top:10px;"><strong>Notes:</strong><div style="margin-top:4px;white-space:pre-wrap;">' + esc(outputNotes) + '</div></div>'
+        ? '<div style="margin-top:10px;"><strong>Notes:</strong><div style="margin-top:4px;white-space:pre-wrap;">' + renderInlineRichText(outputNotes, step).replaceAll('\\n', '<br>') + '</div></div>'
         : '') +
       '</div></div>';
 
@@ -3298,6 +3462,16 @@ function renderHtml() {
         }
         const item = artifactModalItem(step, artifact);
         openModalItem(item, defaultModalMode(item));
+      });
+    });
+    root.querySelectorAll('.detail-inline-file').forEach((button) => {
+      button.addEventListener('click', () => {
+        const filePath = button.dataset.filePath;
+        const stepId = button.dataset.stepId;
+        if (!filePath || !stepId) {
+          return;
+        }
+        openModalItem(fileModalItem(stepId, filePath), 'file');
       });
     });
     wireClickCopy(root);
