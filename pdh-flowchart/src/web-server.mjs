@@ -253,13 +253,16 @@ function buildOverview({ runtime, variant, steps }) {
       };
     }
     const related = steps.filter((step) => group.stepIds.includes(step.id));
-    if (related.some((step) => step.progress.status === "waiting" || step.progress.status === "blocked" || step.progress.status === "failed")) {
+    if (related.some((step) => step.progress.status === "failed")) {
       return { ...group, state: "waiting" };
     }
     if (related.every((step) => step.progress.status === "done")) {
       return { ...group, state: "done" };
     }
     if (related.some((step) => step.current || step.progress.status === "running")) {
+      return { ...group, state: "running" };
+    }
+    if (related.some((step) => step.progress.status === "waiting" || step.progress.status === "blocked")) {
       return { ...group, state: "waiting" };
     }
     const beforeCurrent = steps.findIndex((step) => step.current);
@@ -315,7 +318,7 @@ function stepProgress({ runtime, sequence, index, step, historyEntry, gate, atte
     if (step.provider !== "runtime" && run.id && hasCompletedProviderAttempt({ stateDir: runtime.stateDir, runId: run.id, stepId: step.id, provider: step.provider })) {
       return progress("waiting", "advance待ち", "`run-next` で guard 評価と遷移を進めます。");
     }
-    return progress("waiting", "現在", "この step が進行中です。");
+    return progress("running", "実行中", "provider がこの step を実行しています。");
   }
   if (historyEntry) {
     return progress("done", "完了", historyEntry.summary);
@@ -896,6 +899,9 @@ function renderHtml() {
   .waiting-indicator.critical {
     background: var(--critical-bg); color: var(--critical-text); border-color: #f0b7b7;
   }
+  .waiting-indicator.running {
+    background: #eaf3ff; color: #1f5fbf; border-color: #b8d4fb;
+  }
   .waiting-dot {
     width: 6px; height: 6px; border-radius: 50%;
     background: currentColor;
@@ -919,6 +925,7 @@ function renderHtml() {
   }
   .summary-card.alert { background: var(--waiting-bg); border-color: var(--waiting-border); }
   .summary-card.error { background: var(--critical-bg); border-color: #f0b7b7; }
+  .summary-card.running { background: #eaf3ff; border-color: #b8d4fb; }
   .summary-card .label {
     font-size: 11px; color: var(--text-muted); margin-bottom: 3px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -928,6 +935,7 @@ function renderHtml() {
   .summary-card .value.done { color: var(--done); }
   .summary-card .value.waiting { color: var(--waiting-text); }
   .summary-card .value.error { color: var(--critical-text); }
+  .summary-card .value.running { color: #1f5fbf; }
   .section-head {
     display: flex; align-items: baseline; justify-content: space-between;
     margin: 16px 0 10px; gap: 12px; flex-wrap: wrap;
@@ -959,6 +967,11 @@ function renderHtml() {
     box-shadow: 0 0 0 3px rgba(186, 117, 23, 0.14);
   }
   .overview-node.waiting .ov-label, .overview-node.waiting .ov-name { color: var(--waiting-text); }
+  .overview-node.running {
+    background: #eaf3ff; border-color: #b8d4fb;
+    box-shadow: 0 0 0 3px rgba(31, 95, 191, 0.14);
+  }
+  .overview-node.running .ov-label, .overview-node.running .ov-name { color: #1f5fbf; }
   .overview-node.pending {
     background: var(--pending-bg); border-color: var(--border); opacity: 0.55;
   }
@@ -999,14 +1012,21 @@ function renderHtml() {
     background: var(--waiting-bg); border-color: var(--waiting-border);
     box-shadow: 0 0 0 3px rgba(186, 117, 23, 0.14);
   }
+  .node.running {
+    background: #eaf3ff; border-color: #b8d4fb;
+    box-shadow: 0 0 0 3px rgba(31, 95, 191, 0.14);
+  }
   .node.blocked {
     background: var(--waiting-bg); border-color: var(--waiting-border);
     box-shadow: 0 0 0 3px rgba(186, 117, 23, 0.14);
   }
   .node.waiting .node-icon { background: var(--waiting); color: #fff; position: relative; }
+  .node.running .node-icon { background: #1f5fbf; color: #fff; position: relative; }
   .node.blocked .node-icon { background: var(--waiting); color: #fff; position: relative; }
   .node.waiting .node-title { color: var(--waiting-text); }
   .node.waiting .node-meta { color: var(--waiting-text); opacity: 0.8; }
+  .node.running .node-title { color: #1f5fbf; }
+  .node.running .node-meta { color: #1f5fbf; opacity: 0.8; }
   .node.blocked .node-title { color: var(--waiting-text); }
   .node.blocked .node-meta { color: var(--waiting-text); opacity: 0.8; }
   .node.failed { background: var(--critical-bg); border-color: #f0b7b7; }
@@ -1043,6 +1063,7 @@ function renderHtml() {
   }
   .status-pill.done { background: var(--done-bg); color: var(--done-text); }
   .status-pill.waiting { background: var(--waiting-bg); color: var(--waiting-text); }
+  .status-pill.running { background: #eaf3ff; color: #1f5fbf; }
   .status-pill.blocked { background: var(--waiting-bg); color: var(--waiting-text); }
   .status-pill.pending { background: var(--pending-bg); color: var(--text-muted); }
   .status-pill.skipped { background: var(--skip-bg); color: var(--skip-text); }
@@ -1259,6 +1280,13 @@ function renderHtml() {
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .next-action-command:hover { border-color: var(--border-strong); }
+  .next-action-command.copied {
+    border-color: #9fe1cb;
+    background: #f7fcfa;
   }
   .detail-diagnostics {
     margin-top: 16px;
@@ -2715,7 +2743,11 @@ function renderHtml() {
 
     const variant = (data.flow.activeVariant || 'full').toUpperCase();
     const status = data.runtime.run?.status || 'idle';
-    const waitingClass = status === 'failed' ? 'waiting-indicator critical' : 'waiting-indicator';
+    const waitingClass = status === 'failed'
+      ? 'waiting-indicator critical'
+      : status === 'running'
+        ? 'waiting-indicator running'
+        : 'waiting-indicator';
     const indicatorText = current
       ? current.id + ' ' + current.label + ' · ' + status
       : '未開始';
@@ -2727,9 +2759,12 @@ function renderHtml() {
   function renderSummary() {
     const summary = state.data.summary;
     const ac = summary.acCounts || { verified: 0, deferred: 0, unverified: 0 };
+    const runStatus = state.data.runtime.run?.status || 'idle';
+    const currentCardClass = runStatus === 'running' ? 'summary-card running' : 'summary-card alert';
+    const currentValueClass = runStatus === 'running' ? 'value running' : 'value waiting';
     document.getElementById('summary').innerHTML =
       '<div class="summary-card"><div class="label">完了ステップ</div><div class="value done">' + esc(summary.doneCount + ' / ' + summary.totalSteps) + '</div></div>' +
-      '<div class="summary-card alert"><div class="label">現在</div><div class="value waiting">' + esc(summary.currentLabel) + '</div></div>' +
+      '<div class="' + currentCardClass + '"><div class="label">現在</div><div class="' + currentValueClass + '">' + esc(summary.currentLabel) + '</div></div>' +
       '<div class="summary-card"><div class="label">AC 裏取り</div><div class="value">' + esc(ac.verified + ' verified') + ' <span class="sub">' + esc('deferred ' + ac.deferred + ' / unverified ' + ac.unverified) + '</span></div></div>' +
       '<div class="summary-card ' + (summary.openItems > 0 ? 'alert' : '') + '"><div class="label">要対応</div><div class="value ' + (summary.openItems > 0 ? 'waiting' : 'done') + '">' + esc(String(summary.openItems)) + ' <span class="sub">open items</span></div></div>';
   }
@@ -2844,6 +2879,30 @@ function renderHtml() {
     });
   }
 
+  function wireClickCopy(root) {
+    root.querySelectorAll('[data-click-copy]').forEach((element) => {
+      if (element.dataset.bound === 'true') {
+        return;
+      }
+      element.dataset.bound = 'true';
+      element.addEventListener('click', async () => {
+        const original = element.textContent;
+        const value = decodeURIComponent(element.dataset.clickCopy || '');
+        try {
+          await navigator.clipboard.writeText(value);
+          element.classList.add('copied');
+          element.textContent = value + '\nCopied';
+        } catch {
+          element.textContent = value + '\nCopy failed';
+        }
+        window.setTimeout(() => {
+          element.classList.remove('copied');
+          element.textContent = original;
+        }, 1200);
+      });
+    });
+  }
+
   async function hydrateMermaidBlocks(root) {
     const blocks = Array.from(root.querySelectorAll('.detail-mermaid[data-mermaid]'));
     if (!blocks.length) {
@@ -2867,6 +2926,7 @@ function renderHtml() {
   function hydrateModalBody() {
     const body = document.getElementById('detail-modal-body');
     wireCopyButtons(body);
+    wireClickCopy(body);
     hydrateMermaidBlocks(body);
     const focus = body.querySelector('[data-document-focus="true"]');
     if (focus) {
@@ -3043,7 +3103,7 @@ function renderHtml() {
               '<span class="next-action-choice">' + esc(nextAction?.selection === 'choose_one' ? 'choose one' : nextAction?.selection === 'ordered' ? 'run in order' : 'run this') + '</span>' +
             '</div>' +
             (item.description ? '<div class="next-action-description">' + esc(item.description) + '</div>' : '') +
-            '<div class="next-action-command">' + esc(item.command || '') + '</div>' +
+            '<div class="next-action-command" data-click-copy="' + encodeURIComponent(item.command || '') + '">' + esc(item.command || '') + '</div>' +
           '</div>';
       });
       html += '</div></div>';
@@ -3136,6 +3196,7 @@ function renderHtml() {
         openModalItem(item, defaultModalMode(item));
       });
     });
+    wireClickCopy(root);
   }
 
   document.getElementById('detail-modal-close').addEventListener('click', () => {
