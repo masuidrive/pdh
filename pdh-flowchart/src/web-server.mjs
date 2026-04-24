@@ -1248,11 +1248,24 @@ function renderHtml() {
     margin-bottom: 10px;
   }
   .detail-doc-meta .key { color: var(--text-muted); }
+  .detail-meta-list {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.6);
+    padding: 8px 10px;
+    max-height: 132px;
+    overflow: auto;
+  }
+  .detail-meta-list div + div {
+    margin-top: 4px;
+  }
   .detail-doc-viewer {
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--surface);
     padding: 14px 16px;
+    max-height: 58vh;
+    overflow: auto;
   }
   .detail-doc-raw {
     white-space: pre-wrap;
@@ -1654,6 +1667,88 @@ function renderHtml() {
     return /\\.(md|markdown)$/i.test(String(name || ''));
   }
 
+  function documentExcerptText(docId, heading = null) {
+    const document = documentData(docId);
+    if (!document?.text) {
+      return '';
+    }
+    const range = findDocumentSectionRange(document.text, heading);
+    return range.lines.slice(range.start, range.end + 1).join('\\n').trim();
+  }
+
+  function noteFocusHeading(step) {
+    switch (step.id) {
+      case 'PD-C-4':
+      case 'PD-C-5':
+        return 'PD-C-3. 計画';
+      case 'PD-C-7':
+        return 'PD-C-6';
+      case 'PD-C-8':
+        return 'PD-C-8. 目的妥当性確認';
+      case 'PD-C-9':
+      case 'PD-C-10':
+        return 'AC 裏取り結果';
+      default:
+        return step.id;
+    }
+  }
+
+  function noteMaterialItem(step) {
+    const heading = noteFocusHeading(step);
+    const item = documentModalItem('note', heading);
+    const preview = documentExcerptText('note', heading) || documentData('note')?.text || '';
+    return {
+      ...item,
+      label: 'current-note.md',
+      type: 'document',
+      source: heading ? 'current-note.md#' + heading : 'current-note.md',
+      detail: heading ? 'focus: ' + heading : 'full file view',
+      preview: textPreview(preview)
+    };
+  }
+
+  function ticketMaterialItem(step) {
+    const heading = step.id === 'PD-C-8' || step.id === 'PD-C-9' || step.id === 'PD-C-10'
+      ? 'Product AC'
+      : 'Implementation Notes';
+    const item = documentModalItem('ticket', heading);
+    const preview = documentExcerptText('ticket', heading) || documentData('ticket')?.text || '';
+    return {
+      ...item,
+      label: 'current-ticket.md',
+      type: 'document',
+      source: heading ? 'current-ticket.md#' + heading : 'current-ticket.md',
+      detail: heading ? 'focus: ' + heading : 'full file view',
+      preview: textPreview(preview)
+    };
+  }
+
+  function diffMaterialItem(step) {
+    if (!step.reviewDiff?.baseLabel) {
+      return null;
+    }
+    const detail = preferredText(
+      joinedText(step.reviewDiff?.diffStat),
+      joinedText(step.reviewDiff?.changedFiles),
+      'click to open diff'
+    );
+    const item = buildShowItem('変更差分', 'diff', step.reviewDiff.baseLabel, detail);
+    item.diffTarget = { stepId: step.id };
+    item.preview = textPreview(detail);
+    return item;
+  }
+
+  function judgementMaterialItems(step) {
+    const items = [];
+    const diff = diffMaterialItem(step);
+    if (diff) {
+      items.push(diff);
+    }
+    items.push(noteMaterialItem(step));
+    items.push(ticketMaterialItem(step));
+    return items;
+  }
+
   function normalizeHeadingKey(value) {
     return String(value ?? '')
       .replace(/^#+\\s*/, '')
@@ -1987,8 +2082,10 @@ function renderHtml() {
   }
 
   function renderDiffViewer(payload, mode = 'pretty') {
-    const stat = listOf(payload?.diffStat).map((line) => '<div>' + esc(line) + '</div>').join('');
-    const files = listOf(payload?.changedFiles).map((line) => '<div>' + esc(line) + '</div>').join('');
+    const statLines = listOf(payload?.diffStat);
+    const fileLines = listOf(payload?.changedFiles);
+    const stat = statLines.map((line) => '<div>' + esc(line) + '</div>').join('');
+    const files = fileLines.map((line) => '<div>' + esc(line) + '</div>').join('');
     const viewer = mode === 'raw'
       ? '<div class="detail-doc-raw">' + esc(payload?.patch || '差分なし') + '</div>'
       : renderDiffPretty(payload?.patch || 'diff is empty');
@@ -1997,8 +2094,8 @@ function renderHtml() {
         '<div class="detail-dialog-label">Diff</div>' +
         '<div class="detail-doc-meta">' +
           '<div class="key">Base</div><div>' + esc(payload?.baseLabel || '-') + (payload?.baseCommit ? ' <span style="color: var(--text-muted);">(' + esc(payload.baseCommit) + ')</span>' : '') + '</div>' +
-          '<div class="key">Files</div><div>' + (files || '<span style="color: var(--text-muted);">変更なし</span>') + '</div>' +
-          '<div class="key">Summary</div><div>' + (stat || '<span style="color: var(--text-muted);">変更なし</span>') + '</div>' +
+          '<div class="key">Files</div><div>' + (files ? '<div class="detail-meta-list">' + files + '</div>' : '<span style="color: var(--text-muted);">変更なし</span>') + (fileLines.length ? '<div style="margin-top:4px;color:var(--text-muted);">' + esc(String(fileLines.length)) + ' files</div>' : '') + '</div>' +
+          '<div class="key">Summary</div><div>' + (stat ? '<div class="detail-meta-list">' + stat + '</div>' : '<span style="color: var(--text-muted);">変更なし</span>') + '</div>' +
         '</div>' +
         '<div class="detail-doc-viewer">' + viewer + '</div>' +
       '</div>'
@@ -2579,7 +2676,7 @@ function renderHtml() {
       const questionBody = [];
       if (state.data.runtime.run.status === 'needs_human') {
         questionBody.push('<p>' + esc(nextAction.body || 'この step は human gate です。terminal から判断してください。') + '</p>');
-        questionBody.push('<p>判断材料は下の「この step の判断材料」、Documents、Next に集約しています。gate summary や diff の生テキストは必要なときだけ modal で開けば十分です。</p>');
+        questionBody.push('<p>判断材料は下の diff / current-note.md / current-ticket.md と Next に集約しています。生テキストは必要なときだけ modal で開けば十分です。</p>');
       } else if (state.data.runtime.run.status === 'interrupted') {
         const latest = interruptions[interruptions.length - 1];
         questionBody.push('<p>割り込み質問に未回答です。CLI の <code>answer</code> で回答してください。</p>');
@@ -2609,7 +2706,7 @@ function renderHtml() {
       '</div></div>';
 
     const contract = step.uiContract || {};
-    const showItems = stepShowItems(step, current && current.id === step.id ? nextAction : null);
+    const materialItems = judgementMaterialItems(step);
     const readyItems = stepReadyItems(step);
     const omitItems = listOf(contract.omit);
     const outputSummary = derivedSummaryLines(step);
@@ -2630,11 +2727,11 @@ function renderHtml() {
         : '') +
       '</div></div>';
 
-    html += '<div class="detail-section"><div class="detail-section-title">この step の判断材料</div><div class="artifacts">';
-    if (!showItems.length) {
+    html += '<div class="detail-section"><div class="detail-section-title">判断材料</div><div class="artifacts">';
+    if (!materialItems.length) {
       html += '<div class="artifact"><span class="artifact-name">まだありません</span><span class="artifact-size">pending</span></div>';
     }
-    showItems.forEach((item, index) => {
+    materialItems.forEach((item, index) => {
       html +=
         '<button class="artifact artifact-button show-artifact-button" type="button" data-show-index="' + esc(String(index)) + '">' +
           '<div class="artifact-copy">' +
@@ -2644,25 +2741,6 @@ function renderHtml() {
           '<span class="artifact-source">' + esc(item.source || item.type) + '</span>' +
         '</button>';
     });
-    html += '</div></div>';
-
-    html += '<div class="detail-section"><div class="detail-section-title">Documents</div><div class="document-grid">';
-    html +=
-      '<button class="artifact document-button" type="button" data-doc="note">' +
-        '<div class="document-copy">' +
-          '<span class="artifact-name">current-note.md</span>' +
-          '<span class="document-subtitle">frontmatter, 調査, 計画, レビュー, AC 裏取り</span>' +
-        '</div>' +
-        '<span class="artifact-source">open</span>' +
-      '</button>';
-    html +=
-      '<button class="artifact document-button" type="button" data-doc="ticket">' +
-        '<div class="document-copy">' +
-          '<span class="artifact-name">current-ticket.md</span>' +
-          '<span class="document-subtitle">ticket intent, AC, Implementation Notes</span>' +
-        '</div>' +
-        '<span class="artifact-source">open</span>' +
-      '</button>';
     html += '</div></div>';
 
     if (step.judgements?.length) {
@@ -2750,16 +2828,10 @@ function renderHtml() {
     root.innerHTML = html;
     root.querySelectorAll('.show-artifact-button').forEach((button) => {
       button.addEventListener('click', () => {
-        const item = showItems[Number(button.dataset.showIndex)];
+        const item = materialItems[Number(button.dataset.showIndex)];
         if (!item) {
           return;
         }
-        openModalItem(item, defaultModalMode(item));
-      });
-    });
-    root.querySelectorAll('.document-button').forEach((button) => {
-      button.addEventListener('click', () => {
-        const item = documentModalItem(button.dataset.doc);
         openModalItem(item, defaultModalMode(item));
       });
     });

@@ -99,6 +99,7 @@ export function renderUiOutputPromptSection({ run, step }) {
     "- `risks`: unresolved risks only. Use `[]` when there are none.",
     "- `ready_when`: concrete conditions that mean this step is ready to advance.",
     "- `notes`: optional free text. Use a block scalar when it helps.",
+    "- Match the primary language used in `current-ticket.md` for all human-readable text in this file.",
     ...(judgementKind
       ? [`- \`judgement\`: required for this review step. Use \`kind: ${judgementKind}\`, the exact guard-facing \`status\`, and a short \`summary\`.`]
       : []),

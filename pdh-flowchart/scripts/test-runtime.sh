@@ -123,6 +123,7 @@ test_prompt_context() {
   grep -q "Required references: (none)" "$prompt_path"
   grep -q "## UI Output Artifact" "$prompt_path"
   grep -q "ui-output.yaml" "$prompt_path"
+  grep -q 'Match the primary language used in `current-ticket.md`' "$prompt_path"
   if grep -q "## current-ticket.md" "$prompt_path"; then
     echo "prompt should not inline current-ticket.md" >&2
     exit 1
