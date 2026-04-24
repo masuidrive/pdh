@@ -270,6 +270,9 @@ if (!state.documents?.note?.path?.endsWith("current-note.md")) throw new Error("
 if (!state.documents?.note?.text?.includes("PD-C-3")) throw new Error("note document text missing");
 if (!state.documents?.ticket?.path?.endsWith("current-ticket.md")) throw new Error("ticket document path missing");
 if (!state.current.nextAction.commands.some((command) => command.includes("run-next"))) throw new Error("next action command missing");
+const gateStep = state.flow.variants.full.steps.find((step) => step.id === "PD-C-5");
+if (!gateStep?.uiContract?.mustShow?.includes("変更差分")) throw new Error("gate diff contract missing");
+if (!gateStep?.reviewDiff?.baseLabel) throw new Error("gate diff summary missing");
 const mermaid = await (await fetch(`${url}api/flow.mmd`)).text();
 if (!mermaid.includes("PD-C-6") || !mermaid.includes("実装")) throw new Error("mermaid flow labels missing");
 const html = await (await fetch(url)).text();
@@ -280,6 +283,8 @@ const mutation = await fetch(`${url}api/state`, { method: "POST" });
 if (mutation.status !== 405) throw new Error(`mutation endpoint should be rejected, got ${mutation.status}`);
 NODE
   curl -s "${url}api/render-mermaid?code=graph%20TD%0AA--%3EB" | rg -q "<svg"
+  curl -s "${url}api/artifact?step=PD-C-5&name=human-gate-summary.md" | rg -q "Human Gate Summary"
+  curl -s "${url}api/diff?step=PD-C-5" | rg -q "\"baseLabel\":\"ticket start\""
   /usr/lib/chromium/chromium --headless --disable-gpu --no-sandbox --virtual-time-budget=5000 --dump-dom "${url}?doc=note&heading=PD-C-3.%20%E8%A8%88%E7%94%BB&mode=markdown" | rg -q "detail-view-toggle|detail-doc-viewer|current-note.md"
   kill "$server_pid" 2>/dev/null || true
   wait "$server_pid" 2>/dev/null || true

@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, extname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { URL } from "node:url";
@@ -14,6 +14,8 @@ import { loadStepUiOutput, loadStepUiRuntime } from "./step-ui.mjs";
 import { hasCompletedProviderAttempt, latestAttemptResult, latestHumanGate, loadRuntime, readProgressEvents, stepDir } from "./runtime-state.mjs";
 
 const MAX_TEXT = 120000;
+const MARKDOWN_EXTENSIONS = new Set([".md", ".markdown"]);
+const TEXT_ARTIFACT_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".patch", ".diff", ".log", ".mmd"]);
 
 export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", port = 8765 } = {}) {
   const repo = resolve(repoPath);
@@ -63,6 +65,31 @@ function handleRequest({ request, response, repo }) {
       return;
     }
     sendSvg(response, 200, svg);
+    return;
+  }
+  if (url.pathname === "/api/artifact") {
+    const payload = collectArtifactPayload({
+      repo,
+      stepId: url.searchParams.get("step"),
+      name: url.searchParams.get("name")
+    });
+    if (!payload) {
+      sendJson(response, 404, { error: "artifact_not_found" });
+      return;
+    }
+    sendJson(response, 200, payload);
+    return;
+  }
+  if (url.pathname === "/api/diff") {
+    const payload = collectDiffPayload({
+      repo,
+      stepId: url.searchParams.get("step")
+    });
+    if (!payload) {
+      sendJson(response, 404, { error: "diff_not_found" });
+      return;
+    }
+    sendJson(response, 200, payload);
     return;
   }
   sendJson(response, 404, { error: "not_found" });
@@ -184,6 +211,7 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor, 
       judgements: runtime.run?.id
         ? loadJudgements({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }).map((judgement) => redactObject(judgement, redactor))
         : [],
+      reviewDiff: runtime.run?.id ? redactObject(collectDiffPayload({ repo, stepId: step.id, includePatch: false }), redactor) : null,
       artifacts: runtime.run?.id ? listStepArtifacts({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id, redactor }) : [],
       events: events.filter((event) => event.stepId === step.id).slice(-12)
     };
@@ -425,6 +453,116 @@ function collectMermaid({ repo, variant = null }) {
   return renderMermaidFlow(runtime.flow, variant ?? runtime.run?.flow_variant ?? "full", runtime.run?.current_step_id ?? null);
 }
 
+function collectArtifactPayload({ repo, stepId, name }) {
+  const runtime = loadRuntime(repo);
+  const runId = runtime.run?.id;
+  if (!runId || !stepId || !name) {
+    return null;
+  }
+  const redactor = createRedactor({ repoPath: repo });
+  const dir = stepDir(runtime.stateDir, runId, stepId);
+  if (!existsSync(dir)) {
+    return null;
+  }
+  const resolvedName = String(name);
+  const fullPath = resolve(dir, resolvedName);
+  if (!(fullPath === dir || fullPath.startsWith(`${dir}/`)) || !existsSync(fullPath)) {
+    return null;
+  }
+  const extension = extname(fullPath).toLowerCase();
+  if (!TEXT_ARTIFACT_EXTENSIONS.has(extension)) {
+    return {
+      name: resolvedName,
+      path: redactor(fullPath),
+      size: safeSize(fullPath),
+      text: "This artifact is not rendered in the web viewer.",
+      markdown: false
+    };
+  }
+  return {
+    name: resolvedName,
+    path: redactor(fullPath),
+    size: safeSize(fullPath),
+    text: safeReadText(fullPath, redactor),
+    markdown: MARKDOWN_EXTENSIONS.has(extension)
+  };
+}
+
+function collectDiffPayload({ repo, stepId, includePatch = true }) {
+  const runtime = loadRuntime(repo);
+  const run = runtime.run;
+  if (!run?.id || !stepId) {
+    return null;
+  }
+  const variant = run.flow_variant ?? runtime.note.pdh.variant ?? "full";
+  const view = buildFlowView(runtime.flow, variant, run.current_step_id ?? null);
+  const stepIndex = view.sequence.indexOf(stepId);
+  if (stepIndex < 0) {
+    return null;
+  }
+  const history = parseStepHistory(runtime.note.body).entries
+    .filter((entry) => entry.commit && entry.commit !== "-");
+  const gateIds = view.steps.filter((step) => step.mode === "human").map((step) => step.id);
+  const gateIndex = gateIds.indexOf(stepId);
+  if (gateIndex < 0) {
+    return null;
+  }
+
+  let baseRef = null;
+  let baseLabel = null;
+  let baseCommit = null;
+
+  if (gateIndex === 0) {
+    const firstCommit = history
+      .filter((entry) => {
+        const index = view.sequence.indexOf(entry.stepId);
+        return index >= 0 && index < stepIndex;
+      })
+      .sort((left, right) => view.sequence.indexOf(left.stepId) - view.sequence.indexOf(right.stepId))[0];
+    if (!firstCommit) {
+      baseRef = currentHead(repo) ?? "HEAD";
+      baseLabel = "ticket start";
+      baseCommit = currentHead(repo);
+    } else {
+      baseRef = parentCommit(repo, firstCommit.commit) ?? emptyTreeHash(repo);
+      baseLabel = "ticket start";
+      baseCommit = firstCommit.commit;
+    }
+  } else {
+    const previousGateId = gateIds[gateIndex - 1];
+    const previousGateIndex = view.sequence.indexOf(previousGateId);
+    const baseline = history
+      .filter((entry) => {
+        const index = view.sequence.indexOf(entry.stepId);
+        return index >= 0 && index < previousGateIndex;
+      })
+      .sort((left, right) => view.sequence.indexOf(left.stepId) - view.sequence.indexOf(right.stepId))
+      .at(-1);
+    if (!baseline) {
+      return null;
+    }
+    baseRef = baseline.commit;
+    baseLabel = `${previousGateId} gate baseline`;
+    baseCommit = baseline.commit;
+  }
+
+  const diffArgs = ["diff", "--no-ext-diff", "--submodule=diff", "--unified=3", baseRef, "--"];
+  const statArgs = ["diff", "--stat", baseRef, "--"];
+  const filesArgs = ["diff", "--name-only", baseRef, "--"];
+  const diff = runGit(repo, diffArgs);
+  const stat = runGit(repo, statArgs);
+  const files = runGit(repo, filesArgs);
+
+  return {
+    stepId,
+    baseLabel,
+    baseCommit: baseCommit ? baseCommit.slice(0, 7) : null,
+    diffStat: splitLines(stat.stdout),
+    changedFiles: splitLines(files.stdout),
+    patch: includePatch ? clampText(diff.stdout, MAX_TEXT) : null
+  };
+}
+
 function gitState(repo, redactor) {
   const branch = runGit(repo, ["rev-parse", "--abbrev-ref", "HEAD"]);
   const status = runGit(repo, ["status", "--short"]);
@@ -444,6 +582,28 @@ function runGit(repo, args) {
     stderr: result.stderr ?? "",
     status: result.status
   };
+}
+
+function parentCommit(repo, commit) {
+  const result = runGit(repo, ["rev-parse", `${commit}^`]);
+  return result.status === 0 ? firstLine(result.stdout) : null;
+}
+
+function currentHead(repo) {
+  const result = runGit(repo, ["rev-parse", "HEAD"]);
+  return result.status === 0 ? firstLine(result.stdout) : null;
+}
+
+function emptyTreeHash(repo) {
+  const result = runGit(repo, ["hash-object", "-t", "tree", "/dev/null"]);
+  return firstLine(result.stdout);
+}
+
+function splitLines(value) {
+  return String(value ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function safeReadText(path, redactor) {
@@ -1239,6 +1399,24 @@ function renderHtml() {
     background: rgba(255,255,255,0.6);
     text-align: left;
   }
+  .detail-diff-lines {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: auto;
+    background: #fbfaf7;
+  }
+  .detail-diff-line {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 11px;
+    line-height: 1.55;
+    white-space: pre;
+    padding: 0 12px;
+  }
+  .detail-diff-line.context { color: var(--text); }
+  .detail-diff-line.meta { color: var(--text-muted); background: #f5f4ef; }
+  .detail-diff-line.hunk { color: #185fa5; background: #eaf2fc; }
+  .detail-diff-line.add { color: #0f6e56; background: #e1f5ee; }
+  .detail-diff-line.remove { color: #a32d2d; background: #fcebeb; }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
@@ -1302,7 +1480,7 @@ function renderHtml() {
     </div>
   </div>
 <script>
-  const state = { data: null, selectedId: null, modalItem: null, modalDocumentMode: 'markdown' };
+  const state = { data: null, selectedId: null, modalItem: null, modalViewMode: 'markdown' };
 
   function esc(value) {
     return String(value ?? '')
@@ -1470,6 +1648,10 @@ function renderHtml() {
 
   function documentData(docId) {
     return state.data?.documents?.[docId] || null;
+  }
+
+  function markdownArtifact(name) {
+    return /\\.(md|markdown)$/i.test(String(name || ''));
   }
 
   function normalizeHeadingKey(value) {
@@ -1760,6 +1942,99 @@ function renderHtml() {
     );
   }
 
+  function renderArtifactViewer(payload, mode = 'raw') {
+    const viewer = mode === 'markdown' && payload?.markdown
+      ? '<div class="detail-doc-markdown">' + renderMarkdownExcerpt(payload?.text || '未記録') + '</div>'
+      : '<div class="detail-doc-raw">' + esc(payload?.text || '未記録') + '</div>';
+    return (
+      '<div class="detail-dialog-section">' +
+        '<div class="detail-dialog-label">Artifact</div>' +
+        '<div class="detail-doc-meta">' +
+          '<div class="key">Path</div><div>' + esc(payload?.path || '-') + '</div>' +
+          '<div class="key">File</div><div>' + esc(payload?.name || '-') + '</div>' +
+        '</div>' +
+        '<div class="detail-doc-viewer">' + viewer + '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderDiffPretty(text) {
+    const lines = String(text || '').split(/\\r?\\n/);
+    return (
+      '<div class="detail-diff-lines">' +
+      lines.map((line) => {
+        let kind = 'context';
+        if (line.startsWith('@@')) {
+          kind = 'hunk';
+        } else if ((line.startsWith('+') && !line.startsWith('+++')) || line.startsWith('rename to ')) {
+          kind = 'add';
+        } else if ((line.startsWith('-') && !line.startsWith('---')) || line.startsWith('rename from ')) {
+          kind = 'remove';
+        } else if (
+          line.startsWith('diff --git') ||
+          line.startsWith('index ') ||
+          line.startsWith('--- ') ||
+          line.startsWith('+++ ') ||
+          line.startsWith('new file mode') ||
+          line.startsWith('deleted file mode')
+        ) {
+          kind = 'meta';
+        }
+        return '<div class="detail-diff-line ' + kind + '">' + esc(line || ' ') + '</div>';
+      }).join('') +
+      '</div>'
+    );
+  }
+
+  function renderDiffViewer(payload, mode = 'pretty') {
+    const stat = listOf(payload?.diffStat).map((line) => '<div>' + esc(line) + '</div>').join('');
+    const files = listOf(payload?.changedFiles).map((line) => '<div>' + esc(line) + '</div>').join('');
+    const viewer = mode === 'raw'
+      ? '<div class="detail-doc-raw">' + esc(payload?.patch || '差分なし') + '</div>'
+      : renderDiffPretty(payload?.patch || 'diff is empty');
+    return (
+      '<div class="detail-dialog-section">' +
+        '<div class="detail-dialog-label">Diff</div>' +
+        '<div class="detail-doc-meta">' +
+          '<div class="key">Base</div><div>' + esc(payload?.baseLabel || '-') + (payload?.baseCommit ? ' <span style="color: var(--text-muted);">(' + esc(payload.baseCommit) + ')</span>' : '') + '</div>' +
+          '<div class="key">Files</div><div>' + (files || '<span style="color: var(--text-muted);">変更なし</span>') + '</div>' +
+          '<div class="key">Summary</div><div>' + (stat || '<span style="color: var(--text-muted);">変更なし</span>') + '</div>' +
+        '</div>' +
+        '<div class="detail-doc-viewer">' + viewer + '</div>' +
+      '</div>'
+    );
+  }
+
+  function artifactModalItem(step, artifact) {
+    return {
+      label: artifact.name,
+      type: 'artifact',
+      source: artifact.path || artifact.name,
+      detail: artifact.size || '',
+      artifactTarget: {
+        stepId: step.id,
+        name: artifact.name,
+        markdown: markdownArtifact(artifact.name)
+      }
+    };
+  }
+
+  async function fetchArtifactPayload(target) {
+    const response = await fetch('/api/artifact?step=' + encodeURIComponent(target.stepId) + '&name=' + encodeURIComponent(target.name), { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('artifact fetch failed');
+    }
+    return response.json();
+  }
+
+  async function fetchDiffPayload(stepId) {
+    const response = await fetch('/api/diff?step=' + encodeURIComponent(stepId), { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('diff fetch failed');
+    }
+    return response.json();
+  }
+
   function buildShowItem(label, type, source, detail) {
     return {
       label,
@@ -1843,6 +2118,12 @@ function renderHtml() {
     const planText = stepById('PD-C-3')?.noteSection || '';
     const reviewText = preferredText(stepById('PD-C-4')?.noteSection, stepJudgementText('PD-C-4'));
     const riskText = preferredText(stepById('PD-C-2')?.noteSection, reviewText, planText);
+    if (lower.includes('diff') || lower.includes('差分')) {
+      const diff = step.reviewDiff;
+      const item = buildShowItem(label, 'diff', diff?.baseLabel || 'ticket start', preferredText(joinedText(diff?.diffStat), joinedText(diff?.changedFiles), 'click to open diff'));
+      item.diffTarget = diff ? { stepId: step.id } : null;
+      return item;
+    }
     if (lower.includes('変更対象')) {
       return buildShowItem(label, 'plan', 'current-note.md#PD-C-3. 計画', planText);
     }
@@ -1921,6 +2202,12 @@ function renderHtml() {
     const lower = String(label).toLowerCase();
     const verificationText = preferredText(stepById('PD-C-9')?.noteSection, step.acTableText);
     const riskText = preferredText(stepById('PD-C-8')?.noteSection, stepById('PD-C-7')?.noteSection, verificationText);
+    if (lower.includes('diff') || lower.includes('差分')) {
+      const diff = step.reviewDiff;
+      const item = buildShowItem(label, 'diff', diff?.baseLabel || 'previous gate baseline', preferredText(joinedText(diff?.diffStat), joinedText(diff?.changedFiles), 'click to open diff'));
+      item.diffTarget = diff ? { stepId: step.id } : null;
+      return item;
+    }
     if (lower.includes('ac')) {
       return buildShowItem(label, 'ac', 'current-note.md#AC 裏取り結果', step.acTableText);
     }
@@ -1975,6 +2262,58 @@ function renderHtml() {
     return items;
   }
 
+  function defaultModalMode(item) {
+    if (item?.diffTarget) {
+      return 'pretty';
+    }
+    if (item?.artifactTarget) {
+      return item.artifactTarget.markdown ? 'markdown' : 'raw';
+    }
+    return 'markdown';
+  }
+
+  function renderModalShell(item, viewerHtml) {
+    const hasDetail = String(item.detail || '').trim().length > 0;
+    return (
+      '<div class="detail-dialog-grid">' +
+        '<div class="key">Type</div><div>' + esc(item.type || 'detail') + '</div>' +
+        '<div class="key">Source</div><div>' + esc(item.source || '-') + '</div>' +
+      '</div>' +
+      (hasDetail
+        ? '<div class="detail-dialog-section"><div class="detail-dialog-label">Detail</div><div class="detail-dialog-pre">' + esc(item.detail || '未記録') + '</div></div>'
+        : '') +
+      viewerHtml
+    );
+  }
+
+  async function loadRemoteModalBody(item) {
+    const body = document.getElementById('detail-modal-body');
+    try {
+      const payload = item.diffTarget
+        ? await fetchDiffPayload(item.diffTarget.stepId)
+        : await fetchArtifactPayload(item.artifactTarget);
+      if (state.modalItem !== item) {
+        return;
+      }
+      const mode = item.diffTarget
+        ? (state.modalViewMode === 'raw' ? 'raw' : 'pretty')
+        : (state.modalViewMode === 'raw' ? 'raw' : 'markdown');
+      const viewer = item.diffTarget
+        ? renderDiffViewer(payload, mode)
+        : renderArtifactViewer(payload, mode);
+      body.innerHTML = renderModalShell(item, viewer);
+    } catch {
+      if (state.modalItem !== item) {
+        return;
+      }
+      body.innerHTML = renderModalShell(
+        item,
+        '<div class="detail-dialog-section"><div class="detail-dialog-label">Viewer</div><div class="detail-doc-viewer"><div class="detail-doc-raw">Failed to load the requested content.</div></div></div>'
+      );
+    }
+    hydrateModalBody();
+  }
+
   function fetchState() {
     return fetch('/api/state', { cache: 'no-store' }).then((response) => response.json());
   }
@@ -1990,7 +2329,7 @@ function renderHtml() {
       const requested = requestedModalItem();
       if (requested) {
         state.modalItem = requested.item;
-        state.modalDocumentMode = requested.mode;
+        state.modalViewMode = requested.mode;
       }
       render();
     });
@@ -2115,7 +2454,7 @@ function renderHtml() {
 
   function openModalItem(item, mode = 'markdown') {
     state.modalItem = item;
-    state.modalDocumentMode = mode;
+    state.modalViewMode = mode;
     renderModal();
   }
 
@@ -2181,31 +2520,38 @@ function renderHtml() {
     }
     modal.classList.remove('hidden');
     title.textContent = state.modalItem.label;
-    if (state.modalItem.documentTarget) {
+    const allowsMarkdown = Boolean(state.modalItem.documentTarget || state.modalItem.artifactTarget?.markdown);
+    const isDiff = Boolean(state.modalItem.diffTarget);
+    if (allowsMarkdown || isDiff) {
+      const primaryMode = isDiff ? 'pretty' : 'markdown';
       toggleSlot.innerHTML =
         '<div class="detail-view-toggle">' +
-          '<button type="button" data-mode="markdown"' + (state.modalDocumentMode === 'markdown' ? ' class="on"' : '') + '>Markdown</button>' +
-          '<button type="button" data-mode="raw"' + (state.modalDocumentMode === 'raw' ? ' class="on"' : '') + '>Raw</button>' +
+          '<button type="button" data-mode="' + primaryMode + '"' + (state.modalViewMode === primaryMode ? ' class="on"' : '') + '>' + (isDiff ? 'Pretty' : 'Markdown') + '</button>' +
+          '<button type="button" data-mode="raw"' + (state.modalViewMode === 'raw' ? ' class="on"' : '') + '>Raw</button>' +
         '</div>';
       toggleSlot.querySelectorAll('button').forEach((button) => {
         button.addEventListener('click', () => {
-          state.modalDocumentMode = button.dataset.mode || 'markdown';
+          state.modalViewMode = button.dataset.mode || primaryMode;
           renderModal();
         });
       });
     } else {
       toggleSlot.innerHTML = '';
     }
-    const hasDetail = String(state.modalItem.detail || '').trim().length > 0;
-    body.innerHTML =
-      '<div class="detail-dialog-grid">' +
-        '<div class="key">Type</div><div>' + esc(state.modalItem.type || 'detail') + '</div>' +
-        '<div class="key">Source</div><div>' + esc(state.modalItem.source || '-') + '</div>' +
-      '</div>' +
-      (hasDetail
-        ? '<div class="detail-dialog-section"><div class="detail-dialog-label">Detail</div><div class="detail-dialog-pre">' + esc(state.modalItem.detail || '未記録') + '</div></div>'
-        : '') +
-      (state.modalItem.documentTarget ? renderDocumentViewer(state.modalItem.documentTarget, state.modalDocumentMode) : '');
+    if (state.modalItem.documentTarget) {
+      body.innerHTML = renderModalShell(state.modalItem, renderDocumentViewer(state.modalItem.documentTarget, state.modalViewMode === 'raw' ? 'raw' : 'markdown'));
+      hydrateModalBody();
+      return;
+    }
+    if (state.modalItem.artifactTarget || state.modalItem.diffTarget) {
+      body.innerHTML = renderModalShell(
+        state.modalItem,
+        '<div class="detail-dialog-section"><div class="detail-dialog-label">Viewer</div><div class="detail-doc-viewer"><div class="detail-doc-raw">Loading…</div></div></div>'
+      );
+      loadRemoteModalBody(state.modalItem);
+      return;
+    }
+    body.innerHTML = renderModalShell(state.modalItem, '');
     hydrateModalBody();
   }
 
@@ -2233,7 +2579,7 @@ function renderHtml() {
       const questionBody = [];
       if (state.data.runtime.run.status === 'needs_human') {
         questionBody.push('<p>' + esc(nextAction.body || 'この step は human gate です。terminal から判断してください。') + '</p>');
-        questionBody.push('<p>判断材料は下の「この step の判断材料」と Next に集約しています。gate summary の生テキストは必要なときだけ成果物から開けば十分です。</p>');
+        questionBody.push('<p>判断材料は下の「この step の判断材料」、Documents、Next に集約しています。gate summary や diff の生テキストは必要なときだけ modal で開けば十分です。</p>');
       } else if (state.data.runtime.run.status === 'interrupted') {
         const latest = interruptions[interruptions.length - 1];
         questionBody.push('<p>割り込み質問に未回答です。CLI の <code>answer</code> で回答してください。</p>');
@@ -2288,9 +2634,9 @@ function renderHtml() {
     if (!showItems.length) {
       html += '<div class="artifact"><span class="artifact-name">まだありません</span><span class="artifact-size">pending</span></div>';
     }
-    showItems.forEach((item) => {
+    showItems.forEach((item, index) => {
       html +=
-        '<button class="artifact artifact-button" type="button">' +
+        '<button class="artifact artifact-button show-artifact-button" type="button" data-show-index="' + esc(String(index)) + '">' +
           '<div class="artifact-copy">' +
             '<span class="artifact-name">' + esc(item.label) + '</span>' +
             '<span class="artifact-preview">' + esc(item.preview) + '</span>' +
@@ -2388,42 +2734,64 @@ function renderHtml() {
 
     if (step.artifacts?.length) {
       html += '<div class="detail-section"><div class="detail-section-title">補足成果物</div><div class="artifacts">';
-      step.artifacts.forEach((artifact) => {
-        html += '<div class="artifact"><span class="artifact-name">' + esc(artifact.name) + '</span><span class="artifact-size">' + esc(artifact.size) + '</span></div>';
+      step.artifacts.forEach((artifact, index) => {
+        html +=
+          '<button class="artifact artifact-button supplemental-artifact-button" type="button" data-artifact-index="' + esc(String(index)) + '">' +
+            '<div class="artifact-copy">' +
+              '<span class="artifact-name">' + esc(artifact.name) + '</span>' +
+              '<span class="artifact-preview">' + esc(artifact.size || 'artifact') + '</span>' +
+            '</div>' +
+            '<span class="artifact-source">open</span>' +
+          '</button>';
       });
       html += '</div></div>';
     }
 
     root.innerHTML = html;
-    root.querySelectorAll('.artifact-button').forEach((button, index) => {
+    root.querySelectorAll('.show-artifact-button').forEach((button) => {
       button.addEventListener('click', () => {
-        openModalItem(showItems[index], 'markdown');
+        const item = showItems[Number(button.dataset.showIndex)];
+        if (!item) {
+          return;
+        }
+        openModalItem(item, defaultModalMode(item));
       });
     });
     root.querySelectorAll('.document-button').forEach((button) => {
       button.addEventListener('click', () => {
-        openModalItem(documentModalItem(button.dataset.doc), 'markdown');
+        const item = documentModalItem(button.dataset.doc);
+        openModalItem(item, defaultModalMode(item));
+      });
+    });
+    root.querySelectorAll('.supplemental-artifact-button').forEach((button) => {
+      button.addEventListener('click', () => {
+        const artifact = step.artifacts?.[Number(button.dataset.artifactIndex)];
+        if (!artifact) {
+          return;
+        }
+        const item = artifactModalItem(step, artifact);
+        openModalItem(item, defaultModalMode(item));
       });
     });
   }
 
   document.getElementById('detail-modal-close').addEventListener('click', () => {
     state.modalItem = null;
-    state.modalDocumentMode = 'markdown';
+    state.modalViewMode = 'markdown';
     clearRequestedModalQuery();
     renderModal();
   });
   document.getElementById('detail-modal').addEventListener('click', (event) => {
     if (event.target.id !== 'detail-modal') return;
     state.modalItem = null;
-    state.modalDocumentMode = 'markdown';
+    state.modalViewMode = 'markdown';
     clearRequestedModalQuery();
     renderModal();
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && state.modalItem) {
       state.modalItem = null;
-      state.modalDocumentMode = 'markdown';
+      state.modalViewMode = 'markdown';
       clearRequestedModalQuery();
       renderModal();
     }

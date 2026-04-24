@@ -152,6 +152,7 @@ steps:
       viewer: 承認者
       decision: この計画で実装に入ってよいかを判断する。
       mustShow:
+        - 変更差分
         - 計画サマリ
         - 変更対象
         - 主要リスク
@@ -342,6 +343,7 @@ steps:
       viewer: 承認者
       decision: この ticket を close してよいかを判断する。
       mustShow:
+        - 変更差分
         - AC 裏取りの最終状態
         - 残リスク
         - close 前 cleanup の結果
