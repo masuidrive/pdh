@@ -74,6 +74,8 @@ No runtime metadata is written to this file.
           human-gate.json
         PD-C-6/
           prompt.md
+          ui-output.yaml
+          ui-runtime.yaml
           attempt-1/
             codex.raw.jsonl
             result.json
@@ -139,6 +141,7 @@ Responsibilities:
 - current step and next action presentation
 - step progress display for Full / Light variants
 - event, artifact, and diff summaries
+- right-panel merge of flow YAML contract, provider UI output, and runtime UI facts
 
 ## 4. CLI Surface
 
@@ -173,6 +176,8 @@ Persisted per attempt:
 - provider session id or resume token
 - result metadata
 - note/ticket patch proposal when canonical files changed
+- provider-written `ui-output.yaml`
+- runtime-written `ui-runtime.yaml`
 
 ## 6. Prompt Construction
 
@@ -183,6 +188,7 @@ The prompt includes:
 - compiled semantic rules from `flows/pdh-ticket-core.yaml`
 - required guards
 - canonical file references for `current-ticket.md` and `current-note.md`
+- a YAML contract for `.pdh-flowchart/.../ui-output.yaml`
 
 The prompt does not inline the full contents of canonical files. The provider is expected to read those files directly inside the repo.
 

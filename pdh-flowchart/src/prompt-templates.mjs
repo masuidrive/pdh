@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getStep, nextStep } from "./flow.mjs";
 import { loadStepInterruptions, renderInterruptionsForPrompt } from "./interruptions.mjs";
+import { renderUiOutputPromptSection } from "./step-ui.mjs";
 
 export function writeStepPrompt({ repoPath, stateDir, run, flow, stepId }) {
   const step = getStep(flow, stepId);
@@ -71,6 +72,8 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
     "## Required Guards",
     "",
     ...formatGuards(step),
+    "",
+    ...renderUiOutputPromptSection({ run, step }),
     ""
   ].join("\n");
 }

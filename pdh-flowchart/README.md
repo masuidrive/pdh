@@ -135,6 +135,7 @@ Provider prompts now include:
 - compiled semantic rules from `flows/pdh-ticket-core.yaml`
 - required guards
 - canonical file paths for `current-ticket.md` and `current-note.md`
+- a YAML contract for step-local UI output written to `.pdh-flowchart/.../ui-output.yaml`
 
 They do not inline the full contents of `current-ticket.md` or `current-note.md`.
 
@@ -190,6 +191,8 @@ pdh:
           human-gate.json
         PD-C-6/
           prompt.md
+          ui-output.yaml
+          ui-runtime.yaml
           attempt-1/
             codex.raw.jsonl
             result.json
@@ -220,6 +223,9 @@ The UI shows:
 - current step and next CLI action
 - Full / Light flow
 - per-step progress
+- step-specific viewer / decision contract from flow YAML
+- provider-written semantic UI output from `ui-output.yaml`
+- runtime-written fact summary from `ui-runtime.yaml`
 - gate or interruption state
 - recent events
 - step artifacts

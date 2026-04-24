@@ -44,7 +44,21 @@ write_fake_codex_success() {
   cat >"$path" <<'SH'
 #!/usr/bin/env bash
 printf '%s\n' "$@" > "${FAKE_ARGS_FILE:?}"
-cat >/dev/null || true
+prompt="$(cat || true)"
+ui_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*ui-output.yaml\)`\.$/\1/p' | head -1)"
+if [ -n "$ui_path" ]; then
+  mkdir -p "$(dirname "$ui_path")"
+  cat >"$ui_path" <<'YAML'
+summary:
+  - fake provider summary
+risks:
+  - fake provider risk
+ready_when:
+  - fake provider ready condition
+notes: |
+  fake notes
+YAML
+fi
 printf '%s\n' '{"type":"thread.started","thread_id":"fake-thread"}'
 printf '%s\n' '{"type":"turn.completed","final_message":"fake success"}'
 SH
@@ -69,6 +83,8 @@ test_prompt_context() {
   grep -q "## Canonical Files" "$prompt_path"
   grep -q "current-note.md frontmatter is the canonical runtime state" "$prompt_path"
   grep -q "Required references: (none)" "$prompt_path"
+  grep -q "## UI Output Artifact" "$prompt_path"
+  grep -q "ui-output.yaml" "$prompt_path"
   if grep -q "## current-ticket.md" "$prompt_path"; then
     echo "prompt should not inline current-ticket.md" >&2
     exit 1
@@ -104,6 +120,8 @@ test_auto_provider_run() {
   args="$TMP_ROOT/$run_id.auto-provider-args.txt"
   CODEX_BIN="$fake" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-next --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.auto-provider.txt" || true
   test -f "$args"
+  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/ui-output.yaml"
+  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/ui-runtime.yaml"
   grep -q "guard_failed" "$TMP_ROOT/$run_id.auto-provider.txt"
 }
 
@@ -168,9 +186,12 @@ test_interrupted_run() {
 }
 
 test_web_readonly() {
-  local repo server_log server_pid url
+  local repo run_id fake args server_log server_pid url
   repo="$(seed_repo web)"
-  advance_to_provider_step "$repo" >/dev/null
+  run_id="$(advance_to_provider_step "$repo")"
+  fake="$(write_fake_codex_success)"
+  args="$TMP_ROOT/$run_id.web-args.txt"
+  CODEX_BIN="$fake" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-next --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >/dev/null || true
   server_log="$TMP_ROOT/web.log"
   node "$ROOT/src/cli.mjs" web --repo "$repo" --host 127.0.0.1 --port 0 >"$server_log" 2>&1 &
   server_pid="$!"
@@ -192,6 +213,10 @@ const state = await (await fetch(`${url}api/state`)).json();
 if (state.mode !== "read-only") throw new Error("web mode is not read-only");
 if (!state.runtime.run) throw new Error("run missing from web state");
 if (!state.flow.variants.full.steps.some((step) => step.id === "PD-C-6" && step.label === "実装")) throw new Error("flow labels missing");
+const implementation = state.flow.variants.light.steps.find((step) => step.id === "PD-C-6");
+if (!implementation?.uiContract?.viewer) throw new Error("ui contract missing");
+if (!implementation?.uiOutput?.summary?.includes("fake provider summary")) throw new Error("ui output missing");
+if (!implementation?.uiRuntime?.changedFiles?.includes("current-note.md")) throw new Error("ui runtime missing changed files");
 if (!state.current.nextAction.commands.some((command) => command.includes("run-next"))) throw new Error("next action command missing");
 const mermaid = await (await fetch(`${url}api/flow.mmd`)).text();
 if (!mermaid.includes("PD-C-6") || !mermaid.includes("実装")) throw new Error("mermaid flow labels missing");

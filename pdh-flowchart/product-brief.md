@@ -145,6 +145,7 @@ The provider prompt must include:
 - compiled semantic rules from flow YAML
 - guard requirements
 - canonical file references
+- a YAML output contract for step-local UI semantics
 
 The provider prompt must not inline the full contents of `current-note.md` or `current-ticket.md`.
 
@@ -155,6 +156,9 @@ The Web UI must remain read-only and show:
 - current step
 - next CLI action
 - Full / Light flow
+- step contract from flow YAML
+- provider-written `ui-output.yaml`
+- runtime-written `ui-runtime.yaml`
 - logs
 - gate or interruption state
 - step artifacts

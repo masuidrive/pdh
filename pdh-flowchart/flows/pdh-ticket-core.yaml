@@ -39,6 +39,17 @@ steps:
     label: 調査
     summary: 既存実装、影響範囲、リスク、検証方法を確認する。
     userAction: 通常は操作不要。記録内容が不足していれば割り込みで補足する。
+    ui:
+      viewer: 実装担当
+      decision: どこを読めば blast radius とリスクを固められるかを判断する。
+      mustShow:
+        - 変更対象ファイル
+        - 影響範囲
+        - 既知リスク
+        - 後続 planning に必要な未解決点
+      omit:
+        - 過去 gate の履歴
+        - provider event 全件
     provider: codex
     mode: read
     promptContext:
@@ -60,6 +71,17 @@ steps:
     label: 計画
     summary: 実装方針、変更ファイル、テスト計画、リスク対応を決める。
     userAction: 計画に違和感があれば PD-C-5 前に割り込みで修正指示する。
+    ui:
+      viewer: 実装担当
+      decision: この ticket で実際にどのファイルをどう触るかを判断する。
+      mustShow:
+        - 実装方針
+        - 変更ファイル
+        - テスト方針
+        - リスク対応
+        - durable な設計判断
+      omit:
+        - 過去 step の history 一覧
     provider: codex
     mode: read
     promptContext:
@@ -88,6 +110,16 @@ steps:
     label: 計画レビュー
     summary: 実装前に計画の妥当性、リスク、検証方針をレビューする。
     userAction: Critical/Major が残る場合は計画へ戻す。
+    ui:
+      viewer: レビュー担当
+      decision: この計画で本当に実装に入ってよいかを判断する。
+      mustShow:
+        - 計画要約
+        - 想定 diff surface
+        - 検証不足
+        - Critical/Major 指摘
+      omit:
+        - 実装ログの時系列
     provider: claude
     mode: review
     promptContext:
@@ -116,6 +148,18 @@ steps:
     label: 実装承認
     summary: 実装に入ってよいかを人間が明示承認する gate。
     userAction: gate summary と必要な差分を確認して approve / request-changes / reject を選ぶ。
+    ui:
+      viewer: 承認者
+      decision: この計画で実装に入ってよいかを判断する。
+      mustShow:
+        - 計画サマリ
+        - 変更対象
+        - 主要リスク
+        - テスト計画
+        - approve / request-changes の CLI
+      omit:
+        - 生ログ全件
+        - step history
     provider: runtime
     mode: human
     guards:
@@ -137,6 +181,17 @@ steps:
     label: 実装
     summary: 承認済み計画に沿ってコード、テスト、note/ticket を更新する。
     userAction: 実装中の不明点が出たら answer で回答する。
+    ui:
+      viewer: 実装担当
+      decision: いま何を実装し、何で止まっているかを判断する。
+      mustShow:
+        - 承認済み計画の要点
+        - 現在の provider 結果
+        - 未通過 guard
+        - 必要な test / commit
+        - 割り込み質問
+      omit:
+        - 古い gate 決定の履歴
     provider: codex
     mode: edit
     promptContext:
@@ -168,6 +223,17 @@ steps:
     label: 品質レビュー
     summary: 実装の品質、回帰、テスト不足、設計逸脱をレビューする。
     userAction: Critical/Major が残る場合は実装修正へ戻す。
+    ui:
+      viewer: レビュー担当
+      decision: この実装に Critical/Major が残っていないかを判断する。
+      mustShow:
+        - diff summary
+        - テスト結果
+        - レビュー指摘
+        - 設計逸脱
+        - security / data-integrity の懸念
+      omit:
+        - 過去 step の長文ノート
     provider: claude
     mode: review
     promptContext:
@@ -196,6 +262,16 @@ steps:
     label: 目的妥当性
     summary: チケットの目的と Acceptance Criteria を満たしているか確認する。
     userAction: 未検証 AC や目的ずれがあれば実装修正へ戻す。
+    ui:
+      viewer: PdM / 批判的レビュアー
+      decision: 正しく動いていても close すべきでない理由が残っていないかを判断する。
+      mustShow:
+        - Product AC ごとの到達状況
+        - 目的ずれ
+        - 未検証の仮定
+        - follow-up が必要な点
+      omit:
+        - 実装イベントの生時系列
     provider: claude
     mode: review
     promptContext:
@@ -227,6 +303,16 @@ steps:
     label: 最終検証
     summary: テストと AC 裏取り表で、完了判断に必要な証跡を揃える。
     userAction: deferred / unverified の扱いを確認する。
+    ui:
+      viewer: 完了確認者
+      decision: AC 裏取りと最終検証の証跡が揃っているかを判断する。
+      mustShow:
+        - AC table
+        - verify 結果
+        - 外部 surface の確認結果
+        - deferred / unverified の扱い
+      omit:
+        - 古い review round の全履歴
     provider: codex
     mode: review
     promptContext:
@@ -252,6 +338,17 @@ steps:
     label: 完了承認
     summary: 完了してよいかを人間が明示承認し、ticket close へ進める gate。
     userAction: AC 裏取り、差分、残リスクを確認して approve / request-changes / reject を選ぶ。
+    ui:
+      viewer: 承認者
+      decision: この ticket を close してよいかを判断する。
+      mustShow:
+        - AC 裏取りの最終状態
+        - 残リスク
+        - close 前 cleanup の結果
+        - approve / reject の CLI
+      omit:
+        - step history
+        - provider raw log
     provider: runtime
     mode: human
     guards:

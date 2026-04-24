@@ -70,6 +70,7 @@ export function buildFlowView(flow, variant = "full", currentStepId = null) {
       label: step.label ?? step.id,
       summary: step.summary ?? "",
       userAction: step.userAction ?? "",
+      ui: normalizeUiContract(step.ui),
       provider: step.provider,
       mode: step.mode,
       guards: (step.guards ?? []).map((guard) => ({ ...guard })),
@@ -173,4 +174,25 @@ function mermaidNodeId(stepId) {
 
 function escapeMermaidLabel(value) {
   return String(value).replaceAll('"', "#quot;");
+}
+
+function normalizeUiContract(ui) {
+  const source = ui ?? {};
+  return {
+    viewer: normalizeString(source.viewer),
+    decision: normalizeString(source.decision),
+    mustShow: normalizeStringList(source.mustShow),
+    omit: normalizeStringList(source.omit)
+  };
+}
+
+function normalizeString(value) {
+  return value === undefined || value === null ? "" : String(value).trim();
+}
+
+function normalizeStringList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map(normalizeString).filter(Boolean);
 }

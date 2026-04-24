@@ -18,6 +18,7 @@ import { withRunLock } from "./locks.mjs";
 import { answerLatestInterruption, createInterruption, latestOpenInterruption, loadStepInterruptions, renderInterruptionMarkdown } from "./interruptions.mjs";
 import { writeFailureSummary } from "./failure-summary.mjs";
 import { appendStepHistoryEntry, loadCurrentNote, saveCurrentNote } from "./note-state.mjs";
+import { writeStepUiRuntime } from "./step-ui.mjs";
 import {
   appendProgressEvent,
   cleanupRunArtifacts,
@@ -190,6 +191,7 @@ async function cmdRun(argv) {
     }
     const started = startRun({ repoPath: repo, ticket, variant, flowId, startStep });
     maybeStartTicket({ repo, ticket, required: options["require-ticket-start"] === "true", runId: started.run.id, stepId: started.run.current_step_id });
+    syncStepUiRuntime({ repo });
     console.log(started.run.id);
     console.log(`Current step: ${formatStepName(getStep(started.flow, started.run.current_step_id))}`);
     console.log(`Next: ${runNextCommand(repo)}`);
@@ -291,6 +293,7 @@ async function cmdRunNext(argv) {
             message: `${step.id} provider_step_requires_execution`,
             payload: result
           });
+          syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [nextProviderCommand(repo)] });
           trace.push(result);
           printBlocked(result, trace, options);
           return;
@@ -312,6 +315,7 @@ async function cmdRunNext(argv) {
         if (!gate || gate.status === "needs_human") {
           const summary = ensureGateSummary({ repo, runtime, step });
           updateRun(repo, { status: "needs_human", current_step_id: step.id });
+          syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [showGateCommand(repo, step.id), ...humanDecisionCommands(repo, step.id)] });
           const result = {
             status: "needs_human",
             stepId: step.id,
@@ -330,6 +334,7 @@ async function cmdRunNext(argv) {
       if (failed.length > 0) {
         updateRun(repo, { status: "blocked", current_step_id: step.id });
         const summary = createFailureSummaryForBlock({ repo, runtime, step, failedGuards: failed });
+        syncStepUiRuntime({ repo, stepId: step.id, guardResults, nextCommands: [runNextCommand(repo)] });
         const block = {
           status: "blocked",
           stepId: step.id,
@@ -350,6 +355,7 @@ async function cmdRunNext(argv) {
       if (!outcome) {
         const summary = ensureGateSummary({ repo, runtime, step });
         updateRun(repo, { status: "needs_human", current_step_id: step.id });
+        syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [showGateCommand(repo, step.id), ...humanDecisionCommands(repo, step.id)] });
         const result = {
           status: "needs_human",
           stepId: step.id,
@@ -464,6 +470,7 @@ async function cmdJudgement(argv) {
       message: `judgement ${result.judgement.kind}: ${result.judgement.status}`,
       payload: { artifactPath: result.artifactPath, judgement: result.judgement }
     });
+    syncStepUiRuntime({ repo, stepId });
     console.log(JSON.stringify(result, null, 2));
   } });
 }
@@ -494,6 +501,7 @@ async function cmdVerify(argv) {
       message: `final verification ${result.result.status}`,
       payload: result
     });
+    syncStepUiRuntime({ repo, stepId });
     console.log(JSON.stringify(result, null, 2));
     if (result.result.status !== "passed") {
       process.exitCode = 1;
@@ -514,6 +522,7 @@ async function cmdGateSummary(argv) {
     }
     const summary = ensureGateSummary({ repo, runtime, step });
     updateRun(repo, { status: "needs_human", current_step_id: stepId });
+    syncStepUiRuntime({ repo, stepId, nextCommands: [showGateCommand(repo, stepId), ...humanDecisionCommands(repo, stepId)] });
     console.log(summary.artifactPath);
     console.log(`Next: ${showGateCommand(repo, stepId)}`);
   } });
@@ -554,6 +563,7 @@ async function cmdHumanDecision(command, argv) {
       message: `${stepId} ${gate.decision}`,
       payload: gate
     });
+    syncStepUiRuntime({ repo, stepId, nextCommands: [runNextCommand(repo)] });
     console.log(`${stepId} ${gate.decision}`);
     console.log(`Next: ${runNextCommand(repo)}`);
   } });
@@ -585,6 +595,7 @@ async function cmdInterrupt(argv) {
       message: `${stepId} interrupted`,
       payload: interruption
     });
+    syncStepUiRuntime({ repo, stepId, nextCommands: interruptAnswerCommands(repo, stepId) });
     console.log(`${stepId} interrupted`);
     console.log(`Interrupt: ${interruption.artifactPath}`);
     console.log("Next:");
@@ -619,6 +630,7 @@ async function cmdAnswer(argv) {
       message: `${stepId} interrupt answered`,
       payload: interruption
     });
+    syncStepUiRuntime({ repo, stepId, nextCommands: [runNextCommand(repo)] });
     console.log(`${stepId} answered`);
     console.log(`Answer: ${interruption.answerPath}`);
     console.log(`Next: ${runNextCommand(repo)}`);
@@ -1016,6 +1028,13 @@ async function executeProviderStep({ repo, runtime, step, options }) {
   const failureSummary = status === "completed"
     ? null
     : createProviderFailureSummary({ repo, runtime: requireRuntime(repo), step, attempt, maxAttempts, rawLogPath, result: lastResult });
+  syncStepUiRuntime({
+    repo,
+    stepId,
+    nextCommands: status === "completed"
+      ? [runNextCommand(repo)]
+      : [statusCommand(repo), resumeCommand(repo)]
+  });
   return {
     status,
     attempt,
@@ -1064,6 +1083,7 @@ function advanceRun({ repo, runtime, step, outcome }) {
   });
 
   if (target === "COMPLETE") {
+    syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [] });
     finalizeCompletedRun({ repo, runtime, step });
     return { status: "completed", from: step.id, to: target, outcome };
   }
@@ -1079,6 +1099,8 @@ function advanceRun({ repo, runtime, step, outcome }) {
     message: `[${step.id}] -> [${target}]`,
     payload: { outcome, target }
   });
+  syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [runNextCommand(repo)] });
+  syncStepUiRuntime({ repo, stepId: target, nextCommands: [runNextCommand(repo)] });
   return { status: "advanced", from: step.id, to: target, outcome };
 }
 
@@ -1337,6 +1359,7 @@ function blockIfOpenInterruption({ repo, runtime, step, options }) {
     message: `${step.id} needs interrupt answer`,
     payload: result
   });
+  syncStepUiRuntime({ repo, stepId: step.id, nextCommands: interruptAnswerCommands(repo, step.id) });
   return result;
 }
 
@@ -1369,6 +1392,38 @@ function maybeStartTicket({ repo, ticket, required = false, runId, stepId }) {
     message: `ticket.sh start ${ticket}`,
     payload: result
   });
+}
+
+function syncStepUiRuntime({ repo, stepId = null, guardResults = null, nextCommands = null }) {
+  const runtime = loadRuntime(repo);
+  if (!runtime.run?.id || !runtime.run.current_step_id) {
+    return null;
+  }
+  const resolvedStepId = stepId ?? runtime.run.current_step_id;
+  const step = getStep(runtime.flow, resolvedStepId);
+  return writeStepUiRuntime({
+    repoPath: repo,
+    runtime,
+    step,
+    guardResults,
+    nextCommands: nextCommands ?? defaultUiNextCommands({ repo, runtime, step })
+  });
+}
+
+function defaultUiNextCommands({ repo, runtime, step }) {
+  if (runtime.run.current_step_id !== step.id) {
+    return [];
+  }
+  if (runtime.run.status === "needs_human" && isHumanGateStep(step)) {
+    return [showGateCommand(repo, step.id), ...humanDecisionCommands(repo, step.id)];
+  }
+  if (runtime.run.status === "interrupted") {
+    return interruptAnswerCommands(repo, step.id);
+  }
+  if (runtime.run.status === "failed") {
+    return [statusCommand(repo), resumeCommand(repo)];
+  }
+  return [runNextCommand(repo)];
 }
 
 function requireRuntime(repo) {

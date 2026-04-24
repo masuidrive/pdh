@@ -25,6 +25,9 @@
 - [x] Keep the Web UI read-only.
 - [x] Show current step, next CLI action, flow progress, logs, artifacts, and git summary.
 - [x] Use the provided dashboard visual direction as the base styling.
+- [x] Move right-panel step contract into `flows/pdh-ticket-core.yaml`.
+- [x] Add provider-written `ui-output.yaml` and runtime-written `ui-runtime.yaml`.
+- [x] Replace right-panel mocks with real merged UI data.
 
 ## Phase 4: Verification
 
