@@ -151,7 +151,7 @@ function collectState({ repo }) {
     documents: {
       note: {
         path: join(repo, "current-note.md"),
-        text: clampText(redactor(note.body), MAX_TEXT)
+        text: clampText(redactor(note.text), MAX_TEXT)
       },
       ticket: {
         path: join(repo, "current-ticket.md"),
@@ -1267,6 +1267,23 @@ function renderHtml() {
     max-height: 58vh;
     overflow: auto;
   }
+  .detail-doc-segment + .detail-doc-segment {
+    margin-top: 18px;
+  }
+  .detail-doc-segment.dim {
+    opacity: 0.56;
+  }
+  .detail-doc-segment.focus {
+    opacity: 1;
+    scroll-margin-top: 20px;
+  }
+  .detail-doc-markdown.detail-doc-segment.focus,
+  .detail-doc-raw.detail-doc-segment.focus {
+    background: rgba(255,255,255,0.72);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
   .detail-doc-raw {
     white-space: pre-wrap;
     word-break: break-word;
@@ -2021,16 +2038,29 @@ function renderHtml() {
       return '';
     }
     const range = findDocumentSectionRange(document.text, target.heading);
-    const excerpt = range.lines.slice(range.start, range.end + 1).join('\\n').trim();
-    const viewer = mode === 'raw'
-      ? '<div class="detail-doc-raw">' + esc(excerpt || '未記録') + '</div>'
-      : '<div class="detail-doc-markdown">' + renderMarkdownExcerpt(excerpt || '未記録') + '</div>';
+    const renderSegment = (text, segmentClass, focused = false) => {
+      const value = String(text ?? '').trim();
+      if (!value) {
+        return '';
+      }
+      const attr = focused ? ' data-document-focus="true"' : '';
+      if (mode === 'raw') {
+        return '<div class="detail-doc-raw detail-doc-segment ' + segmentClass + '"' + attr + '>' + esc(value) + '</div>';
+      }
+      return '<div class="detail-doc-markdown detail-doc-segment ' + segmentClass + '"' + attr + '>' + renderMarkdownExcerpt(value) + '</div>';
+    };
+    const before = range.highlightStart >= 0 ? range.lines.slice(0, range.highlightStart).join('\\n') : '';
+    const focus = range.highlightStart >= 0 ? range.lines.slice(range.highlightStart, range.highlightEnd + 1).join('\\n') : document.text;
+    const after = range.highlightEnd >= 0 ? range.lines.slice(range.highlightEnd + 1).join('\\n') : '';
+    const viewer = range.highlightStart >= 0
+      ? renderSegment(before, 'dim') + renderSegment(focus, 'focus', true) + renderSegment(after, 'dim')
+      : renderSegment(document.text, 'focus', true);
     return (
       '<div class="detail-dialog-section">' +
         '<div class="detail-dialog-label">Document</div>' +
         '<div class="detail-doc-meta">' +
           '<div class="key">Path</div><div>' + esc(document.path || target.label || '-') + '</div>' +
-          '<div class="key">Focus</div><div>' + esc(target.heading || 'full file') + (range.clipped ? ' <span style="color: var(--text-muted);">excerpt</span>' : '') + '</div>' +
+          '<div class="key">Focus</div><div>' + esc(target.heading || 'full file') + '</div>' +
         '</div>' +
         '<div class="detail-doc-viewer">' + viewer + '</div>' +
       '</div>'
@@ -2601,6 +2631,12 @@ function renderHtml() {
     const body = document.getElementById('detail-modal-body');
     wireCopyButtons(body);
     hydrateMermaidBlocks(body);
+    const focus = body.querySelector('[data-document-focus="true"]');
+    if (focus) {
+      window.requestAnimationFrame(() => {
+        focus.scrollIntoView({ block: 'center' });
+      });
+    }
   }
 
   function renderModal() {
@@ -2717,13 +2753,13 @@ function renderHtml() {
       '<div><strong>誰が見る:</strong> ' + esc(contract.viewer || '開発者') + '</div>' +
       '<div style="margin-top:6px;"><strong>判断したいこと:</strong> ' + esc(contract.decision || step.summary || '') + '</div>' +
       (outputSummary.length
-        ? '<div style="margin-top:10px;"><strong>Summary:</strong><div style="margin-top:4px;">' + outputSummary.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
+        ? '<div style="margin-top:10px;"><strong>サマリー:</strong><div style="margin-top:4px;">' + outputSummary.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
         : '') +
       (outputRisks.length
-        ? '<div style="margin-top:10px;"><strong>Risks:</strong><div style="margin-top:4px;">' + outputRisks.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
+        ? '<div style="margin-top:10px;"><strong>リスク:</strong><div style="margin-top:4px;">' + outputRisks.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
         : '') +
       (outputNotes
-        ? '<div style="margin-top:10px;"><strong>Notes:</strong><div style="margin-top:4px;white-space:pre-wrap;">' + esc(outputNotes) + '</div></div>'
+        ? '<div style="margin-top:10px;"><strong>補足:</strong><div style="margin-top:4px;white-space:pre-wrap;">' + esc(outputNotes) + '</div></div>'
         : '') +
       '</div></div>';
 
