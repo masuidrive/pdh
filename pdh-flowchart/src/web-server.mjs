@@ -1805,7 +1805,7 @@ function renderHtml() {
     const fragment = text.slice(text.indexOf(docName) + docName.length);
     const fragmentMatch = fragment.match(/^#(.+)/);
     const headings = fragmentMatch?.[1]
-      ? fragmentMatch[1].split(/\s+\/\s+/).map((value) => value.trim()).filter(Boolean)
+      ? fragmentMatch[1].split(' / ').map((value) => value.trim()).filter(Boolean)
       : [];
     return { docId, heading: headings[0] || null, headings, label: docName };
   }
