@@ -2047,7 +2047,7 @@ function renderHtml() {
       if (mode === 'raw') {
         return '<div class="detail-doc-raw detail-doc-segment ' + segmentClass + '"' + attr + '>' + esc(value) + '</div>';
       }
-      return '<div class="detail-doc-markdown detail-doc-segment ' + segmentClass + '"' + attr + '>' + renderMarkdownExcerpt(markdownizeDocumentSegment(value)) + '</div>';
+      return '<div class="detail-doc-markdown detail-doc-segment ' + segmentClass + '"' + attr + '>' + renderMarkdownExcerpt(markdownizeDocumentSegment(value, document)) + '</div>';
     };
     const before = range.highlightStart >= 0 ? range.lines.slice(0, range.highlightStart).join('\\n') : '';
     const focus = range.highlightStart >= 0 ? range.lines.slice(range.highlightStart, range.highlightEnd + 1).join('\\n') : document.text;
@@ -2403,17 +2403,30 @@ function renderHtml() {
     return fetch('/api/state', { cache: 'no-store' }).then((response) => response.json());
   }
 
-  function markdownizeDocumentSegment(text) {
+  function markdownizeDocumentSegment(text, document) {
     const source = String(text || '');
     const match = source.match(/^---\\r?\\n([\\s\\S]*?)\\r?\\n---\\r?\\n?/);
+    const basename = String(document?.path || '').split('/').pop().trim().toLowerCase();
+    const stripDocumentTitle = (value) => {
+      if (!basename) {
+        return value;
+      }
+      const titleMatch = value.match(/^#\\s+([^\\n]+)\\n+/);
+      if (!titleMatch) {
+        return value;
+      }
+      const heading = titleMatch[1].trim().toLowerCase();
+      if (heading !== basename) {
+        return value;
+      }
+      return value.slice(titleMatch[0].length).trimStart();
+    };
     if (!match) {
-      return source;
+      return stripDocumentTitle(source);
     }
     const frontmatter = match[1].trimEnd();
-    const body = source.slice(match[0].length).trimStart();
+    const body = stripDocumentTitle(source.slice(match[0].length).trimStart());
     const parts = [
-      '## Frontmatter',
-      '',
       '\`\`\`yaml',
       frontmatter,
       '\`\`\`'
