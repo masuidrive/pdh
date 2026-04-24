@@ -1,6 +1,6 @@
 # pdh-flowchart
 
-`pdh-flowchart` is a repo-centric runtime for executing `pdh-dev` ticket flow semantics with explicit gates, transient local artifacts, and a read-only progress UI.
+`pdh-flowchart` is a repo-centric runtime for executing the PD-C ticket flow with explicit gates, transient local artifacts, and a read-only progress UI.
 
 ## Core Model
 
@@ -9,6 +9,7 @@
 - `.pdh-flowchart/` holds transient prompts, raw provider logs, gate summaries, interruptions, and other local artifacts. It is not committed.
 - The CLI operates on a repo, not on a separate SQLite run database.
 - The Web UI is read-only. Decisions and execution stay in the CLI.
+- Runtime semantics are owned by this repo's flow YAML and prompt/runtime code. `pdh-dev` and `tmux-director` are not runtime dependencies.
 
 ## Local Setup
 

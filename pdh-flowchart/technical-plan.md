@@ -11,6 +11,7 @@
 - `.pdh-flowchart/` stores transient local artifacts only.
 - CLI commands are repo-centric.
 - Web UI is read-only and derives state from note frontmatter plus transient artifacts.
+- Flow semantics are internalized in this repo; runtime execution does not depend on external `pdh-dev` or `tmux-director` skills.
 
 ### Rejected
 

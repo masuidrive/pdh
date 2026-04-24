@@ -2,7 +2,7 @@
 
 ## Project
 
-`pdh-flowchart` turns `pdh-dev` ticket flow semantics into a repo-centric CLI runtime with explicit guards, provider logs, and human gates.
+`pdh-flowchart` turns the PD-C ticket flow into a repo-centric CLI runtime with explicit guards, provider logs, and human gates.
 
 ## Read First
 
@@ -11,7 +11,6 @@
 - `tasks.md`: active checklist.
 - `flows/pdh-ticket-core.yaml`: machine-readable Full/Light PD-C flow.
 - `README.md`: local commands and current scope.
-- `../skills/pdh-dev/SKILL.md` and `../skills/tmux-director/SKILL.md`: source semantics for PD-C steps and gates.
 
 ## Local Commands
 

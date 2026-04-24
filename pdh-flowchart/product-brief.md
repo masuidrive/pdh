@@ -2,7 +2,7 @@
 
 ## 1. Product Summary
 
-`pdh-flowchart` turns `pdh-dev` ticket semantics into a repo-centric CLI runtime with explicit gates, interruptions, provider prompts, and a read-only progress UI.
+`pdh-flowchart` turns the PD-C ticket flow into a repo-centric CLI runtime with explicit gates, interruptions, provider prompts, and a read-only progress UI.
 
 The key product decision is:
 
@@ -37,6 +37,7 @@ That made it easy for the runtime to say one thing while the canonical note/tick
 4. Human gates and interruptions block the flow explicitly.
 5. The Web UI explains what the user should look at and which CLI command to run next.
 6. Local provider logs and prompts can be deleted before close without losing durable history.
+7. Runtime behavior does not depend on loading external `pdh-dev` or `tmux-director` skills.
 
 ## 5. Non-Goals
 
