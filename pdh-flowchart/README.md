@@ -20,6 +20,8 @@ source /home/masuidrive/.nvm/nvm.sh
 
 Provider commands load `.env` from the repo root. `.env` is ignored by git and may contain `OPENAI_API_KEY`.
 
+By default, both Codex and Claude run in bypass mode for provider steps. Use `--bypass=false` or an explicit Claude `--permission-mode` only when intentionally debugging permission behavior.
+
 ## Common Commands
 
 ```sh

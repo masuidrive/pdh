@@ -169,6 +169,11 @@ Design intent:
 
 Codex and Claude stay on CLI adapters for now.
 
+Default execution policy:
+
+- Codex runs with bypass enabled unless `--bypass=false` is explicitly passed.
+- Claude runs with `bypassPermissions` unless `--bypass=false` or an explicit `--permission-mode` is passed.
+
 Persisted per attempt:
 
 - raw JSONL log

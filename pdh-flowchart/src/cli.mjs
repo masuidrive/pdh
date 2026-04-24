@@ -932,7 +932,7 @@ async function executeProviderStep({ repo, runtime, step, options }) {
           bare: options.bare === "true",
           includePartialMessages: options["include-partial-messages"] === "true",
           model: options.model ?? null,
-          permissionMode: options["permission-mode"] ?? (options.bypass === "true" ? "bypassPermissions" : "acceptEdits"),
+          permissionMode: options["permission-mode"] ?? (options.bypass !== "false" ? "bypassPermissions" : "acceptEdits"),
           resume,
           timeoutMs,
           killGraceMs: providerKillGraceMs(options),

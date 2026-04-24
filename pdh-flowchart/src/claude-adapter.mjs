@@ -12,7 +12,7 @@ export async function runClaude({
   bare = false,
   includePartialMessages = false,
   model = null,
-  permissionMode = "acceptEdits",
+  permissionMode = "bypassPermissions",
   resume = null,
   timeoutMs = null,
   killGraceMs = 5000,
