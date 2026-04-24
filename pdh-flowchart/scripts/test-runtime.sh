@@ -303,6 +303,41 @@ test_interrupted_run() {
   grep -q "completed" "$TMP_ROOT/$run_id.answered-provider.txt"
 }
 
+test_assist_gate_flow() {
+  local repo run_id manifest prompt_path signal_path
+  repo="$(seed_repo assist-gate)"
+  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-5 | sed -n '1p')"
+  node "$ROOT/src/cli.mjs" run-next --repo "$repo" >"$TMP_ROOT/$run_id.assist-gate-open.json"
+  node "$ROOT/src/cli.mjs" assist-open --repo "$repo" --step PD-C-5 --prepare-only >"$TMP_ROOT/$run_id.assist-open.json"
+  manifest="$(node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(!data.allowedSignals.includes('approve')) throw new Error('approve missing'); if(!data.command.join(' ').includes('disable-slash-commands')) throw new Error('assist command missing hardening'); console.log(data.manifestPath);" "$TMP_ROOT/$run_id.assist-open.json")"
+  prompt_path="$(node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); console.log(data.promptPath);" "$TMP_ROOT/$run_id.assist-open.json")"
+  test -f "$manifest"
+  test -f "$prompt_path"
+  grep -q "Allowed signals now: approve, request-changes, reject" "$prompt_path"
+  grep -q "Do not run ticket.sh" "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-5/assist/system-prompt.txt"
+  test -x "$repo/.pdh-flowchart/bin/assist-signal"
+  test -x "$repo/.pdh-flowchart/bin/assist-test"
+  node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-5 --signal approve --reason ok --no-run-next >"$TMP_ROOT/$run_id.assist-signal.json"
+  grep -q '"decision": "approved"' "$TMP_ROOT/$run_id.assist-signal.json"
+  signal_path="$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-5/assist/latest-signal.json"
+  test -f "$signal_path"
+  grep -q '"signal": "approve"' "$signal_path"
+  node "$ROOT/src/cli.mjs" run-next --repo "$repo" --stop-after-step >"$TMP_ROOT/$run_id.assist-stop.txt"
+  grep -q "Stopped After Step: PD-C-5 -> PD-C-6" "$TMP_ROOT/$run_id.assist-stop.txt"
+}
+
+test_assist_answer_flow() {
+  local repo run_id
+  repo="$(seed_repo assist-answer)"
+  run_id="$(advance_to_provider_step "$repo")"
+  node "$ROOT/src/cli.mjs" interrupt --repo "$repo" --message "Need a decision on integer rounding." >/dev/null
+  node "$ROOT/src/cli.mjs" assist-open --repo "$repo" --step PD-C-6 --prepare-only >"$TMP_ROOT/$run_id.assist-answer-open.json"
+  node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(data.allowedSignals.join(',')!=='answer') throw new Error('answer signal missing');" "$TMP_ROOT/$run_id.assist-answer-open.json"
+  node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-6 --signal answer --message "Keep integer arithmetic." --no-run-next >"$TMP_ROOT/$run_id.assist-answer.json"
+  grep -q '"answered": "interrupt-' "$TMP_ROOT/$run_id.assist-answer.json"
+  grep -q "Keep integer arithmetic." "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/interruptions/"*-answer.md
+}
+
 test_web_readonly() {
   local repo run_id fake args server_log server_pid url
   repo="$(seed_repo web)"
@@ -369,6 +404,8 @@ test_failed_run
 test_auto_resume_after_idle_timeout
 test_resumed_run
 test_interrupted_run
+test_assist_gate_flow
+test_assist_answer_flow
 test_web_readonly
 
 echo "runtime tests passed"

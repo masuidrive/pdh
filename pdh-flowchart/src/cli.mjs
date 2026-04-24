@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { loadDotEnv } from "./env.mjs";
 import { describeFlow, buildFlowView, getInitialStep, getStep, loadFlow, nextStep, outcomeFromDecision, renderMermaidFlow } from "./flow.mjs";
@@ -18,6 +18,13 @@ import { withRunLock } from "./locks.mjs";
 import { answerLatestInterruption, createInterruption, latestOpenInterruption, loadStepInterruptions, renderInterruptionMarkdown } from "./interruptions.mjs";
 import { writeFailureSummary } from "./failure-summary.mjs";
 import { appendStepHistoryEntry, loadCurrentNote, saveCurrentNote } from "./note-state.mjs";
+import {
+  allowedAssistSignals,
+  appendAssistSignal,
+  markAssistSessionFinished,
+  markAssistSessionStarted,
+  prepareAssistSession
+} from "./assist-runtime.mjs";
 import {
   activeReviewPlan,
   aggregateReviewerOutputs,
@@ -107,6 +114,10 @@ try {
     await cmdInterrupt(args);
   } else if (command === "answer") {
     await cmdAnswer(args);
+  } else if (command === "assist-open") {
+    await cmdAssistOpen(args);
+  } else if (command === "assist-signal") {
+    await cmdAssistSignal(args);
   } else if (command === "show-interrupts") {
     cmdShowInterrupts(args);
   } else if (["approve", "reject", "request-changes", "cancel"].includes(command)) {
@@ -153,6 +164,8 @@ Usage:
   pdh-flowchart request-changes [--repo DIR] [--step PD-C-5] [--reason TEXT]
   pdh-flowchart interrupt [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6]
   pdh-flowchart answer [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6]
+  pdh-flowchart assist-open [--repo DIR] [--step PD-C-5] [--prepare-only] [--model MODEL] [--bare]
+  pdh-flowchart assist-signal [--repo DIR] [--step PD-C-5] --signal approve|request-changes|reject|answer|continue [--reason TEXT] [--message TEXT] [--file FILE] [--no-run-next]
   pdh-flowchart show-interrupts [--repo DIR] [--step PD-C-6] [--all] [--path]
   pdh-flowchart status [--repo DIR]
   pdh-flowchart logs [--repo DIR] [--follow] [--json]
@@ -326,12 +339,12 @@ async function cmdRunNext(argv) {
         if (!gate || gate.status === "needs_human") {
           const summary = ensureGateSummary({ repo, runtime, step });
           updateRun(repo, { status: "needs_human", current_step_id: step.id });
-          syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [showGateCommand(repo, step.id), ...humanDecisionCommands(repo, step.id)] });
+          syncStepUiRuntime({ repo, stepId: step.id, nextCommands: humanStopCommands(repo, step.id) });
           const result = {
             status: "needs_human",
             stepId: step.id,
             summary: summary.artifactPath,
-            nextCommands: humanDecisionCommands(repo, step.id)
+            nextCommands: humanStopCommands(repo, step.id)
           };
           trace.push(result);
           console.log(JSON.stringify({ ...result, trace }, null, 2));
@@ -347,7 +360,7 @@ async function cmdRunNext(argv) {
         updateRun(repo, { status: "blocked", current_step_id: step.id });
         const message = describeGuardFailureMessage(failed);
         const summary = createFailureSummaryForBlock({ repo, runtime, step, failedGuards: failed, message });
-        syncStepUiRuntime({ repo, stepId: step.id, guardResults, nextCommands: [runNextCommand(repo)] });
+        syncStepUiRuntime({ repo, stepId: step.id, guardResults, nextCommands: blockedStopCommands(repo, step.id) });
         const block = {
           status: "blocked",
           stepId: step.id,
@@ -356,7 +369,7 @@ async function cmdRunNext(argv) {
           message,
           failedGuards: failed,
           failureSummary: summary.artifactPath,
-          nextCommand: runNextCommand(repo)
+          nextCommands: blockedStopCommands(repo, step.id)
         };
         trace.push(block);
         printBlocked(block, trace, options);
@@ -369,12 +382,12 @@ async function cmdRunNext(argv) {
       if (!outcome) {
         const summary = ensureGateSummary({ repo, runtime, step });
         updateRun(repo, { status: "needs_human", current_step_id: step.id });
-        syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [showGateCommand(repo, step.id), ...humanDecisionCommands(repo, step.id)] });
+        syncStepUiRuntime({ repo, stepId: step.id, nextCommands: humanStopCommands(repo, step.id) });
         const result = {
           status: "needs_human",
           stepId: step.id,
           summary: summary.artifactPath,
-          nextCommands: humanDecisionCommands(repo, step.id)
+          nextCommands: humanStopCommands(repo, step.id)
         };
         trace.push(result);
         console.log(JSON.stringify({ ...result, trace }, null, 2));
@@ -536,7 +549,7 @@ async function cmdGateSummary(argv) {
     }
     const summary = ensureGateSummary({ repo, runtime, step });
     updateRun(repo, { status: "needs_human", current_step_id: stepId });
-    syncStepUiRuntime({ repo, stepId, nextCommands: [showGateCommand(repo, stepId), ...humanDecisionCommands(repo, stepId)] });
+    syncStepUiRuntime({ repo, stepId, nextCommands: humanStopCommands(repo, stepId) });
     console.log(summary.artifactPath);
     console.log(`Next: ${showGateCommand(repo, stepId)}`);
   } });
@@ -609,11 +622,11 @@ async function cmdInterrupt(argv) {
       message: `${stepId} interrupted`,
       payload: interruption
     });
-    syncStepUiRuntime({ repo, stepId, nextCommands: interruptAnswerCommands(repo, stepId) });
+    syncStepUiRuntime({ repo, stepId, nextCommands: interruptStopCommands(repo, stepId) });
     console.log(`${stepId} interrupted`);
     console.log(`Interrupt: ${interruption.artifactPath}`);
     console.log("Next:");
-    for (const commandText of interruptAnswerCommands(repo, stepId)) {
+    for (const commandText of interruptStopCommands(repo, stepId)) {
       console.log(`- ${commandText}`);
     }
   } });
@@ -649,6 +662,251 @@ async function cmdAnswer(argv) {
     console.log(`Answer: ${interruption.answerPath}`);
     console.log(`Next: ${runNextCommand(repo)}`);
   } });
+}
+
+async function cmdAssistOpen(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  loadDotEnv();
+  let prepared = null;
+  let runId = null;
+  let stepId = null;
+  let runtimeStatus = null;
+
+  await withRuntimeLock({ repo, options, action: async () => {
+    const runtime = requireRuntime(repo);
+    stepId = options.step ?? runtime.run.current_step_id;
+    assertCurrentStep(runtime.run, stepId, options);
+    const step = getStep(runtime.flow, stepId);
+    const allowedSignals = allowedAssistSignals({ runStatus: runtime.run.status, step });
+    if (!allowedSignals.length) {
+      throw new Error(`assist-open is only available for needs_human, interrupted, or blocked steps; current status is ${runtime.run.status}`);
+    }
+    prepared = prepareAssistSession({
+      repoPath: repo,
+      runtime,
+      step,
+      bare: options.bare === "true",
+      model: options.model ?? null
+    });
+    runId = runtime.run.id;
+    runtimeStatus = runtime.run.status;
+    appendProgressEvent({
+      repoPath: repo,
+      runId,
+      stepId,
+      type: "assist_prepared",
+      provider: "runtime",
+      message: `${stepId} assist prepared`,
+      payload: {
+        sessionId: prepared.sessionId,
+        manifestPath: prepared.manifestPath,
+        promptPath: prepared.promptPath,
+        allowedSignals: prepared.allowedSignals
+      }
+    });
+    syncStepUiRuntime({ repo, stepId });
+  } });
+
+  const args = buildAssistClaudeArgs({
+    prepared,
+    model: options.model ?? null,
+    bare: options.bare === "true"
+  });
+
+  if (options["prepare-only"] === "true") {
+    console.log(JSON.stringify({
+      sessionId: prepared.sessionId,
+      manifestPath: prepared.manifestPath,
+      promptPath: prepared.promptPath,
+      systemPromptPath: prepared.systemPromptPath,
+      allowedSignals: prepared.allowedSignals,
+      wrappers: {
+        signal: prepared.wrappers.signalScriptPath,
+        test: prepared.wrappers.testScriptPath
+      },
+      command: [process.env.CLAUDE_BIN || "claude", ...args]
+    }, null, 2));
+    return;
+  }
+
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error("assist-open needs a TTY. Use --prepare-only for non-interactive use.");
+  }
+
+  markAssistSessionStarted({
+    stateDir: defaultStateDir(repo),
+    runId,
+    stepId,
+    sessionId: prepared.sessionId,
+    command: [process.env.CLAUDE_BIN || "claude", ...args]
+  });
+  appendProgressEvent({
+    repoPath: repo,
+    runId,
+    stepId,
+    type: "assist_started",
+    provider: "runtime",
+    message: `${stepId} assist started`,
+    payload: {
+      sessionId: prepared.sessionId,
+      status: runtimeStatus
+    }
+  });
+
+  console.log(`Assist session: ${prepared.sessionId}`);
+  console.log(`Manifest: ${prepared.manifestPath}`);
+  console.log(`Prompt: ${prepared.promptPath}`);
+  console.log(`Allowed signals: ${prepared.allowedSignals.join(", ")}`);
+
+  const exit = await spawnAssistClaude({
+    repo,
+    args,
+    command: process.env.CLAUDE_BIN || "claude"
+  });
+
+  markAssistSessionFinished({
+    stateDir: defaultStateDir(repo),
+    runId,
+    stepId,
+    sessionId: prepared.sessionId,
+    exitCode: exit.exitCode,
+    signal: exit.signal
+  });
+  appendProgressEvent({
+    repoPath: repo,
+    runId,
+    stepId,
+    type: "assist_finished",
+    provider: "runtime",
+    message: `${stepId} assist ${exit.exitCode === 0 ? "completed" : "failed"}`,
+    payload: {
+      sessionId: prepared.sessionId,
+      exitCode: exit.exitCode,
+      signal: exit.signal
+    }
+  });
+  if (exit.exitCode !== 0) {
+    process.exitCode = exit.exitCode ?? 1;
+  }
+}
+
+async function cmdAssistSignal(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  const signal = required(options, "signal");
+  const autoRunNext = options["no-run-next"] !== "true";
+  let response = null;
+
+  await withRuntimeLock({ repo, options, action: async () => {
+    const runtime = requireRuntime(repo);
+    const stepId = options.step ?? runtime.run.current_step_id;
+    assertCurrentStep(runtime.run, stepId, options);
+    const step = getStep(runtime.flow, stepId);
+    const allowedSignals = allowedAssistSignals({ runStatus: runtime.run.status, step });
+    if (!allowedSignals.includes(signal)) {
+      throw new Error(`Signal ${signal} is not allowed while status=${runtime.run.status} step=${stepId}. Allowed: ${allowedSignals.join(", ") || "(none)"}`);
+    }
+
+    const reason = options.reason ?? null;
+    const message = signal === "answer" ? readMessageOption(options, "assist-signal") : null;
+    const recorded = appendAssistSignal({
+      stateDir: runtime.stateDir,
+      runId: runtime.run.id,
+      stepId,
+      signal,
+      reason,
+      message,
+      runNext: autoRunNext
+    });
+
+    if (runtime.run.status === "needs_human") {
+      const decisionBySignal = {
+        approve: "approved",
+        reject: "rejected",
+        "request-changes": "changes_requested"
+      };
+      ensureGateSummary({ repo, runtime, step });
+      const gate = resolveHumanGate({
+        stateDir: runtime.stateDir,
+        runId: runtime.run.id,
+        stepId,
+        decision: decisionBySignal[signal],
+        reason
+      });
+      updateRun(repo, { status: "running", current_step_id: stepId });
+      appendProgressEvent({
+        repoPath: repo,
+        runId: runtime.run.id,
+        stepId,
+        type: "human_gate_resolved",
+        provider: "runtime",
+        message: `${stepId} ${gate.decision} via assist`,
+        payload: { ...gate, assistSignal: recorded }
+      });
+      syncStepUiRuntime({ repo, stepId, nextCommands: [runNextCommand(repo)] });
+      response = {
+        status: "ok",
+        stepId,
+        signal,
+        decision: gate.decision,
+        runNext: autoRunNext
+      };
+      return;
+    }
+
+    if (runtime.run.status === "interrupted") {
+      const interruption = answerLatestInterruption({
+        stateDir: runtime.stateDir,
+        runId: runtime.run.id,
+        stepId,
+        message,
+        source: "assist"
+      });
+      updateRun(repo, { status: "running", current_step_id: stepId });
+      appendProgressEvent({
+        repoPath: repo,
+        runId: runtime.run.id,
+        stepId,
+        type: "interrupt_answered",
+        provider: "runtime",
+        message: `${stepId} interrupt answered via assist`,
+        payload: { ...interruption, assistSignal: recorded }
+      });
+      syncStepUiRuntime({ repo, stepId, nextCommands: [runNextCommand(repo)] });
+      response = {
+        status: "ok",
+        stepId,
+        signal,
+        answered: interruption.id,
+        runNext: autoRunNext
+      };
+      return;
+    }
+
+    updateRun(repo, { status: "running", current_step_id: stepId });
+    appendProgressEvent({
+      repoPath: repo,
+      runId: runtime.run.id,
+      stepId,
+      type: "assist_continue",
+      provider: "runtime",
+      message: `${stepId} continue via assist`,
+      payload: recorded
+    });
+    syncStepUiRuntime({ repo, stepId, nextCommands: [runNextCommand(repo)] });
+    response = {
+      status: "ok",
+      stepId,
+      signal,
+      runNext: autoRunNext
+    };
+  } });
+
+  console.log(JSON.stringify(response, null, 2));
+  if (autoRunNext) {
+    await cmdRunNext(["--repo", repo]);
+  }
 }
 
 function cmdShowInterrupts(argv) {
@@ -1977,7 +2235,7 @@ function blockIfOpenInterruption({ repo, runtime, step, options }) {
     provider: step.provider,
     message: `Open interruption ${interruption.id} must be answered before ${step.id} continues.`,
     artifactPath: interruption.artifactPath,
-    nextCommands: interruptAnswerCommands(repo, step.id)
+    nextCommands: interruptStopCommands(repo, step.id)
   };
   appendProgressEvent({
     repoPath: repo,
@@ -1988,7 +2246,7 @@ function blockIfOpenInterruption({ repo, runtime, step, options }) {
     message: `${step.id} needs interrupt answer`,
     payload: result
   });
-  syncStepUiRuntime({ repo, stepId: step.id, nextCommands: interruptAnswerCommands(repo, step.id) });
+  syncStepUiRuntime({ repo, stepId: step.id, nextCommands: interruptStopCommands(repo, step.id) });
   return result;
 }
 
@@ -2044,10 +2302,13 @@ function defaultUiNextCommands({ repo, runtime, step }) {
     return [];
   }
   if (runtime.run.status === "needs_human" && isHumanGateStep(step)) {
-    return [showGateCommand(repo, step.id), ...humanDecisionCommands(repo, step.id)];
+    return humanStopCommands(repo, step.id);
   }
   if (runtime.run.status === "interrupted") {
-    return interruptAnswerCommands(repo, step.id);
+    return interruptStopCommands(repo, step.id);
+  }
+  if (runtime.run.status === "blocked") {
+    return blockedStopCommands(repo, step.id);
   }
   if (runtime.run.status === "failed") {
     return [statusCommand(repo), resumeCommand(repo)];
@@ -2256,12 +2517,20 @@ function humanDecisionCommands(repo, stepId) {
   ];
 }
 
+function humanStopCommands(repo, stepId) {
+  return [showGateCommand(repo, stepId), assistOpenCommand(repo, stepId), ...humanDecisionCommands(repo, stepId)];
+}
+
 function runNextCommand(repo) {
   return `node src/cli.mjs run-next --repo ${shellQuote(repo)}`;
 }
 
 function statusCommand(repo) {
   return `node src/cli.mjs status --repo ${shellQuote(repo)}`;
+}
+
+function assistOpenCommand(repo, stepId) {
+  return `node src/cli.mjs assist-open --repo ${shellQuote(repo)} --step ${stepId}`;
 }
 
 function resumeCommand(repo) {
@@ -2279,8 +2548,57 @@ function interruptAnswerCommands(repo, stepId) {
   ];
 }
 
+function interruptStopCommands(repo, stepId) {
+  return [
+    `node src/cli.mjs show-interrupts --repo ${shellQuote(repo)} --step ${stepId}`,
+    assistOpenCommand(repo, stepId),
+    `node src/cli.mjs answer --repo ${shellQuote(repo)} --step ${stepId} --message "<answer>"`
+  ];
+}
+
+function blockedStopCommands(repo, stepId) {
+  return [
+    assistOpenCommand(repo, stepId),
+    runNextCommand(repo)
+  ];
+}
+
 function nextProviderCommand(repo) {
   return `node src/cli.mjs run-provider --repo ${shellQuote(repo)}`;
+}
+
+function buildAssistClaudeArgs({ prepared, model = null, bare = false }) {
+  const args = [
+    "--append-system-prompt",
+    prepared.systemPrompt,
+    "--disable-slash-commands",
+    "--setting-sources",
+    "user",
+    "--permission-mode",
+    "bypassPermissions",
+    "-n",
+    `pdh-assist:${prepared.manifest.step.id}`
+  ];
+  if (bare) {
+    args.unshift("--bare");
+  }
+  if (model) {
+    args.push("--model", model);
+  }
+  args.push(prepared.prompt);
+  return args;
+}
+
+async function spawnAssistClaude({ repo, command, args }) {
+  const child = spawn(command, args, {
+    cwd: repo,
+    stdio: "inherit",
+    env: process.env
+  });
+  return await new Promise((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (code, signal) => resolve({ exitCode: code ?? (signal ? 1 : 0), signal }));
+  });
 }
 
 function shellQuote(value) {

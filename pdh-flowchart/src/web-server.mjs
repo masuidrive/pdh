@@ -448,10 +448,10 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
     const actions = humanDecisionActions(repo, currentStep.id);
     return {
       title: `${currentStep.id} の判断`,
-      body: "Web UI は read-only です。gate summary を読んで terminal から判断します。",
+      body: "Web UI は read-only です。diff / note / ticket を確認して terminal で判断します。必要なら Claude assist を開いてから決めます。",
       commands: actions.map((item) => item.command),
       actions,
-      selection: "choose_one",
+      selection: "choose_one_optional_assist",
       targetTab: "gate"
     };
   }
@@ -459,10 +459,10 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
     const actions = interruptAnswerActions(repo, currentStep.id);
     return {
       title: `${currentStep.id} の割り込み回答`,
-      body: "質問内容を確認して CLI の `answer` で返答します。",
+      body: "質問内容を確認して回答します。必要なら Claude assist でコードやテストを見てから `answer` を返します。",
       commands: actions.map((item) => item.command),
       actions,
-      selection: "ordered",
+      selection: "ordered_optional_assist",
       targetTab: "detail"
     };
   }
@@ -486,11 +486,18 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
   }
   if (runtime.run.status === "blocked") {
     const command = `node src/cli.mjs run-next --repo ${shellQuote(repo)}`;
+    const assist = assistOpenCommand(repo, currentStep.id);
     return {
       title: `${currentStep.id} の不足を解消`,
       body: blockedActionBody(currentStep),
-      commands: [command],
+      commands: [assist, command],
       actions: [
+        nextActionChoice({
+          label: "Open Assist",
+          description: "止まった理由を Claude assist と一緒に確認し、必要な変更や検証をその場で詰めます。",
+          command: assist,
+          tone: "neutral"
+        }),
         nextActionChoice({
           label: "Run Next",
           description: "不足している guard-facing artifact を補完したうえで、この step を再評価します。",
@@ -498,7 +505,7 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
           tone: "revise"
         })
       ],
-      selection: "single",
+      selection: "single_optional_assist",
       targetTab: "detail"
     };
   }
@@ -860,6 +867,10 @@ function humanDecisionCommands(repo, stepId) {
   ];
 }
 
+function assistOpenCommand(repo, stepId) {
+  return `node src/cli.mjs assist-open --repo ${shellQuote(repo)} --step ${stepId}`;
+}
+
 function interruptAnswerCommands(repo, stepId) {
   const repoArg = ` --repo ${shellQuote(repo)}`;
   return [
@@ -892,6 +903,12 @@ function humanDecisionActions(repo, stepId) {
       description: "この計画では進めるべきではないときに選びます。スコープや進め方が間違っている場合です。",
       command: reject,
       tone: "reject"
+    }),
+    nextActionChoice({
+      label: "Open Assist",
+      description: "判断前に Claude assist を開いて、コードや差分を見ながら詰めます。runtime の進行自体は signal で返します。",
+      command: assistOpenCommand(repo, stepId),
+      tone: "neutral"
     })
   ];
 }
@@ -903,6 +920,12 @@ function interruptAnswerActions(repo, stepId) {
       label: "Show Interrupt",
       description: "未回答の質問内容を terminal で確認します。",
       command: showInterrupts,
+      tone: "neutral"
+    }),
+    nextActionChoice({
+      label: "Open Assist",
+      description: "質問に答える前に Claude assist でコードとテストを確認します。",
+      command: assistOpenCommand(repo, stepId),
       tone: "neutral"
     }),
     nextActionChoice({
@@ -2063,8 +2086,17 @@ function renderHtml() {
     if (nextAction?.selection === 'choose_one') {
       return 'Choose one. 3つとも実行するのではなく、1つだけ選びます。';
     }
+    if (nextAction?.selection === 'choose_one_optional_assist') {
+      return 'Approve / Request Changes / Reject のどれか1つを選びます。Open Assist はその前に使う任意の補助です。';
+    }
     if (nextAction?.selection === 'ordered') {
       return '上から順に使います。必要なら先に確認コマンド、その後に回答コマンドです。';
+    }
+    if (nextAction?.selection === 'ordered_optional_assist') {
+      return '通常は Show Interrupt で内容確認し、必要なら Open Assist を挟んでから Answer を返します。';
+    }
+    if (nextAction?.selection === 'single_optional_assist') {
+      return 'すぐに再評価するなら Run Next、先に原因を詰めるなら Open Assist を使います。';
     }
     return '通常はこのコマンドを実行します。';
   }
@@ -3403,7 +3435,15 @@ function renderHtml() {
           '<div class="next-action ' + esc(item.tone || 'neutral') + '">' +
             '<div class="next-action-head">' +
               '<span class="next-action-label">' + esc(item.label || ('Action ' + String(index + 1))) + '</span>' +
-              '<span class="next-action-choice">' + esc(nextAction?.selection === 'choose_one' ? 'choose one' : nextAction?.selection === 'ordered' ? 'run in order' : 'run this') + '</span>' +
+              '<span class="next-action-choice">' + esc(
+                nextAction?.selection === 'choose_one' || nextAction?.selection === 'choose_one_optional_assist'
+                  ? 'choose one'
+                  : nextAction?.selection === 'ordered' || nextAction?.selection === 'ordered_optional_assist'
+                    ? 'run in order'
+                    : nextAction?.selection === 'single_optional_assist'
+                      ? 'pick one'
+                      : 'run this'
+              ) + '</span>' +
             '</div>' +
             (item.description ? '<div class="next-action-description">' + esc(item.description) + '</div>' : '') +
             '<div class="next-action-command" data-click-copy="' + encodeURIComponent(item.command || '') + '">' + esc(item.command || '') + '</div>' +

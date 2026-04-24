@@ -38,6 +38,7 @@ That made it easy for the runtime to say one thing while the canonical note/tick
 5. The Web UI explains what the user should look at and which CLI command to run next.
 6. Local provider logs and prompts can be deleted before close without losing durable history.
 7. Runtime behavior does not depend on loading external `pdh-dev` or `tmux-director` skills.
+8. When the flow stops, the user can open a fresh in-repo assist session without giving that assist authority over runtime progression.
 
 ## 5. Non-Goals
 
@@ -99,6 +100,12 @@ The runtime writes a summary artifact and waits for:
 ```sh
 node src/cli.mjs show-gate --repo .
 node src/cli.mjs approve --repo . --step PD-C-5 --reason ok
+```
+
+If the user wants to discuss code or run tests before deciding, they can open:
+
+```sh
+node src/cli.mjs assist-open --repo .
 ```
 
 ### Completion
@@ -165,6 +172,7 @@ The Web UI must remain read-only and show:
 - gate or interruption state
 - step artifacts
 - git diff summary
+- stop-state assist commands when the current step is `needs_human`, `interrupted`, or `blocked`
 
 ### 8.5 Cleanup
 

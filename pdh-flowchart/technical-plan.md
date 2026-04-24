@@ -160,6 +160,8 @@ node src/cli.mjs show-gate --repo .
 node src/cli.mjs approve --repo . --step PD-C-5 --reason ok
 node src/cli.mjs interrupt --repo . --message "..."
 node src/cli.mjs answer --repo . --message "..."
+node src/cli.mjs assist-open --repo .
+node src/cli.mjs assist-signal --repo . --signal continue --reason "..."
 ```
 
 Design intent:
@@ -167,6 +169,8 @@ Design intent:
 - `run-next` is the default control surface
 - `run-provider` and `resume` are debug / recovery commands
 - `approve` / `reject` / `request-changes` resolve explicit human gates
+- `assist-open` starts a fresh stop-state Claude session in the same repo checkout
+- `assist-signal` is the only supported way for that assist session to hand control back to the runtime
 
 ## 5. Provider Execution
 
@@ -229,7 +233,7 @@ The runtime evaluates guards directly against:
 2. runtime writes `human-gate-summary.md`
 3. runtime writes `human-gate.json`
 4. note frontmatter status becomes `needs_human`
-5. user decides in CLI
+5. user decides in CLI directly, or opens `assist-open` and later hands back control with `assist-signal`
 6. next `run-next` advances based on the decision
 
 ### Interruption
@@ -237,8 +241,31 @@ The runtime evaluates guards directly against:
 1. user or runtime writes an interruption artifact
 2. note frontmatter status becomes `interrupted`
 3. provider execution is blocked
-4. `answer` resolves the latest open interruption
+4. `answer` or `assist-signal --signal answer` resolves the latest open interruption
 5. next provider prompt includes answered interruption context
+
+### Stop-state assist
+
+When the run is `needs_human`, `interrupted`, or `blocked`, the runtime can prepare a fresh Claude assist session in the same repo checkout.
+
+Artifacts:
+
+- `.pdh-flowchart/runs/<run-id>/steps/<step-id>/assist/manifest.yaml`
+- `.pdh-flowchart/runs/<run-id>/steps/<step-id>/assist/prompt.md`
+- `.pdh-flowchart/runs/<run-id>/steps/<step-id>/assist/system-prompt.txt`
+- `.pdh-flowchart/runs/<run-id>/steps/<step-id>/assist/session.json`
+- `.pdh-flowchart/runs/<run-id>/steps/<step-id>/assist/signals.jsonl`
+
+Wrapper scripts:
+
+- `./.pdh-flowchart/bin/assist-signal`
+- `./.pdh-flowchart/bin/assist-test`
+
+Runtime guarantees:
+
+- the assist runs fresh and is not a continuation of the provider session
+- the prompt tells Claude not to advance PDH flow directly
+- progression still happens through runtime state updates plus `run-next`
 
 ## 9. Cleanup and Close
 

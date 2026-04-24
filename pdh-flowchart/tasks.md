@@ -15,6 +15,7 @@
 - [x] Make `run`, `run-next`, `status`, `run-provider`, and `resume` repo-centric.
 - [x] Keep `run-next` as the default auto-progress command.
 - [x] Preserve explicit human gates and interruption answers.
+- [x] Add stop-state assist commands that hand control back through runtime signals.
 - [x] Keep debug commands for prompt, judgement, verify, and gate summary.
 - [x] Add cleanup behavior for transient run artifacts.
 - [x] Keep `smoke-calc` as an intentional real-provider check only.

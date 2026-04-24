@@ -38,6 +38,8 @@ node src/cli.mjs run-provider --repo .
 node src/cli.mjs resume --repo .
 node src/cli.mjs show-gate --repo .
 node src/cli.mjs approve --repo . --step PD-C-5 --reason ok
+node src/cli.mjs assist-open --repo .
+node src/cli.mjs assist-signal --repo . --signal continue --reason "ready"
 node src/cli.mjs interrupt --repo . --message "Need clarification"
 node src/cli.mjs answer --repo . --message "Use the existing fallback"
 node src/cli.mjs prompt --repo .
@@ -101,9 +103,17 @@ Review the summary, then decide in the terminal:
 
 ```sh
 node src/cli.mjs show-gate --repo .
+node src/cli.mjs assist-open --repo .
 node src/cli.mjs approve --repo . --step PD-C-5 --reason ok
 node src/cli.mjs run-next --repo .
 ```
+
+If you want a fresh Claude session to discuss code or run tests before deciding, use `assist-open`. It prepares repo-local wrappers:
+
+- `./.pdh-flowchart/bin/assist-signal`
+- `./.pdh-flowchart/bin/assist-test`
+
+The assist session stays in the same repo checkout, but the runtime still owns progression. The assist should hand control back by running one `assist-signal` command instead of calling `run-next`, `approve`, or `answer` directly.
 
 ### 4. Exactly one completed step
 
@@ -132,6 +142,27 @@ node src/cli.mjs prompt --repo .
 ```
 
 Provider retries now reuse the latest saved session automatically when a retry happens after a failed or timed-out attempt. The runtime also saves the provider session id as soon as the CLI emits it, so `resume` can work even when a provider stalled before clean exit. Use `--idle-timeout-ms` to shorten or disable the no-output stall detector for debugging.
+
+### 6. Stop-state assist
+
+When a step is in `needs_human`, `interrupted`, or `blocked`, you can open a fresh Claude assist session:
+
+```sh
+node src/cli.mjs assist-open --repo .
+```
+
+For non-interactive use, prepare the prompt and wrapper scripts without launching Claude:
+
+```sh
+node src/cli.mjs assist-open --repo . --prepare-only
+```
+
+The assist session is hardened for this use case:
+
+- disables slash commands
+- loads user settings only
+- tells Claude not to follow repo-local PDH automation docs for progression
+- tells Claude to hand control back with `./.pdh-flowchart/bin/assist-signal`
 
 ## Prompt Model
 
@@ -197,6 +228,12 @@ pdh:
         PD-C-5/
           human-gate-summary.md
           human-gate.json
+          assist/
+            manifest.yaml
+            prompt.md
+            system-prompt.txt
+            session.json
+            signals.jsonl
         PD-C-6/
           prompt.md
           ui-output.yaml
