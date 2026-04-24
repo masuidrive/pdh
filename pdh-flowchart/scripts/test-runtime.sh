@@ -266,6 +266,9 @@ const implementation = state.flow.variants.light.steps.find((step) => step.id ==
 if (!implementation?.uiContract?.viewer) throw new Error("ui contract missing");
 if (!implementation?.uiOutput?.summary?.includes("fake provider summary")) throw new Error("ui output missing");
 if (!implementation?.uiRuntime?.changedFiles?.includes("current-note.md")) throw new Error("ui runtime missing changed files");
+if (!state.documents?.note?.path?.endsWith("current-note.md")) throw new Error("note document path missing");
+if (!state.documents?.note?.text?.includes("PD-C-3")) throw new Error("note document text missing");
+if (!state.documents?.ticket?.path?.endsWith("current-ticket.md")) throw new Error("ticket document path missing");
 if (!state.current.nextAction.commands.some((command) => command.includes("run-next"))) throw new Error("next action command missing");
 const mermaid = await (await fetch(`${url}api/flow.mmd`)).text();
 if (!mermaid.includes("PD-C-6") || !mermaid.includes("実装")) throw new Error("mermaid flow labels missing");

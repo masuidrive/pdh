@@ -109,6 +109,16 @@ function collectState({ repo }) {
     files: {
       note: join(repo, "current-note.md"),
       ticket: join(repo, "current-ticket.md")
+    },
+    documents: {
+      note: {
+        path: join(repo, "current-note.md"),
+        text: clampText(redactor(note.body), MAX_TEXT)
+      },
+      ticket: {
+        path: join(repo, "current-ticket.md"),
+        text: clampText(redactor(ticketText), MAX_TEXT)
+      }
     }
   };
 }
@@ -879,6 +889,33 @@ function renderHtml() {
     font-size: 11px;
     flex: 0 0 auto;
   }
+  .document-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+  }
+  .document-button {
+    justify-content: space-between;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    width: 100%;
+  }
+  .document-button:hover { border-color: var(--border-strong); }
+  .document-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+  }
+  .document-subtitle {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .review-table { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .review-row {
     display: grid;
@@ -964,6 +1001,50 @@ function renderHtml() {
     border-radius: 8px;
     background: var(--surface);
     border: 1px solid var(--border);
+  }
+  .detail-dialog-section { margin-top: 16px; }
+  .detail-dialog-section:first-child { margin-top: 0; }
+  .detail-dialog-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+  }
+  .detail-doc-meta {
+    display: grid;
+    grid-template-columns: 84px 1fr;
+    gap: 8px 12px;
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+  .detail-doc-meta .key { color: var(--text-muted); }
+  .detail-doc-viewer {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .detail-doc-line {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 12px;
+    padding: 4px 12px;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 11px;
+    line-height: 1.55;
+    border-bottom: 1px solid rgba(214, 211, 200, 0.5);
+  }
+  .detail-doc-line:last-child { border-bottom: 0; }
+  .detail-doc-line.highlight { background: var(--waiting-bg); }
+  .detail-doc-line-number {
+    color: var(--text-dim);
+    text-align: right;
+  }
+  .detail-doc-line-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
   }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -1191,13 +1272,140 @@ function renderHtml() {
     return '';
   }
 
+  function documentData(docId) {
+    return state.data?.documents?.[docId] || null;
+  }
+
+  function normalizeHeadingKey(value) {
+    return String(value ?? '')
+      .replace(/^#+\\s*/, '')
+      .replace(/\\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  function resolveDocumentTarget(source) {
+    const text = String(source ?? '');
+    if (!text.includes('current-note.md') && !text.includes('current-ticket.md')) {
+      return null;
+    }
+    const noteIndex = text.indexOf('current-note.md');
+    const ticketIndex = text.indexOf('current-ticket.md');
+    const useNote = noteIndex >= 0 && (ticketIndex < 0 || noteIndex <= ticketIndex);
+    const docName = useNote ? 'current-note.md' : 'current-ticket.md';
+    const docId = useNote ? 'note' : 'ticket';
+    const fragment = text.slice(text.indexOf(docName) + docName.length);
+    const fragmentMatch = fragment.match(/^#([^/]+)/);
+    const heading = fragmentMatch?.[1]?.trim() || null;
+    return { docId, heading, label: docName };
+  }
+
+  function findDocumentSectionRange(text, heading) {
+    const lines = String(text ?? '').split(/\\r?\\n/);
+    if (!heading) {
+      return {
+        lines,
+        start: 0,
+        end: Math.min(lines.length - 1, 159),
+        highlightStart: -1,
+        highlightEnd: -1,
+        clipped: lines.length > 160
+      };
+    }
+    const wanted = normalizeHeadingKey(heading);
+    let start = -1;
+    let headingLevel = 6;
+    for (let index = 0; index < lines.length; index += 1) {
+      const match = lines[index].match(/^(#{1,6})\\s+(.*)$/);
+      if (!match) {
+        continue;
+      }
+      const currentHeading = normalizeHeadingKey(match[2]);
+      if (currentHeading === wanted || currentHeading.startsWith(wanted) || wanted.startsWith(currentHeading)) {
+        start = index;
+        headingLevel = match[1].length;
+        break;
+      }
+    }
+    if (start < 0 && /^pd-c-\d+/i.test(wanted)) {
+      const token = wanted.match(/^pd-c-\\d+/i)?.[0] || wanted;
+      for (let index = 0; index < lines.length; index += 1) {
+        const match = lines[index].match(/^(#{1,6})\\s+(.*)$/);
+        if (!match) {
+          continue;
+        }
+        const currentHeading = normalizeHeadingKey(match[2]);
+        if (currentHeading.startsWith(token)) {
+          start = index;
+          headingLevel = match[1].length;
+          break;
+        }
+      }
+    }
+    if (start < 0) {
+      return {
+        lines,
+        start: 0,
+        end: Math.min(lines.length - 1, 159),
+        highlightStart: -1,
+        highlightEnd: -1,
+        clipped: lines.length > 160
+      };
+    }
+    let end = lines.length - 1;
+    for (let index = start + 1; index < lines.length; index += 1) {
+      const match = lines[index].match(/^(#{1,6})\\s+(.*)$/);
+      if (match && match[1].length <= headingLevel) {
+        end = index - 1;
+        break;
+      }
+    }
+    return {
+      lines,
+      start: Math.max(0, start - 2),
+      end: Math.min(lines.length - 1, end + 2),
+      highlightStart: start,
+      highlightEnd: end,
+      clipped: start > 2 || end < lines.length - 3
+    };
+  }
+
+  function renderDocumentViewer(target) {
+    const document = documentData(target?.docId);
+    if (!document?.text) {
+      return '';
+    }
+    const range = findDocumentSectionRange(document.text, target.heading);
+    const lineHtml = [];
+    for (let index = range.start; index <= range.end; index += 1) {
+      const highlighted = range.highlightStart >= 0 && index >= range.highlightStart && index <= range.highlightEnd;
+      lineHtml.push(
+        '<div class="detail-doc-line' + (highlighted ? ' highlight' : '') + '">' +
+          '<div class="detail-doc-line-number">' + esc(String(index + 1)) + '</div>' +
+          '<div class="detail-doc-line-text">' + esc(range.lines[index]) + '</div>' +
+        '</div>'
+      );
+    }
+    return (
+      '<div class="detail-dialog-section">' +
+        '<div class="detail-dialog-label">Document</div>' +
+        '<div class="detail-doc-meta">' +
+          '<div class="key">Path</div><div>' + esc(document.path || target.label || '-') + '</div>' +
+          '<div class="key">Focus</div><div>' + esc(target.heading || 'full file') + (range.clipped ? ' <span style="color: var(--text-muted);">excerpt</span>' : '') + '</div>' +
+        '</div>' +
+        '<div class="detail-doc-viewer">' + lineHtml.join('') + '</div>' +
+      '</div>'
+    );
+  }
+
   function buildShowItem(label, type, source, detail) {
     return {
       label,
       type,
       source,
       detail: String(detail ?? '').trim(),
-      preview: textPreview(detail)
+      preview: textPreview(detail),
+      documentTarget: resolveDocumentTarget(source)
     };
   }
 
@@ -1502,6 +1710,22 @@ function renderHtml() {
     });
   }
 
+  function documentModalItem(docId, heading = null) {
+    const document = documentData(docId);
+    const fileLabel = docId === 'ticket' ? 'current-ticket.md' : 'current-note.md';
+    return {
+      label: heading ? fileLabel + ' · ' + heading : fileLabel,
+      type: 'document',
+      source: document?.path || fileLabel,
+      detail: heading ? 'document focus: ' + heading : 'full file view',
+      documentTarget: {
+        docId,
+        heading,
+        label: fileLabel
+      }
+    };
+  }
+
   function renderModal() {
     const modal = document.getElementById('detail-modal');
     const title = document.getElementById('detail-modal-title');
@@ -1514,12 +1738,16 @@ function renderHtml() {
     }
     modal.classList.remove('hidden');
     title.textContent = state.modalItem.label;
+    const hasDetail = String(state.modalItem.detail || '').trim().length > 0;
     body.innerHTML =
       '<div class="detail-dialog-grid">' +
         '<div class="key">Type</div><div>' + esc(state.modalItem.type || 'detail') + '</div>' +
         '<div class="key">Source</div><div>' + esc(state.modalItem.source || '-') + '</div>' +
       '</div>' +
-      '<div class="detail-dialog-pre">' + esc(state.modalItem.detail || '未記録') + '</div>';
+      (hasDetail
+        ? '<div class="detail-dialog-section"><div class="detail-dialog-label">Detail</div><div class="detail-dialog-pre">' + esc(state.modalItem.detail || '未記録') + '</div></div>'
+        : '') +
+      (state.modalItem.documentTarget ? renderDocumentViewer(state.modalItem.documentTarget) : '');
   }
 
   function renderDetail() {
@@ -1613,6 +1841,25 @@ function renderHtml() {
     });
     html += '</div></div>';
 
+    html += '<div class="detail-section"><div class="detail-section-title">Documents</div><div class="document-grid">';
+    html +=
+      '<button class="artifact document-button" type="button" data-doc="note">' +
+        '<div class="document-copy">' +
+          '<span class="artifact-name">current-note.md</span>' +
+          '<span class="document-subtitle">frontmatter, 調査, 計画, レビュー, AC 裏取り</span>' +
+        '</div>' +
+        '<span class="artifact-source">open</span>' +
+      '</button>';
+    html +=
+      '<button class="artifact document-button" type="button" data-doc="ticket">' +
+        '<div class="document-copy">' +
+          '<span class="artifact-name">current-ticket.md</span>' +
+          '<span class="document-subtitle">ticket intent, AC, Implementation Notes</span>' +
+        '</div>' +
+        '<span class="artifact-source">open</span>' +
+      '</button>';
+    html += '</div></div>';
+
     if (step.judgements?.length) {
       html += '<div class="detail-section"><div class="detail-section-title">レビュー結果</div><div class="review-table">';
       step.judgements.forEach((judgement, index) => {
@@ -1692,6 +1939,12 @@ function renderHtml() {
     root.querySelectorAll('.artifact-button').forEach((button, index) => {
       button.addEventListener('click', () => {
         state.modalItem = showItems[index];
+        renderModal();
+      });
+    });
+    root.querySelectorAll('.document-button').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.modalItem = documentModalItem(button.dataset.doc);
         renderModal();
       });
     });
