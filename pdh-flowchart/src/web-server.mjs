@@ -3067,10 +3067,8 @@ function renderHtml() {
     const currentCardClass = runStatus === 'running' ? 'summary-card running' : 'summary-card alert';
     const currentValueClass = runStatus === 'running' ? 'value running' : 'value waiting';
     document.getElementById('summary').innerHTML =
-      '<div class="summary-card"><div class="label">完了ステップ</div><div class="value done">' + esc(summary.doneCount + ' / ' + summary.totalSteps) + '</div></div>' +
       '<div class="' + currentCardClass + '"><div class="label">現在</div><div class="' + currentValueClass + '">' + esc(summary.currentLabel) + '</div></div>' +
-      '<div class="summary-card"><div class="label">AC 裏取り</div><div class="value">' + esc(ac.verified + ' verified') + ' <span class="sub">' + esc('deferred ' + ac.deferred + ' / unverified ' + ac.unverified) + '</span></div></div>' +
-      '<div class="summary-card ' + (summary.openItems > 0 ? 'alert' : '') + '"><div class="label">要対応</div><div class="value ' + (summary.openItems > 0 ? 'waiting' : 'done') + '">' + esc(String(summary.openItems)) + ' <span class="sub">open items</span></div></div>';
+      '<div class="summary-card"><div class="label">AC 裏取り</div><div class="value">' + esc(ac.verified + ' verified') + ' <span class="sub">' + esc('deferred ' + ac.deferred + ' / unverified ' + ac.unverified) + '</span></div></div>';
   }
 
   function renderOverview() {
