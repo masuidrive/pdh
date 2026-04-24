@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getStep, nextStep } from "./flow.mjs";
 import { loadStepInterruptions, renderInterruptionsForPrompt } from "./interruptions.mjs";
@@ -18,8 +18,6 @@ export function writeStepPrompt({ repoPath, stateDir, run, flow, stepId }) {
 }
 
 export function renderStepPrompt({ repoPath, run, flow, step, interruptions = [] }) {
-  const ticket = readRepoFile(repoPath, "current-ticket.md");
-  const note = readRepoFile(repoPath, "current-note.md");
   const instructions = stepInstructions(step.id);
   const promptContext = mergePromptContext(flow, step);
 
@@ -60,6 +58,12 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
     "",
     ...instructions.map((line) => `- ${line}`),
     "",
+    "## Canonical Files",
+    "",
+    "- `current-ticket.md` at repo root: durable ticket intent, Product AC, and implementation notes.",
+    "- `current-note.md` at repo root: workflow state in frontmatter plus process evidence and step history.",
+    "- Read both files before acting. Use repo-local references called out there when you need additional context.",
+    "",
     "## Compiled Context",
     "",
     ...(renderPromptContext(promptContext)),
@@ -67,25 +71,8 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
     "## Required Guards",
     "",
     ...formatGuards(step),
-    "",
-    "## current-ticket.md",
-    "",
-    "```markdown",
-    ticket.trim() || "(empty)",
-    "```",
-    "",
-    "## current-note.md",
-    "",
-    "```markdown",
-    note.trim() || "(empty)",
-    "```",
     ""
   ].join("\n");
-}
-
-function readRepoFile(repoPath, path) {
-  const fullPath = join(repoPath, path);
-  return existsSync(fullPath) ? readFileSync(fullPath, "utf8") : `(missing ${path})`;
 }
 
 function formatGuards(step) {
@@ -147,7 +134,7 @@ function renderPromptContext(promptContext) {
     lines.push("- Semantic rules: (none)");
   }
   if (promptContext.requiredRefs.length > 0) {
-    lines.push("- Required references to read when canonical files are insufficient:");
+    lines.push("- Required references:");
     for (const ref of promptContext.requiredRefs) {
       const reason = ref.reason ? ` - ${ref.reason}` : "";
       lines.push(`  - \`${ref.path}\`${reason}`);

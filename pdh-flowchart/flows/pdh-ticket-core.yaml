@@ -6,24 +6,12 @@ defaults:
   transitionLogFormat: "[{from}] -> [{to}]"
   promptContext:
     semanticRules:
-      - current-ticket.md and current-note.md are the canonical records for the active run.
+      - current-ticket.md and current-note.md are the canonical records for the active ticket.
+      - current-note.md frontmatter is the canonical runtime state for the active flow.
       - Use current-note.md for process evidence and current-ticket.md for durable ticket intent, Acceptance Criteria, and implementation notes.
       - Prefer concrete local repository evidence over generic best-practice branching when choosing a plan or reviewing a change.
       - Explicit human approval only happens at PD-C-5 and PD-C-10; never infer those approvals from earlier discussion.
       - If a guard cannot pass, record the blocker in current-note.md instead of claiming the next step is ready.
-    requiredRefs:
-      - path: product-brief.md
-        reason: Product intent, scope, and user-facing goals.
-      - path: technical-plan.md
-        reason: Architecture decisions, runtime constraints, and implementation notes.
-      - path: README.md
-        reason: Supported commands, current scope, and user-visible workflows.
-      - path: flows/pdh-ticket-core.yaml
-        reason: Flow structure, guards, and step-specific semantics.
-      - path: ../skills/pdh-dev/SKILL.md
-        reason: Source PDH ticket-development semantics.
-      - path: ../skills/tmux-director/SKILL.md
-        reason: Source gate, summary, and interruption semantics.
 variants:
   light:
     initial: PD-C-3
@@ -58,21 +46,6 @@ steps:
       semanticRules:
         - Distinguish runtime behavior, smoke targets, and example fixture behavior when the ticket name overlaps multiple code surfaces.
         - Record blast radius, external dependencies, and real-environment verification needs explicitly enough for PD-C-3 to plan without rereading everything.
-      requiredRefs:
-        - path: src/cli.mjs
-          reason: Runtime entrypoints, run-next behavior, and step orchestration.
-        - path: src/prompt-templates.mjs
-          reason: Provider prompt construction and canonical-file handling.
-        - path: src/smoke-calc.mjs
-          reason: Real-provider calc smoke scope.
-        - path: examples/fake-pdh-dev/current-ticket.md
-          reason: Example durable calc ticket scope.
-        - path: examples/fake-pdh-dev/current-note.md
-          reason: Example note structure and expected process evidence.
-        - path: examples/fake-pdh-dev/src/calc_demo/cli.py
-          reason: Example calc implementation baseline.
-        - path: examples/fake-pdh-dev/scripts/test-all.sh
-          reason: Example verification expectations and intended failing gap.
     guards:
       - id: investigation-recorded
         type: note_section_updated
@@ -95,19 +68,6 @@ steps:
         - Choose one concrete implementation path from local evidence instead of leaving multiple equivalent options for the user.
         - Record durable design decisions and rationale in current-ticket.md under Implementation Notes, not only in current-note.md.
         - Tie the plan to explicit file ownership, verification commands, and known risks so PD-C-6 and later reviews can validate it deterministically.
-      requiredRefs:
-        - path: current-note.md
-          reason: Latest investigation findings and already recorded risks.
-        - path: current-ticket.md
-          reason: Canonical durable ticket intent and Implementation Notes target.
-        - path: src/smoke-calc.mjs
-          reason: Runtime calc smoke baseline if the ticket targets runtime behavior.
-        - path: examples/fake-pdh-dev/current-ticket.md
-          reason: Example calc-cli scope and Acceptance Criteria if the ticket targets the fixture.
-        - path: examples/fake-pdh-dev/src/calc_demo/cli.py
-          reason: Example implementation baseline and likely change surface.
-        - path: examples/fake-pdh-dev/scripts/test-all.sh
-          reason: Example final verification path and expected multiplication behavior.
     guards:
       - id: plan-recorded
         type: note_section_updated
@@ -303,8 +263,6 @@ steps:
         kind: human_gate_summary
       - id: explicit-approval
         type: human_approved
-      - id: ticket-closed
-        type: ticket_closed
     human_gate:
       prompt: PD-C-10 close approval
       requiredSources:

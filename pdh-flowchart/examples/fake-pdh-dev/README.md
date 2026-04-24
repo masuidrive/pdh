@@ -1,8 +1,14 @@
 # fake-pdh-dev Fixture
 
-This is a tiny throwaway target repository for trying `pdh-flowchart` without touching a real `pdh-dev` project.
+This is a tiny throwaway target repo for trying `pdh-flowchart` without touching a real project.
 
-The fixture starts with a working `uv run calc "1+2"` command and a failing multiplication AC. The intended demo is:
+The fixture starts with:
+
+- a working `uv run calc "1+2"` path
+- a failing multiplication AC
+- canonical `current-ticket.md` and `current-note.md`
+
+## Repo-Centric Walkthrough
 
 ```sh
 FLOW_ROOT=/home/masuidrive/Develop/pdh/pdh-flowchart
@@ -17,24 +23,36 @@ git add .
 git commit -m "Seed fake pdh-dev fixture"
 
 source /home/masuidrive/.nvm/nvm.sh
-node "$FLOW_ROOT/src/cli.mjs" doctor --repo "$PWD"
 
-RUN_ID="$(node "$FLOW_ROOT/src/cli.mjs" run --repo "$PWD" --ticket calc-multiply --variant light --start-step PD-C-5 | sed -n '1p')"
-node "$FLOW_ROOT/src/cli.mjs" run-next "$RUN_ID" --repo "$PWD"
-node "$FLOW_ROOT/src/cli.mjs" show-gate "$RUN_ID" --repo "$PWD"
-node "$FLOW_ROOT/src/cli.mjs" approve "$RUN_ID" --repo "$PWD" --step PD-C-5 --reason ok
-node "$FLOW_ROOT/src/cli.mjs" run-next "$RUN_ID" --repo "$PWD"
+node "$FLOW_ROOT/src/cli.mjs" doctor --repo "$PWD"
+node "$FLOW_ROOT/src/cli.mjs" run --repo "$PWD" --ticket calc-multiply --variant light --start-step PD-C-5
+node "$FLOW_ROOT/src/cli.mjs" run-next --repo "$PWD"
+node "$FLOW_ROOT/src/cli.mjs" show-gate --repo "$PWD"
+node "$FLOW_ROOT/src/cli.mjs" approve --repo "$PWD" --step PD-C-5 --reason ok
+node "$FLOW_ROOT/src/cli.mjs" run-next --repo "$PWD" --stop-after-step
+node "$FLOW_ROOT/src/cli.mjs" status --repo "$PWD"
 ```
 
-At that point the run is on `PD-C-6` and `run-next` will print the provider command. To let Codex implement the failing AC:
+At that point the run is on `PD-C-6`.
+
+Normal path:
 
 ```sh
-node "$FLOW_ROOT/src/cli.mjs" run-provider "$RUN_ID" --repo "$PWD"
+node "$FLOW_ROOT/src/cli.mjs" run-next --repo "$PWD"
+```
+
+Debug path:
+
+```sh
+node "$FLOW_ROOT/src/cli.mjs" prompt --repo "$PWD"
+node "$FLOW_ROOT/src/cli.mjs" run-provider --repo "$PWD"
 ```
 
 Useful local checks:
 
 ```sh
 uv run calc "1+2"
+uv run calc "2*5+1"
+uv run calc "2**10"
 scripts/test-all.sh
 ```

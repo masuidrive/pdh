@@ -1,164 +1,251 @@
 # pdh-flowchart
 
-`pdh-flowchart` is an experimental runtime for executing `pdh-dev` flow semantics as resumable steps with explicit gates, provider logs, and guard evidence.
+`pdh-flowchart` is a repo-centric runtime for executing `pdh-dev` ticket flow semantics with explicit gates, transient local artifacts, and a read-only progress UI.
+
+## Core Model
+
+- `current-note.md` frontmatter is the canonical runtime state.
+- `current-ticket.md` is the durable ticket record for Why / What / Product AC / Implementation Notes.
+- `.pdh-flowchart/` holds transient prompts, raw provider logs, gate summaries, interruptions, and other local artifacts. It is not committed.
+- The CLI operates on a repo, not on a separate SQLite run database.
+- The Web UI is read-only. Decisions and execution stay in the CLI.
 
 ## Local Setup
 
-This machine has Node and Codex under nvm. Source nvm before running the CLI:
+Source nvm before Node or provider commands:
 
 ```sh
 source /home/masuidrive/.nvm/nvm.sh
 ```
 
-Provider smoke checks load `.env` from the repo root. `.env` is ignored by git and should contain `OPENAI_API_KEY`.
+Provider commands load `.env` from the repo root. `.env` is ignored by git and may contain `OPENAI_API_KEY`.
 
-## Commands
+## Common Commands
 
 ```sh
+node src/cli.mjs init --repo .
+node src/cli.mjs run --repo . --ticket ticket-id --variant full
+node src/cli.mjs status --repo .
+node src/cli.mjs run-next --repo .
+node src/cli.mjs run-next --repo . --stop-after-step
+node src/cli.mjs run-next --repo . --manual-provider
+node src/cli.mjs run-provider --repo .
+node src/cli.mjs resume --repo .
+node src/cli.mjs show-gate --repo .
+node src/cli.mjs approve --repo . --step PD-C-5 --reason ok
+node src/cli.mjs interrupt --repo . --message "Need clarification"
+node src/cli.mjs answer --repo . --message "Use the existing fallback"
+node src/cli.mjs prompt --repo .
+node src/cli.mjs metadata --repo .
 node src/cli.mjs flow --variant full
-node src/cli.mjs flow-graph --variant full
-node src/cli.mjs flow-graph --variant full --format json
-node src/cli.mjs init
-node src/cli.mjs run --ticket ticket-id --variant full
-node src/cli.mjs run --ticket ticket-id --variant full --start-step PD-C-5
-node src/cli.mjs run-next <run-id>
-node src/cli.mjs run-next <run-id> --stop-after-step
-node src/cli.mjs run-next <run-id> --manual-provider
-node src/cli.mjs interrupt <run-id> --message "Need clarification on the edge case"
-node src/cli.mjs show-interrupts <run-id>
-node src/cli.mjs answer <run-id> --message "Use the existing fallback behavior"
-node src/cli.mjs guards --step PD-C-3
-node src/cli.mjs logs <run-id> --follow
-node src/cli.mjs gate-summary <run-id> --step PD-C-5
-node src/cli.mjs show-gate <run-id>
-node src/cli.mjs doctor
-node src/cli.mjs approve <run-id> --step PD-C-5 --reason ok
-node src/cli.mjs advance <run-id> --step PD-C-5
-node src/cli.mjs commit-step --step PD-C-6 --message Implementation
-node src/cli.mjs ticket-start --ticket ticket-id
-node src/cli.mjs ticket-close
-node src/cli.mjs prompt <run-id>
-node src/cli.mjs metadata <run-id>
-node src/cli.mjs judgement <run-id> --status "No Critical/Major" --summary ok
-node src/cli.mjs verify <run-id> --command "scripts/test-all.sh"
-node src/cli.mjs run-provider <run-id> --timeout-ms 3600000 --max-attempts 2
-node src/cli.mjs resume <run-id>
-node src/cli.mjs run-provider <run-id> --prompt-file prompt.md
-node src/cli.mjs run-codex <run-id> --prompt-file prompt.md
-node src/cli.mjs run-codex --repo /path/to/repo --prompt-file prompt.md --step PD-C-6
-node src/cli.mjs run-claude <run-id> --prompt-file prompt.md
-node src/cli.mjs run-claude --repo /path/to/repo --prompt-file prompt.md --step PD-C-4
-node src/cli.mjs web --repo /path/to/repo --host 127.0.0.1 --port 8765
+node src/cli.mjs flow-graph --repo . --variant full
+node src/cli.mjs web --repo . --host 0.0.0.0 --port 8765
 node src/cli.mjs smoke-calc
+npm run check
 npm run test:runtime
 ```
 
-## Output Examples
+## Typical Flow
 
-Run creation keeps the run id on the first line so shell capture stays simple:
+### 1. Start a ticket
 
-```text
-run-20260423123000-abc123
-Current step: PD-C-5
-Next: node src/cli.mjs run-next run-20260423123000-abc123 --repo /path/to/repo
+```sh
+node src/cli.mjs run --repo . --ticket calc-cli --variant full
 ```
 
-By default, `run-next` executes provider steps automatically and continues until a gate, interruption, failed guard, provider failure, or completion:
+Output:
 
 ```text
-run-20260423123000-abc123 PD-C-6 completed
-Attempt: 1/2
-Raw log: /path/to/repo/.pdh-flowchart/runs/run-20260423123000-abc123/steps/PD-C-6/attempt-1/codex.raw.jsonl
-Blocked: PD-C-6 (guard_failed)
-Provider: codex
-Failure Summary: /path/to/repo/.pdh-flowchart/runs/run-20260423123000-abc123/steps/PD-C-6/failure-summary.md
-Use --json for full guard details.
+run-20260424022333-726697
+Current step: PD-C-2 調査
+Next: node src/cli.mjs run-next --repo /path/to/repo
 ```
 
-If you want to execute exactly one completed step and stop before the next provider starts, use `--stop-after-step`:
+The first line still prints the transient artifact run id, but normal operation after that is repo-centric.
 
-```text
-Stopped After Step: PD-C-5 -> PD-C-6
-Current step: PD-C-6 実装
-Next: node src/cli.mjs run-next run-20260423123000-abc123 --repo /path/to/repo
+### 2. Let the runtime advance
+
+```sh
+node src/cli.mjs run-next --repo .
 ```
 
-When a human gate opens:
+This auto-runs provider steps until one of these happens:
+
+- a human gate opens
+- an interruption needs an answer
+- a guard fails
+- a provider run fails
+- the flow completes
+
+### 3. Human gate
+
+When a gate opens:
 
 ```text
 {
   "status": "needs_human",
   "stepId": "PD-C-5",
+  "summary": "/path/to/repo/.pdh-flowchart/runs/.../steps/PD-C-5/human-gate-summary.md",
   "nextCommands": [
-    "node src/cli.mjs approve run-20260423123000-abc123 --repo /path/to/repo --step PD-C-5 --reason ok"
+    "node src/cli.mjs approve --repo /path/to/repo --step PD-C-5 --reason ok"
   ]
 }
 ```
 
-`run-provider` remains available for manual provider execution, debugging, and custom prompt-file runs:
+Review the summary, then decide in the terminal:
 
-```text
-run-20260423123000-abc123 PD-C-6 completed
-Attempt: 1/2
-Raw log: /path/to/repo/.pdh-flowchart/runs/run-20260423123000-abc123/steps/PD-C-6/attempt-1/codex.raw.jsonl
-Next: node src/cli.mjs run-next run-20260423123000-abc123 --repo /path/to/repo
+```sh
+node src/cli.mjs show-gate --repo .
+node src/cli.mjs approve --repo . --step PD-C-5 --reason ok
+node src/cli.mjs run-next --repo .
 ```
 
-Interruptions show what the user must answer before the step can continue:
+### 4. Exactly one completed step
+
+If you want a demo that stops before the next provider starts:
+
+```sh
+node src/cli.mjs run-next --repo . --stop-after-step
+```
+
+Output:
 
 ```text
-run-20260423123000-abc123 PD-C-6 interrupted
-Interrupt: /path/to/repo/.pdh-flowchart/runs/run-20260423123000-abc123/steps/PD-C-6/interruptions/interrupt-20260423123100-abcd1234.md
-Next:
-- node src/cli.mjs show-interrupts run-20260423123000-abc123 --repo /path/to/repo --step PD-C-6
-- node src/cli.mjs answer run-20260423123000-abc123 --repo /path/to/repo --step PD-C-6 --message "<answer>"
+Stopped After Step: PD-C-5 -> PD-C-6
+Current step: PD-C-6 実装
+Next: node src/cli.mjs run-next --repo /path/to/repo
 ```
+
+### 5. Provider debugging
+
+Normally you should keep using `run-next`. For step-level debugging:
+
+```sh
+node src/cli.mjs run-provider --repo .
+node src/cli.mjs resume --repo .
+node src/cli.mjs prompt --repo .
+```
+
+## Prompt Model
+
+Provider prompts now include:
+
+- run context
+- step instructions
+- compiled semantic rules from `flows/pdh-ticket-core.yaml`
+- required guards
+- canonical file paths for `current-ticket.md` and `current-note.md`
+
+They do not inline the full contents of `current-ticket.md` or `current-note.md`.
+
+## Canonical Files
+
+### `current-ticket.md`
+
+Durable ticket record:
+
+- Why
+- What
+- Product AC
+- Implementation Notes
+- Related Links
+
+### `current-note.md`
+
+Process record:
+
+- frontmatter runtime state
+- PD-C step sections
+- AC verification table
+- discoveries
+- step history
+
+Frontmatter shape:
+
+```yaml
+---
+pdh:
+  ticket: calc-cli
+  flow: pdh-ticket-core
+  variant: full
+  status: running
+  current_step: PD-C-3
+  run_id: run-20260424022333-726697
+  started_at: 2026-04-24T02:23:33.060Z
+  updated_at: 2026-04-24T02:23:33.060Z
+---
+```
+
+## Local Artifact Layout
+
+```text
+.pdh-flowchart/
+  locks/
+  runs/
+    run-20260424022333-726697/
+      progress.jsonl
+      steps/
+        PD-C-5/
+          human-gate-summary.md
+          human-gate.json
+        PD-C-6/
+          prompt.md
+          attempt-1/
+            codex.raw.jsonl
+            result.json
+            note-ticket.patch
+```
+
+These files are local evidence only. The canonical runtime state stays in `current-note.md`.
+
+## Cleanup Rule
+
+Before close, the runtime appends durable step-history lines to `current-note.md` and removes the local `.pdh-flowchart/runs/<run-id>/` artifacts. The repo should retain:
+
+- code changes
+- `current-ticket.md`
+- `current-note.md`
+- normal git history
+
+It should not retain transient provider logs or prompts.
+
+## Web UI
+
+```sh
+node src/cli.mjs web --repo . --host 0.0.0.0 --port 8765
+```
+
+The UI shows:
+
+- current step and next CLI action
+- Full / Light flow
+- per-step progress
+- gate or interruption state
+- recent events
+- step artifacts
+- git diff summary
+
+It does not execute providers or record decisions.
 
 ## Example Fixture
 
-`examples/fake-pdh-dev` is a tiny throwaway target repo with a `uv run calc` CLI, `current-ticket.md`, `current-note.md`, `ticket.sh`, and a failing multiplication AC. Copy it to `/tmp`, initialize git, and follow its README to exercise `doctor`, `run`, `run-next`, `show-gate`, and `approve` from a user perspective.
+`examples/fake-pdh-dev` is a tiny throwaway repo for user-flow checks. It starts with a working `uv run calc "1+2"` path and a failing multiplication AC.
 
-`smoke-calc` creates `/tmp/pdh-flowchart-calc-smoke`, uses the existing authenticated Codex CLI session, asks Codex to build a tiny `uv run calc "1+2"` CLI app, and verifies the result. It does not run `codex login`; `.env` remains available for other provider checks that need explicit API-key auth.
+See [examples/fake-pdh-dev/README.md](examples/fake-pdh-dev/README.md) for a complete repo-centric walkthrough.
 
 ## Current Scope
 
-- Full `pdh-ticket-core` flow definition is represented in `flows/pdh-ticket-core.yaml`.
-- Flow steps keep their stable `PD-C-*` ids and add human-facing labels, summaries, and user-action hints for CLI/Web display.
-- SQLite state is stored under `.pdh-flowchart/state.sqlite`.
-- State schema changes are tracked in the `schema_migrations` table; current schema version is `1`.
-- Codex JSONL output is saved as raw provider logs.
-- Claude Code `stream-json` output is saved as raw provider logs and normalized into progress events.
-- Deterministic guard skeletons exist for note/ticket sections, commits, commands, human approval, AC verification tables, and judgement artifacts.
-- Human gate commands can create a summary artifact and record approve/reject/request-changes/cancel decisions.
-- `advance` evaluates deterministic guards and only then moves the run to the next step.
-- `run-next` executes runtime-owned current-step work, runs provider steps by default, advances through passing guards, and stops at human gates, interruptions, failed guards, provider failures, or completion. Pass `--manual-provider` to stop before provider execution.
-- `run-next --stop-after-step` stops after one successfully completed step and leaves the run on the next current step without starting its provider.
-- `interrupt` records a step-level clarification artifact, marks the run `interrupted`, and blocks provider execution until `answer` resolves it.
-- Answered interruptions are injected into the next provider prompt for the same step.
-- Runtime commands refuse to operate on a non-current step unless `--force` is provided.
-- PD-C provider prompt templates are generated from `pdh-dev` semantics and saved under the run step artifacts.
-- Flow YAML can compile stable semantic rules, step context summaries, and required reference files directly into provider prompts so providers do not need the full skill text inline every run.
-- `run-provider <run-id>` selects Codex or Claude from the run's current flow step and generates the step prompt when `--prompt-file` is omitted.
-- Runtime-managed metadata blocks in `current-note.md` and `current-ticket.md` track run id, flow, status, and current step.
-- Provider changes to `current-note.md` and `current-ticket.md` are captured as `note-ticket.patch` step artifacts.
-- Structured judgement artifacts back PD-C-4 plan review, PD-C-7 quality review, and PD-C-8 purpose validation guards.
-- AC verification guards parse the `AC 裏取り結果` markdown table and validate `verified` / `deferred` / `unverified` rows.
-- `verify <run-id>` runs PD-C-9 final verification, writes `final-verification.json`, and updates the PD-C-9 process checklist.
-- `logs <run-id> --follow` streams normalized progress events, and `show-gate <run-id>` prints the current gate summary.
-- `web --repo <dir>` serves a local read-only dashboard for run progress, step status, next CLI action, logs, gates, interruptions, and git diff. Runtime execution, approvals, resumes, and interruption answers remain CLI-only.
-- `flow-graph` exports the labeled flow as Mermaid or JSON for users who know PDH overall but do not remember each `PD-C-*` detail.
-- `doctor` checks local Node, Codex, Claude Code, uv, git, provider auth, `.env`, and git repository readiness without printing secrets.
-- `examples/fake-pdh-dev` provides a tiny fake target repository for user-perspective flow checks.
-- Blocked `advance` / `run-next` output is concise by default; pass `--json` for full guard payloads.
-- Mutating run commands use a per-run lock under `.pdh-flowchart/locks`; set `PDH_FLOWCHART_LOCK_WAIT_MS` or pass `--lock-wait-ms` to wait instead of failing immediately.
-- Provider commands use flow `timeoutMinutes` by default, can be overridden with `--timeout-ms`, and terminate the provider process group on timeout.
-- Provider failures retry up to flow `maxAttempts` by default with exponential backoff; use `--max-attempts` and `--retry-backoff-ms` to override.
-- Provider failures and guard failures write `failure-summary.md` artifacts with failed guards, provider output, raw log path, and next recovery commands.
-- Provider raw logs and human gate summaries redact common API key/token patterns and exact secret values loaded from `.env`.
-- `npm run test:runtime` exercises blocked, failed, and resumed run paths with fake providers.
-- `resume <run-id>` resumes the current provider step from the latest saved Codex/Claude session id.
-- `run --ticket <id>` invokes `./ticket.sh start <id>` when `ticket.sh` exists, and records a skip event otherwise.
-- After PD-C-10 approval, runtime invokes `./ticket.sh close` once other close guards pass and records `ticket-close.json`.
-- `run-codex <run-id>` executes the run's current step and refuses provider/step mismatches unless `--force` is provided.
-- `commit-step`, `ticket-start`, and `ticket-close` provide the first direct runtime action hooks.
-- Full transition execution is available for the CLI runtime path; Docker hardening is intentionally deferred while local direct execution remains the active development mode.
+- Full `pdh-ticket-core` flow is the baseline; Light remains a supported variant.
+- Codex and Claude adapters save raw JSONL logs under `.pdh-flowchart/`.
+- Guards validate note sections, ticket sections, commits, commands, AC tables, and human approvals.
+- `run-next` is the main user command.
+- Human gates and interruptions are explicit blocking states.
+- `current-note.md` frontmatter replaces the old SQLite / metadata-block state model.
+- The Web UI is read-only and follows the repo-centric CLI.
+
+## Deferred
+
+- Dockerized execution and hardening
+- Epic flow support
+- parallel reviewer support
+- richer review schemas

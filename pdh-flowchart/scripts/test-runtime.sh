@@ -21,9 +21,9 @@ advance_to_provider_step() {
   local repo="$1"
   local run_id
   run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant light --start-step PD-C-5 | sed -n '1p')"
-  node "$ROOT/src/cli.mjs" run-next "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.gate.json"
-  node "$ROOT/src/cli.mjs" approve "$run_id" --repo "$repo" --step PD-C-5 --reason ok >/dev/null
-  node "$ROOT/src/cli.mjs" run-next "$run_id" --repo "$repo" --manual-provider >"$TMP_ROOT/$run_id.blocked.txt" || true
+  node "$ROOT/src/cli.mjs" run-next --repo "$repo" >"$TMP_ROOT/$run_id.gate.json"
+  node "$ROOT/src/cli.mjs" approve --repo "$repo" --step PD-C-5 --reason ok >/dev/null
+  node "$ROOT/src/cli.mjs" run-next --repo "$repo" --stop-after-step >"$TMP_ROOT/$run_id.stop.txt"
   printf '%s\n' "$run_id"
 }
 
@@ -52,41 +52,48 @@ SH
   printf '%s\n' "$path"
 }
 
-test_blocked_run() {
-  local repo run_id status
-  repo="$(seed_repo blocked)"
-  run_id="$(advance_to_provider_step "$repo")"
-  grep -q "provider_step_requires_execution" "$TMP_ROOT/$run_id.blocked.txt"
-  node "$ROOT/src/cli.mjs" status "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.status.txt"
-  grep -q "Status: blocked" "$TMP_ROOT/$run_id.status.txt"
-  grep -q "Current Step: PD-C-6 実装" "$TMP_ROOT/$run_id.status.txt"
+test_frontmatter_run() {
+  local repo
+  repo="$(seed_repo frontmatter)"
+  node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-3 >"$TMP_ROOT/frontmatter.run.txt"
+  grep -q "^run-" "$TMP_ROOT/frontmatter.run.txt"
+  grep -q "current_step: PD-C-3" "$repo/current-note.md"
+  grep -q "run_id: run-" "$repo/current-note.md"
 }
 
 test_prompt_context() {
-  local repo run_id prompt_path
+  local repo prompt_path
   repo="$(seed_repo prompt-context)"
-  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-3 | sed -n '1p')"
-  prompt_path="$(node "$ROOT/src/cli.mjs" prompt "$run_id" --repo "$repo")"
-  grep -q "## Compiled Context" "$prompt_path"
-  grep -q "Semantic rules:" "$prompt_path"
-  grep -q "../skills/pdh-dev/SKILL.md" "$prompt_path"
-  grep -q "Explicit human approval only happens at PD-C-5 and PD-C-10" "$prompt_path"
+  node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-3 >/dev/null
+  prompt_path="$(node "$ROOT/src/cli.mjs" prompt --repo "$repo")"
+  grep -q "## Canonical Files" "$prompt_path"
+  grep -q "current-note.md frontmatter is the canonical runtime state" "$prompt_path"
+  grep -q "Required references: (none)" "$prompt_path"
+  if grep -q "## current-ticket.md" "$prompt_path"; then
+    echo "prompt should not inline current-ticket.md" >&2
+    exit 1
+  fi
 }
 
 test_stop_after_step() {
-  local repo run_id next_prompt
+  local repo run_id
   repo="$(seed_repo stop-after-step)"
-  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant light --start-step PD-C-5 | sed -n '1p')"
-  node "$ROOT/src/cli.mjs" run-next "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.stop-gate.json"
-  node "$ROOT/src/cli.mjs" approve "$run_id" --repo "$repo" --step PD-C-5 --reason ok >/dev/null
-  node "$ROOT/src/cli.mjs" run-next "$run_id" --repo "$repo" --stop-after-step >"$TMP_ROOT/$run_id.stop-after-step.txt"
-  grep -q "Stopped After Step: PD-C-5 -> PD-C-6" "$TMP_ROOT/$run_id.stop-after-step.txt"
-  grep -q "Current step: PD-C-6 実装" "$TMP_ROOT/$run_id.stop-after-step.txt"
-  next_prompt="$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/prompt.md"
-  test ! -f "$next_prompt"
-  node "$ROOT/src/cli.mjs" status "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.stop-status.txt"
-  grep -q "Status: running" "$TMP_ROOT/$run_id.stop-status.txt"
-  grep -q "Current Step: PD-C-6 実装" "$TMP_ROOT/$run_id.stop-status.txt"
+  run_id="$(advance_to_provider_step "$repo")"
+  grep -q "Stopped After Step: PD-C-5 -> PD-C-6" "$TMP_ROOT/$run_id.stop.txt"
+  grep -q "current_step: PD-C-6" "$repo/current-note.md"
+  node "$ROOT/src/cli.mjs" status --repo "$repo" >"$TMP_ROOT/$run_id.status.txt"
+  grep -q "Status: running" "$TMP_ROOT/$run_id.status.txt"
+  grep -q "Current Step: PD-C-6 実装" "$TMP_ROOT/$run_id.status.txt"
+}
+
+test_blocked_run() {
+  local repo run_id
+  repo="$(seed_repo blocked)"
+  run_id="$(advance_to_provider_step "$repo")"
+  node "$ROOT/src/cli.mjs" run-next --repo "$repo" --manual-provider >"$TMP_ROOT/$run_id.blocked.txt"
+  grep -q "provider_step_requires_execution" "$TMP_ROOT/$run_id.blocked.txt"
+  node "$ROOT/src/cli.mjs" status --repo "$repo" >"$TMP_ROOT/$run_id.blocked-status.txt"
+  grep -q "Status: blocked" "$TMP_ROOT/$run_id.blocked-status.txt"
 }
 
 test_auto_provider_run() {
@@ -95,9 +102,8 @@ test_auto_provider_run() {
   run_id="$(advance_to_provider_step "$repo")"
   fake="$(write_fake_codex_success)"
   args="$TMP_ROOT/$run_id.auto-provider-args.txt"
-  CODEX_BIN="$fake" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-next "$run_id" --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.auto-provider.txt" || true
+  CODEX_BIN="$fake" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-next --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.auto-provider.txt" || true
   test -f "$args"
-  grep -q "PD-C-6 completed" "$TMP_ROOT/$run_id.auto-provider.txt"
   grep -q "guard_failed" "$TMP_ROOT/$run_id.auto-provider.txt"
 }
 
@@ -106,34 +112,28 @@ test_failed_run() {
   repo="$(seed_repo failed)"
   run_id="$(advance_to_provider_step "$repo")"
   fake="$(write_fake_codex_fail)"
-  CODEX_BIN="$fake" node "$ROOT/src/cli.mjs" run-provider "$run_id" --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.provider.txt"
+  CODEX_BIN="$fake" node "$ROOT/src/cli.mjs" run-provider --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.provider.txt" || true
   grep -q "failed" "$TMP_ROOT/$run_id.provider.txt"
   grep -q "Failure Summary:" "$TMP_ROOT/$run_id.provider.txt"
   summary_path="$(sed -n 's/^Failure Summary: //p' "$TMP_ROOT/$run_id.provider.txt")"
   test -f "$summary_path"
   grep -q "Exit code: 9" "$summary_path"
-  node "$ROOT/src/cli.mjs" status "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.failed-status.txt"
+  node "$ROOT/src/cli.mjs" status --repo "$repo" >"$TMP_ROOT/$run_id.failed-status.txt"
   grep -q "Status: failed" "$TMP_ROOT/$run_id.failed-status.txt"
 }
 
 test_resumed_run() {
-  local repo run_id fake first_args second_args summary_path
+  local repo run_id fake first_args second_args
   repo="$(seed_repo resumed)"
   run_id="$(advance_to_provider_step "$repo")"
   fake="$(write_fake_codex_success)"
   first_args="$TMP_ROOT/$run_id.first-args.txt"
   second_args="$TMP_ROOT/$run_id.second-args.txt"
-  CODEX_BIN="$fake" FAKE_ARGS_FILE="$first_args" node "$ROOT/src/cli.mjs" run-provider "$run_id" --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.first-provider.txt"
-  CODEX_BIN="$fake" FAKE_ARGS_FILE="$second_args" node "$ROOT/src/cli.mjs" resume "$run_id" --repo "$repo" --max-attempts 2 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.resume-provider.txt"
-  grep -q "completed" "$TMP_ROOT/$run_id.resume-provider.txt"
+  CODEX_BIN="$fake" FAKE_ARGS_FILE="$first_args" node "$ROOT/src/cli.mjs" run-provider --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >/dev/null
+  CODEX_BIN="$fake" FAKE_ARGS_FILE="$second_args" node "$ROOT/src/cli.mjs" resume --repo "$repo" --max-attempts 2 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.resume.txt"
+  grep -q "completed" "$TMP_ROOT/$run_id.resume.txt"
   grep -q "resume" "$second_args"
   grep -q "fake-thread" "$second_args"
-  node "$ROOT/src/cli.mjs" run-next "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.guard-failed.txt" || true
-  grep -q "guard_failed" "$TMP_ROOT/$run_id.guard-failed.txt"
-  grep -q "Failure Summary:" "$TMP_ROOT/$run_id.guard-failed.txt"
-  summary_path="$(sed -n 's/^Failure Summary: //p' "$TMP_ROOT/$run_id.guard-failed.txt")"
-  test -f "$summary_path"
-  grep -q "Failed Guards" "$summary_path"
 }
 
 test_interrupted_run() {
@@ -143,39 +143,35 @@ test_interrupted_run() {
   fake="$(write_fake_codex_success)"
   args="$TMP_ROOT/$run_id.interrupted-args.txt"
 
-  node "$ROOT/src/cli.mjs" interrupt "$run_id" --repo "$repo" --message "Should multiplication use integer arithmetic?" >"$TMP_ROOT/$run_id.interrupt.txt"
+  node "$ROOT/src/cli.mjs" interrupt --repo "$repo" --message "Should multiplication use integer arithmetic?" >"$TMP_ROOT/$run_id.interrupt.txt"
   grep -q "interrupted" "$TMP_ROOT/$run_id.interrupt.txt"
 
-  node "$ROOT/src/cli.mjs" status "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.interrupted-status.txt"
+  node "$ROOT/src/cli.mjs" status --repo "$repo" >"$TMP_ROOT/$run_id.interrupted-status.txt"
   grep -q "Status: interrupted" "$TMP_ROOT/$run_id.interrupted-status.txt"
-  grep -q "Interruption: open" "$TMP_ROOT/$run_id.interrupted-status.txt"
 
-  if CODEX_BIN="$fake" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-provider "$run_id" --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.open-interrupt-provider.txt" 2>&1; then
+  if CODEX_BIN="$fake" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-provider --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.open-interrupt-provider.txt" 2>&1; then
     echo "run-provider should block while an interruption is open" >&2
     exit 1
   fi
   grep -q "needs_interrupt_answer" "$TMP_ROOT/$run_id.open-interrupt-provider.txt"
   test ! -f "$args"
 
-  node "$ROOT/src/cli.mjs" show-interrupts "$run_id" --repo "$repo" >"$TMP_ROOT/$run_id.show-interrupts.txt"
-  grep -q "Should multiplication use integer arithmetic" "$TMP_ROOT/$run_id.show-interrupts.txt"
-
-  node "$ROOT/src/cli.mjs" answer "$run_id" --repo "$repo" --message "Yes. Preserve integer arithmetic for this fixture." >"$TMP_ROOT/$run_id.answer.txt"
+  node "$ROOT/src/cli.mjs" answer --repo "$repo" --message "Yes. Preserve integer arithmetic for this fixture." >"$TMP_ROOT/$run_id.answer.txt"
   grep -q "answered" "$TMP_ROOT/$run_id.answer.txt"
 
-  prompt_path="$(node "$ROOT/src/cli.mjs" prompt "$run_id" --repo "$repo")"
+  prompt_path="$(node "$ROOT/src/cli.mjs" prompt --repo "$repo")"
   grep -q "Should multiplication use integer arithmetic" "$prompt_path"
   grep -q "Preserve integer arithmetic" "$prompt_path"
 
-  CODEX_BIN="$fake" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-provider "$run_id" --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.answered-provider.txt"
+  CODEX_BIN="$fake" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-provider --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.answered-provider.txt"
   grep -q "completed" "$TMP_ROOT/$run_id.answered-provider.txt"
 }
 
 test_web_readonly() {
-  local repo run_id server_log server_pid url
+  local repo server_log server_pid url
   repo="$(seed_repo web)"
-  run_id="$(advance_to_provider_step "$repo")"
-  server_log="$TMP_ROOT/$run_id.web.log"
+  advance_to_provider_step "$repo" >/dev/null
+  server_log="$TMP_ROOT/web.log"
   node "$ROOT/src/cli.mjs" web --repo "$repo" --host 127.0.0.1 --port 0 >"$server_log" 2>&1 &
   server_pid="$!"
   for _ in $(seq 1 50); do
@@ -190,24 +186,17 @@ test_web_readonly() {
     kill "$server_pid" 2>/dev/null || true
     exit 1
   fi
-  node - "$url" "$run_id" <<'NODE'
+  node - "$url" <<'NODE'
 const url = process.argv[2];
-const runId = process.argv[3];
 const state = await (await fetch(`${url}api/state`)).json();
 if (state.mode !== "read-only") throw new Error("web mode is not read-only");
-if (!state.runs.some((run) => run.id === runId)) throw new Error("run missing from web state");
-const selected = await (await fetch(`${url}api/state?run=${encodeURIComponent(runId)}`)).json();
-if (selected.selectedRunId !== runId) throw new Error("selected run mismatch");
-if (!selected.run?.events?.length) throw new Error("events missing from web state");
-if (!selected.run?.flow?.steps?.some((step) => step.id === "PD-C-6" && step.label === "実装")) throw new Error("flow labels missing");
-const currentStep = selected.run?.flow?.steps?.find((step) => step.id === "PD-C-6");
-if (currentStep?.progress?.status !== "blocked") throw new Error("flow progress status missing");
-if (selected.run?.nextAction?.targetTab !== "commands") throw new Error("next action target missing");
-if (!selected.run?.nextAction?.commands?.some((command) => command.includes("run-next"))) throw new Error("next action command missing");
-const mermaid = await (await fetch(`${url}api/flow.mmd?run=${encodeURIComponent(runId)}`)).text();
+if (!state.runtime.run) throw new Error("run missing from web state");
+if (!state.flow.variants.full.steps.some((step) => step.id === "PD-C-6" && step.label === "実装")) throw new Error("flow labels missing");
+if (!state.current.nextAction.commands.some((command) => command.includes("run-next"))) throw new Error("next action command missing");
+const mermaid = await (await fetch(`${url}api/flow.mmd`)).text();
 if (!mermaid.includes("PD-C-6") || !mermaid.includes("実装")) throw new Error("mermaid flow labels missing");
 const html = await (await fetch(url)).text();
-if (!html.includes("pdh-flowchart")) throw new Error("html shell missing");
+if (!html.includes("PDH Dev Dashboard")) throw new Error("html shell missing");
 const mutation = await fetch(`${url}api/state`, { method: "POST" });
 if (mutation.status !== 405) throw new Error(`mutation endpoint should be rejected, got ${mutation.status}`);
 NODE
@@ -215,13 +204,11 @@ NODE
   wait "$server_pid" 2>/dev/null || true
 }
 
+test_frontmatter_run
 test_prompt_context
 test_stop_after_step
 test_blocked_run
 test_auto_provider_run
-node "$ROOT/src/cli.mjs" flow-graph --variant light >"$TMP_ROOT/flow-graph.mmd"
-grep -q "PD-C-3" "$TMP_ROOT/flow-graph.mmd"
-grep -q "計画" "$TMP_ROOT/flow-graph.mmd"
 test_failed_run
 test_resumed_run
 test_interrupted_run

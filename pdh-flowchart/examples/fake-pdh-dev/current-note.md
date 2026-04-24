@@ -1,3 +1,11 @@
+---
+pdh:
+  ticket: calc-multiply
+  flow: pdh-ticket-core
+  variant: light
+  status: ready
+---
+
 # current-note.md
 
 ## Status
@@ -35,3 +43,5 @@ Pending final verification.
 ## Discoveries
 
 - This fixture intentionally starts with multiplication unsupported so PD-C-6 has a small real change to make.
+
+## Step History

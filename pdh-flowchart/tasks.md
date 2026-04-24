@@ -1,77 +1,52 @@
 # pdh-flowchart Tasks
 
-## Phase 0: Runtime Foundation
+## Phase 1: Repo-Centric Runtime
 
-- [x] Product brief and technical plan are in repo.
-- [x] Full and Light `pdh-ticket-core` flow definitions exist.
-- [x] CLI skeleton supports `init`, `run`, `status`, `guards`, and `advance`.
-- [x] SQLite state store persists runs, progress events, provider sessions, and human gates.
-- [x] Deterministic guard skeletons cover note/ticket sections, commands, commits, human approval, AC verification tables, and judgement artifacts.
-- [x] Codex JSONL adapter saves raw provider logs and normalized progress events.
-- [x] Codex calculator smoke creates a tiny `uv run calc "1+2"` app and verifies it.
-- [x] Human gate commands create summaries and record approve/reject/request-changes/cancel decisions.
-- [x] Runtime action hooks exist for `commit-step`, `ticket-start`, and `ticket-close`.
-- [x] User-facing commands refuse non-current step operations unless `--force` is used.
+- [x] Replace runtime metadata blocks with `current-note.md` frontmatter.
+- [x] Keep `current-ticket.md` free of runtime state.
+- [x] Remove SQLite as the canonical state model.
+- [x] Keep `.pdh-flowchart/` as transient local artifacts only.
+- [x] Add repo-centric runtime helpers for run state, progress events, attempts, gates, and cleanup.
+- [x] Keep prompt generation based on compiled flow semantics.
+- [x] Stop inlining canonical file contents into provider prompts.
 
-## Phase 1: Full Flow MVP
+## Phase 2: CLI Redesign
 
-- [x] Implement a single `run-next` loop that executes the current step, evaluates guards, and advances until blocked.
-- [x] Make `run-next` auto-run provider steps by default, stopping only for gates, interruptions, failed guards, provider failures, or completion.
-- [x] Add Claude adapter with `stream-json` normalization and raw log capture.
-- [x] Add provider selection from `flows/pdh-ticket-core.yaml` instead of command-specific provider calls.
-- [x] Generate PD-C prompt templates from `pdh-dev` semantics.
-- [x] Implement runtime-controlled note/ticket metadata writes.
-- [x] Capture provider note/ticket direct-update diffs as artifacts.
-- [x] Implement `ticket.sh start` integration from `run --ticket`.
-- [x] Implement `ticket.sh close` integration after PD-C-10 approval.
-- [x] Add structured judgement artifacts for PD-C-4, PD-C-7, and PD-C-8.
-- [x] Add AC verification table parser with real `verified` / `deferred` / `unverified` rows.
-- [x] Add `PD-C-9` final verification runner for test commands and AC evidence.
-- [x] Add resume behavior for interrupted provider steps.
-- [x] Compile stable semantic rules and required reference paths into provider prompts from flow YAML.
+- [x] Make `run`, `run-next`, `status`, `run-provider`, and `resume` repo-centric.
+- [x] Keep `run-next` as the default auto-progress command.
+- [x] Preserve explicit human gates and interruption answers.
+- [x] Keep debug commands for prompt, judgement, verify, and gate summary.
+- [x] Add cleanup behavior for transient run artifacts.
+- [x] Keep `smoke-calc` as an intentional real-provider check only.
 
-## Phase 1: User Experience
+## Phase 3: Web UI Redesign
 
-- [x] `status` shows current step, provider, mode, guards, human gate state, and recent events.
-- [x] Add `logs --follow` for normalized progress events.
-- [x] Add `show-gate` to print the current gate summary.
-- [x] Make blocked guard output concise by default, with `--json` for full detail.
-- [x] Add `doctor` to check Node, Codex, Claude, uv, git, and auth status.
-- [x] Add example fixtures for a tiny fake `pdh-dev` repository.
-- [x] Add interruption and answer commands for step-level clarification.
-- [x] Add `run-next --stop-after-step` for one-step user-flow demos without spilling into the next provider step.
+- [x] Replace DB-backed run list UI with a single active repo dashboard.
+- [x] Keep the Web UI read-only.
+- [x] Show current step, next CLI action, flow progress, logs, artifacts, and git summary.
+- [x] Use the provided dashboard visual direction as the base styling.
 
-## Phase 2: Reliability
+## Phase 4: Verification
 
-- [x] Add file locking so two runtimes cannot mutate the same run.
-- [x] Add provider timeout and orphan process cleanup.
-- [x] Add retry/backoff policy per step.
-- [x] Add secret redaction for raw logs and summaries.
-- [x] Add state schema migrations.
-- [x] Add tests around failed/blocked/resumed runs.
+- [x] Rewrite fixture runtime tests for repo-centric commands.
+- [x] Verify gate open -> approve -> stop-after-step user flow.
+- [x] Verify provider success, failure, resume, and interruption handling.
+- [x] Verify Web UI API and read-only behavior.
+- [x] Run `npm run check`.
+- [x] Run `npm run test:runtime`.
 
-## Next: Local Runtime Hardening
+## Phase 5: Documentation
 
-- [ ] Decide whether `.pdh-flowchart/state.sqlite` remains repo-local or moves to a shared volume.
-- [ ] Strengthen direct `current-note.md` / `current-ticket.md` update summaries using `git diff` and artifacts.
-- [x] Add failed-step artifact summaries for user-facing recovery.
-- [ ] Refine structured review report schema.
-- [ ] Evaluate optional Codex SDK / Claude Agent SDK adapters.
+- [x] Rewrite `product-brief.md` for the frontmatter-first state model.
+- [x] Rewrite `technical-plan.md` for repo-centric CLI and transient artifacts.
+- [x] Rewrite `README.md` for the new user flow.
+- [ ] Update example fixture docs and sample canonical files.
+- [ ] Refresh `current-ticket.md` and `current-note.md` in this repo to match the new model.
 
-## Deferred: Docker Operations
+## Deferred
 
-- [ ] Build a reproducible Docker runtime image for permission-bypass provider execution.
-- [ ] Enforce Docker egress policy for provider APIs, package registries, and git remotes.
-- [ ] Pin exact Codex CLI, Claude Code, Node.js, and uv versions in the Docker image.
-
-## Phase 3: UI and Flow Expansion
-
-- [x] Add simple read-only web status UI for progress, logs, gates, interruptions, and git diff.
-- [x] Add labeled flow graph export and Web UI flow view.
-- [x] Show per-step progress and next CLI action in the Web UI flow view.
-- [ ] Add Epic flow support.
-- [ ] Add parallel reviewer support.
-
-## Open Decisions
-
-- [ ] Decide whether `.pdh-flowchart/state.sqlite` remains repo-local or moves to a separate volume for multi-repo use.
+- [ ] Dockerized execution and hardening.
+- [ ] Epic flow support.
+- [ ] Parallel reviewer support.
+- [ ] Richer review result schemas.
+- [ ] Optional SDK adapters after the CLI path is stable.
