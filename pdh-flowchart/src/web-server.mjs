@@ -2750,16 +2750,16 @@ function renderHtml() {
     const outputNotes = derivedNotesText(step, current && current.id === step.id ? nextAction : null);
     html += '<div class="detail-section"><div class="detail-section-title">判断の前提</div>' +
       '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
-      '<div><strong>誰が見る:</strong> ' + esc(contract.viewer || '開発者') + '</div>' +
-      '<div style="margin-top:6px;"><strong>判断したいこと:</strong> ' + esc(contract.decision || step.summary || '') + '</div>' +
+      '<div><strong>Viewer:</strong> ' + esc(contract.viewer || '開発者') + '</div>' +
+      '<div style="margin-top:6px;"><strong>Decision:</strong> ' + esc(contract.decision || step.summary || '') + '</div>' +
       (outputSummary.length
-        ? '<div style="margin-top:10px;"><strong>サマリー:</strong><div style="margin-top:4px;">' + outputSummary.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
+        ? '<div style="margin-top:10px;"><strong>Summary:</strong><div style="margin-top:4px;">' + outputSummary.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
         : '') +
       (outputRisks.length
-        ? '<div style="margin-top:10px;"><strong>リスク:</strong><div style="margin-top:4px;">' + outputRisks.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
+        ? '<div style="margin-top:10px;"><strong>Risks:</strong><div style="margin-top:4px;">' + outputRisks.map((item) => '&#8226; ' + esc(item)).join('<br>') + '</div></div>'
         : '') +
       (outputNotes
-        ? '<div style="margin-top:10px;"><strong>補足:</strong><div style="margin-top:4px;white-space:pre-wrap;">' + esc(outputNotes) + '</div></div>'
+        ? '<div style="margin-top:10px;"><strong>Notes:</strong><div style="margin-top:4px;white-space:pre-wrap;">' + esc(outputNotes) + '</div></div>'
         : '') +
       '</div></div>';
 
