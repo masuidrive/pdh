@@ -53,6 +53,10 @@ function handleRequest({ request, response, repo }) {
     sendJson(response, 200, collectState({ repo }));
     return;
   }
+  if (url.pathname === "/api/events") {
+    sendEventStream({ request, response, repo });
+    return;
+  }
   if (url.pathname === "/api/flow.mmd") {
     sendText(response, 200, collectMermaid({ repo, variant: url.searchParams.get("variant") }));
     return;
@@ -93,6 +97,40 @@ function handleRequest({ request, response, repo }) {
     return;
   }
   sendJson(response, 404, { error: "not_found" });
+}
+
+function sendEventStream({ request, response, repo }) {
+  response.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no"
+  });
+  response.write("retry: 3000\n\n");
+
+  let previous = "";
+  const pushState = () => {
+    const payload = JSON.stringify(collectState({ repo }));
+    if (payload === previous) {
+      return;
+    }
+    previous = payload;
+    response.write(`event: state\ndata: ${payload}\n\n`);
+  };
+
+  const heartbeat = setInterval(() => {
+    response.write(": keep-alive\n\n");
+  }, 15000);
+  const ticker = setInterval(pushState, 2000);
+  pushState();
+
+  const cleanup = () => {
+    clearInterval(heartbeat);
+    clearInterval(ticker);
+    response.end();
+  };
+  request.on("close", cleanup);
+  request.on("aborted", cleanup);
 }
 
 function collectState({ repo }) {
@@ -1708,7 +1746,14 @@ function renderHtml() {
     </div>
   </div>
 <script>
-  const state = { data: null, selectedId: null, modalItem: null, modalViewMode: 'markdown' };
+  const state = {
+    data: null,
+    selectedId: null,
+    modalItem: null,
+    modalViewMode: 'markdown',
+    eventSource: null,
+    pollTimer: null
+  };
 
   function esc(value) {
     return String(value ?? '')
@@ -2707,20 +2752,79 @@ function renderHtml() {
     return parts.join('\\n');
   }
 
+  function applyState(data) {
+    state.data = data;
+    const flow = variantData();
+    const currentId = data.runtime?.run?.current_step_id || flow?.steps?.[0]?.id || null;
+    state.selectedId = state.selectedId && flow?.steps?.some((step) => step.id === state.selectedId)
+      ? state.selectedId
+      : currentId;
+    const requested = requestedModalItem();
+    if (requested) {
+      state.modalItem = requested.item;
+      state.modalViewMode = requested.mode;
+    }
+    render();
+  }
+
   function refresh() {
     fetchState().then((data) => {
-      state.data = data;
-      const flow = variantData();
-      const currentId = data.runtime?.run?.current_step_id || flow?.steps?.[0]?.id || null;
-      state.selectedId = state.selectedId && flow?.steps?.some((step) => step.id === state.selectedId)
-        ? state.selectedId
-        : currentId;
-      const requested = requestedModalItem();
-      if (requested) {
-        state.modalItem = requested.item;
-        state.modalViewMode = requested.mode;
+      if (state.modalItem) {
+        state.data = data;
+        return;
       }
-      render();
+      applyState(data);
+    });
+  }
+
+  function startPolling() {
+    if (state.pollTimer) {
+      return;
+    }
+    state.pollTimer = window.setInterval(() => {
+      if (state.modalItem) {
+        return;
+      }
+      refresh();
+    }, 5000);
+  }
+
+  function stopPolling() {
+    if (!state.pollTimer) {
+      return;
+    }
+    window.clearInterval(state.pollTimer);
+    state.pollTimer = null;
+  }
+
+  function startLiveUpdates() {
+    if (!('EventSource' in window)) {
+      startPolling();
+      return;
+    }
+    if (state.eventSource) {
+      return;
+    }
+    const source = new EventSource('/api/events');
+    state.eventSource = source;
+    source.addEventListener('state', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (state.modalItem) {
+          state.data = data;
+          return;
+        }
+        applyState(data);
+      } catch {
+        // Ignore malformed events and let the next message recover.
+      }
+    });
+    source.addEventListener('error', () => {
+      source.close();
+      if (state.eventSource === source) {
+        state.eventSource = null;
+      }
+      startPolling();
     });
   }
 
@@ -2891,9 +2995,9 @@ function renderHtml() {
         try {
           await navigator.clipboard.writeText(value);
           element.classList.add('copied');
-          element.textContent = value + '\nCopied';
+          element.textContent = value + '\\nCopied';
         } catch {
-          element.textContent = value + '\nCopy failed';
+          element.textContent = value + '\\nCopy failed';
         }
         window.setTimeout(() => {
           element.classList.remove('copied');
@@ -3222,12 +3326,9 @@ function renderHtml() {
   });
 
   refresh();
-  setInterval(() => {
-    if (state.modalItem) {
-      return;
-    }
-    refresh();
-  }, 5000);
+  if (!requestedModalItem()) {
+    startLiveUpdates();
+  }
 </script>
 </body>
 </html>`;
