@@ -276,7 +276,9 @@ function normalizeUiRuntime(value, meta = {}) {
             ? {
                 targetStepId: asString(source.gate.rerun_requirement.target_step_id ?? source.gate.rerun_requirement.targetStepId),
                 reason: asString(source.gate.rerun_requirement.reason),
-                changedFiles: asStringList(source.gate.rerun_requirement.changed_files ?? source.gate.rerun_requirement.changedFiles)
+                changedFiles: asStringList(source.gate.rerun_requirement.changed_files ?? source.gate.rerun_requirement.changedFiles),
+                changedTicketSections: asStringList(source.gate.rerun_requirement.changed_ticket_sections ?? source.gate.rerun_requirement.changedTicketSections),
+                changedNoteSections: asStringList(source.gate.rerun_requirement.changed_note_sections ?? source.gate.rerun_requirement.changedNoteSections)
               }
             : null
         }

@@ -361,7 +361,14 @@ test_gate_baseline_rerun_requirement() {
   node "$ROOT/src/cli.mjs" run-next --repo "$repo" >/dev/null
   node -e "const fs=require('fs'); const gate=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(gate.baseline.step_id!=='PD-C-4') throw new Error('baseline step mismatch'); if(gate.baseline.commit!==process.argv[2]) throw new Error('baseline commit mismatch');" "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-5/human-gate.json" "$baseline_commit"
 
-  printf '\nGate edit after review.\n' >>"$repo/current-ticket.md"
+  python - "$repo/current-ticket.md" <<'PY'
+from pathlib import Path
+path = Path(__import__('sys').argv[1])
+text = path.read_text()
+needle = '## Product AC\n\n'
+replacement = needle + '- `uv run calc "(1+2)*3"` は将来対応候補として検討する。\n'
+path.write_text(text.replace(needle, replacement, 1))
+PY
   node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-5 --signal recommend-approve --reason "looks good" --no-run-next >/dev/null
   node -e "const fs=require('fs'); const gate=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(gate.rerun_requirement.target_step_id!=='PD-C-3') throw new Error('rerun requirement missing');" "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-5/human-gate.json"
   if node "$ROOT/src/cli.mjs" accept-recommendation --repo "$repo" --step PD-C-5 --no-run-next >"$TMP_ROOT/$run_id.accept-should-fail.txt" 2>&1; then

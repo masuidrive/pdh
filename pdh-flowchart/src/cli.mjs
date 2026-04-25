@@ -2900,8 +2900,8 @@ function deriveHumanGateContext({ repo, runtime, step, existingGate = null }) {
   const rerunRequirement = inferHumanGateRerunRequirement({
     stepId: step.id,
     changedFiles: diff.changedFiles,
-    noteDiff: diff.noteDiff,
-    ticketDiff: diff.ticketDiff
+    noteSections: diff.noteSections,
+    ticketSections: diff.ticketSections
   });
   return {
     ...(existingGate ?? {}),
@@ -2927,63 +2927,110 @@ function humanGateBaseline({ repo, runtime, step, existingGate = null }) {
 
 function gateBaselineDiff({ repo, baseline }) {
   if (!baseline?.commit) {
-    return { changedFiles: [], noteDiff: "", ticketDiff: "" };
+    return { changedFiles: [], ticketSections: [], noteSections: [] };
   }
+  const ticketBefore = gitShowFile(repo, baseline.commit, "current-ticket.md");
+  const ticketAfter = readFileIfExists(join(repo, "current-ticket.md"));
+  const noteBefore = stripPdhMetadata(gitShowFile(repo, baseline.commit, "current-note.md"));
+  const noteAfter = stripPdhMetadata(readFileIfExists(join(repo, "current-note.md")));
   return {
     changedFiles: splitLines(runGit(repo, ["diff", "--name-only", baseline.commit, "--"]).stdout),
-    noteDiff: runGit(repo, ["diff", "--no-ext-diff", baseline.commit, "--", "current-note.md"]).stdout,
-    ticketDiff: runGit(repo, ["diff", "--no-ext-diff", baseline.commit, "--", "current-ticket.md"]).stdout
+    ticketSections: changedMarkdownSections(ticketBefore, ticketAfter),
+    noteSections: changedMarkdownSections(noteBefore, noteAfter, { ignoreSections: new Set(["Step History"]) })
   };
 }
 
-function inferHumanGateRerunRequirement({ stepId, changedFiles, noteDiff, ticketDiff }) {
+function inferHumanGateRerunRequirement({ stepId, changedFiles, noteSections, ticketSections }) {
   const files = Array.isArray(changedFiles) ? changedFiles : [];
-  if (files.length === 0) {
+  const note = Array.isArray(noteSections) ? noteSections : [];
+  const ticket = Array.isArray(ticketSections) ? ticketSections : [];
+  const signalFiles = files.filter((path) => !["current-note.md", "current-ticket.md"].includes(path));
+  if (signalFiles.length === 0 && note.length === 0 && ticket.length === 0) {
     return null;
   }
-  const noteSteps = changedPdSteps(noteDiff);
-  const sourceChanged = files.some((path) => !["current-note.md", "current-ticket.md"].includes(path));
   if (stepId === "PD-C-5") {
-    if (noteSteps.has("PD-C-2")) {
-      return rerunRequirement("PD-C-2", "gate edits changed investigation evidence", files);
+    if (note.some((section) => ["PD-C-2. 調査結果", "Discoveries"].includes(section))) {
+      return rerunRequirement("PD-C-2", "gate edits changed investigation evidence", files, ticket, note);
     }
-    if (ticketDiff.trim() || noteSteps.has("PD-C-3")) {
-      return rerunRequirement("PD-C-3", "gate edits changed ticket intent or implementation plan", files);
+    if (ticket.some((section) => ["Why", "What", "Product AC", "Implementation Notes"].includes(section))
+      || note.includes("PD-C-3. 計画")) {
+      return rerunRequirement("PD-C-3", "gate edits changed ticket intent or implementation plan", files, ticket, note);
     }
-    if (sourceChanged || noteSteps.has("PD-C-4")) {
-      return rerunRequirement("PD-C-4", "gate edits changed reviewable material before implementation starts", files);
+    if (signalFiles.length > 0 || note.includes("PD-C-4. 計画レビュー結果")) {
+      return rerunRequirement("PD-C-4", "gate edits changed reviewable material before implementation starts", files, ticket, note);
     }
     return null;
   }
   if (stepId === "PD-C-10") {
-    if (sourceChanged) {
-      return rerunRequirement("PD-C-7", "gate edits changed implementation or tests after review", files);
+    if (signalFiles.length > 0) {
+      return rerunRequirement("PD-C-7", "gate edits changed implementation or tests after review", files, ticket, note);
     }
-    if (ticketDiff.trim() || noteSteps.has("PD-C-7") || noteSteps.has("PD-C-8")) {
-      return rerunRequirement("PD-C-7", "gate edits changed review or product-validity evidence", files);
+    if (ticket.some((section) => ["Why", "What", "Product AC", "Implementation Notes"].includes(section))
+      || note.some((section) => ["PD-C-7. 品質検証結果", "PD-C-8. 目的妥当性確認"].includes(section))) {
+      return rerunRequirement("PD-C-7", "gate edits changed review or product-validity evidence", files, ticket, note);
     }
-    if (noteSteps.has("PD-C-9") || noteSteps.has("PD-C-10")) {
-      return rerunRequirement("PD-C-9", "gate edits changed final verification evidence", files);
+    if (note.some((section) => ["PD-C-9. プロセスチェックリスト", "AC 裏取り結果"].includes(section))) {
+      return rerunRequirement("PD-C-9", "gate edits changed final verification evidence", files, ticket, note);
     }
   }
   return null;
 }
 
-function rerunRequirement(targetStepId, reason, changedFiles) {
+function rerunRequirement(targetStepId, reason, changedFiles, changedTicketSections, changedNoteSections) {
   return {
     target_step_id: targetStepId,
     reason,
-    changed_files: changedFiles
+    changed_files: changedFiles,
+    changed_ticket_sections: changedTicketSections,
+    changed_note_sections: changedNoteSections
   };
 }
 
-function changedPdSteps(diffText) {
-  const set = new Set();
-  const text = String(diffText ?? "");
-  for (const match of text.matchAll(/PD-C-(\d+)/g)) {
-    set.add(`PD-C-${match[1]}`);
+function changedMarkdownSections(beforeText, afterText, { ignoreSections = new Set() } = {}) {
+  const before = markdownSections(beforeText, { ignoreSections });
+  const after = markdownSections(afterText, { ignoreSections });
+  const changed = [];
+  const headings = new Set([...before.keys(), ...after.keys()]);
+  for (const heading of headings) {
+    if ((before.get(heading) ?? "").trim() !== (after.get(heading) ?? "").trim()) {
+      changed.push(heading);
+    }
   }
-  return set;
+  return changed.sort();
+}
+
+function markdownSections(text, { ignoreSections = new Set() } = {}) {
+  const body = String(text ?? "").replace(/\r\n/g, "\n");
+  const map = new Map();
+  const matches = [...body.matchAll(/^##\s+(.+)$/gm)];
+  for (let index = 0; index < matches.length; index += 1) {
+    const heading = matches[index][1].trim();
+    if (ignoreSections.has(heading)) {
+      continue;
+    }
+    const start = matches[index].index + matches[index][0].length;
+    const end = index + 1 < matches.length ? matches[index + 1].index : body.length;
+    map.set(heading, body.slice(start, end).trim());
+  }
+  return map;
+}
+
+function stripPdhMetadata(text) {
+  const raw = String(text ?? "");
+  const frontmatter = raw.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+  return frontmatter ? raw.slice(frontmatter[0].length) : raw;
+}
+
+function gitShowFile(repo, commit, relativePath) {
+  return runGit(repo, ["show", `${commit}:${relativePath}`])?.stdout ?? "";
+}
+
+function readFileIfExists(path) {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return "";
+  }
 }
 
 function previousStepInVariant(flow, variant, stepId) {

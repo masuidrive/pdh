@@ -52,6 +52,12 @@ function renderGateContext(gate) {
     if (Array.isArray(rerunRequirement.changed_files) && rerunRequirement.changed_files.length > 0) {
       lines.push(`- Changed since baseline: ${rerunRequirement.changed_files.join(", ")}`);
     }
+    if (Array.isArray(rerunRequirement.changed_ticket_sections) && rerunRequirement.changed_ticket_sections.length > 0) {
+      lines.push(`- Ticket sections changed: ${rerunRequirement.changed_ticket_sections.join(", ")}`);
+    }
+    if (Array.isArray(rerunRequirement.changed_note_sections) && rerunRequirement.changed_note_sections.length > 0) {
+      lines.push(`- Note sections changed: ${rerunRequirement.changed_note_sections.join(", ")}`);
+    }
   } else {
     lines.push("- Required rerun target if gate edits continue: (none)");
   }
