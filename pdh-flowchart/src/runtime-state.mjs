@@ -293,11 +293,7 @@ export function latestHumanGate({ stateDir, runId, stepId }) {
   return readJson(humanGatePath(stateDir, runId, stepId));
 }
 
-export function openHumanGate({ stateDir, runId, stepId, prompt, summary }) {
-  const existing = latestHumanGate({ stateDir, runId, stepId });
-  if (existing?.status === "needs_human" && existing.summary === summary) {
-    return existing;
-  }
+export function openHumanGate({ stateDir, runId, stepId, prompt, summary, baseline = null, rerunRequirement = null }) {
   return updateHumanGate({
     stateDir,
     runId,
@@ -312,6 +308,8 @@ export function openHumanGate({ stateDir, runId, stepId, prompt, summary }) {
         decision: existingGate?.decision ?? null,
         reason: existingGate?.reason ?? null,
         recommendation: existingGate?.recommendation ?? null,
+        baseline: baseline ?? existingGate?.baseline ?? null,
+        rerun_requirement: rerunRequirement ?? existingGate?.rerun_requirement ?? null,
         created_at: existingGate?.created_at ?? new Date().toISOString(),
         resolved_at: null
       };
@@ -336,6 +334,8 @@ export function resolveHumanGate({ stateDir, runId, stepId, decision, reason = n
         status: "resolved",
         decision,
         reason,
+        baseline: existing?.baseline ?? null,
+        rerun_requirement: existing?.rerun_requirement ?? null,
         resolved_at: new Date().toISOString(),
         recommendation: existing?.recommendation
           ? {
@@ -376,6 +376,8 @@ export function updateHumanGateRecommendation({
           resolved_at: null
         }),
         status: "needs_human",
+        baseline: existing?.baseline ?? null,
+        rerun_requirement: existing?.rerun_requirement ?? null,
         recommendation: {
           id: `gate-rec-${Date.now()}-${randomBytes(3).toString("hex")}`,
           action,
@@ -401,6 +403,8 @@ export function clearHumanGateRecommendation({ stateDir, runId, stepId }) {
       }
       return {
         ...existing,
+        baseline: existing.baseline ?? null,
+        rerun_requirement: existing.rerun_requirement ?? null,
         recommendation: null
       };
     }

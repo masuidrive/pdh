@@ -177,7 +177,9 @@ function buildRuntimeUiData({ repoPath, runtime, step, guardResults = null, next
       ? {
           status: humanGate.status ?? null,
           decision: humanGate.decision ?? null,
-          summary: humanGate.summary ?? null
+          summary: humanGate.summary ?? null,
+          baseline: humanGate.baseline ?? null,
+          rerun_requirement: humanGate.rerun_requirement ?? null
         }
       : null,
     interruptions: interruptions
@@ -261,7 +263,22 @@ function normalizeUiRuntime(value, meta = {}) {
       ? {
           status: asString(source.gate.status),
           decision: asString(source.gate.decision),
-          summary: asString(source.gate.summary)
+          summary: asString(source.gate.summary),
+          baseline: source.gate.baseline
+            ? {
+                commit: asString(source.gate.baseline.commit),
+                stepId: asString(source.gate.baseline.step_id ?? source.gate.baseline.stepId),
+                ref: asString(source.gate.baseline.ref),
+                capturedAt: asString(source.gate.baseline.captured_at ?? source.gate.baseline.capturedAt)
+              }
+            : null,
+          rerunRequirement: source.gate.rerun_requirement
+            ? {
+                targetStepId: asString(source.gate.rerun_requirement.target_step_id ?? source.gate.rerun_requirement.targetStepId),
+                reason: asString(source.gate.rerun_requirement.reason),
+                changedFiles: asStringList(source.gate.rerun_requirement.changed_files ?? source.gate.rerun_requirement.changedFiles)
+              }
+            : null
         }
       : null,
     interruptions: asRecordList(source.interruptions, (item) => ({

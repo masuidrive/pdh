@@ -347,6 +347,30 @@ test_assist_gate_flow() {
   grep -q "current_step: PD-C-6" "$repo/current-note.md"
 }
 
+test_gate_baseline_rerun_requirement() {
+  local repo run_id baseline_commit
+  repo="$(seed_repo gate-baseline)"
+  printf '\nGate baseline seed\n' >>"$repo/current-note.md"
+  (
+    cd "$repo"
+    git add current-note.md
+    git -c user.name="pdh runtime test" -c user.email="pdh-runtime@example.invalid" commit -m "[PD-C-4] Seed review baseline" >/dev/null
+  )
+  baseline_commit="$(cd "$repo" && git rev-parse HEAD)"
+  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-5 | sed -n '1p')"
+  node "$ROOT/src/cli.mjs" run-next --repo "$repo" >/dev/null
+  node -e "const fs=require('fs'); const gate=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(gate.baseline.step_id!=='PD-C-4') throw new Error('baseline step mismatch'); if(gate.baseline.commit!==process.argv[2]) throw new Error('baseline commit mismatch');" "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-5/human-gate.json" "$baseline_commit"
+
+  printf '\nGate edit after review.\n' >>"$repo/current-ticket.md"
+  node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-5 --signal recommend-approve --reason "looks good" --no-run-next >/dev/null
+  node -e "const fs=require('fs'); const gate=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(gate.rerun_requirement.target_step_id!=='PD-C-3') throw new Error('rerun requirement missing');" "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-5/human-gate.json"
+  if node "$ROOT/src/cli.mjs" accept-recommendation --repo "$repo" --step PD-C-5 --no-run-next >"$TMP_ROOT/$run_id.accept-should-fail.txt" 2>&1; then
+    echo "accept-recommendation should fail when gate edits require rerun" >&2
+    exit 1
+  fi
+  grep -q "require rerun from PD-C-3" "$TMP_ROOT/$run_id.accept-should-fail.txt"
+}
+
 test_assist_rerun_recommendation() {
   local repo run_id
   repo="$(seed_repo assist-rerun)"
@@ -445,7 +469,7 @@ if (mutation.status !== 405) throw new Error(`mutation endpoint should be reject
 NODE
   curl -s "${url}api/render-mermaid?code=graph%20TD%0AA--%3EB" | rg -q "<svg"
   curl -s "${url}api/artifact?step=PD-C-5&name=human-gate-summary.md" | rg -q "Human Gate Summary"
-  curl -s "${url}api/diff?step=PD-C-5" | rg -q "\"baseLabel\":\"ticket start\""
+  curl -s "${url}api/diff?step=PD-C-5" | rg -q "\"baseLabel\":\""
   /usr/lib/chromium/chromium --headless --disable-gpu --no-sandbox --virtual-time-budget=5000 --dump-dom "${url}?assist=manual&doc=note&heading=PD-C-3.%20%E8%A8%88%E7%94%BB&mode=markdown" | rg -q "detail-view-toggle|detail-doc-viewer|current-note.md"
   kill "$server_pid" 2>/dev/null || true
   wait "$server_pid" 2>/dev/null || true
@@ -462,6 +486,7 @@ test_auto_resume_after_idle_timeout
 test_resumed_run
 test_interrupted_run
 test_assist_gate_flow
+test_gate_baseline_rerun_requirement
 test_assist_rerun_recommendation
 test_assist_answer_flow
 test_assist_failed_continue

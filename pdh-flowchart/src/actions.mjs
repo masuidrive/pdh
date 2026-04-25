@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRedactor } from "./redaction.mjs";
 
-export function createGateSummary({ repoPath, stateDir, runId, stepId }) {
+export function createGateSummary({ repoPath, stateDir, runId, stepId, gate = null }) {
   const ticketPath = join(repoPath, "current-ticket.md");
   const notePath = join(repoPath, "current-note.md");
   const redact = createRedactor({ repoPath });
@@ -20,6 +20,8 @@ export function createGateSummary({ repoPath, stateDir, runId, stepId }) {
     "## Decision Required",
     gateDecisionText(stepId),
     "",
+    ...renderGateContext(gate),
+    "",
     "## current-ticket.md",
     "",
     ticket.trim(),
@@ -31,6 +33,29 @@ export function createGateSummary({ repoPath, stateDir, runId, stepId }) {
   ].join("\n");
   writeFileSync(artifactPath, body);
   return { artifactPath, body };
+}
+
+function renderGateContext(gate) {
+  const baseline = gate?.baseline ?? null;
+  const rerunRequirement = gate?.rerun_requirement ?? null;
+  const lines = ["## Gate Context", ""];
+  if (baseline?.commit) {
+    lines.push(`- Baseline commit: \`${baseline.commit.slice(0, 7)}\`${baseline.step_id ? ` from ${baseline.step_id}` : ""}`);
+  } else {
+    lines.push("- Baseline commit: (none)");
+  }
+  if (rerunRequirement?.target_step_id) {
+    lines.push(`- Required rerun target if gate edits continue: \`${rerunRequirement.target_step_id}\``);
+    if (rerunRequirement.reason) {
+      lines.push(`- Why: ${rerunRequirement.reason}`);
+    }
+    if (Array.isArray(rerunRequirement.changed_files) && rerunRequirement.changed_files.length > 0) {
+      lines.push(`- Changed since baseline: ${rerunRequirement.changed_files.join(", ")}`);
+    }
+  } else {
+    lines.push("- Required rerun target if gate edits continue: (none)");
+  }
+  return lines;
 }
 
 export function commitStep({ repoPath, stepId, message }) {

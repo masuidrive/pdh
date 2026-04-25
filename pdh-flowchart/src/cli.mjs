@@ -1046,6 +1046,7 @@ async function cmdAcceptRecommendation(argv) {
     if (!recommendation || recommendation.status !== "pending") {
       throw new Error(`${stepId} does not have a pending recommendation`);
     }
+    assertRecommendationCompatibleWithGateEdits({ runtime, stepId, gate, recommendation });
 
     let advanced = null;
     if (recommendation.action === "rerun_from") {
@@ -2358,13 +2359,22 @@ function ensureGateSummary({ repo, runtime, step }) {
   if (existing?.summary && existsSync(existing.summary)) {
     return { artifactPath: existing.summary, body: readFileSync(existing.summary, "utf8") };
   }
-  const summary = createGateSummary({ repoPath: repo, stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id });
+  const gateContext = deriveHumanGateContext({ repo, runtime, step, existingGate: existing });
+  const summary = createGateSummary({
+    repoPath: repo,
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    stepId: step.id,
+    gate: gateContext
+  });
   openHumanGate({
     stateDir: runtime.stateDir,
     runId: runtime.run.id,
     stepId: step.id,
     prompt: step.human_gate?.prompt ?? `${step.id} human gate`,
-    summary: summary.artifactPath
+    summary: summary.artifactPath,
+    baseline: gateContext.baseline,
+    rerunRequirement: gateContext.rerun_requirement
   });
   appendProgressEvent({
     repoPath: repo,
@@ -2379,18 +2389,23 @@ function ensureGateSummary({ repo, runtime, step }) {
 }
 
 function refreshGateSummary({ repo, runtime, step }) {
+  const existing = latestHumanGate({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id });
+  const gateContext = deriveHumanGateContext({ repo, runtime, step, existingGate: existing });
   const summary = createGateSummary({
     repoPath: repo,
     stateDir: runtime.stateDir,
     runId: runtime.run.id,
-    stepId: step.id
+    stepId: step.id,
+    gate: gateContext
   });
   openHumanGate({
     stateDir: runtime.stateDir,
     runId: runtime.run.id,
     stepId: step.id,
     prompt: step.human_gate?.prompt ?? `${step.id} human gate`,
-    summary: summary.artifactPath
+    summary: summary.artifactPath,
+    baseline: gateContext.baseline,
+    rerunRequirement: gateContext.rerun_requirement
   });
   appendProgressEvent({
     repoPath: repo,
@@ -2879,7 +2894,127 @@ function readMessageOption(options, commandName) {
   throw new Error(`${commandName} requires --message TEXT or --file FILE`);
 }
 
-function latestStepCommit(repo, stepId) {
+function deriveHumanGateContext({ repo, runtime, step, existingGate = null }) {
+  const baseline = humanGateBaseline({ repo, runtime, step, existingGate });
+  const diff = gateBaselineDiff({ repo, baseline });
+  const rerunRequirement = inferHumanGateRerunRequirement({
+    stepId: step.id,
+    changedFiles: diff.changedFiles,
+    noteDiff: diff.noteDiff,
+    ticketDiff: diff.ticketDiff
+  });
+  return {
+    ...(existingGate ?? {}),
+    baseline,
+    rerun_requirement: rerunRequirement
+  };
+}
+
+function humanGateBaseline({ repo, runtime, step, existingGate = null }) {
+  if (existingGate?.baseline?.commit) {
+    return existingGate.baseline;
+  }
+  const previousStepId = previousStepInVariant(runtime.flow, runtime.run.flow_variant, step.id);
+  const previousStepCommit = previousStepId ? latestStepCommit(repo, previousStepId, { short: false }) : null;
+  const headCommit = currentHead(repo);
+  return {
+    commit: previousStepCommit ?? headCommit ?? null,
+    step_id: previousStepId ?? null,
+    ref: previousStepCommit ? "step_commit" : (headCommit ? "head" : "working_tree"),
+    captured_at: new Date().toISOString()
+  };
+}
+
+function gateBaselineDiff({ repo, baseline }) {
+  if (!baseline?.commit) {
+    return { changedFiles: [], noteDiff: "", ticketDiff: "" };
+  }
+  return {
+    changedFiles: splitLines(runGit(repo, ["diff", "--name-only", baseline.commit, "--"]).stdout),
+    noteDiff: runGit(repo, ["diff", "--no-ext-diff", baseline.commit, "--", "current-note.md"]).stdout,
+    ticketDiff: runGit(repo, ["diff", "--no-ext-diff", baseline.commit, "--", "current-ticket.md"]).stdout
+  };
+}
+
+function inferHumanGateRerunRequirement({ stepId, changedFiles, noteDiff, ticketDiff }) {
+  const files = Array.isArray(changedFiles) ? changedFiles : [];
+  if (files.length === 0) {
+    return null;
+  }
+  const noteSteps = changedPdSteps(noteDiff);
+  const sourceChanged = files.some((path) => !["current-note.md", "current-ticket.md"].includes(path));
+  if (stepId === "PD-C-5") {
+    if (noteSteps.has("PD-C-2")) {
+      return rerunRequirement("PD-C-2", "gate edits changed investigation evidence", files);
+    }
+    if (ticketDiff.trim() || noteSteps.has("PD-C-3")) {
+      return rerunRequirement("PD-C-3", "gate edits changed ticket intent or implementation plan", files);
+    }
+    if (sourceChanged || noteSteps.has("PD-C-4")) {
+      return rerunRequirement("PD-C-4", "gate edits changed reviewable material before implementation starts", files);
+    }
+    return null;
+  }
+  if (stepId === "PD-C-10") {
+    if (sourceChanged) {
+      return rerunRequirement("PD-C-7", "gate edits changed implementation or tests after review", files);
+    }
+    if (ticketDiff.trim() || noteSteps.has("PD-C-7") || noteSteps.has("PD-C-8")) {
+      return rerunRequirement("PD-C-7", "gate edits changed review or product-validity evidence", files);
+    }
+    if (noteSteps.has("PD-C-9") || noteSteps.has("PD-C-10")) {
+      return rerunRequirement("PD-C-9", "gate edits changed final verification evidence", files);
+    }
+  }
+  return null;
+}
+
+function rerunRequirement(targetStepId, reason, changedFiles) {
+  return {
+    target_step_id: targetStepId,
+    reason,
+    changed_files: changedFiles
+  };
+}
+
+function changedPdSteps(diffText) {
+  const set = new Set();
+  const text = String(diffText ?? "");
+  for (const match of text.matchAll(/PD-C-(\d+)/g)) {
+    set.add(`PD-C-${match[1]}`);
+  }
+  return set;
+}
+
+function previousStepInVariant(flow, variant, stepId) {
+  const sequence = flow.variants?.[variant]?.sequence ?? [];
+  const index = sequence.indexOf(stepId);
+  return index > 0 ? sequence[index - 1] : null;
+}
+
+function assertRecommendationCompatibleWithGateEdits({ runtime, stepId, gate, recommendation }) {
+  const requiredTargetStepId = gate?.rerun_requirement?.target_step_id;
+  if (!requiredTargetStepId) {
+    return;
+  }
+  if (recommendation.action !== "rerun_from") {
+    if (recommendation.action === "reject") {
+      return;
+    }
+    throw new Error(`${stepId} gate edits require rerun from ${requiredTargetStepId}: ${gate.rerun_requirement.reason}`);
+  }
+  const sequence = runtime.flow.variants?.[runtime.run.flow_variant]?.sequence ?? [];
+  const requiredIndex = sequence.indexOf(requiredTargetStepId);
+  const targetIndex = sequence.indexOf(recommendation.target_step_id);
+  if (targetIndex < 0 || requiredIndex < 0) {
+    return;
+  }
+  if (targetIndex > requiredIndex) {
+    throw new Error(`${stepId} gate edits require rerun from ${requiredTargetStepId} or earlier, but the recommendation targets ${recommendation.target_step_id}. ${gate.rerun_requirement.reason}`);
+  }
+}
+
+function latestStepCommit(repo, stepId, { short = true } = {}) {
   const result = runGit(repo, ["log", "--format=%H%x00%s", "-50"]);
   if (!result) {
     return null;
@@ -2889,10 +3024,14 @@ function latestStepCommit(repo, stepId) {
   for (const line of lines) {
     const [hash, subject] = line.split("\0");
     if (pattern.test(subject)) {
-      return hash.slice(0, 7);
+      return short ? hash.slice(0, 7) : hash;
     }
   }
   return null;
+}
+
+function currentHead(repo) {
+  return runGit(repo, ["rev-parse", "HEAD"])?.stdout.trim() || null;
 }
 
 function runGit(repo, args) {
@@ -2901,6 +3040,13 @@ function runGit(repo, args) {
     return null;
   }
   return result;
+}
+
+function splitLines(value) {
+  return String(value ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function assertStepInVariant(flow, variant, stepId) {

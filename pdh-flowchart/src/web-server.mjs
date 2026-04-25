@@ -853,12 +853,21 @@ function resolveDiffBaseline({ repo, stepId }) {
   const anchorGateId = gateIds.includes(stepId)
     ? stepId
     : gateIds.filter((id) => view.sequence.indexOf(id) < stepIndex).at(-1) ?? null;
+  const anchorGate = anchorGateId
+    ? latestHumanGate({ stateDir: runtime.stateDir, runId: run.id, stepId: anchorGateId })
+    : null;
 
   let baseRef = null;
   let baseLabel = null;
   let baseCommit = null;
 
-  if (!anchorGateId) {
+  if (anchorGate?.baseline?.commit) {
+    baseRef = anchorGate.baseline.commit;
+    baseCommit = anchorGate.baseline.commit;
+    baseLabel = anchorGate.baseline.step_id
+      ? `${anchorGateId} gate baseline (${anchorGate.baseline.step_id})`
+      : "ticket start";
+  } else if (!anchorGateId) {
     const firstCommit = history
       .filter((entry) => {
         const index = view.sequence.indexOf(entry.stepId);
