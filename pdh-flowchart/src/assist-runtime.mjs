@@ -1,10 +1,15 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
-import { join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { stringify } from "yaml";
 import { latestOpenInterruption } from "./interruptions.mjs";
 import { latestHumanGate } from "./runtime-state.mjs";
 import { loadStepUiRuntime } from "./step-ui.mjs";
+
+const RUNTIME_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const CLI_PATH = join(RUNTIME_ROOT, "src", "cli.mjs");
+const NODE_PATH = process.execPath;
 
 export function assistDir({ stateDir, runId, stepId }) {
   return join(stateDir, "runs", runId, "steps", stepId, "assist");
@@ -234,11 +239,13 @@ function ensureAssistWrappers(repoPath) {
 
 function renderSignalScript(repoPath) {
   const repo = shellQuote(repoPath);
+  const cli = shellQuote(CLI_PATH);
+  const node = shellQuote(NODE_PATH);
   return `#!/usr/bin/env bash
 set -euo pipefail
 ROOT=${repo}
 cd "$ROOT"
-exec node "$ROOT/src/cli.mjs" assist-signal --repo "$ROOT" "$@"
+exec ${node} ${cli} assist-signal --repo "$ROOT" "$@"
 `;
 }
 
