@@ -1971,7 +1971,7 @@ function renderHtml() {
     border-radius: 12px;
     box-shadow: 0 22px 60px rgba(0, 0, 0, 0.18);
     display: grid;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto auto 1fr auto;
     overflow: hidden;
   }
   .assist-dialog-head {
@@ -2036,6 +2036,10 @@ function renderHtml() {
     height: 100%;
     padding: 8px;
   }
+  .assist-terminal-shell:active {
+    outline: 2px solid rgba(24, 95, 165, 0.45);
+    outline-offset: -2px;
+  }
   .assist-terminal-empty {
     position: absolute;
     inset: 0;
@@ -2045,6 +2049,61 @@ function renderHtml() {
     color: #d7d7d7;
     font-size: 12px;
     background: #111111;
+  }
+  .assist-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    flex-wrap: wrap;
+  }
+  .assist-controls-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .assist-controls-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .assist-key-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 44px);
+    grid-template-rows: repeat(2, 38px);
+    gap: 6px;
+  }
+  .assist-key-grid .assist-key[data-key='up'] { grid-column: 2; grid-row: 1; }
+  .assist-key-grid .assist-key[data-key='left'] { grid-column: 1; grid-row: 2; }
+  .assist-key-grid .assist-key[data-key='down'] { grid-column: 2; grid-row: 2; }
+  .assist-key-grid .assist-key[data-key='right'] { grid-column: 3; grid-row: 2; }
+  .assist-key {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 8px;
+    min-width: 44px;
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .assist-key:hover,
+  .assist-key:active {
+    border-color: var(--border-strong);
+    background: var(--bg);
+  }
+  .assist-key.wide {
+    min-width: 72px;
   }
   .next-action-launch {
     width: 100%;
@@ -2155,6 +2214,19 @@ function renderHtml() {
       <div class="assist-terminal-shell">
         <div class="assist-terminal-empty" id="assist-terminal-empty">Starting assist session…</div>
         <div class="assist-terminal" id="assist-terminal"></div>
+      </div>
+      <div class="assist-controls">
+        <div class="assist-controls-note">Tap the terminal to focus keyboard on mobile. Use these keys when the soft keyboard is unavailable.</div>
+        <div class="assist-controls-group">
+          <button class="assist-key wide" type="button" data-assist-input="escape">Esc</button>
+          <button class="assist-key wide" type="button" data-assist-input="enter">Enter</button>
+          <div class="assist-key-grid">
+            <button class="assist-key" type="button" data-assist-input="up" data-key="up">↑</button>
+            <button class="assist-key" type="button" data-assist-input="left" data-key="left">←</button>
+            <button class="assist-key" type="button" data-assist-input="down" data-key="down">↓</button>
+            <button class="assist-key" type="button" data-assist-input="right" data-key="right">→</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -3503,6 +3575,9 @@ function renderHtml() {
 
   function assistStatusLabel() {
     if (!state.assist.sessionId) {
+      if (state.assist.status === 'starting') {
+        return state.assist.stepId ? state.assist.stepId + ' starting' : 'starting';
+      }
       return 'idle';
     }
     if (state.assist.status === 'running') {
@@ -3565,12 +3640,54 @@ function renderHtml() {
     fitAddon.fit();
     state.assist.terminal = terminal;
     state.assist.fitAddon = fitAddon;
+    const shell = document.querySelector('.assist-terminal-shell');
+    const refocus = () => {
+      focusAssistTerminal();
+    };
+    shell.addEventListener('click', refocus);
+    shell.addEventListener('touchend', refocus, { passive: true });
+    shell.addEventListener('pointerup', refocus);
     terminal.onData((data) => {
       if (state.assist.socket && state.assist.socket.readyState === window.WebSocket.OPEN) {
         state.assist.socket.send(JSON.stringify({ type: 'input', data }));
       }
     });
     return terminal;
+  }
+
+  function focusAssistTerminal() {
+    if (!state.assist.terminal) {
+      return;
+    }
+    try {
+      state.assist.terminal.focus();
+      const textarea = state.assist.terminal.textarea;
+      if (textarea && typeof textarea.focus === 'function') {
+        textarea.focus({ preventScroll: true });
+      }
+    } catch {
+      // Ignore focus failures; user can tap again.
+    }
+  }
+
+  function sendAssistInput(sequence) {
+    if (!sequence) {
+      return;
+    }
+    focusAssistTerminal();
+    if (state.assist.socket && state.assist.socket.readyState === window.WebSocket.OPEN) {
+      state.assist.socket.send(JSON.stringify({ type: 'input', data: sequence }));
+    }
+  }
+
+  function assistSequence(kind) {
+    if (kind === 'escape') return '\u001b';
+    if (kind === 'enter') return '\r';
+    if (kind === 'up') return '\u001b[A';
+    if (kind === 'down') return '\u001b[B';
+    if (kind === 'right') return '\u001b[C';
+    if (kind === 'left') return '\u001b[D';
+    return '';
   }
 
   function resizeAssistTerminal() {
@@ -3593,6 +3710,7 @@ function renderHtml() {
     state.assist.socket = socket;
     socket.addEventListener('open', () => {
       resizeAssistTerminal();
+      focusAssistTerminal();
     });
     socket.addEventListener('message', (event) => {
       let payload = null;
@@ -3643,19 +3761,27 @@ function renderHtml() {
   }
 
   async function openAssistTerminal(stepId) {
+    state.assist.open = true;
+    state.assist.stepId = stepId;
+    state.assist.sessionId = null;
+    state.assist.status = 'starting';
+    renderAssistModal();
+    const terminal = ensureAssistTerminal();
+    terminal.reset();
+    terminal.writeln('[opening assist session]');
+    focusAssistTerminal();
     const response = await fetch('/api/assist/open?step=' + encodeURIComponent(stepId), {
       method: 'POST',
       cache: 'no-store'
     });
     const payload = await response.json();
     if (!response.ok) {
+      terminal.writeln('[assist open failed] ' + (payload.message || payload.error || 'unknown error'));
       throw new Error(payload.message || payload.error || 'assist_open_failed');
     }
-    const terminal = ensureAssistTerminal();
     if (!payload.reused) {
       terminal.reset();
     }
-    state.assist.open = true;
     state.assist.stepId = payload.stepId || stepId;
     state.assist.sessionId = payload.sessionId;
     state.assist.status = payload.status || 'running';
@@ -4111,6 +4237,12 @@ function renderHtml() {
   });
   document.getElementById('assist-modal-close').addEventListener('click', () => {
     closeAssistModal();
+  });
+  document.querySelectorAll('[data-assist-input]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const kind = button.dataset.assistInput;
+      sendAssistInput(assistSequence(kind));
+    });
   });
   document.getElementById('detail-modal').addEventListener('click', (event) => {
     if (event.target.id !== 'detail-modal') return;
