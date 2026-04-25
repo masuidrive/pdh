@@ -298,38 +298,113 @@ export function openHumanGate({ stateDir, runId, stepId, prompt, summary }) {
   if (existing?.status === "needs_human" && existing.summary === summary) {
     return existing;
   }
-  const gate = {
+  return updateHumanGate({
+    stateDir,
     runId,
     stepId,
-    status: "needs_human",
-    prompt,
-    summary,
-    decision: null,
-    reason: null,
-    created_at: new Date().toISOString(),
-    resolved_at: null
-  };
-  writeJson(humanGatePath(stateDir, runId, stepId), gate);
-  return gate;
+    mutator(existingGate = null) {
+      return {
+        runId,
+        stepId,
+        status: "needs_human",
+        prompt,
+        summary,
+        decision: existingGate?.decision ?? null,
+        reason: existingGate?.reason ?? null,
+        recommendation: existingGate?.recommendation ?? null,
+        created_at: existingGate?.created_at ?? new Date().toISOString(),
+        resolved_at: null
+      };
+    }
+  });
 }
 
 export function resolveHumanGate({ stateDir, runId, stepId, decision, reason = null }) {
-  const existing = latestHumanGate({ stateDir, runId, stepId }) ?? {
+  return updateHumanGate({
+    stateDir,
     runId,
     stepId,
-    prompt: `${stepId} human gate`,
-    summary: null,
-    created_at: new Date().toISOString()
-  };
-  const gate = {
-    ...existing,
-    status: "resolved",
-    decision,
-    reason,
-    resolved_at: new Date().toISOString()
-  };
-  writeJson(humanGatePath(stateDir, runId, stepId), gate);
-  return gate;
+    mutator(existing = null) {
+      return {
+        ...(existing ?? {
+          runId,
+          stepId,
+          prompt: `${stepId} human gate`,
+          summary: null,
+          created_at: new Date().toISOString()
+        }),
+        status: "resolved",
+        decision,
+        reason,
+        resolved_at: new Date().toISOString(),
+        recommendation: existing?.recommendation
+          ? {
+              ...existing.recommendation,
+              status: "accepted",
+              responded_at: new Date().toISOString()
+            }
+          : null
+      };
+    }
+  });
+}
+
+export function updateHumanGateRecommendation({
+  stateDir,
+  runId,
+  stepId,
+  action,
+  reason = null,
+  target_step_id = null,
+  source = "assist"
+}) {
+  return updateHumanGate({
+    stateDir,
+    runId,
+    stepId,
+    mutator(existing = null) {
+      return {
+        ...(existing ?? {
+          runId,
+          stepId,
+          status: "needs_human",
+          prompt: `${stepId} human gate`,
+          summary: null,
+          decision: null,
+          reason: null,
+          created_at: new Date().toISOString(),
+          resolved_at: null
+        }),
+        status: "needs_human",
+        recommendation: {
+          id: `gate-rec-${Date.now()}-${randomBytes(3).toString("hex")}`,
+          action,
+          reason,
+          target_step_id,
+          source,
+          status: "pending",
+          updated_at: new Date().toISOString()
+        }
+      };
+    }
+  });
+}
+
+export function clearHumanGateRecommendation({ stateDir, runId, stepId }) {
+  return updateHumanGate({
+    stateDir,
+    runId,
+    stepId,
+    mutator(existing = null) {
+      if (!existing) {
+        return null;
+      }
+      return {
+        ...existing,
+        recommendation: null
+      };
+    }
+  });
 }
 
 export function resetStepArtifacts({ stateDir, runId, stepId }) {
@@ -388,6 +463,15 @@ export function attemptDir(stateDir, runId, stepId, attempt) {
 
 function humanGatePath(stateDir, runId, stepId) {
   return join(stepDir(stateDir, runId, stepId), "human-gate.json");
+}
+
+function updateHumanGate({ stateDir, runId, stepId, mutator }) {
+  const next = mutator(latestHumanGate({ stateDir, runId, stepId }));
+  if (!next) {
+    return null;
+  }
+  writeJson(humanGatePath(stateDir, runId, stepId), next);
+  return next;
 }
 
 function writeJson(path, value) {

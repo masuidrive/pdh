@@ -202,7 +202,7 @@ steps:
   - id: PD-C-5
     label: 実装承認
     summary: 実装に入ってよいかを人間が明示承認する gate。
-    userAction: gate summary と必要な差分を確認して approve / request-changes / reject を選ぶ。
+    userAction: まず agent recommendation を作らせ、差分を確認して Yes / No を選ぶ。必要なら direct override で approve / request-changes / reject を使う。
     ui:
       viewer: 承認者
       decision: この計画で実装に入ってよいかを判断する。
@@ -212,7 +212,7 @@ steps:
         - 変更対象
         - 主要リスク
         - テスト計画
-        - approve / request-changes の CLI
+        - Yes / No の CLI
       omit:
         - 生ログ全件
         - step history
@@ -470,7 +470,7 @@ steps:
   - id: PD-C-10
     label: 完了承認
     summary: 完了してよいかを人間が明示承認し、ticket close へ進める gate。
-    userAction: AC 裏取り、差分、残リスクを確認して approve / request-changes / reject を選ぶ。
+    userAction: まず agent recommendation を作らせ、AC 裏取り、差分、残リスクを確認して Yes / No を選ぶ。必要なら direct override を使う。
     ui:
       viewer: 承認者
       decision: この ticket を close してよいかを判断する。
@@ -479,7 +479,7 @@ steps:
         - AC 裏取りの最終状態
         - 残リスク
         - close 前 cleanup の結果
-        - approve / reject の CLI
+        - Yes / No の CLI
       omit:
         - step history
         - provider raw log

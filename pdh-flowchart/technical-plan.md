@@ -168,9 +168,10 @@ Design intent:
 
 - `run-next` is the default control surface
 - `run-provider` and `resume` are debug / recovery commands
-- `approve` / `reject` / `request-changes` resolve explicit human gates
+- `approve` / `reject` / `request-changes` remain direct override commands for human gates
 - `assist-open` starts a fresh stop-state Claude session in the same repo checkout
 - `assist-signal` is the only supported way for that assist session to hand control back to the runtime
+- `accept-recommendation` / `decline-recommendation` are the normal human-gate confirmation commands after assist proposes a next move
 
 ## 5. Provider Execution
 
@@ -233,8 +234,9 @@ The runtime evaluates guards directly against:
 2. runtime writes `human-gate-summary.md`
 3. runtime writes `human-gate.json`
 4. note frontmatter status becomes `needs_human`
-5. user decides in CLI directly, or opens `assist-open` and later hands back control with `assist-signal`
-6. next `run-next` advances based on the decision
+5. user usually opens `assist-open`, and assist returns a recommendation with `assist-signal`
+6. user confirms it with `accept-recommendation` or rejects it with `decline-recommendation`
+7. direct `approve` / `reject` / `request-changes` still exist as manual override commands
 
 ### Interruption
 

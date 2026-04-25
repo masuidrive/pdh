@@ -57,7 +57,7 @@ That made it easy for the runtime to say one thing while the canonical note/tick
    Ticket intent and step history stay in markdown. Provider raw logs, prompts, and gate artifacts stay under `.pdh-flowchart/`.
 
 3. **Human state changes are first-class**
-   Approval, rejection, request-changes, and interruption answers are explicit runtime events.
+   Human gates, assist recommendations, confirmations, rejections, and interruption answers are explicit runtime events.
 
 4. **The user should not need to remember PD-C numbers**
    The UI and CLI should always show the label, purpose, and next action.
@@ -106,6 +106,13 @@ If the user wants to discuss code or run tests before deciding, they can open:
 
 ```sh
 node src/cli.mjs assist-open --repo .
+```
+
+The assist should then return one recommendation, and the user answers Yes or No:
+
+```sh
+./.pdh-flowchart/bin/assist-signal --step PD-C-5 --signal recommend-approve --reason "ready to implement"
+node src/cli.mjs accept-recommendation --repo . --step PD-C-5
 ```
 
 ### Completion

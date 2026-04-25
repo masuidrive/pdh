@@ -104,8 +104,8 @@ Review the summary, then decide in the terminal:
 ```sh
 node src/cli.mjs show-gate --repo .
 node src/cli.mjs assist-open --repo .
-node src/cli.mjs approve --repo . --step PD-C-5 --reason ok
-node src/cli.mjs run-next --repo .
+./.pdh-flowchart/bin/assist-signal --step PD-C-5 --signal recommend-approve --reason "ready to implement"
+node src/cli.mjs accept-recommendation --repo . --step PD-C-5
 ```
 
 If you want a fresh Claude session to discuss code or run tests before deciding, use `assist-open`. It prepares repo-local wrappers:
@@ -113,7 +113,7 @@ If you want a fresh Claude session to discuss code or run tests before deciding,
 - `./.pdh-flowchart/bin/assist-signal`
 - `./.pdh-flowchart/bin/assist-test`
 
-The assist session stays in the same repo checkout, but the runtime still owns progression. The assist should hand control back by running one `assist-signal` command instead of calling `run-next`, `approve`, or `answer` directly.
+The assist session stays in the same repo checkout, but the runtime still owns progression. At human gates the assist should hand control back with a single recommendation signal, and the user then confirms it with `accept-recommendation` or sends it back with `decline-recommendation`.
 
 ### 4. Exactly one completed step
 
@@ -163,6 +163,22 @@ The assist session is hardened for this use case:
 - loads user settings only
 - tells Claude not to follow repo-local PDH automation docs for progression
 - tells Claude to hand control back with `./.pdh-flowchart/bin/assist-signal`
+
+At human gates, the expected pattern is:
+
+1. assist edits, verifies, and decides the next move
+2. assist emits one recommendation signal such as:
+
+```sh
+./.pdh-flowchart/bin/assist-signal --step PD-C-5 --signal recommend-rerun-from --target-step PD-C-4 --reason "plan changed after app review"
+```
+
+3. the user answers Yes or No by running:
+
+```sh
+node src/cli.mjs accept-recommendation --repo . --step PD-C-5
+node src/cli.mjs decline-recommendation --repo . --step PD-C-5 --reason "keep working"
+```
 
 ## Prompt Model
 

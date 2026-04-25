@@ -36,7 +36,7 @@ export function latestAssistSignalPath({ stateDir, runId, stepId }) {
 
 export function allowedAssistSignals({ runStatus, step }) {
   if (runStatus === "needs_human" && isHumanGateStep(step)) {
-    return ["approve", "request-changes", "reject"];
+    return ["recommend-approve", "recommend-request-changes", "recommend-reject", "recommend-rerun-from"];
   }
   if (runStatus === "interrupted") {
     return ["answer"];
@@ -272,6 +272,7 @@ function buildAssistSystemPrompt() {
     "- Do not run git commit, git push, git rebase, or other history-rewriting commands.",
     "- You may read files, discuss tradeoffs, edit code when asked, and run verification commands.",
     "- Prefer using ./.pdh-flowchart/bin/assist-test -- <command> for verification so the intent stays explicit.",
+    "- For human gates, do not resolve the gate directly. Recommend exactly one next action with ./.pdh-flowchart/bin/assist-signal and then stop.",
     "- When the user wants the runtime to proceed, execute exactly one allowed ./.pdh-flowchart/bin/assist-signal command and then stop issuing runtime-control commands.",
     "",
     "If the user asks what to do next, explain the available signal commands instead of running the runtime directly."
@@ -331,7 +332,8 @@ function buildAssistPrompt({ runtime, step, gate, interruption, blockedGuards, r
     "- Discuss the code directly with the user in this terminal.",
     "- Inspect files and diffs as needed.",
     "- Run verification when it materially helps.",
-    "- If the user only wants discussion, do not send a signal yet."
+    "- If the user only wants discussion, do not send a signal yet.",
+    "- At human gates, choose one concrete recommendation yourself. The user should only need to say Yes or No to apply it."
   );
 
   return `${lines.join("\n")}\n`;
@@ -341,12 +343,14 @@ function buildSignalExamples(stepId, allowedSignals) {
   const path = "./.pdh-flowchart/bin/assist-signal";
   const examples = [];
   for (const signal of allowedSignals) {
-    if (signal === "approve") {
-      examples.push(`${path} --step ${stepId} --signal approve --reason "approved after discussion"`);
-    } else if (signal === "request-changes") {
-      examples.push(`${path} --step ${stepId} --signal request-changes --reason "revise the plan before implementation"`);
-    } else if (signal === "reject") {
-      examples.push(`${path} --step ${stepId} --signal reject --reason "do not proceed with this plan"`);
+    if (signal === "recommend-approve") {
+      examples.push(`${path} --step ${stepId} --signal recommend-approve --reason "the gate can be accepted after these edits"`);
+    } else if (signal === "recommend-request-changes") {
+      examples.push(`${path} --step ${stepId} --signal recommend-request-changes --reason "the user should keep this gate open and ask for changes"`);
+    } else if (signal === "recommend-reject") {
+      examples.push(`${path} --step ${stepId} --signal recommend-reject --reason "this plan should not proceed"`);
+    } else if (signal === "recommend-rerun-from") {
+      examples.push(`${path} --step ${stepId} --signal recommend-rerun-from --target-step ${defaultRerunTarget(stepId)} --reason "the changes invalidate later review and should rerun from here"`);
     } else if (signal === "answer") {
       examples.push(`${path} --step ${stepId} --signal answer --message "..."`);
     } else if (signal === "continue") {
@@ -389,6 +393,16 @@ function repoRelativePath(repoPath, fullPath) {
 
 function createAssistSessionId() {
   return `assist-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${randomBytes(3).toString("hex")}`;
+}
+
+function defaultRerunTarget(stepId) {
+  if (stepId === "PD-C-5") {
+    return "PD-C-4";
+  }
+  if (stepId === "PD-C-10") {
+    return "PD-C-7";
+  }
+  return "PD-C-3";
 }
 
 function shellQuote(value) {

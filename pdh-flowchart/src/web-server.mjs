@@ -399,6 +399,9 @@ function stepProgress({ runtime, sequence, index, step, historyEntry, gate, atte
   const currentIndex = sequence.indexOf(run.current_step_id);
   if (step.id === run.current_step_id) {
     if (run.status === "needs_human") {
+      if (gate?.recommendation?.status === "pending") {
+        return progress("waiting", "ユーザ回答待ち", "agent recommendation を確認して Yes / No を選びます。");
+      }
       return progress("waiting", "ユーザ回答待ち", gate?.summary ? "gate summary を確認して CLI で判断します。" : "gate summary を生成中です。");
     }
     if (run.status === "interrupted") {
@@ -489,10 +492,21 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
     };
   }
   if (runtime.run.status === "needs_human") {
+    if (currentGate?.recommendation?.status === "pending") {
+      const actions = recommendationDecisionActions(repo, currentStep.id, currentGate.recommendation);
+      return {
+        title: `${currentStep.id} の Yes / No`,
+        body: recommendationBody(currentGate.recommendation),
+        commands: actions.map((item) => item.command),
+        actions,
+        selection: "confirm_or_return_optional_assist",
+        targetTab: "gate"
+      };
+    }
     const actions = humanDecisionActions(repo, currentStep.id);
     return {
       title: `${currentStep.id} の判断`,
-      body: "Web UI は read-only です。diff / note / ticket を確認して terminal で判断します。必要なら Claude assist を開いてから決めます。",
+      body: "まずは Claude assist に recommendation を作らせる運用を想定しています。必要なら direct override として terminal から approve / request-changes / reject も使えます。",
       commands: actions.map((item) => item.command),
       actions,
       selection: "choose_one_optional_assist",
@@ -912,6 +926,14 @@ function humanDecisionCommands(repo, stepId) {
   ];
 }
 
+function recommendationDecisionCommands(repo, stepId) {
+  const repoArg = ` --repo ${shellQuote(repo)}`;
+  return [
+    `node src/cli.mjs accept-recommendation${repoArg} --step ${stepId}`,
+    `node src/cli.mjs decline-recommendation${repoArg} --step ${stepId} --reason "<reason>"`
+  ];
+}
+
 function assistOpenCommand(repo, stepId) {
   return `node src/cli.mjs assist-open --repo ${shellQuote(repo)} --step ${stepId}`;
 }
@@ -932,31 +954,102 @@ function humanDecisionActions(repo, stepId) {
   const [approve, requestChanges, reject] = humanDecisionCommands(repo, stepId);
   return [
     nextActionChoice({
+      label: "Open Assist",
+      description: "まずは Claude assist に recommendation を作らせます。大きく直す場合もここからです。",
+      command: assistOpenCommand(repo, stepId),
+      tone: "neutral",
+      kind: "assist"
+    }),
+    nextActionChoice({
       label: "Approve",
-      description: "計画・レビュー結果・差分に問題がなければこれを選びます。PD-C-6 に進みます。",
+      description: "agent recommendation を使わずに、この gate を手動で確定する override です。",
       command: approve,
       tone: "approve"
     }),
     nextActionChoice({
       label: "Request Changes",
-      description: "方向性はよいが、実装前に計画の修正が必要なときに選びます。PD-C-3 に戻します。",
+      description: "agent recommendation を使わずに、この gate を手動で差し戻す override です。",
       command: requestChanges,
       tone: "revise"
     }),
     nextActionChoice({
       label: "Reject",
-      description: "この計画では進めるべきではないときに選びます。スコープや進め方が間違っている場合です。",
+      description: "agent recommendation を使わずに、この gate を手動で reject する override です。",
       command: reject,
+      tone: "reject"
+    })
+  ];
+}
+
+function recommendationDecisionActions(repo, stepId, recommendation) {
+  const [accept, decline] = recommendationDecisionCommands(repo, stepId);
+  return [
+    nextActionChoice({
+      label: "Yes",
+      description: recommendationAcceptText(recommendation),
+      command: accept,
+      tone: recommendationTone(recommendation)
+    }),
+    nextActionChoice({
+      label: "No",
+      description: "この recommendation は採用しません。recommendation を消して assist に戻します。",
+      command: decline,
       tone: "reject"
     }),
     nextActionChoice({
       label: "Open Assist",
-      description: "判断前に Claude assist を開いて、コードや差分を見ながら詰めます。runtime の進行自体は signal で返します。",
+      description: "recommendation を見直す場合や、さらに大きく直す場合はここから続けます。",
       command: assistOpenCommand(repo, stepId),
       tone: "neutral",
       kind: "assist"
     })
   ];
+}
+
+function recommendationBody(recommendation) {
+  return `Claude assist recommends: ${recommendationLabel(recommendation)}. Yes で適用し、No で recommendation を取り消して assist に戻します。`;
+}
+
+function recommendationLabel(recommendation) {
+  if (!recommendation) {
+    return "no recommendation";
+  }
+  if (recommendation.action === "rerun_from" && recommendation.target_step_id) {
+    return `rerun from ${recommendation.target_step_id}${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
+  }
+  return `${recommendation.action.replaceAll("_", " ")}${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
+}
+
+function recommendationAcceptText(recommendation) {
+  if (!recommendation) {
+    return "この recommendation を適用します。";
+  }
+  if (recommendation.action === "approve") {
+    return "この gate を通して、そのまま次へ進めます。";
+  }
+  if (recommendation.action === "request_changes") {
+    return "この gate を差し戻しとして扱い、flow 定義どおりに前段へ戻します。";
+  }
+  if (recommendation.action === "reject") {
+    return "この gate を reject として扱い、flow 定義どおりに前段へ戻します。";
+  }
+  if (recommendation.action === "rerun_from") {
+    return `この recommendation を適用し、${recommendation.target_step_id || "earlier step"} から再実行します。`;
+  }
+  return "この recommendation を適用します。";
+}
+
+function recommendationTone(recommendation) {
+  if (!recommendation) {
+    return "approve";
+  }
+  if (recommendation.action === "approve") {
+    return "approve";
+  }
+  if (recommendation.action === "rerun_from" || recommendation.action === "request_changes") {
+    return "revise";
+  }
+  return "reject";
 }
 
 function interruptAnswerActions(repo, stepId) {
@@ -2430,6 +2523,9 @@ function renderHtml() {
   }
 
   function nextActionNote(nextAction) {
+    if (nextAction?.selection === 'confirm_or_return_optional_assist') {
+      return 'Agent recommendation を受けて Yes / No を選びます。No の場合は assist に戻して recommendation を作り直させます。';
+    }
     if (nextAction?.selection === 'choose_one') {
       return 'Choose one. 3つとも実行するのではなく、1つだけ選びます。';
     }
@@ -2446,6 +2542,16 @@ function renderHtml() {
       return 'すぐに再評価するなら Run Next、先に原因を詰めるなら Open Assist を使います。';
     }
     return '通常はこのコマンドを実行します。';
+  }
+
+  function recommendationLabel(recommendation) {
+    if (!recommendation) {
+      return 'no recommendation';
+    }
+    if (recommendation.action === 'rerun_from' && recommendation.target_step_id) {
+      return 'rerun from ' + recommendation.target_step_id + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
+    }
+    return String(recommendation.action || '').replaceAll('_', ' ') + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
   }
 
   function documentData(docId) {
@@ -4089,6 +4195,8 @@ function renderHtml() {
                   ? 'choose one'
                   : nextAction?.selection === 'ordered' || nextAction?.selection === 'ordered_optional_assist'
                     ? 'run in order'
+                    : nextAction?.selection === 'confirm_or_return_optional_assist'
+                      ? 'yes or no'
                     : nextAction?.selection === 'single_optional_assist'
                       ? 'pick one'
                       : 'run this'
@@ -4112,6 +4220,9 @@ function renderHtml() {
       let section = '<div class="detail-section"><div class="detail-section-title">Current State</div><div class="artifacts">';
       if (step.gate?.summary) {
         section += '<div class="artifact"><span class="artifact-name">human gate summary</span><span class="artifact-size">' + esc(step.gate.decision || step.gate.status) + '</span></div>';
+      }
+      if (step.gate?.recommendation?.status === 'pending') {
+        section += '<div class="artifact"><span class="artifact-name">agent recommendation</span><span class="artifact-size">' + esc(recommendationLabel(step.gate.recommendation)) + '</span></div>';
       }
       step.interruptions.forEach((item) => {
         section += '<div class="artifact"><span class="artifact-name">' + esc(item.message || item.kind || 'interruption') + '</span><span class="artifact-size">' + esc(item.status || item.kind || 'open') + '</span></div>';

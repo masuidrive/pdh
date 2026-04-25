@@ -44,6 +44,7 @@ import {
   hasCompletedProviderAttempt,
   latestAttemptResult,
   latestHumanGate,
+  clearHumanGateRecommendation,
   latestProviderSession,
   loadRuntime,
   nextStepAttempt,
@@ -56,6 +57,7 @@ import {
   startRun,
   stepDir,
   updateRun,
+  updateHumanGateRecommendation,
   writeAttemptResult
 } from "./runtime-state.mjs";
 
@@ -118,6 +120,10 @@ try {
     await cmdAssistOpen(args);
   } else if (command === "assist-signal") {
     await cmdAssistSignal(args);
+  } else if (command === "accept-recommendation") {
+    await cmdAcceptRecommendation(args);
+  } else if (command === "decline-recommendation") {
+    await cmdDeclineRecommendation(args);
   } else if (command === "show-interrupts") {
     cmdShowInterrupts(args);
   } else if (["approve", "reject", "request-changes", "cancel"].includes(command)) {
@@ -165,7 +171,9 @@ Usage:
   pdh-flowchart interrupt [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6]
   pdh-flowchart answer [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6]
   pdh-flowchart assist-open [--repo DIR] [--step PD-C-5] [--prepare-only] [--model MODEL] [--bare]
-  pdh-flowchart assist-signal [--repo DIR] [--step PD-C-5] --signal approve|request-changes|reject|answer|continue [--reason TEXT] [--message TEXT] [--file FILE] [--no-run-next]
+  pdh-flowchart assist-signal [--repo DIR] [--step PD-C-5] --signal recommend-approve|recommend-request-changes|recommend-reject|recommend-rerun-from|answer|continue [--reason TEXT] [--target-step PD-C-4] [--message TEXT] [--file FILE] [--no-run-next]
+  pdh-flowchart accept-recommendation [--repo DIR] [--step PD-C-5] [--no-run-next]
+  pdh-flowchart decline-recommendation [--repo DIR] [--step PD-C-5] [--reason TEXT]
   pdh-flowchart show-interrupts [--repo DIR] [--step PD-C-6] [--all] [--path]
   pdh-flowchart status [--repo DIR]
   pdh-flowchart logs [--repo DIR] [--follow] [--json]
@@ -794,9 +802,10 @@ async function cmdAssistOpen(argv) {
 async function cmdAssistSignal(argv) {
   const options = parseOptions(argv);
   const repo = resolve(options.repo ?? process.cwd());
-  const signal = required(options, "signal");
+  const signal = normalizeAssistSignal(required(options, "signal"));
   const autoRunNext = options["no-run-next"] !== "true";
   let response = null;
+  let shouldRunNext = false;
 
   await withRuntimeLock({ repo, options, action: async () => {
     const runtime = requireRuntime(repo);
@@ -810,6 +819,7 @@ async function cmdAssistSignal(argv) {
 
     const reason = options.reason ?? null;
     const message = signal === "answer" ? readMessageOption(options, "assist-signal") : null;
+    const targetStepId = signal === "recommend-rerun-from" ? required(options, "target-step") : null;
     const recorded = appendAssistSignal({
       stateDir: runtime.stateDir,
       runId: runtime.run.id,
@@ -821,36 +831,37 @@ async function cmdAssistSignal(argv) {
     });
 
     if (runtime.run.status === "needs_human") {
-      const decisionBySignal = {
-        approve: "approved",
-        reject: "rejected",
-        "request-changes": "changes_requested"
-      };
-      ensureGateSummary({ repo, runtime, step });
-      const gate = resolveHumanGate({
+      if (signal === "recommend-rerun-from") {
+        assertRerunTarget({ runtime, currentStepId: stepId, targetStepId });
+      }
+      const summary = refreshGateSummary({ repo, runtime, step });
+      const gate = updateHumanGateRecommendation({
         stateDir: runtime.stateDir,
         runId: runtime.run.id,
         stepId,
-        decision: decisionBySignal[signal],
-        reason
+        action: signal.replace(/^recommend-/, "").replaceAll("-", "_"),
+        reason,
+        target_step_id: targetStepId,
+        source: "assist"
       });
-      updateRun(repo, { status: "running", current_step_id: stepId });
+      updateRun(repo, { status: "needs_human", current_step_id: stepId });
       appendProgressEvent({
         repoPath: repo,
         runId: runtime.run.id,
         stepId,
-        type: "human_gate_resolved",
+        type: "human_gate_recommended",
         provider: "runtime",
-        message: `${stepId} ${gate.decision} via assist`,
-        payload: { ...gate, assistSignal: recorded }
+        message: `${stepId} ${gate.recommendation?.action || signal} via assist`,
+        payload: { ...gate, assistSignal: recorded, summary: summary.artifactPath }
       });
-      syncStepUiRuntime({ repo, stepId, nextCommands: [runNextCommand(repo)] });
+      syncStepUiRuntime({ repo, stepId, nextCommands: recommendedStopCommands(repo, stepId) });
       response = {
         status: "ok",
         stepId,
         signal,
-        decision: gate.decision,
-        runNext: autoRunNext
+        recommendation: gate.recommendation,
+        summary: summary.artifactPath,
+        runNext: false
       };
       return;
     }
@@ -881,6 +892,7 @@ async function cmdAssistSignal(argv) {
         answered: interruption.id,
         runNext: autoRunNext
       };
+      shouldRunNext = autoRunNext;
       return;
     }
 
@@ -901,12 +913,151 @@ async function cmdAssistSignal(argv) {
       signal,
       runNext: autoRunNext
     };
+    shouldRunNext = autoRunNext;
   } });
 
   console.log(JSON.stringify(response, null, 2));
-  if (autoRunNext) {
+  if (shouldRunNext) {
     await cmdRunNext(["--repo", repo]);
   }
+}
+
+async function cmdAcceptRecommendation(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  const autoRunNext = options["no-run-next"] !== "true";
+  let response = null;
+  let shouldRunNext = false;
+
+  await withRuntimeLock({ repo, options, action: async () => {
+    const runtime = requireRuntime(repo);
+    const stepId = options.step ?? runtime.run.current_step_id;
+    assertCurrentStep(runtime.run, stepId, options);
+    const step = getStep(runtime.flow, stepId);
+    if (!isHumanGateStep(step)) {
+      throw new Error(`${stepId} is not a human gate step`);
+    }
+    const gate = latestHumanGate({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId });
+    const recommendation = gate?.recommendation;
+    if (!recommendation || recommendation.status !== "pending") {
+      throw new Error(`${stepId} does not have a pending recommendation`);
+    }
+
+    let advanced = null;
+    if (recommendation.action === "rerun_from") {
+      const targetStepId = recommendation.target_step_id;
+      if (!targetStepId) {
+        throw new Error(`${stepId} recommendation is missing target_step_id`);
+      }
+      assertRerunTarget({ runtime, currentStepId: stepId, targetStepId });
+      resolveHumanGate({
+        stateDir: runtime.stateDir,
+        runId: runtime.run.id,
+        stepId,
+        decision: "changes_requested",
+        reason: recommendation.reason ?? `accepted recommendation to rerun from ${targetStepId}`
+      });
+      advanced = rerunFromStep({
+        repo,
+        runtime,
+        step,
+        targetStepId,
+        reason: recommendation.reason
+      });
+    } else {
+      const decision = gateDecisionFromRecommendation(recommendation.action);
+      if (!decision) {
+        throw new Error(`Unsupported recommendation action: ${recommendation.action}`);
+      }
+      resolveHumanGate({
+        stateDir: runtime.stateDir,
+        runId: runtime.run.id,
+        stepId,
+        decision,
+        reason: recommendation.reason ?? null
+      });
+      advanced = advanceRun({
+        repo,
+        runtime,
+        step,
+        outcome: outcomeFromDecision(decision)
+      });
+    }
+
+    appendProgressEvent({
+      repoPath: repo,
+      runId: runtime.run.id,
+      stepId,
+      type: "human_gate_recommendation_accepted",
+      provider: "runtime",
+      message: `${stepId} accepted ${recommendation.action}`,
+      payload: {
+        recommendation,
+        result: advanced
+      }
+    });
+    response = {
+      status: "ok",
+      stepId,
+      accepted: recommendation,
+      result: advanced,
+      runNext: autoRunNext && advanced?.status !== "completed"
+    };
+    shouldRunNext = autoRunNext && advanced?.status !== "completed";
+  } });
+
+  console.log(JSON.stringify(response, null, 2));
+  if (shouldRunNext) {
+    await cmdRunNext(["--repo", repo]);
+  }
+}
+
+async function cmdDeclineRecommendation(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  let response = null;
+
+  await withRuntimeLock({ repo, options, action: async () => {
+    const runtime = requireRuntime(repo);
+    const stepId = options.step ?? runtime.run.current_step_id;
+    assertCurrentStep(runtime.run, stepId, options);
+    const step = getStep(runtime.flow, stepId);
+    if (!isHumanGateStep(step)) {
+      throw new Error(`${stepId} is not a human gate step`);
+    }
+    const gate = latestHumanGate({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId });
+    const recommendation = gate?.recommendation;
+    if (!recommendation || recommendation.status !== "pending") {
+      throw new Error(`${stepId} does not have a pending recommendation`);
+    }
+    clearHumanGateRecommendation({
+      stateDir: runtime.stateDir,
+      runId: runtime.run.id,
+      stepId
+    });
+    updateRun(repo, { status: "needs_human", current_step_id: stepId });
+    appendProgressEvent({
+      repoPath: repo,
+      runId: runtime.run.id,
+      stepId,
+      type: "human_gate_recommendation_declined",
+      provider: "runtime",
+      message: `${stepId} declined ${recommendation.action}`,
+      payload: {
+        recommendation,
+        reason: options.reason ?? null
+      }
+    });
+    syncStepUiRuntime({ repo, stepId, nextCommands: humanStopCommands(repo, stepId) });
+    response = {
+      status: "ok",
+      stepId,
+      declined: recommendation,
+      next: assistOpenCommand(repo, stepId)
+    };
+  } });
+
+  console.log(JSON.stringify(response, null, 2));
 }
 
 function cmdShowInterrupts(argv) {
@@ -1012,6 +1163,9 @@ function cmdStatus(argv) {
     console.log(`Human Gate: ${gate.status}${gate.decision ? ` (${gate.decision})` : ""}`);
     if (gate.summary) {
       console.log(`Gate Summary: ${gate.summary}`);
+    }
+    if (gate.recommendation?.status === "pending") {
+      console.log(`Recommendation: ${formatRecommendation(gate.recommendation)}`);
     }
   }
   const interruption = run.id ? latestOpenInterruption({ stateDir: runtime.stateDir, runId: run.id, stepId: step.id }) : null;
@@ -1953,7 +2107,11 @@ function advanceRun({ repo, runtime, step, outcome }) {
     return { status: "completed", from: step.id, to: target, outcome };
   }
 
-  resetStepArtifacts({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: target });
+  resetTransitionArtifacts({
+    runtime,
+    currentStepId: step.id,
+    targetStepId: target
+  });
   updateRun(repo, { status: "running", current_step_id: target });
   appendProgressEvent({
     repoPath: repo,
@@ -1967,6 +2125,63 @@ function advanceRun({ repo, runtime, step, outcome }) {
   syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [runNextCommand(repo)] });
   syncStepUiRuntime({ repo, stepId: target, nextCommands: [runNextCommand(repo)] });
   return { status: "advanced", from: step.id, to: target, outcome };
+}
+
+function rerunFromStep({ repo, runtime, step, targetStepId, reason = null }) {
+  resetTransitionArtifacts({
+    runtime,
+    currentStepId: step.id,
+    targetStepId
+  });
+  updateRun(repo, { status: "running", current_step_id: targetStepId });
+  appendStepHistoryEntry(repo, {
+    stepId: step.id,
+    status: "assist_rerun_from",
+    commit: latestStepCommit(repo, step.id) ?? "-",
+    summary: `Accepted assist recommendation to rerun from ${targetStepId}${reason ? `: ${reason}` : ""}`
+  });
+  appendProgressEvent({
+    repoPath: repo,
+    runId: runtime.run.id,
+    stepId: step.id,
+    type: "status",
+    provider: "runtime",
+    message: `[${step.id}] -> [${targetStepId}] (assist rerun)`,
+    payload: {
+      outcome: "assist_rerun_from",
+      target: targetStepId,
+      reason
+    }
+  });
+  syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [runNextCommand(repo)] });
+  syncStepUiRuntime({ repo, stepId: targetStepId, nextCommands: [runNextCommand(repo)] });
+  return {
+    status: "advanced",
+    from: step.id,
+    to: targetStepId,
+    outcome: "assist_rerun_from"
+  };
+}
+
+function resetTransitionArtifacts({ runtime, currentStepId, targetStepId }) {
+  const sequence = runtime.flow.variants?.[runtime.run.flow_variant]?.sequence ?? [];
+  const currentIndex = sequence.indexOf(currentStepId);
+  const targetIndex = sequence.indexOf(targetStepId);
+  if (currentIndex >= 0 && targetIndex >= 0 && targetIndex <= currentIndex) {
+    for (let index = targetIndex; index <= currentIndex; index += 1) {
+      resetStepArtifacts({
+        stateDir: runtime.stateDir,
+        runId: runtime.run.id,
+        stepId: sequence[index]
+      });
+    }
+    return;
+  }
+  resetStepArtifacts({
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    stepId: targetStepId
+  });
 }
 
 function finalizeCompletedRun({ repo, runtime, step }) {
@@ -2025,6 +2240,32 @@ function ensureGateSummary({ repo, runtime, step }) {
     type: "artifact",
     provider: "runtime",
     message: `human gate summary ${summary.artifactPath}`,
+    payload: { artifactPath: summary.artifactPath }
+  });
+  return summary;
+}
+
+function refreshGateSummary({ repo, runtime, step }) {
+  const summary = createGateSummary({
+    repoPath: repo,
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    stepId: step.id
+  });
+  openHumanGate({
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    stepId: step.id,
+    prompt: step.human_gate?.prompt ?? `${step.id} human gate`,
+    summary: summary.artifactPath
+  });
+  appendProgressEvent({
+    repoPath: repo,
+    runId: runtime.run.id,
+    stepId: step.id,
+    type: "artifact",
+    provider: "runtime",
+    message: `human gate summary refreshed ${summary.artifactPath}`,
     payload: { artifactPath: summary.artifactPath }
   });
   return summary;
@@ -2521,6 +2762,18 @@ function humanStopCommands(repo, stepId) {
   return [showGateCommand(repo, stepId), assistOpenCommand(repo, stepId), ...humanDecisionCommands(repo, stepId)];
 }
 
+function recommendationCommands(repo, stepId) {
+  const repoArg = ` --repo ${shellQuote(repo)}`;
+  return [
+    `node src/cli.mjs accept-recommendation${repoArg} --step ${stepId}`,
+    `node src/cli.mjs decline-recommendation${repoArg} --step ${stepId} --reason "<reason>"`
+  ];
+}
+
+function recommendedStopCommands(repo, stepId) {
+  return [showGateCommand(repo, stepId), assistOpenCommand(repo, stepId), ...recommendationCommands(repo, stepId)];
+}
+
 function runNextCommand(repo) {
   return `node src/cli.mjs run-next --repo ${shellQuote(repo)}`;
 }
@@ -2587,6 +2840,49 @@ function buildAssistClaudeArgs({ prepared, model = null, bare = false }) {
   }
   args.push(prepared.prompt);
   return args;
+}
+
+function normalizeAssistSignal(signal) {
+  const normalized = String(signal ?? "").trim();
+  const aliases = {
+    approve: "recommend-approve",
+    reject: "recommend-reject",
+    "request-changes": "recommend-request-changes"
+  };
+  return aliases[normalized] ?? normalized;
+}
+
+function gateDecisionFromRecommendation(action) {
+  const mapping = {
+    approve: "approved",
+    request_changes: "changes_requested",
+    reject: "rejected"
+  };
+  return mapping[action] ?? null;
+}
+
+function formatRecommendation(recommendation) {
+  if (!recommendation) {
+    return "-";
+  }
+  const target = recommendation.target_step_id ? ` -> ${recommendation.target_step_id}` : "";
+  const reason = recommendation.reason ? ` (${recommendation.reason})` : "";
+  return `${recommendation.action}${target}${reason}`;
+}
+
+function assertRerunTarget({ runtime, currentStepId, targetStepId }) {
+  const sequence = runtime.flow.variants?.[runtime.run.flow_variant]?.sequence ?? [];
+  const currentIndex = sequence.indexOf(currentStepId);
+  const targetIndex = sequence.indexOf(targetStepId);
+  if (targetIndex < 0) {
+    throw new Error(`Unknown rerun target for ${runtime.run.flow_variant}: ${targetStepId}`);
+  }
+  if (currentIndex < 0) {
+    throw new Error(`Current step ${currentStepId} is not part of ${runtime.run.flow_variant}`);
+  }
+  if (targetIndex >= currentIndex) {
+    throw new Error(`Rerun target must be earlier than ${currentStepId}; got ${targetStepId}`);
+  }
 }
 
 async function spawnAssistClaude({ repo, command, args }) {

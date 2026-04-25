@@ -309,21 +309,34 @@ test_assist_gate_flow() {
   run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-5 | sed -n '1p')"
   node "$ROOT/src/cli.mjs" run-next --repo "$repo" >"$TMP_ROOT/$run_id.assist-gate-open.json"
   node "$ROOT/src/cli.mjs" assist-open --repo "$repo" --step PD-C-5 --prepare-only >"$TMP_ROOT/$run_id.assist-open.json"
-  manifest="$(node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(!data.allowedSignals.includes('approve')) throw new Error('approve missing'); if(!data.command.join(' ').includes('disable-slash-commands')) throw new Error('assist command missing hardening'); console.log(data.manifestPath);" "$TMP_ROOT/$run_id.assist-open.json")"
+  manifest="$(node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(!data.allowedSignals.includes('recommend-approve')) throw new Error('recommend-approve missing'); if(!data.allowedSignals.includes('recommend-rerun-from')) throw new Error('recommend-rerun-from missing'); if(!data.command.join(' ').includes('disable-slash-commands')) throw new Error('assist command missing hardening'); console.log(data.manifestPath);" "$TMP_ROOT/$run_id.assist-open.json")"
   prompt_path="$(node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); console.log(data.promptPath);" "$TMP_ROOT/$run_id.assist-open.json")"
   test -f "$manifest"
   test -f "$prompt_path"
-  grep -q "Allowed signals now: approve, request-changes, reject" "$prompt_path"
+  grep -q "Allowed signals now: recommend-approve, recommend-request-changes, recommend-reject, recommend-rerun-from" "$prompt_path"
   grep -q "Do not run ticket.sh" "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-5/assist/system-prompt.txt"
   test -x "$repo/.pdh-flowchart/bin/assist-signal"
   test -x "$repo/.pdh-flowchart/bin/assist-test"
-  node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-5 --signal approve --reason ok --no-run-next >"$TMP_ROOT/$run_id.assist-signal.json"
-  grep -q '"decision": "approved"' "$TMP_ROOT/$run_id.assist-signal.json"
+  node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-5 --signal recommend-approve --reason ok --no-run-next >"$TMP_ROOT/$run_id.assist-signal.json"
+  grep -q '"action": "approve"' "$TMP_ROOT/$run_id.assist-signal.json"
   signal_path="$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-5/assist/latest-signal.json"
   test -f "$signal_path"
-  grep -q '"signal": "approve"' "$signal_path"
-  node "$ROOT/src/cli.mjs" run-next --repo "$repo" --stop-after-step >"$TMP_ROOT/$run_id.assist-stop.txt"
-  grep -q "Stopped After Step: PD-C-5 -> PD-C-6" "$TMP_ROOT/$run_id.assist-stop.txt"
+  grep -q '"signal": "recommend-approve"' "$signal_path"
+  node "$ROOT/src/cli.mjs" accept-recommendation --repo "$repo" --step PD-C-5 --no-run-next >"$TMP_ROOT/$run_id.accept-recommendation.json"
+  grep -q '"to": "PD-C-6"' "$TMP_ROOT/$run_id.accept-recommendation.json"
+  grep -q "current_step: PD-C-6" "$repo/current-note.md"
+}
+
+test_assist_rerun_recommendation() {
+  local repo run_id
+  repo="$(seed_repo assist-rerun)"
+  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-5 | sed -n '1p')"
+  node "$ROOT/src/cli.mjs" run-next --repo "$repo" >/dev/null
+  node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-5 --signal recommend-rerun-from --target-step PD-C-4 --reason "plan changed after discussion" --no-run-next >"$TMP_ROOT/$run_id.rerun-recommendation.json"
+  grep -q '"target_step_id": "PD-C-4"' "$TMP_ROOT/$run_id.rerun-recommendation.json"
+  node "$ROOT/src/cli.mjs" accept-recommendation --repo "$repo" --step PD-C-5 --no-run-next >"$TMP_ROOT/$run_id.accept-rerun.json"
+  grep -q '"to": "PD-C-4"' "$TMP_ROOT/$run_id.accept-rerun.json"
+  grep -q "current_step: PD-C-4" "$repo/current-note.md"
 }
 
 test_assist_answer_flow() {
@@ -406,6 +419,7 @@ test_auto_resume_after_idle_timeout
 test_resumed_run
 test_interrupted_run
 test_assist_gate_flow
+test_assist_rerun_recommendation
 test_assist_answer_flow
 test_web_readonly
 
