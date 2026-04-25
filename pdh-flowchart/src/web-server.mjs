@@ -4018,7 +4018,7 @@ function renderHtml() {
     return '';
   }
 
-  function assistPreludeLines(stepId) {
+  function assistPreludeLines(stepId, { autoOpened = false } = {}) {
     const lines = [];
     const run = state.data?.runtime?.run || {};
     const step = stepById(stepId);
@@ -4026,7 +4026,7 @@ function renderHtml() {
       return lines;
     }
     const nextAction = state.data?.current?.nextAction || null;
-    lines.push('[runtime] stop state detected');
+    lines.push(autoOpened ? '[runtime] assist opened automatically for a stop state' : '[runtime] assist opened for the selected stop state');
     lines.push('[runtime] step: ' + stepId + ' (' + (step.label || stepId) + ')');
     lines.push('[runtime] status: ' + String(run.status || 'unknown'));
     if (run.status === 'failed') {
@@ -4038,6 +4038,61 @@ function renderHtml() {
       }
     } else if (nextAction?.body) {
       lines.push('[runtime] next: ' + nextAction.body);
+    }
+    const baseline = step?.gate?.baseline || null;
+    if (baseline?.commit) {
+      lines.push('[runtime] checkpoint: gate baseline ' + baseline.commit.slice(0, 7) + (baseline.step_id ? ' from ' + baseline.step_id : ''));
+    }
+    const rerunRequirement = step?.gate?.rerun_requirement || null;
+    if (rerunRequirement?.target_step_id) {
+      lines.push('[runtime] checkpoint: current gate edits require rerun from ' + rerunRequirement.target_step_id);
+      if (rerunRequirement.reason) {
+        lines.push('[runtime] checkpoint why: ' + rerunRequirement.reason);
+      }
+      const ticketSections = Array.isArray(rerunRequirement.changed_ticket_sections) ? rerunRequirement.changed_ticket_sections : [];
+      const noteSections = Array.isArray(rerunRequirement.changed_note_sections) ? rerunRequirement.changed_note_sections : [];
+      if (ticketSections.length > 0) {
+        lines.push('[runtime] changed ticket sections: ' + ticketSections.join(', '));
+      }
+      if (noteSections.length > 0) {
+        lines.push('[runtime] changed note sections: ' + noteSections.join(', '));
+      }
+    }
+    if (run.status === 'blocked') {
+      const failedGuards = Array.isArray(step?.uiRuntime?.guards) ? step.uiRuntime.guards.filter((guard) => guard.status === 'failed') : [];
+      if (failedGuards.length > 0) {
+        lines.push('[runtime] checkpoints:');
+        failedGuards.slice(0, 3).forEach((guard) => {
+          const evidence = String(guard.evidence || '').trim();
+          lines.push('[runtime]  - satisfy guard ' + (guard.id || 'unknown') + (evidence ? ': ' + evidence : ''));
+        });
+      }
+    } else if (run.status === 'interrupted') {
+      const interruptions = Array.isArray(state.data?.current?.interruptions) ? state.data.current.interruptions : [];
+      if (interruptions.length > 0) {
+        lines.push('[runtime] checkpoints:');
+        interruptions.slice(0, 2).forEach((item) => {
+          lines.push('[runtime]  - answer interruption ' + (item.id || 'unknown') + (item.message ? ': ' + item.message : ''));
+        });
+      }
+    } else if (run.status === 'failed') {
+      const findings = Array.isArray(step?.reviewFindings) ? step.reviewFindings : [];
+      if (findings.length > 0) {
+        lines.push('[runtime] checkpoints:');
+        findings.slice(0, 3).forEach((finding) => {
+          lines.push('[runtime]  - address ' + (finding.severity || 'review') + ': ' + (finding.title || 'review finding'));
+        });
+      } else {
+        lines.push('[runtime] checkpoints: inspect the failure summary, fix the cause, then send continue.');
+      }
+    } else if (run.status === 'needs_human') {
+      const mustShow = Array.isArray(step?.uiContract?.mustShow) ? step.uiContract.mustShow : [];
+      if (mustShow.length > 0) {
+        lines.push('[runtime] checkpoints:');
+        mustShow.slice(0, 4).forEach((item) => {
+          lines.push('[runtime]  - review ' + item);
+        });
+      }
     }
     lines.push('[runtime] discuss, edit, test, then send one assist signal when ready.');
     return lines;
@@ -4516,10 +4571,8 @@ function renderHtml() {
     renderAssistModal();
     const terminal = ensureAssistTerminal();
     terminal.reset();
-    if (autoOpened) {
-      assistPreludeLines(stepId).forEach((line) => terminal.writeln(line));
-      terminal.writeln('');
-    }
+    assistPreludeLines(stepId, { autoOpened }).forEach((line) => terminal.writeln(line));
+    terminal.writeln('');
     terminal.writeln('[opening assist session]');
     focusAssistTerminal();
     const response = await fetch('/api/assist/open?step=' + encodeURIComponent(stepId), {
@@ -4533,6 +4586,8 @@ function renderHtml() {
     }
     if (!payload.reused) {
       terminal.reset();
+      assistPreludeLines(stepId, { autoOpened }).forEach((line) => terminal.writeln(line));
+      terminal.writeln('');
     }
     state.assist.stepId = payload.stepId || stepId;
     state.assist.sessionId = payload.sessionId;
