@@ -6,7 +6,7 @@ import { URL, fileURLToPath } from "node:url";
 import { renderMermaidSVG } from "beautiful-mermaid";
 import { createAssistTerminalManager } from "./assist-terminal.mjs";
 import { evaluateAcVerificationTable } from "./ac-verification.mjs";
-import { buildFlowView, getStep, renderMermaidFlow } from "./flow.mjs";
+import { buildFlowView, getStep, nextStep, renderMermaidFlow } from "./flow.mjs";
 import { loadStepInterruptions } from "./interruptions.mjs";
 import { loadJudgements } from "./judgements.mjs";
 import { extractSection, loadCurrentNote, parseStepHistory } from "./note-state.mjs";
@@ -400,7 +400,7 @@ function stepProgress({ runtime, sequence, index, step, historyEntry, gate, atte
   if (step.id === run.current_step_id) {
     if (run.status === "needs_human") {
       if (gate?.recommendation?.status === "pending") {
-        return progress("waiting", "ユーザ回答待ち", "agent recommendation を確認して Yes / No を選びます。");
+        return progress("waiting", "ユーザ回答待ち", "agent recommendation を適用するか、Open Assist で再作業するかを選びます。");
       }
       return progress("waiting", "ユーザ回答待ち", gate?.summary ? "gate summary を確認して CLI で判断します。" : "gate summary を生成中です。");
     }
@@ -493,13 +493,13 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
   }
   if (runtime.run.status === "needs_human") {
     if (currentGate?.recommendation?.status === "pending") {
-      const actions = recommendationDecisionActions(repo, currentStep.id, currentGate.recommendation);
+      const actions = recommendationDecisionActions(repo, runtime, currentStep, currentGate.recommendation);
       return {
-        title: `${currentStep.id} の Yes / No`,
+        title: `${currentStep.id} の推奨アクション`,
         body: recommendationBody(currentGate.recommendation),
         commands: actions.map((item) => item.command),
         actions,
-        selection: "confirm_or_return_optional_assist",
+        selection: "recommended_or_assist",
         targetTab: "gate"
       };
     }
@@ -981,25 +981,15 @@ function humanDecisionActions(repo, stepId) {
   ];
 }
 
-function recommendationDecisionActions(repo, stepId, recommendation) {
-  const [accept, decline] = recommendationDecisionCommands(repo, stepId);
+function recommendationDecisionActions(repo, runtime, step, recommendation) {
+  const [accept] = recommendationDecisionCommands(repo, step.id);
+  const primary = recommendationPrimaryAction(repo, runtime, step, recommendation, accept);
   return [
+    primary,
     nextActionChoice({
-      label: "Yes",
-      description: recommendationAcceptText(recommendation),
-      command: accept,
-      tone: recommendationTone(recommendation)
-    }),
-    nextActionChoice({
-      label: "No",
-      description: "この recommendation は採用しません。recommendation を消して assist に戻します。",
-      command: decline,
-      tone: "reject"
-    }),
-    nextActionChoice({
-      label: "Open Assist",
-      description: "recommendation を見直す場合や、さらに大きく直す場合はここから続けます。",
-      command: assistOpenCommand(repo, stepId),
+      label: "Assistで再作業",
+      description: "recommendation を見直す場合や、さらに大きく直す場合は assist でそのまま続けます。新しい recommendation が出れば上書きされます。",
+      command: assistOpenCommand(repo, step.id),
       tone: "neutral",
       kind: "assist"
     })
@@ -1007,17 +997,26 @@ function recommendationDecisionActions(repo, stepId, recommendation) {
 }
 
 function recommendationBody(recommendation) {
-  return `Claude assist recommends: ${recommendationLabel(recommendation)}. Yes で適用し、No で recommendation を取り消して assist に戻します。`;
+  return `Claude assist の推奨は「${recommendationLabel(recommendation)}」です。そのまま適用するか、assist で再作業して推奨を更新します。`;
 }
 
 function recommendationLabel(recommendation) {
   if (!recommendation) {
-    return "no recommendation";
+    return "推奨なし";
   }
   if (recommendation.action === "rerun_from" && recommendation.target_step_id) {
-    return `rerun from ${recommendation.target_step_id}${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
+    return `${rerunLabelFromStepId(recommendation.target_step_id)}${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
   }
-  return `${recommendation.action.replaceAll("_", " ")}${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
+  if (recommendation.action === "approve") {
+    return `実装開始${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
+  }
+  if (recommendation.action === "request_changes") {
+    return `計画からやり直し${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
+  }
+  if (recommendation.action === "reject") {
+    return `この案を採用しない${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
+  }
+  return `${String(recommendation.action || "").replaceAll("_", " ")}${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
 }
 
 function recommendationAcceptText(recommendation) {
@@ -1050,6 +1049,126 @@ function recommendationTone(recommendation) {
     return "revise";
   }
   return "reject";
+}
+
+function recommendationPrimaryAction(repo, runtime, step, recommendation, command) {
+  const targetApprove = nextStep(runtime.flow, runtime.run.flow_variant, step.id, "human_approved");
+  const targetChanges = nextStep(runtime.flow, runtime.run.flow_variant, step.id, "human_changes_requested");
+  const targetReject = nextStep(runtime.flow, runtime.run.flow_variant, step.id, "human_rejected");
+
+  if (!recommendation) {
+    return nextActionChoice({
+      label: "Apply Recommendation",
+      description: "現在の recommendation を適用します。",
+      command,
+      tone: "approve"
+    });
+  }
+
+  if (recommendation.action === "approve") {
+    const targetStep = targetApprove && targetApprove !== "COMPLETE" ? getStep(runtime.flow, targetApprove) : null;
+    const approveLabel = targetApprove === "COMPLETE"
+      ? "チケット完了"
+      : implementationStartLabel(targetStep, targetApprove);
+    return nextActionChoice({
+      label: approveLabel,
+      description: targetApprove === "COMPLETE"
+        ? "この recommendation を適用して close に進めます。"
+        : `${formatStepTarget(targetStep, targetApprove)} に進めます。`,
+      command,
+      tone: "approve"
+    });
+  }
+
+  if (recommendation.action === "rerun_from") {
+    const targetStep = recommendation.target_step_id ? getStep(runtime.flow, recommendation.target_step_id) : null;
+    return nextActionChoice({
+      label: redoActionLabel(targetStep, recommendation.target_step_id),
+      description: `この recommendation を適用し、${formatStepTarget(targetStep, recommendation.target_step_id)} から再実行します。`,
+      command,
+      tone: "revise"
+    });
+  }
+
+  if (recommendation.action === "request_changes") {
+    const targetStep = targetChanges && targetChanges !== "COMPLETE" ? getStep(runtime.flow, targetChanges) : null;
+    return nextActionChoice({
+      label: redoActionLabel(targetStep, targetChanges),
+      description: `${formatStepTarget(targetStep, targetChanges)} に戻して修正を続けます。`,
+      command,
+      tone: "revise"
+    });
+  }
+
+  if (recommendation.action === "reject") {
+    const targetStep = targetReject && targetReject !== "COMPLETE" ? getStep(runtime.flow, targetReject) : null;
+    return nextActionChoice({
+      label: targetReject && targetReject !== "COMPLETE" ? redoActionLabel(targetStep, targetReject) : "この案を採用しない",
+      description: targetReject && targetReject !== "COMPLETE"
+        ? `${formatStepTarget(targetStep, targetReject)} に戻して、この案は採用しません。`
+        : "この recommendation を reject として適用します。",
+      command,
+      tone: "reject"
+    });
+  }
+
+  return nextActionChoice({
+    label: "Apply Recommendation",
+    description: "現在の recommendation を適用します。",
+    command,
+    tone: recommendationTone(recommendation)
+  });
+}
+
+function redoActionLabel(step, fallbackStepId) {
+  const label = step?.label || fallbackStepId || "";
+  if (/調査/.test(label)) {
+    return "調査からやり直し";
+  }
+  if (label === "計画" || (/計画/.test(label) && !/レビュー/.test(label))) {
+    return "計画からやり直し";
+  }
+  if (/レビュー/.test(label)) {
+    return "レビューやり直し";
+  }
+  if (/検証|妥当性|チェック/.test(label)) {
+    return "検証やり直し";
+  }
+  return `${formatStepTarget(step, fallbackStepId)} からやり直し`;
+}
+
+function formatStepTarget(step, fallbackStepId) {
+  if (step?.label) {
+    return `${step.id} ${step.label}`;
+  }
+  return fallbackStepId || "previous step";
+}
+
+function implementationStartLabel(step, fallbackStepId) {
+  const label = step?.label || fallbackStepId || "";
+  if (/実装/.test(label)) {
+    return "実装開始";
+  }
+  if (/検証|レビュー/.test(label)) {
+    return "レビュー開始";
+  }
+  return `${formatStepTarget(step, fallbackStepId)} に進む`;
+}
+
+function rerunLabelFromStepId(stepId) {
+  if (stepId === "PD-C-2") {
+    return "調査からやり直し";
+  }
+  if (stepId === "PD-C-3") {
+    return "計画からやり直し";
+  }
+  if (stepId === "PD-C-4") {
+    return "レビューやり直し";
+  }
+  if (stepId === "PD-C-7" || stepId === "PD-C-8" || stepId === "PD-C-9") {
+    return "検証やり直し";
+  }
+  return `${stepId || "前の step"} からやり直し`;
 }
 
 function interruptAnswerActions(repo, stepId) {
@@ -2523,8 +2642,8 @@ function renderHtml() {
   }
 
   function nextActionNote(nextAction) {
-    if (nextAction?.selection === 'confirm_or_return_optional_assist') {
-      return 'Agent recommendation を受けて Yes / No を選びます。No の場合は assist に戻して recommendation を作り直させます。';
+    if (nextAction?.selection === 'recommended_or_assist') {
+      return '通常は推奨アクションを実行します。さらに直す場合だけ Open Assist を使います。';
     }
     if (nextAction?.selection === 'choose_one') {
       return 'Choose one. 3つとも実行するのではなく、1つだけ選びます。';
@@ -2546,12 +2665,29 @@ function renderHtml() {
 
   function recommendationLabel(recommendation) {
     if (!recommendation) {
-      return 'no recommendation';
+      return '推奨なし';
     }
     if (recommendation.action === 'rerun_from' && recommendation.target_step_id) {
-      return 'rerun from ' + recommendation.target_step_id + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
+      return rerunLabelFromStepId(recommendation.target_step_id) + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
+    }
+    if (recommendation.action === 'approve') {
+      return '実装開始' + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
+    }
+    if (recommendation.action === 'request_changes') {
+      return '計画からやり直し' + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
+    }
+    if (recommendation.action === 'reject') {
+      return 'この案を採用しない' + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
     }
     return String(recommendation.action || '').replaceAll('_', ' ') + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
+  }
+
+  function rerunLabelFromStepId(stepId) {
+    if (stepId === 'PD-C-2') return '調査からやり直し';
+    if (stepId === 'PD-C-3') return '計画からやり直し';
+    if (stepId === 'PD-C-4') return 'レビューやり直し';
+    if (stepId === 'PD-C-7' || stepId === 'PD-C-8' || stepId === 'PD-C-9') return '検証やり直し';
+    return String(stepId || '前の step') + ' からやり直し';
   }
 
   function documentData(docId) {
@@ -4191,12 +4327,12 @@ function renderHtml() {
             '<div class="next-action-head">' +
               '<span class="next-action-label">' + esc(item.label || ('Action ' + String(index + 1))) + '</span>' +
               '<span class="next-action-choice">' + esc(
-                nextAction?.selection === 'choose_one' || nextAction?.selection === 'choose_one_optional_assist'
+                nextAction?.selection === 'recommended_or_assist'
+                  ? (item.kind === 'assist' ? 'optional' : 'recommended')
+                  : nextAction?.selection === 'choose_one' || nextAction?.selection === 'choose_one_optional_assist'
                   ? 'choose one'
                   : nextAction?.selection === 'ordered' || nextAction?.selection === 'ordered_optional_assist'
                     ? 'run in order'
-                    : nextAction?.selection === 'confirm_or_return_optional_assist'
-                      ? 'yes or no'
                     : nextAction?.selection === 'single_optional_assist'
                       ? 'pick one'
                       : 'run this'
