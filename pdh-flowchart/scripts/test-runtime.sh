@@ -43,7 +43,11 @@ write_fake_codex_success() {
   local path="$TMP_ROOT/fake-codex-success.sh"
   cat >"$path" <<'SH'
 #!/usr/bin/env bash
-printf '%s\n' "$@" > "${FAKE_ARGS_FILE:?}"
+if [ -n "${FAKE_CODEX_ARGS_FILE:-}" ]; then
+  printf '%s\n' "$@" > "$FAKE_CODEX_ARGS_FILE"
+elif [ -n "${FAKE_ARGS_FILE:-}" ]; then
+  printf '%s\n' "$@" > "$FAKE_ARGS_FILE"
+fi
 prompt="$(cat || true)"
 ui_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*ui-output.yaml\)`\.$/\1/p' | head -1)"
 review_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*review.yaml\)`\.$/\1/p' | head -1)"
@@ -106,6 +110,11 @@ write_fake_claude_success() {
   local path="$TMP_ROOT/fake-claude-success.sh"
   cat >"$path" <<'SH'
 #!/usr/bin/env bash
+if [ -n "${FAKE_CLAUDE_ARGS_FILE:-}" ]; then
+  printf '%s\n' "$@" > "$FAKE_CLAUDE_ARGS_FILE"
+elif [ -n "${FAKE_ARGS_FILE:-}" ]; then
+  printf '%s\n' "$@" > "$FAKE_ARGS_FILE"
+fi
 prompt=""
 while [ "$#" -gt 0 ]; do
   if [ "$1" = "-p" ]; then
@@ -211,18 +220,26 @@ test_auto_provider_run() {
 }
 
 test_auto_review_judgement() {
-  local repo run_id fake_claude fake_codex
+  local repo run_id fake_claude fake_codex args
   repo="$(seed_repo auto-review-judgement)"
   run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-4 | sed -n '1p')"
   fake_claude="$(write_fake_claude_success)"
   fake_codex="$(write_fake_codex_success)"
-  CLAUDE_BIN="$fake_claude" CODEX_BIN="$fake_codex" FAKE_ARGS_FILE="$TMP_ROOT/$run_id.review-codex-args.txt" \
+  args="$TMP_ROOT/$run_id.review-claude-args.txt"
+  CLAUDE_BIN="$fake_claude" CODEX_BIN="$fake_codex" FAKE_CLAUDE_ARGS_FILE="$args" \
     node "$ROOT/src/cli.mjs" run-provider --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.review.txt"
   test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/ui-output.yaml"
   test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
   grep -q '"status": "No Critical/Major"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
   grep -q "Devil's Advocate" "$repo/current-note.md"
   grep -q "codex reviewer found no blocking issues" "$repo/current-note.md"
+  grep -q -- "--disable-slash-commands" "$args"
+  grep -q -- "--setting-sources" "$args"
+  grep -q -- "user" "$args"
+  if grep -q -- "--bare" "$args"; then
+    echo "reviewer claude should not use --bare" >&2
+    exit 1
+  fi
 }
 
 test_failed_run() {
@@ -419,7 +436,7 @@ if (!gateStep?.uiContract?.mustShow?.includes("変更差分")) throw new Error("
 if (!gateStep?.reviewDiff?.baseLabel) throw new Error("gate diff summary missing");
 const mermaid = await (await fetch(`${url}api/flow.mmd`)).text();
 if (!mermaid.includes("PD-C-6") || !mermaid.includes("実装")) throw new Error("mermaid flow labels missing");
-const html = await (await fetch(url)).text();
+  const html = await (await fetch(`${url}?assist=manual`)).text();
 if (!html.includes("PDH Dev Dashboard")) throw new Error("html shell missing");
 if (html.includes("flow-toggle")) throw new Error("flow toggle should not be rendered");
 if (!html.includes("detail-modal")) throw new Error("detail modal shell missing");
@@ -429,7 +446,7 @@ NODE
   curl -s "${url}api/render-mermaid?code=graph%20TD%0AA--%3EB" | rg -q "<svg"
   curl -s "${url}api/artifact?step=PD-C-5&name=human-gate-summary.md" | rg -q "Human Gate Summary"
   curl -s "${url}api/diff?step=PD-C-5" | rg -q "\"baseLabel\":\"ticket start\""
-  /usr/lib/chromium/chromium --headless --disable-gpu --no-sandbox --virtual-time-budget=5000 --dump-dom "${url}?doc=note&heading=PD-C-3.%20%E8%A8%88%E7%94%BB&mode=markdown" | rg -q "detail-view-toggle|detail-doc-viewer|current-note.md"
+  /usr/lib/chromium/chromium --headless --disable-gpu --no-sandbox --virtual-time-budget=5000 --dump-dom "${url}?assist=manual&doc=note&heading=PD-C-3.%20%E8%A8%88%E7%94%BB&mode=markdown" | rg -q "detail-view-toggle|detail-doc-viewer|current-note.md"
   kill "$server_pid" 2>/dev/null || true
   wait "$server_pid" 2>/dev/null || true
 }

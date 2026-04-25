@@ -740,12 +740,24 @@ function blockedActionBody(step) {
 }
 
 function failedActionBody(step) {
+  const authMismatch = failedAuthMismatchText(step);
+  if (authMismatch) {
+    return authMismatch;
+  }
   const findings = Array.isArray(step?.reviewFindings) ? step.reviewFindings : [];
   const topFinding = findings.find((finding) => finding.severity === "critical" || finding.severity === "major") ?? findings[0];
   if (topFinding) {
     return `reviewer batch の一部が失敗しましたが、残っている指摘があります。先に「${topFinding.title || "review finding"}」へ対応してから Resume で ${step.id} を再実行します。`;
   }
   return "失敗 summary を確認し、必要なら Open Assist で修正してから `resume` を再実行します。";
+}
+
+function failedAuthMismatchText(step) {
+  const finalMessage = String(step?.uiRuntime?.latestAttempt?.finalMessage || "");
+  if (/not logged in/i.test(finalMessage) && step?.provider === "claude" && step?.mode === "review") {
+    return "Claude reviewer subprocess は現在の launch mode で認証を見失っています。interactive Claude や通常の `claude -p` が動いても、reviewer batch だけ落ちることがあります。runtime 側では reviewer の bare 起動をやめる修正を入れたので、まず同じ step を再実行してください。";
+  }
+  return "";
 }
 
 function gatePayload(gate, redactor) {
@@ -1623,17 +1635,21 @@ function renderHtml() {
     box-shadow: 0 0 0 3px rgba(31, 95, 191, 0.14);
     animation: runningHalo 1.7s ease-in-out infinite;
   }
+  .node.running::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 12px;
+    border: 2px solid rgba(31, 95, 191, 0.46);
+    pointer-events: none;
+    animation: runningRingPulse 1.7s ease-in-out infinite;
+  }
   .node.blocked {
     background: var(--waiting-bg); border-color: var(--waiting-border);
     box-shadow: 0 0 0 3px rgba(186, 117, 23, 0.14);
   }
   .node.waiting .node-icon { background: var(--waiting); color: #fff; position: relative; }
   .node.running .node-icon { background: #1f5fbf; color: #fff; position: relative; }
-  .node.running .node-icon::after {
-    content: ''; position: absolute; inset: -3px;
-    border: 2px solid #1f5fbf; border-radius: 50%;
-    opacity: 0.34; animation: runningRingPulse 1.7s ease-in-out infinite;
-  }
   .node.blocked .node-icon { background: var(--waiting); color: #fff; position: relative; }
   .node.waiting .node-title { color: var(--waiting-text); }
   .node.waiting .node-meta { color: var(--waiting-text); opacity: 0.8; }
@@ -2704,7 +2720,10 @@ function renderHtml() {
       baselineSignalId: null,
       dismissedRecommendationId: null,
       dismissedSignalId: null,
-      confirmation: null
+      confirmation: null,
+      autoOpenKey: null,
+      dismissedAutoOpenKey: null,
+      autoOpening: false
     },
     eventSource: null,
     pollTimer: null
@@ -3861,6 +3880,7 @@ function renderHtml() {
       state.modalViewMode = requested.mode;
     }
     render();
+    maybeAutoOpenAssist();
   }
 
   function refresh() {
@@ -3869,6 +3889,7 @@ function renderHtml() {
         state.data = data;
         syncAssistConfirmation();
         renderAssistModal();
+        maybeAutoOpenAssist();
         return;
       }
       applyState(data);
@@ -3963,6 +3984,91 @@ function renderHtml() {
       return null;
     }
     return signal;
+  }
+
+  function currentStopAssistKey() {
+    if (!state.data?.runtime?.currentStep?.id) {
+      return null;
+    }
+    const run = state.data.runtime.run || {};
+    if (!['needs_human', 'interrupted', 'failed', 'blocked'].includes(run.status)) {
+      return null;
+    }
+    const step = stepById(state.data.runtime.currentStep.id);
+    const attempt = step?.uiRuntime?.latestAttempt?.attempt || 0;
+    const gateId = step?.gate?.recommendation?.id || '';
+    const signalId = step?.assistSignal?.id || '';
+    return [run.id || '', step?.id || '', run.status || '', attempt, gateId, signalId].join(':');
+  }
+
+  function currentFailedDiagnosis(step) {
+    const message = String(step?.uiRuntime?.latestAttempt?.finalMessage || '');
+    if (/not logged in/i.test(message) && step?.provider === 'claude' && step?.mode === 'review') {
+      return 'Claude reviewer subprocess failed in a non-interactive auth path. Interactive Claude can still work while the automated reviewer fails. The runtime now launches reviewers without bare mode; rerun this step.';
+    }
+    return '';
+  }
+
+  function assistPreludeLines(stepId) {
+    const lines = [];
+    const run = state.data?.runtime?.run || {};
+    const step = stepById(stepId);
+    if (!step) {
+      return lines;
+    }
+    const nextAction = state.data?.current?.nextAction || null;
+    lines.push('[runtime] stop state detected');
+    lines.push('[runtime] step: ' + stepId + ' (' + (step.label || stepId) + ')');
+    lines.push('[runtime] status: ' + String(run.status || 'unknown'));
+    if (run.status === 'failed') {
+      const diagnosis = currentFailedDiagnosis(step);
+      if (diagnosis) {
+        lines.push('[runtime] diagnosis: ' + diagnosis);
+      } else if (nextAction?.body) {
+        lines.push('[runtime] diagnosis: ' + nextAction.body);
+      }
+    } else if (nextAction?.body) {
+      lines.push('[runtime] next: ' + nextAction.body);
+    }
+    lines.push('[runtime] discuss, edit, test, then send one assist signal when ready.');
+    return lines;
+  }
+
+  function maybeAutoOpenAssist() {
+    if (new URLSearchParams(window.location.search).get('assist') === 'manual') {
+      return;
+    }
+    if (state.modalItem || requestedModalItem()) {
+      return;
+    }
+    const key = currentStopAssistKey();
+    const current = state.data?.runtime?.currentStep;
+    if (!key || !current?.id) {
+      return;
+    }
+    if (state.assist.open) {
+      if (state.assist.stepId === current.id) {
+        return;
+      }
+      closeAssistModal({ suppressAutoOpenDismissal: true });
+    }
+    if (state.assist.autoOpening) {
+      return;
+    }
+    if (key === state.assist.autoOpenKey || key === state.assist.dismissedAutoOpenKey) {
+      return;
+    }
+    state.assist.autoOpenKey = key;
+    state.assist.autoOpening = true;
+    window.setTimeout(async () => {
+      try {
+        await openAssistTerminal(current.id, { autoOpened: true });
+      } catch {
+        // Leave the page usable; manual assist launch remains available.
+      } finally {
+        state.assist.autoOpening = false;
+      }
+    }, 0);
   }
 
   function syncAssistConfirmation() {
@@ -4145,7 +4251,8 @@ function renderHtml() {
     }
   }
 
-  function closeAssistModal() {
+  function closeAssistModal({ suppressAutoOpenDismissal = false } = {}) {
+    const stopKey = currentStopAssistKey();
     closeAssistSocket();
     if (state.assist.terminal) {
       try {
@@ -4165,6 +4272,9 @@ function renderHtml() {
     state.assist.dismissedRecommendationId = null;
     state.assist.dismissedSignalId = null;
     state.assist.confirmation = null;
+    if (stopKey && !suppressAutoOpenDismissal) {
+      state.assist.dismissedAutoOpenKey = stopKey;
+    }
     renderAssistModal();
   }
 
@@ -4384,7 +4494,7 @@ function renderHtml() {
     });
   }
 
-  async function openAssistTerminal(stepId) {
+  async function openAssistTerminal(stepId, { autoOpened = false } = {}) {
     state.assist.open = true;
     state.assist.stepId = stepId;
     state.assist.sessionId = null;
@@ -4397,6 +4507,10 @@ function renderHtml() {
     renderAssistModal();
     const terminal = ensureAssistTerminal();
     terminal.reset();
+    if (autoOpened) {
+      assistPreludeLines(stepId).forEach((line) => terminal.writeln(line));
+      terminal.writeln('');
+    }
     terminal.writeln('[opening assist session]');
     focusAssistTerminal();
     const response = await fetch('/api/assist/open?step=' + encodeURIComponent(stepId), {
@@ -4682,7 +4796,8 @@ function renderHtml() {
           questionBody.push('<p>' + esc(latest.message) + '</p>');
         }
       } else if (state.data.runtime.run.status === 'failed') {
-        questionBody.push('<p>provider が失敗しています。summary を確認して <code>resume</code> か <code>run-provider</code> を再実行します。</p>');
+        const diagnosis = currentFailedDiagnosis(step);
+        questionBody.push('<p>' + esc(diagnosis || 'provider が失敗しています。summary を確認して <code>resume</code> か <code>run-provider</code> を再実行します。') + '</p>');
         const topFinding = listOf(step.reviewFindings).find((finding) => finding.severity === 'critical' || finding.severity === 'major') || listOf(step.reviewFindings)[0];
         if (topFinding) {
           questionBody.push('<p><strong>残っている指摘:</strong> ' + esc(topFinding.title || '') + '</p>');

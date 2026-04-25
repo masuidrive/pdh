@@ -1995,7 +1995,8 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, time
     timeoutMs,
     idleTimeoutMs,
     options,
-    forceBareClaude: true,
+    disableSlashCommands: provider === "claude",
+    settingSources: provider === "claude" ? "user" : null,
     onEvent(event) {
       appendProgressEvent({
         repoPath: repo,
@@ -2075,7 +2076,20 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, time
   };
 }
 
-async function runProviderInvocation({ provider, cwd, prompt, rawLogPath, timeoutMs, idleTimeoutMs, options, onEvent, resume = null, forceBareClaude = false }) {
+async function runProviderInvocation({
+  provider,
+  cwd,
+  prompt,
+  rawLogPath,
+  timeoutMs,
+  idleTimeoutMs,
+  options,
+  onEvent,
+  resume = null,
+  forceBareClaude = false,
+  disableSlashCommands = false,
+  settingSources = null
+}) {
   if (provider === "codex") {
     return runCodex({
       cwd,
@@ -2095,6 +2109,8 @@ async function runProviderInvocation({ provider, cwd, prompt, rawLogPath, timeou
     prompt,
     rawLogPath,
     bare: forceBareClaude || options.bare === "true",
+    disableSlashCommands,
+    settingSources,
     includePartialMessages: options["include-partial-messages"] === "true",
     model: options.model ?? null,
     permissionMode: options["permission-mode"] ?? (options.bypass !== "false" ? "bypassPermissions" : "acceptEdits"),
@@ -2459,9 +2475,7 @@ function createFailureSummaryForBlock({ repo, runtime, step, failedGuards, messa
 }
 
 function createProviderFailureSummary({ repo, runtime, step, attempt, maxAttempts, rawLogPath, result, reviewContext = null }) {
-  const reviewMessage = reviewContext?.topFindings?.[0]
-    ? `Completed reviewer findings are still available. First unresolved issue: ${reviewContext.topFindings[0].title}`
-    : null;
+  const reviewMessage = providerFailureDiagnosis({ step, result, reviewContext });
   const summary = writeFailureSummary({
     stateDir: runtime.stateDir,
     repoPath: repo,
@@ -2494,6 +2508,21 @@ function createProviderFailureSummary({ repo, runtime, step, attempt, maxAttempt
     payload: { artifactPath: summary.artifactPath }
   });
   return summary;
+}
+
+function providerFailureDiagnosis({ step, result, reviewContext }) {
+  const finalMessage = String(result?.finalMessage || "");
+  const stderr = String(result?.stderr || "");
+  if (step.mode === "review" && step.provider === "claude" && /not logged in/i.test(finalMessage)) {
+    return "Claude reviewer subprocess failed in non-interactive bare-style startup. Interactive Claude may still work, but reviewer automation needs the non-bare path. Re-run this step after the runtime update or investigate `claude -p` versus `claude --bare -p` behavior.";
+  }
+  if (step.mode === "review" && /authentication_failed/i.test(stderr)) {
+    return "Claude reviewer subprocess could not authenticate in its current launch mode. Compare the working `claude -p ...` path with the failing reviewer path before retrying.";
+  }
+  if (reviewContext?.topFindings?.[0]) {
+    return `Completed reviewer findings are still available. First unresolved issue: ${reviewContext.topFindings[0].title}`;
+  }
+  return null;
 }
 
 function summarizePartialReviewContext(reviewers) {

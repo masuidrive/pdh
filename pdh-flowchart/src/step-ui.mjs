@@ -168,6 +168,8 @@ function buildRuntimeUiData({ repoPath, runtime, step, guardResults = null, next
           status: attempt.status ?? null,
           provider: attempt.provider ?? null,
           exit_code: attempt.exitCode ?? null,
+          final_message: attempt.finalMessage ?? null,
+          stderr: attempt.stderr ?? null,
           raw_log_path: attempt.rawLogPath ?? null
         }
       : null,
@@ -250,6 +252,8 @@ function normalizeUiRuntime(value, meta = {}) {
           status: asString(source.latest_attempt.status),
           provider: asString(source.latest_attempt.provider),
           exitCode: source.latest_attempt.exit_code ?? null,
+          finalMessage: asString(source.latest_attempt.final_message),
+          stderr: asString(source.latest_attempt.stderr),
           rawLogPath: asString(source.latest_attempt.raw_log_path)
         }
       : null,

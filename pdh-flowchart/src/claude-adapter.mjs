@@ -10,6 +10,8 @@ export async function runClaude({
   rawLogPath,
   env = {},
   bare = false,
+  disableSlashCommands = false,
+  settingSources = null,
   includePartialMessages = false,
   model = null,
   permissionMode = "bypassPermissions",
@@ -26,6 +28,12 @@ export async function runClaude({
   const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
   if (bare) {
     args.unshift("--bare");
+  }
+  if (disableSlashCommands) {
+    args.push("--disable-slash-commands");
+  }
+  if (settingSources) {
+    args.push("--setting-sources", settingSources);
   }
   if (includePartialMessages) {
     args.push("--include-partial-messages");
