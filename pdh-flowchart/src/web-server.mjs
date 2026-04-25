@@ -2367,7 +2367,7 @@ function renderHtml() {
     border-radius: 12px;
     box-shadow: 0 22px 60px rgba(0, 0, 0, 0.18);
     display: grid;
-    grid-template-rows: auto auto auto 1fr auto;
+    grid-template-rows: auto auto 1fr auto;
     overflow: hidden;
   }
   .assist-dialog-head {
@@ -2415,31 +2415,52 @@ function renderHtml() {
     font: inherit;
   }
   .assist-dialog-close:hover { border-color: var(--border-strong); color: var(--text); }
-  .assist-note {
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
-    font-size: 12px;
-    color: var(--text-muted);
-    background: var(--surface);
-  }
   .assist-runtime-summary {
     padding: 10px 16px;
     border-bottom: 1px solid var(--border);
     background: #fbfaf7;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .assist-runtime-summary.hidden { display: none; }
+  .assist-runtime-summary-main {
     font-size: 12px;
+    line-height: 1.55;
     color: var(--text);
+  }
+  .assist-runtime-summary-toggle {
+    align-self: flex-start;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-muted);
+    border-radius: 6px;
+    padding: 5px 9px;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .assist-runtime-summary-toggle:hover {
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+  .assist-runtime-summary-toggle.hidden { display: none; }
+  .assist-runtime-summary-details {
     display: flex;
     flex-direction: column;
     gap: 4px;
   }
-  .assist-runtime-summary.hidden { display: none; }
+  .assist-runtime-summary-details.hidden { display: none; }
   .assist-runtime-summary-line {
+    font-size: 11px;
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;
+    color: var(--text-muted);
   }
   .assist-runtime-summary-line.lead {
     font-weight: 600;
+    color: var(--text);
   }
   .assist-terminal-shell {
     position: relative;
@@ -2707,8 +2728,11 @@ function renderHtml() {
           <button class="assist-dialog-close" id="assist-modal-close" type="button">Close</button>
         </div>
       </div>
-      <div class="assist-note">This terminal runs a fresh Claude assist session in the same repo checkout. Closing this viewer does not stop the session.</div>
-      <div class="assist-runtime-summary hidden" id="assist-runtime-summary"></div>
+      <div class="assist-runtime-summary hidden" id="assist-runtime-summary">
+        <div class="assist-runtime-summary-main" id="assist-runtime-summary-main"></div>
+        <button class="assist-runtime-summary-toggle hidden" id="assist-runtime-summary-toggle" type="button" aria-expanded="false">Details</button>
+        <div class="assist-runtime-summary-details hidden" id="assist-runtime-summary-details"></div>
+      </div>
       <div class="assist-terminal-shell">
         <div class="assist-terminal-empty" id="assist-terminal-empty">Starting assist session…</div>
         <div class="assist-terminal" id="assist-terminal"></div>
@@ -2742,6 +2766,7 @@ function renderHtml() {
       stepId: null,
       sessionId: null,
       status: 'idle',
+      summaryExpanded: false,
       terminal: null,
       fitAddon: null,
       socket: null,
@@ -4118,6 +4143,76 @@ function renderHtml() {
     return lines;
   }
 
+  function assistSummaryModel(stepId) {
+    const run = state.data?.runtime?.run || {};
+    const step = stepById(stepId);
+    if (!step) {
+      return null;
+    }
+    const nextAction = state.data?.current?.nextAction || null;
+    let headline = '';
+    const details = [];
+
+    if (run.status === 'failed') {
+      headline = currentFailedDiagnosis(step) || nextAction?.body || (stepId + ' failed');
+    } else if (run.status === 'blocked') {
+      headline = nextAction?.body || (stepId + ' is blocked by missing guard evidence.');
+    } else if (run.status === 'interrupted') {
+      headline = nextAction?.body || (stepId + ' is waiting for an interruption answer.');
+    } else if (run.status === 'needs_human') {
+      headline = nextAction?.body || (stepId + ' is waiting for a gate decision.');
+    } else if (run.status === 'running') {
+      headline = 'Claude assist is attached to the current repo checkout. Closing this viewer does not stop the session.';
+    } else {
+      headline = 'Claude assist is attached to the current repo checkout.';
+    }
+
+    const baseline = step?.gate?.baseline || null;
+    if (baseline?.commit) {
+      details.push('gate baseline ' + baseline.commit.slice(0, 7) + (baseline.step_id ? ' from ' + baseline.step_id : ''));
+    }
+    const rerunRequirement = step?.gate?.rerun_requirement || null;
+    if (rerunRequirement?.target_step_id) {
+      details.push('require rerun from ' + rerunRequirement.target_step_id + (rerunRequirement.reason ? ': ' + rerunRequirement.reason : ''));
+      const ticketSections = Array.isArray(rerunRequirement.changed_ticket_sections) ? rerunRequirement.changed_ticket_sections : [];
+      const noteSections = Array.isArray(rerunRequirement.changed_note_sections) ? rerunRequirement.changed_note_sections : [];
+      if (ticketSections.length > 0) {
+        details.push('changed ticket sections: ' + ticketSections.join(', '));
+      }
+      if (noteSections.length > 0) {
+        details.push('changed note sections: ' + noteSections.join(', '));
+      }
+    }
+
+    if (run.status === 'blocked') {
+      const failedGuards = Array.isArray(step?.uiRuntime?.guards) ? step.uiRuntime.guards.filter((guard) => guard.status === 'failed') : [];
+      failedGuards.slice(0, 3).forEach((guard) => {
+        const evidence = String(guard.evidence || '').trim();
+        details.push('guard ' + (guard.id || 'unknown') + (evidence ? ': ' + evidence : ''));
+      });
+    } else if (run.status === 'interrupted') {
+      const interruptions = Array.isArray(state.data?.current?.interruptions) ? state.data.current.interruptions : [];
+      interruptions.slice(0, 2).forEach((item) => {
+        details.push('answer interruption ' + (item.id || 'unknown') + (item.message ? ': ' + item.message : ''));
+      });
+    } else if (run.status === 'failed') {
+      const findings = Array.isArray(step?.reviewFindings) ? step.reviewFindings : [];
+      findings.slice(0, 3).forEach((finding) => {
+        details.push('address ' + (finding.severity || 'review') + ': ' + (finding.title || 'review finding'));
+      });
+      if (!findings.length) {
+        details.push('inspect the failure summary, fix the cause, then send continue');
+      }
+    } else if (run.status === 'needs_human') {
+      const mustShow = Array.isArray(step?.uiContract?.mustShow) ? step.uiContract.mustShow : [];
+      mustShow.slice(0, 4).forEach((item) => {
+        details.push('review ' + item);
+      });
+    }
+
+    return { headline, details };
+  }
+
   function maybeAutoOpenAssist() {
     if (new URLSearchParams(window.location.search).get('assist') === 'manual') {
       return;
@@ -4351,6 +4446,7 @@ function renderHtml() {
     state.assist.stepId = null;
     state.assist.sessionId = null;
     state.assist.status = 'idle';
+    state.assist.summaryExpanded = false;
     state.assist.baselineRecommendationId = null;
     state.assist.baselineSignalId = null;
     state.assist.dismissedRecommendationId = null;
@@ -4380,6 +4476,9 @@ function renderHtml() {
     const status = document.getElementById('assist-modal-status');
     const empty = document.getElementById('assist-terminal-empty');
     const summary = document.getElementById('assist-runtime-summary');
+    const summaryMain = document.getElementById('assist-runtime-summary-main');
+    const summaryToggle = document.getElementById('assist-runtime-summary-toggle');
+    const summaryDetails = document.getElementById('assist-runtime-summary-details');
     const confirm = document.getElementById('assist-confirm');
     const confirmTitle = document.getElementById('assist-confirm-title');
     const confirmBody = document.getElementById('assist-confirm-body');
@@ -4393,7 +4492,11 @@ function renderHtml() {
       empty.textContent = 'Starting assist session…';
       empty.classList.remove('hidden');
       summary.classList.add('hidden');
-      summary.innerHTML = '';
+      summaryMain.textContent = '';
+      summaryToggle.classList.add('hidden');
+      summaryToggle.setAttribute('aria-expanded', 'false');
+      summaryDetails.classList.add('hidden');
+      summaryDetails.innerHTML = '';
       confirm.classList.add('hidden');
       acceptButton.disabled = false;
       dismissButton.disabled = false;
@@ -4402,15 +4505,31 @@ function renderHtml() {
     root.classList.remove('hidden');
     status.textContent = assistStatusLabel();
     status.className = 'assist-status ' + esc(state.assist.status);
-    const summaryLines = assistPreludeLines(state.assist.stepId, { autoOpened: false });
-    if (summaryLines.length > 0) {
+    const summaryModel = assistSummaryModel(state.assist.stepId);
+    if (summaryModel?.headline) {
       summary.classList.remove('hidden');
-      summary.innerHTML = summaryLines.map((line, index) =>
-        '<div class="assist-runtime-summary-line' + (index === 0 ? ' lead' : '') + '">' + esc(line.replace(/^\[runtime\]\s*/, '')) + '</div>'
-      ).join('');
+      summaryMain.textContent = summaryModel.headline;
+      if (summaryModel.details.length > 0) {
+        summaryToggle.classList.remove('hidden');
+        summaryToggle.textContent = state.assist.summaryExpanded ? 'Hide details' : 'Details';
+        summaryToggle.setAttribute('aria-expanded', state.assist.summaryExpanded ? 'true' : 'false');
+        summaryDetails.innerHTML = summaryModel.details.map((line, index) =>
+          '<div class="assist-runtime-summary-line' + (index === 0 ? ' lead' : '') + '">' + esc(line) + '</div>'
+        ).join('');
+        summaryDetails.classList.toggle('hidden', !state.assist.summaryExpanded);
+      } else {
+        summaryToggle.classList.add('hidden');
+        summaryToggle.setAttribute('aria-expanded', 'false');
+        summaryDetails.classList.add('hidden');
+        summaryDetails.innerHTML = '';
+      }
     } else {
       summary.classList.add('hidden');
-      summary.innerHTML = '';
+      summaryMain.textContent = '';
+      summaryToggle.classList.add('hidden');
+      summaryToggle.setAttribute('aria-expanded', 'false');
+      summaryDetails.classList.add('hidden');
+      summaryDetails.innerHTML = '';
     }
     if (state.assist.terminal) {
       empty.classList.add('hidden');
@@ -4596,6 +4715,7 @@ function renderHtml() {
     state.assist.stepId = stepId;
     state.assist.sessionId = null;
     state.assist.status = 'starting';
+    state.assist.summaryExpanded = false;
     state.assist.baselineRecommendationId = stepById(stepId)?.gate?.recommendation?.id || null;
     state.assist.baselineSignalId = null;
     state.assist.dismissedRecommendationId = null;
@@ -5152,6 +5272,10 @@ function renderHtml() {
     } catch (error) {
       window.alert('Failed to apply recommendation: ' + (error?.message || String(error)));
     }
+  });
+  document.getElementById('assist-runtime-summary-toggle').addEventListener('click', () => {
+    state.assist.summaryExpanded = !state.assist.summaryExpanded;
+    renderAssistModal();
   });
   document.querySelectorAll('[data-assist-input]').forEach((button) => {
     button.addEventListener('click', () => {
