@@ -213,6 +213,7 @@ function renderReviewSemantics(step, reviewPlan) {
 export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, reviewer }) {
   const acceptedStatus = acceptedReviewerStatus(step.id);
   const outputPath = `.pdh-flowchart/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.yaml`;
+  const reviewerStepRules = reviewerRulesForStep(step.id);
   return [
     "# pdh-flowchart Reviewer Prompt",
     "",
@@ -238,10 +239,16 @@ export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, re
     "- Do not run `ticket.sh` or `node src/cli.mjs ...`.",
     "- You may inspect git diff, read files, and run narrowly scoped verification commands when needed.",
     "- This repo owns review semantics. Do not rely on external `pdh-dev` or `tmux-director` skills for missing rules.",
+    "- Prioritize critical and major findings over nits. If severe issues remain, do not spend the review on style-only comments.",
+    "- Review the purpose of the plan or change, not only generic code-style concerns.",
+    "- Do not dismiss a finding just because the plan or note claims it is handled. Look for direct evidence in the current repo state.",
+    "- If this reviewer role previously raised a blocker, clear it only when the latest repo state resolves it.",
+    "- The runtime unions the latest reviewer results across roles. Do not assume PM or another reviewer will downgrade your severity for you.",
     ...(reviewPlan.intent ? [`- Review intent: ${reviewPlan.intent}`] : []),
     ...(reviewPlan.passWhen?.length ? ["- Step pass conditions:", ...reviewPlan.passWhen.map((item) => `  - ${item}`)] : []),
     ...(reviewPlan.onFindings?.length ? ["- If findings remain:", ...reviewPlan.onFindings.map((item) => `  - ${item}`)] : []),
     ...(reviewer.focus?.length ? ["- Your focus:", ...reviewer.focus.map((item) => `  - ${item}`)] : ["- Your focus: (none)"]),
+    ...(reviewerStepRules.length ? ["- Step-specific review rules:", ...reviewerStepRules.map((item) => `  - ${item}`)] : []),
     "",
     "## Canonical Files",
     "",
@@ -292,34 +299,42 @@ function stepInstructions(stepId) {
   const instructions = {
     "PD-C-2": [
       "Investigate the current implementation, design history, execution paths, and blast radius.",
-      "Check recent git history for relevant files and read related tickets when available.",
-      "Record findings, risks, external dependencies, and real-environment verification needs in `current-note.md` under `PD-C-2. 調査結果`.",
+      "Check recent git history for relevant files and read related tickets or notes when available.",
+      "Cover at least the app code, tests, UI or API surfaces, SDK or CLI entrypoints, migrations or generated assets, docs or specs, repo rule files, and examples when they are in scope.",
+      "Record findings, risks, external dependencies, blast radius, and real-environment verification needs in `current-note.md` under `PD-C-2. 調査結果`.",
+      "Write enough concrete evidence that PD-C-3 can plan without redoing the same repository walk.",
       "Commit the investigation record with a subject beginning `[PD-C-2]`."
     ],
     "PD-C-3": [
       "Create an implementation plan from the investigation and ticket goal.",
-      "Document file-level changes, ownership/context, design decisions, test plan, E2E or real-environment verification steps, and risk handling in `current-note.md` under `PD-C-3. 計画`.",
+      "Analyze nearby existing patterns first and prefer the local implementation style over inventing a new abstraction.",
+      "Document file-level changes, ownership, file-specific context, design decisions, test plan, E2E or real-environment verification steps, and risk handling in `current-note.md` under `PD-C-3. 計画`.",
       "Record durable design decisions and rationale in `current-ticket.md` under `Implementation Notes`.",
+      "Include how the PD-C-2 concerns will be handled, not just a happy-path implementation outline.",
       "Choose a concrete plan from local evidence instead of leaving unresolved options for the user.",
       "Commit the plan with a subject beginning `[PD-C-3]`."
     ],
     "PD-C-4": [
       "Review the plan for Full flow before implementation starts.",
-      "Evaluate whether the plan solves the ticket purpose, follows existing patterns, covers risks, and has a credible test/verification path.",
+      "Evaluate whether the plan solves the ticket purpose, follows existing patterns, covers risks, and has a credible test or verification path.",
+      "Review the proposed correction strategy, not just the historical bug report or current code smell list.",
       "Record the integrated review result in `current-note.md` under `PD-C-4. 計画レビュー結果`.",
       "Use `No Critical/Major` only when there are no unresolved critical or major issues; otherwise state the required revision.",
       "Commit the review with a subject beginning `[PD-C-4]`."
     ],
     "PD-C-6": [
       "Implement the approved plan with changes scoped to this ticket.",
-      "Update `current-note.md` under `PD-C-6` with implementation summary, changed files, tests run, and remaining risks.",
-      "Run the smallest meaningful verification first; run broader checks when the change risk requires it.",
+      "Keep `current-ticket.md`, `current-note.md`, code, and tests consistent with the approved plan as you implement.",
+      "Update `current-note.md` under `PD-C-6` with implementation summary, changed files, tests run, remaining risks, and any deviations from the original plan.",
+      "Run the smallest meaningful verification first; broaden coverage when the change risk or affected surface requires it.",
       "If `scripts/test-all.sh` exists and is appropriate for this repo, run it or record why it cannot be run.",
+      "Do not treat failing, skipped, or environment-blocked verification as complete implementation.",
       "Commit the implementation with a subject beginning `[PD-C-6]`."
     ],
     "PD-C-7": [
       "Review the implemented change for quality, regressions, authorization or data-integrity issues, security, error handling, and test adequacy.",
       "Check the change against product-brief intent and Acceptance Criteria.",
+      "When critical or major findings remain, push concrete corrections, rerun impacted verification, and review again until the latest reviewer state is clear or user-accepted.",
       "Record quality verification in `current-note.md` under `PD-C-7. 品質検証結果`.",
       "Use `No Critical/Major` only when all latest reviewer concerns at those severities are resolved or explicitly user-accepted.",
       "Commit the review result with a subject beginning `[PD-C-7]`."
@@ -327,6 +342,7 @@ function stepInstructions(stepId) {
     "PD-C-8": [
       "Validate purpose fit: look for reasons the ticket should not close even if the implementation appears correct.",
       "Review every Acceptance Criteria item and classify it as `verified`, `deferred`, or `unverified` with evidence.",
+      "Act like a counterexample-seeking product reviewer: look for missing outcomes, missing scope, and things that should have been written but were not.",
       "Record purpose validation in `current-note.md` under `PD-C-8. 目的妥当性確認`.",
       "Do not treat follow-up work as acceptable deferral unless there is explicit user approval and a real follow-up ticket.",
       "Commit the validation with a subject beginning `[PD-C-8]`."
@@ -336,6 +352,7 @@ function stepInstructions(stepId) {
       "Write or update `AC 裏取り結果` in `current-note.md` with one row per AC: item, classification, status, evidence, and deferral ticket.",
       "Run final verification commands appropriate for the repo, including `scripts/test-all.sh` when present and applicable.",
       "Check changed external surfaces from a consumer perspective when the ticket affects UI, HTTP API, SDK, or CLI behavior.",
+      "Do not leave any AC as implicit. `unverified` means the ticket is not ready to close.",
       "Commit final verification evidence with a subject beginning `[PD-C-9]`."
     ]
   };
@@ -344,4 +361,26 @@ function stepInstructions(stepId) {
     `Update canonical records and satisfy the guards for ${stepId}.`,
     `Commit with a subject beginning \`[${stepId}]\`.`
   ];
+}
+
+function reviewerRulesForStep(stepId) {
+  const rules = {
+    "PD-C-4": [
+      "Judge whether the plan's correction strategy is credible for this repo and ticket purpose.",
+      "Push plan changes back to PD-C-3 with concrete revisions instead of vague cautionary notes."
+    ],
+    "PD-C-7": [
+      "Focus on regressions, security, authorization, data integrity, error handling, and test adequacy against the implemented diff.",
+      "If the repo state changed after earlier severe findings, explicitly check whether those findings are now resolved."
+    ],
+    "PD-C-8": [
+      "Try to find reasons the ticket should not close, especially missing outcomes or insufficient delivery against the product intent.",
+      "Treat unverified or weakly evidenced Acceptance Criteria as blocking, not as optional polish."
+    ],
+    "PD-C-9": [
+      "Treat any unverified Acceptance Criteria row or missing external-surface evidence as blocking.",
+      "Prefer direct evidence over assertions from notes when the two conflict."
+    ]
+  };
+  return rules[stepId] ?? [];
 }

@@ -179,6 +179,8 @@ test_prompt_context() {
   grep -q "## UI Output Artifact" "$prompt_path"
   grep -q "ui-output.yaml" "$prompt_path"
   grep -q 'Match the primary language used in `current-ticket.md`' "$prompt_path"
+  grep -q "Analyze nearby existing patterns first" "$prompt_path"
+  grep -q "Include how the PD-C-2 concerns will be handled" "$prompt_path"
   if grep -q "## current-ticket.md" "$prompt_path"; then
     echo "prompt should not inline current-ticket.md" >&2
     exit 1
@@ -331,6 +333,9 @@ test_assist_gate_flow() {
   test -f "$manifest"
   test -f "$prompt_path"
   grep -q "Allowed signals now: recommend-approve, recommend-request-changes, recommend-reject, recommend-rerun-from" "$prompt_path"
+  grep -q "## What This Stop Means" "$prompt_path"
+  grep -q "## Checkpoints For This Step" "$prompt_path"
+  grep -q "If plan or ticket intent changed during the gate, prefer a rerun recommendation instead of approve." "$prompt_path"
   grep -q "Do not run ticket.sh" "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-5/assist/system-prompt.txt"
   test -x "$repo/.pdh-flowchart/bin/assist-signal"
   test -x "$repo/.pdh-flowchart/bin/assist-test"
@@ -413,6 +418,7 @@ test_assist_failed_continue() {
   node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(data.allowedSignals.join(',')!=='continue') throw new Error('continue signal missing for failed state'); console.log(data.promptPath);" "$TMP_ROOT/$run_id.assist-failed-open.json" >"$TMP_ROOT/$run_id.assist-failed-prompt-path.txt"
   prompt_path="$(cat "$TMP_ROOT/$run_id.assist-failed-prompt-path.txt")"
   grep -q "Allowed signals now: continue" "$prompt_path"
+  grep -q 'When the blocker is addressed, send `continue` so the runtime reruns PD-C-6 from the current step.' "$prompt_path"
   node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-6 --signal continue --reason "edits are ready" --no-run-next >"$TMP_ROOT/$run_id.assist-failed-signal.json"
   grep -q '"pendingConfirmation": true' "$TMP_ROOT/$run_id.assist-failed-signal.json"
   grep -q '"status": "pending"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/assist/latest-signal.json"

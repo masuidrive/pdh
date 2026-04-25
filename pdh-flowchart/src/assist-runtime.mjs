@@ -312,6 +312,8 @@ function buildAssistSystemPrompt() {
 }
 
 function buildAssistPrompt({ runtime, step, gate, interruption, blockedGuards, readFirst, wrappers, allowedSignals, signalExamples }) {
+  const stepCheckpoints = assistCheckpoints(step.id);
+  const statusGuidance = assistStatusGuidance({ status: runtime.run.status, stepId: step.id, hasBlockedGuards: blockedGuards.length > 0 });
   const lines = [
     "# PDH Flow Assist Session",
     "",
@@ -341,6 +343,24 @@ function buildAssistPrompt({ runtime, step, gate, interruption, blockedGuards, r
       "## Blocked Guard Context",
       "",
       ...blockedGuards.map((guard) => `- ${guard.id}: ${guard.evidence || "(no evidence)"}`)
+    );
+  }
+
+  if (statusGuidance.length > 0) {
+    lines.push(
+      "",
+      "## What This Stop Means",
+      "",
+      ...statusGuidance.map((item) => `- ${item}`)
+    );
+  }
+
+  if (stepCheckpoints.length > 0) {
+    lines.push(
+      "",
+      "## Checkpoints For This Step",
+      "",
+      ...stepCheckpoints.map((item) => `- ${item}`)
     );
   }
 
@@ -375,8 +395,10 @@ function buildAssistPrompt({ runtime, step, gate, interruption, blockedGuards, r
     "- Discuss the code directly with the user in this terminal.",
     "- Inspect files and diffs as needed.",
     "- Run verification when it materially helps.",
+    "- When you change plan, ticket intent, AC, or implementation evidence, re-read the affected note and ticket sections before recommending a handoff.",
     "- If the user only wants discussion, do not send a signal yet.",
-    "- At human gates, choose one concrete recommendation yourself. The user should only need to say Yes or No to apply it."
+    "- At human gates, choose one concrete recommendation yourself. The user should only need to say Yes or No to apply it.",
+    "- If edits invalidate earlier planning or review work, recommend one concrete rerun target instead of trying to push forward anyway."
   );
 
   return `${lines.join("\n")}\n`;
@@ -401,6 +423,78 @@ function buildSignalExamples(stepId, allowedSignals) {
     }
   }
   return examples;
+}
+
+function assistStatusGuidance({ status, stepId, hasBlockedGuards }) {
+  if (status === "needs_human") {
+    return [
+      "This is a human gate. You may inspect, edit, and test, but the runtime still owns the final transition.",
+      "If your edits only clarify the same gate materials, recommend approve or request-changes. If they invalidate earlier plan or review work, recommend one rerun target."
+    ];
+  }
+  if (status === "failed") {
+    return [
+      "This step already ran and failed. Use the failure summary, reviewer outputs, and logs to separate environment problems from substantive findings.",
+      `When the blocker is addressed, send \`continue\` so the runtime reruns ${stepId} from the current step.`
+    ];
+  }
+  if (status === "blocked") {
+    return [
+      "A guard is still missing evidence. Do not send `continue` until the missing note, ticket, judgement, or verification evidence actually exists.",
+      hasBlockedGuards
+        ? "Use the blocked-guard evidence above as the checklist for what must be fixed before rerunning."
+        : "Inspect ui-runtime and failure artifacts to identify the missing evidence before rerunning."
+    ];
+  }
+  if (status === "interrupted") {
+    return [
+      "The runtime is waiting for an explicit answer to an interruption.",
+      "Answer the open question narrowly, then send `answer` so the runtime can resume with that new instruction."
+    ];
+  }
+  return [];
+}
+
+function assistCheckpoints(stepId) {
+  const checkpoints = {
+    "PD-C-2": [
+      "Confirm blast radius across code, tests, external surfaces, docs, and examples before closing the investigation.",
+      "Record concrete findings and risks so PD-C-3 can plan without repeating the same repository walk."
+    ],
+    "PD-C-3": [
+      "Check that the plan names concrete files, file-specific context, design decisions, tests, and real-environment verification steps.",
+      "Make sure PD-C-2 concerns are addressed explicitly, not left as vague caveats."
+    ],
+    "PD-C-4": [
+      "Verify the plan solves the ticket purpose, follows local patterns, and has a credible verification path.",
+      "If the plan changed materially, prefer rerunning PD-C-3 and then PD-C-4 over forcing this review to pass."
+    ],
+    "PD-C-5": [
+      "Before recommending implementation, confirm the plan, design decisions, test strategy, real-environment checks, and open concerns are all represented in current-note and current-ticket.",
+      "If plan or ticket intent changed during the gate, prefer a rerun recommendation instead of approve."
+    ],
+    "PD-C-6": [
+      "Keep code, tests, current-note, and current-ticket aligned with the approved plan.",
+      "Do not treat failed or skipped verification as acceptable completion."
+    ],
+    "PD-C-7": [
+      "Resolve critical and major findings with code or verification evidence, then rerun the same quality step.",
+      "Do not clear a serious finding just because notes say it is fixed; verify the latest repo state."
+    ],
+    "PD-C-8": [
+      "Look for missing outcomes, missing coverage, and reasons the ticket still should not close.",
+      "If the implementation or scope must change, expect to route back through PD-C-6 or earlier review."
+    ],
+    "PD-C-9": [
+      "Every Acceptance Criteria item needs explicit evidence in `AC 裏取り結果`.",
+      "Check changed user-facing surfaces as a consumer, not only through unit-style evidence."
+    ],
+    "PD-C-10": [
+      "Only recommend close when AC evidence, user verification guidance, and residual risks are all explicit.",
+      "If code or AC evidence changed during the gate, expect a rerun recommendation instead of close."
+    ]
+  };
+  return checkpoints[stepId] ?? [];
 }
 
 function writeSession({ stateDir, runId, stepId, sessionId, mutator }) {
