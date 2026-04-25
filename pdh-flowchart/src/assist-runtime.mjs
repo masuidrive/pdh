@@ -49,6 +49,9 @@ export function allowedAssistSignals({ runStatus, step }) {
   if (runStatus === "blocked") {
     return ["continue"];
   }
+  if (runStatus === "failed") {
+    return ["continue"];
+  }
   return [];
 }
 
@@ -219,6 +222,28 @@ export function appendAssistSignal({ stateDir, runId, stepId, signal, reason = n
   writeFileSync(path, `${JSON.stringify(entry)}\n`, { flag: "a" });
   writeFileSync(latestAssistSignalPath({ stateDir, runId, stepId }), `${JSON.stringify(entry, null, 2)}\n`);
   return entry;
+}
+
+export function loadLatestAssistSignal({ stateDir, runId, stepId }) {
+  const path = latestAssistSignalPath({ stateDir, runId, stepId });
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+export function updateLatestAssistSignal({ stateDir, runId, stepId, mutator }) {
+  const current = loadLatestAssistSignal({ stateDir, runId, stepId });
+  if (!current) {
+    return null;
+  }
+  const updated = mutator(current);
+  if (!updated) {
+    return current;
+  }
+  writeFileSync(latestAssistSignalPath({ stateDir, runId, stepId }), `${JSON.stringify(updated, null, 2)}\n`);
+  return updated;
 }
 
 function ensureAssistWrappers(repoPath) {

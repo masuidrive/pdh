@@ -354,6 +354,29 @@ test_assist_answer_flow() {
   grep -q "Keep integer arithmetic." "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/interruptions/"*-answer.md
 }
 
+test_assist_failed_continue() {
+  local repo run_id fake_fail fake_success args prompt_path
+  repo="$(seed_repo assist-failed-continue)"
+  run_id="$(advance_to_provider_step "$repo")"
+  fake_fail="$(write_fake_codex_fail)"
+  fake_success="$(write_fake_codex_success)"
+  CODEX_BIN="$fake_fail" node "$ROOT/src/cli.mjs" run-provider --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >/dev/null || true
+  node "$ROOT/src/cli.mjs" assist-open --repo "$repo" --step PD-C-6 --prepare-only >"$TMP_ROOT/$run_id.assist-failed-open.json"
+  node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(data.allowedSignals.join(',')!=='continue') throw new Error('continue signal missing for failed state'); console.log(data.promptPath);" "$TMP_ROOT/$run_id.assist-failed-open.json" >"$TMP_ROOT/$run_id.assist-failed-prompt-path.txt"
+  prompt_path="$(cat "$TMP_ROOT/$run_id.assist-failed-prompt-path.txt")"
+  grep -q "Allowed signals now: continue" "$prompt_path"
+  node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-6 --signal continue --reason "edits are ready" --no-run-next >"$TMP_ROOT/$run_id.assist-failed-signal.json"
+  grep -q '"pendingConfirmation": true' "$TMP_ROOT/$run_id.assist-failed-signal.json"
+  grep -q '"status": "pending"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/assist/latest-signal.json"
+  node "$ROOT/src/cli.mjs" apply-assist-signal --repo "$repo" --step PD-C-6 --no-run-next >"$TMP_ROOT/$run_id.assist-failed-apply.json"
+  grep -q '"status": "ok"' "$TMP_ROOT/$run_id.assist-failed-apply.json"
+  grep -q '"status": "accepted"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/assist/latest-signal.json"
+  grep -q "status: running" "$repo/current-note.md"
+  args="$TMP_ROOT/$run_id.assist-failed-rerun-args.txt"
+  CODEX_BIN="$fake_success" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-next --repo "$repo" --force --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >/dev/null || true
+  test -f "$args"
+}
+
 test_web_readonly() {
   local repo run_id fake args server_log server_pid url
   repo="$(seed_repo web)"
@@ -424,6 +447,7 @@ test_interrupted_run
 test_assist_gate_flow
 test_assist_rerun_recommendation
 test_assist_answer_flow
+test_assist_failed_continue
 test_web_readonly
 
 echo "runtime tests passed"

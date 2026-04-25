@@ -21,9 +21,11 @@ import { appendStepHistoryEntry, loadCurrentNote, saveCurrentNote } from "./note
 import {
   allowedAssistSignals,
   appendAssistSignal,
+  loadLatestAssistSignal,
   markAssistSessionFinished,
   markAssistSessionStarted,
-  prepareAssistSession
+  prepareAssistSession,
+  updateLatestAssistSignal
 } from "./assist-runtime.mjs";
 import {
   activeReviewPlan,
@@ -121,6 +123,8 @@ try {
     await cmdAssistOpen(args);
   } else if (command === "assist-signal") {
     await cmdAssistSignal(args);
+  } else if (command === "apply-assist-signal") {
+    await cmdApplyAssistSignal(args);
   } else if (command === "accept-recommendation") {
     await cmdAcceptRecommendation(args);
   } else if (command === "decline-recommendation") {
@@ -173,6 +177,7 @@ Usage:
   pdh-flowchart answer [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6]
   pdh-flowchart assist-open [--repo DIR] [--step PD-C-5] [--prepare-only] [--model MODEL] [--bare]
   pdh-flowchart assist-signal [--repo DIR] [--step PD-C-5] --signal recommend-approve|recommend-request-changes|recommend-reject|recommend-rerun-from|answer|continue [--reason TEXT] [--target-step PD-C-4] [--message TEXT] [--file FILE] [--no-run-next]
+  pdh-flowchart apply-assist-signal [--repo DIR] [--step PD-C-4] [--no-run-next]
   pdh-flowchart accept-recommendation [--repo DIR] [--step PD-C-5] [--no-run-next]
   pdh-flowchart decline-recommendation [--repo DIR] [--step PD-C-5] [--reason TEXT]
   pdh-flowchart show-interrupts [--repo DIR] [--step PD-C-6] [--all] [--path]
@@ -897,6 +902,42 @@ async function cmdAssistSignal(argv) {
       return;
     }
 
+    if (runtime.run.status === "failed") {
+      updateLatestAssistSignal({
+        stateDir: runtime.stateDir,
+        runId: runtime.run.id,
+        stepId,
+        mutator(current) {
+          if (!current || current.id !== recorded.id) {
+            return current;
+          }
+          return {
+            ...current,
+            status: "pending"
+          };
+        }
+      });
+      appendProgressEvent({
+        repoPath: repo,
+        runId: runtime.run.id,
+        stepId,
+        type: "assist_continue_requested",
+        provider: "runtime",
+        message: `${stepId} rerun requested via assist`,
+        payload: recorded
+      });
+      syncStepUiRuntime({ repo, stepId, nextCommands: [assistOpenCommand(repo, stepId), applyAssistSignalCommand(repo, stepId), resumeCommand(repo)] });
+      response = {
+        status: "ok",
+        stepId,
+        signal,
+        pendingConfirmation: true,
+        next: applyAssistSignalCommand(repo, stepId),
+        runNext: false
+      };
+      return;
+    }
+
     updateRun(repo, { status: "running", current_step_id: stepId });
     appendProgressEvent({
       repoPath: repo,
@@ -920,6 +961,68 @@ async function cmdAssistSignal(argv) {
   console.log(JSON.stringify(response, null, 2));
   if (shouldRunNext) {
     await cmdRunNext(["--repo", repo]);
+  }
+}
+
+async function cmdApplyAssistSignal(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  const autoRunNext = options["no-run-next"] !== "true";
+  let response = null;
+  let shouldRunNext = false;
+
+  await withRuntimeLock({ repo, options, action: async () => {
+    const runtime = requireRuntime(repo);
+    const stepId = options.step ?? runtime.run.current_step_id;
+    assertCurrentStep(runtime.run, stepId, options);
+    const signal = loadLatestAssistSignal({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId });
+    if (!signal) {
+      throw new Error(`${stepId} does not have a latest assist signal`);
+    }
+    if (signal.signal !== "continue") {
+      throw new Error(`${stepId} latest assist signal is ${signal.signal}; only continue can be applied here`);
+    }
+    if (runtime.run.status !== "failed" && runtime.run.status !== "blocked") {
+      throw new Error(`${stepId} assist continue can only be applied while status is failed or blocked; current status is ${runtime.run.status}`);
+    }
+    const updatedSignal = updateLatestAssistSignal({
+      stateDir: runtime.stateDir,
+      runId: runtime.run.id,
+      stepId,
+      mutator(current) {
+        if (!current || current.id !== signal.id) {
+          return current;
+        }
+        return {
+          ...current,
+          status: "accepted",
+          accepted_at: new Date().toISOString()
+        };
+      }
+    }) ?? signal;
+    updateRun(repo, { status: "running", current_step_id: stepId });
+    appendProgressEvent({
+      repoPath: repo,
+      runId: runtime.run.id,
+      stepId,
+      type: "assist_continue_accepted",
+      provider: "runtime",
+      message: `${stepId} rerun accepted via assist`,
+      payload: updatedSignal
+    });
+    syncStepUiRuntime({ repo, stepId, nextCommands: [rerunCurrentStepCommand(repo)] });
+    response = {
+      status: "ok",
+      stepId,
+      signal: updatedSignal.signal,
+      runNext: autoRunNext
+    };
+    shouldRunNext = autoRunNext;
+  } });
+
+  console.log(JSON.stringify(response, null, 2));
+  if (shouldRunNext) {
+    await cmdRunNext(["--repo", repo, "--force"]);
   }
 }
 
@@ -2824,12 +2927,20 @@ function runNextCommand(repo) {
   return `node src/cli.mjs run-next --repo ${shellQuote(repo)}`;
 }
 
+function rerunCurrentStepCommand(repo) {
+  return `node src/cli.mjs run-next --repo ${shellQuote(repo)} --force`;
+}
+
 function statusCommand(repo) {
   return `node src/cli.mjs status --repo ${shellQuote(repo)}`;
 }
 
 function assistOpenCommand(repo, stepId) {
   return `node src/cli.mjs assist-open --repo ${shellQuote(repo)} --step ${stepId}`;
+}
+
+function applyAssistSignalCommand(repo, stepId) {
+  return `node src/cli.mjs apply-assist-signal --repo ${shellQuote(repo)} --step ${stepId}`;
 }
 
 function resumeCommand(repo) {

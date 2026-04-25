@@ -4,6 +4,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { URL, fileURLToPath } from "node:url";
 import { renderMermaidSVG } from "beautiful-mermaid";
+import { loadLatestAssistSignal } from "./assist-runtime.mjs";
 import { createAssistTerminalManager } from "./assist-terminal.mjs";
 import { evaluateAcVerificationTable } from "./ac-verification.mjs";
 import { buildFlowView, getStep, nextStep, renderMermaidFlow } from "./flow.mjs";
@@ -56,7 +57,7 @@ export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", p
 
 function handleRequest({ request, response, repo, assistTerminalManager }) {
   const method = request.method ?? "GET";
-  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/recommendation/accept")))) {
+  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept")))) {
     sendJson(response, 405, { error: "read_only_web_ui" });
     return;
   }
@@ -101,6 +102,23 @@ function handleRequest({ request, response, repo, assistTerminalManager }) {
       sendJson(response, 200, acceptRecommendationFromWeb({ repo, stepId }));
     } catch (error) {
       sendJson(response, Number(error?.statusCode || 500), { error: "recommendation_accept_failed", message: error?.message || String(error) });
+    }
+    return;
+  }
+  if (url.pathname === "/api/assist/apply") {
+    if (method !== "POST") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    const stepId = url.searchParams.get("step");
+    if (!stepId) {
+      sendJson(response, 400, { error: "missing_step" });
+      return;
+    }
+    try {
+      sendJson(response, 200, applyAssistSignalFromWeb({ repo, stepId }));
+    } catch (error) {
+      sendJson(response, Number(error?.statusCode || 500), { error: "assist_apply_failed", message: error?.message || String(error) });
     }
     return;
   }
@@ -224,6 +242,22 @@ function acceptRecommendationFromWeb({ repo, stepId }) {
   return {
     ...accepted,
     runNextStarted: Boolean(runNextPid),
+    runNextPid
+  };
+}
+
+function applyAssistSignalFromWeb({ repo, stepId }) {
+  const applied = runCliJson({
+    repo,
+    args: ["apply-assist-signal", "--repo", repo, "--step", stepId, "--no-run-next"]
+  });
+  const runNextPid = spawnBackgroundCli({
+    repo,
+    args: ["run-next", "--repo", repo, "--force"]
+  });
+  return {
+    ...applied,
+    runNextStarted: true,
     runNextPid
   };
 }
@@ -360,6 +394,9 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor, 
     const reviewerOutputs = runtime.run?.id && step.mode === "review"
       ? loadReviewerOutputsForStep({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id })
       : [];
+    const assistSignal = runtime.run?.id
+      ? loadLatestAssistSignal({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id })
+      : null;
     return {
       ...stepMeta(step),
       progress,
@@ -367,6 +404,7 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor, 
       uiContract: step.ui ?? null,
       uiOutput: uiOutput ? redactObject(uiOutput, redactor) : null,
       uiRuntime: uiRuntime ? redactObject(uiRuntime, redactor) : null,
+      assistSignal: assistSignal ? redactObject(assistSignal, redactor) : null,
       noteSection: redactSection(resolveStepNoteSection(noteBody, step.id), redactor),
       ticketImplementationNotes,
       acTableText: redactSection(extractSection(noteBody, "AC 裏取り結果"), redactor),
@@ -1522,7 +1560,7 @@ function renderHtml() {
     flex: 0 0 auto; padding: 8px 12px;
     border-radius: 8px; border: 1px solid var(--border);
     background: var(--bg); cursor: pointer;
-    transition: transform 0.15s, border-color 0.15s;
+    transition: border-color 0.15s;
     min-width: 96px; text-align: center;
   }
   .overview-node .ov-label { font-size: 10px; color: var(--text-dim); margin-bottom: 1px; }
@@ -1544,7 +1582,7 @@ function renderHtml() {
     background: var(--pending-bg); border-color: var(--border); opacity: 0.55;
   }
   .overview-node.pending .ov-name { color: var(--pending-text); }
-  .overview-node:hover { transform: translateY(-1px); border-color: var(--border-strong); }
+  .overview-node:hover { border-color: var(--border-strong); }
   .overview-node.selected { outline: 2px solid #1c1b18; outline-offset: 1px; }
   .overview-arrow { color: var(--text-dim); flex: 0 0 auto; font-size: 12px; }
   .pdc-list { display: flex; flex-direction: column; gap: 8px; }
@@ -1552,10 +1590,10 @@ function renderHtml() {
     position: relative; background: var(--bg);
     border: 1px solid var(--border); border-radius: 10px;
     padding: 10px 12px; cursor: pointer;
-    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
     display: flex; align-items: center; gap: 10px;
   }
-  .node:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+  .node:hover { border-color: var(--border-strong); }
   .node.selected { outline: 2px solid #1c1b18; outline-offset: 1px; }
   .node-icon {
     flex: 0 0 auto; width: 26px; height: 26px;
@@ -2663,7 +2701,9 @@ function renderHtml() {
       fitAddon: null,
       socket: null,
       baselineRecommendationId: null,
+      baselineSignalId: null,
       dismissedRecommendationId: null,
+      dismissedSignalId: null,
       confirmation: null
     },
     eventSource: null,
@@ -3910,27 +3950,59 @@ function renderHtml() {
     return recommendation;
   }
 
+  function currentAssistContinueSignal() {
+    if (!state.assist.open || !state.assist.stepId || !state.data) {
+      return null;
+    }
+    const step = stepById(state.assist.stepId);
+    const signal = step?.assistSignal || null;
+    if (!signal || signal.signal !== 'continue' || signal.source !== 'assist') {
+      return null;
+    }
+    if (signal.status && signal.status !== 'pending') {
+      return null;
+    }
+    return signal;
+  }
+
   function syncAssistConfirmation() {
     if (!state.assist.open) {
       state.assist.confirmation = null;
       return;
     }
     const recommendation = currentAssistRecommendation();
-    if (!recommendation) {
+    if (recommendation) {
+      if (state.assist.confirmation?.id === recommendation.id) {
+        return;
+      }
+      if (recommendation.id === state.assist.baselineRecommendationId || recommendation.id === state.assist.dismissedRecommendationId) {
+        return;
+      }
+      state.assist.confirmation = {
+        id: recommendation.id,
+        kind: 'recommendation',
+        recommendation,
+        submitting: false
+      };
+      return;
+    }
+    const signal = currentAssistContinueSignal();
+    if (!signal) {
       if (!state.assist.confirmation?.submitting) {
         state.assist.confirmation = null;
       }
       return;
     }
-    if (state.assist.confirmation?.id === recommendation.id) {
+    if (state.assist.confirmation?.id === signal.id) {
       return;
     }
-    if (recommendation.id === state.assist.baselineRecommendationId || recommendation.id === state.assist.dismissedRecommendationId) {
+    if (signal.id === state.assist.baselineSignalId || signal.id === state.assist.dismissedSignalId) {
       return;
     }
     state.assist.confirmation = {
-      id: recommendation.id,
-      recommendation,
+      id: signal.id,
+      kind: 'signal',
+      signalEntry: signal,
       submitting: false
     };
   }
@@ -4089,7 +4161,9 @@ function renderHtml() {
     state.assist.sessionId = null;
     state.assist.status = 'idle';
     state.assist.baselineRecommendationId = null;
+    state.assist.baselineSignalId = null;
     state.assist.dismissedRecommendationId = null;
+    state.assist.dismissedSignalId = null;
     state.assist.confirmation = null;
     renderAssistModal();
   }
@@ -4150,11 +4224,18 @@ function renderHtml() {
       dismissButton.disabled = false;
       return;
     }
-    const recommendation = state.assist.confirmation.recommendation;
     confirm.classList.remove('hidden');
-    confirmTitle.textContent = recommendationLabel(recommendation).replace(/\\s*\\(.*/, '') + 'しますか？';
-    confirmBody.textContent = recommendationAcceptText(recommendation) + '\\nOK を押すと assist terminal を閉じて、runtime がこの recommendation を適用します。';
-    confirmReason.textContent = recommendation.reason ? 'Reason: ' + recommendation.reason : '';
+    if (state.assist.confirmation.kind === 'recommendation') {
+      const recommendation = state.assist.confirmation.recommendation;
+      confirmTitle.textContent = recommendationLabel(recommendation).replace(/\\s*\\(.*/, '') + 'しますか？';
+      confirmBody.textContent = recommendationAcceptText(recommendation) + '\\nOK を押すと assist terminal を閉じて、runtime がこの recommendation を適用します。';
+      confirmReason.textContent = recommendation.reason ? 'Reason: ' + recommendation.reason : '';
+    } else {
+      const signal = state.assist.confirmation.signalEntry;
+      confirmTitle.textContent = (state.assist.stepId || 'Current step') + ' を再実行しますか？';
+      confirmBody.textContent = 'OK を押すと assist terminal を閉じて、runtime がこの step を再実行します。修正済みの current-note.md / current-ticket.md / code を前提に、同じ step を最初からやり直します。';
+      confirmReason.textContent = signal?.reason ? 'Reason: ' + signal.reason : '';
+    }
     acceptButton.disabled = Boolean(state.assist.confirmation.submitting);
     dismissButton.disabled = Boolean(state.assist.confirmation.submitting);
   }
@@ -4309,7 +4390,9 @@ function renderHtml() {
     state.assist.sessionId = null;
     state.assist.status = 'starting';
     state.assist.baselineRecommendationId = stepById(stepId)?.gate?.recommendation?.id || null;
+    state.assist.baselineSignalId = null;
     state.assist.dismissedRecommendationId = null;
+    state.assist.dismissedSignalId = null;
     state.assist.confirmation = null;
     renderAssistModal();
     const terminal = ensureAssistTerminal();
@@ -4339,7 +4422,11 @@ function renderHtml() {
     if (!state.assist.confirmation) {
       return;
     }
-    state.assist.dismissedRecommendationId = state.assist.confirmation.id;
+    if (state.assist.confirmation.kind === 'recommendation') {
+      state.assist.dismissedRecommendationId = state.assist.confirmation.id;
+    } else {
+      state.assist.dismissedSignalId = state.assist.confirmation.id;
+    }
     state.assist.confirmation = null;
     renderAssistModal();
     focusAssistTerminal();
@@ -4349,14 +4436,16 @@ function renderHtml() {
     if (!state.assist.confirmation) {
       return;
     }
-    const recommendation = state.assist.confirmation.recommendation;
     const stepId = state.assist.stepId;
     state.assist.confirmation = {
       ...state.assist.confirmation,
       submitting: true
     };
     renderAssistModal();
-    const response = await fetch('/api/recommendation/accept?step=' + encodeURIComponent(stepId), {
+    const path = state.assist.confirmation.kind === 'recommendation'
+      ? '/api/recommendation/accept?step=' + encodeURIComponent(stepId)
+      : '/api/assist/apply?step=' + encodeURIComponent(stepId);
+    const response = await fetch(path, {
       method: 'POST',
       cache: 'no-store'
     });
@@ -4367,9 +4456,13 @@ function renderHtml() {
         submitting: false
       };
       renderAssistModal();
-      throw new Error(payload.message || payload.error || 'recommendation_accept_failed');
+      throw new Error(payload.message || payload.error || 'assist_confirmation_accept_failed');
     }
-    state.assist.dismissedRecommendationId = recommendation.id;
+    if (state.assist.confirmation.kind === 'recommendation') {
+      state.assist.dismissedRecommendationId = state.assist.confirmation.id;
+    } else {
+      state.assist.dismissedSignalId = state.assist.confirmation.id;
+    }
     closeAssistModal();
     if (payload?.result?.to && payload.result.to !== 'COMPLETE') {
       state.selectedId = payload.result.to;
