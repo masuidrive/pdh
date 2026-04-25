@@ -1833,6 +1833,61 @@ function renderHtml() {
   .detail-diff-line.hunk { color: #185fa5; background: #eaf2fc; }
   .detail-diff-line.add { color: #0f6e56; background: #e1f5ee; }
   .detail-diff-line.remove { color: #a32d2d; background: #fcebeb; }
+  .copy-fallback {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: rgba(28, 27, 24, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .copy-fallback.hidden { display: none; }
+  .copy-fallback-card {
+    width: min(680px, 100%);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 14px 40px rgba(0,0,0,0.16);
+    padding: 14px;
+  }
+  .copy-fallback-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .copy-fallback-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .copy-fallback-close {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-muted);
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font: inherit;
+  }
+  .copy-fallback-close:hover { border-color: var(--border-strong); color: var(--text); }
+  .copy-fallback-note {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+  .copy-fallback textarea {
+    width: 100%;
+    min-height: 110px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--text);
+    background: #fbfaf7;
+    resize: vertical;
+  }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
@@ -1895,12 +1950,23 @@ function renderHtml() {
       <div class="detail-dialog-body" id="detail-modal-body"></div>
     </div>
   </div>
+  <div class="copy-fallback hidden" id="copy-fallback">
+    <div class="copy-fallback-card" role="dialog" aria-modal="true" aria-labelledby="copy-fallback-title">
+      <div class="copy-fallback-head">
+        <div class="copy-fallback-title" id="copy-fallback-title">Manual Copy</div>
+        <button class="copy-fallback-close" id="copy-fallback-close" type="button">Close</button>
+      </div>
+      <div class="copy-fallback-note">Clipboard access is unavailable in this browser context. Press Ctrl+C or Cmd+C on the selected text below.</div>
+      <textarea id="copy-fallback-text" readonly></textarea>
+    </div>
+  </div>
 <script>
   const state = {
     data: null,
     selectedId: null,
     modalItem: null,
     modalViewMode: 'markdown',
+    copyFallbackText: null,
     eventSource: null,
     pollTimer: null
   };
@@ -3191,6 +3257,57 @@ function renderHtml() {
     renderModal();
   }
 
+  function renderCopyFallback() {
+    const root = document.getElementById('copy-fallback');
+    const textarea = document.getElementById('copy-fallback-text');
+    if (!state.copyFallbackText) {
+      root.classList.add('hidden');
+      textarea.value = '';
+      return;
+    }
+    textarea.value = state.copyFallbackText;
+    root.classList.remove('hidden');
+    window.setTimeout(() => {
+      textarea.focus();
+      textarea.select();
+      textarea.setSelectionRange(0, textarea.value.length);
+    }, 0);
+  }
+
+  function closeCopyFallback() {
+    state.copyFallbackText = null;
+    renderCopyFallback();
+  }
+
+  async function copyText(value) {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+      return 'copied';
+    }
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+    textarea.setAttribute('readonly', 'readonly');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-1000px';
+    textarea.style.left = '-1000px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, value.length);
+    let copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } finally {
+      document.body.removeChild(textarea);
+    }
+    if (!copied) {
+      state.copyFallbackText = value;
+      renderCopyFallback();
+      return 'manual';
+    }
+    return 'copied';
+  }
+
   function wireCopyButtons(root) {
     root.querySelectorAll('.detail-copy-button').forEach((button) => {
       if (button.dataset.bound === 'true') {
@@ -3201,8 +3318,8 @@ function renderHtml() {
         const original = button.textContent;
         const value = decodeURIComponent(button.dataset.copy || '');
         try {
-          await navigator.clipboard.writeText(value);
-          button.textContent = 'Copied';
+          const result = await copyText(value);
+          button.textContent = result === 'manual' ? 'Select and copy' : 'Copied';
         } catch {
           button.textContent = 'Copy failed';
         }
@@ -3223,9 +3340,9 @@ function renderHtml() {
         const original = element.textContent;
         const value = decodeURIComponent(element.dataset.clickCopy || '');
         try {
-          await navigator.clipboard.writeText(value);
+          const result = await copyText(value);
           element.classList.add('copied');
-          element.textContent = value + '\\nCopied';
+          element.textContent = value + (result === 'manual' ? '\\nSelect and copy' : '\\nCopied');
         } catch {
           element.textContent = value + '\\nCopy failed';
         }
@@ -3558,6 +3675,9 @@ function renderHtml() {
     clearRequestedModalQuery();
     renderModal();
   });
+  document.getElementById('copy-fallback-close').addEventListener('click', () => {
+    closeCopyFallback();
+  });
   document.getElementById('detail-modal').addEventListener('click', (event) => {
     if (event.target.id !== 'detail-modal') return;
     state.modalItem = null;
@@ -3565,7 +3685,15 @@ function renderHtml() {
     clearRequestedModalQuery();
     renderModal();
   });
+  document.getElementById('copy-fallback').addEventListener('click', (event) => {
+    if (event.target.id !== 'copy-fallback') return;
+    closeCopyFallback();
+  });
   document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && state.copyFallbackText) {
+      closeCopyFallback();
+      return;
+    }
     if (event.key === 'Escape' && state.modalItem) {
       state.modalItem = null;
       state.modalViewMode = 'markdown';
