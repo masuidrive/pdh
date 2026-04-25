@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { URL, fileURLToPath } from "node:url";
 import { renderMermaidSVG } from "beautiful-mermaid";
@@ -20,6 +20,7 @@ const TEXT_ARTIFACT_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".json", "
 const XTERM_JS_PATH = fileURLToPath(new URL("../node_modules/@xterm/xterm/lib/xterm.js", import.meta.url));
 const XTERM_CSS_PATH = fileURLToPath(new URL("../node_modules/@xterm/xterm/css/xterm.css", import.meta.url));
 const XTERM_FIT_JS_PATH = fileURLToPath(new URL("../node_modules/@xterm/addon-fit/lib/addon-fit.js", import.meta.url));
+const CLI_PATH = fileURLToPath(new URL("./cli.mjs", import.meta.url));
 
 export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", port = 8765 } = {}) {
   const repo = resolve(repoPath);
@@ -54,7 +55,7 @@ export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", p
 
 function handleRequest({ request, response, repo, assistTerminalManager }) {
   const method = request.method ?? "GET";
-  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && request.url?.startsWith("/api/assist/open"))) {
+  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/recommendation/accept")))) {
     sendJson(response, 405, { error: "read_only_web_ui" });
     return;
   }
@@ -82,6 +83,23 @@ function handleRequest({ request, response, repo, assistTerminalManager }) {
       sendJson(response, 200, assistTerminalManager.openSession({ stepId }));
     } catch (error) {
       sendJson(response, 500, { error: "assist_open_failed", message: error?.message || String(error) });
+    }
+    return;
+  }
+  if (url.pathname === "/api/recommendation/accept") {
+    if (method !== "POST") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    const stepId = url.searchParams.get("step");
+    if (!stepId) {
+      sendJson(response, 400, { error: "missing_step" });
+      return;
+    }
+    try {
+      sendJson(response, 200, acceptRecommendationFromWeb({ repo, stepId }));
+    } catch (error) {
+      sendJson(response, Number(error?.statusCode || 500), { error: "recommendation_accept_failed", message: error?.message || String(error) });
     }
     return;
   }
@@ -188,6 +206,59 @@ function sendEventStream({ request, response, repo }) {
   };
   request.on("close", cleanup);
   request.on("aborted", cleanup);
+}
+
+function acceptRecommendationFromWeb({ repo, stepId }) {
+  const accepted = runCliJson({
+    repo,
+    args: ["accept-recommendation", "--repo", repo, "--step", stepId, "--no-run-next"]
+  });
+  let runNextPid = null;
+  if (accepted?.result?.status !== "completed") {
+    runNextPid = spawnBackgroundCli({
+      repo,
+      args: ["run-next", "--repo", repo]
+    });
+  }
+  return {
+    ...accepted,
+    runNextStarted: Boolean(runNextPid),
+    runNextPid
+  };
+}
+
+function runCliJson({ repo, args, timeoutMs = 30000 }) {
+  const result = spawnSync(process.execPath, [CLI_PATH, ...args], {
+    cwd: repo,
+    encoding: "utf8",
+    timeout: timeoutMs,
+    env: process.env
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    const message = String(result.stderr || result.stdout || `CLI exited with ${result.status}`).trim();
+    const error = new Error(message || "CLI command failed");
+    error.statusCode = result.status === 1 ? 409 : 500;
+    throw error;
+  }
+  const text = String(result.stdout || "").trim();
+  if (!text) {
+    return {};
+  }
+  return JSON.parse(text);
+}
+
+function spawnBackgroundCli({ repo, args }) {
+  const child = spawn(process.execPath, [CLI_PATH, ...args], {
+    cwd: repo,
+    detached: true,
+    stdio: "ignore",
+    env: process.env
+  });
+  child.unref();
+  return child.pid;
 }
 
 function collectState({ repo }) {
@@ -1365,6 +1436,14 @@ function renderHtml() {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.45; transform: scale(1.3); }
   }
+  @keyframes runningHalo {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(31, 95, 191, 0.16); }
+    50% { box-shadow: 0 0 0 8px rgba(31, 95, 191, 0.05); }
+  }
+  @keyframes runningRingPulse {
+    0%, 100% { transform: scale(1); opacity: 0.34; }
+    50% { transform: scale(1.34); opacity: 0; }
+  }
   .main { display: grid; grid-template-columns: minmax(280px, 0.82fr) minmax(620px, 1.68fr); min-height: 0; flex: 1; }
   .panel-left { padding: 18px 20px 32px; border-right: 1px solid var(--border); min-width: 0; }
   .panel-right { background: var(--surface); min-width: 0; }
@@ -1424,6 +1503,7 @@ function renderHtml() {
   .overview-node.running {
     background: #eaf3ff; border-color: #b8d4fb;
     box-shadow: 0 0 0 3px rgba(31, 95, 191, 0.14);
+    animation: runningHalo 1.7s ease-in-out infinite;
   }
   .overview-node.running .ov-label, .overview-node.running .ov-name { color: #1f5fbf; }
   .overview-node.pending {
@@ -1469,6 +1549,7 @@ function renderHtml() {
   .node.running {
     background: #eaf3ff; border-color: #b8d4fb;
     box-shadow: 0 0 0 3px rgba(31, 95, 191, 0.14);
+    animation: runningHalo 1.7s ease-in-out infinite;
   }
   .node.blocked {
     background: var(--waiting-bg); border-color: var(--waiting-border);
@@ -1476,6 +1557,11 @@ function renderHtml() {
   }
   .node.waiting .node-icon { background: var(--waiting); color: #fff; position: relative; }
   .node.running .node-icon { background: #1f5fbf; color: #fff; position: relative; }
+  .node.running .node-icon::after {
+    content: ''; position: absolute; inset: -3px;
+    border: 2px solid #1f5fbf; border-radius: 50%;
+    opacity: 0.34; animation: runningRingPulse 1.7s ease-in-out infinite;
+  }
   .node.blocked .node-icon { background: var(--waiting); color: #fff; position: relative; }
   .node.waiting .node-title { color: var(--waiting-text); }
   .node.waiting .node-meta { color: var(--waiting-text); opacity: 0.8; }
@@ -2176,6 +2262,7 @@ function renderHtml() {
   }
   .assist-modal.hidden { display: none; }
   .assist-dialog {
+    position: relative;
     width: min(1120px, 100%);
     height: min(78vh, 860px);
     background: var(--bg);
@@ -2261,6 +2348,77 @@ function renderHtml() {
     color: #d7d7d7;
     font-size: 12px;
     background: #111111;
+  }
+  .assist-confirm {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: rgba(28, 27, 24, 0.42);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .assist-confirm.hidden { display: none; }
+  .assist-confirm-card {
+    width: min(520px, 100%);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+    padding: 18px;
+  }
+  .assist-confirm-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+  .assist-confirm-body {
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+  .assist-confirm-reason {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .assist-confirm-actions {
+    margin-top: 16px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .assist-confirm-button {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .assist-confirm-button:hover {
+    border-color: var(--border-strong);
+    background: var(--surface);
+  }
+  .assist-confirm-button.primary {
+    background: #1f5fbf;
+    color: #fff;
+    border-color: #1f5fbf;
+  }
+  .assist-confirm-button.primary:hover {
+    background: #1b56ad;
+    border-color: #1b56ad;
+  }
+  .assist-confirm-button[disabled] {
+    opacity: 0.65;
+    cursor: progress;
   }
   .assist-controls {
     display: flex;
@@ -2413,6 +2571,17 @@ function renderHtml() {
   </div>
   <div class="assist-modal hidden" id="assist-modal">
     <div class="assist-dialog" role="dialog" aria-modal="true" aria-labelledby="assist-modal-title">
+      <div class="assist-confirm hidden" id="assist-confirm">
+        <div class="assist-confirm-card" role="dialog" aria-modal="true" aria-labelledby="assist-confirm-title">
+          <div class="assist-confirm-title" id="assist-confirm-title">Recommendation</div>
+          <div class="assist-confirm-body" id="assist-confirm-body"></div>
+          <div class="assist-confirm-reason" id="assist-confirm-reason"></div>
+          <div class="assist-confirm-actions">
+            <button class="assist-confirm-button" id="assist-confirm-dismiss" type="button">Keep Editing</button>
+            <button class="assist-confirm-button primary" id="assist-confirm-accept" type="button">OK</button>
+          </div>
+        </div>
+      </div>
       <div class="assist-dialog-head">
         <div>
           <div class="assist-dialog-title" id="assist-modal-title">Claude Assist</div>
@@ -2458,7 +2627,10 @@ function renderHtml() {
       status: 'idle',
       terminal: null,
       fitAddon: null,
-      socket: null
+      socket: null,
+      baselineRecommendationId: null,
+      dismissedRecommendationId: null,
+      confirmation: null
     },
     eventSource: null,
     pollTimer: null
@@ -2680,6 +2852,25 @@ function renderHtml() {
       return 'この案を採用しない' + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
     }
     return String(recommendation.action || '').replaceAll('_', ' ') + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
+  }
+
+  function recommendationAcceptText(recommendation) {
+    if (!recommendation) {
+      return 'この recommendation を適用します。';
+    }
+    if (recommendation.action === 'approve') {
+      return 'この gate を通して、そのまま次の step に進めます。';
+    }
+    if (recommendation.action === 'request_changes') {
+      return 'この gate を差し戻しとして扱い、前段 step から flow をやり直します。';
+    }
+    if (recommendation.action === 'reject') {
+      return 'この案は採用せず、前段 step に戻して検討し直します。';
+    }
+    if (recommendation.action === 'rerun_from') {
+      return 'この recommendation を適用し、' + (recommendation.target_step_id || 'earlier step') + ' から再実行します。';
+    }
+    return 'この recommendation を適用します。';
   }
 
   function rerunLabelFromStepId(stepId) {
@@ -3580,6 +3771,7 @@ function renderHtml() {
     state.selectedId = state.selectedId && flow?.steps?.some((step) => step.id === state.selectedId)
       ? state.selectedId
       : currentId;
+    syncAssistConfirmation();
     const requested = requestedModalItem();
     if (requested) {
       state.modalItem = requested.item;
@@ -3592,6 +3784,8 @@ function renderHtml() {
     fetchState().then((data) => {
       if (state.modalItem) {
         state.data = data;
+        syncAssistConfirmation();
+        renderAssistModal();
         return;
       }
       applyState(data);
@@ -3633,6 +3827,8 @@ function renderHtml() {
         const data = JSON.parse(event.data);
         if (state.modalItem) {
           state.data = data;
+          syncAssistConfirmation();
+          renderAssistModal();
           return;
         }
         applyState(data);
@@ -3657,6 +3853,43 @@ function renderHtml() {
     renderDetail();
     renderModal();
     renderAssistModal();
+  }
+
+  function currentAssistRecommendation() {
+    if (!state.assist.open || !state.assist.stepId || !state.data) {
+      return null;
+    }
+    const step = stepById(state.assist.stepId);
+    const recommendation = step?.gate?.recommendation || null;
+    if (!recommendation || recommendation.status !== 'pending' || recommendation.source !== 'assist') {
+      return null;
+    }
+    return recommendation;
+  }
+
+  function syncAssistConfirmation() {
+    if (!state.assist.open) {
+      state.assist.confirmation = null;
+      return;
+    }
+    const recommendation = currentAssistRecommendation();
+    if (!recommendation) {
+      if (!state.assist.confirmation?.submitting) {
+        state.assist.confirmation = null;
+      }
+      return;
+    }
+    if (state.assist.confirmation?.id === recommendation.id) {
+      return;
+    }
+    if (recommendation.id === state.assist.baselineRecommendationId || recommendation.id === state.assist.dismissedRecommendationId) {
+      return;
+    }
+    state.assist.confirmation = {
+      id: recommendation.id,
+      recommendation,
+      submitting: false
+    };
   }
 
   function renderHeader() {
@@ -3812,6 +4045,9 @@ function renderHtml() {
     state.assist.stepId = null;
     state.assist.sessionId = null;
     state.assist.status = 'idle';
+    state.assist.baselineRecommendationId = null;
+    state.assist.dismissedRecommendationId = null;
+    state.assist.confirmation = null;
     renderAssistModal();
   }
 
@@ -3832,12 +4068,21 @@ function renderHtml() {
     const root = document.getElementById('assist-modal');
     const status = document.getElementById('assist-modal-status');
     const empty = document.getElementById('assist-terminal-empty');
+    const confirm = document.getElementById('assist-confirm');
+    const confirmTitle = document.getElementById('assist-confirm-title');
+    const confirmBody = document.getElementById('assist-confirm-body');
+    const confirmReason = document.getElementById('assist-confirm-reason');
+    const acceptButton = document.getElementById('assist-confirm-accept');
+    const dismissButton = document.getElementById('assist-confirm-dismiss');
     if (!state.assist.open) {
       root.classList.add('hidden');
       status.textContent = 'idle';
       status.className = 'assist-status';
       empty.textContent = 'Starting assist session…';
       empty.classList.remove('hidden');
+      confirm.classList.add('hidden');
+      acceptButton.disabled = false;
+      dismissButton.disabled = false;
       return;
     }
     root.classList.remove('hidden');
@@ -3852,10 +4097,23 @@ function renderHtml() {
           // Ignore resize races until the terminal is attached.
         }
       }, 0);
+    } else {
+      empty.textContent = 'Starting assist session…';
+      empty.classList.remove('hidden');
+    }
+    if (!state.assist.confirmation) {
+      confirm.classList.add('hidden');
+      acceptButton.disabled = false;
+      dismissButton.disabled = false;
       return;
     }
-    empty.textContent = 'Starting assist session…';
-    empty.classList.remove('hidden');
+    const recommendation = state.assist.confirmation.recommendation;
+    confirm.classList.remove('hidden');
+    confirmTitle.textContent = recommendationLabel(recommendation).replace(/\\s*\\(.*/, '') + 'しますか？';
+    confirmBody.textContent = recommendationAcceptText(recommendation) + '\\nOK を押すと assist terminal を閉じて、runtime がこの recommendation を適用します。';
+    confirmReason.textContent = recommendation.reason ? 'Reason: ' + recommendation.reason : '';
+    acceptButton.disabled = Boolean(state.assist.confirmation.submitting);
+    dismissButton.disabled = Boolean(state.assist.confirmation.submitting);
   }
 
   function ensureAssistTerminal() {
@@ -4007,6 +4265,9 @@ function renderHtml() {
     state.assist.stepId = stepId;
     state.assist.sessionId = null;
     state.assist.status = 'starting';
+    state.assist.baselineRecommendationId = stepById(stepId)?.gate?.recommendation?.id || null;
+    state.assist.dismissedRecommendationId = null;
+    state.assist.confirmation = null;
     renderAssistModal();
     const terminal = ensureAssistTerminal();
     terminal.reset();
@@ -4029,6 +4290,48 @@ function renderHtml() {
     state.assist.status = payload.status || 'running';
     renderAssistModal();
     connectAssistSocket(payload.sessionId);
+  }
+
+  function dismissAssistConfirmation() {
+    if (!state.assist.confirmation) {
+      return;
+    }
+    state.assist.dismissedRecommendationId = state.assist.confirmation.id;
+    state.assist.confirmation = null;
+    renderAssistModal();
+    focusAssistTerminal();
+  }
+
+  async function acceptAssistConfirmation() {
+    if (!state.assist.confirmation) {
+      return;
+    }
+    const recommendation = state.assist.confirmation.recommendation;
+    const stepId = state.assist.stepId;
+    state.assist.confirmation = {
+      ...state.assist.confirmation,
+      submitting: true
+    };
+    renderAssistModal();
+    const response = await fetch('/api/recommendation/accept?step=' + encodeURIComponent(stepId), {
+      method: 'POST',
+      cache: 'no-store'
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      state.assist.confirmation = {
+        ...state.assist.confirmation,
+        submitting: false
+      };
+      renderAssistModal();
+      throw new Error(payload.message || payload.error || 'recommendation_accept_failed');
+    }
+    state.assist.dismissedRecommendationId = recommendation.id;
+    closeAssistModal();
+    if (payload?.result?.to && payload.result.to !== 'COMPLETE') {
+      state.selectedId = payload.result.to;
+    }
+    refresh();
   }
 
   function renderCopyFallback() {
@@ -4485,6 +4788,16 @@ function renderHtml() {
   document.getElementById('assist-modal-close').addEventListener('click', () => {
     closeAssistModal();
   });
+  document.getElementById('assist-confirm-dismiss').addEventListener('click', () => {
+    dismissAssistConfirmation();
+  });
+  document.getElementById('assist-confirm-accept').addEventListener('click', async () => {
+    try {
+      await acceptAssistConfirmation();
+    } catch (error) {
+      window.alert('Failed to apply recommendation: ' + (error?.message || String(error)));
+    }
+  });
   document.querySelectorAll('[data-assist-input]').forEach((button) => {
     button.addEventListener('click', () => {
       const kind = button.dataset.assistInput;
@@ -4501,6 +4814,10 @@ function renderHtml() {
   document.getElementById('assist-modal').addEventListener('click', (event) => {
     if (event.target.id !== 'assist-modal') return;
     closeAssistModal();
+  });
+  document.getElementById('assist-confirm').addEventListener('click', (event) => {
+    if (event.target.id !== 'assist-confirm') return;
+    dismissAssistConfirmation();
   });
   document.getElementById('copy-fallback').addEventListener('click', (event) => {
     if (event.target.id !== 'copy-fallback') return;
