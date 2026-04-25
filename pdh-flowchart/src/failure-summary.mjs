@@ -20,6 +20,7 @@ export function writeFailureSummary({
   finalMessage = null,
   stderr = null,
   failedGuards = [],
+  reviewContext = null,
   message = null,
   nextCommands = []
 }) {
@@ -43,6 +44,7 @@ export function writeFailureSummary({
     finalMessage,
     stderr,
     failedGuards,
+    reviewContext,
     message,
     nextCommands
   }));
@@ -66,6 +68,7 @@ function renderFailureSummary({
   finalMessage,
   stderr,
   failedGuards,
+  reviewContext,
   message,
   nextCommands
 }) {
@@ -98,6 +101,29 @@ function renderFailureSummary({
 
   if (message) {
     lines.push("", "## Diagnosis", "", `- ${message}`);
+  }
+
+  if (reviewContext?.completedReviewers?.length) {
+    lines.push("", "## Completed Reviewers", "");
+    for (const reviewer of reviewContext.completedReviewers) {
+      lines.push(`- ${reviewer.label || reviewer.reviewerId} (${reviewer.provider || "-"}) : ${reviewer.status || "-"}`);
+      if (reviewer.summary) {
+        lines.push(`  - ${reviewer.summary}`);
+      }
+    }
+  }
+
+  if (reviewContext?.topFindings?.length) {
+    lines.push("", "## Review Findings", "");
+    for (const finding of reviewContext.topFindings) {
+      lines.push(`- [${finding.severity}] ${finding.reviewerLabel}: ${finding.title}`);
+      if (finding.evidence) {
+        lines.push(`  - Evidence: ${finding.evidence}`);
+      }
+      if (finding.recommendation) {
+        lines.push(`  - Recommendation: ${finding.recommendation}`);
+      }
+    }
   }
 
   lines.push("", "## Provider Output", "");

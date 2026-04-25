@@ -11,6 +11,7 @@ import { loadStepInterruptions } from "./interruptions.mjs";
 import { loadJudgements } from "./judgements.mjs";
 import { extractSection, loadCurrentNote, parseStepHistory } from "./note-state.mjs";
 import { createRedactor } from "./redaction.mjs";
+import { loadReviewerOutputsForStep } from "./review-runtime.mjs";
 import { loadStepUiOutput, loadStepUiRuntime } from "./step-ui.mjs";
 import { hasCompletedProviderAttempt, latestAttemptResult, latestHumanGate, loadRuntime, readProgressEvents, stepDir } from "./runtime-state.mjs";
 
@@ -280,7 +281,8 @@ function collectState({ repo }) {
     buildVariantState({ repo, runtime, variant, history, events, redactor, noteBody: note.body, ticketText, ac })
   ]));
   const activeVariant = run?.flow_variant ?? note.pdh.variant ?? "full";
-  const summary = buildSummary({ runtime, activeVariant: variants[activeVariant], ac, currentStep, currentGate, interruptions });
+  const currentStepView = currentStep ? variants[activeVariant]?.steps?.find((step) => step.id === currentStep.id) ?? null : null;
+  const summary = buildSummary({ runtime, activeVariant: variants[activeVariant], ac, currentStep: currentStepView ?? currentStep, currentGate, interruptions });
   return {
     repo,
     repoName: basename(repo),
@@ -299,7 +301,7 @@ function collectState({ repo }) {
     current: {
       gate: currentGate ? gatePayload(currentGate, redactor) : null,
       interruptions,
-      nextAction: describeNextAction({ repo, runtime, currentStep, currentGate, interruptions }),
+      nextAction: describeNextAction({ repo, runtime, currentStep: currentStepView ?? currentStep, currentGate, interruptions }),
       stepArtifacts: currentStep && run?.id ? listStepArtifacts({ stateDir: runtime.stateDir, runId: run.id, stepId: currentStep.id, redactor }) : []
     },
     history,
@@ -355,6 +357,9 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor, 
     });
     const uiOutput = runtime.run?.id ? loadStepUiOutput({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }) : null;
     const uiRuntime = runtime.run?.id ? loadStepUiRuntime({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }) : null;
+    const reviewerOutputs = runtime.run?.id && step.mode === "review"
+      ? loadReviewerOutputsForStep({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id })
+      : [];
     return {
       ...stepMeta(step),
       progress,
@@ -377,6 +382,18 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor, 
       judgements: runtime.run?.id
         ? loadJudgements({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }).map((judgement) => redactObject(judgement, redactor))
         : [],
+      reviewFindings: reviewerOutputs.flatMap((reviewer) =>
+        (reviewer.output?.findings ?? [])
+          .filter((finding) => ["critical", "major", "minor"].includes(finding.severity))
+          .map((finding) => redactObject({
+            reviewerId: reviewer.reviewerId,
+            reviewerLabel: reviewer.label || reviewer.reviewerId,
+            severity: finding.severity,
+            title: finding.title,
+            evidence: finding.evidence,
+            recommendation: finding.recommendation
+          }, redactor))
+      ),
       reviewDiff: runtime.run?.id ? redactObject(collectDiffPayload({ repo, stepId: step.id, includePatch: false }), redactor) : null,
       artifacts: runtime.run?.id ? listStepArtifacts({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id, redactor }) : [],
       events: events.filter((event) => event.stepId === step.id).slice(-12)
@@ -597,11 +614,19 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
   }
   if (runtime.run.status === "failed") {
     const command = `node src/cli.mjs resume --repo ${shellQuote(repo)}`;
+    const assist = assistOpenCommand(repo, currentStep.id);
     return {
       title: `${currentStep.id} の再実行`,
-      body: "失敗 summary を確認して `resume` か `run-provider` を再実行します。",
-      commands: [command],
+      body: failedActionBody(currentStep),
+      commands: [assist, command],
       actions: [
+        nextActionChoice({
+          label: "Open Assist",
+          description: "failed のままコード、計画、テストを見直します。修正後に Resume で同じ step を再実行します。",
+          command: assist,
+          tone: "neutral",
+          kind: "assist"
+        }),
         nextActionChoice({
           label: "Resume",
           description: "保存済み provider session から再開します。summary を確認してから使います。",
@@ -609,8 +634,8 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
           tone: "revise"
         })
       ],
-      selection: "single",
-      targetTab: "commands"
+      selection: "single_optional_assist",
+      targetTab: "detail"
     };
   }
   if (runtime.run.status === "blocked") {
@@ -674,6 +699,15 @@ function blockedActionBody(step) {
     return "provider step は完了していますが、guard が必要とする structured evidence が不足しています。step artifacts を確認してから `run-next` を再実行します。";
   }
   return `必須 guard が不足しています: ${evidence || first.id || first.guardId || "unknown"}`;
+}
+
+function failedActionBody(step) {
+  const findings = Array.isArray(step?.reviewFindings) ? step.reviewFindings : [];
+  const topFinding = findings.find((finding) => finding.severity === "critical" || finding.severity === "major") ?? findings[0];
+  if (topFinding) {
+    return `reviewer batch の一部が失敗しましたが、残っている指摘があります。先に「${topFinding.title || "review finding"}」へ対応してから Resume で ${step.id} を再実行します。`;
+  }
+  return "失敗 summary を確認し、必要なら Open Assist で修正してから `resume` を再実行します。";
 }
 
 function gatePayload(gate, redactor) {
@@ -2830,7 +2864,8 @@ function renderHtml() {
       return '通常は Show Interrupt で内容確認し、必要なら Open Assist を挟んでから Answer を返します。';
     }
     if (nextAction?.selection === 'single_optional_assist') {
-      return 'すぐに再評価するなら Run Next、先に原因を詰めるなら Open Assist を使います。';
+      const primary = listOf(nextAction?.actions).find((action) => action.kind !== 'assist');
+      return (primary?.label || '主アクション') + ' をすぐ実行するか、先に Open Assist で原因を詰めるかを選びます。';
     }
     return '通常はこのコマンドを実行します。';
   }
@@ -2983,6 +3018,14 @@ function renderHtml() {
     const diff = diffMaterialItem(step);
     if (diff) {
       items.push(diff);
+    }
+    if (step.progress.status === 'failed' && listOf(step.reviewFindings).length) {
+      const detail = step.reviewFindings.map((finding) =>
+        '[' + finding.severity + '] ' + finding.reviewerLabel + ': ' + finding.title +
+        (finding.evidence ? '\\nEvidence: ' + finding.evidence : '') +
+        (finding.recommendation ? '\\nRecommendation: ' + finding.recommendation : '')
+      ).join('\\n\\n');
+      items.push(buildShowItem('レビュー指摘', 'review_findings', 'review.yaml', detail));
     }
     items.push(noteMaterialItem(step));
     items.push(ticketMaterialItem(step));
@@ -4547,6 +4590,13 @@ function renderHtml() {
         }
       } else if (state.data.runtime.run.status === 'failed') {
         questionBody.push('<p>provider が失敗しています。summary を確認して <code>resume</code> か <code>run-provider</code> を再実行します。</p>');
+        const topFinding = listOf(step.reviewFindings).find((finding) => finding.severity === 'critical' || finding.severity === 'major') || listOf(step.reviewFindings)[0];
+        if (topFinding) {
+          questionBody.push('<p><strong>残っている指摘:</strong> ' + esc(topFinding.title || '') + '</p>');
+          if (topFinding.recommendation) {
+            questionBody.push('<p>' + esc(topFinding.recommendation) + '</p>');
+          }
+        }
       } else {
         questionBody.push('<p>' + esc(nextAction.body || 'guard が通っていません。必要な note/ticket 更新、commit、検証を追加してから run-next を再実行します。') + '</p>');
       }

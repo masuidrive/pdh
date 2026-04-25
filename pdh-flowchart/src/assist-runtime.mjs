@@ -326,11 +326,22 @@ function buildAssistPrompt({ runtime, step, gate, interruption, blockedGuards, r
     `- Signal wrapper: ${repoRelativePath(runtime.repoPath, wrappers.signalScriptPath)}`,
     `- Test wrapper: ${repoRelativePath(runtime.repoPath, wrappers.testScriptPath)} -- <command>`,
     `- Allowed signals now: ${allowedSignals.join(", ") || "(none)"}`,
-    "",
-    "Use one of these when the user wants the runtime to react:",
-    "",
-    ...signalExamples.map((example) => `- ${example}`)
   );
+
+  if (signalExamples.length > 0) {
+    lines.push(
+      "",
+      "Use one of these when the user wants the runtime to react:",
+      "",
+      ...signalExamples.map((example) => `- ${example}`)
+    );
+  } else {
+    lines.push(
+      "",
+      "No runtime signal is available in this state.",
+      "When your edits are ready, return to the web UI or CLI and use Resume / retry there."
+    );
+  }
 
   lines.push(
     "",

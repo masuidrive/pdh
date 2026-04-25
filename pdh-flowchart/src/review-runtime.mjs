@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parseDocument, stringify } from "yaml";
 import { commitStep } from "./actions.mjs";
@@ -144,6 +144,32 @@ export function loadReviewerOutput({ stateDir, runId, stepId, reviewerId }) {
   } catch {
     return null;
   }
+}
+
+export function loadReviewerOutputsForStep({ stateDir, runId, stepId }) {
+  const reviewersDir = join(stateDir, "runs", runId, "steps", stepId, "reviewers");
+  if (!existsSync(reviewersDir)) {
+    return [];
+  }
+  return readdirSync(reviewersDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const output = loadReviewerOutput({
+        stateDir,
+        runId,
+        stepId,
+        reviewerId: entry.name
+      });
+      return output
+        ? {
+            reviewerId: entry.name,
+            label: entry.name,
+            provider: "",
+            output
+          }
+        : null;
+    })
+    .filter(Boolean);
 }
 
 export function aggregateReviewerOutputs({ step, reviewPlan, reviewers }) {

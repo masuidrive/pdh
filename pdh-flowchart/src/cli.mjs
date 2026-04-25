@@ -30,6 +30,7 @@ import {
   aggregateReviewerOutputs,
   expandReviewerInstances,
   loadReviewerOutput,
+  loadReviewerOutputsForStep,
   materializeAggregatedReview,
   reviewerAttemptDir,
   reviewerOutputPath,
@@ -687,8 +688,8 @@ async function cmdAssistOpen(argv) {
     assertCurrentStep(runtime.run, stepId, options);
     const step = getStep(runtime.flow, stepId);
     const allowedSignals = allowedAssistSignals({ runStatus: runtime.run.status, step });
-    if (!allowedSignals.length) {
-      throw new Error(`assist-open is only available for needs_human, interrupted, or blocked steps; current status is ${runtime.run.status}`);
+    if (!allowedSignals.length && runtime.run.status !== "failed") {
+      throw new Error(`assist-open is only available for needs_human, interrupted, blocked, or failed steps; current status is ${runtime.run.status}`);
     }
     prepared = prepareAssistSession({
       repoPath: repo,
@@ -1811,13 +1812,26 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
   updateRun(repo, { status: status === "completed" ? "running" : "failed", current_step_id: stepId });
   const failureSummary = status === "completed"
     ? null
-    : createProviderFailureSummary({ repo, runtime: requireRuntime(repo), step, attempt, maxAttempts, rawLogPath, result: lastResult });
+    : createProviderFailureSummary({
+        repo,
+        runtime: requireRuntime(repo),
+        step,
+        attempt,
+        maxAttempts,
+        rawLogPath,
+        result: lastResult,
+        reviewContext: step.mode === "review" ? summarizePartialReviewContext(loadReviewerOutputsForStep({
+          stateDir: runtime.stateDir,
+          runId: runtime.run.id,
+          stepId
+        })) : null
+      });
   syncStepUiRuntime({
     repo,
     stepId,
     nextCommands: status === "completed"
       ? [runNextCommand(repo)]
-      : [statusCommand(repo), resumeCommand(repo)]
+      : [statusCommand(repo), assistOpenCommand(repo, stepId), resumeCommand(repo)]
   });
   return {
     status,
@@ -2341,7 +2355,10 @@ function createFailureSummaryForBlock({ repo, runtime, step, failedGuards, messa
   return summary;
 }
 
-function createProviderFailureSummary({ repo, runtime, step, attempt, maxAttempts, rawLogPath, result }) {
+function createProviderFailureSummary({ repo, runtime, step, attempt, maxAttempts, rawLogPath, result, reviewContext = null }) {
+  const reviewMessage = reviewContext?.topFindings?.[0]
+    ? `Completed reviewer findings are still available. First unresolved issue: ${reviewContext.topFindings[0].title}`
+    : null;
   const summary = writeFailureSummary({
     stateDir: runtime.stateDir,
     repoPath: repo,
@@ -2359,7 +2376,9 @@ function createProviderFailureSummary({ repo, runtime, step, attempt, maxAttempt
     rawLogPath,
     finalMessage: result?.finalMessage ?? null,
     stderr: result?.stderr ?? null,
-    nextCommands: [statusCommand(repo), resumeCommand(repo)]
+    reviewContext,
+    message: reviewMessage,
+    nextCommands: [statusCommand(repo), assistOpenCommand(repo, step.id), resumeCommand(repo)]
   });
   appendProgressEvent({
     repoPath: repo,
@@ -2372,6 +2391,33 @@ function createProviderFailureSummary({ repo, runtime, step, attempt, maxAttempt
     payload: { artifactPath: summary.artifactPath }
   });
   return summary;
+}
+
+function summarizePartialReviewContext(reviewers) {
+  const completedReviewers = reviewers
+    .filter((reviewer) => reviewer?.output)
+    .map((reviewer) => ({
+      reviewerId: reviewer.reviewerId,
+      label: reviewer.label || reviewer.reviewerId,
+      provider: reviewer.provider || "",
+      status: reviewer.output.status || "",
+      summary: reviewer.output.summary || ""
+    }));
+  const findings = reviewers.flatMap((reviewer) =>
+    (reviewer?.output?.findings ?? []).map((finding) => ({
+      ...finding,
+      reviewerId: reviewer.reviewerId,
+      reviewerLabel: reviewer.label || reviewer.reviewerId
+    }))
+  );
+  const topFindings = findings.filter((finding) => ["critical", "major"].includes(finding.severity));
+  if (!completedReviewers.length && !topFindings.length) {
+    return null;
+  }
+  return {
+    completedReviewers,
+    topFindings
+  };
 }
 
 function printProviderResult({ repo, runtime, step, result, options, trace = [] }) {
