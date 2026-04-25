@@ -363,7 +363,7 @@ test_web_readonly() {
   node - "$url" <<'NODE'
 const url = process.argv[2];
 const state = await (await fetch(`${url}api/state`)).json();
-if (state.mode !== "read-only") throw new Error("web mode is not read-only");
+if (state.mode !== "viewer+assist") throw new Error("web mode is not viewer+assist");
 if (!state.runtime.run) throw new Error("run missing from web state");
 if (!state.flow.variants.full.steps.some((step) => step.id === "PD-C-6" && step.label === "実装")) throw new Error("flow labels missing");
 const implementation = state.flow.variants.light.steps.find((step) => step.id === "PD-C-6");
@@ -373,6 +373,7 @@ if (!implementation?.uiRuntime?.changedFiles?.includes("current-note.md")) throw
 if (!state.documents?.note?.path?.endsWith("current-note.md")) throw new Error("note document path missing");
 if (!state.documents?.note?.text?.includes("PD-C-3")) throw new Error("note document text missing");
 if (!state.documents?.ticket?.path?.endsWith("current-ticket.md")) throw new Error("ticket document path missing");
+if (!state.current?.nextAction?.actions?.some((action) => action.kind === "assist")) throw new Error("assist action missing");
 if (!state.current.nextAction.commands.some((command) => command.includes("run-next"))) throw new Error("next action command missing");
 const gateStep = state.flow.variants.full.steps.find((step) => step.id === "PD-C-5");
 if (!gateStep?.uiContract?.mustShow?.includes("変更差分")) throw new Error("gate diff contract missing");

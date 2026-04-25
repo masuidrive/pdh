@@ -2,7 +2,7 @@
 
 ## 1. Product Summary
 
-`pdh-flowchart` turns the PD-C ticket flow into a repo-centric CLI runtime with explicit gates, interruptions, provider prompts, and a read-only progress UI.
+`pdh-flowchart` turns the PD-C ticket flow into a repo-centric CLI runtime with explicit gates, interruptions, provider prompts, and a viewer-first progress UI.
 
 The key product decision is:
 
@@ -159,7 +159,7 @@ The provider prompt must not inline the full contents of `current-note.md` or `c
 
 ### 8.4 Web UI
 
-The Web UI must remain read-only and show:
+The Web UI must remain viewer-first and show:
 
 - current step
 - next CLI action
@@ -188,7 +188,7 @@ In scope:
 - Codex / Claude provider adapters
 - parallel reviewer execution for review steps
 - explicit human gates and interruptions
-- read-only Web dashboard
+- viewer-first Web dashboard with stop-state assist launch
 - fixture-based user-flow tests
 
 Deferred:

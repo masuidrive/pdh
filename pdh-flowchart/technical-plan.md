@@ -10,7 +10,7 @@
 - Durable ticket intent lives in `current-ticket.md`.
 - `.pdh-flowchart/` stores transient local artifacts only.
 - CLI commands are repo-centric.
-- Web UI is read-only and derives state from note frontmatter plus transient artifacts.
+- Web UI is viewer-first and derives state from note frontmatter plus transient artifacts. It may launch a stop-state assist terminal, but progression still belongs to runtime commands and assist signals.
 - Flow semantics are internalized in this repo; runtime execution does not depend on external `pdh-dev` or `tmux-director` skills.
 - Review-step orchestration semantics (reviewer roster, pass conditions, loop-back intent) are defined in flow YAML and compiled into runtime-owned prompts.
 - Review-step reviewer rosters execute in parallel and are aggregated by the runtime into canonical note sections and structured judgement artifacts.
@@ -140,7 +140,7 @@ Responsibilities:
 
 Responsibilities:
 
-- read-only API and dashboard
+- viewer-first API and dashboard
 - current step and next action presentation
 - step progress display for Full / Light variants
 - event, artifact, and diff summaries
@@ -304,7 +304,7 @@ User-flow checks:
 - provider failure
 - resume
 - interruption
-- read-only Web UI
+- viewer-first Web UI with assist launch only
 
 Intentional real-provider check:
 

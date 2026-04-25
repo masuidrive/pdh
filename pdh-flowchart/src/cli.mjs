@@ -1104,7 +1104,7 @@ async function cmdWeb(argv) {
   const port = nonNegativeInteger(options.port ?? "8765", "--port");
   const { server, url } = await startWebServer({ repoPath: repo, host, port });
   console.log(`Web UI: ${url}`);
-  console.log("Mode: read-only");
+  console.log("Mode: viewer + assist terminal");
   console.log(`Repo: ${repo}`);
   await new Promise((resolveServer) => {
     const shutdown = () => server.close(resolveServer);

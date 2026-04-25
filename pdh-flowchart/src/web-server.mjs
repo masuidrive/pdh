@@ -2,8 +2,9 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { URL } from "node:url";
+import { URL, fileURLToPath } from "node:url";
 import { renderMermaidSVG } from "beautiful-mermaid";
+import { createAssistTerminalManager } from "./assist-terminal.mjs";
 import { evaluateAcVerificationTable } from "./ac-verification.mjs";
 import { buildFlowView, getStep, renderMermaidFlow } from "./flow.mjs";
 import { loadStepInterruptions } from "./interruptions.mjs";
@@ -16,11 +17,25 @@ import { hasCompletedProviderAttempt, latestAttemptResult, latestHumanGate, load
 const MAX_TEXT = 120000;
 const MARKDOWN_EXTENSIONS = new Set([".md", ".markdown"]);
 const TEXT_ARTIFACT_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".patch", ".diff", ".log", ".mmd"]);
+const XTERM_JS_PATH = fileURLToPath(new URL("../node_modules/@xterm/xterm/lib/xterm.js", import.meta.url));
+const XTERM_CSS_PATH = fileURLToPath(new URL("../node_modules/@xterm/xterm/css/xterm.css", import.meta.url));
+const XTERM_FIT_JS_PATH = fileURLToPath(new URL("../node_modules/@xterm/addon-fit/lib/addon-fit.js", import.meta.url));
 
 export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", port = 8765 } = {}) {
   const repo = resolve(repoPath);
+  const assistTerminalManager = createAssistTerminalManager({ repoPath: repo });
   const server = createServer((request, response) => {
-    handleRequest({ request, response, repo });
+    handleRequest({ request, response, repo, assistTerminalManager });
+  });
+  server.on("upgrade", (request, socket, head) => {
+    if (assistTerminalManager.handleUpgrade(request, socket, head)) {
+      return;
+    }
+    socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+    socket.destroy();
+  });
+  server.on("close", () => {
+    assistTerminalManager.closeAll();
   });
   return new Promise((resolveServer, reject) => {
     server.once("error", reject);
@@ -37,9 +52,9 @@ export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", p
   });
 }
 
-function handleRequest({ request, response, repo }) {
+function handleRequest({ request, response, repo, assistTerminalManager }) {
   const method = request.method ?? "GET";
-  if (method !== "GET" && method !== "HEAD") {
+  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && request.url?.startsWith("/api/assist/open"))) {
     sendJson(response, 405, { error: "read_only_web_ui" });
     return;
   }
@@ -53,8 +68,37 @@ function handleRequest({ request, response, repo }) {
     sendJson(response, 200, collectState({ repo }));
     return;
   }
+  if (url.pathname === "/api/assist/open") {
+    if (method !== "POST") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    const stepId = url.searchParams.get("step");
+    if (!stepId) {
+      sendJson(response, 400, { error: "missing_step" });
+      return;
+    }
+    try {
+      sendJson(response, 200, assistTerminalManager.openSession({ stepId }));
+    } catch (error) {
+      sendJson(response, 500, { error: "assist_open_failed", message: error?.message || String(error) });
+    }
+    return;
+  }
   if (url.pathname === "/api/events") {
     sendEventStream({ request, response, repo });
+    return;
+  }
+  if (url.pathname === "/assets/xterm.js") {
+    sendScript(response, 200, readFileSync(XTERM_JS_PATH, "utf8"));
+    return;
+  }
+  if (url.pathname === "/assets/xterm-addon-fit.js") {
+    sendScript(response, 200, readFileSync(XTERM_FIT_JS_PATH, "utf8"));
+    return;
+  }
+  if (url.pathname === "/assets/xterm.css") {
+    sendCss(response, 200, readFileSync(XTERM_CSS_PATH, "utf8"));
     return;
   }
   if (url.pathname === "/api/flow.mmd") {
@@ -169,7 +213,7 @@ function collectState({ repo }) {
   return {
     repo,
     repoName: basename(repo),
-    mode: "read-only",
+    mode: "viewer+assist",
     generatedAt: new Date().toISOString(),
     runtime: {
       run: run ? redactObject(run, redactor) : null,
@@ -496,7 +540,8 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
           label: "Open Assist",
           description: "止まった理由を Claude assist と一緒に確認し、必要な変更や検証をその場で詰めます。",
           command: assist,
-          tone: "neutral"
+          tone: "neutral",
+          kind: "assist"
         }),
         nextActionChoice({
           label: "Run Next",
@@ -879,8 +924,8 @@ function interruptAnswerCommands(repo, stepId) {
   ];
 }
 
-function nextActionChoice({ label, description, command, tone = "neutral" }) {
-  return { label, description, command, tone };
+function nextActionChoice({ label, description, command, tone = "neutral", kind = "command" }) {
+  return { label, description, command, tone, kind };
 }
 
 function humanDecisionActions(repo, stepId) {
@@ -908,7 +953,8 @@ function humanDecisionActions(repo, stepId) {
       label: "Open Assist",
       description: "判断前に Claude assist を開いて、コードや差分を見ながら詰めます。runtime の進行自体は signal で返します。",
       command: assistOpenCommand(repo, stepId),
-      tone: "neutral"
+      tone: "neutral",
+      kind: "assist"
     })
   ];
 }
@@ -926,7 +972,8 @@ function interruptAnswerActions(repo, stepId) {
       label: "Open Assist",
       description: "質問に答える前に Claude assist でコードとテストを確認します。",
       command: assistOpenCommand(repo, stepId),
-      tone: "neutral"
+      tone: "neutral",
+      kind: "assist"
     }),
     nextActionChoice({
       label: "Answer",
@@ -983,6 +1030,22 @@ function sendSvg(response, statusCode, body) {
   response.end(body);
 }
 
+function sendScript(response, statusCode, body) {
+  response.writeHead(statusCode, {
+    "content-type": "application/javascript; charset=utf-8",
+    "cache-control": "no-store"
+  });
+  response.end(body);
+}
+
+function sendCss(response, statusCode, body) {
+  response.writeHead(statusCode, {
+    "content-type": "text/css; charset=utf-8",
+    "cache-control": "no-store"
+  });
+  response.end(body);
+}
+
 function sendHtml(response, body) {
   response.writeHead(200, {
     "content-type": "text/html; charset=utf-8",
@@ -998,6 +1061,7 @@ function renderHtml() {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PDH Dev Dashboard</title>
+<link rel="stylesheet" href="/assets/xterm.css">
 <style>
   :root {
     --bg: #ffffff;
@@ -1888,6 +1952,122 @@ function renderHtml() {
     background: #fbfaf7;
     resize: vertical;
   }
+  .assist-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(28, 27, 24, 0.42);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .assist-modal.hidden { display: none; }
+  .assist-dialog {
+    width: min(1120px, 100%);
+    height: min(78vh, 860px);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.18);
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    overflow: hidden;
+  }
+  .assist-dialog-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .assist-dialog-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .assist-dialog-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .assist-status {
+    font-size: 11px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    background: var(--surface);
+  }
+  .assist-status.running {
+    color: #185fa5;
+    background: #e6f1fb;
+    border-color: #b8d5f0;
+  }
+  .assist-status.exited {
+    color: var(--text-muted);
+  }
+  .assist-dialog-close {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-muted);
+    border-radius: 6px;
+    padding: 7px 10px;
+    cursor: pointer;
+    font: inherit;
+  }
+  .assist-dialog-close:hover { border-color: var(--border-strong); color: var(--text); }
+  .assist-note {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--surface);
+  }
+  .assist-terminal-shell {
+    position: relative;
+    background: #111111;
+    min-height: 0;
+  }
+  .assist-terminal {
+    width: 100%;
+    height: 100%;
+    padding: 8px;
+  }
+  .assist-terminal-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #d7d7d7;
+    font-size: 12px;
+    background: #111111;
+  }
+  .next-action-launch {
+    width: 100%;
+    margin-top: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+  }
+  .next-action-launch:hover {
+    border-color: var(--border-strong);
+    background: var(--surface);
+  }
+  .next-action-launch-hint {
+    display: block;
+    margin-top: 3px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
@@ -1960,6 +2140,26 @@ function renderHtml() {
       <textarea id="copy-fallback-text" readonly></textarea>
     </div>
   </div>
+  <div class="assist-modal hidden" id="assist-modal">
+    <div class="assist-dialog" role="dialog" aria-modal="true" aria-labelledby="assist-modal-title">
+      <div class="assist-dialog-head">
+        <div>
+          <div class="assist-dialog-title" id="assist-modal-title">Claude Assist</div>
+        </div>
+        <div class="assist-dialog-meta">
+          <span class="assist-status" id="assist-modal-status">idle</span>
+          <button class="assist-dialog-close" id="assist-modal-close" type="button">Close</button>
+        </div>
+      </div>
+      <div class="assist-note">This terminal runs a fresh Claude assist session in the same repo checkout. Closing this viewer does not stop the session.</div>
+      <div class="assist-terminal-shell">
+        <div class="assist-terminal-empty" id="assist-terminal-empty">Starting assist session…</div>
+        <div class="assist-terminal" id="assist-terminal"></div>
+      </div>
+    </div>
+  </div>
+<script src="/assets/xterm.js"></script>
+<script src="/assets/xterm-addon-fit.js"></script>
 <script>
   const state = {
     data: null,
@@ -1967,6 +2167,15 @@ function renderHtml() {
     modalItem: null,
     modalViewMode: 'markdown',
     copyFallbackText: null,
+    assist: {
+      open: false,
+      stepId: null,
+      sessionId: null,
+      status: 'idle',
+      terminal: null,
+      fitAddon: null,
+      socket: null
+    },
     eventSource: null,
     pollTimer: null
   };
@@ -3133,6 +3342,7 @@ function renderHtml() {
     renderSteps();
     renderDetail();
     renderModal();
+    renderAssistModal();
   }
 
   function renderHeader() {
@@ -3255,6 +3465,202 @@ function renderHtml() {
     state.modalItem = item;
     state.modalViewMode = mode;
     renderModal();
+  }
+
+  function assistWebSocketUrl(sessionId) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return protocol + '//' + window.location.host + '/api/assist/ws?session=' + encodeURIComponent(sessionId);
+  }
+
+  function closeAssistSocket() {
+    if (state.assist.socket) {
+      try {
+        state.assist.socket.close();
+      } catch {
+        // Ignore close races from reconnect/shutdown.
+      }
+      state.assist.socket = null;
+    }
+  }
+
+  function closeAssistModal() {
+    closeAssistSocket();
+    if (state.assist.terminal) {
+      try {
+        state.assist.terminal.dispose();
+      } catch {
+        // Ignore terminal disposal races.
+      }
+      state.assist.terminal = null;
+      state.assist.fitAddon = null;
+    }
+    state.assist.open = false;
+    state.assist.stepId = null;
+    state.assist.sessionId = null;
+    state.assist.status = 'idle';
+    renderAssistModal();
+  }
+
+  function assistStatusLabel() {
+    if (!state.assist.sessionId) {
+      return 'idle';
+    }
+    if (state.assist.status === 'running') {
+      return state.assist.stepId ? state.assist.stepId + ' running' : 'running';
+    }
+    return state.assist.stepId ? state.assist.stepId + ' exited' : 'exited';
+  }
+
+  function renderAssistModal() {
+    const root = document.getElementById('assist-modal');
+    const status = document.getElementById('assist-modal-status');
+    const empty = document.getElementById('assist-terminal-empty');
+    if (!state.assist.open) {
+      root.classList.add('hidden');
+      status.textContent = 'idle';
+      status.className = 'assist-status';
+      empty.textContent = 'Starting assist session…';
+      empty.classList.remove('hidden');
+      return;
+    }
+    root.classList.remove('hidden');
+    status.textContent = assistStatusLabel();
+    status.className = 'assist-status ' + esc(state.assist.status);
+    if (state.assist.terminal) {
+      empty.classList.add('hidden');
+      window.setTimeout(() => {
+        try {
+          state.assist.fitAddon?.fit();
+        } catch {
+          // Ignore resize races until the terminal is attached.
+        }
+      }, 0);
+      return;
+    }
+    empty.textContent = 'Starting assist session…';
+    empty.classList.remove('hidden');
+  }
+
+  function ensureAssistTerminal() {
+    if (state.assist.terminal) {
+      return state.assist.terminal;
+    }
+    if (!window.Terminal || !window.FitAddon || !window.FitAddon.FitAddon) {
+      throw new Error('xterm_assets_missing');
+    }
+    const terminal = new window.Terminal({
+      cursorBlink: true,
+      convertEol: true,
+      fontSize: 13,
+      fontFamily: 'ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace',
+      theme: {
+        background: '#111111',
+        foreground: '#f2f2f2'
+      },
+      scrollback: 5000
+    });
+    const fitAddon = new window.FitAddon.FitAddon();
+    terminal.loadAddon(fitAddon);
+    terminal.open(document.getElementById('assist-terminal'));
+    fitAddon.fit();
+    state.assist.terminal = terminal;
+    state.assist.fitAddon = fitAddon;
+    terminal.onData((data) => {
+      if (state.assist.socket && state.assist.socket.readyState === window.WebSocket.OPEN) {
+        state.assist.socket.send(JSON.stringify({ type: 'input', data }));
+      }
+    });
+    return terminal;
+  }
+
+  function resizeAssistTerminal() {
+    if (!state.assist.terminal || !state.assist.fitAddon) {
+      return;
+    }
+    state.assist.fitAddon.fit();
+    if (state.assist.socket && state.assist.socket.readyState === window.WebSocket.OPEN) {
+      state.assist.socket.send(JSON.stringify({
+        type: 'resize',
+        cols: state.assist.terminal.cols,
+        rows: state.assist.terminal.rows
+      }));
+    }
+  }
+
+  function connectAssistSocket(sessionId) {
+    closeAssistSocket();
+    const socket = new window.WebSocket(assistWebSocketUrl(sessionId));
+    state.assist.socket = socket;
+    socket.addEventListener('open', () => {
+      resizeAssistTerminal();
+    });
+    socket.addEventListener('message', (event) => {
+      let payload = null;
+      try {
+        payload = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      const terminal = ensureAssistTerminal();
+      if (payload.type === 'snapshot') {
+        state.assist.status = payload.status || state.assist.status;
+        renderAssistModal();
+        if (payload.data) {
+          terminal.write(payload.data);
+        }
+        if (payload.status === 'exited') {
+          terminal.writeln('');
+          terminal.writeln('[assist session exited]');
+        }
+        return;
+      }
+      if (payload.type === 'output') {
+        terminal.write(payload.data || '');
+        renderAssistModal();
+        return;
+      }
+      if (payload.type === 'exit') {
+        state.assist.status = 'exited';
+        renderAssistModal();
+        terminal.writeln('');
+        terminal.writeln('[assist session exited]');
+        return;
+      }
+      if (payload.type === 'error') {
+        terminal.writeln('');
+        terminal.writeln('[assist error] ' + (payload.message || 'unknown error'));
+      }
+    });
+    socket.addEventListener('close', () => {
+      if (state.assist.socket === socket) {
+        state.assist.socket = null;
+      }
+      if (state.assist.status === 'running') {
+        state.assist.status = 'exited';
+        renderAssistModal();
+      }
+    });
+  }
+
+  async function openAssistTerminal(stepId) {
+    const response = await fetch('/api/assist/open?step=' + encodeURIComponent(stepId), {
+      method: 'POST',
+      cache: 'no-store'
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.message || payload.error || 'assist_open_failed');
+    }
+    const terminal = ensureAssistTerminal();
+    if (!payload.reused) {
+      terminal.reset();
+    }
+    state.assist.open = true;
+    state.assist.stepId = payload.stepId || stepId;
+    state.assist.sessionId = payload.sessionId;
+    state.assist.status = payload.status || 'running';
+    renderAssistModal();
+    connectAssistSocket(payload.sessionId);
   }
 
   function renderCopyFallback() {
@@ -3480,7 +3886,7 @@ function renderHtml() {
             '<span class="title">' + esc(nextAction.title) + '</span>' +
           '</div>' +
           '<div class="question-body">' + questionBody.join('') + '</div>' +
-          '<div class="viewer-note"><span class="info-icon">i</span><span>この UI は viewer です。操作は terminal の CLI で実行します。</span></div>' +
+          '<div class="viewer-note"><span class="info-icon">i</span><span>この UI は viewer を基本にしつつ、Claude assist terminal だけはここから開けます。runtime の進行判断は CLI か assist signal で行います。</span></div>' +
         '</div>';
     }
 
@@ -3563,7 +3969,13 @@ function renderHtml() {
               ) + '</span>' +
             '</div>' +
             (item.description ? '<div class="next-action-description">' + esc(item.description) + '</div>' : '') +
-            '<div class="next-action-command" data-click-copy="' + encodeURIComponent(item.command || '') + '">' + esc(item.command || '') + '</div>' +
+            (item.kind === 'assist'
+              ? '<button class="next-action-launch" type="button" data-assist-step="' + esc(step.id) + '">' +
+                  'Open Claude Assist' +
+                  '<span class="next-action-launch-hint">Launch a fresh assist terminal in this browser. The CLI fallback remains below.</span>' +
+                '</button>'
+              : '') +
+            '<div class="next-action-command"' + (item.kind === 'assist' ? '' : ' data-click-copy="' + encodeURIComponent(item.command || '') + '"') + '>' + esc(item.command || '') + '</div>' +
           '</div>';
       });
       html += '</div></div>';
@@ -3666,6 +4078,25 @@ function renderHtml() {
         openModalItem(fileModalItem(stepId, filePath), 'file');
       });
     });
+    root.querySelectorAll('[data-assist-step]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const stepId = button.dataset.assistStep;
+        if (!stepId) {
+          return;
+        }
+        const original = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = 'Opening…';
+        try {
+          await openAssistTerminal(stepId);
+        } catch (error) {
+          window.alert('Failed to open assist: ' + (error?.message || String(error)));
+        } finally {
+          button.disabled = false;
+          button.innerHTML = original;
+        }
+      });
+    });
     wireClickCopy(root);
   }
 
@@ -3678,6 +4109,9 @@ function renderHtml() {
   document.getElementById('copy-fallback-close').addEventListener('click', () => {
     closeCopyFallback();
   });
+  document.getElementById('assist-modal-close').addEventListener('click', () => {
+    closeAssistModal();
+  });
   document.getElementById('detail-modal').addEventListener('click', (event) => {
     if (event.target.id !== 'detail-modal') return;
     state.modalItem = null;
@@ -3685,13 +4119,24 @@ function renderHtml() {
     clearRequestedModalQuery();
     renderModal();
   });
+  document.getElementById('assist-modal').addEventListener('click', (event) => {
+    if (event.target.id !== 'assist-modal') return;
+    closeAssistModal();
+  });
   document.getElementById('copy-fallback').addEventListener('click', (event) => {
     if (event.target.id !== 'copy-fallback') return;
     closeCopyFallback();
   });
+  window.addEventListener('resize', () => {
+    resizeAssistTerminal();
+  });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && state.copyFallbackText) {
       closeCopyFallback();
+      return;
+    }
+    if (event.key === 'Escape' && state.assist.open) {
+      closeAssistModal();
       return;
     }
     if (event.key === 'Escape' && state.modalItem) {

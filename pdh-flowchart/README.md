@@ -1,6 +1,6 @@
 # pdh-flowchart
 
-`pdh-flowchart` is a repo-centric runtime for executing the PD-C ticket flow with explicit gates, transient local artifacts, and a read-only progress UI.
+`pdh-flowchart` is a repo-centric runtime for executing the PD-C ticket flow with explicit gates, transient local artifacts, and a viewer-first progress UI with stop-state assist launch.
 
 ## Core Model
 
@@ -8,7 +8,7 @@
 - `current-ticket.md` is the durable ticket record for Why / What / Product AC / Implementation Notes.
 - `.pdh-flowchart/` holds transient prompts, raw provider logs, gate summaries, interruptions, and other local artifacts. It is not committed.
 - The CLI operates on a repo, not on a separate SQLite run database.
-- The Web UI is read-only. Decisions and execution stay in the CLI.
+- The Web UI is viewer-first. It can launch a stop-state assist terminal, but runtime decisions and execution still stay in CLI commands or assist signals.
 - Runtime semantics are owned by this repo's flow YAML and prompt/runtime code. `pdh-dev` and `tmux-director` are not runtime dependencies.
 - Reviewer rosters, review-loop pass conditions, and review-step intent are also defined in this repo's flow YAML and compiled into provider prompts.
 - Review steps execute their configured reviewer roster in parallel, and the runtime aggregates those reviewer outputs into note sections, UI output, and guard-facing judgements.
@@ -293,7 +293,7 @@ See [examples/fake-pdh-dev/README.md](examples/fake-pdh-dev/README.md) for a com
 - `run-next` is the main user command.
 - Human gates and interruptions are explicit blocking states.
 - `current-note.md` frontmatter replaces the old SQLite / metadata-block state model.
-- The Web UI is read-only and follows the repo-centric CLI.
+- The Web UI stays viewer-first and follows the repo-centric CLI. Its only direct action is launching a stop-state assist terminal.
 
 ## Deferred
 

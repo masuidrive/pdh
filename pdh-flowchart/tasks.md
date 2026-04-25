@@ -29,6 +29,7 @@
 - [x] Move right-panel step contract into `flows/pdh-ticket-core.yaml`.
 - [x] Add provider-written `ui-output.yaml` and runtime-written `ui-runtime.yaml`.
 - [x] Replace right-panel mocks with real merged UI data.
+- [x] Launch stop-state assist sessions from the Web UI with an in-browser terminal.
 
 ## Phase 4: Verification
 
