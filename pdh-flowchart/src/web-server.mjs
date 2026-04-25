@@ -3681,12 +3681,12 @@ function renderHtml() {
   }
 
   function assistSequence(kind) {
-    if (kind === 'escape') return '\u001b';
-    if (kind === 'enter') return '\r';
-    if (kind === 'up') return '\u001b[A';
-    if (kind === 'down') return '\u001b[B';
-    if (kind === 'right') return '\u001b[C';
-    if (kind === 'left') return '\u001b[D';
+    if (kind === 'escape') return '\\u001b';
+    if (kind === 'enter') return '\\r';
+    if (kind === 'up') return '\\u001b[A';
+    if (kind === 'down') return '\\u001b[B';
+    if (kind === 'right') return '\\u001b[C';
+    if (kind === 'left') return '\\u001b[D';
     return '';
   }
 
