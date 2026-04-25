@@ -2576,18 +2576,15 @@ function renderHtml() {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-width: 100%;
   }
   .assist-key-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 44px);
-    grid-template-rows: repeat(2, 38px);
+    display: flex;
+    align-items: center;
     gap: 6px;
   }
-  .assist-key-grid .assist-key[data-key='up'] { grid-column: 2; grid-row: 1; }
-  .assist-key-grid .assist-key[data-key='left'] { grid-column: 1; grid-row: 2; }
-  .assist-key-grid .assist-key[data-key='down'] { grid-column: 2; grid-row: 2; }
-  .assist-key-grid .assist-key[data-key='right'] { grid-column: 3; grid-row: 2; }
   .assist-key {
     border: 1px solid var(--border);
     background: var(--bg);
