@@ -2740,9 +2740,9 @@ function renderHtml() {
           <button class="assist-key wide" type="button" data-assist-input="escape">Esc</button>
           <button class="assist-key wide" type="button" data-assist-input="enter">Enter</button>
           <div class="assist-key-grid">
-            <button class="assist-key" type="button" data-assist-input="up" data-key="up">↑</button>
             <button class="assist-key" type="button" data-assist-input="left" data-key="left">←</button>
             <button class="assist-key" type="button" data-assist-input="down" data-key="down">↓</button>
+            <button class="assist-key" type="button" data-assist-input="up" data-key="up">↑</button>
             <button class="assist-key" type="button" data-assist-input="right" data-key="right">→</button>
           </div>
         </div>
