@@ -2367,7 +2367,7 @@ function renderHtml() {
     border-radius: 12px;
     box-shadow: 0 22px 60px rgba(0, 0, 0, 0.18);
     display: grid;
-    grid-template-rows: auto auto 1fr auto;
+    grid-template-rows: auto auto auto 1fr auto;
     overflow: hidden;
   }
   .assist-dialog-head {
@@ -2421,6 +2421,25 @@ function renderHtml() {
     font-size: 12px;
     color: var(--text-muted);
     background: var(--surface);
+  }
+  .assist-runtime-summary {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: #fbfaf7;
+    font-size: 12px;
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .assist-runtime-summary.hidden { display: none; }
+  .assist-runtime-summary-line {
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .assist-runtime-summary-line.lead {
+    font-weight: 600;
   }
   .assist-terminal-shell {
     position: relative;
@@ -2689,6 +2708,7 @@ function renderHtml() {
         </div>
       </div>
       <div class="assist-note">This terminal runs a fresh Claude assist session in the same repo checkout. Closing this viewer does not stop the session.</div>
+      <div class="assist-runtime-summary hidden" id="assist-runtime-summary"></div>
       <div class="assist-terminal-shell">
         <div class="assist-terminal-empty" id="assist-terminal-empty">Starting assist session…</div>
         <div class="assist-terminal" id="assist-terminal"></div>
@@ -4359,6 +4379,7 @@ function renderHtml() {
     const root = document.getElementById('assist-modal');
     const status = document.getElementById('assist-modal-status');
     const empty = document.getElementById('assist-terminal-empty');
+    const summary = document.getElementById('assist-runtime-summary');
     const confirm = document.getElementById('assist-confirm');
     const confirmTitle = document.getElementById('assist-confirm-title');
     const confirmBody = document.getElementById('assist-confirm-body');
@@ -4371,6 +4392,8 @@ function renderHtml() {
       status.className = 'assist-status';
       empty.textContent = 'Starting assist session…';
       empty.classList.remove('hidden');
+      summary.classList.add('hidden');
+      summary.innerHTML = '';
       confirm.classList.add('hidden');
       acceptButton.disabled = false;
       dismissButton.disabled = false;
@@ -4379,6 +4402,16 @@ function renderHtml() {
     root.classList.remove('hidden');
     status.textContent = assistStatusLabel();
     status.className = 'assist-status ' + esc(state.assist.status);
+    const summaryLines = assistPreludeLines(state.assist.stepId, { autoOpened: false });
+    if (summaryLines.length > 0) {
+      summary.classList.remove('hidden');
+      summary.innerHTML = summaryLines.map((line, index) =>
+        '<div class="assist-runtime-summary-line' + (index === 0 ? ' lead' : '') + '">' + esc(line.replace(/^\[runtime\]\s*/, '')) + '</div>'
+      ).join('');
+    } else {
+      summary.classList.add('hidden');
+      summary.innerHTML = '';
+    }
     if (state.assist.terminal) {
       empty.classList.add('hidden');
       window.setTimeout(() => {
