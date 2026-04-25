@@ -2577,13 +2577,24 @@ function renderHtml() {
     align-items: center;
     gap: 8px;
     flex-wrap: nowrap;
-    overflow-x: auto;
+    overflow: hidden;
     max-width: 100%;
+    min-width: 0;
   }
   .assist-key-grid {
     display: flex;
     align-items: center;
     gap: 6px;
+    flex: 0 0 auto;
+  }
+  .assist-key-quick {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+  }
+  .assist-key-quick.hidden {
+    display: none;
   }
   .assist-key {
     border: 1px solid var(--border);
@@ -2744,6 +2755,14 @@ function renderHtml() {
             <button class="assist-key" type="button" data-assist-input="down" data-key="down">↓</button>
             <button class="assist-key" type="button" data-assist-input="up" data-key="up">↑</button>
             <button class="assist-key" type="button" data-assist-input="right" data-key="right">→</button>
+          </div>
+          <div class="assist-key-quick" id="assist-key-quick">
+            <button class="assist-key" type="button" data-assist-input="y">y</button>
+            <button class="assist-key" type="button" data-assist-input="n">n</button>
+            <button class="assist-key" type="button" data-assist-input="1">1</button>
+            <button class="assist-key" type="button" data-assist-input="2">2</button>
+            <button class="assist-key" type="button" data-assist-input="3">3</button>
+            <button class="assist-key" type="button" data-assist-input="4">4</button>
           </div>
         </div>
       </div>
@@ -4497,6 +4516,7 @@ function renderHtml() {
       confirm.classList.add('hidden');
       acceptButton.disabled = false;
       dismissButton.disabled = false;
+      syncAssistQuickKeysVisibility();
       return;
     }
     root.classList.remove('hidden');
@@ -4545,6 +4565,9 @@ function renderHtml() {
       confirm.classList.add('hidden');
       acceptButton.disabled = false;
       dismissButton.disabled = false;
+      window.requestAnimationFrame(() => {
+        syncAssistQuickKeysVisibility();
+      });
       return;
     }
     confirm.classList.remove('hidden');
@@ -4561,6 +4584,9 @@ function renderHtml() {
     }
     acceptButton.disabled = Boolean(state.assist.confirmation.submitting);
     dismissButton.disabled = Boolean(state.assist.confirmation.submitting);
+    window.requestAnimationFrame(() => {
+      syncAssistQuickKeysVisibility();
+    });
   }
 
   function ensureAssistTerminal() {
@@ -4634,14 +4660,29 @@ function renderHtml() {
     if (kind === 'down') return '\\u001b[B';
     if (kind === 'right') return '\\u001b[C';
     if (kind === 'left') return '\\u001b[D';
+    if (kind === 'y' || kind === 'n' || kind === '1' || kind === '2' || kind === '3' || kind === '4') return kind;
     return '';
+  }
+
+  function syncAssistQuickKeysVisibility() {
+    const group = document.querySelector('.assist-controls-group');
+    const quick = document.getElementById('assist-key-quick');
+    if (!group || !quick) {
+      return;
+    }
+    quick.classList.remove('hidden');
+    if (group.scrollWidth > group.clientWidth + 1) {
+      quick.classList.add('hidden');
+    }
   }
 
   function resizeAssistTerminal() {
     if (!state.assist.terminal || !state.assist.fitAddon) {
+      syncAssistQuickKeysVisibility();
       return;
     }
     state.assist.fitAddon.fit();
+    syncAssistQuickKeysVisibility();
     if (state.assist.socket && state.assist.socket.readyState === window.WebSocket.OPEN) {
       state.assist.socket.send(JSON.stringify({
         type: 'resize',
@@ -5286,10 +5327,6 @@ function renderHtml() {
     state.modalViewMode = 'markdown';
     clearRequestedModalQuery();
     renderModal();
-  });
-  document.getElementById('assist-modal').addEventListener('click', (event) => {
-    if (event.target.id !== 'assist-modal') return;
-    closeAssistModal();
   });
   document.getElementById('assist-confirm').addEventListener('click', (event) => {
     if (event.target.id !== 'assist-confirm') return;
