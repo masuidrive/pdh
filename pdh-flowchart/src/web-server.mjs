@@ -2136,6 +2136,10 @@ function renderHtml() {
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     min-width: 0;
   }
+  .artifact-name.prominent-doc {
+    font-size: 15px;
+    font-weight: 800;
+  }
   .artifact-size, .history-meta { color: var(--text-muted); font-size: 11px; flex: 0 0 auto; }
   .artifact-button {
     width: 100%;
@@ -2183,8 +2187,24 @@ function renderHtml() {
     font-size: 12px;
     line-height: 1.55;
     color: var(--text);
-    white-space: pre-wrap;
     overflow: hidden;
+  }
+  .artifact-inline-excerpt > :first-child { margin-top: 0; }
+  .artifact-inline-excerpt > :last-child { margin-bottom: 0; }
+  .artifact-inline-excerpt p { margin: 0 0 10px; }
+  .artifact-inline-excerpt ul,
+  .artifact-inline-excerpt ol { margin: 0 0 10px 18px; padding: 0; }
+  .artifact-inline-excerpt li + li { margin-top: 4px; }
+  .artifact-inline-excerpt code {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 11px;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .artifact-inline-excerpt .detail-code-block,
+  .artifact-inline-excerpt .detail-mermaid-card {
+    margin-top: 8px;
   }
   .document-grid {
     display: grid;
@@ -2222,6 +2242,12 @@ function renderHtml() {
     font-size: 11px;
     color: var(--text-muted);
     margin-bottom: 8px;
+  }
+  .detail-body-disabled {
+    opacity: 0.52;
+    pointer-events: none;
+    user-select: none;
+    filter: saturate(0.7);
   }
   .next-action {
     border: 1px solid var(--border);
@@ -3626,7 +3652,8 @@ function renderHtml() {
       source: focusText ? 'current-note.md#' + focusText : 'current-note.md',
       detail: focusText ? 'focus: ' + focusText : 'full file view',
       preview: textPreview(excerpt),
-      inlineExcerpt: excerpt
+      inlineExcerpt: excerpt,
+      prominentLabel: true
     };
   }
 
@@ -3644,7 +3671,8 @@ function renderHtml() {
       source: focusText ? 'current-ticket.md#' + focusText : 'current-ticket.md',
       detail: focusText ? 'focus: ' + focusText : 'full file view',
       preview: textPreview(excerpt),
-      inlineExcerpt: excerpt
+      inlineExcerpt: excerpt,
+      prominentLabel: true
     };
   }
 
@@ -4280,7 +4308,7 @@ function renderHtml() {
     }
     return (
       '<div class="artifact-inline-excerpt">' +
-        esc(item.inlineExcerpt).replaceAll('\\n', '<br>') +
+        renderMarkdownExcerpt(String(item.inlineExcerpt ?? '')) +
       '</div>'
     );
   }
@@ -5657,6 +5685,8 @@ function renderHtml() {
     const interruptions = state.data.current.interruptions || [];
     const liveLines = current && current.id === step.id ? providerActivityLines(step, 3) : [];
     const terminalStepId = current?.id || step.id;
+    const isCurrentStep = Boolean(current && current.id === step.id);
+    const isLiveRunning = isCurrentStep && step.progress?.status === 'running';
     let html =
       '<div class="detail-head">' +
         '<div class="detail-label">' + esc(step.id + ' · ' + step.provider + ' / ' + step.mode) + '</div>' +
@@ -5707,16 +5737,18 @@ function renderHtml() {
         '</div>';
     }
 
-    html +=
-      '<div class="detail-section"><div class="detail-section-title">Terminal</div>' +
-      '<button class="next-action-launch" type="button" data-assist-step="' + esc(terminalStepId) + '">' +
-        'Open Terminal' +
-      '</button>' +
-      '<div class="next-action-hint">' +
-        esc(current && current.id !== step.id
-          ? ('Open a fresh assist terminal for the current step ' + current.id + '.')
-          : ('Open a fresh assist terminal for ' + terminalStepId + '.')) +
-      '</div></div>';
+    html += '<div class="' + (isLiveRunning ? 'detail-body-disabled' : '') + '">';
+
+    if (isLiveRunning) {
+      html +=
+        '<div class="detail-section"><div class="detail-section-title">Terminal</div>' +
+        '<button class="next-action-launch" type="button" data-assist-step="' + esc(terminalStepId) + '">' +
+          'Open Terminal' +
+        '</button>' +
+        '<div class="next-action-hint">' +
+          esc('Open a fresh assist terminal for ' + terminalStepId + '.') +
+        '</div></div>';
+    }
 
     html +=
       '<div class="detail-section"><div class="detail-section-title">この step の観点</div>' +
@@ -5730,8 +5762,8 @@ function renderHtml() {
     const omitItems = listOf(contract.omit);
     const outputSummary = derivedSummaryLines(step);
     const outputRisks = derivedRiskLines(step);
-    const outputNotes = derivedNotesText(step, current && current.id === step.id ? nextAction : null);
-    const nextItems = current && current.id === step.id ? nextActionItems(nextAction) : [];
+    const outputNotes = derivedNotesText(step, isCurrentStep ? nextAction : null);
+    const nextItems = isLiveRunning ? [] : (isCurrentStep ? nextActionItems(nextAction) : []);
     if (outputSummary.length || outputRisks.length || outputNotes) {
       html += '<div class="detail-section"><div class="detail-section-title">要点</div>' +
         '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
@@ -5756,7 +5788,7 @@ function renderHtml() {
         '<button class="artifact artifact-button show-artifact-button' + (item.inlineExcerpt ? ' has-inline-excerpt' : '') + '" type="button" data-show-index="' + esc(String(index)) + '">' +
           '<div class="artifact-button-header">' +
             '<div class="artifact-copy">' +
-              '<span class="artifact-name">' + esc(item.label) + '</span>' +
+              '<span class="artifact-name' + (item.prominentLabel ? ' prominent-doc' : '') + '">' + esc(item.label) + '</span>' +
               '<span class="artifact-preview">' + esc(item.preview) + '</span>' +
             '</div>' +
             '<span class="artifact-source">' + esc(item.source || item.type) + '</span>' +
@@ -5883,6 +5915,8 @@ function renderHtml() {
           '<div class="detail-diagnostics-body">' + diagnostics.join('') + '</div>' +
         '</details>';
     }
+
+    html += '</div>';
 
     root.innerHTML = html;
     root.querySelectorAll('.show-artifact-button').forEach((button) => {
