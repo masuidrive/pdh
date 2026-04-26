@@ -5169,6 +5169,13 @@ function renderHtml() {
     }
   }
 
+  function sendAssistLoginSequence() {
+    sendAssistInput('/login', { preserveLoginHint: true });
+    window.setTimeout(() => {
+      sendAssistInput('\\r', { preserveLoginHint: true });
+    }, 1000);
+  }
+
   function updateAssistLoginAvailability(text) {
     if (shouldOfferAssistLogin(text)) {
       state.assist.loginAvailable = true;
@@ -5899,7 +5906,7 @@ function renderHtml() {
     }
   });
   document.getElementById('assist-login-button').addEventListener('click', () => {
-    sendAssistInput('/login\\r', { preserveLoginHint: true });
+    sendAssistLoginSequence();
   });
   document.querySelectorAll('[data-assist-input]').forEach((button) => {
     button.addEventListener('click', () => {
