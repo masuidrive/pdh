@@ -325,7 +325,28 @@ function runCliJson({ repo, args, timeoutMs = 30000 }) {
   if (!text) {
     return {};
   }
-  return JSON.parse(text);
+  return parseCliJsonOutput(text);
+}
+
+function parseCliJsonOutput(text) {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    for (let index = text.length - 1; index >= 0; index -= 1) {
+      const char = text[index];
+      if (char !== "{" && char !== "[") {
+        continue;
+      }
+      try {
+        return JSON.parse(text.slice(index));
+      } catch {
+        continue;
+      }
+    }
+    const wrapped = new Error(error?.message || "invalid_json");
+    wrapped.cause = error;
+    throw wrapped;
+  }
 }
 
 function spawnBackgroundCli({ repo, args }) {
