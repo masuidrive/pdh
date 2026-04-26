@@ -3104,18 +3104,6 @@ function renderHtml() {
     </header>
     <div class="main">
       <section class="panel-left">
-        <div class="summary" id="summary"></div>
-        <div class="section-head">
-          <div class="section-title">全体フロー<span class="subtitle">Ticket 開始 → Close</span></div>
-          <div class="legend">
-            <span class="legend-item"><span class="legend-dot" style="background: var(--done);"></span>完了</span>
-            <span class="legend-item"><span class="legend-dot" style="background: var(--waiting);"></span>要対応</span>
-            <span class="legend-item"><span class="legend-dot" style="background: #d3d1c7;"></span>未着手</span>
-          </div>
-        </div>
-        <div class="flow-container" style="margin-bottom:20px;">
-          <div class="overview-scroll"><div class="overview-flow" id="overview-flow"></div></div>
-        </div>
         <div class="section-head">
           <div class="section-title">PD-C: Ticket 開発<span class="subtitle">ステップ詳細</span></div>
         </div>
@@ -4447,8 +4435,6 @@ function renderHtml() {
 
   function render() {
     renderHeader();
-    renderSummary();
-    renderOverview();
     renderSteps();
     renderDetail();
     renderModal();
@@ -4755,37 +4741,6 @@ function renderHtml() {
     document.getElementById('header-right').innerHTML =
       '<span class="flow-badge">Flow: ' + esc(variant) + '</span>' +
       '<span class="' + waitingClass + '"><span class="waiting-dot"></span>' + esc(indicatorText) + '</span>';
-  }
-
-  function renderSummary() {
-    const summary = state.data.summary;
-    const ac = summary.acCounts || { verified: 0, deferred: 0, unverified: 0 };
-    const runStatus = state.data.runtime.run?.status || 'idle';
-    const currentCardClass = runStatus === 'running' ? 'summary-card running' : 'summary-card alert';
-    const currentValueClass = runStatus === 'running' ? 'value running' : 'value waiting';
-    const currentStep = selectedStep() && selectedStep().current ? selectedStep() : stepById(state.data.runtime.currentStep?.id);
-    const liveLine = providerActivityLines(currentStep, 1)[0] || '';
-    document.getElementById('summary').innerHTML =
-      '<div class="' + currentCardClass + '"><div class="label">現在</div><div class="' + currentValueClass + '">' + esc(summary.currentLabel) + '</div>' + (liveLine ? '<div class="summary-live">' + esc(liveLine) + '</div>' : '') + '</div>' +
-      '<div class="summary-card"><div class="label">AC 裏取り</div><div class="value">' + esc(ac.verified + ' verified') + ' <span class="sub">' + esc('deferred ' + ac.deferred + ' / unverified ' + ac.unverified) + '</span></div></div>';
-  }
-
-  function renderOverview() {
-    const overview = variantData().overview;
-    const root = document.getElementById('overview-flow');
-    root.innerHTML = '';
-    overview.forEach((node, index) => {
-      const el = document.createElement('div');
-      el.className = 'overview-node ' + node.state;
-      el.innerHTML = '<div class="ov-label">' + esc(node.label) + '</div><div class="ov-name">' + esc(node.title) + '</div>';
-      root.appendChild(el);
-      if (index < overview.length - 1) {
-        const arrow = document.createElement('div');
-        arrow.className = 'overview-arrow';
-        arrow.textContent = '\\u2192';
-        root.appendChild(arrow);
-      }
-    });
   }
 
   function renderSteps() {
