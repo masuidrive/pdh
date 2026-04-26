@@ -3203,7 +3203,6 @@ function buildAssistClaudeArgs({ prepared, model = null, bare = false }) {
   const args = [
     "--append-system-prompt",
     prepared.systemPrompt,
-    "--disable-slash-commands",
     "--setting-sources",
     "user",
     "--permission-mode",

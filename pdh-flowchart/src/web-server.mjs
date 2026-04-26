@@ -22,6 +22,7 @@ const TEXT_ARTIFACT_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".json", "
 const XTERM_JS_PATH = fileURLToPath(new URL("../node_modules/@xterm/xterm/lib/xterm.js", import.meta.url));
 const XTERM_CSS_PATH = fileURLToPath(new URL("../node_modules/@xterm/xterm/css/xterm.css", import.meta.url));
 const XTERM_FIT_JS_PATH = fileURLToPath(new URL("../node_modules/@xterm/addon-fit/lib/addon-fit.js", import.meta.url));
+const XTERM_WEB_LINKS_JS_PATH = fileURLToPath(new URL("../node_modules/@xterm/addon-web-links/lib/addon-web-links.js", import.meta.url));
 const CLI_PATH = fileURLToPath(new URL("./cli.mjs", import.meta.url));
 
 export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", port = 8765 } = {}) {
@@ -132,6 +133,10 @@ function handleRequest({ request, response, repo, assistTerminalManager }) {
   }
   if (url.pathname === "/assets/xterm-addon-fit.js") {
     sendScript(response, 200, readFileSync(XTERM_FIT_JS_PATH, "utf8"));
+    return;
+  }
+  if (url.pathname === "/assets/xterm-addon-web-links.js") {
+    sendScript(response, 200, readFileSync(XTERM_WEB_LINKS_JS_PATH, "utf8"));
     return;
   }
   if (url.pathname === "/assets/xterm.css") {
@@ -2596,6 +2601,34 @@ function renderHtml() {
   .assist-key-quick.hidden {
     display: none;
   }
+  .assist-login-action {
+    margin-top: 10px;
+  }
+  .assist-login-action.hidden {
+    display: none;
+  }
+  .assist-login-button {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 8px;
+    min-height: 38px;
+    padding: 0 12px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .assist-login-button:hover,
+  .assist-login-button:active {
+    border-color: var(--border-strong);
+    background: var(--surface);
+  }
+  .assist-login-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
   .assist-key {
     border: 1px solid var(--border);
     background: var(--bg);
@@ -2765,11 +2798,16 @@ function renderHtml() {
             <button class="assist-key" type="button" data-assist-input="4">4</button>
           </div>
         </div>
+        <div class="assist-login-action hidden" id="assist-login-action">
+          <button class="assist-login-button" id="assist-login-button" type="button">Run /login</button>
+          <div class="assist-login-hint">Shown only when Claude asks for /login in this terminal.</div>
+        </div>
       </div>
     </div>
   </div>
 <script src="/assets/xterm.js"></script>
 <script src="/assets/xterm-addon-fit.js"></script>
+<script src="/assets/xterm-addon-web-links.js"></script>
 <script>
   const state = {
     data: null,
@@ -2782,6 +2820,7 @@ function renderHtml() {
       stepId: null,
       sessionId: null,
       status: 'idle',
+      loginAvailable: false,
       summaryExpanded: false,
       terminal: null,
       fitAddon: null,
@@ -4462,6 +4501,7 @@ function renderHtml() {
     state.assist.stepId = null;
     state.assist.sessionId = null;
     state.assist.status = 'idle';
+    state.assist.loginAvailable = false;
     state.assist.summaryExpanded = false;
     state.assist.baselineRecommendationId = null;
     state.assist.baselineSignalId = null;
@@ -4501,6 +4541,7 @@ function renderHtml() {
     const confirmReason = document.getElementById('assist-confirm-reason');
     const acceptButton = document.getElementById('assist-confirm-accept');
     const dismissButton = document.getElementById('assist-confirm-dismiss');
+    const loginAction = document.getElementById('assist-login-action');
     if (!state.assist.open) {
       root.classList.add('hidden');
       status.textContent = 'idle';
@@ -4516,12 +4557,14 @@ function renderHtml() {
       confirm.classList.add('hidden');
       acceptButton.disabled = false;
       dismissButton.disabled = false;
+      loginAction.classList.add('hidden');
       syncAssistQuickKeysVisibility();
       return;
     }
     root.classList.remove('hidden');
     status.textContent = assistStatusLabel();
     status.className = 'assist-status ' + esc(state.assist.status);
+    loginAction.classList.toggle('hidden', !state.assist.loginAvailable);
     const summaryModel = assistSummaryModel(state.assist.stepId);
     if (summaryModel?.headline) {
       summary.classList.remove('hidden');
@@ -4593,7 +4636,7 @@ function renderHtml() {
     if (state.assist.terminal) {
       return state.assist.terminal;
     }
-    if (!window.Terminal || !window.FitAddon || !window.FitAddon.FitAddon) {
+    if (!window.Terminal || !window.FitAddon || !window.FitAddon.FitAddon || !window.WebLinksAddon || !window.WebLinksAddon.WebLinksAddon) {
       throw new Error('xterm_assets_missing');
     }
     const terminal = new window.Terminal({
@@ -4608,7 +4651,18 @@ function renderHtml() {
       scrollback: 5000
     });
     const fitAddon = new window.FitAddon.FitAddon();
+    const webLinksAddon = new window.WebLinksAddon.WebLinksAddon((event, uri) => {
+      if (!uri) {
+        return;
+      }
+      try {
+        window.open(uri, '_blank', 'noopener,noreferrer');
+      } catch {
+        window.location.href = uri;
+      }
+    });
     terminal.loadAddon(fitAddon);
+    terminal.loadAddon(webLinksAddon);
     terminal.open(document.getElementById('assist-terminal'));
     fitAddon.fit();
     state.assist.terminal = terminal;
@@ -4650,6 +4704,17 @@ function renderHtml() {
     focusAssistTerminal();
     if (state.assist.socket && state.assist.socket.readyState === window.WebSocket.OPEN) {
       state.assist.socket.send(JSON.stringify({ type: 'input', data: sequence }));
+    }
+  }
+
+  function updateAssistLoginAvailability(text) {
+    const normalized = String(text ?? '');
+    if (!normalized) {
+      return;
+    }
+    if (/not logged in|run\s+\/login/i.test(normalized)) {
+      state.assist.loginAvailable = true;
+      renderAssistModal();
     }
   }
 
@@ -4712,6 +4777,7 @@ function renderHtml() {
         state.assist.status = payload.status || state.assist.status;
         renderAssistModal();
         if (payload.data) {
+          updateAssistLoginAvailability(payload.data);
           terminal.write(payload.data);
         }
         if (payload.status === 'exited') {
@@ -4721,6 +4787,7 @@ function renderHtml() {
         return;
       }
       if (payload.type === 'output') {
+        updateAssistLoginAvailability(payload.data || '');
         terminal.write(payload.data || '');
         renderAssistModal();
         return;
@@ -4733,6 +4800,7 @@ function renderHtml() {
         return;
       }
       if (payload.type === 'error') {
+        updateAssistLoginAvailability(payload.message || '');
         terminal.writeln('');
         terminal.writeln('[assist error] ' + (payload.message || 'unknown error'));
       }
@@ -4753,6 +4821,7 @@ function renderHtml() {
     state.assist.stepId = stepId;
     state.assist.sessionId = null;
     state.assist.status = 'starting';
+    state.assist.loginAvailable = false;
     state.assist.summaryExpanded = false;
     state.assist.baselineRecommendationId = stepById(stepId)?.gate?.recommendation?.id || null;
     state.assist.baselineSignalId = null;
@@ -5314,6 +5383,9 @@ function renderHtml() {
   document.getElementById('assist-runtime-summary-toggle').addEventListener('click', () => {
     state.assist.summaryExpanded = !state.assist.summaryExpanded;
     renderAssistModal();
+  });
+  document.getElementById('assist-login-button').addEventListener('click', () => {
+    sendAssistInput('/login\\r');
   });
   document.querySelectorAll('[data-assist-input]').forEach((button) => {
     button.addEventListener('click', () => {
