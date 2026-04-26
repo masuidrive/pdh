@@ -840,7 +840,7 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
       title: `${currentStep.id} の判断`,
       body: currentGate?.recommendation?.status === "pending"
         ? recommendationBody(currentGate.recommendation, currentStep.id)
-        : (decisionRequired || "まずは gate summary と diff を確認して判断します。必要なら Open Terminal で recommendation を作るか、そのまま Approve します。"),
+        : (decisionRequired || ""),
       commands: actions.map((item) => item.command),
       actions,
       selection: "choose_one_optional_assist",
@@ -2735,13 +2735,17 @@ function renderHtml() {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 16px;
   }
   .assist-modal.hidden { display: none; }
   .assist-dialog {
     position: relative;
-    width: min(1120px, calc(100vw - 40px));
-    height: min(860px, calc(100vh - 40px));
+    width: min(1120px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    height: min(860px, calc(100vh - 32px));
+    max-height: calc(100vh - 32px);
+    min-width: 0;
+    min-height: 0;
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -2753,21 +2757,28 @@ function renderHtml() {
   .assist-dialog-head {
     padding: 14px 16px;
     border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
     gap: 12px;
+    min-width: 0;
+  }
+  .assist-dialog-copy {
+    min-width: 0;
   }
   .assist-dialog-title {
     font-size: 14px;
     font-weight: 600;
     color: var(--text);
+    overflow-wrap: anywhere;
   }
   .assist-dialog-meta {
     display: flex;
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
   }
   .assist-status {
     font-size: 12px;
@@ -2796,6 +2807,7 @@ function renderHtml() {
     padding: 10px 16px;
     border-bottom: 1px solid var(--border);
     background: #fbfaf7;
+    min-width: 0;
   }
   .assist-runtime-summary.hidden { display: none; }
   .assist-runtime-summary-main {
@@ -2821,6 +2833,7 @@ function renderHtml() {
     padding: 10px 14px;
     border-top: 1px solid var(--border);
     background: #fbfaf7;
+    min-width: 0;
   }
   .assist-prompt-drawer.hidden {
     display: none;
@@ -2830,6 +2843,7 @@ function renderHtml() {
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+    min-width: 0;
   }
   .assist-prompt-action {
     border: 1px solid var(--border);
@@ -2852,6 +2866,7 @@ function renderHtml() {
     position: relative;
     background: #111111;
     min-height: 0;
+    min-width: 0;
     overflow: hidden;
     touch-action: none;
   }
@@ -2859,9 +2874,11 @@ function renderHtml() {
     width: 100%;
     height: 100%;
     padding: 8px;
+    min-width: 0;
   }
   .assist-terminal .xterm {
     height: 100%;
+    width: 100%;
   }
   .assist-terminal .xterm-viewport {
     height: 100% !important;
@@ -2965,11 +2982,14 @@ function renderHtml() {
     border-top: 1px solid var(--border);
     background: var(--surface);
     flex-wrap: wrap;
+    min-width: 0;
   }
   .assist-controls-note {
     font-size: 11px;
     color: var(--text-muted);
-    white-space: nowrap;
+    white-space: normal;
+    min-width: 0;
+    flex: 1 1 220px;
   }
   .assist-controls-group {
     display: flex;
@@ -2979,6 +2999,8 @@ function renderHtml() {
     overflow: hidden;
     max-width: 100%;
     min-width: 0;
+    flex: 1 1 320px;
+    justify-content: flex-end;
   }
   .assist-key-grid {
     display: flex;
@@ -3104,6 +3126,21 @@ function renderHtml() {
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
   @media (max-width: 820px) {
+    .assist-modal {
+      padding: 12px;
+    }
+    .assist-dialog {
+      width: calc(100vw - 24px);
+      max-width: calc(100vw - 24px);
+      height: calc(100vh - 24px);
+      max-height: calc(100vh - 24px);
+    }
+    .assist-dialog-head {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .assist-dialog-meta {
+      justify-content: space-between;
+    }
     .main { grid-template-columns: 1fr; }
     .panel-right { border-top: 1px solid var(--border); border-right: 0; }
     .panel-left { border-right: 0; }
@@ -3174,7 +3211,7 @@ function renderHtml() {
         </div>
       </div>
       <div class="assist-dialog-head">
-        <div>
+        <div class="assist-dialog-copy">
           <div class="assist-dialog-title" id="assist-modal-title">Claude Assist</div>
         </div>
         <div class="assist-dialog-meta">
@@ -3517,11 +3554,11 @@ function renderHtml() {
     if (nextAction?.selection === 'recommended_or_assist') {
       return '通常は推奨アクションを実行します。さらに直す場合だけ Open Terminal を使います。';
     }
-    if (nextAction?.selection === 'choose_one') {
+  if (nextAction?.selection === 'choose_one') {
       return 'Choose one. 3つとも実行するのではなく、1つだけ選びます。';
     }
   if (nextAction?.selection === 'choose_one_optional_assist') {
-      return 'Open Terminal で recommendation を作るか、そのまま Approve します。差し戻しや却下は terminal 側で進めます。';
+      return '';
   }
     if (nextAction?.selection === 'ordered') {
       return '上から順に使います。必要なら先に確認コマンド、その後に回答コマンドです。';
@@ -5702,8 +5739,9 @@ function renderHtml() {
       const isError = state.data.runtime.run.status === 'failed' || (state.data.runtime.run.status === 'running' && step.processState?.stale);
       const questionBody = [];
       if (state.data.runtime.run.status === 'needs_human') {
-        questionBody.push('<p>' + esc(nextAction.body || 'この step は human gate です。terminal から判断してください。') + '</p>');
-        questionBody.push('<p>判断材料は下の diff / current-note.md / current-ticket.md と Next に集約しています。生テキストは必要なときだけ modal で開けば十分です。</p>');
+        if (nextAction?.body) {
+          questionBody.push('<p>' + esc(nextAction.body) + '</p>');
+        }
       } else if (state.data.runtime.run.status === 'interrupted') {
         const latest = interruptions[interruptions.length - 1];
         questionBody.push('<p>割り込み質問に未回答です。CLI の <code>answer</code> で回答してください。</p>');
