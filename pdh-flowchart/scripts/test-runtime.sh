@@ -239,6 +239,18 @@ test_nested_section_guard() {
   grep -q '"status":"passed"' "$TMP_ROOT/nested-section-guard.json"
 }
 
+test_recorded_step_commit_guard() {
+  local repo before
+  repo="$(seed_repo recorded-step-commit)"
+  before="$(git -C "$repo" rev-parse HEAD)"
+  printf '\nrecorded commit test\n' >>"$repo/current-note.md"
+  git -C "$repo" add current-note.md
+  git -C "$repo" -c user.name="pdh runtime test" -c user.email="pdh-runtime@example.invalid" commit -m "Unrelated commit subject" >/dev/null
+  node --input-type=module -e "import { writeStepCommitRecord, loadStepCommitRecord } from '$ROOT/src/step-commit.mjs'; const record = writeStepCommitRecord({ repoPath: '$repo', stateDir: '$repo/.pdh-flowchart', runId: 'run-test', stepId: 'PD-C-2', beforeCommit: '$before' }); if (!record?.commit) throw new Error('step commit record missing'); const loaded = loadStepCommitRecord({ stateDir: '$repo/.pdh-flowchart', runId: 'run-test', stepId: 'PD-C-2' }); if (!loaded?.commit) throw new Error('step commit record not reloadable');"
+  node --input-type=module -e "import { evaluateGuard } from '$ROOT/src/guards.mjs'; import { loadStepCommitRecord } from '$ROOT/src/step-commit.mjs'; const stepCommit = loadStepCommitRecord({ stateDir: '$repo/.pdh-flowchart', runId: 'run-test', stepId: 'PD-C-2' }); const result = evaluateGuard({ id: 'step-commit', type: 'git_commit_exists', pattern: '^\\\\[PD-C-2\\\\]', stepCommit }, { repoPath: '$repo' }); console.log(JSON.stringify(result));" >"$TMP_ROOT/recorded-step-commit.json"
+  grep -q '"status":"passed"' "$TMP_ROOT/recorded-step-commit.json"
+}
+
 test_prompt_context() {
   local repo prompt_path
   repo="$(seed_repo prompt-context)"
@@ -581,6 +593,7 @@ NODE
 
 test_frontmatter_run
 test_nested_section_guard
+test_recorded_step_commit_guard
 test_prompt_context
 test_stop_after_step
 test_blocked_run

@@ -46,6 +46,7 @@ import {
   writeReviewerAttemptResult
 } from "./review-runtime.mjs";
 import { judgementFromUiOutput, loadStepUiOutput, writeStepUiRuntime } from "./step-ui.mjs";
+import { clearStepCommitRecord, loadStepCommitRecord, writeStepCommitRecord } from "./step-commit.mjs";
 import {
   appendProgressEvent,
   cleanupRunArtifacts,
@@ -1445,6 +1446,8 @@ async function executeProviderStep({ repo, runtime, step, options }) {
   let status = "failed";
   let rawLogPath = null;
   let lastResult = null;
+  const headBeforeStep = currentHead(repo);
+  clearStepCommitRecord({ stateDir: runtime.stateDir, runId, stepId });
   while (attempt <= maxAttempts) {
     rawLogPath = join(runtime.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, `${step.provider}.raw.jsonl`);
     const resume = resolveProviderResume({
@@ -1654,6 +1657,25 @@ async function executeProviderStep({ repo, runtime, step, options }) {
       });
     }
     if (status === "completed") {
+      const stepCommit = writeStepCommitRecord({
+        repoPath: repo,
+        stateDir: runtime.stateDir,
+        runId,
+        stepId,
+        beforeCommit: headBeforeStep
+      });
+      if (stepCommit) {
+        appendProgressEvent({
+          repoPath: repo,
+          runId,
+          stepId,
+          attempt,
+          type: "artifact",
+          provider: "runtime",
+          message: `step commit ${stepCommit.short_commit}`,
+          payload: { artifactPath: stepCommit.artifactPath, stepCommit }
+        });
+      }
       materializeJudgementFromUiOutput({
         repo,
         runtime,
@@ -1740,6 +1762,8 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
   let rawLogPath = join(runtime.stateDir, "runs", runId, "steps", stepId, "reviewers");
   let lastResult = null;
   let roundHistory = [];
+  const headBeforeStep = currentHead(repo);
+  clearStepCommitRecord({ stateDir: runtime.stateDir, runId, stepId });
   while (attempt <= maxAttempts) {
     const before = snapshotNoteTicketFiles({ repoPath: repo });
     updateRun(repo, { status: "running", current_step_id: stepId });
@@ -2057,6 +2081,27 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
         message: `note/ticket patch proposal ${patchProposal.artifactPath}`,
         payload: patchProposal
       });
+    }
+    if (status === "completed") {
+      const stepCommit = writeStepCommitRecord({
+        repoPath: repo,
+        stateDir: runtime.stateDir,
+        runId,
+        stepId,
+        beforeCommit: headBeforeStep
+      });
+      if (stepCommit) {
+        appendProgressEvent({
+          repoPath: repo,
+          runId,
+          stepId,
+          attempt,
+          type: "artifact",
+          provider: "runtime",
+          message: `step commit ${stepCommit.short_commit}`,
+          payload: { artifactPath: stepCommit.artifactPath, stepCommit }
+        });
+      }
     }
     if (status === "completed" || status === "blocked" || attempt >= maxAttempts) {
       break;
@@ -2608,6 +2653,7 @@ function hydrateStepArtifactsBeforeGuards({ repo, runtime, step }) {
 
 function evaluateCurrentGuards({ repo, runtime, step, gate = null }) {
   const uiOutput = runtime.run.id ? loadStepUiOutput({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }) : null;
+  const stepCommit = runtime.run.id ? loadStepCommitRecord({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }) : null;
   const latestAttempt = step.provider === "runtime"
     ? null
     : latestAttemptResult({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id, provider: step.provider });
@@ -2617,6 +2663,7 @@ function evaluateCurrentGuards({ repo, runtime, step, gate = null }) {
     judgements: runtime.run.id ? loadJudgements({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }) : [],
     uiOutput,
     latestAttempt,
+    stepCommit,
     humanDecision: gate?.decision ?? null,
     ticketClosed: false
   });
@@ -2835,6 +2882,7 @@ function collectGuardArtifacts(runtime, stepId) {
   const stepPath = stepDir(runtime.stateDir, runtime.run.id, stepId);
   return [
     { kind: "human_gate_summary", path: join(stepPath, "human-gate-summary.md") },
+    { kind: "step_commit", path: join(stepPath, "step-commit.json") },
     ...loadJudgements({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId }).map((judgement) => ({
       kind: judgement.kind,
       path: judgement.artifactPath

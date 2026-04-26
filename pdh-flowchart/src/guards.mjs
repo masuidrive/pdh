@@ -23,7 +23,7 @@ export function evaluateGuard(guard, context = {}) {
       case "ticket_section_updated":
         return checkSection(guard, repo);
       case "git_commit_exists":
-        return checkGitCommit(guard, repo);
+        return checkGitCommit(guard, repo, context);
       case "command":
         return checkCommand(guard, repo);
       case "ac_verification_table":
@@ -113,13 +113,27 @@ function sectionHeadingMatches(target, heading) {
   return false;
 }
 
-function checkGitCommit(guard, repo) {
+function checkGitCommit(guard, repo, context = {}) {
+  const recorded = guardStepCommitRecord(guard, context);
+  if (recorded) {
+    return passIf(guard, true, `${recorded.short_commit || recorded.commit} ${recorded.subject || ""}`.trim());
+  }
   const result = spawnSync("git", ["log", "--format=%s", "-50"], { cwd: repo, text: true, encoding: "utf8" });
   if (result.status !== 0) {
     return passIf(guard, false, result.stderr.trim() || "git log failed");
   }
   const matched = new RegExp(guard.pattern).test(result.stdout);
   return passIf(guard, matched, matched ? `matched ${guard.pattern}` : `no commit matched ${guard.pattern}`);
+}
+
+function guardStepCommitRecord(guard, context = {}) {
+  if (context?.stepCommit && typeof context.stepCommit === "object" && context.stepCommit.commit) {
+    return context.stepCommit;
+  }
+  if (guard?.stepCommit && typeof guard.stepCommit === "object" && guard.stepCommit.commit) {
+    return guard.stepCommit;
+  }
+  return null;
 }
 
 function checkCommand(guard, repo) {
