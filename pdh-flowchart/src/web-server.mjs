@@ -2742,8 +2742,8 @@ function renderHtml() {
     position: relative;
     width: min(1120px, calc(100vw - 32px));
     max-width: calc(100vw - 32px);
-    height: min(860px, calc(100vh - 32px));
-    max-height: calc(100vh - 32px);
+    height: min(820px, calc(100dvh - 32px));
+    max-height: calc(100dvh - 32px);
     min-width: 0;
     min-height: 0;
     background: var(--bg);
@@ -2804,7 +2804,7 @@ function renderHtml() {
   }
   .assist-dialog-close:hover { border-color: var(--border-strong); color: var(--text); }
   .assist-runtime-summary {
-    padding: 10px 16px;
+    padding: 8px 16px;
     border-bottom: 1px solid var(--border);
     background: #fbfaf7;
     min-width: 0;
@@ -2873,7 +2873,7 @@ function renderHtml() {
   .assist-terminal {
     width: 100%;
     height: 100%;
-    padding: 8px;
+    padding: 6px 8px;
     min-width: 0;
   }
   .assist-terminal .xterm {
@@ -2978,7 +2978,7 @@ function renderHtml() {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 10px 14px 12px;
+    padding: 8px 14px 10px;
     border-top: 1px solid var(--border);
     background: var(--surface);
     flex-wrap: wrap;
@@ -3132,8 +3132,8 @@ function renderHtml() {
     .assist-dialog {
       width: calc(100vw - 24px);
       max-width: calc(100vw - 24px);
-      height: calc(100vh - 24px);
-      max-height: calc(100vh - 24px);
+      height: calc(100dvh - 24px);
+      max-height: calc(100dvh - 24px);
     }
     .assist-dialog-head {
       grid-template-columns: minmax(0, 1fr);
@@ -4585,7 +4585,7 @@ function renderHtml() {
       } else if (nextAction?.body) {
         lines.push('[runtime] diagnosis: ' + nextAction.body);
       }
-    } else if (nextAction?.body) {
+    } else if (run.status !== 'needs_human' && nextAction?.body) {
       lines.push('[runtime] next: ' + nextAction.body);
     }
     const baseline = step?.gate?.baseline || null;
@@ -4664,7 +4664,7 @@ function renderHtml() {
     } else if (run.status === 'interrupted') {
       headline = nextAction?.body || (stepId + ' is waiting for an interruption answer.');
     } else if (run.status === 'needs_human') {
-      headline = nextAction?.body || (stepId + ' is waiting for a gate decision.');
+      headline = '';
     } else if (run.status === 'running') {
       headline = 'Claude assist is attached to the current repo checkout. Closing this viewer does not stop the session.';
     } else {
