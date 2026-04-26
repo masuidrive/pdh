@@ -2082,6 +2082,18 @@ function renderHtml() {
     font-size: 11px;
     flex: 0 0 auto;
   }
+  .artifact-inline-excerpt {
+    margin: -2px 0 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--text);
+    white-space: pre-wrap;
+    overflow: hidden;
+  }
   .document-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -3462,7 +3474,7 @@ function renderHtml() {
   function noteMaterialItem(step) {
     const headings = noteFocusHeadings(step);
     const item = documentModalItem('note', headings);
-    const preview = documentExcerptText('note', headings) || documentData('note')?.text || '';
+    const excerpt = documentExcerptText('note', headings) || documentData('note')?.text || '';
     const focusText = headings.join(' / ');
     return {
       ...item,
@@ -3470,7 +3482,8 @@ function renderHtml() {
       type: 'document',
       source: focusText ? 'current-note.md#' + focusText : 'current-note.md',
       detail: focusText ? 'focus: ' + focusText : 'full file view',
-      preview: textPreview(preview)
+      preview: textPreview(excerpt),
+      inlineExcerpt: excerpt
     };
   }
 
@@ -3479,7 +3492,7 @@ function renderHtml() {
       ? ['Product AC']
       : ['Implementation Notes'];
     const item = documentModalItem('ticket', headings);
-    const preview = documentExcerptText('ticket', headings) || documentData('ticket')?.text || '';
+    const excerpt = documentExcerptText('ticket', headings) || documentData('ticket')?.text || '';
     const focusText = headings.join(' / ');
     return {
       ...item,
@@ -3487,7 +3500,8 @@ function renderHtml() {
       type: 'document',
       source: focusText ? 'current-ticket.md#' + focusText : 'current-ticket.md',
       detail: focusText ? 'focus: ' + focusText : 'full file view',
-      preview: textPreview(preview)
+      preview: textPreview(excerpt),
+      inlineExcerpt: excerpt
     };
   }
 
@@ -4222,6 +4236,17 @@ function renderHtml() {
       return item.artifactTarget.markdown ? 'markdown' : 'raw';
     }
     return 'markdown';
+  }
+
+  function inlineExcerptHtml(item, step) {
+    if (!item?.inlineExcerpt) {
+      return '';
+    }
+    return (
+      '<div class="artifact-inline-excerpt">' +
+        renderInlineRichText(item.inlineExcerpt, step).replaceAll('\\n', '<br>') +
+      '</div>'
+    );
   }
 
   function renderModalShell(_item, viewerHtml) {
@@ -5656,7 +5681,8 @@ function renderHtml() {
             '<span class="artifact-preview">' + esc(item.preview) + '</span>' +
           '</div>' +
           '<span class="artifact-source">' + esc(item.source || item.type) + '</span>' +
-        '</button>';
+        '</button>' +
+        inlineExcerptHtml(item, step);
     });
     html += '</div></div>';
 
