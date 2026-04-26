@@ -5159,12 +5159,14 @@ function renderHtml() {
     );
   }
 
-  function sendAssistInput(sequence) {
+  function sendAssistInput(sequence, { preserveLoginHint = false } = {}) {
     if (!sequence) {
       return;
     }
     focusAssistTerminal();
-    clearAssistLoginAvailability();
+    if (!preserveLoginHint) {
+      clearAssistLoginAvailability();
+    }
     if (state.assist.socket && state.assist.socket.readyState === window.WebSocket.OPEN) {
       state.assist.socket.send(JSON.stringify({ type: 'input', data: sequence }));
     }
@@ -5898,7 +5900,7 @@ function renderHtml() {
     }
   });
   document.getElementById('assist-login-button').addEventListener('click', () => {
-    sendAssistInput('/login\\r');
+    sendAssistInput('/login\\r', { preserveLoginHint: true });
   });
   document.querySelectorAll('[data-assist-input]').forEach((button) => {
     button.addEventListener('click', () => {
