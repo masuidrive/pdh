@@ -2477,6 +2477,11 @@ function renderHtml() {
     height: 100%;
     padding: 8px;
   }
+  .assist-terminal .xterm-viewport {
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
   .assist-terminal-shell:active {
     outline: 2px solid rgba(24, 95, 165, 0.45);
     outline-offset: -2px;
