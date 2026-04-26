@@ -232,7 +232,7 @@ export function writeLatestReviewerOutputMirror({ stateDir, runId, stepId, revie
 export function aggregateReviewerOutputs({ step, reviewPlan, reviewers }) {
   const kind = defaultJudgementKind(step.id);
   const acceptedStatus = kind ? defaultAcceptedJudgementStatus(kind) : null;
-  const invalidReviewer = reviewers.find((reviewer) => reviewer.output?.parseErrors?.length);
+  const invalidReviewer = reviewers.find((reviewer) => !reviewerOutputUsable(reviewer.output));
   if (invalidReviewer) {
     return {
       kind,
@@ -517,6 +517,19 @@ function normalizeReviewerOutput(value, meta = {}) {
     parseWarnings: asStringList(meta.parseWarnings),
     rawText: asString(meta.rawText)
   };
+}
+
+function reviewerOutputUsable(output) {
+  if (!output) {
+    return false;
+  }
+  if (!output.status || !output.summary) {
+    return false;
+  }
+  if (!Array.isArray(output.findings)) {
+    return false;
+  }
+  return true;
 }
 
 function normalizeReviewRepairOutput(value, meta = {}) {
