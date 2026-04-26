@@ -751,9 +751,10 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
       };
     }
     const actions = humanDecisionActions(repo, currentStep.id);
+    const decisionRequired = gateDecisionRequiredText(currentGate?.summaryText);
     return {
       title: `${currentStep.id} の判断`,
-      body: "まずは Claude assist に recommendation を作らせる運用を想定しています。必要なら direct override として terminal から approve / request-changes / reject も使えます。",
+      body: decisionRequired || "まずは gate summary と diff を確認して判断します。必要なら Open Terminal で recommendation を作るか、direct override として terminal から approve / request-changes / reject を使えます。",
       commands: actions.map((item) => item.command),
       actions,
       selection: "choose_one_optional_assist",
@@ -1362,6 +1363,22 @@ function recommendationDecisionActions(repo, runtime, step, recommendation) {
 
 function recommendationBody(recommendation) {
   return `Claude assist の推奨は「${recommendationLabel(recommendation)}」です。そのまま適用するか、assist で再作業して推奨を更新します。`;
+}
+
+function gateDecisionRequiredText(summaryText) {
+  const text = String(summaryText || "");
+  if (!text) {
+    return "";
+  }
+  const match = text.match(/## Decision Required\s+([\s\S]*?)(?:\n## |\n# |$)/);
+  if (!match) {
+    return "";
+  }
+  return match[1]
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" ");
 }
 
 function recommendationLabel(recommendation) {
