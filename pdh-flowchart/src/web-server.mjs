@@ -3321,9 +3321,6 @@ function renderHtml() {
     if (step.uiOutput?.notes) {
       return step.uiOutput.notes;
     }
-    if (step.mode === 'human' && nextAction?.commands?.length) {
-      return '判断はこの UI ではなく terminal の CLI で行います。必要なコマンドは下の Next に出します。';
-    }
     if (step.id === 'PD-C-6') {
       return preferredText(formatGuardText(step, true), step.noteSection);
     }
