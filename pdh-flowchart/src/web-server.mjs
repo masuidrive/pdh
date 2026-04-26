@@ -1572,6 +1572,14 @@ function renderHtml() {
   .summary-card .value.waiting { color: var(--waiting-text); }
   .summary-card .value.error { color: var(--critical-text); }
   .summary-card .value.running { color: #1f5fbf; }
+  .summary-live {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .section-head {
     display: flex; align-items: baseline; justify-content: space-between;
     margin: 16px 0 10px; gap: 12px; flex-wrap: wrap;
@@ -1703,6 +1711,29 @@ function renderHtml() {
   .detail-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
   .detail-title { font-size: 17px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
   .detail-desc { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+  .detail-live {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid #d9e8ff;
+    background: #f7fbff;
+    border-radius: 8px;
+  }
+  .detail-live-title {
+    font-size: 10px;
+    color: #1f5fbf;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+  }
+  .detail-live-line {
+    font-size: 11px;
+    color: #31527c;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .detail-live-line + .detail-live-line { margin-top: 4px; }
   .status-pill {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 3px 10px; border-radius: 999px;
@@ -2922,8 +2953,75 @@ function renderHtml() {
     return String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 140) || '未記録';
   }
 
+  function truncateInline(value, limit = 120) {
+    const text = String(value ?? '').replace(/\\s+/g, ' ').trim();
+    if (text.length <= limit) {
+      return text;
+    }
+    return text.slice(0, Math.max(0, limit - 1)).trimEnd() + '…';
+  }
+
   function joinedText(lines) {
     return listOf(lines).join('\\n');
+  }
+
+  function isProviderActivityEvent(event) {
+    if (!event || !event.message) {
+      return false;
+    }
+    const type = String(event.type || '');
+    if (type === 'message' || type === 'status' || type === 'tool_started' || type === 'tool_finished' || type === 'file_changed' || type === 'run_failed') {
+      return true;
+    }
+    if (type === 'reviewer_started' || type === 'reviewer_finished' || type === 'review_repair_started' || type === 'review_repair_finished') {
+      return true;
+    }
+    if (type.startsWith('reviewer_') || type.startsWith('review_repair_')) {
+      return true;
+    }
+    return false;
+  }
+
+  function providerActivityLabel(event) {
+    const type = String(event?.type || '');
+    if (type === 'tool_started') return 'tool';
+    if (type === 'tool_finished') return 'tool done';
+    if (type === 'message') return 'message';
+    if (type === 'status') return 'status';
+    if (type === 'file_changed') return 'file';
+    if (type === 'run_failed') return 'error';
+    if (type === 'reviewer_started') return 'reviewer';
+    if (type === 'reviewer_finished') return 'reviewer done';
+    if (type === 'review_repair_started') return 'repair';
+    if (type === 'review_repair_finished') return 'repair done';
+    if (type.startsWith('reviewer_tool_started')) return 'reviewer tool';
+    if (type.startsWith('reviewer_tool_finished')) return 'reviewer tool done';
+    if (type.startsWith('reviewer_message')) return 'reviewer';
+    if (type.startsWith('reviewer_status')) return 'reviewer';
+    if (type.startsWith('review_repair_tool_started')) return 'repair tool';
+    if (type.startsWith('review_repair_tool_finished')) return 'repair tool done';
+    if (type.startsWith('review_repair_message')) return 'repair';
+    if (type.startsWith('review_repair_status')) return 'repair';
+    return type || 'event';
+  }
+
+  function providerActivityLines(step, limit = 3) {
+    if (!step || step.progress?.status !== 'running') {
+      return [];
+    }
+    return listOf(step.events)
+      .filter(isProviderActivityEvent)
+      .map((event) => {
+        const provider = String(event.provider || '').trim();
+        const label = providerActivityLabel(event);
+        const message = truncateInline(event.message, 140);
+        if (!message) {
+          return '';
+        }
+        return (provider ? provider + ' · ' : '') + label + ': ' + message;
+      })
+      .filter(Boolean)
+      .slice(-limit);
   }
 
   function stepJudgementText(stepId) {
@@ -4401,8 +4499,10 @@ function renderHtml() {
     const runStatus = state.data.runtime.run?.status || 'idle';
     const currentCardClass = runStatus === 'running' ? 'summary-card running' : 'summary-card alert';
     const currentValueClass = runStatus === 'running' ? 'value running' : 'value waiting';
+    const currentStep = selectedStep() && selectedStep().current ? selectedStep() : stepById(state.data.runtime.currentStep?.id);
+    const liveLine = providerActivityLines(currentStep, 1)[0] || '';
     document.getElementById('summary').innerHTML =
-      '<div class="' + currentCardClass + '"><div class="label">現在</div><div class="' + currentValueClass + '">' + esc(summary.currentLabel) + '</div></div>' +
+      '<div class="' + currentCardClass + '"><div class="label">現在</div><div class="' + currentValueClass + '">' + esc(summary.currentLabel) + '</div>' + (liveLine ? '<div class="summary-live">' + esc(liveLine) + '</div>' : '') + '</div>' +
       '<div class="summary-card"><div class="label">AC 裏取り</div><div class="value">' + esc(ac.verified + ' verified') + ' <span class="sub">' + esc('deferred ' + ac.deferred + ' / unverified ' + ac.unverified) + '</span></div></div>';
   }
 
@@ -5250,12 +5350,16 @@ function renderHtml() {
     const nextAction = state.data.current.nextAction;
     const currentGate = state.data.current.gate;
     const interruptions = state.data.current.interruptions || [];
+    const liveLines = current && current.id === step.id ? providerActivityLines(step, 3) : [];
     let html =
       '<div class="detail-head">' +
         '<div class="detail-label">' + esc(step.id + ' · ' + step.provider + ' / ' + step.mode) + '</div>' +
         '<div class="detail-title">' + esc(step.label) + '</div>' +
         '<div class="detail-desc">' + esc(step.summary || '') + '</div>' +
         '<span class="status-pill ' + esc(step.progress.status) + '"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;"></span>' + esc(step.progress.label) + '</span>' +
+        (liveLines.length
+          ? '<div class="detail-live"><div class="detail-live-title">Live</div>' + liveLines.map((line) => '<div class="detail-live-line">' + esc(line) + '</div>').join('') + '</div>'
+          : '') +
       '</div>';
 
     if (current && current.id === step.id && (state.data.runtime.run?.status === 'needs_human' || state.data.runtime.run?.status === 'interrupted' || state.data.runtime.run?.status === 'failed' || state.data.runtime.run?.status === 'blocked')) {
