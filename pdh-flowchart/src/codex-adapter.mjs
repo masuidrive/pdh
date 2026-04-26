@@ -15,6 +15,7 @@ export async function runCodex({
   timeoutMs = null,
   idleTimeoutMs = null,
   killGraceMs = 5000,
+  onSpawn = () => {},
   onEvent = () => {}
 }) {
   mkdirSync(dirname(rawLogPath), { recursive: true });
@@ -43,6 +44,7 @@ export async function runCodex({
     env: effectiveEnv,
     stdio: ["pipe", "pipe", "pipe"]
   });
+  onSpawn({ pid: child.pid ?? null });
 
   let finalMessage = "";
   let sessionId = null;
@@ -129,6 +131,7 @@ export async function runCodex({
   const exitCode = timeout.timedOut ? 124 : (closed.code ?? (closed.signal ? 1 : 0));
   return {
     exitCode,
+    pid: child.pid ?? null,
     finalMessage,
     sessionId,
     stderr,

@@ -383,6 +383,9 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor, 
     const interruptions = current && runtime.run?.id
       ? loadStepInterruptions({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }).map((item) => redactObject(item, redactor))
       : [];
+    const processState = runtime.run?.id
+      ? collectStepProcessState({ stateDir: runtime.stateDir, runId: runtime.run.id, step, attempt })
+      : null;
     const progress = stepProgress({
       runtime,
       variant,
@@ -392,6 +395,7 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor, 
       historyEntry,
       gate,
       attempt,
+      processState,
       interruptions
     });
     const uiOutput = runtime.run?.id ? loadStepUiOutput({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }) : null;
@@ -406,6 +410,7 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor, 
       ...stepMeta(step),
       progress,
       current,
+      processState,
       uiContract: step.ui ?? null,
       uiOutput: uiOutput ? redactObject(uiOutput, redactor) : null,
       uiRuntime: uiRuntime ? redactObject(uiRuntime, redactor) : null,
@@ -516,7 +521,112 @@ function buildSummary({ runtime, activeVariant, ac, currentStep, currentGate, in
   };
 }
 
-function stepProgress({ runtime, sequence, index, step, historyEntry, gate, attempt, interruptions }) {
+function collectStepProcessState({ stateDir, runId, step, attempt }) {
+  const entries = step.mode === "review"
+    ? collectReviewProcessEntries({ stateDir, runId, stepId: step.id })
+    : collectProviderProcessEntries({ attempt });
+  if (!entries.length) {
+    return {
+      activeCount: 0,
+      stale: false,
+      active: [],
+      dead: [],
+      note: ""
+    };
+  }
+  const active = entries.filter((entry) => entry.alive);
+  const dead = entries.filter((entry) => !entry.alive);
+  if (active.length > 0) {
+    return {
+      activeCount: active.length,
+      stale: false,
+      active,
+      dead,
+      note: active.length === 1
+        ? `${active[0].label} が実行中です。`
+        : `${active.length} 個の provider process が実行中です。`
+    };
+  }
+  return {
+    activeCount: 0,
+    stale: true,
+    active,
+    dead,
+    note: dead.length === 1
+      ? `${dead[0].label} は終了しています。runtime の state が stale です。`
+      : `${dead.length} 個の provider process はすでに終了しています。runtime の state が stale です。`
+  };
+}
+
+function collectProviderProcessEntries({ attempt }) {
+  const pid = Number(attempt?.pid);
+  if (!Number.isInteger(pid) || pid <= 0 || attempt?.status !== "running") {
+    return [];
+  }
+  return [{
+    label: attempt.provider || "provider",
+    pid,
+    alive: isPidAlive(pid)
+  }];
+}
+
+function collectReviewProcessEntries({ stateDir, runId, stepId }) {
+  const root = join(stateDir, "runs", runId, "steps", stepId, "review-rounds");
+  if (!existsSync(root)) {
+    return [];
+  }
+  const entries = [];
+  for (const roundEntry of readdirSync(root, { withFileTypes: true })) {
+    if (!roundEntry.isDirectory() || !/^round-\d+$/.test(roundEntry.name)) {
+      continue;
+    }
+    const roundDir = join(root, roundEntry.name);
+    const reviewersDir = join(roundDir, "reviewers");
+    if (existsSync(reviewersDir)) {
+      for (const reviewerEntry of readdirSync(reviewersDir, { withFileTypes: true })) {
+        if (!reviewerEntry.isDirectory()) {
+          continue;
+        }
+        const reviewerDir = join(reviewersDir, reviewerEntry.name);
+        for (const attemptEntry of readdirSync(reviewerDir, { withFileTypes: true })) {
+          if (!attemptEntry.isDirectory() || !/^attempt-\d+$/.test(attemptEntry.name)) {
+            continue;
+          }
+          const result = safeReadJson(join(reviewerDir, attemptEntry.name, "result.json"));
+          const pid = Number(result?.pid);
+          if (result?.status === "running" && Number.isInteger(pid) && pid > 0) {
+            entries.push({
+              label: `${reviewerEntry.name} (${roundEntry.name})`,
+              pid,
+              alive: isPidAlive(pid)
+            });
+          }
+        }
+      }
+    }
+    const repair = safeReadJson(join(roundDir, "repair-result.json"));
+    const repairPid = Number(repair?.pid);
+    if (repair?.status === "running" && Number.isInteger(repairPid) && repairPid > 0) {
+      entries.push({
+        label: `repair (${roundEntry.name})`,
+        pid: repairPid,
+        alive: isPidAlive(repairPid)
+      });
+    }
+  }
+  return entries;
+}
+
+function isPidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function stepProgress({ runtime, sequence, index, step, historyEntry, gate, attempt, processState, interruptions }) {
   const run = runtime.run;
   if (!sequence.includes(step.id)) {
     return progress("skipped", "スキップ", "選択中 variant では実行しない step です。");
@@ -529,6 +639,9 @@ function stepProgress({ runtime, sequence, index, step, historyEntry, gate, atte
   }
   const currentIndex = sequence.indexOf(run.current_step_id);
   if (step.id === run.current_step_id) {
+    if (run.status === "running" && processState?.stale) {
+      return progress("failed", "stalled", processState.note || "provider process is no longer alive.");
+    }
     if (run.status === "needs_human") {
       if (gate?.recommendation?.status === "pending") {
         return progress("waiting", "ユーザ回答待ち", "agent recommendation を適用するか、Open Assist で再作業するかを選びます。");
@@ -546,6 +659,9 @@ function stepProgress({ runtime, sequence, index, step, historyEntry, gate, atte
     }
     if (step.provider !== "runtime" && run.id && hasCompletedProviderAttempt({ stateDir: runtime.stateDir, runId: run.id, stepId: step.id, provider: step.provider })) {
       return progress("waiting", "advance待ち", "`run-next` で guard 評価と遷移を進めます。");
+    }
+    if (processState?.activeCount > 0) {
+      return progress("running", "実行中", processState.note || "provider がこの step を実行しています。");
     }
     return progress("running", "実行中", "provider がこの step を実行しています。");
   }
@@ -673,6 +789,32 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
         nextActionChoice({
           label: "Resume",
           description: "保存済み provider session から再開します。summary を確認してから使います。",
+          command,
+          tone: "revise"
+        })
+      ],
+      selection: "single_optional_assist",
+      targetTab: "detail"
+    };
+  }
+  if (runtime.run.status === "running" && currentStep?.processState?.stale) {
+    const command = `node src/cli.mjs resume --repo ${shellQuote(repo)}`;
+    const assist = assistOpenCommand(repo, currentStep.id);
+    return {
+      title: `${currentStep.id} の再実行`,
+      body: currentStep.processState.note || "provider process は終了していますが、runtime state は running のままです。summary を確認してから再実行します。",
+      commands: [assist, command],
+      actions: [
+        nextActionChoice({
+          label: "Open Assist",
+          description: "stale running になる直前の変更や reviewer 指摘を確認します。",
+          command: assist,
+          tone: "neutral",
+          kind: "assist"
+        }),
+        nextActionChoice({
+          label: "Resume",
+          description: "同じ step を再実行します。",
           command,
           tone: "revise"
         })
@@ -1032,6 +1174,14 @@ function splitLines(value) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function safeReadJson(path) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
 }
 
 function safeReadText(path, redactor) {
@@ -1539,13 +1689,15 @@ function renderHtml() {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.45; transform: scale(1.3); }
   }
-  @keyframes runningHalo {
-    0%, 100% { box-shadow: 0 0 0 3px rgba(31, 95, 191, 0.16); }
-    50% { box-shadow: 0 0 0 8px rgba(31, 95, 191, 0.05); }
-  }
-  @keyframes runningRingPulse {
-    0%, 100% { transform: scale(1); opacity: 0.34; }
-    50% { transform: scale(1.34); opacity: 0; }
+  @keyframes runningBorderBlink {
+    0%, 100% {
+      border-color: #b8d4fb;
+      box-shadow: 0 0 0 1px rgba(31, 95, 191, 0.10);
+    }
+    50% {
+      border-color: #1f5fbf;
+      box-shadow: 0 0 0 3px rgba(31, 95, 191, 0.22);
+    }
   }
   .main { display: grid; grid-template-columns: minmax(280px, 0.82fr) minmax(620px, 1.68fr); min-height: 0; flex: 1; }
   .panel-left { padding: 18px 20px 32px; border-right: 1px solid var(--border); min-width: 0; }
@@ -1613,8 +1765,8 @@ function renderHtml() {
   .overview-node.waiting .ov-label, .overview-node.waiting .ov-name { color: var(--waiting-text); }
   .overview-node.running {
     background: #eaf3ff; border-color: #b8d4fb;
-    box-shadow: 0 0 0 3px rgba(31, 95, 191, 0.14);
-    animation: runningHalo 1.7s ease-in-out infinite;
+    box-shadow: 0 0 0 1px rgba(31, 95, 191, 0.10);
+    animation: runningBorderBlink 1.2s step-end infinite;
   }
   .overview-node.running .ov-label, .overview-node.running .ov-name { color: #1f5fbf; }
   .overview-node.pending {
@@ -1659,17 +1811,8 @@ function renderHtml() {
   }
   .node.running {
     background: #eaf3ff; border-color: #b8d4fb;
-    box-shadow: 0 0 0 3px rgba(31, 95, 191, 0.14);
-    animation: runningHalo 1.7s ease-in-out infinite;
-  }
-  .node.running::after {
-    content: '';
-    position: absolute;
-    inset: -2px;
-    border-radius: 12px;
-    border: 2px solid rgba(31, 95, 191, 0.46);
-    pointer-events: none;
-    animation: runningRingPulse 1.7s ease-in-out infinite;
+    box-shadow: 0 0 0 1px rgba(31, 95, 191, 0.10);
+    animation: runningBorderBlink 1.2s step-end infinite;
   }
   .node.blocked {
     background: var(--waiting-bg); border-color: var(--waiting-border);
@@ -2970,13 +3113,13 @@ function renderHtml() {
       return false;
     }
     const type = String(event.type || '');
-    if (type === 'message' || type === 'status' || type === 'tool_started' || type === 'tool_finished' || type === 'file_changed' || type === 'run_failed') {
+    if (type === 'message' || type === 'tool_started' || type === 'tool_finished' || type === 'file_changed' || type === 'run_failed') {
       return true;
     }
     if (type === 'reviewer_started' || type === 'reviewer_finished' || type === 'review_repair_started' || type === 'review_repair_finished') {
       return true;
     }
-    if (type.startsWith('reviewer_') || type.startsWith('review_repair_')) {
+    if (type.startsWith('reviewer_tool_') || type.startsWith('reviewer_message') || type.startsWith('review_repair_tool_') || type.startsWith('review_repair_message')) {
       return true;
     }
     return false;
@@ -3015,7 +3158,7 @@ function renderHtml() {
         const provider = String(event.provider || '').trim();
         const label = providerActivityLabel(event);
         const message = truncateInline(event.message, 140);
-        if (!message) {
+        if (!message || /claude user event/i.test(message)) {
           return '';
         }
         return (provider ? provider + ' · ' : '') + label + ': ' + message;
@@ -5362,8 +5505,8 @@ function renderHtml() {
           : '') +
       '</div>';
 
-    if (current && current.id === step.id && (state.data.runtime.run?.status === 'needs_human' || state.data.runtime.run?.status === 'interrupted' || state.data.runtime.run?.status === 'failed' || state.data.runtime.run?.status === 'blocked')) {
-      const isError = state.data.runtime.run.status === 'failed';
+    if (current && current.id === step.id && (state.data.runtime.run?.status === 'needs_human' || state.data.runtime.run?.status === 'interrupted' || state.data.runtime.run?.status === 'failed' || state.data.runtime.run?.status === 'blocked' || (state.data.runtime.run?.status === 'running' && step.processState?.stale))) {
+      const isError = state.data.runtime.run.status === 'failed' || (state.data.runtime.run.status === 'running' && step.processState?.stale);
       const questionBody = [];
       if (state.data.runtime.run.status === 'needs_human') {
         questionBody.push('<p>' + esc(nextAction.body || 'この step は human gate です。terminal から判断してください。') + '</p>');
@@ -5384,6 +5527,9 @@ function renderHtml() {
             questionBody.push('<p>' + esc(topFinding.recommendation) + '</p>');
           }
         }
+      } else if (state.data.runtime.run.status === 'running' && step.processState?.stale) {
+        questionBody.push('<p>' + esc(step.processState.note || 'provider process は終了していますが、runtime state は running のままです。') + '</p>');
+        questionBody.push('<p>通常は <code>Resume</code> で同じ step を再実行します。必要なら Open Assist で直前の変更を確認してから戻します。</p>');
       } else {
         questionBody.push('<p>' + esc(nextAction.body || 'guard が通っていません。必要な note/ticket 更新、commit、検証を追加してから run-next を再実行します。') + '</p>');
       }

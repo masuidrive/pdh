@@ -19,6 +19,7 @@ export async function runClaude({
   timeoutMs = null,
   idleTimeoutMs = null,
   killGraceMs = 5000,
+  onSpawn = () => {},
   onEvent = () => {}
 }) {
   mkdirSync(dirname(rawLogPath), { recursive: true });
@@ -53,6 +54,7 @@ export async function runClaude({
     env: effectiveEnv,
     stdio: ["ignore", "pipe", "pipe"]
   });
+  onSpawn({ pid: child.pid ?? null });
 
   let finalMessage = "";
   let sessionId = null;
@@ -136,6 +138,7 @@ export async function runClaude({
   const exitCode = timeout.timedOut ? 124 : (closed.code ?? (closed.signal ? 1 : 0));
   return {
     exitCode,
+    pid: child.pid ?? null,
     finalMessage,
     sessionId,
     stderr,

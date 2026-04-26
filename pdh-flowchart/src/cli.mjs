@@ -1462,6 +1462,7 @@ async function executeProviderStep({ repo, runtime, step, options }) {
     let attemptState = {
       provider: step.provider,
       status: "running",
+      pid: null,
       exitCode: null,
       finalMessage: null,
       stderr: "",
@@ -1502,6 +1503,19 @@ async function executeProviderStep({ repo, runtime, step, options }) {
           timeoutMs,
           idleTimeoutMs,
           killGraceMs: providerKillGraceMs(options),
+          onSpawn({ pid }) {
+            attemptState = {
+              ...attemptState,
+              pid: pid ?? null
+            };
+            writeAttemptResult({
+              stateDir: runtime.stateDir,
+              runId,
+              stepId,
+              attempt,
+              result: attemptState
+            });
+          },
           onEvent(event) {
             attemptState = {
               ...attemptState,
@@ -1541,6 +1555,19 @@ async function executeProviderStep({ repo, runtime, step, options }) {
           timeoutMs,
           idleTimeoutMs,
           killGraceMs: providerKillGraceMs(options),
+          onSpawn({ pid }) {
+            attemptState = {
+              ...attemptState,
+              pid: pid ?? null
+            };
+            writeAttemptResult({
+              stateDir: runtime.stateDir,
+              runId,
+              stepId,
+              attempt,
+              result: attemptState
+            });
+          },
           onEvent(event) {
             attemptState = {
               ...attemptState,
@@ -1579,6 +1606,7 @@ async function executeProviderStep({ repo, runtime, step, options }) {
       result: {
         provider: step.provider,
         status,
+        pid: result.pid ?? attemptState.pid ?? null,
         exitCode: result.exitCode,
         finalMessage: result.finalMessage,
         stderr: result.stderr,
@@ -1721,6 +1749,7 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
     let attemptState = {
       provider: step.provider,
       status: "running",
+      pid: null,
       exitCode: null,
       finalMessage: null,
       stderr: "",
@@ -1982,6 +2011,7 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
       result: {
         provider: step.provider,
         status,
+        pid: lastResult?.pid ?? attemptState.pid ?? null,
         exitCode: lastResult?.exitCode ?? null,
         finalMessage: lastResult?.finalMessage ?? null,
         stderr: lastResult?.stderr ?? "",
@@ -2148,6 +2178,30 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, roun
     payload: { reviewerId: reviewer.reviewerId, provider, round }
   });
 
+  let reviewerAttemptState = {
+    round,
+    provider,
+    status: "running",
+    pid: null,
+    exitCode: null,
+    finalMessage: null,
+    stderr: "",
+    timedOut: false,
+    timeoutKind: null,
+    signal: null,
+    rawLogPath,
+    startedAt: new Date().toISOString(),
+    finishedAt: null
+  };
+  writeReviewerAttemptResult({
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    stepId: step.id,
+    reviewerId: reviewer.reviewerId,
+    attempt,
+    result: reviewerAttemptState
+  });
+
   const result = await runProviderInvocation({
     provider,
     cwd: repo,
@@ -2158,6 +2212,20 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, roun
     options,
     disableSlashCommands: provider === "claude",
     settingSources: provider === "claude" ? "user" : null,
+    onSpawn({ pid }) {
+      reviewerAttemptState = {
+        ...reviewerAttemptState,
+        pid: pid ?? null
+      };
+      writeReviewerAttemptResult({
+        stateDir: runtime.stateDir,
+        runId: runtime.run.id,
+        stepId: step.id,
+        reviewerId: reviewer.reviewerId,
+        attempt,
+        result: reviewerAttemptState
+      });
+    },
     onEvent(event) {
       appendProgressEvent({
         repoPath: repo,
@@ -2187,6 +2255,7 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, roun
       round,
       provider,
       status: result.exitCode === 0 ? "completed" : "failed",
+      pid: result.pid ?? reviewerAttemptState.pid ?? null,
       exitCode: result.exitCode,
       finalMessage: result.finalMessage,
       stderr: result.stderr,
@@ -2297,6 +2366,29 @@ async function executeReviewRepair({ repo, runtime, step, reviewPlan, aggregate,
     payload: { round, provider }
   });
 
+  let repairAttemptState = {
+    provider,
+    round,
+    status: "running",
+    pid: null,
+    exitCode: null,
+    finalMessage: null,
+    stderr: "",
+    timedOut: false,
+    timeoutKind: null,
+    signal: null,
+    rawLogPath,
+    startedAt: new Date().toISOString(),
+    finishedAt: null
+  };
+  writeReviewRepairResult({
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    stepId: step.id,
+    round,
+    result: repairAttemptState
+  });
+
   const result = await runProviderInvocation({
     provider,
     cwd: repo,
@@ -2307,6 +2399,19 @@ async function executeReviewRepair({ repo, runtime, step, reviewPlan, aggregate,
     options,
     disableSlashCommands: provider === "claude",
     settingSources: provider === "claude" ? "user" : null,
+    onSpawn({ pid }) {
+      repairAttemptState = {
+        ...repairAttemptState,
+        pid: pid ?? null
+      };
+      writeReviewRepairResult({
+        stateDir: runtime.stateDir,
+        runId: runtime.run.id,
+        stepId: step.id,
+        round,
+        result: repairAttemptState
+      });
+    },
     onEvent(event) {
       appendProgressEvent({
         repoPath: repo,
@@ -2333,6 +2438,7 @@ async function executeReviewRepair({ repo, runtime, step, reviewPlan, aggregate,
     round,
     result: {
       provider,
+      pid: result.pid ?? repairAttemptState.pid ?? null,
       status: result.exitCode === 0 ? "completed" : "failed",
       exitCode: result.exitCode,
       finalMessage: result.finalMessage,
@@ -2392,6 +2498,7 @@ async function runProviderInvocation({
   idleTimeoutMs,
   options,
   onEvent,
+  onSpawn = () => {},
   resume = null,
   forceBareClaude = false,
   disableSlashCommands = false,
@@ -2408,6 +2515,7 @@ async function runProviderInvocation({
       timeoutMs,
       idleTimeoutMs,
       killGraceMs: providerKillGraceMs(options),
+      onSpawn,
       onEvent
     });
   }
@@ -2425,6 +2533,7 @@ async function runProviderInvocation({
     timeoutMs,
     idleTimeoutMs,
     killGraceMs: providerKillGraceMs(options),
+    onSpawn,
     onEvent
   });
 }
