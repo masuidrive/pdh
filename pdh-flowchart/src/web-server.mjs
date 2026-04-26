@@ -2917,16 +2917,10 @@ function renderHtml() {
   .assist-key-quick.hidden {
     display: none;
   }
-  .assist-login-action {
-    margin-top: 10px;
-  }
-  .assist-login-action.hidden {
-    display: none;
-  }
   .assist-login-button {
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text);
+    border: 1px solid #cf4b4b;
+    background: #fff3f3;
+    color: #a12b2b;
     border-radius: 999px;
     min-height: 38px;
     padding: 0 14px;
@@ -2935,15 +2929,13 @@ function renderHtml() {
     font-size: 12px;
     font-weight: 500;
   }
+  .assist-login-button.hidden {
+    display: none;
+  }
   .assist-login-button:hover,
   .assist-login-button:active {
-    border-color: var(--border-strong);
-    background: var(--surface);
-  }
-  .assist-login-hint {
-    margin-top: 6px;
-    font-size: 11px;
-    color: var(--text-muted);
+    border-color: #b93838;
+    background: #ffe6e6;
   }
   .assist-key {
     border: 1px solid var(--border);
@@ -3117,6 +3109,7 @@ function renderHtml() {
       <div class="assist-controls">
         <div class="assist-controls-note">Tap the terminal to focus keyboard on mobile. Use these keys when the soft keyboard is unavailable.</div>
         <div class="assist-controls-group">
+          <button class="assist-login-button hidden" id="assist-login-button" type="button">Run /login</button>
           <button class="assist-key wide" type="button" data-assist-input="escape">Esc</button>
           <button class="assist-key wide" type="button" data-assist-input="enter">Enter</button>
           <div class="assist-key-grid">
@@ -3133,10 +3126,6 @@ function renderHtml() {
             <button class="assist-key" type="button" data-assist-input="3">3</button>
             <button class="assist-key" type="button" data-assist-input="4">4</button>
           </div>
-        </div>
-        <div class="assist-login-action hidden" id="assist-login-action">
-          <button class="assist-login-button" id="assist-login-button" type="button">Run /login</button>
-          <div class="assist-login-hint">Shown only when Claude asks for /login in this terminal.</div>
         </div>
       </div>
     </div>
@@ -3158,6 +3147,7 @@ function renderHtml() {
       sessionId: null,
       status: 'idle',
       loginAvailable: false,
+      loginSuppressed: false,
       terminal: null,
       fitAddon: null,
       socket: null,
@@ -4942,6 +4932,7 @@ function renderHtml() {
     state.assist.sessionId = null;
     state.assist.status = 'idle';
     state.assist.loginAvailable = false;
+    state.assist.loginSuppressed = false;
     state.assist.baselineRecommendationId = null;
     state.assist.baselineSignalId = null;
     state.assist.dismissedRecommendationId = null;
@@ -4978,7 +4969,7 @@ function renderHtml() {
     const confirmReason = document.getElementById('assist-confirm-reason');
     const acceptButton = document.getElementById('assist-confirm-accept');
     const dismissButton = document.getElementById('assist-confirm-dismiss');
-    const loginAction = document.getElementById('assist-login-action');
+    const loginButton = document.getElementById('assist-login-button');
     if (!state.assist.open) {
       root.classList.add('hidden');
       status.textContent = 'idle';
@@ -4990,7 +4981,7 @@ function renderHtml() {
       confirm.classList.add('hidden');
       acceptButton.disabled = false;
       dismissButton.disabled = false;
-      loginAction.classList.add('hidden');
+      loginButton.classList.add('hidden');
       syncAssistQuickKeysVisibility();
       updateBodyModalLock();
       return;
@@ -5022,9 +5013,12 @@ function renderHtml() {
     if (!state.assist.confirmation) {
       confirm.classList.add('hidden');
       if (shouldOfferAssistLogin(summaryMain.textContent)) {
-        state.assist.loginAvailable = true;
+        if (!state.assist.loginAvailable) {
+          state.assist.loginAvailable = true;
+          state.assist.loginSuppressed = false;
+        }
       }
-      loginAction.classList.toggle('hidden', !state.assist.loginAvailable);
+      loginButton.classList.toggle('hidden', !state.assist.loginAvailable || state.assist.loginSuppressed);
       acceptButton.disabled = false;
       dismissButton.disabled = false;
       window.requestAnimationFrame(() => {
@@ -5050,9 +5044,12 @@ function renderHtml() {
       shouldOfferAssistLogin(confirmBody.textContent) ||
       shouldOfferAssistLogin(confirmReason.textContent)
     ) {
-      state.assist.loginAvailable = true;
+      if (!state.assist.loginAvailable) {
+        state.assist.loginAvailable = true;
+        state.assist.loginSuppressed = false;
+      }
     }
-    loginAction.classList.toggle('hidden', !state.assist.loginAvailable);
+    loginButton.classList.toggle('hidden', !state.assist.loginAvailable || state.assist.loginSuppressed);
     acceptButton.disabled = Boolean(state.assist.confirmation.submitting);
     dismissButton.disabled = Boolean(state.assist.confirmation.submitting);
     window.requestAnimationFrame(() => {
@@ -5141,7 +5138,7 @@ function renderHtml() {
     if (!state.assist.loginAvailable) {
       return;
     }
-    state.assist.loginAvailable = false;
+    state.assist.loginSuppressed = true;
     renderAssistModal();
   }
 
@@ -5175,6 +5172,7 @@ function renderHtml() {
   function updateAssistLoginAvailability(text) {
     if (shouldOfferAssistLogin(text)) {
       state.assist.loginAvailable = true;
+      state.assist.loginSuppressed = false;
       renderAssistModal();
     }
   }
@@ -5283,6 +5281,7 @@ function renderHtml() {
     state.assist.sessionId = null;
     state.assist.status = 'starting';
     state.assist.loginAvailable = false;
+    state.assist.loginSuppressed = false;
     state.assist.baselineRecommendationId = stepById(stepId)?.gate?.recommendation?.id || null;
     state.assist.baselineSignalId = null;
     state.assist.dismissedRecommendationId = null;
