@@ -4,7 +4,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stringify } from "yaml";
 import { latestOpenInterruption } from "./interruptions.mjs";
-import { latestHumanGate } from "./runtime-state.mjs";
+import { latestAttemptResult, latestHumanGate } from "./runtime-state.mjs";
 import { loadStepUiRuntime } from "./step-ui.mjs";
 
 const RUNTIME_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -39,7 +39,7 @@ export function latestAssistSignalPath({ stateDir, runId, stepId }) {
   return join(assistDir({ stateDir, runId, stepId }), "latest-signal.json");
 }
 
-export function allowedAssistSignals({ runStatus, step }) {
+export function allowedAssistSignals({ runStatus, step, runtime = null }) {
   if (runStatus === "needs_human" && isHumanGateStep(step)) {
     return ["recommend-approve", "recommend-request-changes", "recommend-reject", "recommend-rerun-from"];
   }
@@ -50,6 +50,9 @@ export function allowedAssistSignals({ runStatus, step }) {
     return ["continue"];
   }
   if (runStatus === "failed") {
+    return ["continue"];
+  }
+  if (runStatus === "running" && isAdvancePending({ runtime, step })) {
     return ["continue"];
   }
   return [];
@@ -65,7 +68,7 @@ export function prepareAssistSession({ repoPath, runtime, step, bare = false, mo
   const gate = latestHumanGate({ stateDir: runtime.stateDir, runId, stepId });
   const interruption = latestOpenInterruption({ stateDir: runtime.stateDir, runId, stepId });
   const uiRuntime = loadStepUiRuntime({ stateDir: runtime.stateDir, runId, stepId });
-  const allowedSignals = allowedAssistSignals({ runStatus: runtime.run.status, step });
+  const allowedSignals = allowedAssistSignals({ runStatus: runtime.run.status, step, runtime });
   const wrappers = ensureAssistWrappers(repoPath);
   const readFirst = [
     "./current-ticket.md",
@@ -405,6 +408,19 @@ function buildAssistPrompt({ runtime, step, gate, interruption, blockedGuards, r
   );
 
   return `${lines.join("\n")}\n`;
+}
+
+function isAdvancePending({ runtime, step }) {
+  if (!runtime?.run?.id || runtime.run.status !== "running" || !step || step.provider === "runtime") {
+    return false;
+  }
+  const latest = latestAttemptResult({
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    stepId: step.id,
+    provider: step.provider
+  });
+  return latest?.status === "completed";
 }
 
 function buildSignalExamples(stepId, allowedSignals) {

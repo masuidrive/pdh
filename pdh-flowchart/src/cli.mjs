@@ -713,7 +713,7 @@ async function cmdAssistOpen(argv) {
     stepId = options.step ?? runtime.run.current_step_id;
     assertCurrentStep(runtime.run, stepId, options);
     const step = getStep(runtime.flow, stepId);
-    const allowedSignals = allowedAssistSignals({ runStatus: runtime.run.status, step });
+    const allowedSignals = allowedAssistSignals({ runStatus: runtime.run.status, step, runtime });
     prepared = prepareAssistSession({
       repoPath: repo,
       runtime,
@@ -836,7 +836,7 @@ async function cmdAssistSignal(argv) {
     const stepId = options.step ?? runtime.run.current_step_id;
     assertCurrentStep(runtime.run, stepId, options);
     const step = getStep(runtime.flow, stepId);
-    const allowedSignals = allowedAssistSignals({ runStatus: runtime.run.status, step });
+    const allowedSignals = allowedAssistSignals({ runStatus: runtime.run.status, step, runtime });
     if (!allowedSignals.includes(signal)) {
       throw new Error(`Signal ${signal} is not allowed while status=${runtime.run.status} step=${stepId}. Allowed: ${allowedSignals.join(", ") || "(none)"}`);
     }
