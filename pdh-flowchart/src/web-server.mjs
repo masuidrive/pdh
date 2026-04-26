@@ -834,22 +834,13 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
     };
   }
   if (runtime.run.status === "needs_human") {
-    if (currentGate?.recommendation?.status === "pending") {
-      const actions = recommendationDecisionActions(repo, runtime, currentStep, currentGate.recommendation);
-      return {
-        title: `${currentStep.id} の推奨アクション`,
-        body: recommendationBody(currentGate.recommendation, currentStep.id),
-        commands: actions.map((item) => item.command),
-        actions,
-        selection: "recommended_or_assist",
-        targetTab: "gate"
-      };
-    }
     const actions = humanDecisionActions(repo, currentStep.id);
     const decisionRequired = gateDecisionRequiredText(currentGate?.summaryText);
     return {
       title: `${currentStep.id} の判断`,
-      body: decisionRequired || "まずは gate summary と diff を確認して判断します。必要なら Open Terminal で recommendation を作るか、そのまま Approve します。",
+      body: currentGate?.recommendation?.status === "pending"
+        ? recommendationBody(currentGate.recommendation, currentStep.id)
+        : (decisionRequired || "まずは gate summary と diff を確認して判断します。必要なら Open Terminal で recommendation を作るか、そのまま Approve します。"),
       commands: actions.map((item) => item.command),
       actions,
       selection: "choose_one_optional_assist",
@@ -5957,56 +5948,6 @@ function renderHtml() {
         openModalItem(fileModalItem(stepId, filePath), 'file');
       });
     });
-    root.querySelectorAll('[data-assist-step]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        const stepId = button.dataset.assistStep;
-        if (!stepId) {
-          return;
-        }
-        const original = button.innerHTML;
-        button.disabled = true;
-        button.innerHTML = 'Opening…';
-        try {
-          await openAssistTerminal(stepId);
-        } catch (error) {
-          window.alert('Failed to open assist: ' + (error?.message || String(error)));
-        } finally {
-          button.disabled = false;
-          button.innerHTML = original;
-        }
-      });
-    });
-    root.querySelectorAll('[data-approve-step]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        const stepId = button.dataset.approveStep;
-        if (!stepId) {
-          return;
-        }
-        const confirmed = window.confirm(stepId + ' を approve して次へ進めますか？');
-        if (!confirmed) {
-          return;
-        }
-        const original = button.textContent;
-        button.disabled = true;
-        button.textContent = 'Approving…';
-        try {
-          const response = await fetch('/api/gate/approve?step=' + encodeURIComponent(stepId), {
-            method: 'POST',
-            cache: 'no-store'
-          });
-          const payload = await response.json();
-          if (!response.ok) {
-            throw new Error(payload.message || payload.error || 'gate_approve_failed');
-          }
-          refresh();
-        } catch (error) {
-          window.alert('Failed to approve gate: ' + (error?.message || String(error)));
-        } finally {
-          button.disabled = false;
-          button.textContent = original;
-        }
-      });
-    });
     wireClickCopy(root);
   }
 
@@ -6051,6 +5992,58 @@ function renderHtml() {
     state.assist.promptDrawerOpen = false;
     renderAssistModal();
     sendAssistPromptSequence(assistRecommendationPromptText());
+  });
+  document.addEventListener('click', async (event) => {
+    const assistButton = event.target.closest('[data-assist-step]');
+    if (assistButton) {
+      const stepId = assistButton.dataset.assistStep;
+      if (!stepId) {
+        return;
+      }
+      const original = assistButton.innerHTML;
+      assistButton.disabled = true;
+      assistButton.innerHTML = 'Opening…';
+      try {
+        await openAssistTerminal(stepId);
+      } catch (error) {
+        window.alert('Failed to open assist: ' + (error?.message || String(error)));
+      } finally {
+        assistButton.disabled = false;
+        assistButton.innerHTML = original;
+      }
+      return;
+    }
+
+    const approveButton = event.target.closest('[data-approve-step]');
+    if (approveButton) {
+      const stepId = approveButton.dataset.approveStep;
+      if (!stepId) {
+        return;
+      }
+      const confirmed = window.confirm(stepId + ' を approve して次へ進めますか？');
+      if (!confirmed) {
+        return;
+      }
+      const original = approveButton.textContent;
+      approveButton.disabled = true;
+      approveButton.textContent = 'Approving…';
+      try {
+        const response = await fetch('/api/gate/approve?step=' + encodeURIComponent(stepId), {
+          method: 'POST',
+          cache: 'no-store'
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.message || payload.error || 'gate_approve_failed');
+        }
+        refresh();
+      } catch (error) {
+        window.alert('Failed to approve gate: ' + (error?.message || String(error)));
+      } finally {
+        approveButton.disabled = false;
+        approveButton.textContent = original;
+      }
+    }
   });
   document.querySelectorAll('[data-assist-input]').forEach((button) => {
     button.addEventListener('click', () => {
