@@ -817,7 +817,7 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
       const actions = recommendationDecisionActions(repo, runtime, currentStep, currentGate.recommendation);
       return {
         title: `${currentStep.id} の推奨アクション`,
-        body: recommendationBody(currentGate.recommendation),
+        body: recommendationBody(currentGate.recommendation, currentStep.id),
         commands: actions.map((item) => item.command),
         actions,
         selection: "recommended_or_assist",
@@ -1424,8 +1424,12 @@ function recommendationDecisionActions(repo, runtime, step, recommendation) {
   ];
 }
 
-function recommendationBody(recommendation) {
-  return `Claude assist の推奨は「${recommendationLabel(recommendation)}」です。そのまま適用するか、assist で再作業して推奨を更新します。`;
+function approveRecommendationLabelForStep(stepId) {
+  return stepId === "PD-C-10" ? "チケット完了" : "実装開始";
+}
+
+function recommendationBody(recommendation, stepId = null) {
+  return `Claude assist の推奨は「${recommendationLabel(recommendation, stepId)}」です。そのまま適用するか、assist で再作業して推奨を更新します。`;
 }
 
 function gateDecisionRequiredText(summaryText) {
@@ -1444,7 +1448,7 @@ function gateDecisionRequiredText(summaryText) {
     .join(" ");
 }
 
-function recommendationLabel(recommendation) {
+function recommendationLabel(recommendation, stepId = null) {
   if (!recommendation) {
     return "推奨なし";
   }
@@ -1452,7 +1456,7 @@ function recommendationLabel(recommendation) {
     return `${rerunLabelFromStepId(recommendation.target_step_id)}${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
   }
   if (recommendation.action === "approve") {
-    return `実装開始${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
+    return `${approveRecommendationLabelForStep(stepId)}${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
   }
   if (recommendation.action === "request_changes") {
     return `計画からやり直し${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
@@ -1463,12 +1467,14 @@ function recommendationLabel(recommendation) {
   return `${String(recommendation.action || "").replaceAll("_", " ")}${recommendation.reason ? ` (${recommendation.reason})` : ""}`;
 }
 
-function recommendationAcceptText(recommendation) {
+function recommendationAcceptText(recommendation, stepId = null) {
   if (!recommendation) {
     return "この recommendation を適用します。";
   }
   if (recommendation.action === "approve") {
-    return "この gate を通して、そのまま次へ進めます。";
+    return stepId === "PD-C-10"
+      ? "この gate を通して、ticket close に進めます。"
+      : "この gate を通して、そのまま次へ進めます。";
   }
   if (recommendation.action === "request_changes") {
     return "この gate を差し戻しとして扱い、flow 定義どおりに前段へ戻します。";
@@ -3159,7 +3165,7 @@ function renderHtml() {
       </div>
       <div class="assist-prompt-drawer hidden" id="assist-prompt-drawer">
         <div class="assist-prompt-actions">
-          <button class="assist-prompt-action" id="assist-prompt-recommendation" type="button">recommendation?</button>
+          <button class="assist-prompt-action" id="assist-prompt-recommendation" type="button">recommendation</button>
         </div>
       </div>
       <div class="assist-controls">
@@ -3493,7 +3499,11 @@ function renderHtml() {
     return '通常はこのコマンドを実行します。';
   }
 
-  function recommendationLabel(recommendation) {
+  function approveRecommendationLabelForStep(stepId) {
+    return stepId === 'PD-C-10' ? 'チケット完了' : '実装開始';
+  }
+
+  function recommendationLabel(recommendation, stepId = null) {
     if (!recommendation) {
       return '推奨なし';
     }
@@ -3501,7 +3511,7 @@ function renderHtml() {
       return rerunLabelFromStepId(recommendation.target_step_id) + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
     }
     if (recommendation.action === 'approve') {
-      return '実装開始' + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
+      return approveRecommendationLabelForStep(stepId) + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
     }
     if (recommendation.action === 'request_changes') {
       return '計画からやり直し' + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
@@ -3512,12 +3522,14 @@ function renderHtml() {
     return String(recommendation.action || '').replaceAll('_', ' ') + (recommendation.reason ? ' (' + recommendation.reason + ')' : '');
   }
 
-  function recommendationAcceptText(recommendation) {
+  function recommendationAcceptText(recommendation, stepId = null) {
     if (!recommendation) {
       return 'この recommendation を適用します。';
     }
     if (recommendation.action === 'approve') {
-      return 'この gate を通して、そのまま次の step に進めます。';
+      return stepId === 'PD-C-10'
+        ? 'この gate を通して、ticket close に進めます。'
+        : 'この gate を通して、そのまま次の step に進めます。';
     }
     if (recommendation.action === 'request_changes') {
       return 'この gate を差し戻しとして扱い、前段 step から flow をやり直します。';
@@ -5095,8 +5107,8 @@ function renderHtml() {
     confirm.classList.remove('hidden');
     if (state.assist.confirmation.kind === 'recommendation') {
       const recommendation = state.assist.confirmation.recommendation;
-      confirmTitle.textContent = recommendationLabel(recommendation).replace(/\\s*\\(.*/, '') + 'しますか？';
-      confirmBody.textContent = recommendationAcceptText(recommendation) + '\\nOK を押すと assist terminal を閉じて、runtime がこの recommendation を適用します。';
+      confirmTitle.textContent = recommendationLabel(recommendation, state.assist.stepId).replace(/\\s*\\(.*/, '') + 'しますか？';
+      confirmBody.textContent = recommendationAcceptText(recommendation, state.assist.stepId) + '\\nOK を押すと assist terminal を閉じて、runtime がこの recommendation を適用します。';
       confirmReason.textContent = recommendation.reason ? 'Reason: ' + recommendation.reason : '';
     } else {
       const signal = state.assist.confirmation.signalEntry;
@@ -5831,7 +5843,7 @@ function renderHtml() {
         section += '<div class="artifact"><span class="artifact-name">human gate summary</span><span class="artifact-size">' + esc(step.gate.decision || step.gate.status) + '</span></div>';
       }
       if (step.gate?.recommendation?.status === 'pending') {
-        section += '<div class="artifact"><span class="artifact-name">agent recommendation</span><span class="artifact-size">' + esc(recommendationLabel(step.gate.recommendation)) + '</span></div>';
+        section += '<div class="artifact"><span class="artifact-name">agent recommendation</span><span class="artifact-size">' + esc(recommendationLabel(step.gate.recommendation, step.id)) + '</span></div>';
       }
       step.interruptions.forEach((item) => {
         section += '<div class="artifact"><span class="artifact-name">' + esc(item.message || item.kind || 'interruption') + '</span><span class="artifact-size">' + esc(item.status || item.kind || 'open') + '</span></div>';
