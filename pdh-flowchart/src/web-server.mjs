@@ -4712,7 +4712,8 @@ function renderHtml() {
     if (!normalized) {
       return;
     }
-    if (/not logged in|run\s+\/login/i.test(normalized)) {
+    const lower = normalized.toLowerCase();
+    if (lower.includes('not logged in') || lower.includes('/login')) {
       state.assist.loginAvailable = true;
       renderAssistModal();
     }
