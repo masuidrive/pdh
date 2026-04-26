@@ -4411,7 +4411,7 @@ function renderHtml() {
       return null;
     }
     const run = state.data.runtime.run || {};
-    if (!['needs_human', 'interrupted', 'failed', 'blocked'].includes(run.status)) {
+    if (!['interrupted', 'failed', 'blocked'].includes(run.status)) {
       return null;
     }
     const step = stepById(state.data.runtime.currentStep.id);
