@@ -4301,7 +4301,7 @@ function renderHtml() {
     }
     return (
       '<div class="artifact-inline-excerpt">' +
-        renderInlineRichText(item.inlineExcerpt, step).replaceAll('\\n', '<br>') +
+        esc(item.inlineExcerpt).replaceAll('\\n', '<br>') +
       '</div>'
     );
   }
