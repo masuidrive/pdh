@@ -5629,20 +5629,20 @@ function renderHtml() {
     const outputRisks = derivedRiskLines(step);
     const outputNotes = derivedNotesText(step, current && current.id === step.id ? nextAction : null);
     const nextItems = current && current.id === step.id ? nextActionItems(nextAction) : [];
-    html += '<div class="detail-section"><div class="detail-section-title">判断の前提</div>' +
-      '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
-      '<div><strong>Viewer:</strong> ' + esc(contract.viewer || '開発者') + '</div>' +
-      '<div style="margin-top:6px;"><strong>Decision:</strong> ' + esc(contract.decision || step.summary || '') + '</div>' +
-      (outputSummary.length
-        ? '<div style="margin-top:10px;"><strong>Summary:</strong><div style="margin-top:4px;">' + outputSummary.map((item) => '&#8226; ' + renderInlineRichText(item, step)).join('<br>') + '</div></div>'
-        : '') +
-      (outputRisks.length
-        ? '<div style="margin-top:10px;"><strong>Risks:</strong><div style="margin-top:4px;">' + outputRisks.map((item) => '&#8226; ' + renderInlineRichText(item, step)).join('<br>') + '</div></div>'
-        : '') +
-      (outputNotes
-        ? '<div style="margin-top:10px;"><strong>Notes:</strong><div style="margin-top:4px;white-space:pre-wrap;">' + renderInlineRichText(outputNotes, step).replaceAll('\\n', '<br>') + '</div></div>'
-        : '') +
-      '</div></div>';
+    if (outputSummary.length || outputRisks.length || outputNotes) {
+      html += '<div class="detail-section"><div class="detail-section-title">要点</div>' +
+        '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
+        (outputSummary.length
+          ? '<div><strong>Summary:</strong><div style="margin-top:4px;">' + outputSummary.map((item) => '&#8226; ' + renderInlineRichText(item, step)).join('<br>') + '</div></div>'
+          : '') +
+        (outputRisks.length
+          ? '<div style="margin-top:10px;"><strong>Risks:</strong><div style="margin-top:4px;">' + outputRisks.map((item) => '&#8226; ' + renderInlineRichText(item, step)).join('<br>') + '</div></div>'
+          : '') +
+        (outputNotes
+          ? '<div style="margin-top:10px;"><strong>Notes:</strong><div style="margin-top:4px;white-space:pre-wrap;">' + renderInlineRichText(outputNotes, step).replaceAll('\\n', '<br>') + '</div></div>'
+          : '') +
+        '</div></div>';
+    }
 
     html += '<div class="detail-section"><div class="detail-section-title">判断材料</div><div class="artifacts">';
     if (!materialItems.length) {
