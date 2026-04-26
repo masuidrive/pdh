@@ -309,7 +309,7 @@ export function openHumanGate({ stateDir, runId, stepId, prompt, summary, baseli
         reason: existingGate?.reason ?? null,
         recommendation: existingGate?.recommendation ?? null,
         baseline: baseline ?? existingGate?.baseline ?? null,
-        rerun_requirement: rerunRequirement ?? existingGate?.rerun_requirement ?? null,
+        rerun_requirement: rerunRequirement,
         created_at: existingGate?.created_at ?? new Date().toISOString(),
         resolved_at: null
       };

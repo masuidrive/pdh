@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { loadDotEnv } from "./env.mjs";
 import { describeFlow, buildFlowView, getInitialStep, getStep, loadFlow, nextStep, outcomeFromDecision, renderMermaidFlow } from "./flow.mjs";
 import { evaluateStepGuards } from "./guards.mjs";
@@ -3438,12 +3438,15 @@ function gateBaselineDiff({ repo, baseline }) {
   if (!baseline?.commit) {
     return { changedFiles: [], ticketSections: [], noteSections: [] };
   }
-  const ticketBefore = gitShowFile(repo, baseline.commit, "current-ticket.md");
+  const ticketDocPath = resolveCurrentDocPathAtCommit(repo, baseline.commit, "current-ticket.md");
+  const noteDocPath = resolveCurrentDocPathAtCommit(repo, baseline.commit, "current-note.md");
+  const ticketBefore = gitShowFile(repo, baseline.commit, ticketDocPath);
   const ticketAfter = readFileIfExists(join(repo, "current-ticket.md"));
-  const noteBefore = stripPdhMetadata(gitShowFile(repo, baseline.commit, "current-note.md"));
+  const noteBefore = stripPdhMetadata(gitShowFile(repo, baseline.commit, noteDocPath));
   const noteAfter = stripPdhMetadata(readFileIfExists(join(repo, "current-note.md")));
+  const changedFiles = normalizeGateChangedFiles(repo, splitLines(runGit(repo, ["diff", "--name-only", baseline.commit, "--"]).stdout));
   return {
-    changedFiles: splitLines(runGit(repo, ["diff", "--name-only", baseline.commit, "--"]).stdout),
+    changedFiles,
     ticketSections: changedMarkdownSections(ticketBefore, ticketAfter),
     noteSections: changedMarkdownSections(noteBefore, noteAfter, { ignoreSections: new Set(["Step History"]) })
   };
@@ -3528,6 +3531,43 @@ function stripPdhMetadata(text) {
   const raw = String(text ?? "");
   const frontmatter = raw.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
   return frontmatter ? raw.slice(frontmatter[0].length) : raw;
+}
+
+function resolveCurrentDocPathAtCommit(repo, commit, aliasPath) {
+  if (gitFileExists(repo, commit, aliasPath)) {
+    return aliasPath;
+  }
+  const targetPath = currentDocTargetPath(repo, aliasPath);
+  if (targetPath && gitFileExists(repo, commit, targetPath)) {
+    return targetPath;
+  }
+  return aliasPath;
+}
+
+function normalizeGateChangedFiles(repo, changedFiles) {
+  const aliases = new Map();
+  const noteTarget = currentDocTargetPath(repo, "current-note.md");
+  const ticketTarget = currentDocTargetPath(repo, "current-ticket.md");
+  if (noteTarget) {
+    aliases.set(noteTarget, "current-note.md");
+  }
+  if (ticketTarget) {
+    aliases.set(ticketTarget, "current-ticket.md");
+  }
+  return changedFiles.map((path) => aliases.get(path) ?? path);
+}
+
+function currentDocTargetPath(repo, aliasPath) {
+  try {
+    const target = readlinkSync(join(repo, aliasPath));
+    return relative(repo, resolve(repo, target)).replaceAll("\\", "/");
+  } catch {
+    return null;
+  }
+}
+
+function gitFileExists(repo, commit, relativePath) {
+  return Boolean(runGit(repo, ["cat-file", "-e", `${commit}:${relativePath}`]));
 }
 
 function gitShowFile(repo, commit, relativePath) {
