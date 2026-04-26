@@ -2929,6 +2929,9 @@ function renderHtml() {
     font-size: 12px;
     font-weight: 500;
   }
+  .assist-login-button.hidden {
+    display: none;
+  }
   .assist-login-button:hover,
   .assist-login-button:active {
     border-color: #b93838;
@@ -3106,7 +3109,7 @@ function renderHtml() {
       <div class="assist-controls">
         <div class="assist-controls-note">Tap the terminal to focus keyboard on mobile. Use these keys when the soft keyboard is unavailable.</div>
         <div class="assist-controls-group">
-          <button class="assist-login-button" id="assist-login-button" type="button">Run /login</button>
+          <button class="assist-login-button hidden" id="assist-login-button" type="button">Run /login</button>
           <button class="assist-key wide" type="button" data-assist-input="escape">Esc</button>
           <button class="assist-key wide" type="button" data-assist-input="enter">Enter</button>
           <div class="assist-key-grid">
@@ -4976,6 +4979,7 @@ function renderHtml() {
       summary.classList.add('hidden');
       summaryMain.textContent = '';
       confirm.classList.add('hidden');
+      loginButton.classList.add('hidden');
       acceptButton.disabled = false;
       dismissButton.disabled = false;
       syncAssistQuickKeysVisibility();
@@ -5008,6 +5012,13 @@ function renderHtml() {
     }
     if (!state.assist.confirmation) {
       confirm.classList.add('hidden');
+      if (shouldOfferAssistLogin(summaryMain.textContent)) {
+        if (!state.assist.loginAvailable) {
+          state.assist.loginAvailable = true;
+          state.assist.loginSuppressed = false;
+        }
+      }
+      loginButton.classList.toggle('hidden', !state.assist.loginAvailable || state.assist.loginSuppressed);
       acceptButton.disabled = false;
       dismissButton.disabled = false;
       window.requestAnimationFrame(() => {
@@ -5028,6 +5039,17 @@ function renderHtml() {
       confirmBody.textContent = 'OK を押すと assist terminal を閉じて、runtime がこの step を再実行します。修正済みの current-note.md / current-ticket.md / code を前提に、同じ step を最初からやり直します。';
       confirmReason.textContent = signal?.reason ? 'Reason: ' + signal.reason : '';
     }
+    if (
+      shouldOfferAssistLogin(summaryMain.textContent) ||
+      shouldOfferAssistLogin(confirmBody.textContent) ||
+      shouldOfferAssistLogin(confirmReason.textContent)
+    ) {
+      if (!state.assist.loginAvailable) {
+        state.assist.loginAvailable = true;
+        state.assist.loginSuppressed = false;
+      }
+    }
+    loginButton.classList.toggle('hidden', !state.assist.loginAvailable || state.assist.loginSuppressed);
     acceptButton.disabled = Boolean(state.assist.confirmation.submitting);
     dismissButton.disabled = Boolean(state.assist.confirmation.submitting);
     window.requestAnimationFrame(() => {
