@@ -4655,8 +4655,16 @@ function renderHtml() {
       if (!uri) {
         return;
       }
+      if (event && (event.metaKey || event.ctrlKey || event.shiftKey)) {
+        try {
+          window.open(uri, '_blank', 'noopener,noreferrer');
+          return;
+        } catch {
+          // Fall through to same-tab navigation.
+        }
+      }
       try {
-        window.open(uri, '_blank', 'noopener,noreferrer');
+        window.location.assign(uri);
       } catch {
         window.location.href = uri;
       }
