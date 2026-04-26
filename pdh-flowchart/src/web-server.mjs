@@ -66,7 +66,7 @@ function handleRequest({ request, response, repo, assistTerminalManager }) {
 
   const url = new URL(request.url ?? "/", "http://localhost");
   if (url.pathname === "/" || url.pathname === "/index.html") {
-    sendHtml(response, renderHtml());
+    sendHtml(response, renderHtml(collectState({ repo })));
     return;
   }
   if (url.pathname === "/api/state") {
@@ -1728,7 +1728,8 @@ function sendHtml(response, body) {
   response.end(body);
 }
 
-function renderHtml() {
+function renderHtml(initialState = null) {
+  const initialStateJson = serializeJsonForHtml(initialState);
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -3252,6 +3253,7 @@ function renderHtml() {
 <script src="/assets/xterm-addon-fit.js"></script>
 <script src="/assets/xterm-addon-web-links.js"></script>
 <script src="/assets/markdown-it.js"></script>
+<script id="initial-state" type="application/json">${initialStateJson}</script>
 <script>
   const state = {
     data: null,
@@ -6102,11 +6104,30 @@ function renderHtml() {
     }
   });
 
-  refresh();
+  const initialStateNode = document.getElementById('initial-state');
+  let initialData = null;
+  if (initialStateNode?.textContent) {
+    try {
+      initialData = JSON.parse(initialStateNode.textContent);
+    } catch {}
+  }
+  if (initialData) {
+    applyState(initialData);
+  } else {
+    render();
+  }
   if (!requestedModalItem()) {
     startLiveUpdates();
   }
+  refresh();
 </script>
 </body>
 </html>`;
+}
+
+function serializeJsonForHtml(value) {
+  return JSON.stringify(value ?? null)
+    .replaceAll("<", "\\u003c")
+    .replaceAll(">", "\\u003e")
+    .replaceAll("&", "\\u0026");
 }
