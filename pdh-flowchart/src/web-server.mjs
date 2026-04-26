@@ -5173,14 +5173,16 @@ function renderHtml() {
 
   function sendAssistLoginSequence() {
     const chars = '/login'.split('');
+    const typeIntervalMs = 40;
+    const submitDelayMs = 250;
     chars.forEach((char, index) => {
       window.setTimeout(() => {
         sendAssistInput(char, { preserveLoginHint: true });
-      }, index * 80);
+      }, index * typeIntervalMs);
     });
     window.setTimeout(() => {
       sendAssistInput('\\r', { preserveLoginHint: true });
-    }, chars.length * 80 + 700);
+    }, chars.length * typeIntervalMs + submitDelayMs);
   }
 
   function updateAssistLoginAvailability(text) {
