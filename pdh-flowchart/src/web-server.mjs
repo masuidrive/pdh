@@ -1477,6 +1477,10 @@ function renderHtml() {
     -webkit-font-smoothing: antialiased;
     min-height: 100%;
   }
+  body.modal-open {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
   .app { display: flex; flex-direction: column; min-height: 100vh; }
   .header {
     border-bottom: 1px solid var(--border);
@@ -2471,16 +2475,23 @@ function renderHtml() {
     position: relative;
     background: #111111;
     min-height: 0;
+    overflow: hidden;
   }
   .assist-terminal {
     width: 100%;
     height: 100%;
     padding: 8px;
   }
+  .assist-terminal .xterm {
+    height: 100%;
+  }
   .assist-terminal .xterm-viewport {
+    height: 100% !important;
     overflow-y: auto !important;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
   }
   .assist-terminal-shell:active {
     outline: 2px solid rgba(24, 95, 165, 0.45);
@@ -4468,6 +4479,11 @@ function renderHtml() {
     window.history.replaceState({}, '', url);
   }
 
+  function updateBodyModalLock() {
+    const locked = Boolean(state.modalItem || state.assist.open || state.copyFallbackText);
+    document.body.classList.toggle('modal-open', locked);
+  }
+
   function openModalItem(item, mode = 'markdown') {
     state.modalItem = item;
     state.modalViewMode = mode;
@@ -4564,6 +4580,7 @@ function renderHtml() {
       dismissButton.disabled = false;
       loginAction.classList.add('hidden');
       syncAssistQuickKeysVisibility();
+      updateBodyModalLock();
       return;
     }
     root.classList.remove('hidden');
@@ -4616,6 +4633,7 @@ function renderHtml() {
       window.requestAnimationFrame(() => {
         syncAssistQuickKeysVisibility();
       });
+      updateBodyModalLock();
       return;
     }
     confirm.classList.remove('hidden');
@@ -4635,6 +4653,7 @@ function renderHtml() {
     window.requestAnimationFrame(() => {
       syncAssistQuickKeysVisibility();
     });
+    updateBodyModalLock();
   }
 
   function ensureAssistTerminal() {
@@ -4677,6 +4696,12 @@ function renderHtml() {
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
     terminal.open(document.getElementById('assist-terminal'));
+    if (typeof terminal.attachCustomWheelEventHandler === 'function') {
+      terminal.attachCustomWheelEventHandler((event) => {
+        event.stopPropagation();
+        return true;
+      });
+    }
     fitAddon.fit();
     state.assist.terminal = terminal;
     state.assist.fitAddon = fitAddon;
@@ -4938,10 +4963,12 @@ function renderHtml() {
     if (!state.copyFallbackText) {
       root.classList.add('hidden');
       textarea.value = '';
+      updateBodyModalLock();
       return;
     }
     textarea.value = state.copyFallbackText;
     root.classList.remove('hidden');
+    updateBodyModalLock();
     window.setTimeout(() => {
       textarea.focus();
       textarea.select();
@@ -5072,6 +5099,7 @@ function renderHtml() {
       title.textContent = 'Detail';
       body.innerHTML = '';
       toggleSlot.innerHTML = '';
+      updateBodyModalLock();
       return;
     }
     modal.classList.remove('hidden');
@@ -5098,6 +5126,7 @@ function renderHtml() {
     if (state.modalItem.documentTarget) {
       body.innerHTML = renderModalShell(state.modalItem, renderDocumentViewer(state.modalItem.documentTarget, state.modalViewMode === 'raw' ? 'raw' : 'markdown'));
       hydrateModalBody();
+      updateBodyModalLock();
       return;
     }
     if (state.modalItem.artifactTarget || state.modalItem.diffTarget || state.modalItem.fileTarget) {
@@ -5106,10 +5135,12 @@ function renderHtml() {
         '<div class="detail-dialog-section"><div class="detail-dialog-label">Viewer</div><div class="detail-doc-viewer"><div class="detail-doc-raw">Loading…</div></div></div>'
       );
       loadRemoteModalBody(state.modalItem);
+      updateBodyModalLock();
       return;
     }
     body.innerHTML = renderModalShell(state.modalItem, '');
     hydrateModalBody();
+    updateBodyModalLock();
   }
 
   function renderDetail() {
