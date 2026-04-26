@@ -1843,7 +1843,7 @@ function renderHtml() {
     }
   }
   .main { display: grid; grid-template-columns: minmax(280px, 0.82fr) minmax(620px, 1.68fr); min-height: 0; flex: 1; }
-  .panel-left { padding: 18px 20px 32px; border-right: 1px solid var(--border); min-width: 0; }
+  .panel-left { padding: 0 20px 32px; border-right: 1px solid var(--border); min-width: 0; }
   .panel-right { background: var(--surface); min-width: 0; }
   .summary {
     display: grid;
@@ -3084,7 +3084,7 @@ function renderHtml() {
   }
   @media (max-width: 600px) {
     .header { padding: 10px 14px; }
-    .panel-left { padding: 14px 14px 24px; }
+    .panel-left { padding: 0 14px 24px; }
     .detail { padding: 16px 14px 24px; }
     .brand span:not(.brand-logo) { display: none; }
   }
