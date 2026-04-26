@@ -20,15 +20,26 @@ export function writeStepPrompt({ repoPath, stateDir, run, flow, stepId }) {
   return { artifactPath, body };
 }
 
-export function writeReviewerPromptArtifact({ repoPath, stateDir, run, flow, stepId, reviewer }) {
+export function writeReviewerPromptArtifact({ repoPath, stateDir, run, flow, stepId, reviewer, round = null, priorFindings = [] }) {
   const step = getStep(flow, stepId);
   const reviewPlan = resolveStepReviewPlan(flow, run.flow_variant, stepId);
   if (!reviewPlan) {
     throw new Error(`${stepId} does not define runtime review semantics`);
   }
-  const artifactPath = join(stateDir, "runs", run.id, "steps", stepId, "reviewers", reviewer.reviewerId, "prompt.md");
+  const artifactPath = round
+    ? join(stateDir, "runs", run.id, "steps", stepId, "review-rounds", `round-${round}`, "reviewers", reviewer.reviewerId, "prompt.md")
+    : join(stateDir, "runs", run.id, "steps", stepId, "reviewers", reviewer.reviewerId, "prompt.md");
   mkdirSync(join(artifactPath, ".."), { recursive: true });
-  const body = renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, reviewer });
+  const body = renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, reviewer, round, priorFindings });
+  writeFileSync(artifactPath, body);
+  return { artifactPath, body };
+}
+
+export function writeReviewRepairPromptArtifact({ repoPath, stateDir, run, flow, stepId, reviewPlan, aggregate, round, provider }) {
+  const step = getStep(flow, stepId);
+  const artifactPath = join(stateDir, "runs", run.id, "steps", stepId, "review-rounds", `round-${round}`, "repair-prompt.md");
+  mkdirSync(join(artifactPath, ".."), { recursive: true });
+  const body = renderReviewRepairPrompt({ repoPath, run, flow, step, reviewPlan, aggregate, round, provider });
   writeFileSync(artifactPath, body);
   return { artifactPath, body };
 }
@@ -192,6 +203,12 @@ function renderReviewSemantics(step, reviewPlan) {
       lines.push(`  - ${item}`);
     }
   }
+  if (reviewPlan?.maxRounds) {
+    lines.push(`- Review loop max rounds: ${reviewPlan.maxRounds}`);
+  }
+  if (reviewPlan?.repairProvider) {
+    lines.push(`- Repair provider between rounds: ${reviewPlan.repairProvider}`);
+  }
   if (reviewPlan?.reviewers?.length) {
     lines.push("- Reviewer roster for this run variant:");
     for (const reviewer of reviewPlan.reviewers) {
@@ -210,9 +227,11 @@ function renderReviewSemantics(step, reviewPlan) {
   return lines;
 }
 
-export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, reviewer }) {
+export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, reviewer, round = null, priorFindings = [] }) {
   const acceptedStatus = acceptedReviewerStatus(step.id);
-  const outputPath = `.pdh-flowchart/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.yaml`;
+  const outputPath = round
+    ? `.pdh-flowchart/runs/${run.id}/steps/${step.id}/review-rounds/round-${round}/reviewers/${reviewer.reviewerId}/review.yaml`
+    : `.pdh-flowchart/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.yaml`;
   const reviewerStepRules = reviewerRulesForStep(step.id);
   return [
     "# pdh-flowchart Reviewer Prompt",
@@ -227,6 +246,7 @@ export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, re
     `- Flow: ${run.flow_id}@${run.flow_variant}`,
     `- Step: ${step.id}`,
     `- Reviewer role: ${reviewer.label}`,
+    ...(round ? [`- Review round: ${round}`] : []),
     ...(reviewer.provider ? [`- Provider: ${reviewer.provider}`] : []),
     ...(reviewer.remit ? [`- Remit: ${reviewer.remit}`] : []),
     "",
@@ -249,6 +269,13 @@ export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, re
     ...(reviewPlan.onFindings?.length ? ["- If findings remain:", ...reviewPlan.onFindings.map((item) => `  - ${item}`)] : []),
     ...(reviewer.focus?.length ? ["- Your focus:", ...reviewer.focus.map((item) => `  - ${item}`)] : ["- Your focus: (none)"]),
     ...(reviewerStepRules.length ? ["- Step-specific review rules:", ...reviewerStepRules.map((item) => `  - ${item}`)] : []),
+    ...(priorFindings.length
+      ? [
+          "- Prior blocking findings from this reviewer role that must be re-checked in this round:",
+          ...priorFindings.map((finding) => `  - [${finding.severity}] ${finding.title}: ${finding.evidence || finding.recommendation || "re-check against the latest repo state"}`),
+          "- Clear these only when the current repo state directly resolves them."
+        ]
+      : []),
     "",
     "## Canonical Files",
     "",
@@ -288,6 +315,89 @@ export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, re
     }).trimEnd(),
     ""
   ].join("\n");
+}
+
+export function renderReviewRepairPrompt({ repoPath, run, flow, step, reviewPlan, aggregate, round, provider }) {
+  const outputPath = `.pdh-flowchart/runs/${run.id}/steps/${step.id}/review-rounds/round-${round}/repair.yaml`;
+  const lines = [
+    "# pdh-flowchart Review Repair Prompt",
+    "",
+    `You are the repair provider for ${step.id} round ${round}.`,
+    "Your job is to resolve the current blocking review findings, update the repo state, run the smallest meaningful verification, and prepare the next review round.",
+    "",
+    "## Run Context",
+    "",
+    `- Run: ${run.id}`,
+    `- Ticket: ${run.ticket_id ?? "(none)"}`,
+    `- Flow: ${run.flow_id}@${run.flow_variant}`,
+    `- Step: ${step.id}`,
+    `- Review round: ${round}`,
+    `- Repair provider: ${provider}`,
+    ...(reviewPlan?.intent ? [`- Review intent: ${reviewPlan.intent}`] : []),
+    "",
+    "## Repair Rules",
+    "",
+    "- Read `current-ticket.md` and `current-note.md` before editing.",
+    "- Resolve the current blocking findings for this step only. Do not drift into later steps.",
+    "- You may edit code, tests, `current-ticket.md`, and `current-note.md` when needed to satisfy the findings.",
+    "- Do not commit.",
+    "- Do not run `ticket.sh` or `node src/cli.mjs ...`.",
+    "- Run the smallest meaningful verification that proves the addressed findings are actually resolved.",
+    "- Keep your changes consistent with existing local patterns instead of inventing a parallel design.",
+    "- If you cannot fully resolve every blocker in this round, still fix the highest-leverage subset and record what remains.",
+    "- Match the primary language used in `current-ticket.md` for all human-readable text in the output artifact.",
+    ...reviewRepairRulesForStep(step.id).map((rule) => `- ${rule}`),
+    "",
+    "## Canonical Files",
+    "",
+    "- `current-ticket.md` at repo root: durable ticket intent, Product AC, and implementation notes.",
+    "- `current-note.md` at repo root: workflow state in frontmatter plus process evidence and step history.",
+    "",
+    "## Current Blocking Findings",
+    ""
+  ];
+  const blockers = blockingFindings(aggregate);
+  if (blockers.length === 0) {
+    lines.push("- No blocking findings were detected. Clean up any remaining verification or evidence gaps and prepare for the next review round.");
+  } else {
+    for (const finding of blockers) {
+      lines.push(`- [${finding.severity}] ${finding.reviewerLabel}: ${finding.title}`);
+      if (finding.evidence) {
+        lines.push(`  - Evidence: ${finding.evidence}`);
+      }
+      if (finding.recommendation) {
+        lines.push(`  - Recommendation: ${finding.recommendation}`);
+      }
+    }
+  }
+  lines.push(
+    "",
+    "## Output Artifact",
+    "",
+    `Write plain YAML to \`${outputPath}\`.`,
+    "Do not use markdown fences. Do not add extra top-level keys.",
+    "",
+    "Field rules:",
+    "- `summary`: one short sentence describing what you changed.",
+    "- `verification`: commands or checks you actually ran in this repair round.",
+    "- `remaining_risks`: unresolved blockers or follow-up risks only. Use `[]` when there are none.",
+    "- `notes`: optional free text.",
+    "",
+    "Use this YAML shape:",
+    "",
+    stringify({
+      summary: "Short repair summary",
+      verification: [
+        "command or check that was actually run"
+      ],
+      remaining_risks: [
+        "Unresolved blocker or follow-up risk"
+      ],
+      notes: "Optional free text"
+    }).trimEnd(),
+    ""
+  );
+  return lines.join("\n");
 }
 
 function acceptedReviewerStatus(stepId) {
@@ -383,4 +493,37 @@ function reviewerRulesForStep(stepId) {
     ]
   };
   return rules[stepId] ?? [];
+}
+
+function reviewRepairRulesForStep(stepId) {
+  const rules = {
+    "PD-C-4": [
+      "Treat this as a plan repair loop. Prefer updating `current-ticket.md` and `current-note.md` over editing app code unless the finding proves the plan is impossible without a code spike.",
+      "If the plan changes materially, keep Product AC, implementation notes, and the PD-C-3 plan section aligned."
+    ],
+    "PD-C-7": [
+      "Treat this as a code-quality repair loop. Fix the implementation and impacted tests, then rerun only the verification needed for the changed surface.",
+      "Do not claim quality blockers are resolved unless the changed code path is covered by direct evidence."
+    ],
+    "PD-C-8": [
+      "Treat this as a purpose-fit repair loop. Close missing AC coverage, missing outcomes, or weak evidence, and update ticket intent when the product scope changed.",
+      "If you change code or tests here, make sure `current-note.md` explains why the purpose validation required it."
+    ],
+    "PD-C-9": [
+      "Treat this as a final-verification repair loop. Fill missing AC evidence and final verification gaps rather than normalizing them away.",
+      "If external-surface observations found problems, fix the surface or its evidence before the next review round."
+    ]
+  };
+  return rules[stepId] ?? [];
+}
+
+function blockingFindings(aggregate) {
+  if (!aggregate?.findings?.length) {
+    return [];
+  }
+  const severe = aggregate.findings.filter((finding) => ["critical", "major"].includes(String(finding.severity || "").toLowerCase()));
+  if (severe.length > 0) {
+    return severe;
+  }
+  return aggregate.findings.filter((finding) => !["none", "note"].includes(String(finding.severity || "").toLowerCase()));
 }

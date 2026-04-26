@@ -4,6 +4,8 @@ defaults:
   timeoutMinutes: 60
   idleTimeoutMinutes: 5
   maxAttempts: 2
+  reviewMaxRounds: 6
+  reviewRepairProvider: codex
   transitionLogFormat: "[{from}] -> [{to}]"
   reviewRoles:
     devils_advocate:
@@ -154,6 +156,8 @@ steps:
     mode: review
     review:
       intent: 実装前レビューとして、計画の穴、検証不足、目的ずれを潰してから実装承認へ進む。
+      maxRounds: 6
+      repairProvider: codex
       passWhen:
         - "全 reviewer role の最新結果が `No Critical/Major` である"
         - または未解消点についてユーザが明示的に受け入れている
@@ -294,6 +298,8 @@ steps:
     mode: review
     review:
       intent: 実装済み変更の品質、回帰、テスト妥当性、設計逸脱を複数視点で洗う。
+      maxRounds: 6
+      repairProvider: codex
       passWhen:
         - 全 reviewer role の最新結果が `No Critical/Major` である
         - または未解消点についてユーザが明示的に受け入れている
@@ -369,6 +375,8 @@ steps:
     mode: review
     review:
       intent: 正しく動いて見えても close してはいけない理由を反証要求型で探す。
+      maxRounds: 6
+      repairProvider: codex
       passWhen:
         - "`No Unverified` である"
         - または未解消点についてユーザが明示的に受け入れている
@@ -426,6 +434,8 @@ steps:
     mode: review
     review:
       intent: 完了承認に必要な AC 裏取りと consumer 視点の最終検証証跡を揃える。
+      maxRounds: 6
+      repairProvider: codex
       passWhen:
         - AC 裏取り表が完成し、`unverified` が 0 件である
         - 変更した外部 surface に対する最終観察結果が揃っている

@@ -51,6 +51,7 @@ fi
 prompt="$(cat || true)"
 ui_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*ui-output.yaml\)`\.$/\1/p' | head -1)"
 review_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*review.yaml\)`\.$/\1/p' | head -1)"
+repair_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*repair.yaml\)`\.$/\1/p' | head -1)"
 if [ -n "$ui_path" ]; then
   mkdir -p "$(dirname "$ui_path")"
   cat >"$ui_path" <<'YAML'
@@ -71,6 +72,16 @@ status: No Critical/Major
 summary: codex reviewer found no blocking issues
 findings: []
 notes: codex review notes
+YAML
+fi
+if [ -n "$repair_path" ]; then
+  mkdir -p "$(dirname "$repair_path")"
+  cat >"$repair_path" <<'YAML'
+summary: fake repair applied
+verification:
+  - fake repair verification
+remaining_risks: []
+notes: fake repair notes
 YAML
 fi
 printf '%s\n' '{"type":"thread.started","thread_id":"fake-thread"}'
@@ -154,6 +165,57 @@ fi
 printf '%s\n' '{"type":"system","subtype":"init","session_id":"fake-session"}'
 printf '%s\n' '{"type":"assistant","message":{"content":"fake review success"}}'
 printf '%s\n' '{"type":"result","subtype":"success","result":"fake review success"}'
+SH
+  chmod +x "$path"
+  printf '%s\n' "$path"
+}
+
+write_fake_claude_review_loop() {
+  local path="$TMP_ROOT/fake-claude-review-loop.sh"
+  cat >"$path" <<'SH'
+#!/usr/bin/env bash
+count_file="${FAKE_REVIEW_COUNT_FILE:?}"
+prompt=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-p" ]; then
+    prompt="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+review_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*review.yaml\)`\.$/\1/p' | head -1)"
+count=0
+if [ -f "$count_file" ]; then
+  count="$(cat "$count_file")"
+fi
+count="$((count + 1))"
+printf '%s\n' "$count" >"$count_file"
+if [ -n "$review_path" ]; then
+  mkdir -p "$(dirname "$review_path")"
+  if [ "$count" -le 3 ]; then
+    cat >"$review_path" <<'YAML'
+status: Major
+summary: claude reviewer still sees a blocking issue
+findings:
+  - severity: major
+    title: Blocking review issue
+    evidence: fake round-one blocker
+    recommendation: apply a repair and rerun the same reviewer role
+notes: fake blocker
+YAML
+  else
+    cat >"$review_path" <<'YAML'
+status: No Critical/Major
+summary: claude reviewer no longer sees blocking issues
+findings: []
+notes: fake pass
+YAML
+  fi
+fi
+printf '%s\n' '{"type":"system","subtype":"init","session_id":"fake-session"}'
+printf '%s\n' '{"type":"assistant","message":{"content":"fake review loop run"}}'
+printf '%s\n' '{"type":"result","subtype":"success","result":"fake review loop run"}'
 SH
   chmod +x "$path"
   printf '%s\n' "$path"
@@ -244,6 +306,26 @@ test_auto_review_judgement() {
   fi
 }
 
+test_review_loop_auto_repair() {
+  local repo run_id fake_claude fake_codex count_file
+  repo="$(seed_repo review-loop)"
+  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-4 | sed -n '1p')"
+  fake_claude="$(write_fake_claude_review_loop)"
+  fake_codex="$(write_fake_codex_success)"
+  count_file="$TMP_ROOT/$run_id.review-count.txt"
+  CLAUDE_BIN="$fake_claude" CODEX_BIN="$fake_codex" FAKE_REVIEW_COUNT_FILE="$count_file" \
+    node "$ROOT/src/cli.mjs" run-provider --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.review-loop.txt"
+  grep -q "completed" "$TMP_ROOT/$run_id.review-loop.txt"
+  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/review-rounds/round-1/aggregate.yaml"
+  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/review-rounds/round-1/repair.yaml"
+  find "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/review-rounds/round-1/reviewers" -name review.yaml | grep -q .
+  find "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/review-rounds/round-2/reviewers" -name review.yaml | grep -q .
+  grep -R -q "Prior blocking findings from this reviewer role" "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/review-rounds/round-2/reviewers"
+  grep -q "#### Round 1" "$repo/current-note.md"
+  grep -q "Repair summary: fake repair applied" "$repo/current-note.md"
+  grep -q '"status": "No Critical/Major"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
+}
+
 test_failed_run() {
   local repo run_id fake summary_path
   repo="$(seed_repo failed)"
@@ -328,7 +410,7 @@ test_assist_gate_flow() {
   run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-5 | sed -n '1p')"
   node "$ROOT/src/cli.mjs" run-next --repo "$repo" >"$TMP_ROOT/$run_id.assist-gate-open.json"
   node "$ROOT/src/cli.mjs" assist-open --repo "$repo" --step PD-C-5 --prepare-only >"$TMP_ROOT/$run_id.assist-open.json"
-  manifest="$(node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(!data.allowedSignals.includes('recommend-approve')) throw new Error('recommend-approve missing'); if(!data.allowedSignals.includes('recommend-rerun-from')) throw new Error('recommend-rerun-from missing'); if(!data.command.join(' ').includes('disable-slash-commands')) throw new Error('assist command missing hardening'); console.log(data.manifestPath);" "$TMP_ROOT/$run_id.assist-open.json")"
+  manifest="$(node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(!data.allowedSignals.includes('recommend-approve')) throw new Error('recommend-approve missing'); if(!data.allowedSignals.includes('recommend-rerun-from')) throw new Error('recommend-rerun-from missing'); if(!data.command.join(' ').includes('--setting-sources')) throw new Error('assist command missing settings hardening'); console.log(data.manifestPath);" "$TMP_ROOT/$run_id.assist-open.json")"
   prompt_path="$(node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); console.log(data.promptPath);" "$TMP_ROOT/$run_id.assist-open.json")"
   test -f "$manifest"
   test -f "$prompt_path"
@@ -494,6 +576,7 @@ test_stop_after_step
 test_blocked_run
 test_auto_provider_run
 test_auto_review_judgement
+test_review_loop_auto_repair
 test_failed_run
 test_auto_resume_after_idle_timeout
 test_resumed_run

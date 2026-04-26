@@ -9,7 +9,7 @@ import { runCodex } from "./codex-adapter.mjs";
 import { runClaude } from "./claude-adapter.mjs";
 import { runCalcSmoke } from "./smoke-calc.mjs";
 import { createGateSummary, commitStep, ticketClose, ticketStart } from "./actions.mjs";
-import { writeReviewerPromptArtifact, writeStepPrompt } from "./prompt-templates.mjs";
+import { writeReviewerPromptArtifact, writeReviewRepairPromptArtifact, writeStepPrompt } from "./prompt-templates.mjs";
 import { captureNoteTicketPatchProposal, snapshotNoteTicketFiles } from "./patch-proposals.mjs";
 import { defaultJudgementKind, loadJudgements, writeJudgement } from "./judgements.mjs";
 import { runFinalVerification } from "./final-verification.mjs";
@@ -31,11 +31,18 @@ import {
   activeReviewPlan,
   aggregateReviewerOutputs,
   expandReviewerInstances,
+  loadReviewRepairOutput,
   loadReviewerOutput,
-  loadReviewerOutputsForStep,
+  loadReviewerOutputsForStepRound,
   materializeAggregatedReview,
-  reviewerAttemptDir,
-  reviewerOutputPath,
+  reviewAccepted,
+  reviewRoundDir,
+  reviewRoundReviewerAttemptDir,
+  reviewRoundReviewerOutputPath,
+  reviewRepairOutputPath,
+  writeLatestReviewerOutputMirror,
+  writeReviewRepairResult,
+  writeReviewRoundAggregate,
   writeReviewerAttemptResult
 } from "./review-runtime.mjs";
 import { judgementFromUiOutput, loadStepUiOutput, writeStepUiRuntime } from "./step-ui.mjs";
@@ -339,6 +346,20 @@ async function cmdRunNext(argv) {
 
         trace.push({ status: "provider_started", stepId: step.id, provider: step.provider });
         const providerResult = await executeProviderStep({ repo, runtime, step, options });
+        if (providerResult.status === "blocked") {
+          const block = {
+            status: "blocked",
+            stepId: step.id,
+            reason: "review_rounds_exhausted",
+            provider: step.provider,
+            message: providerResult.result?.finalMessage ?? `${step.id} requires user intervention after repeated review rounds.`,
+            failureSummary: providerResult.failureSummary?.artifactPath ?? providerResult.failureSummary,
+            nextCommands: blockedStopCommands(repo, step.id)
+          };
+          trace.push(block);
+          printBlocked(block, trace, options);
+          return;
+        }
         if (providerResult.status !== "completed") {
           trace.push({ status: "failed", stepId: step.id, provider: step.provider });
           printProviderResult({ repo, runtime: requireRuntime(repo), step, result: providerResult, options, trace });
@@ -1687,10 +1708,13 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
   if (reviewers.length === 0) {
     throw new Error(`${stepId} review plan did not resolve any reviewers`);
   }
+  const maxRounds = reviewMaxRoundsForStep(runtime.flow, reviewPlan);
+  const repairProvider = reviewRepairProviderForStep(runtime.flow, step, reviewPlan);
 
   let status = "failed";
   let rawLogPath = join(runtime.stateDir, "runs", runId, "steps", stepId, "reviewers");
   let lastResult = null;
+  let roundHistory = [];
   while (attempt <= maxAttempts) {
     const before = snapshotNoteTicketFiles({ repoPath: repo });
     updateRun(repo, { status: "running", current_step_id: stepId });
@@ -1724,71 +1748,58 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
       type: "step_started",
       provider: "runtime",
       message: `${stepId} reviewer batch started`,
-      payload: { reviewers: reviewers.map((reviewer) => ({ reviewerId: reviewer.reviewerId, provider: reviewer.provider || step.provider })) }
+      payload: {
+        reviewers: reviewers.map((reviewer) => ({ reviewerId: reviewer.reviewerId, provider: reviewer.provider || step.provider })),
+        maxRounds,
+        repairProvider
+      }
     });
-
-    const reviewerRuns = await Promise.all(reviewers.map((reviewer) =>
-      executeReviewerRun({
-        repo,
-        runtime,
-        step,
-        reviewer,
-        attempt,
-        timeoutMs,
-        idleTimeoutMs,
-        options
-      })
-    ));
-    const failedReviewer = reviewerRuns.find((reviewer) => reviewer.result.exitCode !== 0);
-    const aggregate = failedReviewer
-      ? null
-      : aggregateReviewerOutputs({
-          step,
-          reviewPlan,
-          reviewers: reviewerRuns
-        });
-
+    roundHistory = [];
+    let priorFindingsByReviewer = new Map();
     let materialized = null;
-    if (failedReviewer) {
-      status = "failed";
-      lastResult = {
-        exitCode: failedReviewer.result.exitCode,
-        finalMessage: `${failedReviewer.label} failed`,
-        stderr: failedReviewer.result.stderr ?? "",
-        timedOut: failedReviewer.result.timedOut === true,
-        timeoutKind: failedReviewer.result.timeoutKind ?? null,
-        signal: failedReviewer.result.signal ?? null
-      };
-      rawLogPath = failedReviewer.result.rawLogPath ?? rawLogPath;
-    } else if (aggregate?.status === "invalid_reviewer_output" || aggregate?.status === "missing_reviewer_output") {
-      status = "failed";
-      lastResult = {
-        exitCode: 2,
-        finalMessage: aggregate.summary,
-        stderr: aggregate.summary,
-        timedOut: false,
-        timeoutKind: null,
-        signal: null
-      };
-    } else {
-      materialized = materializeAggregatedReview({
-        repoPath: repo,
-        runtime,
-        step,
-        reviewPlan,
-        aggregate
-      });
+    for (let round = 1; round <= maxRounds; round += 1) {
       appendProgressEvent({
         repoPath: repo,
         runId,
         stepId,
         attempt,
-        type: "artifact",
+        type: "review_round_started",
         provider: "runtime",
-        message: `aggregated review ui-output ${materialized.uiOutputPath}`,
-        payload: { artifactPath: materialized.uiOutputPath }
+        message: `${stepId} review round ${round} started`,
+        payload: { round, maxRounds, repairProvider }
       });
-      if (materialized.judgement) {
+
+      const reviewerRuns = await Promise.all(reviewers.map((reviewer) =>
+        executeReviewerRun({
+          repo,
+          runtime,
+          step,
+          reviewer,
+          attempt,
+          round,
+          priorFindings: priorFindingsByReviewer.get(reviewer.reviewerId) ?? [],
+          timeoutMs,
+          idleTimeoutMs,
+          options
+        })
+      ));
+      const failedReviewer = reviewerRuns.find((reviewer) => reviewer.result.exitCode !== 0);
+      const aggregate = failedReviewer
+        ? null
+        : aggregateReviewerOutputs({
+            step,
+            reviewPlan,
+            reviewers: reviewerRuns
+          });
+
+      if (aggregate) {
+        const aggregatePath = writeReviewRoundAggregate({
+          stateDir: runtime.stateDir,
+          runId,
+          stepId,
+          round,
+          aggregate
+        });
         appendProgressEvent({
           repoPath: repo,
           runId,
@@ -1796,39 +1807,171 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
           attempt,
           type: "artifact",
           provider: "runtime",
-          message: `judgement ${materialized.judgement.judgement.kind}: ${materialized.judgement.judgement.status}`,
-          payload: { artifactPath: materialized.judgement.artifactPath, judgement: materialized.judgement.judgement }
+          message: `review round ${round} aggregate ${aggregatePath}`,
+          payload: { round, artifactPath: aggregatePath, status: aggregate.status }
         });
+      }
+
+      if (failedReviewer) {
+        status = "failed";
+        lastResult = {
+          exitCode: failedReviewer.result.exitCode,
+          finalMessage: `${failedReviewer.label} failed`,
+          stderr: failedReviewer.result.stderr ?? "",
+          timedOut: failedReviewer.result.timedOut === true,
+          timeoutKind: failedReviewer.result.timeoutKind ?? null,
+          signal: failedReviewer.result.signal ?? null
+        };
+        rawLogPath = failedReviewer.result.rawLogPath ?? rawLogPath;
+        break;
+      }
+      if (aggregate?.status === "invalid_reviewer_output" || aggregate?.status === "missing_reviewer_output") {
+        status = "failed";
+        lastResult = {
+          exitCode: 2,
+          finalMessage: aggregate.summary,
+          stderr: aggregate.summary,
+          timedOut: false,
+          timeoutKind: null,
+          signal: null
+        };
+        break;
+      }
+
+      priorFindingsByReviewer = new Map(reviewerRuns.map((reviewerRun) => [
+        reviewerRun.reviewerId,
+        (reviewerRun.output?.findings ?? []).filter((finding) => ["critical", "major", "minor"].includes(finding.severity))
+      ]));
+
+      const roundRecord = {
+        round,
+        status: aggregate.status,
+        summary: aggregate.summary,
+        blockingFindings: aggregate.blockingFindings ?? aggregate.topFindings ?? [],
+        repairSummary: null,
+        verification: [],
+        remainingRisks: []
+      };
+      roundHistory.push(roundRecord);
+
+      if (reviewAccepted(aggregate)) {
+        materialized = materializeAggregatedReview({
+          repoPath: repo,
+          runtime,
+          step,
+          reviewPlan,
+          aggregate,
+          rounds: roundHistory,
+          commit: true
+        });
+        appendReviewMaterializedEvents({ repo, runId, stepId, attempt, materialized });
+        appendProgressEvent({
+          repoPath: repo,
+          runId,
+          stepId,
+          attempt,
+          type: "review_round_finished",
+          provider: "runtime",
+          message: `${stepId} review round ${round} passed`,
+          payload: { round, status: aggregate.status }
+        });
+        status = "completed";
+        lastResult = {
+          exitCode: 0,
+          finalMessage: aggregate.summary,
+          stderr: "",
+          timedOut: false,
+          timeoutKind: null,
+          signal: null
+        };
+        break;
+      }
+
+      if (round >= maxRounds) {
+        materialized = materializeAggregatedReview({
+          repoPath: repo,
+          runtime,
+          step,
+          reviewPlan,
+          aggregate,
+          rounds: roundHistory,
+          commit: true
+        });
+        appendReviewMaterializedEvents({ repo, runId, stepId, attempt, materialized });
+        appendProgressEvent({
+          repoPath: repo,
+          runId,
+          stepId,
+          attempt,
+          type: "review_round_limit",
+          provider: "runtime",
+          message: `${stepId} exhausted ${maxRounds} review rounds`,
+          payload: { round, maxRounds, status: aggregate.status }
+        });
+        status = "blocked";
+        lastResult = {
+          exitCode: 3,
+          finalMessage: `${stepId} exhausted ${maxRounds} review rounds`,
+          stderr: aggregate.summary,
+          timedOut: false,
+          timeoutKind: null,
+          signal: null
+        };
+        break;
+      }
+
+      const repair = await executeReviewRepair({
+        repo,
+        runtime,
+        step,
+        reviewPlan,
+        aggregate,
+        attempt,
+        round,
+        provider: repairProvider,
+        timeoutMs,
+        idleTimeoutMs,
+        options
+      });
+      roundRecord.repairSummary = repair.output?.summary || repair.result.finalMessage || "";
+      roundRecord.verification = repair.output?.verification ?? [];
+      roundRecord.remainingRisks = repair.output?.remainingRisks ?? [];
+      if (repair.result.exitCode !== 0) {
+        status = "failed";
+        lastResult = {
+          exitCode: repair.result.exitCode,
+          finalMessage: `${repairProvider} repair failed in round ${round}`,
+          stderr: repair.result.stderr ?? "",
+          timedOut: repair.result.timedOut === true,
+          timeoutKind: repair.result.timeoutKind ?? null,
+          signal: repair.result.signal ?? null
+        };
+        rawLogPath = repair.result.rawLogPath ?? rawLogPath;
+        break;
+      }
+      if (!repair.output || repair.output.parseErrors?.length) {
+        status = "failed";
+        lastResult = {
+          exitCode: 4,
+          finalMessage: `repair output missing or invalid in round ${round}`,
+          stderr: repair.output?.parseErrors?.join("\n") || "repair output missing",
+          timedOut: false,
+          timeoutKind: null,
+          signal: null
+        };
+        rawLogPath = repair.result.rawLogPath ?? rawLogPath;
+        break;
       }
       appendProgressEvent({
         repoPath: repo,
         runId,
         stepId,
         attempt,
-        type: "artifact",
+        type: "review_round_finished",
         provider: "runtime",
-        message: `review note updated ${materialized.noteSection}`,
-        payload: { section: materialized.noteSection }
+        message: `${stepId} review round ${round} repaired; rerunning reviewers`,
+        payload: { round, status: aggregate.status, verification: repair.output.verification ?? [] }
       });
-      appendProgressEvent({
-        repoPath: repo,
-        runId,
-        stepId,
-        attempt,
-        type: "commit",
-        provider: "runtime",
-        message: materialized.commit.message ?? `${stepId} commit ${materialized.commit.status}`,
-        payload: materialized.commit
-      });
-      status = "completed";
-      lastResult = {
-        exitCode: 0,
-        finalMessage: aggregate.summary,
-        stderr: "",
-        timedOut: false,
-        timeoutKind: null,
-        signal: null
-      };
     }
 
     writeAttemptResult({
@@ -1888,7 +2031,7 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
         payload: patchProposal
       });
     }
-    if (status === "completed" || attempt >= maxAttempts) {
+    if (status === "completed" || status === "blocked" || attempt >= maxAttempts) {
       break;
     }
     const delayMs = retryDelayMs(options, attempt);
@@ -1913,29 +2056,43 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
     attempt += 1;
   }
 
-  updateRun(repo, { status: status === "completed" ? "running" : "failed", current_step_id: stepId });
+  updateRun(repo, { status: status === "completed" ? "running" : status, current_step_id: stepId });
   const failureSummary = status === "completed"
     ? null
-    : createProviderFailureSummary({
-        repo,
-        runtime: requireRuntime(repo),
-        step,
-        attempt,
-        maxAttempts,
-        rawLogPath,
-        result: lastResult,
-        reviewContext: step.mode === "review" ? summarizePartialReviewContext(loadReviewerOutputsForStep({
-          stateDir: runtime.stateDir,
-          runId: runtime.run.id,
-          stepId
-        })) : null
-      });
+    : status === "blocked"
+      ? createReviewRoundLimitSummary({
+          repo,
+          runtime: requireRuntime(repo),
+          step,
+          attempt,
+          maxAttempts,
+          maxRounds,
+          reviewContext: summarizeReviewRounds(roundHistory),
+          message: `${stepId} reached ${maxRounds} review rounds without satisfying ${reviewPlan.passWhen?.[0] ?? "the review pass condition"}.`
+        })
+      : createProviderFailureSummary({
+          repo,
+          runtime: requireRuntime(repo),
+          step,
+          attempt,
+          maxAttempts,
+          rawLogPath,
+          result: lastResult,
+          reviewContext: step.mode === "review" ? summarizePartialReviewContext(loadReviewerOutputsForStepRound({
+            stateDir: runtime.stateDir,
+            runId: runtime.run.id,
+            stepId,
+            round: roundHistory.length > 0 ? roundHistory[roundHistory.length - 1].round : null
+          })) : null
+        });
   syncStepUiRuntime({
     repo,
     stepId,
     nextCommands: status === "completed"
       ? [runNextCommand(repo)]
-      : [statusCommand(repo), assistOpenCommand(repo, stepId), resumeCommand(repo)]
+      : status === "blocked"
+        ? blockedStopCommands(repo, stepId)
+        : [statusCommand(repo), assistOpenCommand(repo, stepId), resumeCommand(repo)]
   });
   return {
     status,
@@ -1949,14 +2106,16 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
   };
 }
 
-async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, timeoutMs, idleTimeoutMs, options }) {
+async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, round, priorFindings, timeoutMs, idleTimeoutMs, options }) {
   const promptArtifact = writeReviewerPromptArtifact({
     repoPath: repo,
     stateDir: runtime.stateDir,
     run: runtime.run,
     flow: runtime.flow,
     stepId: step.id,
-    reviewer
+    reviewer,
+    round,
+    priorFindings
   });
   appendProgressEvent({
     repoPath: repo,
@@ -1966,13 +2125,14 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, time
     type: "artifact",
     provider: "runtime",
     message: `reviewer prompt ${promptArtifact.artifactPath}`,
-    payload: { reviewerId: reviewer.reviewerId, artifactPath: promptArtifact.artifactPath }
+    payload: { reviewerId: reviewer.reviewerId, artifactPath: promptArtifact.artifactPath, round }
   });
   const provider = reviewer.provider || step.provider;
-  const rawLogPath = join(reviewerAttemptDir({
+  const rawLogPath = join(reviewRoundReviewerAttemptDir({
     stateDir: runtime.stateDir,
     runId: runtime.run.id,
     stepId: step.id,
+    round,
     reviewerId: reviewer.reviewerId,
     attempt
   }), `${provider}.raw.jsonl`);
@@ -1985,7 +2145,7 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, time
     type: "reviewer_started",
     provider,
     message: `${reviewer.label} started`,
-    payload: { reviewerId: reviewer.reviewerId, provider }
+    payload: { reviewerId: reviewer.reviewerId, provider, round }
   });
 
   const result = await runProviderInvocation({
@@ -2009,6 +2169,7 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, time
         message: `${reviewer.label}: ${event.message}`,
         payload: {
           reviewerId: reviewer.reviewerId,
+          round,
           sessionId: event.sessionId ?? null,
           finalMessage: event.finalMessage ?? null,
           event: event.payload ?? {}
@@ -2023,6 +2184,7 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, time
     reviewerId: reviewer.reviewerId,
     attempt,
     result: {
+      round,
       provider,
       status: result.exitCode === 0 ? "completed" : "failed",
       exitCode: result.exitCode,
@@ -2041,9 +2203,24 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, time
         stateDir: runtime.stateDir,
         runId: runtime.run.id,
         stepId: step.id,
-        reviewerId: reviewer.reviewerId
+        reviewerId: reviewer.reviewerId,
+        round
       })
     : null;
+  if (output) {
+    writeLatestReviewerOutputMirror({
+      stateDir: runtime.stateDir,
+      runId: runtime.run.id,
+      stepId: step.id,
+      reviewerId: reviewer.reviewerId,
+      output: {
+        status: output.status,
+        summary: output.summary,
+        findings: output.findings,
+        notes: output.notes
+      }
+    });
+  }
 
   appendProgressEvent({
     repoPath: repo,
@@ -2055,12 +2232,14 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, time
     message: `${reviewer.label} ${result.exitCode === 0 ? "completed" : "failed"}`,
     payload: {
       reviewerId: reviewer.reviewerId,
+      round,
       provider,
       exitCode: result.exitCode,
-      outputPath: reviewerOutputPath({
+      outputPath: reviewRoundReviewerOutputPath({
         stateDir: runtime.stateDir,
         runId: runtime.run.id,
         stepId: step.id,
+        round,
         reviewerId: reviewer.reviewerId
       })
     }
@@ -2068,6 +2247,133 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, time
 
   return {
     ...reviewer,
+    provider,
+    round,
+    result: {
+      ...result,
+      rawLogPath
+    },
+    output
+  };
+}
+
+async function executeReviewRepair({ repo, runtime, step, reviewPlan, aggregate, attempt, round, provider, timeoutMs, idleTimeoutMs, options }) {
+  const promptArtifact = writeReviewRepairPromptArtifact({
+    repoPath: repo,
+    stateDir: runtime.stateDir,
+    run: runtime.run,
+    flow: runtime.flow,
+    stepId: step.id,
+    reviewPlan,
+    aggregate,
+    round,
+    provider
+  });
+  appendProgressEvent({
+    repoPath: repo,
+    runId: runtime.run.id,
+    stepId: step.id,
+    attempt,
+    type: "artifact",
+    provider: "runtime",
+    message: `review repair prompt ${promptArtifact.artifactPath}`,
+    payload: { round, provider, artifactPath: promptArtifact.artifactPath }
+  });
+
+  const rawLogPath = join(reviewRoundDir({
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    stepId: step.id,
+    round
+  }), `${provider}.raw.jsonl`);
+  appendProgressEvent({
+    repoPath: repo,
+    runId: runtime.run.id,
+    stepId: step.id,
+    attempt,
+    type: "review_repair_started",
+    provider,
+    message: `${step.id} repair round ${round} started`,
+    payload: { round, provider }
+  });
+
+  const result = await runProviderInvocation({
+    provider,
+    cwd: repo,
+    prompt: promptArtifact.body,
+    rawLogPath,
+    timeoutMs,
+    idleTimeoutMs,
+    options,
+    disableSlashCommands: provider === "claude",
+    settingSources: provider === "claude" ? "user" : null,
+    onEvent(event) {
+      appendProgressEvent({
+        repoPath: repo,
+        runId: runtime.run.id,
+        stepId: step.id,
+        attempt,
+        type: `review_repair_${event.type}`,
+        provider,
+        message: `${step.id} repair round ${round}: ${event.message}`,
+        payload: {
+          round,
+          sessionId: event.sessionId ?? null,
+          finalMessage: event.finalMessage ?? null,
+          event: event.payload ?? {}
+        }
+      });
+    }
+  });
+
+  const resultPath = writeReviewRepairResult({
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    stepId: step.id,
+    round,
+    result: {
+      provider,
+      status: result.exitCode === 0 ? "completed" : "failed",
+      exitCode: result.exitCode,
+      finalMessage: result.finalMessage,
+      stderr: result.stderr,
+      timedOut: result.timedOut === true,
+      timeoutKind: result.timeoutKind ?? null,
+      signal: result.signal ?? null,
+      rawLogPath,
+      finishedAt: new Date().toISOString()
+    }
+  });
+  const output = result.exitCode === 0
+    ? loadReviewRepairOutput({
+        stateDir: runtime.stateDir,
+        runId: runtime.run.id,
+        stepId: step.id,
+        round
+      })
+    : null;
+  appendProgressEvent({
+    repoPath: repo,
+    runId: runtime.run.id,
+    stepId: step.id,
+    attempt,
+    type: "review_repair_finished",
+    provider,
+    message: `${step.id} repair round ${round} ${result.exitCode === 0 ? "completed" : "failed"}`,
+    payload: {
+      round,
+      provider,
+      exitCode: result.exitCode,
+      resultPath,
+      outputPath: reviewRepairOutputPath({
+        stateDir: runtime.stateDir,
+        runId: runtime.run.id,
+        stepId: step.id,
+        round
+      })
+    }
+  });
+  return {
     provider,
     result: {
       ...result,
@@ -2525,6 +2831,34 @@ function createProviderFailureSummary({ repo, runtime, step, attempt, maxAttempt
   return summary;
 }
 
+function createReviewRoundLimitSummary({ repo, runtime, step, attempt, maxAttempts, maxRounds, reviewContext = null, message = null }) {
+  const summary = writeFailureSummary({
+    stateDir: runtime.stateDir,
+    repoPath: repo,
+    runId: runtime.run.id,
+    stepId: step.id,
+    reason: "review_rounds_exhausted",
+    provider: step.provider,
+    status: "blocked",
+    attempt,
+    maxAttempts,
+    reviewContext,
+    message: message ?? `${step.id} exhausted ${maxRounds} review rounds.`,
+    nextCommands: blockedStopCommands(repo, step.id)
+  });
+  appendProgressEvent({
+    repoPath: repo,
+    runId: runtime.run.id,
+    stepId: step.id,
+    attempt,
+    type: "artifact",
+    provider: "runtime",
+    message: `failure summary ${summary.artifactPath}`,
+    payload: { artifactPath: summary.artifactPath, reason: "review_rounds_exhausted" }
+  });
+  return summary;
+}
+
 function providerFailureDiagnosis({ step, result, reviewContext }) {
   const finalMessage = String(result?.finalMessage || "");
   const stderr = String(result?.stderr || "");
@@ -2565,6 +2899,75 @@ function summarizePartialReviewContext(reviewers) {
     completedReviewers,
     topFindings
   };
+}
+
+function summarizeReviewRounds(roundHistory) {
+  if (!roundHistory.length) {
+    return null;
+  }
+  const latest = roundHistory[roundHistory.length - 1];
+  return {
+    completedReviewers: [],
+    topFindings: latest.blockingFindings ?? [],
+    rounds: roundHistory.map((round) => ({
+      round: round.round,
+      status: round.status,
+      summary: round.summary
+    }))
+  };
+}
+
+function appendReviewMaterializedEvents({ repo, runId, stepId, attempt, materialized }) {
+  appendProgressEvent({
+    repoPath: repo,
+    runId,
+    stepId,
+    attempt,
+    type: "artifact",
+    provider: "runtime",
+    message: `aggregated review ui-output ${materialized.uiOutputPath}`,
+    payload: { artifactPath: materialized.uiOutputPath }
+  });
+  if (materialized.judgement) {
+    appendProgressEvent({
+      repoPath: repo,
+      runId,
+      stepId,
+      attempt,
+      type: "artifact",
+      provider: "runtime",
+      message: `judgement ${materialized.judgement.judgement.kind}: ${materialized.judgement.judgement.status}`,
+      payload: { artifactPath: materialized.judgement.artifactPath, judgement: materialized.judgement.judgement }
+    });
+  }
+  appendProgressEvent({
+    repoPath: repo,
+    runId,
+    stepId,
+    attempt,
+    type: "artifact",
+    provider: "runtime",
+    message: `review note updated ${materialized.noteSection}`,
+    payload: { section: materialized.noteSection }
+  });
+  appendProgressEvent({
+    repoPath: repo,
+    runId,
+    stepId,
+    attempt,
+    type: "commit",
+    provider: "runtime",
+    message: materialized.commit.message ?? `${stepId} commit ${materialized.commit.status}`,
+    payload: materialized.commit
+  });
+}
+
+function reviewMaxRoundsForStep(flow, reviewPlan) {
+  return positiveInteger(reviewPlan?.maxRounds ?? flow.defaults?.reviewMaxRounds ?? 6, "reviewMaxRounds");
+}
+
+function reviewRepairProviderForStep(flow, step, reviewPlan) {
+  return reviewPlan?.repairProvider || flow.defaults?.reviewRepairProvider || step.provider;
 }
 
 function printProviderResult({ repo, runtime, step, result, options, trace = [] }) {

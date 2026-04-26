@@ -42,6 +42,38 @@ export function reviewerAttemptResultPath({ stateDir, runId, stepId, reviewerId,
   return join(reviewerAttemptDir({ stateDir, runId, stepId, reviewerId, attempt }), "result.json");
 }
 
+export function reviewRoundDir({ stateDir, runId, stepId, round }) {
+  return join(stateDir, "runs", runId, "steps", stepId, "review-rounds", `round-${round}`);
+}
+
+export function reviewRoundReviewerDir({ stateDir, runId, stepId, round, reviewerId }) {
+  return join(reviewRoundDir({ stateDir, runId, stepId, round }), "reviewers", reviewerId);
+}
+
+export function reviewRoundReviewerOutputPath({ stateDir, runId, stepId, round, reviewerId }) {
+  return join(reviewRoundReviewerDir({ stateDir, runId, stepId, round, reviewerId }), "review.yaml");
+}
+
+export function reviewRoundReviewerAttemptDir({ stateDir, runId, stepId, round, reviewerId, attempt }) {
+  return join(reviewRoundReviewerDir({ stateDir, runId, stepId, round, reviewerId }), `attempt-${attempt}`);
+}
+
+export function reviewRoundReviewerAttemptResultPath({ stateDir, runId, stepId, round, reviewerId, attempt }) {
+  return join(reviewRoundReviewerAttemptDir({ stateDir, runId, stepId, round, reviewerId, attempt }), "result.json");
+}
+
+export function reviewRepairOutputPath({ stateDir, runId, stepId, round }) {
+  return join(reviewRoundDir({ stateDir, runId, stepId, round }), "repair.yaml");
+}
+
+export function reviewRepairResultPath({ stateDir, runId, stepId, round }) {
+  return join(reviewRoundDir({ stateDir, runId, stepId, round }), "repair-result.json");
+}
+
+export function reviewRoundAggregatePath({ stateDir, runId, stepId, round }) {
+  return join(reviewRoundDir({ stateDir, runId, stepId, round }), "aggregate.yaml");
+}
+
 export function writeReviewerPrompt({ stateDir, run, step, reviewPlan, reviewer }) {
   const path = reviewerPromptPath({
     stateDir,
@@ -120,14 +152,25 @@ export function writeReviewerPrompt({ stateDir, run, step, reviewPlan, reviewer 
 }
 
 export function writeReviewerAttemptResult({ stateDir, runId, stepId, reviewerId, attempt, result }) {
-  const path = reviewerAttemptResultPath({ stateDir, runId, stepId, reviewerId, attempt });
+  const path = result.round
+    ? reviewRoundReviewerAttemptResultPath({
+        stateDir,
+        runId,
+        stepId,
+        round: result.round,
+        reviewerId,
+        attempt
+      })
+    : reviewerAttemptResultPath({ stateDir, runId, stepId, reviewerId, attempt });
   mkdirSync(join(path, ".."), { recursive: true });
   writeFileSync(path, JSON.stringify({ ...result, reviewerId, attempt, runId, stepId }, null, 2));
   return path;
 }
 
-export function loadReviewerOutput({ stateDir, runId, stepId, reviewerId }) {
-  const path = reviewerOutputPath({ stateDir, runId, stepId, reviewerId });
+export function loadReviewerOutput({ stateDir, runId, stepId, reviewerId, round = null }) {
+  const path = round
+    ? reviewRoundReviewerOutputPath({ stateDir, runId, stepId, round, reviewerId })
+    : reviewerOutputPath({ stateDir, runId, stepId, reviewerId });
   if (!existsSync(path)) {
     return null;
   }
@@ -147,7 +190,13 @@ export function loadReviewerOutput({ stateDir, runId, stepId, reviewerId }) {
 }
 
 export function loadReviewerOutputsForStep({ stateDir, runId, stepId }) {
-  const reviewersDir = join(stateDir, "runs", runId, "steps", stepId, "reviewers");
+  return loadReviewerOutputsForStepRound({ stateDir, runId, stepId, round: null });
+}
+
+export function loadReviewerOutputsForStepRound({ stateDir, runId, stepId, round = null }) {
+  const reviewersDir = round
+    ? join(reviewRoundDir({ stateDir, runId, stepId, round }), "reviewers")
+    : join(stateDir, "runs", runId, "steps", stepId, "reviewers");
   if (!existsSync(reviewersDir)) {
     return [];
   }
@@ -158,7 +207,8 @@ export function loadReviewerOutputsForStep({ stateDir, runId, stepId }) {
         stateDir,
         runId,
         stepId,
-        reviewerId: entry.name
+        reviewerId: entry.name,
+        round
       });
       return output
         ? {
@@ -170,6 +220,13 @@ export function loadReviewerOutputsForStep({ stateDir, runId, stepId }) {
         : null;
     })
     .filter(Boolean);
+}
+
+export function writeLatestReviewerOutputMirror({ stateDir, runId, stepId, reviewerId, output }) {
+  const path = reviewerOutputPath({ stateDir, runId, stepId, reviewerId });
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, `${stringify(output).trimEnd()}\n`);
+  return path;
 }
 
 export function aggregateReviewerOutputs({ step, reviewPlan, reviewers }) {
@@ -202,10 +259,11 @@ export function aggregateReviewerOutputs({ step, reviewPlan, reviewers }) {
   const findings = reviewers.flatMap((reviewer) =>
     (reviewer.output?.findings ?? []).map((finding) => ({ ...finding, reviewerId: reviewer.reviewerId, reviewerLabel: reviewer.label }))
   );
+  const blockingFindings = findings.filter((finding) => ["critical", "major", "minor"].includes(finding.severity));
   const topFindings = findings.filter((finding) => ["critical", "major"].includes(finding.severity));
   const status = acceptedStatus
     ? (nonAccepted ? nonAccepted.output.status : acceptedStatus)
-    : (topFindings.length > 0 ? "Findings Present" : "Ready");
+    : (blockingFindings.length > 0 ? "Findings Present" : "Ready");
   const summary = nonAccepted
     ? `${nonAccepted.label}: ${nonAccepted.output.summary || nonAccepted.output.status}`
     : reviewers.map((reviewer) => `${reviewer.label}: ${reviewer.output.summary}`).filter(Boolean).join(" / ");
@@ -216,17 +274,18 @@ export function aggregateReviewerOutputs({ step, reviewPlan, reviewers }) {
     summary: summary || status,
     reviewers,
     findings,
+    blockingFindings,
     topFindings,
     readyWhen: Array.isArray(reviewPlan?.passWhen) ? reviewPlan.passWhen : []
   };
 }
 
-export function materializeAggregatedReview({ repoPath, runtime, step, reviewPlan, aggregate }) {
+export function materializeAggregatedReview({ repoPath, runtime, step, reviewPlan, aggregate, rounds = [], commit = true }) {
   const section = noteSectionForStep(step);
   if (!section) {
     throw new Error(`${step.id} has no note_section_updated guard to record review output`);
   }
-  const noteBody = renderReviewSection(step.id, aggregate);
+  const noteBody = renderReviewSection(step.id, aggregate, rounds);
   replaceNoteSection(repoPath, section, noteBody);
 
   const uiOutputPath = uiOutputArtifactPath({
@@ -260,19 +319,85 @@ export function materializeAggregatedReview({ repoPath, runtime, step, reviewPla
     });
   }
 
-  const commit = commitStep({
-    repoPath,
-    stepId: step.id,
-    message: reviewCommitSummary(step.id)
-  });
+  const commitResult = commit
+    ? commitStep({
+        repoPath,
+        stepId: step.id,
+        message: reviewCommitSummary(step.id)
+      })
+    : { status: "skipped", message: "Commit deferred until review loop finishes" };
 
   return {
     noteSection: section,
     noteBody,
     uiOutputPath,
     judgement,
-    commit
+    commit: commitResult
   };
+}
+
+export function writeReviewRoundAggregate({ stateDir, runId, stepId, round, aggregate }) {
+  const path = reviewRoundAggregatePath({ stateDir, runId, stepId, round });
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, `${stringify({
+    round,
+    status: aggregate.status,
+    summary: aggregate.summary,
+    accepted_status: aggregate.acceptedStatus ?? null,
+    reviewers: aggregate.reviewers.map((reviewer) => ({
+      reviewer_id: reviewer.reviewerId,
+      label: reviewer.label,
+      provider: reviewer.provider || "",
+      status: reviewer.output?.status || "",
+      summary: reviewer.output?.summary || "",
+      artifact: reviewer.output?.artifactPath || ""
+    })),
+    findings: (aggregate.findings ?? []).map((finding) => ({
+      severity: finding.severity,
+      reviewer: finding.reviewerLabel,
+      title: finding.title,
+      evidence: finding.evidence,
+      recommendation: finding.recommendation
+    }))
+  }).trimEnd()}\n`);
+  return path;
+}
+
+export function writeReviewRepairResult({ stateDir, runId, stepId, round, result }) {
+  const path = reviewRepairResultPath({ stateDir, runId, stepId, round });
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, JSON.stringify({ ...result, runId, stepId, round }, null, 2));
+  return path;
+}
+
+export function loadReviewRepairOutput({ stateDir, runId, stepId, round }) {
+  const path = reviewRepairOutputPath({ stateDir, runId, stepId, round });
+  if (!existsSync(path)) {
+    return null;
+  }
+  try {
+    const rawText = readFileSync(path, "utf8");
+    const doc = parseDocument(rawText, { prettyErrors: false });
+    const raw = doc.toJS() ?? {};
+    return normalizeReviewRepairOutput(raw, {
+      artifactPath: path,
+      rawText,
+      parseErrors: doc.errors.map((error) => error.message),
+      parseWarnings: doc.warnings.map((warning) => warning.message)
+    });
+  } catch {
+    return null;
+  }
+}
+
+export function reviewAccepted(aggregate) {
+  if (!aggregate) {
+    return false;
+  }
+  if (aggregate.acceptedStatus) {
+    return aggregate.status === aggregate.acceptedStatus;
+  }
+  return aggregate.status === "Ready" && (aggregate.blockingFindings?.length ?? 0) === 0;
 }
 
 function renderAggregateUiOutput(step, reviewPlan, aggregate) {
@@ -293,9 +418,11 @@ function renderAggregateUiOutput(step, reviewPlan, aggregate) {
   };
 }
 
-function renderReviewSection(stepId, aggregate) {
+function renderReviewSection(stepId, aggregate, rounds = []) {
   const lines = [
     `Updated: ${new Date().toISOString()}`,
+    "",
+    `- Review rounds: ${Math.max(rounds.length, 1)}`,
     "",
     "### Aggregate",
     "",
@@ -324,6 +451,33 @@ function renderReviewSection(stepId, aggregate) {
       if (finding.recommendation) {
         lines.push(`  - Recommendation: ${finding.recommendation}`);
       }
+    }
+  }
+  if (rounds.length > 0) {
+    lines.push("", "### Review Rounds", "");
+    for (const round of rounds) {
+      lines.push(`#### Round ${round.round}`, "");
+      lines.push(`- Aggregate status: ${round.status}`);
+      lines.push(`- Summary: ${round.summary || "-"}`);
+      if (round.repairSummary) {
+        lines.push(`- Repair summary: ${round.repairSummary}`);
+      }
+      if (Array.isArray(round.verification) && round.verification.length > 0) {
+        lines.push(`- Verification: ${round.verification.join(" / ")}`);
+      }
+      if (Array.isArray(round.blockingFindings) && round.blockingFindings.length > 0) {
+        lines.push("- Blocking findings:");
+        for (const finding of round.blockingFindings) {
+          lines.push(`  - [${finding.severity}] ${finding.reviewerLabel}: ${finding.title}`);
+        }
+      }
+      if (Array.isArray(round.remainingRisks) && round.remainingRisks.length > 0) {
+        lines.push("- Remaining risks:");
+        for (const risk of round.remainingRisks) {
+          lines.push(`  - ${risk}`);
+        }
+      }
+      lines.push("");
     }
   }
   if (stepId === "PD-C-8") {
@@ -357,6 +511,20 @@ function normalizeReviewerOutput(value, meta = {}) {
           recommendation: asString(finding?.recommendation)
         }))
       : [],
+    notes: asString(source.notes),
+    artifactPath: asString(meta.artifactPath),
+    parseErrors: asStringList(meta.parseErrors),
+    parseWarnings: asStringList(meta.parseWarnings),
+    rawText: asString(meta.rawText)
+  };
+}
+
+function normalizeReviewRepairOutput(value, meta = {}) {
+  const source = value ?? {};
+  return {
+    summary: asString(source.summary),
+    verification: asStringList(source.verification),
+    remainingRisks: asStringList(source.remaining_risks ?? source.remainingRisks),
     notes: asString(source.notes),
     artifactPath: asString(meta.artifactPath),
     parseErrors: asStringList(meta.parseErrors),

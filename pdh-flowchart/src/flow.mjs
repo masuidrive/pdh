@@ -213,6 +213,8 @@ function normalizeReviewPlan(review, variant, roleCatalog) {
     : (source.reviewersByVariant?.[variant] ?? source.reviewersByVariant?.default ?? []);
   return {
     intent: normalizeString(source.intent),
+    maxRounds: normalizePositiveInteger(source.maxRounds),
+    repairProvider: normalizeString(source.repairProvider),
     passWhen: normalizeStringList(source.passWhen),
     onFindings: normalizeStringList(source.onFindings),
     reviewers: Array.isArray(reviewers)
@@ -243,4 +245,9 @@ function normalizeStringList(value) {
     return [];
   }
   return value.map(normalizeString).filter(Boolean);
+}
+
+function normalizePositiveInteger(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : null;
 }

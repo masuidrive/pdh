@@ -14,6 +14,7 @@
 - Flow semantics are internalized in this repo; runtime execution does not depend on external `pdh-dev` or `tmux-director` skills.
 - Review-step orchestration semantics (reviewer roster, pass conditions, loop-back intent) are defined in flow YAML and compiled into runtime-owned prompts.
 - Review-step reviewer rosters execute in parallel and are aggregated by the runtime into canonical note sections and structured judgement artifacts.
+- Review steps may run bounded repair rounds between reviewer rounds. The runtime owns round tracking, repair prompts, and the escalation point back to the user after repeated unresolved findings.
 
 ### Rejected
 

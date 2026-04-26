@@ -12,6 +12,7 @@
 - Runtime semantics are owned by this repo's flow YAML and prompt/runtime code. `pdh-dev` and `tmux-director` are not runtime dependencies.
 - Reviewer rosters, review-loop pass conditions, and review-step intent are also defined in this repo's flow YAML and compiled into provider prompts.
 - Review steps execute their configured reviewer roster in parallel, and the runtime aggregates those reviewer outputs into note sections, UI output, and guard-facing judgements.
+- When review steps still have blocking findings, the runtime can run bounded repair rounds and re-run the same reviewer roster before escalating back to the user.
 
 ## Local Setup
 

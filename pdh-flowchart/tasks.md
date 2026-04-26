@@ -53,5 +53,6 @@
 - [ ] Dockerized execution and hardening.
 - [ ] Epic flow support.
 - [x] Parallel reviewer support.
+- [x] Runtime-owned review repair and re-review loop.
 - [ ] Richer review result schemas.
 - [ ] Optional SDK adapters after the CLI path is stable.
