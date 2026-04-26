@@ -2930,7 +2930,9 @@ function renderHtml() {
     font-weight: 500;
   }
   .assist-login-button.hidden {
-    display: none;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
   }
   .assist-login-button:hover,
   .assist-login-button:active {
@@ -5910,8 +5912,14 @@ function renderHtml() {
       window.alert('Failed to apply recommendation: ' + (error?.message || String(error)));
     }
   });
-  document.getElementById('assist-login-button').addEventListener('click', () => {
+  document.getElementById('assist-login-button').addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
     sendAssistLoginSequence();
+  });
+  document.getElementById('assist-login-button').addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
   });
   document.querySelectorAll('[data-assist-input]').forEach((button) => {
     button.addEventListener('click', () => {
