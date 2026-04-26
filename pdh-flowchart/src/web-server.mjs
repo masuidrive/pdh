@@ -2098,7 +2098,18 @@ function renderHtml() {
     cursor: pointer;
     font-family: inherit;
   }
+  .artifact-button.has-inline-excerpt {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .artifact-button:hover { border-color: var(--border-strong); }
+  .artifact-button-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+  }
   .artifact-copy {
     display: flex;
     flex-direction: column;
@@ -2119,7 +2130,7 @@ function renderHtml() {
     flex: 0 0 auto;
   }
   .artifact-inline-excerpt {
-    margin: -2px 0 4px;
+    margin-top: 2px;
     padding: 10px 12px;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -3473,7 +3484,7 @@ function renderHtml() {
     return heading ? [heading] : [];
   }
 
-  function documentExcerptText(docId, headingOrHeadings = null) {
+  function documentExcerptText(docId, headingOrHeadings = null, { includeContext = true } = {}) {
     const document = documentData(docId);
     if (!document?.text) {
       return '';
@@ -3485,7 +3496,9 @@ function renderHtml() {
     }
     return headings.map((heading) => {
       const range = findDocumentSectionRange(document.text, heading);
-      return range.lines.slice(range.start, range.end + 1).join('\\n').trim();
+      const start = includeContext || range.highlightStart < 0 ? range.start : range.highlightStart;
+      const end = includeContext || range.highlightEnd < 0 ? range.end : range.highlightEnd;
+      return range.lines.slice(start, end + 1).join('\\n').trim();
     }).filter(Boolean).join('\\n\\n');
   }
 
@@ -3510,7 +3523,7 @@ function renderHtml() {
   function noteMaterialItem(step) {
     const headings = noteFocusHeadings(step);
     const item = documentModalItem('note', headings);
-    const excerpt = documentExcerptText('note', headings) || documentData('note')?.text || '';
+    const excerpt = documentExcerptText('note', headings, { includeContext: false }) || documentData('note')?.text || '';
     const focusText = headings.join(' / ');
     return {
       ...item,
@@ -3528,7 +3541,7 @@ function renderHtml() {
       ? ['Product AC']
       : ['Implementation Notes'];
     const item = documentModalItem('ticket', headings);
-    const excerpt = documentExcerptText('ticket', headings) || documentData('ticket')?.text || '';
+    const excerpt = documentExcerptText('ticket', headings, { includeContext: false }) || documentData('ticket')?.text || '';
     const focusText = headings.join(' / ');
     return {
       ...item,
@@ -5746,14 +5759,16 @@ function renderHtml() {
     }
     materialItems.forEach((item, index) => {
       html +=
-        '<button class="artifact artifact-button show-artifact-button" type="button" data-show-index="' + esc(String(index)) + '">' +
-          '<div class="artifact-copy">' +
-            '<span class="artifact-name">' + esc(item.label) + '</span>' +
-            '<span class="artifact-preview">' + esc(item.preview) + '</span>' +
+        '<button class="artifact artifact-button show-artifact-button' + (item.inlineExcerpt ? ' has-inline-excerpt' : '') + '" type="button" data-show-index="' + esc(String(index)) + '">' +
+          '<div class="artifact-button-header">' +
+            '<div class="artifact-copy">' +
+              '<span class="artifact-name">' + esc(item.label) + '</span>' +
+              '<span class="artifact-preview">' + esc(item.preview) + '</span>' +
+            '</div>' +
+            '<span class="artifact-source">' + esc(item.source || item.type) + '</span>' +
           '</div>' +
-          '<span class="artifact-source">' + esc(item.source || item.type) + '</span>' +
-        '</button>' +
-        inlineExcerptHtml(item, step);
+          inlineExcerptHtml(item, step) +
+        '</button>';
     });
     html += '</div></div>';
 
