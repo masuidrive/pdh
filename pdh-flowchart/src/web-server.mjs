@@ -5170,6 +5170,7 @@ function renderHtml() {
   }
 
   function sendAssistLoginSequence() {
+    clearAssistLoginAvailability();
     const chars = '/login'.split('');
     const typeIntervalMs = 40;
     const submitDelayMs = 250;
