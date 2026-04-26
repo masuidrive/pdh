@@ -5170,10 +5170,15 @@ function renderHtml() {
   }
 
   function sendAssistLoginSequence() {
-    sendAssistInput('/login', { preserveLoginHint: true });
+    const chars = '/login'.split('');
+    chars.forEach((char, index) => {
+      window.setTimeout(() => {
+        sendAssistInput(char, { preserveLoginHint: true });
+      }, index * 80);
+    });
     window.setTimeout(() => {
       sendAssistInput('\\r', { preserveLoginHint: true });
-    }, 1000);
+    }, chars.length * 80 + 700);
   }
 
   function updateAssistLoginAvailability(text) {
