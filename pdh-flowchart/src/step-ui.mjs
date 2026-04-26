@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { parseDocument, stringify } from "yaml";
 import { defaultJudgementKind, loadJudgements } from "./judgements.mjs";
 import { loadStepInterruptions } from "./interruptions.mjs";
+import { extractSection } from "./note-state.mjs";
 import { collectStepArtifacts, latestAttemptResult } from "./runtime-state.mjs";
 
 export function stepUiContract(step) {
@@ -148,6 +149,8 @@ function buildRuntimeUiData({ repoPath, runtime, step, guardResults = null, next
     name: artifact.name,
     path: artifact.path
   }));
+  const uiOutput = loadStepUiOutput({ stateDir: runtime.stateDir, runId, stepId });
+  const highlights = deriveStepUiHighlights({ runtime, stepId, uiOutput });
   const diffNameOnly = runGit(repoPath, ["diff", "--name-only"]);
   const diffStat = runGit(repoPath, ["diff", "--stat"]);
   return normalizeUiRuntime({
@@ -192,6 +195,7 @@ function buildRuntimeUiData({ repoPath, runtime, step, guardResults = null, next
       })),
     judgements,
     artifacts,
+    highlights,
     next_commands: asStringList(nextCommands)
   });
 }
@@ -298,6 +302,17 @@ function normalizeUiRuntime(value, meta = {}) {
       name: asString(item.name),
       path: asString(item.path)
     })),
+    highlights: source.highlights
+      ? {
+          summary: asStringList(source.highlights.summary),
+          risks: asStringList(source.highlights.risks),
+          notes: asString(source.highlights.notes)
+        }
+      : {
+          summary: [],
+          risks: [],
+          notes: ""
+        },
     nextCommands: asStringList(source.next_commands ?? source.nextCommands),
     artifactPath: asString(meta.artifactPath),
     parseErrors: asStringList(meta.parseErrors),
@@ -352,4 +367,110 @@ function safeHumanGate(runtime, stepId) {
   } catch {
     return null;
   }
+}
+
+function deriveStepUiHighlights({ runtime, stepId, uiOutput }) {
+  const noteBody = runtime.note?.body ?? "";
+  const ownSummary = asStringList(uiOutput?.summary);
+  const ownRisks = asStringList(uiOutput?.risks);
+  const ownNotes = asString(uiOutput?.notes);
+  return {
+    summary: ownSummary.length ? ownSummary : fallbackSummaryLines({ runtime, noteBody, stepId }),
+    risks: ownRisks.length ? ownRisks : fallbackRiskLines({ runtime, noteBody, stepId }),
+    notes: ownNotes
+  };
+}
+
+function fallbackSummaryLines({ runtime, noteBody, stepId }) {
+  switch (stepId) {
+    case "PD-C-4":
+      return bulletsFromText(stepNoteSection(noteBody, "PD-C-3"), 4);
+    case "PD-C-5":
+      return [
+        ...bulletsFromText(stepNoteSection(noteBody, "PD-C-3"), 3),
+        ...bulletsFromText(preferredText(stepNoteSection(noteBody, "PD-C-4"), stepJudgementText(runtime, "PD-C-4")), 1)
+      ].slice(0, 4);
+    case "PD-C-6":
+      return bulletsFromText(preferredText(stepNoteSection(noteBody, "PD-C-6"), stepNoteSection(noteBody, "PD-C-3")), 4);
+    case "PD-C-7":
+      return bulletsFromText(preferredText(stepNoteSection(noteBody, "PD-C-7"), stepNoteSection(noteBody, "PD-C-6")), 4);
+    case "PD-C-8":
+    case "PD-C-9":
+      return bulletsFromText(preferredText(stepNoteSection(noteBody, stepId), acTableText(noteBody)), 4);
+    case "PD-C-10":
+      return bulletsFromText(preferredText(acTableText(noteBody), stepNoteSection(noteBody, "PD-C-9")), 4);
+    default:
+      return bulletsFromText(stepNoteSection(noteBody, stepId), 4);
+  }
+}
+
+function fallbackRiskLines({ runtime, noteBody, stepId }) {
+  switch (stepId) {
+    case "PD-C-3":
+    case "PD-C-4":
+    case "PD-C-5":
+      return bulletsFromText(preferredText(stepNoteSection(noteBody, "PD-C-2"), stepNoteSection(noteBody, "PD-C-4")), 3);
+    case "PD-C-6":
+      return bulletsFromText(preferredText(stepNoteSection(noteBody, "PD-C-6"), stepNoteSection(noteBody, "PD-C-2")), 3);
+    case "PD-C-7":
+    case "PD-C-8":
+    case "PD-C-10":
+      return bulletsFromText(preferredText(stepNoteSection(noteBody, stepId), stepJudgementText(runtime, stepId), stepNoteSection(noteBody, "PD-C-7")), 3);
+    default:
+      return [];
+  }
+}
+
+function stepNoteSection(noteBody, stepId) {
+  const headingByStep = {
+    "PD-C-2": "PD-C-2. 調査結果",
+    "PD-C-3": "PD-C-3. 計画",
+    "PD-C-4": "PD-C-4. 計画レビュー結果",
+    "PD-C-6": "PD-C-6",
+    "PD-C-7": "PD-C-7. 品質検証結果",
+    "PD-C-8": "PD-C-8. 目的妥当性確認",
+    "PD-C-9": "PD-C-9. プロセスチェックリスト",
+    "PD-C-10": "PD-C-10"
+  };
+  const heading = headingByStep[stepId];
+  return heading ? extractSection(noteBody, heading) ?? "" : "";
+}
+
+function acTableText(noteBody) {
+  return extractSection(noteBody, "AC 裏取り結果") ?? "";
+}
+
+function stepJudgementText(runtime, stepId) {
+  if (!runtime.run?.id) {
+    return "";
+  }
+  return loadJudgements({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId })
+    .map((item) => [asString(item.status), asString(item.summary)].filter(Boolean).join(": "))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function preferredText(...items) {
+  return items.map((item) => String(item ?? "").trim()).find(Boolean) ?? "";
+}
+
+function bulletsFromText(text, limit) {
+  const value = String(text ?? "").trim();
+  if (!value) {
+    return [];
+  }
+  const bulletLines = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^[-*]\s+/.test(line))
+    .map((line) => line.replace(/^[-*]\s+/, "").trim())
+    .filter(Boolean);
+  if (bulletLines.length) {
+    return bulletLines.slice(0, limit);
+  }
+  return value
+    .split(/\r?\n{2,}/)
+    .map((chunk) => chunk.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, limit);
 }

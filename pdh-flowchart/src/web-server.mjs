@@ -3405,6 +3405,10 @@ function renderHtml() {
   }
 
   function derivedSummaryLines(step) {
+    const persisted = listOf(step.uiRuntime?.highlights?.summary);
+    if (persisted.length) {
+      return persisted;
+    }
     const own = listOf(step.uiOutput?.summary);
     if (own.length) {
       return own;
@@ -3433,6 +3437,10 @@ function renderHtml() {
   }
 
   function derivedRiskLines(step) {
+    const persisted = listOf(step.uiRuntime?.highlights?.risks);
+    if (persisted.length) {
+      return persisted;
+    }
     const own = listOf(step.uiOutput?.risks);
     if (own.length) {
       return own;
@@ -3454,6 +3462,9 @@ function renderHtml() {
   }
 
   function derivedNotesText(step, nextAction) {
+    if (step.uiRuntime?.highlights?.notes) {
+      return step.uiRuntime.highlights.notes;
+    }
     if (step.uiOutput?.notes) {
       return step.uiOutput.notes;
     }
