@@ -3627,7 +3627,7 @@ function renderHtml() {
       return '';
     }
     const basename = String(document?.path || '').split('/').pop().trim().toLowerCase();
-    const titleMatch = source.match(/^#\s+([^\n]+)\n+/);
+    const titleMatch = source.match(/^#\\s+([^\\n]+)\\n+/);
     const stripDocumentTitle = (value) => {
       if (!basename) {
         return value;
@@ -3641,7 +3641,7 @@ function renderHtml() {
       }
       return value.slice(titleMatch[0].length).trimStart();
     };
-    const frontmatterMatch = source.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+    const frontmatterMatch = source.match(/^---\\r?\\n[\\s\\S]*?\\r?\\n---\\r?\\n?/);
     if (!frontmatterMatch) {
       return stripDocumentTitle(source);
     }
@@ -3851,7 +3851,7 @@ function renderHtml() {
         break;
       }
     }
-    if (start < 0 && /^pd-c-\d+/i.test(wanted)) {
+    if (start < 0 && /^pd-c-\\d+/i.test(wanted)) {
       const token = wanted.match(/^pd-c-\\d+/i)?.[0] || wanted;
       for (let index = 0; index < lines.length; index += 1) {
         const match = lines[index].match(/^(#{1,6})\\s+(.*)$/);
