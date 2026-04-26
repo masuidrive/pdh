@@ -1480,6 +1480,7 @@ function renderHtml() {
   body.modal-open {
     overflow: hidden;
     overscroll-behavior: none;
+    width: 100%;
   }
   .app { display: flex; flex-direction: column; min-height: 100vh; }
   .header {
@@ -2476,6 +2477,7 @@ function renderHtml() {
     background: #111111;
     min-height: 0;
     overflow: hidden;
+    touch-action: none;
   }
   .assist-terminal {
     width: 100%;
@@ -2490,7 +2492,7 @@ function renderHtml() {
     overflow-y: auto !important;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
-    touch-action: pan-y;
+    touch-action: none;
     -webkit-overflow-scrolling: touch;
   }
   .assist-terminal-shell:active {
@@ -2848,7 +2850,14 @@ function renderHtml() {
       confirmation: null,
       autoOpenKey: null,
       dismissedAutoOpenKey: null,
-      autoOpening: false
+      autoOpening: false,
+      shellBound: false,
+      touchScroll: {
+        active: false,
+        lastY: 0,
+        pixelRemainder: 0,
+        didScroll: false
+      }
     },
     eventSource: null,
     pollTimer: null
@@ -4479,9 +4488,100 @@ function renderHtml() {
     window.history.replaceState({}, '', url);
   }
 
+  let bodyLockActive = false;
+  let bodyLockScrollTop = 0;
+
   function updateBodyModalLock() {
     const locked = Boolean(state.modalItem || state.assist.open || state.copyFallbackText);
     document.body.classList.toggle('modal-open', locked);
+    if (locked && !bodyLockActive) {
+      bodyLockScrollTop = window.scrollY || window.pageYOffset || 0;
+      document.body.style.position = 'fixed';
+      document.body.style.top = '-' + bodyLockScrollTop + 'px';
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      document.body.style.width = '100%';
+      bodyLockActive = true;
+      return;
+    }
+    if (!locked && bodyLockActive) {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.width = '';
+      window.scrollTo(0, bodyLockScrollTop);
+      bodyLockActive = false;
+    }
+  }
+
+  function assistCellHeight() {
+    try {
+      return state.assist.terminal?._core?._renderService?.dimensions?.css?.cell?.height || 18;
+    } catch {
+      return 18;
+    }
+  }
+
+  function bindAssistShellInteractions(shell) {
+    if (!shell || state.assist.shellBound) {
+      return;
+    }
+    const touchState = state.assist.touchScroll;
+    const refocus = () => {
+      focusAssistTerminal();
+    };
+    const resetTouchScroll = () => {
+      touchState.active = false;
+      touchState.lastY = 0;
+      touchState.pixelRemainder = 0;
+    };
+
+    shell.addEventListener('click', refocus);
+    shell.addEventListener('pointerup', refocus);
+    shell.addEventListener('touchstart', (event) => {
+      if (!state.assist.terminal || event.touches.length !== 1) {
+        resetTouchScroll();
+        return;
+      }
+      touchState.active = true;
+      touchState.lastY = event.touches[0].clientY;
+      touchState.pixelRemainder = 0;
+      touchState.didScroll = false;
+    }, { passive: true });
+    shell.addEventListener('touchmove', (event) => {
+      if (!touchState.active || !state.assist.terminal || event.touches.length !== 1) {
+        return;
+      }
+      const nextY = event.touches[0].clientY;
+      const deltaY = touchState.lastY - nextY;
+      touchState.lastY = nextY;
+      touchState.pixelRemainder += deltaY;
+      const cellHeight = Math.max(assistCellHeight(), 1);
+      const scrollLines = touchState.pixelRemainder > 0
+        ? Math.floor(touchState.pixelRemainder / cellHeight)
+        : Math.ceil(touchState.pixelRemainder / cellHeight);
+      if (scrollLines !== 0) {
+        state.assist.terminal.scrollLines(scrollLines);
+        touchState.pixelRemainder -= scrollLines * cellHeight;
+        touchState.didScroll = true;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    }, { passive: false });
+    shell.addEventListener('touchend', () => {
+      const didScroll = touchState.didScroll;
+      resetTouchScroll();
+      touchState.didScroll = false;
+      if (!didScroll) {
+        refocus();
+      }
+    }, { passive: true });
+    shell.addEventListener('touchcancel', () => {
+      resetTouchScroll();
+      touchState.didScroll = false;
+    }, { passive: true });
+    state.assist.shellBound = true;
   }
 
   function openModalItem(item, mode = 'markdown') {
@@ -4699,6 +4799,7 @@ function renderHtml() {
     if (typeof terminal.attachCustomWheelEventHandler === 'function') {
       terminal.attachCustomWheelEventHandler((event) => {
         event.stopPropagation();
+        event.preventDefault();
         return true;
       });
     }
@@ -4706,12 +4807,7 @@ function renderHtml() {
     state.assist.terminal = terminal;
     state.assist.fitAddon = fitAddon;
     const shell = document.querySelector('.assist-terminal-shell');
-    const refocus = () => {
-      focusAssistTerminal();
-    };
-    shell.addEventListener('click', refocus);
-    shell.addEventListener('touchend', refocus, { passive: true });
-    shell.addEventListener('pointerup', refocus);
+    bindAssistShellInteractions(shell);
     terminal.onData((data) => {
       clearAssistLoginAvailability();
       if (state.assist.socket && state.assist.socket.readyState === window.WebSocket.OPEN) {
