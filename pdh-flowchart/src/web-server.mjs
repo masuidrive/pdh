@@ -306,6 +306,7 @@ function collectState({ repo }) {
   const redactor = createRedactor({ repoPath: repo });
   const note = runtime.note;
   const ticketText = existsSync(join(repo, "current-ticket.md")) ? readFileSync(join(repo, "current-ticket.md"), "utf8") : "";
+  const optionalDocs = loadOptionalRepoDocuments(repo, redactor);
   const run = runtime.run;
   const currentStep = run?.current_step_id ? getStep(runtime.flow, run.current_step_id) : null;
   const currentGate = run?.id && currentStep ? latestHumanGate({ stateDir: runtime.stateDir, runId: run.id, stepId: currentStep.id }) : null;
@@ -353,7 +354,9 @@ function collectState({ repo }) {
     git: gitState(repo, redactor),
     files: {
       note: join(repo, "current-note.md"),
-      ticket: join(repo, "current-ticket.md")
+      ticket: join(repo, "current-ticket.md"),
+      ...(optionalDocs.productBrief ? { productBrief: optionalDocs.productBrief.path } : {}),
+      ...(optionalDocs.epic ? { epic: optionalDocs.epic.path } : {})
     },
     documents: {
       note: {
@@ -363,9 +366,42 @@ function collectState({ repo }) {
       ticket: {
         path: join(repo, "current-ticket.md"),
         text: clampText(redactor(ticketText), MAX_TEXT)
-      }
+      },
+      ...(optionalDocs.productBrief ? {
+        productBrief: {
+          path: optionalDocs.productBrief.path,
+          text: clampText(optionalDocs.productBrief.text, MAX_TEXT)
+        }
+      } : {}),
+      ...(optionalDocs.epic ? {
+        epic: {
+          path: optionalDocs.epic.path,
+          text: clampText(optionalDocs.epic.text, MAX_TEXT)
+        }
+      } : {})
     }
   };
+}
+
+function loadOptionalRepoDocuments(repo, redactor) {
+  const result = {};
+  const productBriefPath = join(repo, "product-brief.md");
+  if (existsSync(productBriefPath)) {
+    result.productBrief = {
+      path: productBriefPath,
+      text: redactor(readFileSync(productBriefPath, "utf8"))
+    };
+  }
+  const epicCandidates = ["current-epic.md", "epic.md", "epic.yaml", "epic.yml"]
+    .map((name) => join(repo, name));
+  const epicPath = epicCandidates.find((candidate) => existsSync(candidate));
+  if (epicPath) {
+    result.epic = {
+      path: epicPath,
+      text: redactor(readFileSync(epicPath, "utf8"))
+    };
+  }
+  return result;
 }
 
 function buildVariantState({ repo, runtime, variant, history, events, redactor, noteBody, ticketText, ac }) {
@@ -3536,6 +3572,14 @@ function renderHtml() {
     }
     items.push(noteMaterialItem(step));
     items.push(ticketMaterialItem(step));
+    const productBrief = repoDocumentMaterialItem('productBrief', 'product-brief.md');
+    if (productBrief) {
+      items.push(productBrief);
+    }
+    const epic = repoDocumentMaterialItem('epic');
+    if (epic) {
+      items.push(epic);
+    }
     return items;
   }
 
@@ -4776,9 +4820,19 @@ function renderHtml() {
     });
   }
 
+  function documentLabel(docId) {
+    const document = documentData(docId);
+    if (document?.path) {
+      return document.path.split('/').pop();
+    }
+    if (docId === 'ticket') return 'current-ticket.md';
+    if (docId === 'note') return 'current-note.md';
+    return String(docId || 'document');
+  }
+
   function documentModalItem(docId, headingOrHeadings = null) {
     const document = documentData(docId);
-    const fileLabel = docId === 'ticket' ? 'current-ticket.md' : 'current-note.md';
+    const fileLabel = documentLabel(docId);
     const headings = normalizeHeadings(headingOrHeadings);
     const headingText = headings.join(' / ');
     return {
@@ -4792,6 +4846,23 @@ function renderHtml() {
         headings,
         label: fileLabel
       }
+    };
+  }
+
+  function repoDocumentMaterialItem(docId, explicitLabel = null) {
+    const document = documentData(docId);
+    if (!document?.text) {
+      return null;
+    }
+    const item = documentModalItem(docId);
+    const label = explicitLabel || documentLabel(docId);
+    return {
+      ...item,
+      label,
+      type: 'document',
+      source: label,
+      detail: 'full file view',
+      preview: textPreview(document.text)
     };
   }
 
