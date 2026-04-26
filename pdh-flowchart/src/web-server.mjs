@@ -4683,6 +4683,7 @@ function renderHtml() {
     shell.addEventListener('touchend', refocus, { passive: true });
     shell.addEventListener('pointerup', refocus);
     terminal.onData((data) => {
+      clearAssistLoginAvailability();
       if (state.assist.socket && state.assist.socket.readyState === window.WebSocket.OPEN) {
         state.assist.socket.send(JSON.stringify({ type: 'input', data }));
       }
@@ -4705,11 +4706,20 @@ function renderHtml() {
     }
   }
 
+  function clearAssistLoginAvailability() {
+    if (!state.assist.loginAvailable) {
+      return;
+    }
+    state.assist.loginAvailable = false;
+    renderAssistModal();
+  }
+
   function sendAssistInput(sequence) {
     if (!sequence) {
       return;
     }
     focusAssistTerminal();
+    clearAssistLoginAvailability();
     if (state.assist.socket && state.assist.socket.readyState === window.WebSocket.OPEN) {
       state.assist.socket.send(JSON.stringify({ type: 'input', data: sequence }));
     }
