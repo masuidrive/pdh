@@ -2372,11 +2372,13 @@ function renderHtml() {
   .detail-dialog-close {
     border: 1px solid var(--border);
     background: var(--bg);
-    border-radius: 6px;
-    padding: 5px 10px;
+    border-radius: 999px;
+    padding: 8px 14px;
     cursor: pointer;
     font: inherit;
-    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
   }
   .detail-dialog-body { padding: 16px; }
   .detail-dialog-grid {
@@ -2654,11 +2656,13 @@ function renderHtml() {
   .copy-fallback-close {
     border: 1px solid var(--border);
     background: var(--bg);
-    color: var(--text-muted);
-    border-radius: 6px;
-    padding: 6px 10px;
+    color: var(--text);
+    border-radius: 999px;
+    padding: 8px 14px;
     cursor: pointer;
     font: inherit;
+    font-size: 12px;
+    font-weight: 600;
   }
   .copy-fallback-close:hover { border-color: var(--border-strong); color: var(--text); }
   .copy-fallback-note {
@@ -2692,8 +2696,8 @@ function renderHtml() {
   .assist-modal.hidden { display: none; }
   .assist-dialog {
     position: relative;
-    width: min(1120px, 100%);
-    height: min(78vh, 860px);
+    width: min(1120px, calc(100vw - 40px));
+    height: min(860px, calc(100vh - 40px));
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -2722,17 +2726,12 @@ function renderHtml() {
     flex-wrap: wrap;
   }
   .assist-status {
-    font-size: 11px;
-    padding: 4px 9px;
-    border-radius: 999px;
-    border: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 600;
     color: var(--text-muted);
-    background: var(--surface);
   }
   .assist-status.running {
     color: #185fa5;
-    background: #e6f1fb;
-    border-color: #b8d5f0;
   }
   .assist-status.exited {
     color: var(--text-muted);
@@ -2740,20 +2739,19 @@ function renderHtml() {
   .assist-dialog-close {
     border: 1px solid var(--border);
     background: var(--bg);
-    color: var(--text-muted);
-    border-radius: 6px;
-    padding: 7px 10px;
+    color: var(--text);
+    border-radius: 999px;
+    padding: 8px 14px;
     cursor: pointer;
     font: inherit;
+    font-size: 12px;
+    font-weight: 600;
   }
   .assist-dialog-close:hover { border-color: var(--border-strong); color: var(--text); }
   .assist-runtime-summary {
     padding: 10px 16px;
     border-bottom: 1px solid var(--border);
     background: #fbfaf7;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
   }
   .assist-runtime-summary.hidden { display: none; }
   .assist-runtime-summary-main {
@@ -2761,28 +2759,6 @@ function renderHtml() {
     line-height: 1.55;
     color: var(--text);
   }
-  .assist-runtime-summary-toggle {
-    align-self: flex-start;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text-muted);
-    border-radius: 6px;
-    padding: 5px 9px;
-    font: inherit;
-    font-size: 11px;
-    cursor: pointer;
-  }
-  .assist-runtime-summary-toggle:hover {
-    border-color: var(--border-strong);
-    color: var(--text);
-  }
-  .assist-runtime-summary-toggle.hidden { display: none; }
-  .assist-runtime-summary-details {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .assist-runtime-summary-details.hidden { display: none; }
   .assist-runtime-summary-line {
     font-size: 11px;
     line-height: 1.5;
@@ -2878,8 +2854,8 @@ function renderHtml() {
     border: 1px solid var(--border);
     background: var(--bg);
     color: var(--text);
-    border-radius: 8px;
-    padding: 8px 12px;
+    border-radius: 999px;
+    padding: 8px 14px;
     cursor: pointer;
     font: inherit;
     font-size: 12px;
@@ -2951,9 +2927,9 @@ function renderHtml() {
     border: 1px solid var(--border);
     background: var(--bg);
     color: var(--text);
-    border-radius: 8px;
+    border-radius: 999px;
     min-height: 38px;
-    padding: 0 12px;
+    padding: 0 14px;
     cursor: pointer;
     font: inherit;
     font-size: 12px;
@@ -3000,20 +2976,21 @@ function renderHtml() {
     background: var(--bg);
     color: var(--text);
     border-radius: 999px;
-    padding: 8px 10px;
+    padding: 10px 14px;
     cursor: pointer;
     font: inherit;
-    text-align: left;
+    text-align: center;
+    font-weight: 600;
   }
   .next-action-launch:hover {
     border-color: var(--border-strong);
     background: var(--surface);
   }
-  .next-action-launch-hint {
-    display: block;
-    margin-top: 3px;
+  .next-action-hint {
+    margin-top: 6px;
     font-size: 11px;
     color: var(--text-muted);
+    line-height: 1.45;
   }
   .next-action-direct {
     width: 100%;
@@ -3132,8 +3109,6 @@ function renderHtml() {
       </div>
       <div class="assist-runtime-summary hidden" id="assist-runtime-summary">
         <div class="assist-runtime-summary-main" id="assist-runtime-summary-main"></div>
-        <button class="assist-runtime-summary-toggle hidden" id="assist-runtime-summary-toggle" type="button" aria-expanded="false">Details</button>
-        <div class="assist-runtime-summary-details hidden" id="assist-runtime-summary-details"></div>
       </div>
       <div class="assist-terminal-shell">
         <div class="assist-terminal-empty" id="assist-terminal-empty">Starting assist session…</div>
@@ -3183,7 +3158,6 @@ function renderHtml() {
       sessionId: null,
       status: 'idle',
       loginAvailable: false,
-      summaryExpanded: false,
       terminal: null,
       fitAddon: null,
       socket: null,
@@ -4968,7 +4942,6 @@ function renderHtml() {
     state.assist.sessionId = null;
     state.assist.status = 'idle';
     state.assist.loginAvailable = false;
-    state.assist.summaryExpanded = false;
     state.assist.baselineRecommendationId = null;
     state.assist.baselineSignalId = null;
     state.assist.dismissedRecommendationId = null;
@@ -4999,8 +4972,6 @@ function renderHtml() {
     const empty = document.getElementById('assist-terminal-empty');
     const summary = document.getElementById('assist-runtime-summary');
     const summaryMain = document.getElementById('assist-runtime-summary-main');
-    const summaryToggle = document.getElementById('assist-runtime-summary-toggle');
-    const summaryDetails = document.getElementById('assist-runtime-summary-details');
     const confirm = document.getElementById('assist-confirm');
     const confirmTitle = document.getElementById('assist-confirm-title');
     const confirmBody = document.getElementById('assist-confirm-body');
@@ -5016,10 +4987,6 @@ function renderHtml() {
       empty.classList.remove('hidden');
       summary.classList.add('hidden');
       summaryMain.textContent = '';
-      summaryToggle.classList.add('hidden');
-      summaryToggle.setAttribute('aria-expanded', 'false');
-      summaryDetails.classList.add('hidden');
-      summaryDetails.innerHTML = '';
       confirm.classList.add('hidden');
       acceptButton.disabled = false;
       dismissButton.disabled = false;
@@ -5031,32 +4998,13 @@ function renderHtml() {
     root.classList.remove('hidden');
     status.textContent = assistStatusLabel();
     status.className = 'assist-status ' + esc(state.assist.status);
-    loginAction.classList.toggle('hidden', !state.assist.loginAvailable);
     const summaryModel = assistSummaryModel(state.assist.stepId);
     if (summaryModel?.headline) {
       summary.classList.remove('hidden');
       summaryMain.textContent = summaryModel.headline;
-      if (summaryModel.details.length > 0) {
-        summaryToggle.classList.remove('hidden');
-        summaryToggle.textContent = state.assist.summaryExpanded ? 'Hide details' : 'Details';
-        summaryToggle.setAttribute('aria-expanded', state.assist.summaryExpanded ? 'true' : 'false');
-        summaryDetails.innerHTML = summaryModel.details.map((line, index) =>
-          '<div class="assist-runtime-summary-line' + (index === 0 ? ' lead' : '') + '">' + esc(line) + '</div>'
-        ).join('');
-        summaryDetails.classList.toggle('hidden', !state.assist.summaryExpanded);
-      } else {
-        summaryToggle.classList.add('hidden');
-        summaryToggle.setAttribute('aria-expanded', 'false');
-        summaryDetails.classList.add('hidden');
-        summaryDetails.innerHTML = '';
-      }
     } else {
       summary.classList.add('hidden');
       summaryMain.textContent = '';
-      summaryToggle.classList.add('hidden');
-      summaryToggle.setAttribute('aria-expanded', 'false');
-      summaryDetails.classList.add('hidden');
-      summaryDetails.innerHTML = '';
     }
     if (state.assist.terminal) {
       empty.classList.add('hidden');
@@ -5073,6 +5021,10 @@ function renderHtml() {
     }
     if (!state.assist.confirmation) {
       confirm.classList.add('hidden');
+      if (shouldOfferAssistLogin(summaryMain.textContent)) {
+        state.assist.loginAvailable = true;
+      }
+      loginAction.classList.toggle('hidden', !state.assist.loginAvailable);
       acceptButton.disabled = false;
       dismissButton.disabled = false;
       window.requestAnimationFrame(() => {
@@ -5093,6 +5045,14 @@ function renderHtml() {
       confirmBody.textContent = 'OK を押すと assist terminal を閉じて、runtime がこの step を再実行します。修正済みの current-note.md / current-ticket.md / code を前提に、同じ step を最初からやり直します。';
       confirmReason.textContent = signal?.reason ? 'Reason: ' + signal.reason : '';
     }
+    if (
+      shouldOfferAssistLogin(summaryMain.textContent) ||
+      shouldOfferAssistLogin(confirmBody.textContent) ||
+      shouldOfferAssistLogin(confirmReason.textContent)
+    ) {
+      state.assist.loginAvailable = true;
+    }
+    loginAction.classList.toggle('hidden', !state.assist.loginAvailable);
     acceptButton.disabled = Boolean(state.assist.confirmation.submitting);
     dismissButton.disabled = Boolean(state.assist.confirmation.submitting);
     window.requestAnimationFrame(() => {
@@ -5185,6 +5145,20 @@ function renderHtml() {
     renderAssistModal();
   }
 
+  function shouldOfferAssistLogin(text) {
+    const lower = String(text ?? '').toLowerCase();
+    return Boolean(
+      lower &&
+      (
+        lower.includes('/login') ||
+        lower.includes('not logged in') ||
+        lower.includes('authentication credentials') ||
+        lower.includes('authentication_error') ||
+        lower.includes('api error: 401')
+      )
+    );
+  }
+
   function sendAssistInput(sequence) {
     if (!sequence) {
       return;
@@ -5197,12 +5171,7 @@ function renderHtml() {
   }
 
   function updateAssistLoginAvailability(text) {
-    const normalized = String(text ?? '');
-    if (!normalized) {
-      return;
-    }
-    const lower = normalized.toLowerCase();
-    if (lower.includes('not logged in') || lower.includes('/login')) {
+    if (shouldOfferAssistLogin(text)) {
       state.assist.loginAvailable = true;
       renderAssistModal();
     }
@@ -5312,7 +5281,6 @@ function renderHtml() {
     state.assist.sessionId = null;
     state.assist.status = 'starting';
     state.assist.loginAvailable = false;
-    state.assist.summaryExpanded = false;
     state.assist.baselineRecommendationId = stepById(stepId)?.gate?.recommendation?.id || null;
     state.assist.baselineSignalId = null;
     state.assist.dismissedRecommendationId = null;
@@ -5651,12 +5619,12 @@ function renderHtml() {
       '<div class="detail-section"><div class="detail-section-title">Terminal</div>' +
       '<button class="next-action-launch" type="button" data-assist-step="' + esc(terminalStepId) + '">' +
         'Open Terminal' +
-        '<span class="next-action-launch-hint">' +
-          esc(current && current.id !== step.id
-            ? ('Open a fresh assist terminal for the current step ' + current.id + '.')
-            : ('Open a fresh assist terminal for ' + terminalStepId + '.')) +
-        '</span>' +
-      '</button></div>';
+      '</button>' +
+      '<div class="next-action-hint">' +
+        esc(current && current.id !== step.id
+          ? ('Open a fresh assist terminal for the current step ' + current.id + '.')
+          : ('Open a fresh assist terminal for ' + terminalStepId + '.')) +
+      '</div></div>';
 
     html +=
       '<div class="detail-section"><div class="detail-section-title">この step の観点</div>' +
@@ -5743,10 +5711,8 @@ function renderHtml() {
             '</div>' +
             (item.description ? '<div class="next-action-description">' + esc(item.description) + '</div>' : '') +
             (item.kind === 'assist'
-              ? '<button class="next-action-launch" type="button" data-assist-step="' + esc(step.id) + '">' +
-                  'Open Terminal' +
-                  '<span class="next-action-launch-hint">Launch a fresh assist terminal in this browser.</span>' +
-                '</button>'
+              ? '<button class="next-action-launch" type="button" data-assist-step="' + esc(step.id) + '">Open Terminal</button>' +
+                '<div class="next-action-hint">Launch a fresh assist terminal in this browser.</div>'
               : item.kind === 'approve_direct'
                 ? '<button class="next-action-direct" type="button" data-approve-step="' + esc(step.id) + '">Approve</button>'
                 : '') +
@@ -5930,10 +5896,6 @@ function renderHtml() {
     } catch (error) {
       window.alert('Failed to apply recommendation: ' + (error?.message || String(error)));
     }
-  });
-  document.getElementById('assist-runtime-summary-toggle').addEventListener('click', () => {
-    state.assist.summaryExpanded = !state.assist.summaryExpanded;
-    renderAssistModal();
   });
   document.getElementById('assist-login-button').addEventListener('click', () => {
     sendAssistInput('/login\\r');
