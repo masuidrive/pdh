@@ -230,6 +230,15 @@ test_frontmatter_run() {
   grep -q "run_id: run-" "$repo/current-note.md"
 }
 
+test_nested_section_guard() {
+  local repo
+  repo="$(seed_repo nested-section-guard)"
+  node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-3 >/dev/null
+  node --input-type=module -e "import { replaceNoteSection } from '$ROOT/src/note-state.mjs'; replaceNoteSection('$repo', 'PD-C-3. 計画', '### 実装方針\\n\\n- nested plan detail\\n\\n### テスト計画\\n\\n- nested verification detail');"
+  node --input-type=module -e "import { evaluateGuard } from '$ROOT/src/guards.mjs'; const result = evaluateGuard({ id: 'plan-recorded', type: 'note_section_updated', path: 'current-note.md', section: 'PD-C-3. 計画' }, { repoPath: '$repo' }); console.log(JSON.stringify(result));" >"$TMP_ROOT/nested-section-guard.json"
+  grep -q '"status":"passed"' "$TMP_ROOT/nested-section-guard.json"
+}
+
 test_prompt_context() {
   local repo prompt_path
   repo="$(seed_repo prompt-context)"
@@ -571,6 +580,7 @@ NODE
 }
 
 test_frontmatter_run
+test_nested_section_guard
 test_prompt_context
 test_stop_after_step
 test_blocked_run

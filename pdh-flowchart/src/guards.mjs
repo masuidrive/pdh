@@ -55,14 +55,47 @@ function checkSection(guard, repo) {
     return passIf(guard, false, `${guard.path} missing`);
   }
   const text = readFileSync(path, "utf8");
-  const index = text.indexOf(guard.section);
-  if (index < 0) {
+  const body = sectionBody(text, guard.section);
+  if (body === null) {
     return passIf(guard, false, `${guard.section} missing`);
   }
-  const after = text.slice(index + guard.section.length);
-  const nextHeading = after.search(/\n#{1,6}\s+/);
-  const body = (nextHeading >= 0 ? after.slice(0, nextHeading) : after).trim();
   return passIf(guard, body.length > 0, `${guard.section} has ${body.length} chars`);
+}
+
+function sectionBody(text, section) {
+  const target = normalizeSectionTitle(section);
+  const lines = String(text).split(/\r?\n/);
+  let start = -1;
+  let level = null;
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = lines[index].match(/^(#{1,6})\s+(.*?)\s*$/);
+    if (!match) {
+      continue;
+    }
+    if (normalizeSectionTitle(match[2]) === target) {
+      start = index + 1;
+      level = match[1].length;
+      break;
+    }
+  }
+  if (start < 0 || level === null) {
+    return null;
+  }
+  const bodyLines = [];
+  for (let index = start; index < lines.length; index += 1) {
+    const match = lines[index].match(/^(#{1,6})\s+(.*?)\s*$/);
+    if (match && match[1].length <= level) {
+      break;
+    }
+    bodyLines.push(lines[index]);
+  }
+  return bodyLines.join("\n").trim();
+}
+
+function normalizeSectionTitle(value) {
+  return String(value ?? "")
+    .replace(/^#{1,6}\s+/, "")
+    .trim();
 }
 
 function checkGitCommit(guard, repo) {
