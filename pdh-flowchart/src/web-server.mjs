@@ -2770,6 +2770,40 @@ function renderHtml() {
     font-weight: 600;
     color: var(--text);
   }
+  .assist-prompt-drawer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+    background: #fbfaf7;
+  }
+  .assist-prompt-drawer.hidden {
+    display: none;
+  }
+  .assist-prompt-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .assist-prompt-action {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 999px;
+    min-height: 36px;
+    padding: 0 14px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .assist-prompt-action:hover,
+  .assist-prompt-action:active {
+    border-color: var(--border-strong);
+    background: var(--surface);
+  }
   .assist-terminal-shell {
     position: relative;
     background: #111111;
@@ -2961,6 +2995,23 @@ function renderHtml() {
   .assist-key.wide {
     min-width: 72px;
   }
+  .assist-prompt-toggle {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 999px;
+    min-height: 38px;
+    padding: 0 14px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .assist-prompt-toggle:hover,
+  .assist-prompt-toggle:active {
+    border-color: var(--border-strong);
+    background: var(--surface);
+  }
   .next-action-launch {
     width: 100%;
     margin-top: 8px;
@@ -3106,10 +3157,16 @@ function renderHtml() {
         <div class="assist-terminal-empty" id="assist-terminal-empty">Starting assist session…</div>
         <div class="assist-terminal" id="assist-terminal"></div>
       </div>
+      <div class="assist-prompt-drawer hidden" id="assist-prompt-drawer">
+        <div class="assist-prompt-actions">
+          <button class="assist-prompt-action" id="assist-prompt-recommendation" type="button">recommendation?</button>
+        </div>
+      </div>
       <div class="assist-controls">
         <div class="assist-controls-note">Tap the terminal to focus keyboard on mobile. Use these keys when the soft keyboard is unavailable.</div>
         <div class="assist-controls-group">
           <button class="assist-login-button hidden" id="assist-login-button" type="button">Run /login</button>
+          <button class="assist-prompt-toggle" id="assist-prompt-toggle" type="button">Prompt</button>
           <button class="assist-key wide" type="button" data-assist-input="escape">Esc</button>
           <button class="assist-key wide" type="button" data-assist-input="enter">Enter</button>
           <div class="assist-key-grid">
@@ -3148,6 +3205,7 @@ function renderHtml() {
       status: 'idle',
       loginAvailable: false,
       loginSuppressed: false,
+      promptDrawerOpen: false,
       terminal: null,
       fitAddon: null,
       socket: null,
@@ -4933,6 +4991,7 @@ function renderHtml() {
     state.assist.status = 'idle';
     state.assist.loginAvailable = false;
     state.assist.loginSuppressed = false;
+    state.assist.promptDrawerOpen = false;
     state.assist.baselineRecommendationId = null;
     state.assist.baselineSignalId = null;
     state.assist.dismissedRecommendationId = null;
@@ -4963,6 +5022,8 @@ function renderHtml() {
     const empty = document.getElementById('assist-terminal-empty');
     const summary = document.getElementById('assist-runtime-summary');
     const summaryMain = document.getElementById('assist-runtime-summary-main');
+    const promptDrawer = document.getElementById('assist-prompt-drawer');
+    const promptToggle = document.getElementById('assist-prompt-toggle');
     const confirm = document.getElementById('assist-confirm');
     const confirmTitle = document.getElementById('assist-confirm-title');
     const confirmBody = document.getElementById('assist-confirm-body');
@@ -4978,6 +5039,8 @@ function renderHtml() {
       empty.classList.remove('hidden');
       summary.classList.add('hidden');
       summaryMain.textContent = '';
+      promptDrawer.classList.add('hidden');
+      promptToggle.setAttribute('aria-expanded', 'false');
       confirm.classList.add('hidden');
       loginButton.classList.add('hidden');
       acceptButton.disabled = false;
@@ -4989,6 +5052,8 @@ function renderHtml() {
     root.classList.remove('hidden');
     status.textContent = assistStatusLabel();
     status.className = 'assist-status ' + esc(state.assist.status);
+    promptDrawer.classList.toggle('hidden', !state.assist.promptDrawerOpen);
+    promptToggle.setAttribute('aria-expanded', state.assist.promptDrawerOpen ? 'true' : 'false');
     const summaryModel = assistSummaryModel(state.assist.stepId);
     if (summaryModel?.headline) {
       summary.classList.remove('hidden');
@@ -5184,6 +5249,26 @@ function renderHtml() {
     }, chars.length * typeIntervalMs + submitDelayMs);
   }
 
+  function assistRecommendationPromptText() {
+    const stepId = state.assist.stepId || state.data?.runtime?.currentStep?.id || 'current step';
+    return [
+      'Please give one concrete recommendation for ' + stepId + '.',
+      'Choose exactly one next action.',
+      'If a rerun target is needed, choose one specific earlier step.',
+      'If you are confident, run the appropriate assist-signal command yourself and briefly explain the reason.'
+    ].join(' ');
+  }
+
+  function sendAssistPromptSequence(text) {
+    if (!text) {
+      return;
+    }
+    sendAssistInput(text);
+    window.setTimeout(() => {
+      sendAssistInput('\\r', { preserveLoginHint: true });
+    }, 1000);
+  }
+
   function updateAssistLoginAvailability(text) {
     if (shouldOfferAssistLogin(text)) {
       state.assist.loginAvailable = true;
@@ -5297,6 +5382,7 @@ function renderHtml() {
     state.assist.status = 'starting';
     state.assist.loginAvailable = false;
     state.assist.loginSuppressed = false;
+    state.assist.promptDrawerOpen = false;
     state.assist.baselineRecommendationId = stepById(stepId)?.gate?.recommendation?.id || null;
     state.assist.baselineSignalId = null;
     state.assist.dismissedRecommendationId = null;
@@ -5921,6 +6007,17 @@ function renderHtml() {
   document.getElementById('assist-login-button').addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
+  });
+  document.getElementById('assist-prompt-toggle').addEventListener('click', (event) => {
+    event.preventDefault();
+    state.assist.promptDrawerOpen = !state.assist.promptDrawerOpen;
+    renderAssistModal();
+  });
+  document.getElementById('assist-prompt-recommendation').addEventListener('click', (event) => {
+    event.preventDefault();
+    state.assist.promptDrawerOpen = false;
+    renderAssistModal();
+    sendAssistPromptSequence(assistRecommendationPromptText());
   });
   document.querySelectorAll('[data-assist-input]').forEach((button) => {
     button.addEventListener('click', () => {
