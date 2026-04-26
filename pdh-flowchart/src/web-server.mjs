@@ -2930,9 +2930,7 @@ function renderHtml() {
     font-weight: 500;
   }
   .assist-login-button.hidden {
-    visibility: hidden;
-    opacity: 0;
-    pointer-events: none;
+    display: none;
   }
   .assist-login-button:hover,
   .assist-login-button:active {
