@@ -314,12 +314,13 @@ function buildAssistSystemPrompt() {
 function buildAssistPrompt({ runtime, step, gate, interruption, blockedGuards, readFirst, wrappers, allowedSignals, signalExamples }) {
   const stepCheckpoints = assistCheckpoints(step.id);
   const statusGuidance = assistStatusGuidance({ status: runtime.run.status, stepId: step.id, hasBlockedGuards: blockedGuards.length > 0 });
+  const isStopState = ["needs_human", "interrupted", "blocked", "failed"].includes(runtime.run.status);
   const lines = [
     "# PDH Flow Assist Session",
     "",
     "You are attached to the current repository checkout. Start fresh from the files in this repo.",
     "",
-    "## Current Stop",
+    isStopState ? "## Current Stop" : "## Current Context",
     "",
     `- Status: ${runtime.run.status}`,
     `- Step: ${step.id}${step.label ? ` ${step.label}` : ""}`,
@@ -349,7 +350,7 @@ function buildAssistPrompt({ runtime, step, gate, interruption, blockedGuards, r
   if (statusGuidance.length > 0) {
     lines.push(
       "",
-      "## What This Stop Means",
+      isStopState ? "## What This Stop Means" : "## What This State Means",
       "",
       ...statusGuidance.map((item) => `- ${item}`)
     );
@@ -384,7 +385,9 @@ function buildAssistPrompt({ runtime, step, gate, interruption, blockedGuards, r
     lines.push(
       "",
       "No runtime signal is available in this state.",
-      "When your edits are ready, return to the web UI or CLI and use Resume / retry there."
+      runtime.run.status === "running"
+        ? "Use this terminal for inspection, discussion, or verification while the runtime continues. When the step completes, return to the web UI or CLI and use `run-next` if a flow transition is waiting."
+        : "When your edits are ready, return to the web UI or CLI and use Resume / retry there."
     );
   }
 

@@ -714,9 +714,6 @@ async function cmdAssistOpen(argv) {
     assertCurrentStep(runtime.run, stepId, options);
     const step = getStep(runtime.flow, stepId);
     const allowedSignals = allowedAssistSignals({ runStatus: runtime.run.status, step });
-    if (!allowedSignals.length && runtime.run.status !== "failed") {
-      throw new Error(`assist-open is only available for needs_human, interrupted, blocked, or failed steps; current status is ${runtime.run.status}`);
-    }
     prepared = prepareAssistSession({
       repoPath: repo,
       runtime,

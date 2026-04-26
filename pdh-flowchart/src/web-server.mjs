@@ -644,7 +644,7 @@ function stepProgress({ runtime, sequence, index, step, historyEntry, gate, atte
     }
     if (run.status === "needs_human") {
       if (gate?.recommendation?.status === "pending") {
-        return progress("waiting", "ユーザ回答待ち", "agent recommendation を適用するか、Open Assist で再作業するかを選びます。");
+        return progress("waiting", "ユーザ回答待ち", "agent recommendation を適用するか、Open Terminal で再作業するかを選びます。");
       }
       return progress("waiting", "ユーザ回答待ち", gate?.summary ? "gate summary を確認して CLI で判断します。" : "gate summary を生成中です。");
     }
@@ -780,7 +780,7 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
       commands: [assist, command],
       actions: [
         nextActionChoice({
-          label: "Open Assist",
+          label: "Open Terminal",
           description: "failed のままコード、計画、テストを見直します。修正後に Resume で同じ step を再実行します。",
           command: assist,
           tone: "neutral",
@@ -797,6 +797,43 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
       targetTab: "detail"
     };
   }
+  if (
+    runtime.run.status === "running" &&
+    currentStep.provider !== "runtime" &&
+    runtime.run.id &&
+    hasCompletedProviderAttempt({
+      stateDir: runtime.stateDir,
+      runId: runtime.run.id,
+      stepId: currentStep.id,
+      provider: currentStep.provider
+    }) &&
+    !currentStep?.processState?.activeCount
+  ) {
+    const command = `node src/cli.mjs run-next --repo ${shellQuote(repo)}`;
+    const assist = assistOpenCommand(repo, currentStep.id);
+    return {
+      title: `${currentStep.id} の遷移を進める`,
+      body: "この step の provider/review は完了しています。`run-next` で guard 評価と次 step への遷移を進めます。必要なら先に Open Terminal で差分や note/ticket を確認します。",
+      commands: [command, assist],
+      actions: [
+        nextActionChoice({
+          label: "Run Next",
+          description: "完了済み step の guard 評価と flow transition を進めます。",
+          command,
+          tone: "approve"
+        }),
+        nextActionChoice({
+          label: "Open Terminal",
+          description: "次に進める前に current repo state を terminal で確認します。",
+          command: assist,
+          tone: "neutral",
+          kind: "assist"
+        })
+      ],
+      selection: "single_optional_assist",
+      targetTab: "commands"
+    };
+  }
   if (runtime.run.status === "running" && currentStep?.processState?.stale) {
     const command = `node src/cli.mjs resume --repo ${shellQuote(repo)}`;
     const assist = assistOpenCommand(repo, currentStep.id);
@@ -806,7 +843,7 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
       commands: [assist, command],
       actions: [
         nextActionChoice({
-          label: "Open Assist",
+          label: "Open Terminal",
           description: "stale running になる直前の変更や reviewer 指摘を確認します。",
           command: assist,
           tone: "neutral",
@@ -832,7 +869,7 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
       commands: [assist, command],
       actions: [
         nextActionChoice({
-          label: "Open Assist",
+          label: "Open Terminal",
           description: "止まった理由を Claude assist と一緒に確認し、必要な変更や検証をその場で詰めます。",
           command: assist,
           tone: "neutral",
@@ -850,19 +887,27 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
     };
   }
   const command = `node src/cli.mjs run-next --repo ${shellQuote(repo)}`;
+  const assist = assistOpenCommand(repo, currentStep.id);
   return {
     title: `${currentStep.id} を進める`,
     body: "通常は `run-next` だけで、gate や割り込みまで自動で進みます。",
-    commands: [command],
+    commands: [command, assist],
     actions: [
       nextActionChoice({
         label: "Run Next",
         description: "通常進行です。次の gate / interruption / failure / complete まで自動で進めます。",
         command,
         tone: "approve"
+      }),
+      nextActionChoice({
+        label: "Open Terminal",
+        description: "current step の repo state を terminal で確認したり、会話しながら調査します。",
+        command: assist,
+        tone: "neutral",
+        kind: "assist"
       })
     ],
-    selection: "single",
+    selection: "single_optional_assist",
     targetTab: "commands"
   };
 }
@@ -896,7 +941,7 @@ function failedActionBody(step) {
   if (topFinding) {
     return `reviewer batch の一部が失敗しましたが、残っている指摘があります。先に「${topFinding.title || "review finding"}」へ対応してから Resume で ${step.id} を再実行します。`;
   }
-  return "失敗 summary を確認し、必要なら Open Assist で修正してから `resume` を再実行します。";
+  return "失敗 summary を確認し、必要なら Open Terminal で修正してから `resume` を再実行します。";
 }
 
 function failedAuthMismatchText(step) {
@@ -1273,7 +1318,7 @@ function humanDecisionActions(repo, stepId) {
   const [approve, requestChanges, reject] = humanDecisionCommands(repo, stepId);
   return [
     nextActionChoice({
-      label: "Open Assist",
+      label: "Open Terminal",
       description: "まずは Claude assist に recommendation を作らせます。大きく直す場合もここからです。",
       command: assistOpenCommand(repo, stepId),
       tone: "neutral",
@@ -1500,7 +1545,7 @@ function interruptAnswerActions(repo, stepId) {
       tone: "neutral"
     }),
     nextActionChoice({
-      label: "Open Assist",
+      label: "Open Terminal",
       description: "質問に答える前に Claude assist でコードとテストを確認します。",
       command: assistOpenCommand(repo, stepId),
       tone: "neutral",
@@ -3283,23 +3328,23 @@ function renderHtml() {
 
   function nextActionNote(nextAction) {
     if (nextAction?.selection === 'recommended_or_assist') {
-      return '通常は推奨アクションを実行します。さらに直す場合だけ Open Assist を使います。';
+      return '通常は推奨アクションを実行します。さらに直す場合だけ Open Terminal を使います。';
     }
     if (nextAction?.selection === 'choose_one') {
       return 'Choose one. 3つとも実行するのではなく、1つだけ選びます。';
     }
     if (nextAction?.selection === 'choose_one_optional_assist') {
-      return 'Approve / Request Changes / Reject のどれか1つを選びます。Open Assist はその前に使う任意の補助です。';
+      return 'Approve / Request Changes / Reject のどれか1つを選びます。Open Terminal はその前に使う任意の補助です。';
     }
     if (nextAction?.selection === 'ordered') {
       return '上から順に使います。必要なら先に確認コマンド、その後に回答コマンドです。';
     }
     if (nextAction?.selection === 'ordered_optional_assist') {
-      return '通常は Show Interrupt で内容確認し、必要なら Open Assist を挟んでから Answer を返します。';
+      return '通常は Show Interrupt で内容確認し、必要なら Open Terminal を挟んでから Answer を返します。';
     }
     if (nextAction?.selection === 'single_optional_assist') {
       const primary = listOf(nextAction?.actions).find((action) => action.kind !== 'assist');
-      return (primary?.label || '主アクション') + ' をすぐ実行するか、先に Open Assist で原因を詰めるかを選びます。';
+      return (primary?.label || '主アクション') + ' をすぐ実行するか、先に Open Terminal で原因を詰めるかを選びます。';
     }
     return '通常はこのコマンドを実行します。';
   }
@@ -5494,6 +5539,7 @@ function renderHtml() {
     const currentGate = state.data.current.gate;
     const interruptions = state.data.current.interruptions || [];
     const liveLines = current && current.id === step.id ? providerActivityLines(step, 3) : [];
+    const terminalStepId = current?.id || step.id;
     let html =
       '<div class="detail-head">' +
         '<div class="detail-label">' + esc(step.id + ' · ' + step.provider + ' / ' + step.mode) + '</div>' +
@@ -5529,7 +5575,7 @@ function renderHtml() {
         }
       } else if (state.data.runtime.run.status === 'running' && step.processState?.stale) {
         questionBody.push('<p>' + esc(step.processState.note || 'provider process は終了していますが、runtime state は running のままです。') + '</p>');
-        questionBody.push('<p>通常は <code>Resume</code> で同じ step を再実行します。必要なら Open Assist で直前の変更を確認してから戻します。</p>');
+        questionBody.push('<p>通常は <code>Resume</code> で同じ step を再実行します。必要なら Open Terminal で直前の変更を確認してから戻します。</p>');
       } else {
         questionBody.push('<p>' + esc(nextAction.body || 'guard が通っていません。必要な note/ticket 更新、commit、検証を追加してから run-next を再実行します。') + '</p>');
       }
@@ -5543,6 +5589,17 @@ function renderHtml() {
           '<div class="viewer-note"><span class="info-icon">i</span><span>この UI は viewer を基本にしつつ、Claude assist terminal だけはここから開けます。runtime の進行判断は CLI か assist signal で行います。</span></div>' +
         '</div>';
     }
+
+    html +=
+      '<div class="detail-section"><div class="detail-section-title">Terminal</div>' +
+      '<button class="next-action-launch" type="button" data-assist-step="' + esc(terminalStepId) + '">' +
+        'Open Terminal' +
+        '<span class="next-action-launch-hint">' +
+          esc(current && current.id !== step.id
+            ? ('Open a fresh assist terminal for the current step ' + current.id + '.')
+            : ('Open a fresh assist terminal for ' + terminalStepId + '.')) +
+        '</span>' +
+      '</button></div>';
 
     html +=
       '<div class="detail-section"><div class="detail-section-title">この step の観点</div>' +
@@ -5627,7 +5684,7 @@ function renderHtml() {
             (item.description ? '<div class="next-action-description">' + esc(item.description) + '</div>' : '') +
             (item.kind === 'assist'
               ? '<button class="next-action-launch" type="button" data-assist-step="' + esc(step.id) + '">' +
-                  'Open Claude Assist' +
+                  'Open Terminal' +
                   '<span class="next-action-launch-hint">Launch a fresh assist terminal in this browser. The CLI fallback remains below.</span>' +
                 '</button>'
               : '') +
