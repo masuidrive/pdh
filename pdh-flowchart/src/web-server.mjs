@@ -2984,13 +2984,6 @@ function renderHtml() {
     flex-wrap: wrap;
     min-width: 0;
   }
-  .assist-controls-note {
-    font-size: 11px;
-    color: var(--text-muted);
-    white-space: normal;
-    min-width: 0;
-    flex: 1 1 220px;
-  }
   .assist-controls-group {
     display: flex;
     align-items: center;
@@ -2999,7 +2992,7 @@ function renderHtml() {
     overflow: hidden;
     max-width: 100%;
     min-width: 0;
-    flex: 1 1 320px;
+    flex: 1 1 100%;
     justify-content: flex-end;
   }
   .assist-key-grid {
@@ -3232,7 +3225,6 @@ function renderHtml() {
         </div>
       </div>
       <div class="assist-controls">
-        <div class="assist-controls-note">Tap the terminal to focus keyboard on mobile. Use these keys when the soft keyboard is unavailable.</div>
         <div class="assist-controls-group">
           <button class="assist-login-button hidden" id="assist-login-button" type="button">Run /login</button>
           <button class="assist-prompt-toggle" id="assist-prompt-toggle" type="button">Prompt</button>
@@ -3629,6 +3621,33 @@ function renderHtml() {
     return state.data?.documents?.[docId] || null;
   }
 
+  function documentBodyText(document) {
+    const source = String(document?.text ?? '');
+    if (!source) {
+      return '';
+    }
+    const basename = String(document?.path || '').split('/').pop().trim().toLowerCase();
+    const titleMatch = source.match(/^#\s+([^\n]+)\n+/);
+    const stripDocumentTitle = (value) => {
+      if (!basename) {
+        return value;
+      }
+      if (!titleMatch) {
+        return value;
+      }
+      const heading = titleMatch[1].trim().toLowerCase();
+      if (heading !== basename) {
+        return value;
+      }
+      return value.slice(titleMatch[0].length).trimStart();
+    };
+    const frontmatterMatch = source.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+    if (!frontmatterMatch) {
+      return stripDocumentTitle(source);
+    }
+    return stripDocumentTitle(source.slice(frontmatterMatch[0].length).trimStart());
+  }
+
   function markdownArtifact(name) {
     return /\\.(md|markdown)$/i.test(String(name || ''));
   }
@@ -3646,13 +3665,14 @@ function renderHtml() {
     if (!document?.text) {
       return '';
     }
+    const text = documentBodyText(document);
     const headings = normalizeHeadings(headingOrHeadings);
     if (!headings.length) {
-      const range = findDocumentSectionRange(document.text, null);
+      const range = findDocumentSectionRange(text, null);
       return range.lines.slice(range.start, range.end + 1).join('\\n').trim();
     }
     return headings.map((heading) => {
-      const range = findDocumentSectionRange(document.text, heading);
+      const range = findDocumentSectionRange(text, heading);
       const start = includeContext || range.highlightStart < 0 ? range.start : range.highlightStart;
       const end = includeContext || range.highlightEnd < 0 ? range.end : range.highlightEnd;
       return range.lines.slice(start, end + 1).join('\\n').trim();
@@ -3725,6 +3745,7 @@ function renderHtml() {
     const item = buildShowItem('変更差分', 'diff', step.reviewDiff.baseLabel, detail);
     item.diffTarget = { stepId: step.id };
     item.preview = textPreview(detail);
+    item.prominentLabel = true;
     return item;
   }
 
@@ -3935,6 +3956,7 @@ function renderHtml() {
     if (!document?.text) {
       return '';
     }
+    const documentText = documentBodyText(document);
     const renderSegment = (text, segmentClass, focused = false) => {
       const value = String(text ?? '').trim();
       if (!value) {
@@ -3946,11 +3968,11 @@ function renderHtml() {
       }
       return '<div class="detail-doc-markdown detail-doc-segment ' + segmentClass + '"' + attr + '>' + renderMarkdownExcerpt(markdownizeDocumentSegment(value, document)) + '</div>';
     };
-    const lines = String(document.text ?? '').split(/\\r?\\n/);
-    const highlightRanges = findDocumentHighlightRanges(document.text, target.headings || target.heading);
+    const lines = String(documentText ?? '').split(/\\r?\\n/);
+    const highlightRanges = findDocumentHighlightRanges(documentText, target.headings || target.heading);
     let viewer = '';
     if (!highlightRanges.length) {
-      viewer = renderSegment(document.text, 'focus', true);
+      viewer = renderSegment(documentText, 'focus', true);
     } else {
       let cursor = 0;
       highlightRanges.forEach((range) => {
@@ -4392,38 +4414,8 @@ function renderHtml() {
     return fetch('/api/state', { cache: 'no-store' }).then((response) => response.json());
   }
 
-  function markdownizeDocumentSegment(text, document) {
-    const source = String(text || '');
-    const match = source.match(/^---\\r?\\n([\\s\\S]*?)\\r?\\n---\\r?\\n?/);
-    const basename = String(document?.path || '').split('/').pop().trim().toLowerCase();
-    const stripDocumentTitle = (value) => {
-      if (!basename) {
-        return value;
-      }
-      const titleMatch = value.match(/^#\\s+([^\\n]+)\\n+/);
-      if (!titleMatch) {
-        return value;
-      }
-      const heading = titleMatch[1].trim().toLowerCase();
-      if (heading !== basename) {
-        return value;
-      }
-      return value.slice(titleMatch[0].length).trimStart();
-    };
-    if (!match) {
-      return stripDocumentTitle(source);
-    }
-    const frontmatter = match[1].trimEnd();
-    const body = stripDocumentTitle(source.slice(match[0].length).trimStart());
-    const parts = [
-      '\`\`\`yaml',
-      frontmatter,
-      '\`\`\`'
-    ];
-    if (body) {
-      parts.push('', body);
-    }
-    return parts.join('\\n');
+  function markdownizeDocumentSegment(text, _document) {
+    return String(text || '').trim();
   }
 
   function applyState(data) {
@@ -4886,7 +4878,8 @@ function renderHtml() {
       type: 'document',
       source: label,
       detail: 'full file view',
-      preview: textPreview(document.text)
+      preview: textPreview(documentBodyText(document)),
+      prominentLabel: true
     };
   }
 

@@ -72,7 +72,7 @@ function sectionBody(text, section) {
     if (!match) {
       continue;
     }
-    if (normalizeSectionTitle(match[2]) === target) {
+    if (sectionHeadingMatches(target, normalizeSectionTitle(match[2]))) {
       start = index + 1;
       level = match[1].length;
       break;
@@ -96,6 +96,21 @@ function normalizeSectionTitle(value) {
   return String(value ?? "")
     .replace(/^#{1,6}\s+/, "")
     .trim();
+}
+
+function sectionHeadingMatches(target, heading) {
+  if (heading === target) {
+    return true;
+  }
+  const normalizedTarget = normalizeSectionTitle(target);
+  const normalizedHeading = normalizeSectionTitle(heading);
+  if (normalizedHeading === normalizedTarget) {
+    return true;
+  }
+  if (/^PD-C-\d+$/i.test(normalizedTarget)) {
+    return new RegExp(`^${escapeRegExp(normalizedTarget)}(?:[\\s.:：。\\-].+)?$`, "i").test(normalizedHeading);
+  }
+  return false;
 }
 
 function checkGitCommit(guard, repo) {
@@ -173,4 +188,8 @@ function passIf(guard, condition, evidence) {
     status: condition ? "passed" : guard.optional ? "skipped" : "failed",
     evidence
   };
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
