@@ -59,7 +59,7 @@ export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", p
 
 function handleRequest({ request, response, repo, assistTerminalManager }) {
   const method = request.method ?? "GET";
-  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept")))) {
+  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept") || request.url?.startsWith("/api/gate/approve")))) {
     sendJson(response, 405, { error: "read_only_web_ui" });
     return;
   }
@@ -104,6 +104,23 @@ function handleRequest({ request, response, repo, assistTerminalManager }) {
       sendJson(response, 200, acceptRecommendationFromWeb({ repo, stepId }));
     } catch (error) {
       sendJson(response, Number(error?.statusCode || 500), { error: "recommendation_accept_failed", message: error?.message || String(error) });
+    }
+    return;
+  }
+  if (url.pathname === "/api/gate/approve") {
+    if (method !== "POST") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    const stepId = url.searchParams.get("step");
+    if (!stepId) {
+      sendJson(response, 400, { error: "missing_step" });
+      return;
+    }
+    try {
+      sendJson(response, 200, approveGateFromWeb({ repo, stepId }));
+    } catch (error) {
+      sendJson(response, Number(error?.statusCode || 500), { error: "gate_approve_failed", message: error?.message || String(error) });
     }
     return;
   }
@@ -252,6 +269,22 @@ function acceptRecommendationFromWeb({ repo, stepId }) {
   return {
     ...accepted,
     runNextStarted: Boolean(runNextPid),
+    runNextPid
+  };
+}
+
+function approveGateFromWeb({ repo, stepId }) {
+  const approved = runCliJson({
+    repo,
+    args: ["approve", "--repo", repo, "--step", stepId, "--reason", "ok"]
+  });
+  const runNextPid = spawnBackgroundCli({
+    repo,
+    args: ["run-next", "--repo", repo]
+  });
+  return {
+    ...approved,
+    runNextStarted: true,
     runNextPid
   };
 }
@@ -795,7 +828,7 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
     const decisionRequired = gateDecisionRequiredText(currentGate?.summaryText);
     return {
       title: `${currentStep.id} の判断`,
-      body: decisionRequired || "まずは gate summary と diff を確認して判断します。必要なら Open Terminal で recommendation を作るか、direct override として terminal から approve / request-changes / reject を使えます。",
+      body: decisionRequired || "まずは gate summary と diff を確認して判断します。必要なら Open Terminal で recommendation を作るか、そのまま Approve します。",
       commands: actions.map((item) => item.command),
       actions,
       selection: "choose_one_optional_assist",
@@ -1357,32 +1390,21 @@ function nextActionChoice({ label, description, command, tone = "neutral", kind 
 }
 
 function humanDecisionActions(repo, stepId) {
-  const [approve, requestChanges, reject] = humanDecisionCommands(repo, stepId);
+  const [approve] = humanDecisionCommands(repo, stepId);
   return [
     nextActionChoice({
       label: "Open Terminal",
-      description: "まずは Claude assist に recommendation を作らせます。大きく直す場合もここからです。",
+      description: "まずは Claude assist と相談しながら recommendation を作るか、必要な修正をここで進めます。",
       command: assistOpenCommand(repo, stepId),
       tone: "neutral",
       kind: "assist"
     }),
     nextActionChoice({
       label: "Approve",
-      description: "agent recommendation を使わずに、この gate を手動で確定する override です。",
+      description: "この gate をそのまま通して次へ進めます。",
       command: approve,
-      tone: "approve"
-    }),
-    nextActionChoice({
-      label: "Request Changes",
-      description: "agent recommendation を使わずに、この gate を手動で差し戻す override です。",
-      command: requestChanges,
-      tone: "revise"
-    }),
-    nextActionChoice({
-      label: "Reject",
-      description: "agent recommendation を使わずに、この gate を手動で reject する override です。",
-      command: reject,
-      tone: "reject"
+      tone: "approve",
+      kind: "approve_direct"
     })
   ];
 }
@@ -2977,7 +2999,7 @@ function renderHtml() {
     border: 1px solid var(--border);
     background: var(--bg);
     color: var(--text);
-    border-radius: 8px;
+    border-radius: 999px;
     padding: 8px 10px;
     cursor: pointer;
     font: inherit;
@@ -2992,6 +3014,27 @@ function renderHtml() {
     margin-top: 3px;
     font-size: 11px;
     color: var(--text-muted);
+  }
+  .next-action-direct {
+    width: 100%;
+    margin-top: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font: inherit;
+    text-align: center;
+    font-weight: 600;
+  }
+  .next-action.approve .next-action-direct {
+    border-color: #d8c07a;
+    background: #fff8e8;
+  }
+  .next-action-direct:hover {
+    border-color: var(--border-strong);
+    background: var(--surface);
   }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -3412,9 +3455,9 @@ function renderHtml() {
     if (nextAction?.selection === 'choose_one') {
       return 'Choose one. 3つとも実行するのではなく、1つだけ選びます。';
     }
-    if (nextAction?.selection === 'choose_one_optional_assist') {
-      return 'Approve / Request Changes / Reject のどれか1つを選びます。Open Terminal はその前に使う任意の補助です。';
-    }
+  if (nextAction?.selection === 'choose_one_optional_assist') {
+      return 'Open Terminal で recommendation を作るか、そのまま Approve します。差し戻しや却下は terminal 側で進めます。';
+  }
     if (nextAction?.selection === 'ordered') {
       return '上から順に使います。必要なら先に確認コマンド、その後に回答コマンドです。';
     }
@@ -5702,10 +5745,12 @@ function renderHtml() {
             (item.kind === 'assist'
               ? '<button class="next-action-launch" type="button" data-assist-step="' + esc(step.id) + '">' +
                   'Open Terminal' +
-                  '<span class="next-action-launch-hint">Launch a fresh assist terminal in this browser. The CLI fallback remains below.</span>' +
+                  '<span class="next-action-launch-hint">Launch a fresh assist terminal in this browser.</span>' +
                 '</button>'
-              : '') +
-            '<div class="next-action-command"' + (item.kind === 'assist' ? '' : ' data-click-copy="' + encodeURIComponent(item.command || '') + '"') + '>' + esc(item.command || '') + '</div>' +
+              : item.kind === 'approve_direct'
+                ? '<button class="next-action-direct" type="button" data-approve-step="' + esc(step.id) + '">Approve</button>'
+                : '') +
+            ((item.kind === 'assist' || item.kind === 'approve_direct') ? '' : '<div class="next-action-command"' + ' data-click-copy="' + encodeURIComponent(item.command || '') + '">' + esc(item.command || '') + '</div>') +
           '</div>';
       });
       html += '</div></div>';
@@ -5827,6 +5872,37 @@ function renderHtml() {
         } finally {
           button.disabled = false;
           button.innerHTML = original;
+        }
+      });
+    });
+    root.querySelectorAll('[data-approve-step]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const stepId = button.dataset.approveStep;
+        if (!stepId) {
+          return;
+        }
+        const confirmed = window.confirm(stepId + ' を approve して次へ進めますか？');
+        if (!confirmed) {
+          return;
+        }
+        const original = button.textContent;
+        button.disabled = true;
+        button.textContent = 'Approving…';
+        try {
+          const response = await fetch('/api/gate/approve?step=' + encodeURIComponent(stepId), {
+            method: 'POST',
+            cache: 'no-store'
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.message || payload.error || 'gate_approve_failed');
+          }
+          refresh();
+        } catch (error) {
+          window.alert('Failed to approve gate: ' + (error?.message || String(error)));
+        } finally {
+          button.disabled = false;
+          button.textContent = original;
         }
       });
     });
