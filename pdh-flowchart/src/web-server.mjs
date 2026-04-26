@@ -5794,21 +5794,6 @@ function renderHtml() {
       sendAssistInput(assistSequence(kind));
     });
   });
-  document.getElementById('detail-modal').addEventListener('click', (event) => {
-    if (event.target.id !== 'detail-modal') return;
-    state.modalItem = null;
-    state.modalViewMode = 'markdown';
-    clearRequestedModalQuery();
-    renderModal();
-  });
-  document.getElementById('assist-confirm').addEventListener('click', (event) => {
-    if (event.target.id !== 'assist-confirm') return;
-    dismissAssistConfirmation();
-  });
-  document.getElementById('copy-fallback').addEventListener('click', (event) => {
-    if (event.target.id !== 'copy-fallback') return;
-    closeCopyFallback();
-  });
   window.addEventListener('resize', () => {
     resizeAssistTerminal();
   });
