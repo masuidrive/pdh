@@ -23,6 +23,7 @@ const XTERM_JS_PATH = fileURLToPath(new URL("../node_modules/@xterm/xterm/lib/xt
 const XTERM_CSS_PATH = fileURLToPath(new URL("../node_modules/@xterm/xterm/css/xterm.css", import.meta.url));
 const XTERM_FIT_JS_PATH = fileURLToPath(new URL("../node_modules/@xterm/addon-fit/lib/addon-fit.js", import.meta.url));
 const XTERM_WEB_LINKS_JS_PATH = fileURLToPath(new URL("../node_modules/@xterm/addon-web-links/lib/addon-web-links.js", import.meta.url));
+const MARKDOWN_IT_JS_PATH = fileURLToPath(new URL("../node_modules/markdown-it/dist/markdown-it.min.js", import.meta.url));
 const CLI_PATH = fileURLToPath(new URL("./cli.mjs", import.meta.url));
 
 export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", port = 8765 } = {}) {
@@ -137,6 +138,10 @@ function handleRequest({ request, response, repo, assistTerminalManager }) {
   }
   if (url.pathname === "/assets/xterm-addon-web-links.js") {
     sendScript(response, 200, readFileSync(XTERM_WEB_LINKS_JS_PATH, "utf8"));
+    return;
+  }
+  if (url.pathname === "/assets/markdown-it.js") {
+    sendScript(response, 200, readFileSync(MARKDOWN_IT_JS_PATH, "utf8"));
     return;
   }
   if (url.pathname === "/assets/xterm.css") {
@@ -3121,6 +3126,7 @@ function renderHtml() {
 <script src="/assets/xterm.js"></script>
 <script src="/assets/xterm-addon-fit.js"></script>
 <script src="/assets/xterm-addon-web-links.js"></script>
+<script src="/assets/markdown-it.js"></script>
 <script>
   const state = {
     data: null,
@@ -3714,70 +3720,34 @@ function renderHtml() {
     };
   }
 
-  function renderInlineMarkdown(text) {
-    const codeTick = String.fromCharCode(96);
-    const inlineCodePattern = new RegExp(codeTick + '([^' + codeTick + ']+)' + codeTick, 'g');
-    return esc(text)
-      .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>')
-      .replace(inlineCodePattern, '<code>$1</code>');
-  }
+  let markdownRendererInstance = null;
 
-  function renderMarkdownExcerpt(text) {
-    const codeFence = String.fromCharCode(96).repeat(3);
-    const lines = String(text ?? '').split(/\\r?\\n/);
-    const blocks = [];
-    let paragraph = [];
-    let listType = null;
-    let listItems = [];
-    let tableRows = [];
-    let inCode = false;
-    let codeLines = [];
-    let codeFenceInfo = '';
-
-    function pushParagraph() {
-      if (!paragraph.length) {
-        return;
-      }
-      blocks.push('<p>' + renderInlineMarkdown(paragraph.join(' ')) + '</p>');
-      paragraph = [];
+  function markdownRenderer() {
+    if (markdownRendererInstance) {
+      return markdownRendererInstance;
     }
-
-    function pushList() {
-      if (!listItems.length) {
-        return;
-      }
-      const tag = listType === 'ol' ? 'ol' : 'ul';
-      blocks.push('<' + tag + '>' + listItems.map((item) => '<li>' + renderInlineMarkdown(item) + '</li>').join('') + '</' + tag + '>');
-      listType = null;
-      listItems = [];
+    const factory = window.markdownit;
+    if (typeof factory !== 'function') {
+      markdownRendererInstance = {
+        render(text) {
+          return '<p>' + esc(String(text ?? '')).replaceAll('\\n', '<br>') + '</p>';
+        }
+      };
+      return markdownRendererInstance;
     }
-
-    function pushTable() {
-      if (!tableRows.length) {
-        return;
-      }
-      const rows = tableRows.map((line) => line.trim().replace(/^\\|/, '').replace(/\\|$/, '').split('|').map((cell) => cell.trim()));
-      const divider = rows[1] && rows[1].every((cell) => /^:?-{3,}:?$/.test(cell));
-      const head = rows[0] || [];
-      const body = divider ? rows.slice(2) : rows.slice(1);
-      blocks.push(
-        '<table>' +
-          (head.length ? '<thead><tr>' + head.map((cell) => '<th>' + renderInlineMarkdown(cell) + '</th>').join('') + '</tr></thead>' : '') +
-          '<tbody>' + body.map((row) => '<tr>' + row.map((cell) => '<td>' + renderInlineMarkdown(cell) + '</td>').join('') + '</tr>').join('') + '</tbody>' +
-        '</table>'
-      );
-      tableRows = [];
-    }
-
-    function pushCode() {
-      if (!codeLines.length && !codeFenceInfo) {
-        return;
-      }
-      const source = codeLines.join('\\n');
-      const language = codeFenceInfo || 'text';
+    const md = factory({
+      html: false,
+      linkify: true,
+      typographer: false
+    });
+    md.renderer.rules.fence = (tokens, idx) => {
+      const token = tokens[idx];
+      const source = String(token.content ?? '');
+      const info = String(token.info ?? '').trim().split(/\\s+/)[0]?.toLowerCase() || '';
+      const language = info || 'text';
       const encoded = encodeURIComponent(source);
-      if (codeFenceInfo === 'mermaid') {
-        blocks.push(
+      if (info === 'mermaid') {
+        return (
           '<div class="detail-mermaid-card">' +
             '<div class="detail-code-toolbar">' +
               '<span class="detail-code-language">mermaid</span>' +
@@ -3788,102 +3758,23 @@ function renderHtml() {
             '</div>' +
           '</div>'
         );
-      } else {
-        blocks.push(
-          '<div class="detail-code-block">' +
-            '<div class="detail-code-toolbar">' +
-              '<span class="detail-code-language">' + esc(language) + '</span>' +
-              '<button class="detail-copy-button" type="button" data-copy="' + encoded + '">Copy</button>' +
-            '</div>' +
-            '<pre><code>' + esc(source) + '</code></pre>' +
-          '</div>'
-        );
       }
-      codeLines = [];
-      codeFenceInfo = '';
-    }
+      return (
+        '<div class="detail-code-block">' +
+          '<div class="detail-code-toolbar">' +
+            '<span class="detail-code-language">' + esc(language) + '</span>' +
+            '<button class="detail-copy-button" type="button" data-copy="' + encoded + '">Copy</button>' +
+          '</div>' +
+          '<pre><code>' + esc(source) + '</code></pre>' +
+        '</div>'
+      );
+    };
+    markdownRendererInstance = md;
+    return markdownRendererInstance;
+  }
 
-    for (const rawLine of lines) {
-      const line = rawLine.replace(/\\t/g, '  ');
-      const trimmed = line.trim();
-      if (trimmed.startsWith(codeFence)) {
-        pushParagraph();
-        pushList();
-        pushTable();
-        if (inCode) {
-          pushCode();
-          inCode = false;
-        } else {
-          codeFenceInfo = trimmed.slice(codeFence.length).trim().toLowerCase();
-          inCode = true;
-        }
-        continue;
-      }
-      if (inCode) {
-        codeLines.push(rawLine);
-        continue;
-      }
-      if (!trimmed) {
-        pushParagraph();
-        pushList();
-        pushTable();
-        continue;
-      }
-      if (trimmed.startsWith('> ')) {
-        pushParagraph();
-        pushList();
-        pushTable();
-        blocks.push('<blockquote>' + renderInlineMarkdown(trimmed.slice(2)) + '</blockquote>');
-        continue;
-      }
-      const headingMatch = trimmed.match(/^(#{1,6})\\s+(.*)$/);
-      if (headingMatch) {
-        pushParagraph();
-        pushList();
-        pushTable();
-        const level = Math.min(6, headingMatch[1].length);
-        blocks.push('<h' + level + '>' + renderInlineMarkdown(headingMatch[2]) + '</h' + level + '>');
-        continue;
-      }
-      const orderedMatch = trimmed.match(/^\\d+\\.\\s+(.*)$/);
-      if (orderedMatch) {
-        pushParagraph();
-        pushTable();
-        if (listType && listType !== 'ol') {
-          pushList();
-        }
-        listType = 'ol';
-        listItems.push(orderedMatch[1]);
-        continue;
-      }
-      const unorderedMatch = trimmed.match(/^[-*]\\s+(.*)$/);
-      if (unorderedMatch) {
-        pushParagraph();
-        pushTable();
-        if (listType && listType !== 'ul') {
-          pushList();
-        }
-        listType = 'ul';
-        listItems.push(unorderedMatch[1]);
-        continue;
-      }
-      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
-        pushParagraph();
-        pushList();
-        tableRows.push(trimmed);
-        continue;
-      }
-      pushList();
-      pushTable();
-      paragraph.push(trimmed);
-    }
-    pushParagraph();
-    pushList();
-    pushTable();
-    if (inCode) {
-      pushCode();
-    }
-    return blocks.join('');
+  function renderMarkdownExcerpt(text) {
+    return markdownRenderer().render(String(text ?? ''));
   }
 
   function renderDocumentViewer(target, mode = 'markdown') {
