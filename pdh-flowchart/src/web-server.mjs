@@ -1816,13 +1816,6 @@ function renderHtml(initialState = null) {
     font-size: 11px; color: var(--text-muted);
     flex-wrap: wrap;
   }
-  .flow-badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 4px 10px; border-radius: 999px;
-    background: #efeefc; color: #3c3489;
-    font-size: 11px; font-weight: 500;
-    border: 1px solid #cecbf6; white-space: nowrap;
-  }
   .waiting-indicator {
     display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
     padding: 4px 10px; border-radius: 999px;
@@ -4810,7 +4803,6 @@ function renderHtml(initialState = null) {
       '<span class="current">' + esc(data.runtime.run?.ticket_id || 'no-ticket') + '</span>';
 
     const activeVariant = data.flow.activeVariant || 'full';
-    const variant = activeVariant.toUpperCase();
     const leftVariant = activeVariant.charAt(0).toUpperCase() + activeVariant.slice(1);
     const status = data.runtime.run?.status || 'idle';
     const waitingClass = status === 'failed'
@@ -4826,7 +4818,6 @@ function renderHtml(initialState = null) {
       leftFlowVariant.textContent = 'PD-C: Ticket 開発 (' + leftVariant + ')';
     }
     document.getElementById('header-right').innerHTML =
-      '<span class="flow-badge">Flow: ' + esc(variant) + '</span>' +
       '<span class="' + waitingClass + '"><span class="waiting-dot"></span>' + esc(indicatorText) + '</span>';
   }
 
