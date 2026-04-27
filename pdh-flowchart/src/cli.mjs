@@ -2696,8 +2696,27 @@ function advanceRun({ repo, runtime, step, outcome }) {
 
   if (target === "COMPLETE") {
     syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [] });
-    finalizeCompletedRun({ repo, runtime, step });
-    return { status: "completed", from: step.id, to: target, outcome };
+    try {
+      finalizeCompletedRun({ repo, runtime, step });
+      return { status: "completed", from: step.id, to: target, outcome };
+    } catch (error) {
+      updateRun(repo, { status: "needs_human", current_step_id: step.id });
+      appendProgressEvent({
+        repoPath: repo,
+        runId: runtime.run.id,
+        stepId: step.id,
+        type: "human_gate_finalize_failed",
+        provider: "runtime",
+        message: `${step.id} close finalization failed`,
+        payload: {
+          outcome,
+          target,
+          error: error?.message || String(error)
+        }
+      });
+      syncStepUiRuntime({ repo, stepId: step.id, nextCommands: humanStopCommands(repo, step.id) });
+      throw error;
+    }
   }
 
   resetTransitionArtifacts({
@@ -2779,37 +2798,21 @@ function resetTransitionArtifacts({ runtime, currentStepId, targetStepId }) {
 
 function finalizeCompletedRun({ repo, runtime, step }) {
   const runId = runtime.run.id;
-  appendStepHistoryEntry(repo, {
-    stepId: "CLEANUP",
-    status: "local_artifacts_removed",
-    commit: "-",
-    summary: `Removed .pdh-flowchart/runs/${runId} before close`
+  const closeCommit = commitStep({
+    repoPath: repo,
+    stepId: step.id,
+    message: "Record final gate approval before ticket close"
   });
-  cleanupRunArtifacts({ repoPath: repo, runId });
   let closeResult = { status: "skipped", reason: "ticket.sh not found" };
   if (existsSync(join(repo, "ticket.sh"))) {
-    closeResult = ticketClose({ repoPath: repo });
-    appendStepHistoryEntry(repo, {
-      stepId: "PD-C-10",
-      status: "ticket_closed",
-      commit: "-",
-      summary: "Ran ticket.sh close"
-    });
+    closeResult = ticketClose({ repoPath: repo, args: ["--keep-worktree"] });
   }
-  const note = loadCurrentNote(repo);
-  saveCurrentNote(repo, {
-    ...note,
-    pdh: {
-      ...note.pdh,
-      status: "completed",
-      current_step: step.id,
-      run_id: null,
-      updated_at: new Date().toISOString(),
-      completed_at: new Date().toISOString()
-    }
-  });
+  cleanupRunArtifacts({ repoPath: repo, runId });
   if (closeResult.status === "ok") {
     console.log(`ticket.sh close: ${firstLine(closeResult.stdout || closeResult.stderr || "ok")}`);
+  }
+  if (closeCommit.status === "committed") {
+    console.log(`close prep commit: ${closeCommit.commit}`);
   }
 }
 

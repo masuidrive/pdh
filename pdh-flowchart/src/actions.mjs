@@ -90,8 +90,8 @@ export function ticketStart({ repoPath, ticket }) {
   return runTicket(repoPath, ["start", ticket]);
 }
 
-export function ticketClose({ repoPath }) {
-  return runTicket(repoPath, ["close"]);
+export function ticketClose({ repoPath, args = [] }) {
+  return runTicket(repoPath, ["close", ...args]);
 }
 
 function runTicket(repoPath, args) {
