@@ -60,7 +60,7 @@ export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", p
 
 function handleRequest({ request, response, repo, assistTerminalManager }) {
   const method = request.method ?? "GET";
-  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept") || request.url?.startsWith("/api/gate/approve")))) {
+  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept") || request.url?.startsWith("/api/gate/approve") || request.url?.startsWith("/api/ticket/start")))) {
     sendJson(response, 405, { error: "read_only_web_ui" });
     return;
   }
@@ -122,6 +122,24 @@ function handleRequest({ request, response, repo, assistTerminalManager }) {
       sendJson(response, 200, approveGateFromWeb({ repo, stepId }));
     } catch (error) {
       sendJson(response, Number(error?.statusCode || 500), { error: "gate_approve_failed", message: error?.message || String(error) });
+    }
+    return;
+  }
+  if (url.pathname === "/api/ticket/start") {
+    if (method !== "POST") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    const ticketId = url.searchParams.get("ticket");
+    const variant = url.searchParams.get("variant") || "full";
+    if (!ticketId) {
+      sendJson(response, 400, { error: "missing_ticket" });
+      return;
+    }
+    try {
+      sendJson(response, 200, startTicketFromWeb({ repo, ticketId, variant }));
+    } catch (error) {
+      sendJson(response, Number(error?.statusCode || 500), { error: "ticket_start_failed", message: error?.message || String(error) });
     }
     return;
   }
@@ -286,6 +304,23 @@ function approveGateFromWeb({ repo, stepId }) {
   return {
     status: "ok",
     approved,
+    runNextStarted: true,
+    runNextPid
+  };
+}
+
+function startTicketFromWeb({ repo, ticketId, variant = "full" }) {
+  const started = runCliText({
+    repo,
+    args: ["run", "--repo", repo, "--ticket", ticketId, "--variant", variant, "--force-reset"]
+  });
+  const runNextPid = spawnBackgroundCli({
+    repo,
+    args: ["run-next", "--repo", repo]
+  });
+  return {
+    status: "ok",
+    started,
     runNextStarted: true,
     runNextPid
   };
@@ -6215,6 +6250,21 @@ function renderHtml(initialState = null) {
         '</div></div>';
     }
 
+    const nextLabel = ticket.status === 'doing' ? 'Resume' : 'Start';
+    html +=
+      '<div class="detail-section"><div class="detail-section-title">Next</div>' +
+        '<div class="next-actions">' +
+          '<div class="next-action neutral">' +
+            '<div class="next-action-head">' +
+              '<span class="next-action-label">' + esc(nextLabel) + '</span>' +
+              '<span class="next-action-choice">run</span>' +
+            '</div>' +
+            '<div class="next-action-description">' + esc(ticket.status === 'doing' ? 'Resume this ticket in the current repo.' : 'Start this ticket and begin the PD-C flow.') + '</div>' +
+            '<button class="next-action-direct" type="button" data-start-ticket="' + esc(ticket.id) + '" data-start-variant="' + esc(state.data.flow.activeVariant || 'full') + '">' + esc(nextLabel) + '</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
     html += '<div class="detail-section"><div class="detail-section-title">Ticket</div><div class="artifacts">';
     materialItems.forEach((item, index) => {
       html +=
@@ -6341,6 +6391,39 @@ function renderHtml(initialState = null) {
         approveButton.disabled = false;
         approveButton.textContent = original;
       }
+    }
+
+    const startButton = event.target.closest('[data-start-ticket]');
+    if (startButton) {
+      const ticketId = startButton.dataset.startTicket;
+      const variant = startButton.dataset.startVariant || 'full';
+      if (!ticketId) {
+        return;
+      }
+      const confirmed = window.confirm(ticketId + ' を ' + variant + ' flow で開始しますか？');
+      if (!confirmed) {
+        return;
+      }
+      const original = startButton.textContent;
+      startButton.disabled = true;
+      startButton.textContent = ticketId === state.selectedId ? 'Starting…' : 'Starting…';
+      try {
+        const response = await fetch('/api/ticket/start?ticket=' + encodeURIComponent(ticketId) + '&variant=' + encodeURIComponent(variant), {
+          method: 'POST',
+          cache: 'no-store'
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.message || payload.error || 'ticket_start_failed');
+        }
+        refresh();
+      } catch (error) {
+        window.alert('Failed to start ticket: ' + (error?.message || String(error)));
+      } finally {
+        startButton.disabled = false;
+        startButton.textContent = original;
+      }
+      return;
     }
   });
   document.querySelectorAll('[data-assist-input]').forEach((button) => {

@@ -234,8 +234,19 @@ async function cmdRun(argv) {
     if (runtime.run?.id && options["force-reset"] !== "true") {
       throw new Error("An active run already exists in current-note.md. Pass --force-reset to replace it.");
     }
+    const ticketStartResult = maybeStartTicket({ repo, ticket, required: options["require-ticket-start"] === "true" });
     const started = startRun({ repoPath: repo, ticket, variant, flowId, startStep });
-    maybeStartTicket({ repo, ticket, required: options["require-ticket-start"] === "true", runId: started.run.id, stepId: started.run.current_step_id });
+    if (ticketStartResult) {
+      appendProgressEvent({
+        repoPath: repo,
+        runId: started.run.id,
+        stepId: started.run.current_step_id,
+        type: ticketStartResult.status === "ok" ? "tool_finished" : "status",
+        provider: "runtime",
+        message: ticketStartResult.status === "ok" ? `ticket.sh start ${ticket}` : ticketStartResult.message,
+        payload: ticketStartResult
+      });
+    }
     syncStepUiRuntime({ repo });
     console.log(started.run.id);
     console.log(`Current step: ${formatStepName(getStep(started.flow, started.run.current_step_id))}`);
@@ -3244,7 +3255,7 @@ function blockIfOpenInterruption({ repo, runtime, step, options }) {
   return result;
 }
 
-function maybeStartTicket({ repo, ticket, required = false, runId, stepId }) {
+function maybeStartTicket({ repo, ticket, required = false }) {
   if (!ticket) {
     return;
   }
@@ -3252,27 +3263,13 @@ function maybeStartTicket({ repo, ticket, required = false, runId, stepId }) {
     if (required) {
       throw new Error("ticket.sh start required but ticket.sh was not found");
     }
-    appendProgressEvent({
-      repoPath: repo,
-      runId,
-      stepId,
-      type: "status",
-      provider: "runtime",
+    return {
+      status: "skipped",
       message: "ticket.sh start skipped: ticket.sh not found",
-      payload: { ticket }
-    });
-    return;
+      ticket
+    };
   }
-  const result = ticketStart({ repoPath: repo, ticket });
-  appendProgressEvent({
-    repoPath: repo,
-    runId,
-    stepId,
-    type: "tool_finished",
-    provider: "runtime",
-    message: `ticket.sh start ${ticket}`,
-    payload: result
-  });
+  return ticketStart({ repoPath: repo, ticket });
 }
 
 function syncStepUiRuntime({ repo, stepId = null, guardResults = null, nextCommands = null }) {
