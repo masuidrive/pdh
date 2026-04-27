@@ -1904,7 +1904,12 @@ function renderHtml(initialState = null) {
     overscroll-behavior: none;
     width: 100%;
   }
-  .app { display: flex; flex-direction: column; min-height: 100vh; }
+  .app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
   .header {
     border-bottom: 1px solid var(--border);
     padding: 12px 16px;
@@ -1967,6 +1972,56 @@ function renderHtml(initialState = null) {
   .main { display: grid; grid-template-columns: minmax(280px, 0.82fr) minmax(620px, 1.68fr); min-height: 0; flex: 1; }
   .panel-left { padding: 0 20px 32px; border-right: 1px solid var(--border); min-width: 0; }
   .panel-right { background: var(--surface); min-width: 0; }
+  .bottom-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    border-top: 1px solid var(--border);
+    background: rgba(248, 247, 244, 0.96);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  }
+  .bottom-bar.hidden { display: none; }
+  .bottom-bar-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .bottom-bar-title {
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bottom-bar-status {
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .bottom-bar-lines {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  .bottom-bar-line {
+    font-size: 11px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bottom-bar-line.process { color: var(--text); }
+  .bottom-bar-line.live { color: #1f5fbf; }
+  .bottom-bar-line.stale { color: var(--critical-text); }
   .summary {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -3261,10 +3316,24 @@ function renderHtml(initialState = null) {
     .panel-left { border-right: 0; }
   }
   @media (max-width: 600px) {
+    .app { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
     .header { padding: 10px 14px; }
     .panel-left { padding: 0 14px 24px; }
     .detail { padding: 16px 14px 24px; }
     .brand span:not(.brand-logo) { display: none; }
+    .bottom-bar { padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); }
+    .bottom-bar-head {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .bottom-bar-title,
+    .bottom-bar-status,
+    .bottom-bar-line {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+    }
   }
 </style>
 </head>
@@ -3289,6 +3358,7 @@ function renderHtml(initialState = null) {
       </section>
       <aside class="panel-right"><div class="detail" id="detail"></div></aside>
     </div>
+    <div class="bottom-bar hidden" id="bottom-bar"></div>
   </div>
   <div class="detail-modal hidden" id="detail-modal">
     <div class="detail-dialog" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title">
@@ -3549,6 +3619,85 @@ function renderHtml(initialState = null) {
       })
       .filter(Boolean)
       .slice(-limit);
+  }
+
+  function bottomBarProcessLine(step) {
+    const processState = step?.processState || null;
+    if (!processState) {
+      return '';
+    }
+    if (processState.activeCount > 0) {
+      const entries = listOf(processState.active);
+      const labels = entries.slice(0, 3).map((entry) => {
+        const pid = Number(entry?.pid);
+        return String(entry?.label || 'process') + (Number.isInteger(pid) && pid > 0 ? ' #' + pid : '');
+      });
+      const suffix = entries.length > 3 ? ' +' + String(entries.length - 3) : '';
+      return (entries.length > 1 ? 'Processes: ' : 'Process: ') + labels.join(' / ') + suffix;
+    }
+    if (processState.stale) {
+      return 'Stale: ' + preferredText(processState.note, 'provider process は終了しています。');
+    }
+    return 'Process: active provider なし';
+  }
+
+  function bottomBarModel() {
+    if (!state.data) {
+      return {
+        title: 'Loading runtime state…',
+        status: '',
+        lines: []
+      };
+    }
+    if (!hasActiveRun()) {
+      const openTickets = listOf(state.data.tickets).filter((ticket) => ticket.status === 'doing' || ticket.status === 'todo');
+      const selected = selectedTicket() || openTickets[0] || null;
+      return {
+        title: 'No active run',
+        status: openTickets.length ? String(openTickets.length) + ' open ticket(s)' : 'idle',
+        lines: [
+          selected ? 'Next ticket: ' + preferredText(selected.id, selected.title, 'unknown') : 'Open tickets: none',
+          selected?.title ? truncateInline(selected.title, 180) : ''
+        ].filter(Boolean)
+      };
+    }
+    const run = state.data.runtime.run || {};
+    const currentStep = stepById(run.current_step_id) || state.data.runtime.currentStep || null;
+    const title = preferredText(run.ticket_id, 'unknown-ticket') +
+      ' · ' +
+      preferredText(currentStep?.id, 'no-step') +
+      (currentStep?.label ? ' ' + currentStep.label : '');
+    const lines = [];
+    const processLine = bottomBarProcessLine(currentStep);
+    if (processLine) {
+      lines.push({
+        kind: currentStep?.processState?.stale ? 'stale' : 'process',
+        text: processLine
+      });
+    }
+    const liveLine = providerActivityLines(currentStep, 1)[0];
+    if (liveLine) {
+      lines.push({
+        kind: 'live',
+        text: liveLine
+      });
+    } else if (!processLine) {
+      const statusLine = run.status === 'needs_human'
+        ? 'Waiting for gate decision.'
+        : run.status === 'blocked'
+          ? 'Waiting for missing guard evidence.'
+          : run.status === 'failed'
+            ? 'Provider failed. Inspect the current step.'
+            : run.status === 'interrupted'
+              ? 'Waiting for interruption answer.'
+              : 'Waiting for the next runtime event.';
+      lines.push({ kind: 'process', text: statusLine });
+    }
+    return {
+      title,
+      status: String(run.status || 'idle'),
+      lines
+    };
   }
 
   function stepJudgementText(stepId) {
@@ -4595,7 +4744,7 @@ function renderHtml(initialState = null) {
         return;
       }
       refresh();
-    }, 5000);
+    }, 3000);
   }
 
   function stopPolling() {
@@ -4643,8 +4792,33 @@ function renderHtml(initialState = null) {
     renderHeader();
     renderSteps();
     renderDetail();
+    renderBottomBar();
     renderModal();
     renderAssistModal();
+  }
+
+  function renderBottomBar() {
+    const root = document.getElementById('bottom-bar');
+    if (!root) {
+      return;
+    }
+    const model = bottomBarModel();
+    if (!model) {
+      root.classList.add('hidden');
+      root.innerHTML = '';
+      return;
+    }
+    root.classList.remove('hidden');
+    root.innerHTML =
+      '<div class="bottom-bar-head">' +
+        '<div class="bottom-bar-title">' + esc(model.title || '') + '</div>' +
+        '<div class="bottom-bar-status">' + esc(model.status || '') + '</div>' +
+      '</div>' +
+      '<div class="bottom-bar-lines">' +
+        listOf(model.lines).slice(0, 2).map((line) =>
+          '<div class="bottom-bar-line ' + esc(line.kind || '') + '">' + esc(line.text || '') + '</div>'
+        ).join('') +
+      '</div>';
   }
 
   function currentAssistRecommendation() {
