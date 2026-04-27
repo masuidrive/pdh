@@ -468,7 +468,8 @@ function collectState({ repo }) {
     runtime: {
       run: run ? redactObject(run, redactor) : null,
       noteState: redactObject(note.pdh, redactor),
-      currentStep: currentStep ? stepMeta(currentStep) : null
+      currentStep: currentStep ? stepMeta(currentStep) : null,
+      supervisor: runtime.supervisor ? redactObject(runtime.supervisor, redactor) : null
     },
     summary,
     flow: {
@@ -638,7 +639,7 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor, 
       ? loadStepInterruptions({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }).map((item) => redactObject(item, redactor))
       : [];
     const processState = runtime.run?.id
-      ? collectStepProcessState({ stateDir: runtime.stateDir, runId: runtime.run.id, step, attempt })
+      ? collectStepProcessState({ runtime, step, attempt })
       : null;
     const progress = stepProgress({
       runtime,
@@ -775,7 +776,22 @@ function buildSummary({ runtime, activeVariant, ac, currentStep, currentGate, in
   };
 }
 
-function collectStepProcessState({ stateDir, runId, step, attempt }) {
+function collectStepProcessState({ runtime, step, attempt }) {
+  const topLevel = collectTopLevelRuntimeProcessState({ runtime, step });
+  if (topLevel) {
+    return topLevel;
+  }
+  const stateDir = runtime.stateDir;
+  const runId = runtime.run?.id;
+  if (!runId) {
+    return {
+      activeCount: 0,
+      stale: false,
+      active: [],
+      dead: [],
+      note: ""
+    };
+  }
   const entries = collectTrackedProcessEntries({ stateDir, runId, step, attempt });
   if (!entries.length) {
     return {
@@ -808,6 +824,43 @@ function collectStepProcessState({ stateDir, runId, step, attempt }) {
       ? `${dead[0].label} は終了しています。runtime の state が stale です。`
       : `${dead.length} 個の provider process はすでに終了しています。runtime の state が stale です。`
   };
+}
+
+function collectTopLevelRuntimeProcessState({ runtime, step }) {
+  const run = runtime.run;
+  const supervisor = runtime.supervisor;
+  if (!run?.id || run.status !== "running" || !supervisor || step.id !== run.current_step_id) {
+    return null;
+  }
+  if (supervisor.runId !== run.id) {
+    return null;
+  }
+  const pid = Number(supervisor.pid);
+  const label = String(supervisor.command || "runtime");
+  const baseEntry = Number.isInteger(pid) && pid > 0
+    ? [{ label, pid, alive: supervisor.status === "running", kind: "runtime" }]
+    : [];
+  if (supervisor.status === "running") {
+    return {
+      activeCount: 1,
+      stale: false,
+      scope: "runtime",
+      active: baseEntry.length > 0 ? baseEntry : [{ label, pid: null, alive: true, kind: "runtime" }],
+      dead: [],
+      note: `${label} が実行中です。`
+    };
+  }
+  if (supervisor.status === "stale") {
+    return {
+      activeCount: 0,
+      stale: true,
+      scope: "runtime",
+      active: [],
+      dead: baseEntry.length > 0 ? baseEntry : [{ label, pid: null, alive: false, kind: "runtime" }],
+      note: `${label} は終了しています。runtime の state が stale です。`
+    };
+  }
+  return null;
 }
 
 function collectTrackedProcessEntries({ stateDir, runId, step, attempt }) {
@@ -3762,10 +3815,13 @@ function renderHtml(initialState = null) {
         return String(entry?.label || 'process') + (Number.isInteger(pid) && pid > 0 ? ' #' + pid : '');
       });
       const suffix = entries.length > 3 ? ' +' + String(entries.length - 3) : '';
-      return (entries.length > 1 ? 'Processes: ' : 'Process: ') + labels.join(' / ') + suffix;
+      const prefix = processState.scope === 'runtime'
+        ? 'Runtime: '
+        : (entries.length > 1 ? 'Processes: ' : 'Process: ');
+      return prefix + labels.join(' / ') + suffix;
     }
     if (processState.stale) {
-      return 'Stale: ' + preferredText(processState.note, 'provider process は終了しています。');
+      return (processState.scope === 'runtime' ? 'Runtime stale: ' : 'Stale: ') + preferredText(processState.note, 'provider process は終了しています。');
     }
     return 'Process: active provider なし';
   }

@@ -60,10 +60,15 @@ export function ensureCanonicalFiles(repoPath, ticket = null) {
 }
 
 export function loadRuntime(repoPath, options = {}) {
+  reconcileRunSupervisor({
+    repoPath,
+    staleAfterMs: options.staleAfterMs
+  });
   if (options.normalizeStaleRunning === true) {
     normalizeStaleRunningRuntime(repoPath, options);
   }
   const repo = repoPath;
+  const stateDir = defaultStateDir(repo);
   const note = loadCurrentNote(repo);
   const run = note.pdh.current_step
     ? {
@@ -82,10 +87,11 @@ export function loadRuntime(repoPath, options = {}) {
   const flow = run ? loadFlow(run.flow_id) : loadFlow(note.pdh.flow ?? "pdh-ticket-core");
   return {
     repoPath: repo,
-    stateDir: defaultStateDir(repo),
+    stateDir,
     note,
     run,
-    flow
+    flow,
+    supervisor: loadRunSupervisor({ stateDir })
   };
 }
 
@@ -461,6 +467,102 @@ export function processRegistryPath(stateDir, runId) {
   return join(runDir(stateDir, runId), "process-registry.json");
 }
 
+export function runtimeSupervisorPath(stateDir) {
+  return join(stateDir, "runtime-supervisor.json");
+}
+
+export function loadRunSupervisor({ stateDir }) {
+  const supervisor = readJson(runtimeSupervisorPath(stateDir));
+  if (!supervisor || typeof supervisor !== "object") {
+    return null;
+  }
+  return {
+    command: supervisor.command ?? null,
+    repoPath: supervisor.repoPath ?? null,
+    runId: supervisor.runId ?? null,
+    stepId: supervisor.stepId ?? null,
+    pid: supervisor.pid ?? null,
+    status: supervisor.status ?? null,
+    startedAt: supervisor.startedAt ?? null,
+    finishedAt: supervisor.finishedAt ?? null,
+    exitCode: supervisor.exitCode ?? null,
+    signal: supervisor.signal ?? null,
+    staleReason: supervisor.staleReason ?? null
+  };
+}
+
+export function startRunSupervisor({ stateDir, repoPath, runId = null, stepId = null, command, pid }) {
+  const next = {
+    command,
+    repoPath,
+    runId,
+    stepId,
+    pid,
+    status: "running",
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    exitCode: null,
+    signal: null,
+    staleReason: null
+  };
+  writeJson(runtimeSupervisorPath(stateDir), next);
+  return next;
+}
+
+export function updateRunSupervisor({ stateDir, fields = {} }) {
+  const current = loadRunSupervisor({ stateDir });
+  if (!current) {
+    return null;
+  }
+  const next = {
+    ...current,
+    ...fields
+  };
+  writeJson(runtimeSupervisorPath(stateDir), next);
+  return next;
+}
+
+export function finishRunSupervisor({ stateDir, status = "exited", exitCode = null, signal = null }) {
+  const current = loadRunSupervisor({ stateDir });
+  if (!current) {
+    return null;
+  }
+  const next = {
+    ...current,
+    status,
+    finishedAt: new Date().toISOString(),
+    exitCode,
+    signal
+  };
+  writeJson(runtimeSupervisorPath(stateDir), next);
+  return next;
+}
+
+export function reconcileRunSupervisor({ repoPath, staleAfterMs = 15000 }) {
+  const stateDir = defaultStateDir(repoPath);
+  const current = loadRunSupervisor({ stateDir });
+  if (!current || current.status !== "running") {
+    return current;
+  }
+  const pid = Number(current.pid);
+  if (Number.isInteger(pid) && pid > 0 && pidIsAlive(pid)) {
+    return current;
+  }
+  const referenceIso = current.startedAt ?? null;
+  const referenceMs = referenceIso ? Date.parse(referenceIso) : NaN;
+  if (Number.isFinite(referenceMs) && Date.now() - referenceMs < staleAfterMs) {
+    return current;
+  }
+  const next = {
+    ...current,
+    status: "stale",
+    finishedAt: new Date().toISOString(),
+    staleReason: current.staleReason || "top-level runtime process is no longer alive"
+  };
+  writeJson(runtimeSupervisorPath(stateDir), next);
+  return next;
+}
+
 export function loadProcessRegistry({ stateDir, runId }) {
   const registry = readJson(processRegistryPath(stateDir, runId));
   if (!registry || !Array.isArray(registry.entries)) {
@@ -621,6 +723,11 @@ export function normalizeStaleRunningRuntime(repoPath, options = {}) {
   if (!run?.id || run.status !== "running" || !run.current_step_id) {
     return runtime;
   }
+  const supervisor = reconcileRunSupervisor({ repoPath, staleAfterMs });
+  const supervisorPid = Number(supervisor?.pid);
+  if (supervisor?.status === "running" && Number.isInteger(supervisorPid) && supervisorPid > 0 && pidIsAlive(supervisorPid)) {
+    return runtime;
+  }
   const step = getStep(runtime.flow, run.current_step_id);
   if (!step) {
     return runtime;
@@ -632,6 +739,26 @@ export function normalizeStaleRunningRuntime(repoPath, options = {}) {
     provider: step.mode === "review" ? null : step.provider
   });
   if (!latestAttempt || latestAttempt.status !== "running") {
+    if (supervisor?.status === "stale") {
+      const reason = `${step.id} stayed running after ${supervisor.command || "runtime"} exited.`;
+      updateRun(repoPath, {
+        status: "failed",
+        current_step_id: step.id
+      });
+      appendProgressEvent({
+        repoPath,
+        runId: run.id,
+        stepId: step.id,
+        type: "runtime_stale",
+        provider: "runtime",
+        message: `${step.id} stale running normalized to failed`,
+        payload: {
+          reason,
+          staleAfterMs
+        }
+      });
+      return loadRuntime(repoPath);
+    }
     return runtime;
   }
   const finishedEvent = latestFinishedStepEvent({

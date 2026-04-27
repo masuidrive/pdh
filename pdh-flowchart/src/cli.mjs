@@ -68,12 +68,15 @@ import {
   progressPath,
   readProgressEvents,
   registerTrackedProcess,
+  finishRunSupervisor,
   resetStepArtifacts,
   resolveHumanGate,
   saveRun,
+  startRunSupervisor,
   startRun,
   stepDir,
   updateRun,
+  updateRunSupervisor,
   updateHumanGateRecommendation,
   writeAttemptResult
 } from "./runtime-state.mjs";
@@ -314,90 +317,156 @@ async function cmdRunNext(argv) {
   }
 
   await withRuntimeLock({ repo, options, action: async () => {
-    const trace = [];
-    for (let count = 0; count < limit; count += 1) {
-      const runtime = requireRuntime(repo);
-      const { run, flow, stateDir } = runtime;
-      const step = getStep(flow, run.current_step_id);
+    await withRunSupervisor({ repo, command: "run-next", action: async (supervisor) => {
+      const trace = [];
+      for (let count = 0; count < limit; count += 1) {
+        const runtime = requireRuntime(repo);
+        supervisor.sync(runtime);
+        const { run, flow, stateDir } = runtime;
+        const step = getStep(flow, run.current_step_id);
 
-      if (run.status === "completed") {
-        console.log(JSON.stringify({ status: "completed", currentStepId: run.current_step_id, trace }, null, 2));
-        return;
-      }
-      if (run.status === "failed") {
-        printBlocked({
-          status: "failed",
-          stepId: step.id,
-          reason: "provider_failed",
-          provider: step.provider,
-          nextCommands: [statusCommand(repo), resumeCommand(repo)]
-        }, trace, options);
-        process.exitCode = 1;
-        return;
-      }
-
-      const interruptionBlock = blockIfOpenInterruption({ repo, runtime, step, options });
-      if (interruptionBlock) {
-        printBlocked(interruptionBlock, trace, options);
-        process.exitCode = interruptionBlock.status === "interrupted" ? 0 : 1;
-        return;
-      }
-
-      if (step.provider !== "runtime" && !hasCompletedProviderAttempt({ stateDir, runId: run.id, stepId: step.id, provider: step.provider })) {
-        if (options["manual-provider"] === "true") {
-          updateRun(repo, { status: "blocked", current_step_id: step.id });
-          const result = {
-            status: "blocked",
+        if (run.status === "completed") {
+          console.log(JSON.stringify({ status: "completed", currentStepId: run.current_step_id, trace }, null, 2));
+          return;
+        }
+        if (run.status === "failed") {
+          printBlocked({
+            status: "failed",
             stepId: step.id,
-            reason: "provider_step_requires_execution",
+            reason: "provider_failed",
             provider: step.provider,
-            nextCommand: nextProviderCommand(repo)
-          };
-          appendProgressEvent({
-            repoPath: repo,
-            runId: run.id,
-            stepId: step.id,
-            type: "blocked",
-            provider: "runtime",
-            message: `${step.id} provider_step_requires_execution`,
-            payload: result
-          });
-          syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [nextProviderCommand(repo)] });
-          trace.push(result);
-          printBlocked(result, trace, options);
+            nextCommands: [statusCommand(repo), resumeCommand(repo)]
+          }, trace, options);
+          process.exitCode = 1;
           return;
         }
 
-        trace.push({ status: "provider_started", stepId: step.id, provider: step.provider });
-        const providerResult = await executeProviderStep({ repo, runtime, step, options });
-        if (providerResult.status === "blocked") {
+        const interruptionBlock = blockIfOpenInterruption({ repo, runtime, step, options });
+        if (interruptionBlock) {
+          printBlocked(interruptionBlock, trace, options);
+          process.exitCode = interruptionBlock.status === "interrupted" ? 0 : 1;
+          return;
+        }
+
+        if (step.provider !== "runtime" && !hasCompletedProviderAttempt({ stateDir, runId: run.id, stepId: step.id, provider: step.provider })) {
+          if (options["manual-provider"] === "true") {
+            updateRun(repo, { status: "blocked", current_step_id: step.id });
+            const result = {
+              status: "blocked",
+              stepId: step.id,
+              reason: "provider_step_requires_execution",
+              provider: step.provider,
+              nextCommand: nextProviderCommand(repo)
+            };
+            appendProgressEvent({
+              repoPath: repo,
+              runId: run.id,
+              stepId: step.id,
+              type: "blocked",
+              provider: "runtime",
+              message: `${step.id} provider_step_requires_execution`,
+              payload: result
+            });
+            syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [nextProviderCommand(repo)] });
+            trace.push(result);
+            printBlocked(result, trace, options);
+            return;
+          }
+
+          trace.push({ status: "provider_started", stepId: step.id, provider: step.provider });
+          const providerResult = await executeProviderStep({ repo, runtime, step, options });
+          supervisor.sync();
+          if (providerResult.status === "blocked") {
+            const block = {
+              status: "blocked",
+              stepId: step.id,
+              reason: "review_rounds_exhausted",
+              provider: step.provider,
+              message: providerResult.result?.finalMessage ?? `${step.id} requires user intervention after repeated review rounds.`,
+              failureSummary: providerResult.failureSummary?.artifactPath ?? providerResult.failureSummary,
+              nextCommands: blockedStopCommands(repo, step.id)
+            };
+            trace.push(block);
+            printBlocked(block, trace, options);
+            return;
+          }
+          if (providerResult.status !== "completed") {
+            trace.push({ status: "failed", stepId: step.id, provider: step.provider });
+            printProviderResult({ repo, runtime: requireRuntime(repo), step, result: providerResult, options, trace });
+            process.exitCode = 1;
+            return;
+          }
+          continue;
+        }
+
+        if (isHumanGateStep(step)) {
+          const gate = latestHumanGate({ stateDir, runId: run.id, stepId: step.id });
+          if (!gate || gate.status === "needs_human") {
+            const summary = ensureGateSummary({ repo, runtime, step });
+            updateRun(repo, { status: "needs_human", current_step_id: step.id });
+            supervisor.sync();
+            syncStepUiRuntime({ repo, stepId: step.id, nextCommands: humanStopCommands(repo, step.id) });
+            const result = {
+              status: "needs_human",
+              stepId: step.id,
+              summary: summary.artifactPath,
+              nextCommands: humanStopCommands(repo, step.id)
+            };
+            trace.push(result);
+            console.log(JSON.stringify({ ...result, trace }, null, 2));
+            return;
+          }
+        }
+
+        const gate = isHumanGateStep(step) ? latestHumanGate({ stateDir, runId: run.id, stepId: step.id }) : null;
+        hydrateStepArtifactsBeforeGuards({ repo, runtime, step });
+        const guardResults = evaluateCurrentGuards({ repo, runtime, step, gate });
+        const failed = guardResults.filter((guard) => guard.status === "failed");
+        if (failed.length > 0) {
+          const guardRepair = await maybeAutoRepairReviewGuards({
+            repo,
+            runtime,
+            step,
+            failedGuards: failed,
+            options
+          });
+          supervisor.sync();
+          if (guardRepair?.status === "repaired") {
+            trace.push({
+              status: "guard_repaired",
+              stepId: step.id,
+              repairedGuards: guardRepair.repairedGuards,
+              rounds: guardRepair.rounds
+            });
+            continue;
+          }
+          updateRun(repo, { status: "blocked", current_step_id: step.id });
+          supervisor.sync();
+          const message = describeGuardFailureMessage(failed);
+          const summary = createFailureSummaryForBlock({ repo, runtime, step, failedGuards: failed, message });
+          syncStepUiRuntime({ repo, stepId: step.id, guardResults, nextCommands: blockedStopCommands(repo, step.id) });
           const block = {
             status: "blocked",
             stepId: step.id,
-            reason: "review_rounds_exhausted",
+            reason: "guard_failed",
             provider: step.provider,
-            message: providerResult.result?.finalMessage ?? `${step.id} requires user intervention after repeated review rounds.`,
-            failureSummary: providerResult.failureSummary?.artifactPath ?? providerResult.failureSummary,
+            message,
+            failedGuards: failed,
+            failureSummary: summary.artifactPath,
             nextCommands: blockedStopCommands(repo, step.id)
           };
           trace.push(block);
           printBlocked(block, trace, options);
           return;
         }
-        if (providerResult.status !== "completed") {
-          trace.push({ status: "failed", stepId: step.id, provider: step.provider });
-          printProviderResult({ repo, runtime: requireRuntime(repo), step, result: providerResult, options, trace });
-          process.exitCode = 1;
-          return;
-        }
-        continue;
-      }
 
-      if (isHumanGateStep(step)) {
-        const gate = latestHumanGate({ stateDir, runId: run.id, stepId: step.id });
-        if (!gate || gate.status === "needs_human") {
+        const outcome = isHumanGateStep(step)
+          ? outcomeFromDecision(gate?.decision)
+          : "success";
+        if (!outcome) {
           const summary = ensureGateSummary({ repo, runtime, step });
           updateRun(repo, { status: "needs_human", current_step_id: step.id });
+          supervisor.sync();
           syncStepUiRuntime({ repo, stepId: step.id, nextCommands: humanStopCommands(repo, step.id) });
           const result = {
             status: "needs_human",
@@ -409,86 +478,29 @@ async function cmdRunNext(argv) {
           console.log(JSON.stringify({ ...result, trace }, null, 2));
           return;
         }
-      }
 
-      const gate = isHumanGateStep(step) ? latestHumanGate({ stateDir, runId: run.id, stepId: step.id }) : null;
-      hydrateStepArtifactsBeforeGuards({ repo, runtime, step });
-      const guardResults = evaluateCurrentGuards({ repo, runtime, step, gate });
-      const failed = guardResults.filter((guard) => guard.status === "failed");
-      if (failed.length > 0) {
-        const guardRepair = await maybeAutoRepairReviewGuards({
-          repo,
-          runtime,
-          step,
-          failedGuards: failed,
-          options
-        });
-        if (guardRepair?.status === "repaired") {
-          trace.push({
-            status: "guard_repaired",
-            stepId: step.id,
-            repairedGuards: guardRepair.repairedGuards,
-            rounds: guardRepair.rounds
-          });
-          continue;
+        const advanced = advanceRun({ repo, runtime, step, outcome });
+        supervisor.sync();
+        trace.push(advanced);
+        if (advanced.status === "completed") {
+          console.log(JSON.stringify({ ...advanced, trace }, null, 2));
+          return;
         }
-        updateRun(repo, { status: "blocked", current_step_id: step.id });
-        const message = describeGuardFailureMessage(failed);
-        const summary = createFailureSummaryForBlock({ repo, runtime, step, failedGuards: failed, message });
-        syncStepUiRuntime({ repo, stepId: step.id, guardResults, nextCommands: blockedStopCommands(repo, step.id) });
-        const block = {
-          status: "blocked",
-          stepId: step.id,
-          reason: "guard_failed",
-          provider: step.provider,
-          message,
-          failedGuards: failed,
-          failureSummary: summary.artifactPath,
-          nextCommands: blockedStopCommands(repo, step.id)
-        };
-        trace.push(block);
-        printBlocked(block, trace, options);
-        return;
+        if (stopAfterStep) {
+          printStoppedAfterStep({
+            completedStepId: step.id,
+            nextStep: getStep(flow, advanced.to),
+            repo,
+            trace,
+            options
+          });
+          return;
+        }
       }
 
-      const outcome = isHumanGateStep(step)
-        ? outcomeFromDecision(gate?.decision)
-        : "success";
-      if (!outcome) {
-        const summary = ensureGateSummary({ repo, runtime, step });
-        updateRun(repo, { status: "needs_human", current_step_id: step.id });
-        syncStepUiRuntime({ repo, stepId: step.id, nextCommands: humanStopCommands(repo, step.id) });
-        const result = {
-          status: "needs_human",
-          stepId: step.id,
-          summary: summary.artifactPath,
-          nextCommands: humanStopCommands(repo, step.id)
-        };
-        trace.push(result);
-        console.log(JSON.stringify({ ...result, trace }, null, 2));
-        return;
-      }
-
-      const advanced = advanceRun({ repo, runtime, step, outcome });
-      trace.push(advanced);
-      if (advanced.status === "completed") {
-        console.log(JSON.stringify({ ...advanced, trace }, null, 2));
-        return;
-      }
-      if (stopAfterStep) {
-        printStoppedAfterStep({
-          completedStepId: step.id,
-          nextStep: getStep(flow, advanced.to),
-          repo,
-          trace,
-          options
-        });
-        return;
-      }
-    }
-
-    printBlocked({ status: "blocked", reason: "limit_reached", limit }, [], options);
-    process.exitCode = 1;
+      printBlocked({ status: "blocked", reason: "limit_reached", limit }, [], options);
+      process.exitCode = 1;
+    } });
   } });
 }
 
@@ -496,26 +508,30 @@ async function cmdRunProvider(argv) {
   const options = parseOptions(argv);
   const repo = resolve(options.repo ?? process.cwd());
   await withRuntimeLock({ repo, options, action: async () => {
-    const runtime = requireRuntime(repo);
-    const stepId = options.step ?? runtime.run.current_step_id;
-    assertCurrentStep(runtime.run, stepId, options);
-    const step = getStep(runtime.flow, stepId);
-    const interruptionBlock = blockIfOpenInterruption({ repo, runtime, step, options });
-    if (interruptionBlock) {
-      printBlocked(interruptionBlock, [], options);
-      process.exitCode = 1;
-      return;
-    }
-    const result = await executeProviderStep({ repo, runtime, step, options });
-    printProviderResult({ repo, runtime: requireRuntime(repo), step, result, options, trace: [] });
-    if (result.status !== "completed") {
-      process.exitCode = 1;
-    }
+    await withRunSupervisor({ repo, command: options["supervisor-command"] ?? "run-provider", action: async (supervisor) => {
+      const runtime = requireRuntime(repo);
+      supervisor.sync(runtime);
+      const stepId = options.step ?? runtime.run.current_step_id;
+      assertCurrentStep(runtime.run, stepId, options);
+      const step = getStep(runtime.flow, stepId);
+      const interruptionBlock = blockIfOpenInterruption({ repo, runtime, step, options });
+      if (interruptionBlock) {
+        printBlocked(interruptionBlock, [], options);
+        process.exitCode = 1;
+        return;
+      }
+      const result = await executeProviderStep({ repo, runtime, step, options });
+      supervisor.sync();
+      printProviderResult({ repo, runtime: requireRuntime(repo), step, result, options, trace: [] });
+      if (result.status !== "completed") {
+        process.exitCode = 1;
+      }
+    } });
   } });
 }
 
 async function cmdResume(argv) {
-  await cmdRunProvider([...argv, "--resume", "latest"]);
+  await cmdRunProvider([...argv, "--resume", "latest", "--supervisor-command", "resume"]);
 }
 
 async function cmdPrompt(argv) {
@@ -3730,6 +3746,40 @@ function requireRuntime(repo) {
     throw new Error("No active run found in current-note.md");
   }
   return runtime;
+}
+
+async function withRunSupervisor({ repo, command, action }) {
+  const stateDir = defaultStateDir(repo);
+  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
+  startRunSupervisor({
+    stateDir,
+    repoPath: repo,
+    runId: runtime.run?.id ?? null,
+    stepId: runtime.run?.current_step_id ?? null,
+    command,
+    pid: process.pid
+  });
+  const supervisor = {
+    sync(snapshot = null) {
+      const current = snapshot ?? loadRuntime(repo, { normalizeStaleRunning: false });
+      updateRunSupervisor({
+        stateDir,
+        fields: {
+          runId: current.run?.id ?? null,
+          stepId: current.run?.current_step_id ?? null
+        }
+      });
+    }
+  };
+  try {
+    return await action(supervisor);
+  } finally {
+    finishRunSupervisor({
+      stateDir,
+      status: "exited",
+      exitCode: Number.isInteger(process.exitCode) ? process.exitCode : 0
+    });
+  }
 }
 
 async function withRuntimeLock({ repo, options = {}, action }) {

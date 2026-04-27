@@ -646,6 +646,7 @@ function buildTicketAssistPrompt({ repoPath, ticketId, ticketPaths, readFirst, t
     "- Discuss this specific ticket with the user in this terminal.",
     "- Ground your guidance in the target ticket file, its note file, and the product brief if present.",
     "- Do not start the ticket yourself; request a start and let the UI ask for approval.",
+    "- If the user chooses Keep Editing or asks to revise the recommendation, you may issue a fresh ticket-start-request later in the same session. The latest pending request replaces the older one.",
     "- If the user only wants discussion, do not request a start yet."
   ].filter(Boolean);
   return `${lines.join("\n")}\n`;

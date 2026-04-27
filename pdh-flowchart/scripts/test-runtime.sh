@@ -259,16 +259,36 @@ write_fake_codex_guard_repair() {
 prompt="$(cat || true)"
 repair_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*repair.yaml\)`\.$/\1/p' | head -1)"
 if [ -n "$repair_path" ]; then
-  cat >>current-note.md <<'MD'
-
-## AC 裏取り結果
-
-| item | classification | status | evidence | deferral ticket |
-| --- | --- | --- | --- | --- |
-| parentheses success case | functional | verified | scripts/test-all.sh covers committed parentheses success paths | - |
-| malformed parentheses failure case | edge-case | verified | scripts/test-all.sh asserts exit status 2 and `error:` prefix for malformed parentheses | - |
-
-MD
+  node --input-type=module <<'NODE'
+import { readFileSync, writeFileSync } from "node:fs";
+const path = "current-note.md";
+const replacementLines = [
+  "## AC 裏取り結果",
+  "",
+  "| item | classification | status | evidence | deferral ticket |",
+  "| --- | --- | --- | --- | --- |",
+  "| addition success case | functional | verified | scripts/test-all.sh covers the baseline addition example from current-ticket.md | - |",
+  "| parentheses success case | functional | verified | scripts/test-all.sh covers committed parentheses success paths | - |",
+  "| malformed parentheses failure case | edge-case | verified | scripts/test-all.sh asserts exit status 2 and `error:` prefix for malformed parentheses | - |",
+  ""
+];
+const text = readFileSync(path, "utf8");
+const lines = text.split(/\r?\n/);
+const start = lines.findIndex((line) => line.trim() === "## AC 裏取り結果");
+if (start >= 0) {
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##\s/.test(lines[index])) {
+      end = index;
+      break;
+    }
+  }
+  lines.splice(start, end - start, ...replacementLines);
+  writeFileSync(path, lines.join("\n"));
+} else {
+  writeFileSync(path, `${text.trimEnd()}\n\n${replacementLines.join("\n")}\n`);
+}
+NODE
   mkdir -p "$(dirname "$repair_path")"
   cat >"$repair_path" <<'YAML'
 summary: added the AC verification table required by the guard
@@ -451,12 +471,12 @@ test_review_guard_auto_repair() {
   fake_codex="$(write_fake_codex_guard_repair)"
   CLAUDE_BIN="$fake_claude" CODEX_BIN="$fake_codex" \
     node "$ROOT/src/cli.mjs" run-next --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.review-guard-repair.txt"
-  grep -q "PD-C-9" "$TMP_ROOT/$run_id.review-guard-repair.txt"
+  grep -q "PD-C-10" "$TMP_ROOT/$run_id.review-guard-repair.txt"
   grep -q "## AC 裏取り結果" "$repo/current-note.md"
   test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-8/review-rounds/round-2/repair.yaml"
   test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-8/step-commit.json"
   node "$ROOT/src/cli.mjs" status --repo "$repo" >"$TMP_ROOT/$run_id.review-guard-status.txt"
-  grep -q "Current Step: PD-C-9" "$TMP_ROOT/$run_id.review-guard-status.txt"
+  grep -q "Current Step: PD-C-10" "$TMP_ROOT/$run_id.review-guard-status.txt"
 }
 
 test_failed_run() {
@@ -497,6 +517,20 @@ test_stale_normalization_respects_step_finished() {
   repo="$(seed_repo stale-normalization-finished)"
   run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-8 | sed -n '1p')"
   node --input-type=module -e "import { appendProgressEvent, defaultStateDir, loadRuntime, updateRun, writeAttemptResult, latestAttemptResult } from '$ROOT/src/runtime-state.mjs'; const repo = '$repo'; const runId = '$run_id'; const stateDir = defaultStateDir(repo); writeAttemptResult({ stateDir, runId, stepId: 'PD-C-8', attempt: 1, result: { provider: 'claude', status: 'running', pid: null, exitCode: null, finalMessage: null, stderr: '', timedOut: false, timeoutKind: null, signal: null, sessionId: null, resumeToken: null, rawLogPath: 'raw', startedAt: '2026-04-27T00:00:00.000Z', lastEventAt: '2026-04-27T00:00:00.000Z' } }); appendProgressEvent({ repoPath: repo, runId, stepId: 'PD-C-8', attempt: 1, type: 'step_finished', provider: 'runtime', message: 'PD-C-8 completed', payload: { finalMessage: 'done' } }); updateRun(repo, { status: 'running', current_step_id: 'PD-C-8' }); loadRuntime(repo, { normalizeStaleRunning: true, staleAfterMs: 0 }); const runtime = loadRuntime(repo); const latest = latestAttemptResult({ stateDir, runId, stepId: 'PD-C-8', provider: null }); if (runtime.run.status !== 'running') throw new Error('run status should stay running'); if (latest.status !== 'completed') throw new Error('attempt should be normalized to completed');"
+}
+
+test_supervisor_running_blocks_stale_normalization() {
+  local repo run_id
+  repo="$(seed_repo supervisor-running)"
+  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-2 | sed -n '1p')"
+  node --input-type=module -e "import { defaultStateDir, loadRuntime, startRunSupervisor } from '$ROOT/src/runtime-state.mjs'; const repo = '$repo'; const stateDir = defaultStateDir(repo); startRunSupervisor({ stateDir, repoPath: repo, runId: '$run_id', stepId: 'PD-C-2', command: 'run-next', pid: process.pid }); const runtime = loadRuntime(repo, { normalizeStaleRunning: true, staleAfterMs: 0 }); if (runtime.run.status !== 'running') throw new Error('supervisor-backed run should stay running'); if (runtime.supervisor?.status !== 'running') throw new Error('supervisor should stay running');"
+}
+
+test_supervisor_stale_without_attempt_fails_run() {
+  local repo run_id
+  repo="$(seed_repo supervisor-stale)"
+  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-2 | sed -n '1p')"
+  node --input-type=module -e "import { defaultStateDir, loadRuntime, startRunSupervisor } from '$ROOT/src/runtime-state.mjs'; const repo = '$repo'; const stateDir = defaultStateDir(repo); startRunSupervisor({ stateDir, repoPath: repo, runId: '$run_id', stepId: 'PD-C-2', command: 'run-next', pid: 999999 }); const runtime = loadRuntime(repo, { normalizeStaleRunning: true, staleAfterMs: 0 }); if (runtime.run.status !== 'failed') throw new Error('stale supervisor should fail the run'); if (runtime.supervisor?.status !== 'stale') throw new Error('supervisor should be stale');"
 }
 
 test_resumed_run() {
@@ -725,6 +759,8 @@ test_failed_run
 test_auto_resume_after_idle_timeout
 test_review_guard_auto_repair
 test_stale_normalization_respects_step_finished
+test_supervisor_running_blocks_stale_normalization
+test_supervisor_stale_without_attempt_fails_run
 test_resumed_run
 test_interrupted_run
 test_assist_gate_flow
