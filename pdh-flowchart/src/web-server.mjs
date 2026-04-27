@@ -274,7 +274,7 @@ function acceptRecommendationFromWeb({ repo, stepId }) {
 }
 
 function approveGateFromWeb({ repo, stepId }) {
-  const approved = runCliJson({
+  const approved = runCliText({
     repo,
     args: ["approve", "--repo", repo, "--step", stepId, "--reason", "ok"]
   });
@@ -283,7 +283,8 @@ function approveGateFromWeb({ repo, stepId }) {
     args: ["run-next", "--repo", repo]
   });
   return {
-    ...approved,
+    status: "ok",
+    approved,
     runNextStarted: true,
     runNextPid
   };
@@ -306,6 +307,20 @@ function applyAssistSignalFromWeb({ repo, stepId }) {
 }
 
 function runCliJson({ repo, args, timeoutMs = 30000 }) {
+  const result = runCli({ repo, args, timeoutMs });
+  const text = String(result.stdout || "").trim();
+  if (!text) {
+    return {};
+  }
+  return parseCliJsonOutput(text);
+}
+
+function runCliText({ repo, args, timeoutMs = 30000 }) {
+  const result = runCli({ repo, args, timeoutMs });
+  return String(result.stdout || "").trim();
+}
+
+function runCli({ repo, args, timeoutMs = 30000 }) {
   const result = spawnSync(process.execPath, [CLI_PATH, ...args], {
     cwd: repo,
     encoding: "utf8",
@@ -321,11 +336,7 @@ function runCliJson({ repo, args, timeoutMs = 30000 }) {
     error.statusCode = result.status === 1 ? 409 : 500;
     throw error;
   }
-  const text = String(result.stdout || "").trim();
-  if (!text) {
-    return {};
-  }
-  return parseCliJsonOutput(text);
+  return result;
 }
 
 function parseCliJsonOutput(text) {
