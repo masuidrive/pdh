@@ -3173,7 +3173,7 @@ function renderHtml(initialState = null) {
     <div class="main">
       <section class="panel-left">
         <div class="section-head">
-          <div class="section-title">PD-C: Ticket 開発<span class="subtitle">ステップ詳細</span></div>
+          <div class="section-title" id="left-flow-variant">Flow: Full</div>
         </div>
         <div class="flow-container"><div class="pdc-list" id="pdc-list"></div></div>
       </section>
@@ -4809,7 +4809,9 @@ function renderHtml(initialState = null) {
       '<span class="sep">/</span>' +
       '<span class="current">' + esc(data.runtime.run?.ticket_id || 'no-ticket') + '</span>';
 
-    const variant = (data.flow.activeVariant || 'full').toUpperCase();
+    const activeVariant = data.flow.activeVariant || 'full';
+    const variant = activeVariant.toUpperCase();
+    const leftVariant = activeVariant.charAt(0).toUpperCase() + activeVariant.slice(1);
     const status = data.runtime.run?.status || 'idle';
     const waitingClass = status === 'failed'
       ? 'waiting-indicator critical'
@@ -4819,6 +4821,10 @@ function renderHtml(initialState = null) {
     const indicatorText = current
       ? current.id + ' ' + current.label + ' · ' + status
       : '未開始';
+    const leftFlowVariant = document.getElementById('left-flow-variant');
+    if (leftFlowVariant) {
+      leftFlowVariant.textContent = 'Flow: ' + leftVariant;
+    }
     document.getElementById('header-right').innerHTML =
       '<span class="flow-badge">Flow: ' + esc(variant) + '</span>' +
       '<span class="' + waitingClass + '"><span class="waiting-dot"></span>' + esc(indicatorText) + '</span>';
