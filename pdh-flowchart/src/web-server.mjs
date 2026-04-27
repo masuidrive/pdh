@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { URL, fileURLToPath } from "node:url";
 import { renderMermaidSVG } from "beautiful-mermaid";
 import { parse as parseYaml } from "yaml";
-import { loadLatestAssistSignal } from "./assist-runtime.mjs";
+import { clearTicketStartRequest, loadLatestAssistSignal, loadPendingTicketStartRequests } from "./assist-runtime.mjs";
 import { createAssistTerminalManager } from "./assist-terminal.mjs";
 import { evaluateAcVerificationTable } from "./ac-verification.mjs";
 import { buildFlowView, getStep, nextStep, renderMermaidFlow } from "./flow.mjs";
@@ -331,6 +331,7 @@ function startTicketFromWeb({ repo, ticketId, variant = "full" }) {
     repo,
     args: ["run", "--repo", repo, "--ticket", ticketId, "--variant", variant, "--force-reset"]
   });
+  clearTicketStartRequest({ repoPath: repo, ticketId });
   const runNextPid = spawnBackgroundCli({
     repo,
     args: ["run-next", "--repo", repo]
@@ -351,9 +352,7 @@ function openTicketTerminalFromWeb({ repo, ticketId, assistTerminalManager }) {
     throw error;
   }
   return assistTerminalManager.openTicketSession({
-    ticketId,
-    ticketPath: ticket.path || null,
-    notePath: ticket.notePath || null
+    ticketId
   });
 }
 
@@ -491,6 +490,7 @@ function collectState({ repo }) {
     },
     git: gitState(repo, redactor),
     tickets,
+    ticketRequests: loadPendingTicketStartRequests({ repoPath: repo }),
     files: {
       note: join(repo, "current-note.md"),
       ticket: join(repo, "current-ticket.md"),
@@ -3592,8 +3592,10 @@ function renderHtml(initialState = null) {
       socket: null,
       baselineRecommendationId: null,
       baselineSignalId: null,
+      baselineTicketRequestId: null,
       dismissedRecommendationId: null,
       dismissedSignalId: null,
+      dismissedTicketRequestId: null,
       confirmation: null,
       autoOpenKey: null,
       dismissedAutoOpenKey: null,
@@ -4976,6 +4978,13 @@ function renderHtml(initialState = null) {
     return signal;
   }
 
+  function currentTicketStartRequest() {
+    if (!state.assist.open || state.assist.kind !== 'ticket' || !state.assist.ticketId || !state.data) {
+      return null;
+    }
+    return listOf(state.data.ticketRequests).find((item) => item.ticket_id === state.assist.ticketId && item.status === 'pending') || null;
+  }
+
   function currentStopAssistKey() {
     if (!state.data?.runtime?.currentStep?.id) {
       return null;
@@ -5079,9 +5088,9 @@ function renderHtml(initialState = null) {
     return lines;
   }
 
-  function ticketTerminalPreludeLines(ticketId) {
+  function ticketAssistPreludeLines(ticketId) {
     const ticket = listOf(state.data?.tickets).find((item) => item.id === ticketId) || null;
-    const lines = ['[terminal] ticket terminal opened'];
+    const lines = ['[terminal] chooser assist opened'];
     if (ticketId) {
       lines.push('[terminal] ticket: ' + ticketId);
     }
@@ -5091,7 +5100,7 @@ function renderHtml(initialState = null) {
     if (ticket?.notePath) {
       lines.push('[terminal] work notes: ' + ticket.notePath);
     }
-    lines.push('[terminal] running ./ticket.sh first, then leaving you in a repo shell.');
+    lines.push('[terminal] this is an assist session for ticket review and start requests.');
     return lines;
   }
 
@@ -5203,12 +5212,30 @@ function renderHtml(initialState = null) {
   }
 
   function syncAssistConfirmation() {
-    if (state.assist.kind !== 'assist') {
+    if (!state.assist.open) {
       state.assist.confirmation = null;
       return;
     }
-    if (!state.assist.open) {
-      state.assist.confirmation = null;
+    if (state.assist.kind === 'ticket') {
+      const request = currentTicketStartRequest();
+      if (!request) {
+        if (!state.assist.confirmation?.submitting) {
+          state.assist.confirmation = null;
+        }
+        return;
+      }
+      if (state.assist.confirmation?.id === request.id) {
+        return;
+      }
+      if (request.id === state.assist.baselineTicketRequestId || request.id === state.assist.dismissedTicketRequestId) {
+        return;
+      }
+      state.assist.confirmation = {
+        id: request.id,
+        kind: 'ticket-start-request',
+        request,
+        submitting: false
+      };
       return;
     }
     const recommendation = currentAssistRecommendation();
@@ -5604,8 +5631,10 @@ function renderHtml(initialState = null) {
     state.assist.promptDrawerOpen = false;
     state.assist.baselineRecommendationId = null;
     state.assist.baselineSignalId = null;
+    state.assist.baselineTicketRequestId = null;
     state.assist.dismissedRecommendationId = null;
     state.assist.dismissedSignalId = null;
+    state.assist.dismissedTicketRequestId = null;
     state.assist.confirmation = null;
     if (stopKey && !suppressAutoOpenDismissal) {
       state.assist.dismissedAutoOpenKey = stopKey;
@@ -5622,7 +5651,7 @@ function renderHtml(initialState = null) {
       return 'idle';
     }
     if (state.assist.kind === 'ticket') {
-      return state.assist.ticketId ? state.assist.ticketId + ' shell' : 'shell';
+      return state.assist.ticketId ? state.assist.ticketId + ' assist' : 'assist';
     }
     if (state.assist.status === 'running') {
       return state.assist.stepId ? state.assist.stepId + ' running' : 'running';
@@ -5716,6 +5745,11 @@ function renderHtml(initialState = null) {
       confirmTitle.textContent = recommendationLabel(recommendation, state.assist.stepId).replace(/\\s*\\(.*/, '') + 'しますか？';
       confirmBody.textContent = recommendationAcceptText(recommendation, state.assist.stepId) + '\\nOK を押すと assist terminal を閉じて、runtime がこの recommendation を適用します。';
       confirmReason.textContent = recommendation.reason ? 'Reason: ' + recommendation.reason : '';
+    } else if (state.assist.confirmation.kind === 'ticket-start-request') {
+      const request = state.assist.confirmation.request;
+      confirmTitle.textContent = 'チケット開始しますか？';
+      confirmBody.textContent = (request?.ticket_id || 'ticket') + ' の PD-C を開始します。OK を押すと assist terminal を閉じて、runtime が開始します。';
+      confirmReason.textContent = request?.reason ? 'Reason: ' + request.reason : '';
     } else {
       const signal = state.assist.confirmation.signalEntry;
       confirmTitle.textContent = (state.assist.stepId || 'Current step') + ' を再実行しますか？';
@@ -6048,7 +6082,7 @@ function renderHtml(initialState = null) {
   async function openTicketTerminal(ticketId) {
     state.assist.open = true;
     state.assist.kind = 'ticket';
-    state.assist.title = 'Ticket Terminal';
+    state.assist.title = 'Claude Assist';
     state.assist.stepId = null;
     state.assist.ticketId = ticketId;
     state.assist.sessionId = null;
@@ -6059,15 +6093,17 @@ function renderHtml(initialState = null) {
     state.assist.promptDrawerOpen = false;
     state.assist.baselineRecommendationId = null;
     state.assist.baselineSignalId = null;
+    state.assist.baselineTicketRequestId = currentTicketStartRequest()?.id || null;
     state.assist.dismissedRecommendationId = null;
     state.assist.dismissedSignalId = null;
+    state.assist.dismissedTicketRequestId = null;
     state.assist.confirmation = null;
     renderAssistModal();
     const terminal = ensureAssistTerminal();
     terminal.reset();
-    ticketTerminalPreludeLines(ticketId).forEach((line) => terminal.writeln(line));
+    ticketAssistPreludeLines(ticketId).forEach((line) => terminal.writeln(line));
     terminal.writeln('');
-    terminal.writeln('[opening ticket terminal]');
+    terminal.writeln('[opening chooser assist]');
     focusAssistTerminal();
     const response = await fetch('/api/ticket/terminal?ticket=' + encodeURIComponent(ticketId), {
       method: 'POST',
@@ -6075,16 +6111,16 @@ function renderHtml(initialState = null) {
     });
     const payload = await response.json();
     if (!response.ok) {
-      terminal.writeln('[ticket terminal open failed] ' + (payload.message || payload.error || 'unknown error'));
+      terminal.writeln('[chooser assist open failed] ' + (payload.message || payload.error || 'unknown error'));
       throw new Error(payload.message || payload.error || 'ticket_terminal_failed');
     }
     if (!payload.reused) {
       terminal.reset();
-      ticketTerminalPreludeLines(ticketId).forEach((line) => terminal.writeln(line));
+      ticketAssistPreludeLines(ticketId).forEach((line) => terminal.writeln(line));
       terminal.writeln('');
     }
     state.assist.kind = payload.kind || 'ticket';
-    state.assist.title = payload.title || 'Ticket Terminal';
+    state.assist.title = payload.title || 'Claude Assist';
     state.assist.ticketId = payload.ticketId || ticketId;
     state.assist.sessionId = payload.sessionId;
     state.assist.status = payload.status || 'running';
@@ -6098,6 +6134,8 @@ function renderHtml(initialState = null) {
     }
     if (state.assist.confirmation.kind === 'recommendation') {
       state.assist.dismissedRecommendationId = state.assist.confirmation.id;
+    } else if (state.assist.confirmation.kind === 'ticket-start-request') {
+      state.assist.dismissedTicketRequestId = state.assist.confirmation.id;
     } else {
       state.assist.dismissedSignalId = state.assist.confirmation.id;
     }
@@ -6116,9 +6154,15 @@ function renderHtml(initialState = null) {
       submitting: true
     };
     renderAssistModal();
-    const path = state.assist.confirmation.kind === 'recommendation'
-      ? '/api/recommendation/accept?step=' + encodeURIComponent(stepId)
-      : '/api/assist/apply?step=' + encodeURIComponent(stepId);
+    let path = '';
+    if (state.assist.confirmation.kind === 'recommendation') {
+      path = '/api/recommendation/accept?step=' + encodeURIComponent(stepId);
+    } else if (state.assist.confirmation.kind === 'ticket-start-request') {
+      const request = state.assist.confirmation.request || {};
+      path = '/api/ticket/start?ticket=' + encodeURIComponent(request.ticket_id || state.assist.ticketId || '') + '&variant=' + encodeURIComponent(request.variant || 'full');
+    } else {
+      path = '/api/assist/apply?step=' + encodeURIComponent(stepId);
+    }
     const response = await fetch(path, {
       method: 'POST',
       cache: 'no-store'
@@ -6134,6 +6178,8 @@ function renderHtml(initialState = null) {
     }
     if (state.assist.confirmation.kind === 'recommendation') {
       state.assist.dismissedRecommendationId = state.assist.confirmation.id;
+    } else if (state.assist.confirmation.kind === 'ticket-start-request') {
+      state.assist.dismissedTicketRequestId = state.assist.confirmation.id;
     } else {
       state.assist.dismissedSignalId = state.assist.confirmation.id;
     }

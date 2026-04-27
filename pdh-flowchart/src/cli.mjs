@@ -21,10 +21,14 @@ import { appendStepHistoryEntry, loadCurrentNote, saveCurrentNote } from "./note
 import {
   allowedAssistSignals,
   appendAssistSignal,
+  appendTicketStartRequest,
+  clearTicketStartRequest,
   loadLatestAssistSignal,
   markAssistSessionFinished,
   markAssistSessionStarted,
   prepareAssistSession,
+  prepareTicketAssistSession,
+  ticketAssistSessionPath,
   updateLatestAssistSignal
 } from "./assist-runtime.mjs";
 import {
@@ -131,8 +135,12 @@ try {
     await cmdAnswer(args);
   } else if (command === "assist-open") {
     await cmdAssistOpen(args);
+  } else if (command === "ticket-assist-open") {
+    await cmdTicketAssistOpen(args);
   } else if (command === "assist-signal") {
     await cmdAssistSignal(args);
+  } else if (command === "ticket-start-request") {
+    await cmdTicketStartRequest(args);
   } else if (command === "apply-assist-signal") {
     await cmdApplyAssistSignal(args);
   } else if (command === "accept-recommendation") {
@@ -186,7 +194,9 @@ Usage:
   pdh-flowchart interrupt [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6]
   pdh-flowchart answer [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6]
   pdh-flowchart assist-open [--repo DIR] [--step PD-C-5] [--prepare-only] [--model MODEL] [--bare]
+  pdh-flowchart ticket-assist-open [--repo DIR] --ticket TICKET [--prepare-only] [--model MODEL] [--bare] [--variant full|light]
   pdh-flowchart assist-signal [--repo DIR] [--step PD-C-5] --signal recommend-approve|recommend-request-changes|recommend-reject|recommend-rerun-from|answer|continue [--reason TEXT] [--target-step PD-C-4] [--message TEXT] [--file FILE] [--no-run-next]
+  pdh-flowchart ticket-start-request [--repo DIR] --ticket TICKET [--variant full|light] [--reason TEXT]
   pdh-flowchart apply-assist-signal [--repo DIR] [--step PD-C-4] [--no-run-next]
   pdh-flowchart accept-recommendation [--repo DIR] [--step PD-C-5] [--no-run-next]
   pdh-flowchart decline-recommendation [--repo DIR] [--step PD-C-5] [--reason TEXT]
@@ -853,6 +863,73 @@ async function cmdAssistOpen(argv) {
   }
 }
 
+async function cmdTicketAssistOpen(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  loadDotEnv();
+  const ticketId = required(options, "ticket");
+  const variant = options.variant ?? "full";
+  const prepared = prepareTicketAssistSession({
+    repoPath: repo,
+    ticketId,
+    variant,
+    bare: options.bare === "true",
+    model: options.model ?? null
+  });
+  const args = buildAssistClaudeArgs({
+    prepared,
+    model: options.model ?? null,
+    bare: options.bare === "true"
+  });
+
+  if (options["prepare-only"] === "true") {
+    console.log(JSON.stringify({
+      sessionId: prepared.sessionId,
+      manifestPath: prepared.manifestPath,
+      promptPath: prepared.promptPath,
+      systemPromptPath: prepared.systemPromptPath,
+      wrappers: {
+        ticketStartRequest: prepared.wrappers.ticketStartRequestScriptPath,
+        test: prepared.wrappers.testScriptPath
+      },
+      command: [process.env.CLAUDE_BIN || "claude", ...args]
+    }, null, 2));
+    return;
+  }
+
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error("ticket-assist-open needs a TTY. Use --prepare-only for non-interactive use.");
+  }
+
+  markTicketAssistSessionStarted({
+    repoPath: repo,
+    ticketId,
+    sessionId: prepared.sessionId,
+    command: [process.env.CLAUDE_BIN || "claude", ...args]
+  });
+
+  console.log(`Assist session: ${prepared.sessionId}`);
+  console.log(`Manifest: ${prepared.manifestPath}`);
+  console.log(`Prompt: ${prepared.promptPath}`);
+
+  const exit = await spawnAssistClaude({
+    repo,
+    args,
+    command: process.env.CLAUDE_BIN || "claude"
+  });
+
+  markTicketAssistSessionFinished({
+    repoPath: repo,
+    ticketId,
+    sessionId: prepared.sessionId,
+    exitCode: exit.exitCode,
+    signal: exit.signal
+  });
+  if (exit.exitCode !== 0) {
+    process.exitCode = exit.exitCode ?? 1;
+  }
+}
+
 async function cmdAssistSignal(argv) {
   const options = parseOptions(argv);
   const repo = resolve(options.repo ?? process.cwd());
@@ -1010,6 +1087,21 @@ async function cmdAssistSignal(argv) {
   if (shouldRunNext) {
     await cmdRunNext(["--repo", repo]);
   }
+}
+
+async function cmdTicketStartRequest(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  const ticketId = required(options, "ticket");
+  const variant = options.variant ?? "full";
+  const request = appendTicketStartRequest({
+    repoPath: repo,
+    ticketId,
+    variant,
+    reason: options.reason ?? null,
+    source: options.source ?? "assist"
+  });
+  console.log(JSON.stringify(request, null, 2));
 }
 
 async function cmdApplyAssistSignal(argv) {
@@ -4142,7 +4234,9 @@ function buildAssistClaudeArgs({ prepared, model = null, bare = false }) {
     "--permission-mode",
     "bypassPermissions",
     "-n",
-    `pdh-assist:${prepared.manifest.step.id}`
+    prepared.manifest.step?.id
+      ? `pdh-assist:${prepared.manifest.step.id}`
+      : `pdh-ticket-assist:${prepared.manifest.ticket_id || "ticket"}`
   ];
   if (bare) {
     args.unshift("--bare");
@@ -4152,6 +4246,53 @@ function buildAssistClaudeArgs({ prepared, model = null, bare = false }) {
   }
   args.push(prepared.prompt);
   return args;
+}
+
+function markTicketAssistSessionStarted({ repoPath, ticketId, sessionId, command }) {
+  updateTicketAssistSession({
+    repoPath,
+    ticketId,
+    sessionId,
+    mutator(session) {
+      return {
+        ...session,
+        status: "running",
+        command,
+        started_at: new Date().toISOString()
+      };
+    }
+  });
+}
+
+function markTicketAssistSessionFinished({ repoPath, ticketId, sessionId, exitCode, signal = null }) {
+  updateTicketAssistSession({
+    repoPath,
+    ticketId,
+    sessionId,
+    mutator(session) {
+      return {
+        ...session,
+        status: exitCode === 0 ? "completed" : "failed",
+        exit_code: exitCode,
+        signal,
+        finished_at: new Date().toISOString()
+      };
+    }
+  });
+}
+
+function updateTicketAssistSession({ repoPath, ticketId, sessionId, mutator }) {
+  const path = ticketAssistSessionPath({ repoPath, ticketId });
+  let session = {};
+  try {
+    session = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    session = {};
+  }
+  if (sessionId && session.id && session.id !== sessionId) {
+    return;
+  }
+  writeFileSync(path, `${JSON.stringify(mutator(session), null, 2)}\n`);
 }
 
 function normalizeAssistSignal(signal) {

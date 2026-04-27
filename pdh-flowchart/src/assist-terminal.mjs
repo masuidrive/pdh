@@ -113,30 +113,14 @@ export function createAssistTerminalManager({ repoPath }) {
     });
   }
 
-  function openTicketSession({ ticketId, ticketPath = null, notePath = null }) {
-    const shellPath = process.env.SHELL || "/bin/bash";
-    const introLines = [
-      "[ticket terminal]",
-      `Ticket: ${ticketId}`,
-      ticketPath ? `Ticket file: ${ticketPath}` : null,
-      notePath ? `Work notes: ${notePath}` : null,
-      "",
-      "Ran ./ticket.sh first. Continue in this shell as needed.",
-      ""
-    ].filter(Boolean);
-    const script = [
-      `printf '%s\\n' ${introLines.map((line) => shellQuote(line)).join(" ")}`,
-      "./ticket.sh || true",
-      "printf '\\n'",
-      `exec ${shellQuote(shellPath)} -i`
-    ].join("; ");
+  function openTicketSession({ ticketId }) {
     return openManagedSession({
       key: `ticket:${ticketId}`,
       kind: "ticket",
-      title: "Ticket Terminal",
+      title: "Claude Assist",
       ticketId,
-      command: shellPath,
-      args: ["-lc", script]
+      command: process.execPath,
+      args: [CLI_PATH, "ticket-assist-open", "--repo", repoPath, "--ticket", ticketId]
     });
   }
 
@@ -265,8 +249,4 @@ export function createAssistTerminalManager({ repoPath }) {
     handleUpgrade,
     closeAll
   };
-}
-
-function shellQuote(value) {
-  return `'${String(value ?? "").replaceAll("'", `'\\''`)}'`;
 }
