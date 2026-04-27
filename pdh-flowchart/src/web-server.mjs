@@ -1,9 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, extname, join, resolve } from "node:path";
+import { basename, extname, join, relative, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { URL, fileURLToPath } from "node:url";
 import { renderMermaidSVG } from "beautiful-mermaid";
+import { parse as parseYaml } from "yaml";
 import { loadLatestAssistSignal } from "./assist-runtime.mjs";
 import { createAssistTerminalManager } from "./assist-terminal.mjs";
 import { evaluateAcVerificationTable } from "./ac-verification.mjs";
@@ -377,6 +378,7 @@ function collectState({ repo }) {
   const note = runtime.note;
   const ticketText = existsSync(join(repo, "current-ticket.md")) ? readFileSync(join(repo, "current-ticket.md"), "utf8") : "";
   const optionalDocs = loadOptionalRepoDocuments(repo, redactor);
+  const tickets = collectTickets({ repo, redactor });
   const run = runtime.run;
   const currentStep = run?.current_step_id ? getStep(runtime.flow, run.current_step_id) : null;
   const currentGate = run?.id && currentStep ? latestHumanGate({ stateDir: runtime.stateDir, runId: run.id, stepId: currentStep.id }) : null;
@@ -422,6 +424,7 @@ function collectState({ repo }) {
       errors: ac.errors
     },
     git: gitState(repo, redactor),
+    tickets,
     files: {
       note: join(repo, "current-note.md"),
       ticket: join(repo, "current-ticket.md"),
@@ -451,6 +454,85 @@ function collectState({ repo }) {
       } : {})
     }
   };
+}
+
+function collectTickets({ repo, redactor }) {
+  const ticketsDir = join(repo, "tickets");
+  if (!existsSync(ticketsDir)) {
+    return [];
+  }
+  const items = [];
+  const candidatePaths = [];
+  for (const entry of readdirSync(ticketsDir, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md" && !entry.name.endsWith("-note.md")) {
+      candidatePaths.push(join(ticketsDir, entry.name));
+    }
+  }
+  const doneDir = join(ticketsDir, "done");
+  if (existsSync(doneDir)) {
+    for (const entry of readdirSync(doneDir, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md" && !entry.name.endsWith("-note.md")) {
+        candidatePaths.push(join(doneDir, entry.name));
+      }
+    }
+  }
+  for (const path of candidatePaths) {
+    const text = readFileSync(path, "utf8");
+    const { meta, body } = parseMarkdownFrontmatter(text);
+    const ticketId = basename(path, ".md");
+    const notePath = path.replace(/\.md$/u, "-note.md");
+    const status = ticketStatus({ path, meta });
+    items.push({
+      id: ticketId,
+      title: firstHeading(body) || ticketId,
+      path: relative(repo, path).replaceAll("\\", "/"),
+      notePath: existsSync(notePath) ? relative(repo, notePath).replaceAll("\\", "/") : null,
+      status,
+      priority: Number(meta.priority ?? 999),
+      description: String(meta.description ?? "").trim(),
+      createdAt: String(meta.created_at ?? "").trim(),
+      startedAt: String(meta.started_at ?? "").trim(),
+      closedAt: String(meta.closed_at ?? "").trim(),
+      body: clampText(redactor(text), MAX_TEXT)
+    });
+  }
+  const rank = { doing: 0, todo: 1, canceled: 2, done: 3 };
+  items.sort((a, b) =>
+    (rank[a.status] ?? 99) - (rank[b.status] ?? 99)
+    || a.priority - b.priority
+    || a.id.localeCompare(b.id)
+  );
+  return items;
+}
+
+function parseMarkdownFrontmatter(text) {
+  const raw = String(text ?? "");
+  const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/u);
+  if (!match) {
+    return { meta: {}, body: raw };
+  }
+  return {
+    meta: parseYaml(match[1]) ?? {},
+    body: raw.slice(match[0].length)
+  };
+}
+
+function firstHeading(text) {
+  const match = String(text ?? "").match(/^#{1,6}\s+(.+)$/mu);
+  return match ? match[1].trim() : "";
+}
+
+function ticketStatus({ path, meta }) {
+  if (String(meta.canceled_at ?? "").trim() && String(meta.canceled_at).trim() !== "null") {
+    return "canceled";
+  }
+  if (path.includes("/done/") || (String(meta.closed_at ?? "").trim() && String(meta.closed_at).trim() !== "null")) {
+    return "done";
+  }
+  if (String(meta.started_at ?? "").trim() && String(meta.started_at).trim() !== "null") {
+    return "doing";
+  }
+  return "todo";
 }
 
 function loadOptionalRepoDocuments(repo, redactor) {
@@ -3317,9 +3399,17 @@ function renderHtml(initialState = null) {
     return activeVariant ? state.data?.flow?.variants?.[activeVariant] : null;
   }
 
+  function hasActiveRun() {
+    return Boolean(state.data?.runtime?.run?.id);
+  }
+
   function selectedStep() {
     const flow = variantData();
     return flow?.steps?.find((step) => step.id === state.selectedId) || null;
+  }
+
+  function selectedTicket() {
+    return listOf(state.data?.tickets).find((ticket) => ticket.id === state.selectedId) || null;
   }
 
   function listOf(value) {
@@ -4426,11 +4516,18 @@ function renderHtml(initialState = null) {
 
   function applyState(data) {
     state.data = data;
-    const flow = variantData();
-    const currentId = data.runtime?.run?.current_step_id || flow?.steps?.[0]?.id || null;
-    state.selectedId = state.selectedId && flow?.steps?.some((step) => step.id === state.selectedId)
-      ? state.selectedId
-      : currentId;
+    if (data.runtime?.run?.id) {
+      const flow = variantData();
+      const currentId = data.runtime?.run?.current_step_id || flow?.steps?.[0]?.id || null;
+      state.selectedId = state.selectedId && flow?.steps?.some((step) => step.id === state.selectedId)
+        ? state.selectedId
+        : currentId;
+    } else {
+      const tickets = listOf(data.tickets).filter((ticket) => ticket.status === 'doing' || ticket.status === 'todo');
+      state.selectedId = state.selectedId && tickets.some((ticket) => ticket.id === state.selectedId)
+        ? state.selectedId
+        : tickets[0]?.id || null;
+    }
     syncAssistConfirmation();
     const requested = requestedModalItem();
     if (requested) {
@@ -4797,6 +4894,18 @@ function renderHtml(initialState = null) {
   function renderHeader() {
     const data = state.data;
     const current = data.runtime.currentStep;
+    if (!hasActiveRun()) {
+      const leftFlowVariant = document.getElementById('left-flow-variant');
+      if (leftFlowVariant) {
+        leftFlowVariant.textContent = 'Tickets';
+      }
+      document.getElementById('breadcrumbs').innerHTML =
+        '<span>' + esc(data.repoName) + '</span>' +
+        '<span class="sep">/</span>' +
+        '<span class="current">tickets</span>';
+      document.getElementById('header-right').innerHTML = '';
+      return;
+    }
     document.getElementById('breadcrumbs').innerHTML =
       '<span>' + esc(data.repoName) + '</span>' +
       '<span class="sep">/</span>' +
@@ -4822,6 +4931,10 @@ function renderHtml(initialState = null) {
   }
 
   function renderSteps() {
+    if (!hasActiveRun()) {
+      renderTicketList();
+      return;
+    }
     const steps = variantData().steps;
     const root = document.getElementById('pdc-list');
     root.innerHTML = '';
@@ -4837,6 +4950,43 @@ function renderHtml(initialState = null) {
         '</div>';
       el.addEventListener('click', () => {
         state.selectedId = step.id;
+        state.modalItem = null;
+        renderSteps();
+        renderDetail();
+        renderModal();
+      });
+      root.appendChild(el);
+    });
+  }
+
+  function renderTicketList() {
+    const tickets = listOf(state.data?.tickets).filter((ticket) => ticket.status === 'doing' || ticket.status === 'todo');
+    const root = document.getElementById('pdc-list');
+    root.innerHTML = '';
+    if (!tickets.length) {
+      root.innerHTML = '<div class="node pending selected"><div class="node-body"><div class="node-title">No open tickets</div><div class="node-meta">Create a new ticket to continue.</div></div></div>';
+      return;
+    }
+    tickets.forEach((ticket) => {
+      const statusClass = ticket.status === 'doing' ? 'waiting' : 'pending';
+      const meta = [ticket.status];
+      if (Number.isFinite(ticket.priority)) {
+        meta.push('P' + String(ticket.priority));
+      }
+      if (ticket.createdAt) {
+        meta.push(ticket.createdAt.slice(0, 10));
+      }
+      const el = document.createElement('div');
+      el.className = 'node ' + statusClass + (ticket.id === state.selectedId ? ' selected' : '');
+      el.innerHTML =
+        '<div class="node-icon">' + (ticket.status === 'doing' ? '\u2022' : '') + '</div>' +
+        '<div class="node-body">' +
+          '<div class="node-step">' + esc(ticket.id) + '</div>' +
+          '<div class="node-title">' + esc(ticket.title) + '</div>' +
+          '<div class="node-meta">' + esc(meta.join(' · ')) + '</div>' +
+        '</div>';
+      el.addEventListener('click', () => {
+        state.selectedId = ticket.id;
         state.modalItem = null;
         renderSteps();
         renderDetail();
@@ -5713,8 +5863,12 @@ function renderHtml(initialState = null) {
   }
 
   function renderDetail() {
-    const step = selectedStep();
     const root = document.getElementById('detail');
+    if (!hasActiveRun()) {
+      renderTicketChooserDetail();
+      return;
+    }
+    const step = selectedStep();
     if (!step) {
       root.innerHTML = '';
       return;
@@ -5990,6 +6144,109 @@ function renderHtml(initialState = null) {
       });
     });
     wireClickCopy(root);
+  }
+
+  function renderTicketChooserDetail() {
+    const root = document.getElementById('detail');
+    const tickets = listOf(state.data?.tickets).filter((ticket) => ticket.status === 'doing' || ticket.status === 'todo');
+    const ticket = selectedTicket();
+    if (!tickets.length) {
+      root.innerHTML =
+        '<div class="detail-head">' +
+          '<div class="detail-label">Idle</div>' +
+          '<div class="detail-title">No open tickets</div>' +
+          '<div class="detail-desc">Create or start a ticket in this repo to begin a new PD-C run.</div>' +
+        '</div>';
+      return;
+    }
+    if (!ticket) {
+      root.innerHTML = '';
+      return;
+    }
+
+    const materialItems = [];
+    if (ticket.path) {
+      materialItems.push({
+        label: 'Ticket',
+        preview: ticket.path.split('/').pop(),
+        source: ticket.path,
+        fileTarget: { path: ticket.path }
+      });
+    }
+    if (ticket.notePath) {
+      materialItems.push({
+        label: 'Work Notes',
+        preview: ticket.notePath.split('/').pop(),
+        source: ticket.notePath,
+        fileTarget: { path: ticket.notePath }
+      });
+    }
+
+    const summaryLines = [];
+    summaryLines.push('Status: ' + ticket.status);
+    if (Number.isFinite(ticket.priority)) {
+      summaryLines.push('Priority: P' + String(ticket.priority));
+    }
+    if (ticket.createdAt) {
+      summaryLines.push('Created: ' + ticket.createdAt);
+    }
+    if (ticket.startedAt) {
+      summaryLines.push('Started: ' + ticket.startedAt);
+    }
+    if (ticket.closedAt) {
+      summaryLines.push('Closed: ' + ticket.closedAt);
+    }
+
+    let html =
+      '<div class="detail-head">' +
+        '<div class="detail-label">' + esc(ticket.id) + '</div>' +
+        '<div class="detail-title">' + esc(ticket.title || ticket.id) + '</div>' +
+        '<div class="detail-desc">' + esc(ticket.description || 'Select this ticket in ticket.sh and start a new run when ready.') + '</div>' +
+        '<span class="status-pill ' + esc(ticket.status === 'doing' ? 'running' : 'pending') + '">' + esc(ticket.status) + '</span>' +
+      '</div>';
+
+    html += '<div class="detail-body">';
+
+    if (summaryLines.length) {
+      html +=
+        '<div class="detail-section"><div class="detail-section-title">Summary</div>' +
+        '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
+          summaryLines.map((line) => esc(line)).join('<br>') +
+        '</div></div>';
+    }
+
+    html += '<div class="detail-section"><div class="detail-section-title">Ticket</div><div class="artifacts">';
+    materialItems.forEach((item, index) => {
+      html +=
+        '<button class="artifact artifact-button chooser-artifact-button" type="button" data-chooser-index="' + esc(String(index)) + '">' +
+          '<div class="artifact-copy">' +
+            '<span class="artifact-name">' + esc(item.label) + '</span>' +
+            '<span class="artifact-preview">' + esc(item.preview || '') + '</span>' +
+          '</div>' +
+          '<span class="artifact-source">' + esc(item.source || 'file') + '</span>' +
+        '</button>';
+    });
+    html += '</div></div>';
+
+    if (ticket.body) {
+      html +=
+        '<div class="detail-section"><div class="detail-section-title">Preview</div>' +
+        '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);white-space:pre-wrap;">' +
+          esc(ticket.body.length > 1200 ? ticket.body.slice(0, 1200) + '\n…' : ticket.body) +
+        '</div></div>';
+    }
+
+    html += '</div>';
+    root.innerHTML = html;
+    root.querySelectorAll('.chooser-artifact-button').forEach((button) => {
+      button.addEventListener('click', () => {
+        const item = materialItems[Number(button.dataset.chooserIndex)];
+        if (!item) {
+          return;
+        }
+        openModalItem(item, 'file');
+      });
+    });
   }
 
   document.getElementById('detail-modal-close').addEventListener('click', () => {
