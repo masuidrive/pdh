@@ -60,7 +60,7 @@ export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", p
 
 function handleRequest({ request, response, repo, assistTerminalManager }) {
   const method = request.method ?? "GET";
-  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept") || request.url?.startsWith("/api/gate/approve") || request.url?.startsWith("/api/ticket/start") || request.url?.startsWith("/api/ticket/terminal")))) {
+  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept") || request.url?.startsWith("/api/gate/approve") || request.url?.startsWith("/api/ticket/start") || request.url?.startsWith("/api/ticket/terminal") || request.url?.startsWith("/api/run-next")))) {
     sendJson(response, 405, { error: "read_only_web_ui" });
     return;
   }
@@ -157,6 +157,19 @@ function handleRequest({ request, response, repo, assistTerminalManager }) {
       sendJson(response, 200, openTicketTerminalFromWeb({ repo, ticketId, assistTerminalManager }));
     } catch (error) {
       sendJson(response, Number(error?.statusCode || 500), { error: "ticket_terminal_failed", message: error?.message || String(error) });
+    }
+    return;
+  }
+  if (url.pathname === "/api/run-next") {
+    if (method !== "POST") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    const force = url.searchParams.get("force") === "1";
+    try {
+      sendJson(response, 200, runNextFromWeb({ repo, force }));
+    } catch (error) {
+      sendJson(response, Number(error?.statusCode || 500), { error: "run_next_failed", message: error?.message || String(error) });
     }
     return;
   }
@@ -341,6 +354,20 @@ function startTicketFromWeb({ repo, ticketId, variant = "full" }) {
     started,
     runNextStarted: true,
     runNextPid
+  };
+}
+
+function runNextFromWeb({ repo, force = false }) {
+  const args = ["run-next", "--repo", repo];
+  if (force) {
+    args.push("--force");
+  }
+  const runNextPid = spawnBackgroundCli({ repo, args });
+  return {
+    status: "ok",
+    runNextStarted: true,
+    runNextPid,
+    force
   };
 }
 
@@ -2202,6 +2229,8 @@ function renderHtml(initialState = null) {
     padding: 10px 12px; cursor: pointer;
     transition: border-color 0.15s, box-shadow 0.15s;
     display: flex; align-items: center; gap: 10px;
+    scroll-margin-top: 20px;
+    scroll-margin-bottom: calc(108px + env(safe-area-inset-bottom));
   }
   .node:hover { border-color: var(--border-strong); }
   .node.selected { outline: 2px solid #1c1b18; outline-offset: 1px; }
@@ -2510,8 +2539,8 @@ function renderHtml(initialState = null) {
     text-overflow: ellipsis;
   }
   .next-actions {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 8px;
   }
   .next-actions-note {
@@ -2530,6 +2559,7 @@ function renderHtml(initialState = null) {
     border-radius: 8px;
     background: var(--bg);
     padding: 10px 12px;
+    min-width: 0;
   }
   .next-action.approve { border-color: #9fe1cb; background: #f7fcfa; }
   .next-action.revise { border-color: var(--waiting-border); background: #fffaf2; }
@@ -3624,6 +3654,9 @@ function renderHtml(initialState = null) {
   const state = {
     data: null,
     selectedId: null,
+    selectionPinned: false,
+    lastRenderedSelectedId: null,
+    selectionNeedsVisibilitySync: false,
     modalItem: null,
     modalViewMode: 'markdown',
     copyFallbackText: null,
@@ -3705,6 +3738,87 @@ function renderHtml(initialState = null) {
 
   function stepById(stepId) {
     return variantData()?.steps?.find((step) => step.id === stepId) || null;
+  }
+
+  function currentStepId() {
+    return state.data?.runtime?.run?.current_step_id || state.data?.runtime?.currentStep?.id || null;
+  }
+
+  function bindPrimaryPress(element, handler) {
+    if (!element || element.dataset.primaryPressBound === 'true') {
+      return;
+    }
+    element.dataset.primaryPressBound = 'true';
+    let suppressClick = false;
+    element.addEventListener('pointerdown', (event) => {
+      if (event.button !== undefined && event.button !== 0) {
+        return;
+      }
+      suppressClick = true;
+      event.preventDefault();
+      handler(event);
+    });
+    element.addEventListener('click', (event) => {
+      if (suppressClick) {
+        suppressClick = false;
+        event.preventDefault();
+        return;
+      }
+      handler(event);
+    });
+  }
+
+  function claimDelegatedPress(target) {
+    if (!target) {
+      return false;
+    }
+    if (target.dataset.pointerActivated === 'true') {
+      delete target.dataset.pointerActivated;
+      return true;
+    }
+    target.dataset.pointerActivated = 'true';
+    window.setTimeout(() => {
+      if (target.dataset.pointerActivated === 'true') {
+        delete target.dataset.pointerActivated;
+      }
+    }, 400);
+    return false;
+  }
+
+  function keepElementClearOfFixedBars(element) {
+    if (!element) {
+      return;
+    }
+    const bottomBar = document.getElementById('bottom-bar');
+    const bottomBarHeight = bottomBar && !bottomBar.classList.contains('hidden')
+      ? bottomBar.getBoundingClientRect().height
+      : 0;
+    const rect = element.getBoundingClientRect();
+    const topLimit = 72;
+    const bottomLimit = window.innerHeight - bottomBarHeight - 12;
+    if (rect.top < topLimit) {
+      window.scrollBy({ top: rect.top - topLimit, left: 0, behavior: 'auto' });
+      return;
+    }
+    if (rect.bottom > bottomLimit) {
+      window.scrollBy({ top: rect.bottom - bottomLimit, left: 0, behavior: 'auto' });
+    }
+  }
+
+  function ensureSelectedVisible() {
+    if (!state.selectionNeedsVisibilitySync) {
+      return;
+    }
+    state.selectionNeedsVisibilitySync = false;
+    const selected = document.querySelector('#pdc-list .node.selected');
+    if (!selected) {
+      return;
+    }
+    selected.scrollIntoView({ block: 'nearest' });
+    keepElementClearOfFixedBars(selected);
+    window.setTimeout(() => {
+      keepElementClearOfFixedBars(selected);
+    }, 0);
   }
 
   function preferredText(...values) {
@@ -4000,10 +4114,12 @@ function renderHtml(initialState = null) {
       return actions;
     }
     return listOf(nextAction?.commands).map((command) => ({
-      label: 'Run',
+      label: String(command || '').includes('node src/cli.mjs run-next') ? 'Run Next' : 'Run',
       description: nextAction?.body || '',
       command,
-      tone: 'neutral'
+      tone: 'neutral',
+      kind: String(command || '').includes('node src/cli.mjs run-next') ? 'run_next_direct' : 'command',
+      force: /\s--force(?:\s|$)/.test(String(command || ''))
     }));
   }
 
@@ -4884,18 +5000,26 @@ function renderHtml(initialState = null) {
   }
 
   function applyState(data) {
+    const previousCurrentId = currentStepId();
     state.data = data;
     if (data.runtime?.run?.id) {
-      const flow = variantData();
+      const flow = data.flow?.activeVariant ? data.flow?.variants?.[data.flow.activeVariant] : null;
       const currentId = data.runtime?.run?.current_step_id || flow?.steps?.[0]?.id || null;
-      state.selectedId = state.selectedId && flow?.steps?.some((step) => step.id === state.selectedId)
-        ? state.selectedId
-        : currentId;
+      const hasSelectedStep = Boolean(state.selectedId && flow?.steps?.some((step) => step.id === state.selectedId));
+      if (!hasSelectedStep) {
+        state.selectedId = currentId;
+        state.selectionPinned = false;
+      } else if (!state.selectionPinned || state.selectedId === previousCurrentId) {
+        state.selectedId = currentId;
+        state.selectionPinned = false;
+      }
     } else {
       const tickets = listOf(data.tickets).filter((ticket) => ticket.status === 'doing' || ticket.status === 'todo');
-      state.selectedId = state.selectedId && tickets.some((ticket) => ticket.id === state.selectedId)
-        ? state.selectedId
-        : tickets[0]?.id || null;
+      const hasSelectedTicket = Boolean(state.selectedId && tickets.some((ticket) => ticket.id === state.selectedId));
+      state.selectedId = hasSelectedTicket ? state.selectedId : (tickets[0]?.id || null);
+      if (!hasSelectedTicket) {
+        state.selectionPinned = false;
+      }
     }
     syncAssistConfirmation();
     const requested = requestedModalItem();
@@ -4981,6 +5105,7 @@ function renderHtml(initialState = null) {
     renderModal();
     renderActionConfirm();
     renderAssistModal();
+    ensureSelectedVisible();
   }
 
   function renderBottomBar() {
@@ -5388,8 +5513,9 @@ function renderHtml(initialState = null) {
           '<div class="node-title">' + esc(step.label) + '</div>' +
           '<div class="node-meta">' + esc(step.progress.label + ' · ' + (step.progress.note || step.summary || '')) + '</div>' +
         '</div>';
-      el.addEventListener('click', () => {
+      bindPrimaryPress(el, () => {
         state.selectedId = step.id;
+        state.selectionPinned = step.id !== currentStepId();
         state.modalItem = null;
         renderSteps();
         renderDetail();
@@ -5397,6 +5523,10 @@ function renderHtml(initialState = null) {
       });
       root.appendChild(el);
     });
+    if (state.lastRenderedSelectedId !== state.selectedId) {
+      state.lastRenderedSelectedId = state.selectedId;
+      state.selectionNeedsVisibilitySync = true;
+    }
   }
 
   function renderTicketList() {
@@ -5425,8 +5555,9 @@ function renderHtml(initialState = null) {
           '<div class="node-title">' + esc(ticket.title) + '</div>' +
           '<div class="node-meta">' + esc(meta.join(' · ')) + '</div>' +
         '</div>';
-      el.addEventListener('click', () => {
+      bindPrimaryPress(el, () => {
         state.selectedId = ticket.id;
+        state.selectionPinned = true;
         state.modalItem = null;
         renderSteps();
         renderDetail();
@@ -5434,6 +5565,10 @@ function renderHtml(initialState = null) {
       });
       root.appendChild(el);
     });
+    if (state.lastRenderedSelectedId !== state.selectedId) {
+      state.lastRenderedSelectedId = state.selectedId;
+      state.selectionNeedsVisibilitySync = true;
+    }
   }
 
   function documentLabel(docId) {
@@ -6544,6 +6679,42 @@ function renderHtml(initialState = null) {
         '</div></div>';
     }
 
+    if (nextItems.length) {
+      html += '<div class="detail-section"><div class="detail-section-title">Next</div>';
+      html += '<div class="next-actions-note">' + esc(nextActionNote(nextAction)) + '</div>';
+      html += '<div class="next-actions">';
+      nextItems.forEach((item, index) => {
+        html +=
+          '<div class="next-action ' + esc(item.tone || 'neutral') + '">' +
+            '<div class="next-action-head">' +
+              '<span class="next-action-label">' + esc(item.label || ('Action ' + String(index + 1))) + '</span>' +
+              '<span class="next-action-choice">' + esc(
+                nextAction?.selection === 'recommended_or_assist'
+                  ? (item.kind === 'assist' ? 'optional' : 'recommended')
+                  : nextAction?.selection === 'choose_one' || nextAction?.selection === 'choose_one_optional_assist'
+                  ? 'choose one'
+                  : nextAction?.selection === 'ordered' || nextAction?.selection === 'ordered_optional_assist'
+                    ? 'run in order'
+                    : nextAction?.selection === 'single_optional_assist'
+                      ? 'pick one'
+                      : 'run this'
+              ) + '</span>' +
+            '</div>' +
+            (item.description ? '<div class="next-action-description">' + esc(item.description) + '</div>' : '') +
+            (item.kind === 'assist'
+              ? '<button class="next-action-launch" type="button" data-assist-step="' + esc(step.id) + '">Open Terminal</button>' +
+                '<div class="next-action-hint">Launch a fresh assist terminal in this browser.</div>'
+              : item.kind === 'approve_direct'
+                ? '<button class="next-action-direct" type="button" data-approve-step="' + esc(step.id) + '">Approve</button>'
+                : item.kind === 'run_next_direct'
+                  ? '<button class="next-action-direct" type="button" data-run-next-step="' + esc(step.id) + '"' + (item.force ? ' data-run-next-force="1"' : '') + '>Run Next</button>'
+                : '') +
+            ((item.kind === 'assist' || item.kind === 'approve_direct' || item.kind === 'run_next_direct') ? '' : '<div class="next-action-command"' + ' data-click-copy="' + encodeURIComponent(item.command || '') + '">' + esc(item.command || '') + '</div>') +
+          '</div>';
+      });
+      html += '</div></div>';
+    }
+
     html += '<div class="detail-section"><div class="detail-section-title">判断材料</div><div class="artifacts">';
     if (!materialItems.length) {
       html += '<div class="artifact"><span class="artifact-name">まだありません</span><span class="artifact-size">pending</span></div>';
@@ -6572,40 +6743,6 @@ function renderHtml(initialState = null) {
             '<div class="rv-name">' + esc(judgement.kind) + '</div>' +
             '<div class="rv-round">R' + esc(String(index + 1)) + '</div>' +
             '<div><span class="sev ' + esc(sev) + '">' + esc(judgement.status) + '</span></div>' +
-          '</div>';
-      });
-      html += '</div></div>';
-    }
-
-    if (nextItems.length) {
-      html += '<div class="detail-section"><div class="detail-section-title">Next</div>';
-      html += '<div class="next-actions-note">' + esc(nextActionNote(nextAction)) + '</div>';
-      html += '<div class="next-actions">';
-      nextItems.forEach((item, index) => {
-        html +=
-          '<div class="next-action ' + esc(item.tone || 'neutral') + '">' +
-            '<div class="next-action-head">' +
-              '<span class="next-action-label">' + esc(item.label || ('Action ' + String(index + 1))) + '</span>' +
-              '<span class="next-action-choice">' + esc(
-                nextAction?.selection === 'recommended_or_assist'
-                  ? (item.kind === 'assist' ? 'optional' : 'recommended')
-                  : nextAction?.selection === 'choose_one' || nextAction?.selection === 'choose_one_optional_assist'
-                  ? 'choose one'
-                  : nextAction?.selection === 'ordered' || nextAction?.selection === 'ordered_optional_assist'
-                    ? 'run in order'
-                    : nextAction?.selection === 'single_optional_assist'
-                      ? 'pick one'
-                      : 'run this'
-              ) + '</span>' +
-            '</div>' +
-            (item.description ? '<div class="next-action-description">' + esc(item.description) + '</div>' : '') +
-            (item.kind === 'assist'
-              ? '<button class="next-action-launch" type="button" data-assist-step="' + esc(step.id) + '">Open Terminal</button>' +
-                '<div class="next-action-hint">Launch a fresh assist terminal in this browser.</div>'
-              : item.kind === 'approve_direct'
-                ? '<button class="next-action-direct" type="button" data-approve-step="' + esc(step.id) + '">Approve</button>'
-                : '') +
-            ((item.kind === 'assist' || item.kind === 'approve_direct') ? '' : '<div class="next-action-command"' + ' data-click-copy="' + encodeURIComponent(item.command || '') + '">' + esc(item.command || '') + '</div>') +
           '</div>';
       });
       html += '</div></div>';
@@ -6685,7 +6822,7 @@ function renderHtml(initialState = null) {
 
     root.innerHTML = html;
     root.querySelectorAll('.show-artifact-button').forEach((button) => {
-      button.addEventListener('click', () => {
+      bindPrimaryPress(button, () => {
         const item = materialItems[Number(button.dataset.showIndex)];
         if (!item) {
           return;
@@ -6694,7 +6831,7 @@ function renderHtml(initialState = null) {
       });
     });
     root.querySelectorAll('.supplemental-artifact-button').forEach((button) => {
-      button.addEventListener('click', () => {
+      bindPrimaryPress(button, () => {
         const artifact = step.artifacts?.[Number(button.dataset.artifactIndex)];
         if (!artifact) {
           return;
@@ -6704,7 +6841,7 @@ function renderHtml(initialState = null) {
       });
     });
     root.querySelectorAll('.detail-inline-file').forEach((button) => {
-      button.addEventListener('click', () => {
+      bindPrimaryPress(button, () => {
         const filePath = button.dataset.filePath;
         const stepId = button.dataset.stepId;
         if (!filePath || !stepId) {
@@ -6832,7 +6969,7 @@ function renderHtml(initialState = null) {
     html += '</div>';
     root.innerHTML = html;
     root.querySelectorAll('.chooser-artifact-button').forEach((button) => {
-      button.addEventListener('click', () => {
+      bindPrimaryPress(button, () => {
         const item = materialItems[Number(button.dataset.chooserIndex)];
         if (!item) {
           return;
@@ -6929,7 +7066,7 @@ function renderHtml(initialState = null) {
     renderAssistModal();
     sendAssistPromptSequence(assistRecommendationPromptText());
   });
-  document.addEventListener('click', async (event) => {
+  async function handleDelegatedPrimaryAction(event) {
     const assistButton = event.target.closest('[data-assist-step]');
     if (assistButton) {
       const stepId = assistButton.dataset.assistStep;
@@ -6947,7 +7084,7 @@ function renderHtml(initialState = null) {
         assistButton.disabled = false;
         assistButton.innerHTML = original;
       }
-      return;
+      return true;
     }
 
     const approveButton = event.target.closest('[data-approve-step]');
@@ -6963,7 +7100,36 @@ function renderHtml(initialState = null) {
         body: 'この gate を承認して次へ進めます。',
         confirmLabel: 'Approve'
       });
-      return;
+      return true;
+    }
+
+    const runNextButton = event.target.closest('[data-run-next-step]');
+    if (runNextButton) {
+      const stepId = runNextButton.dataset.runNextStep;
+      const force = runNextButton.dataset.runNextForce === '1';
+      if (!stepId) {
+        return;
+      }
+      const original = runNextButton.innerHTML;
+      runNextButton.disabled = true;
+      runNextButton.innerHTML = 'Starting…';
+      try {
+        const response = await fetch('/api/run-next?force=' + (force ? '1' : '0'), {
+          method: 'POST',
+          cache: 'no-store'
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.message || payload.error || 'run_next_failed');
+        }
+        refresh();
+      } catch (error) {
+        window.alert('Failed to run next: ' + (error?.message || String(error)));
+      } finally {
+        runNextButton.disabled = false;
+        runNextButton.innerHTML = original;
+      }
+      return true;
     }
 
     const ticketTerminalButton = event.target.closest('[data-ticket-terminal]');
@@ -6983,7 +7149,7 @@ function renderHtml(initialState = null) {
         ticketTerminalButton.disabled = false;
         ticketTerminalButton.innerHTML = original;
       }
-      return;
+      return true;
     }
 
     const startButton = event.target.closest('[data-start-ticket]');
@@ -7001,8 +7167,33 @@ function renderHtml(initialState = null) {
         body: ticketId + ' を ' + variant + ' flow で開始します。',
         confirmLabel: 'Start'
       });
+      return true;
+    }
+    return false;
+  }
+
+  document.addEventListener('pointerdown', async (event) => {
+    const target = event.target.closest('[data-assist-step], [data-approve-step], [data-run-next-step], [data-ticket-terminal], [data-start-ticket]');
+    if (!target) {
       return;
     }
+    if (event.button !== undefined && event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    claimDelegatedPress(target);
+    await handleDelegatedPrimaryAction(event);
+  });
+  document.addEventListener('click', async (event) => {
+    const target = event.target.closest('[data-assist-step], [data-approve-step], [data-run-next-step], [data-ticket-terminal], [data-start-ticket]');
+    if (!target) {
+      return;
+    }
+    if (claimDelegatedPress(target)) {
+      event.preventDefault();
+      return;
+    }
+    await handleDelegatedPrimaryAction(event);
   });
   document.querySelectorAll('[data-assist-input]').forEach((button) => {
     button.addEventListener('click', () => {
