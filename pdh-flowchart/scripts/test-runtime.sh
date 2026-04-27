@@ -251,6 +251,38 @@ test_recorded_step_commit_guard() {
   grep -q '"status":"passed"' "$TMP_ROOT/recorded-step-commit.json"
 }
 
+test_reviewer_placeholder_sanitization() {
+  local repo
+  repo="$(seed_repo reviewer-placeholder-sanitization)"
+  mkdir -p "$repo/.pdh-flowchart/runs/run-test/steps/PD-C-7/reviewers/code_reviewer-1"
+  cat >"$repo/.pdh-flowchart/runs/run-test/steps/PD-C-7/reviewers/code_reviewer-1/review.yaml" <<'YAML'
+status: No Critical/Major
+summary: looks fine
+findings:
+  - severity: note
+    title: "[object Object]"
+    evidence: ""
+    recommendation: ""
+  - severity: note
+    title: Nested metadata
+    evidence:
+      command: uv run calc "2-5"
+      observed: -3
+    recommendation: ""
+notes:
+  lines:
+    - one
+    - two
+YAML
+  node --input-type=module -e "import { loadReviewerOutput } from '$ROOT/src/review-runtime.mjs'; const output = loadReviewerOutput({ stateDir: '$repo/.pdh-flowchart', runId: 'run-test', stepId: 'PD-C-7', reviewerId: 'code_reviewer-1' }); if (output.findings.length !== 1) throw new Error('placeholder finding should be dropped'); if (!output.findings[0].evidence.includes('command: uv run calc \"2-5\"')) throw new Error('structured evidence not preserved'); if (output.notes !== 'lines:\\n  - one\\n  - two') throw new Error('structured notes not rendered');"
+}
+
+test_replace_note_section_with_nested_headings() {
+  local repo
+  repo="$(seed_repo replace-note-section-nested)"
+  node --input-type=module -e "import { replaceNoteSection, extractSection } from '$ROOT/src/note-state.mjs'; import { readFileSync } from 'node:fs'; replaceNoteSection('$repo', 'PD-C-7. 品質検証結果', 'Updated: now\\n\\n### Findings\\n\\n- clean finding\\n\\n### Review Rounds\\n\\n#### Round 1\\n\\n- ok'); const text = readFileSync('$repo/current-note.md', 'utf8'); const section = extractSection(text, 'PD-C-7. 品質検証結果'); if (!section.includes('### Findings')) throw new Error('nested heading missing'); if (!section.includes('#### Round 1')) throw new Error('nested child heading missing'); if (!text.includes('## PD-C-8. 目的妥当性確認')) throw new Error('next top-level section removed');"
+}
+
 test_prompt_context() {
   local repo prompt_path
   repo="$(seed_repo prompt-context)"
@@ -594,6 +626,8 @@ NODE
 test_frontmatter_run
 test_nested_section_guard
 test_recorded_step_commit_guard
+test_reviewer_placeholder_sanitization
+test_replace_note_section_with_nested_headings
 test_prompt_context
 test_stop_after_step
 test_blocked_run

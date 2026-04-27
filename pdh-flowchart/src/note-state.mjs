@@ -82,31 +82,22 @@ export function parseStepHistory(text) {
 
 export function extractSection(text, heading) {
   const resolvedHeading = normalizeHeading(heading);
-  const pattern = new RegExp(`^${escapeRegExp(resolvedHeading)}\\s*$`, "m");
-  const match = pattern.exec(text);
-  if (!match) {
+  const bounds = findSectionBounds(text, resolvedHeading);
+  if (!bounds) {
     return null;
   }
-  const after = text.slice(match.index + match[0].length);
-  const nextHeading = after.search(/\n#{1,6}\s+/);
-  return nextHeading >= 0 ? after.slice(0, nextHeading).trim() : after.trim();
+  return text.slice(bounds.bodyStart, bounds.end).trim();
 }
 
 export function replaceSection(text, heading, content) {
   const resolvedHeading = normalizeHeading(heading);
   const trimmedContent = String(content ?? "").trim();
   const block = `${resolvedHeading}\n\n${trimmedContent}`.trimEnd();
-  const pattern = new RegExp(`^${escapeRegExp(resolvedHeading)}\\s*$`, "m");
-  const match = pattern.exec(text);
-  if (!match) {
+  const bounds = findSectionBounds(text, resolvedHeading);
+  if (!bounds) {
     return `${text.trimEnd()}\n\n${block}\n`;
   }
-  const after = text.slice(match.index + match[0].length);
-  const nextHeading = after.search(/\n#{1,6}\s+/);
-  if (nextHeading < 0) {
-    return `${text.slice(0, match.index).trimEnd()}\n\n${block}\n`;
-  }
-  return `${text.slice(0, match.index).trimEnd()}\n\n${block}${after.slice(nextHeading)}`
+  return `${text.slice(0, bounds.start).trimEnd()}\n\n${block}${text.slice(bounds.end)}`
     .replace(/\n{3,}/g, "\n\n")
     .trimEnd() + "\n";
 }
@@ -207,6 +198,38 @@ function normalizeBody(body) {
 
 function normalizeHeading(heading) {
   return heading.startsWith("#") ? heading : `## ${heading}`;
+}
+
+function findSectionBounds(text, resolvedHeading) {
+  const pattern = new RegExp(`^${escapeRegExp(resolvedHeading)}\\s*$`, "m");
+  const match = pattern.exec(text);
+  if (!match) {
+    return null;
+  }
+  const headingLevel = headingLevelOf(resolvedHeading);
+  const bodyStart = match.index + match[0].length;
+  const after = text.slice(bodyStart);
+  const headingPattern = /\n(#{1,6})\s+/g;
+  let nextHeadingMatch = null;
+  while ((nextHeadingMatch = headingPattern.exec(after)) !== null) {
+    if (nextHeadingMatch[1].length <= headingLevel) {
+      return {
+        start: match.index,
+        bodyStart,
+        end: bodyStart + nextHeadingMatch.index
+      };
+    }
+  }
+  return {
+    start: match.index,
+    bodyStart,
+    end: text.length
+  };
+}
+
+function headingLevelOf(heading) {
+  const match = /^(#{1,6})\s+/.exec(heading);
+  return match ? match[1].length : 2;
 }
 
 function renderStepHistoryEntry(entry) {

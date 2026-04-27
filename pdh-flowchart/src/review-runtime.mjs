@@ -502,16 +502,16 @@ function normalizeReviewerOutput(value, meta = {}) {
   const source = value ?? {};
   return {
     status: asString(source.status),
-    summary: asString(source.summary),
+    summary: normalizeReviewText(source.summary),
     findings: Array.isArray(source.findings)
       ? source.findings.map((finding) => ({
           severity: normalizeSeverity(finding?.severity),
-          title: asString(finding?.title),
-          evidence: asString(finding?.evidence),
-          recommendation: asString(finding?.recommendation)
-        }))
+          title: normalizeReviewText(finding?.title),
+          evidence: normalizeReviewText(finding?.evidence),
+          recommendation: normalizeReviewText(finding?.recommendation)
+        })).filter(hasMeaningfulFinding)
       : [],
-    notes: asString(source.notes),
+    notes: normalizeReviewText(source.notes),
     artifactPath: asString(meta.artifactPath),
     parseErrors: asStringList(meta.parseErrors),
     parseWarnings: asStringList(meta.parseWarnings),
@@ -535,10 +535,10 @@ function reviewerOutputUsable(output) {
 function normalizeReviewRepairOutput(value, meta = {}) {
   const source = value ?? {};
   return {
-    summary: asString(source.summary),
-    verification: asStringList(source.verification),
-    remainingRisks: asStringList(source.remaining_risks ?? source.remainingRisks),
-    notes: asString(source.notes),
+    summary: normalizeReviewText(source.summary),
+    verification: asReviewStringList(source.verification),
+    remainingRisks: asReviewStringList(source.remaining_risks ?? source.remainingRisks),
+    notes: normalizeReviewText(source.notes),
     artifactPath: asString(meta.artifactPath),
     parseErrors: asStringList(meta.parseErrors),
     parseWarnings: asStringList(meta.parseWarnings),
@@ -570,6 +570,32 @@ function normalizeSeverity(value) {
   return ["critical", "major", "minor", "note", "none"].includes(normalized) ? normalized : "note";
 }
 
+function hasMeaningfulFinding(finding) {
+  return Boolean(finding?.title || finding?.evidence || finding?.recommendation);
+}
+
+function normalizeReviewText(value) {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return scrubPlaceholderText(value.trim());
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value).trim();
+  }
+  const rendered = stringify(value).replace(/^---\n/, "").trim();
+  return scrubPlaceholderText(rendered);
+}
+
+function asReviewStringList(value) {
+  return Array.isArray(value) ? value.map(normalizeReviewText).filter(Boolean) : [];
+}
+
+function scrubPlaceholderText(value) {
+  return PLACEHOLDER_TEXT.has(value) ? "" : value;
+}
+
 function asString(value) {
   return value === undefined || value === null ? "" : String(value).trim();
 }
@@ -577,6 +603,8 @@ function asString(value) {
 function asStringList(value) {
   return Array.isArray(value) ? value.map(asString).filter(Boolean) : [];
 }
+
+const PLACEHOLDER_TEXT = new Set(["[object Object]", "[object Array]"]);
 
 function escapeTable(value) {
   return String(value).replaceAll("|", "\\|").replaceAll("\n", "<br/>");
