@@ -60,7 +60,7 @@ export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", p
 
 function handleRequest({ request, response, repo, assistTerminalManager }) {
   const method = request.method ?? "GET";
-  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept") || request.url?.startsWith("/api/gate/approve") || request.url?.startsWith("/api/ticket/start")))) {
+  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept") || request.url?.startsWith("/api/gate/approve") || request.url?.startsWith("/api/ticket/start") || request.url?.startsWith("/api/ticket/terminal")))) {
     sendJson(response, 405, { error: "read_only_web_ui" });
     return;
   }
@@ -140,6 +140,23 @@ function handleRequest({ request, response, repo, assistTerminalManager }) {
       sendJson(response, 200, startTicketFromWeb({ repo, ticketId, variant }));
     } catch (error) {
       sendJson(response, Number(error?.statusCode || 500), { error: "ticket_start_failed", message: error?.message || String(error) });
+    }
+    return;
+  }
+  if (url.pathname === "/api/ticket/terminal") {
+    if (method !== "POST") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    const ticketId = url.searchParams.get("ticket");
+    if (!ticketId) {
+      sendJson(response, 400, { error: "missing_ticket" });
+      return;
+    }
+    try {
+      sendJson(response, 200, openTicketTerminalFromWeb({ repo, ticketId, assistTerminalManager }));
+    } catch (error) {
+      sendJson(response, Number(error?.statusCode || 500), { error: "ticket_terminal_failed", message: error?.message || String(error) });
     }
     return;
   }
@@ -324,6 +341,20 @@ function startTicketFromWeb({ repo, ticketId, variant = "full" }) {
     runNextStarted: true,
     runNextPid
   };
+}
+
+function openTicketTerminalFromWeb({ repo, ticketId, assistTerminalManager }) {
+  const ticket = collectTickets({ repo, redactor: (text) => String(text ?? "") }).find((item) => item.id === ticketId);
+  if (!ticket) {
+    const error = new Error(`ticket_not_found: ${ticketId}`);
+    error.statusCode = 404;
+    throw error;
+  }
+  return assistTerminalManager.openTicketSession({
+    ticketId,
+    ticketPath: ticket.path || null,
+    notePath: ticket.notePath || null
+  });
 }
 
 function applyAssistSignalFromWeb({ repo, stepId }) {
@@ -2105,7 +2136,7 @@ function renderHtml(initialState = null) {
   }
   .overview-node.running .ov-label, .overview-node.running .ov-name { color: #1f5fbf; }
   .overview-node.pending {
-    background: var(--pending-bg); border-color: var(--border); opacity: 0.55;
+    background: var(--pending-bg); border-color: var(--border);
   }
   .overview-node.pending .ov-name { color: var(--pending-text); }
   .overview-node:hover { border-color: var(--border-strong); }
@@ -2165,7 +2196,7 @@ function renderHtml(initialState = null) {
   .node.failed { background: var(--critical-bg); border-color: #f0b7b7; }
   .node.failed .node-icon { background: #b53a3a; color: #fff; }
   .node.failed .node-title, .node.failed .node-meta { color: var(--critical-text); }
-  .node.pending { background: var(--pending-bg); border-color: var(--border); opacity: 0.55; }
+  .node.pending { background: var(--pending-bg); border-color: var(--border); }
   .node.pending .node-icon { background: #e0ddd2; color: #a3a097; }
   .node.pending .node-title { color: var(--pending-text); }
   .node.skipped { background: var(--skip-bg); border-color: var(--border); opacity: 0.45; }
@@ -2919,6 +2950,72 @@ function renderHtml(initialState = null) {
     background: #fbfaf7;
     resize: vertical;
   }
+  .action-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 58;
+    background: rgba(28, 27, 24, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .action-modal.hidden { display: none; }
+  .action-dialog {
+    width: min(520px, 100%);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+    padding: 18px;
+  }
+  .action-dialog-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+  .action-dialog-body {
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+  .action-dialog-actions {
+    margin-top: 16px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .action-dialog-button {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .action-dialog-button:hover {
+    border-color: var(--border-strong);
+    background: var(--surface);
+  }
+  .action-dialog-button.primary {
+    background: #1f5fbf;
+    color: #fff;
+    border-color: #1f5fbf;
+  }
+  .action-dialog-button.primary:hover {
+    background: #1b56ad;
+    border-color: #1b56ad;
+  }
+  .action-dialog-button[disabled] {
+    opacity: 0.65;
+    cursor: progress;
+  }
   .assist-modal {
     position: fixed;
     inset: 0;
@@ -3397,6 +3494,16 @@ function renderHtml(initialState = null) {
       <textarea id="copy-fallback-text" readonly></textarea>
     </div>
   </div>
+  <div class="action-modal hidden" id="action-modal">
+    <div class="action-dialog" role="dialog" aria-modal="true" aria-labelledby="action-modal-title">
+      <div class="action-dialog-title" id="action-modal-title">確認</div>
+      <div class="action-dialog-body" id="action-modal-body"></div>
+      <div class="action-dialog-actions">
+        <button class="action-dialog-button" id="action-modal-cancel" type="button">Cancel</button>
+        <button class="action-dialog-button primary" id="action-modal-confirm" type="button">OK</button>
+      </div>
+    </div>
+  </div>
   <div class="assist-modal hidden" id="assist-modal">
     <div class="assist-dialog" role="dialog" aria-modal="true" aria-labelledby="assist-modal-title">
       <div class="assist-confirm hidden" id="assist-confirm">
@@ -3467,10 +3574,15 @@ function renderHtml(initialState = null) {
     modalItem: null,
     modalViewMode: 'markdown',
     copyFallbackText: null,
+    actionConfirm: null,
     assist: {
       open: false,
+      kind: 'assist',
+      title: 'Claude Assist',
       stepId: null,
+      ticketId: null,
       sessionId: null,
+      promptEnabled: true,
       status: 'idle',
       loginAvailable: false,
       loginSuppressed: false,
@@ -4809,6 +4921,7 @@ function renderHtml(initialState = null) {
     renderDetail();
     renderBottomBar();
     renderModal();
+    renderActionConfirm();
     renderAssistModal();
   }
 
@@ -4966,6 +5079,22 @@ function renderHtml(initialState = null) {
     return lines;
   }
 
+  function ticketTerminalPreludeLines(ticketId) {
+    const ticket = listOf(state.data?.tickets).find((item) => item.id === ticketId) || null;
+    const lines = ['[terminal] ticket terminal opened'];
+    if (ticketId) {
+      lines.push('[terminal] ticket: ' + ticketId);
+    }
+    if (ticket?.path) {
+      lines.push('[terminal] ticket file: ' + ticket.path);
+    }
+    if (ticket?.notePath) {
+      lines.push('[terminal] work notes: ' + ticket.notePath);
+    }
+    lines.push('[terminal] running ./ticket.sh first, then leaving you in a repo shell.');
+    return lines;
+  }
+
   function assistSummaryModel(stepId) {
     const run = state.data?.runtime?.run || {};
     const step = stepById(stepId);
@@ -5074,6 +5203,10 @@ function renderHtml(initialState = null) {
   }
 
   function syncAssistConfirmation() {
+    if (state.assist.kind !== 'assist') {
+      state.assist.confirmation = null;
+      return;
+    }
     if (!state.assist.open) {
       state.assist.confirmation = null;
       return;
@@ -5291,7 +5424,7 @@ function renderHtml(initialState = null) {
   let bodyLockScrollTop = 0;
 
   function updateBodyModalLock() {
-    const locked = Boolean(state.modalItem || state.assist.open || state.copyFallbackText);
+    const locked = Boolean(state.modalItem || state.assist.open || state.copyFallbackText || state.actionConfirm);
     document.body.classList.toggle('modal-open', locked);
     if (locked && !bodyLockActive) {
       bodyLockScrollTop = window.scrollY || window.pageYOffset || 0;
@@ -5312,6 +5445,47 @@ function renderHtml(initialState = null) {
       window.scrollTo(0, bodyLockScrollTop);
       bodyLockActive = false;
     }
+  }
+
+  function openActionConfirm(config) {
+    state.actionConfirm = {
+      ...config,
+      submitting: false
+    };
+    renderActionConfirm();
+  }
+
+  function closeActionConfirm() {
+    if (state.actionConfirm?.submitting) {
+      return;
+    }
+    state.actionConfirm = null;
+    renderActionConfirm();
+  }
+
+  function renderActionConfirm() {
+    const root = document.getElementById('action-modal');
+    const title = document.getElementById('action-modal-title');
+    const body = document.getElementById('action-modal-body');
+    const confirm = document.getElementById('action-modal-confirm');
+    const cancel = document.getElementById('action-modal-cancel');
+    if (!state.actionConfirm) {
+      root.classList.add('hidden');
+      title.textContent = '確認';
+      body.textContent = '';
+      confirm.textContent = 'OK';
+      confirm.disabled = false;
+      cancel.disabled = false;
+      updateBodyModalLock();
+      return;
+    }
+    root.classList.remove('hidden');
+    title.textContent = state.actionConfirm.title || '確認';
+    body.textContent = state.actionConfirm.body || '';
+    confirm.textContent = state.actionConfirm.confirmLabel || 'OK';
+    confirm.disabled = Boolean(state.actionConfirm.submitting);
+    cancel.disabled = Boolean(state.actionConfirm.submitting);
+    updateBodyModalLock();
   }
 
   function assistCellHeight() {
@@ -5418,8 +5592,12 @@ function renderHtml(initialState = null) {
       state.assist.fitAddon = null;
     }
     state.assist.open = false;
+    state.assist.kind = 'assist';
+    state.assist.title = 'Claude Assist';
     state.assist.stepId = null;
+    state.assist.ticketId = null;
     state.assist.sessionId = null;
+    state.assist.promptEnabled = true;
     state.assist.status = 'idle';
     state.assist.loginAvailable = false;
     state.assist.loginSuppressed = false;
@@ -5438,9 +5616,13 @@ function renderHtml(initialState = null) {
   function assistStatusLabel() {
     if (!state.assist.sessionId) {
       if (state.assist.status === 'starting') {
-        return state.assist.stepId ? state.assist.stepId + ' starting' : 'starting';
+        const contextId = state.assist.kind === 'ticket' ? state.assist.ticketId : state.assist.stepId;
+        return contextId ? contextId + ' starting' : 'starting';
       }
       return 'idle';
+    }
+    if (state.assist.kind === 'ticket') {
+      return state.assist.ticketId ? state.assist.ticketId + ' shell' : 'shell';
     }
     if (state.assist.status === 'running') {
       return state.assist.stepId ? state.assist.stepId + ' running' : 'running';
@@ -5450,6 +5632,7 @@ function renderHtml(initialState = null) {
 
   function renderAssistModal() {
     const root = document.getElementById('assist-modal');
+    const title = document.getElementById('assist-modal-title');
     const status = document.getElementById('assist-modal-status');
     const empty = document.getElementById('assist-terminal-empty');
     const summary = document.getElementById('assist-runtime-summary');
@@ -5465,6 +5648,7 @@ function renderHtml(initialState = null) {
     const loginButton = document.getElementById('assist-login-button');
     if (!state.assist.open) {
       root.classList.add('hidden');
+      title.textContent = 'Claude Assist';
       status.textContent = 'idle';
       status.className = 'assist-status';
       empty.textContent = 'Starting assist session…';
@@ -5482,11 +5666,13 @@ function renderHtml(initialState = null) {
       return;
     }
     root.classList.remove('hidden');
+    title.textContent = state.assist.title || 'Claude Assist';
     status.textContent = assistStatusLabel();
     status.className = 'assist-status ' + esc(state.assist.status);
-    promptDrawer.classList.toggle('hidden', !state.assist.promptDrawerOpen);
-    promptToggle.setAttribute('aria-expanded', state.assist.promptDrawerOpen ? 'true' : 'false');
-    const summaryModel = assistSummaryModel(state.assist.stepId);
+    promptToggle.classList.toggle('hidden', !state.assist.promptEnabled);
+    promptDrawer.classList.toggle('hidden', !state.assist.promptEnabled || !state.assist.promptDrawerOpen);
+    promptToggle.setAttribute('aria-expanded', state.assist.promptEnabled && state.assist.promptDrawerOpen ? 'true' : 'false');
+    const summaryModel = state.assist.kind === 'assist' ? assistSummaryModel(state.assist.stepId) : null;
     if (summaryModel?.headline) {
       summary.classList.remove('hidden');
       summaryMain.textContent = summaryModel.headline;
@@ -5765,6 +5951,10 @@ function renderHtml(initialState = null) {
       }
       const terminal = ensureAssistTerminal();
       if (payload.type === 'snapshot') {
+        state.assist.kind = payload.kind || state.assist.kind;
+        state.assist.title = payload.title || state.assist.title;
+        state.assist.ticketId = payload.ticketId || state.assist.ticketId;
+        state.assist.stepId = payload.stepId || state.assist.stepId;
         state.assist.status = payload.status || state.assist.status;
         renderAssistModal();
         if (payload.data) {
@@ -5809,8 +5999,12 @@ function renderHtml(initialState = null) {
 
   async function openAssistTerminal(stepId, { autoOpened = false } = {}) {
     state.assist.open = true;
+    state.assist.kind = 'assist';
+    state.assist.title = 'Claude Assist';
     state.assist.stepId = stepId;
+    state.assist.ticketId = null;
     state.assist.sessionId = null;
+    state.assist.promptEnabled = true;
     state.assist.status = 'starting';
     state.assist.loginAvailable = false;
     state.assist.loginSuppressed = false;
@@ -5842,6 +6036,56 @@ function renderHtml(initialState = null) {
       terminal.writeln('');
     }
     state.assist.stepId = payload.stepId || stepId;
+    state.assist.kind = payload.kind || 'assist';
+    state.assist.title = payload.title || 'Claude Assist';
+    state.assist.ticketId = payload.ticketId || null;
+    state.assist.sessionId = payload.sessionId;
+    state.assist.status = payload.status || 'running';
+    renderAssistModal();
+    connectAssistSocket(payload.sessionId);
+  }
+
+  async function openTicketTerminal(ticketId) {
+    state.assist.open = true;
+    state.assist.kind = 'ticket';
+    state.assist.title = 'Ticket Terminal';
+    state.assist.stepId = null;
+    state.assist.ticketId = ticketId;
+    state.assist.sessionId = null;
+    state.assist.promptEnabled = false;
+    state.assist.status = 'starting';
+    state.assist.loginAvailable = false;
+    state.assist.loginSuppressed = false;
+    state.assist.promptDrawerOpen = false;
+    state.assist.baselineRecommendationId = null;
+    state.assist.baselineSignalId = null;
+    state.assist.dismissedRecommendationId = null;
+    state.assist.dismissedSignalId = null;
+    state.assist.confirmation = null;
+    renderAssistModal();
+    const terminal = ensureAssistTerminal();
+    terminal.reset();
+    ticketTerminalPreludeLines(ticketId).forEach((line) => terminal.writeln(line));
+    terminal.writeln('');
+    terminal.writeln('[opening ticket terminal]');
+    focusAssistTerminal();
+    const response = await fetch('/api/ticket/terminal?ticket=' + encodeURIComponent(ticketId), {
+      method: 'POST',
+      cache: 'no-store'
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      terminal.writeln('[ticket terminal open failed] ' + (payload.message || payload.error || 'unknown error'));
+      throw new Error(payload.message || payload.error || 'ticket_terminal_failed');
+    }
+    if (!payload.reused) {
+      terminal.reset();
+      ticketTerminalPreludeLines(ticketId).forEach((line) => terminal.writeln(line));
+      terminal.writeln('');
+    }
+    state.assist.kind = payload.kind || 'ticket';
+    state.assist.title = payload.title || 'Ticket Terminal';
+    state.assist.ticketId = payload.ticketId || ticketId;
     state.assist.sessionId = payload.sessionId;
     state.assist.status = payload.status || 'running';
     renderAssistModal();
@@ -6439,7 +6683,7 @@ function renderHtml(initialState = null) {
         '</div></div>';
     }
 
-    const nextLabel = ticket.status === 'doing' ? 'Resume' : 'Start';
+    const nextLabel = ticket.status === 'doing' ? 'Resume' : 'チケット開始';
     html +=
       '<div class="detail-section"><div class="detail-section-title">Next</div>' +
         '<div class="next-actions">' +
@@ -6450,6 +6694,14 @@ function renderHtml(initialState = null) {
             '</div>' +
             '<div class="next-action-description">' + esc(ticket.status === 'doing' ? 'Resume this ticket in the current repo.' : 'Start this ticket and begin the PD-C flow.') + '</div>' +
             '<button class="next-action-direct" type="button" data-start-ticket="' + esc(ticket.id) + '" data-start-variant="' + esc(state.data.flow.activeVariant || 'full') + '">' + esc(nextLabel) + '</button>' +
+          '</div>' +
+          '<div class="next-action neutral">' +
+            '<div class="next-action-head">' +
+              '<span class="next-action-label">Open Terminal</span>' +
+              '<span class="next-action-choice">optional</span>' +
+            '</div>' +
+            '<div class="next-action-description">Run <code>./ticket.sh</code> first, then inspect the ticket files in a repo shell.</div>' +
+            '<button class="next-action-launch" type="button" data-ticket-terminal="' + esc(ticket.id) + '">Open Terminal</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -6496,6 +6748,51 @@ function renderHtml(initialState = null) {
   });
   document.getElementById('copy-fallback-close').addEventListener('click', () => {
     closeCopyFallback();
+  });
+  document.getElementById('action-modal-cancel').addEventListener('click', () => {
+    closeActionConfirm();
+  });
+  document.getElementById('action-modal-confirm').addEventListener('click', async () => {
+    if (!state.actionConfirm) {
+      return;
+    }
+    state.actionConfirm = {
+      ...state.actionConfirm,
+      submitting: true
+    };
+    renderActionConfirm();
+    try {
+      const action = state.actionConfirm;
+      if (action.kind === 'approve') {
+        const response = await fetch('/api/gate/approve?step=' + encodeURIComponent(action.stepId), {
+          method: 'POST',
+          cache: 'no-store'
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.message || payload.error || 'gate_approve_failed');
+        }
+      } else if (action.kind === 'ticket-start') {
+        const response = await fetch('/api/ticket/start?ticket=' + encodeURIComponent(action.ticketId) + '&variant=' + encodeURIComponent(action.variant || 'full'), {
+          method: 'POST',
+          cache: 'no-store'
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.message || payload.error || 'ticket_start_failed');
+        }
+      }
+      state.actionConfirm = null;
+      renderActionConfirm();
+      refresh();
+    } catch (error) {
+      state.actionConfirm = {
+        ...state.actionConfirm,
+        submitting: false
+      };
+      renderActionConfirm();
+      window.alert('Failed to apply action: ' + (error?.message || String(error)));
+    }
   });
   document.getElementById('assist-modal-close').addEventListener('click', () => {
     closeAssistModal();
@@ -6557,29 +6854,34 @@ function renderHtml(initialState = null) {
       if (!stepId) {
         return;
       }
-      const confirmed = window.confirm(stepId + ' を approve して次へ進めますか？');
-      if (!confirmed) {
+      openActionConfirm({
+        kind: 'approve',
+        stepId,
+        title: stepId + ' を承認しますか？',
+        body: 'この gate を承認して次へ進めます。',
+        confirmLabel: 'Approve'
+      });
+      return;
+    }
+
+    const ticketTerminalButton = event.target.closest('[data-ticket-terminal]');
+    if (ticketTerminalButton) {
+      const ticketId = ticketTerminalButton.dataset.ticketTerminal;
+      if (!ticketId) {
         return;
       }
-      const original = approveButton.textContent;
-      approveButton.disabled = true;
-      approveButton.textContent = 'Approving…';
+      const original = ticketTerminalButton.innerHTML;
+      ticketTerminalButton.disabled = true;
+      ticketTerminalButton.innerHTML = 'Opening…';
       try {
-        const response = await fetch('/api/gate/approve?step=' + encodeURIComponent(stepId), {
-          method: 'POST',
-          cache: 'no-store'
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.message || payload.error || 'gate_approve_failed');
-        }
-        refresh();
+        await openTicketTerminal(ticketId);
       } catch (error) {
-        window.alert('Failed to approve gate: ' + (error?.message || String(error)));
+        window.alert('Failed to open terminal: ' + (error?.message || String(error)));
       } finally {
-        approveButton.disabled = false;
-        approveButton.textContent = original;
+        ticketTerminalButton.disabled = false;
+        ticketTerminalButton.innerHTML = original;
       }
+      return;
     }
 
     const startButton = event.target.closest('[data-start-ticket]');
@@ -6589,29 +6891,14 @@ function renderHtml(initialState = null) {
       if (!ticketId) {
         return;
       }
-      const confirmed = window.confirm(ticketId + ' を ' + variant + ' flow で開始しますか？');
-      if (!confirmed) {
-        return;
-      }
-      const original = startButton.textContent;
-      startButton.disabled = true;
-      startButton.textContent = ticketId === state.selectedId ? 'Starting…' : 'Starting…';
-      try {
-        const response = await fetch('/api/ticket/start?ticket=' + encodeURIComponent(ticketId) + '&variant=' + encodeURIComponent(variant), {
-          method: 'POST',
-          cache: 'no-store'
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.message || payload.error || 'ticket_start_failed');
-        }
-        refresh();
-      } catch (error) {
-        window.alert('Failed to start ticket: ' + (error?.message || String(error)));
-      } finally {
-        startButton.disabled = false;
-        startButton.textContent = original;
-      }
+      openActionConfirm({
+        kind: 'ticket-start',
+        ticketId,
+        variant,
+        title: 'チケット開始',
+        body: ticketId + ' を ' + variant + ' flow で開始します。',
+        confirmLabel: 'Start'
+      });
       return;
     }
   });
@@ -6627,6 +6914,10 @@ function renderHtml(initialState = null) {
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && state.copyFallbackText) {
       closeCopyFallback();
+      return;
+    }
+    if (event.key === 'Escape' && state.actionConfirm) {
+      closeActionConfirm();
       return;
     }
     if (event.key === 'Escape' && state.assist.open) {

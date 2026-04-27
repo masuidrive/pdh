@@ -11,7 +11,7 @@ const RETAIN_EXITED_MS = 30 * 60 * 1000;
 
 export function createAssistTerminalManager({ repoPath }) {
   const sessions = new Map();
-  const activeByStep = new Map();
+  const activeByKey = new Map();
   const wss = new WebSocketServer({ noServer: true });
 
   wss.on("connection", (socket, request, session) => {
@@ -23,7 +23,10 @@ export function createAssistTerminalManager({ repoPath }) {
     send(socket, {
       type: "snapshot",
       sessionId: session.id,
+      kind: session.kind,
+      title: session.title,
       stepId: session.stepId,
+      ticketId: session.ticketId,
       status: session.status,
       exitCode: session.exitCode,
       signal: session.signal,
@@ -100,24 +103,63 @@ export function createAssistTerminalManager({ repoPath }) {
   }
 
   function openSession({ stepId }) {
+    return openManagedSession({
+      key: `step:${stepId}`,
+      kind: "assist",
+      title: "Claude Assist",
+      stepId,
+      command: process.execPath,
+      args: [CLI_PATH, "assist-open", "--repo", repoPath, "--step", stepId]
+    });
+  }
+
+  function openTicketSession({ ticketId, ticketPath = null, notePath = null }) {
+    const shellPath = process.env.SHELL || "/bin/bash";
+    const introLines = [
+      "[ticket terminal]",
+      `Ticket: ${ticketId}`,
+      ticketPath ? `Ticket file: ${ticketPath}` : null,
+      notePath ? `Work notes: ${notePath}` : null,
+      "",
+      "Ran ./ticket.sh first. Continue in this shell as needed.",
+      ""
+    ].filter(Boolean);
+    const script = [
+      `printf '%s\\n' ${introLines.map((line) => shellQuote(line)).join(" ")}`,
+      "./ticket.sh || true",
+      "printf '\\n'",
+      `exec ${shellQuote(shellPath)} -i`
+    ].join("; ");
+    return openManagedSession({
+      key: `ticket:${ticketId}`,
+      kind: "ticket",
+      title: "Ticket Terminal",
+      ticketId,
+      command: shellPath,
+      args: ["-lc", script]
+    });
+  }
+
+  function openManagedSession({ key, kind, title, stepId = null, ticketId = null, command, args }) {
     pruneSessions();
-    const existingId = activeByStep.get(stepId);
+    const existingId = activeByKey.get(key);
     if (existingId) {
       const existing = sessions.get(existingId);
       if (existing && existing.status === "running") {
         return {
           sessionId: existing.id,
+          kind,
+          title,
           stepId,
+          ticketId,
           status: existing.status,
           reused: true
         };
       }
-      activeByStep.delete(stepId);
+      activeByKey.delete(key);
     }
 
     const id = `assist-term-${Date.now()}-${randomBytes(3).toString("hex")}`;
-    const command = process.execPath;
-    const args = [CLI_PATH, "assist-open", "--repo", repoPath, "--step", stepId];
     const pty = spawnPty(command, args, {
       name: "xterm-color",
       cwd: repoPath,
@@ -130,7 +172,11 @@ export function createAssistTerminalManager({ repoPath }) {
     });
     const session = {
       id,
+      key,
+      kind,
+      title,
       stepId,
+      ticketId,
       command,
       args,
       pty,
@@ -143,7 +189,7 @@ export function createAssistTerminalManager({ repoPath }) {
       clients: new Set()
     };
     sessions.set(id, session);
-    activeByStep.set(stepId, id);
+    activeByKey.set(key, id);
 
     pty.onData((data) => {
       session.buffer = trimBuffer(session.buffer + data);
@@ -155,8 +201,8 @@ export function createAssistTerminalManager({ repoPath }) {
       session.exitCode = event.exitCode ?? 0;
       session.signal = event.signal ?? null;
       session.updatedAt = Date.now();
-      if (activeByStep.get(stepId) === id) {
-        activeByStep.delete(stepId);
+      if (activeByKey.get(key) === id) {
+        activeByKey.delete(key);
       }
       broadcast(session, {
         type: "exit",
@@ -167,7 +213,10 @@ export function createAssistTerminalManager({ repoPath }) {
 
     return {
       sessionId: id,
+      kind,
+      title,
       stepId,
+      ticketId,
       status: session.status,
       reused: false
     };
@@ -205,14 +254,19 @@ export function createAssistTerminalManager({ repoPath }) {
       }
     }
     sessions.clear();
-    activeByStep.clear();
+    activeByKey.clear();
     wss.clients.forEach((socket) => socket.close(1001, "server_shutdown"));
     wss.close();
   }
 
   return {
     openSession,
+    openTicketSession,
     handleUpgrade,
     closeAll
   };
+}
+
+function shellQuote(value) {
+  return `'${String(value ?? "").replaceAll("'", `'\\''`)}'`;
 }
