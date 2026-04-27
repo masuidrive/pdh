@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
-import { loadFlow, getInitialStep } from "./flow.mjs";
+import { loadFlow, getInitialStep, getStep } from "./flow.mjs";
 import { createRedactor } from "./redaction.mjs";
 import { loadCurrentNote, saveCurrentNote } from "./note-state.mjs";
 
@@ -59,7 +59,10 @@ export function ensureCanonicalFiles(repoPath, ticket = null) {
   }
 }
 
-export function loadRuntime(repoPath) {
+export function loadRuntime(repoPath, options = {}) {
+  if (options.normalizeStaleRunning === true) {
+    normalizeStaleRunningRuntime(repoPath, options);
+  }
   const repo = repoPath;
   const note = loadCurrentNote(repo);
   const run = note.pdh.current_step
@@ -413,6 +416,7 @@ export function clearHumanGateRecommendation({ stateDir, runId, stepId }) {
 
 export function resetStepArtifacts({ stateDir, runId, stepId }) {
   rmSync(stepDir(stateDir, runId, stepId), { recursive: true, force: true });
+  clearTrackedProcesses({ stateDir, runId, stepId });
 }
 
 export function cleanupRunArtifacts({ repoPath, runId }) {
@@ -453,6 +457,122 @@ export function progressPath(stateDir, runId) {
   return join(runDir(stateDir, runId), "progress.jsonl");
 }
 
+export function processRegistryPath(stateDir, runId) {
+  return join(runDir(stateDir, runId), "process-registry.json");
+}
+
+export function loadProcessRegistry({ stateDir, runId }) {
+  const registry = readJson(processRegistryPath(stateDir, runId));
+  if (!registry || !Array.isArray(registry.entries)) {
+    return {
+      runId,
+      updated_at: null,
+      entries: []
+    };
+  }
+  return {
+    runId,
+    updated_at: registry.updated_at ?? null,
+    entries: registry.entries.filter((entry) => entry && typeof entry === "object")
+  };
+}
+
+export function listTrackedProcesses({ stateDir, runId, stepId = null }) {
+  const registry = loadProcessRegistry({ stateDir, runId });
+  const entries = registry.entries.map((entry) => ({
+    id: entry.id ?? null,
+    kind: entry.kind ?? null,
+    stepId: entry.stepId ?? null,
+    attempt: entry.attempt ?? null,
+    round: entry.round ?? null,
+    reviewerId: entry.reviewerId ?? null,
+    provider: entry.provider ?? null,
+    label: entry.label ?? null,
+    pid: entry.pid ?? null,
+    status: entry.status ?? null,
+    startedAt: entry.startedAt ?? null,
+    finishedAt: entry.finishedAt ?? null,
+    exitCode: entry.exitCode ?? null
+  }));
+  return stepId ? entries.filter((entry) => entry.stepId === stepId) : entries;
+}
+
+export function registerTrackedProcess({ stateDir, runId, entry }) {
+  const registry = loadProcessRegistry({ stateDir, runId });
+  const id = String(entry?.id ?? "").trim();
+  if (!id) {
+    throw new Error("Tracked process entry id is required");
+  }
+  const nextEntry = {
+    id,
+    kind: entry.kind ?? null,
+    stepId: entry.stepId ?? null,
+    attempt: entry.attempt ?? null,
+    round: entry.round ?? null,
+    reviewerId: entry.reviewerId ?? null,
+    provider: entry.provider ?? null,
+    label: entry.label ?? null,
+    pid: entry.pid ?? null,
+    status: entry.status ?? "running",
+    startedAt: entry.startedAt ?? new Date().toISOString(),
+    finishedAt: entry.finishedAt ?? null,
+    exitCode: entry.exitCode ?? null
+  };
+  const entries = registry.entries.filter((item) => item?.id !== id);
+  entries.push(nextEntry);
+  writeJson(processRegistryPath(stateDir, runId), {
+    runId,
+    updated_at: new Date().toISOString(),
+    entries
+  });
+  return nextEntry;
+}
+
+export function finishTrackedProcess({ stateDir, runId, entryId, status, pid = null, finishedAt = null, exitCode = null }) {
+  const registry = loadProcessRegistry({ stateDir, runId });
+  const id = String(entryId ?? "").trim();
+  if (!id) {
+    return null;
+  }
+  const entries = registry.entries.map((entry) => {
+    if (entry?.id !== id) {
+      return entry;
+    }
+    return {
+      ...entry,
+      status,
+      pid: pid ?? entry.pid ?? null,
+      finishedAt: finishedAt ?? new Date().toISOString(),
+      exitCode: exitCode ?? entry.exitCode ?? null
+    };
+  });
+  writeJson(processRegistryPath(stateDir, runId), {
+    runId,
+    updated_at: new Date().toISOString(),
+    entries
+  });
+  return entries.find((entry) => entry?.id === id) ?? null;
+}
+
+export function clearTrackedProcesses({ stateDir, runId, stepId = null }) {
+  const path = processRegistryPath(stateDir, runId);
+  if (!existsSync(path)) {
+    return null;
+  }
+  if (!stepId) {
+    rmSync(path, { force: true });
+    return path;
+  }
+  const registry = loadProcessRegistry({ stateDir, runId });
+  const entries = registry.entries.filter((entry) => entry?.stepId !== stepId);
+  writeJson(path, {
+    runId,
+    updated_at: new Date().toISOString(),
+    entries
+  });
+  return path;
+}
+
 export function runDir(stateDir, runId) {
   return join(stateDir, "runs", runId);
 }
@@ -491,6 +611,84 @@ function readJson(path) {
     return JSON.parse(readFileSync(path, "utf8"));
   } catch {
     return null;
+  }
+}
+
+export function normalizeStaleRunningRuntime(repoPath, options = {}) {
+  const staleAfterMs = Number.isFinite(Number(options.staleAfterMs)) ? Number(options.staleAfterMs) : 15000;
+  const runtime = loadRuntime(repoPath);
+  const run = runtime.run;
+  if (!run?.id || run.status !== "running" || !run.current_step_id) {
+    return runtime;
+  }
+  const step = getStep(runtime.flow, run.current_step_id);
+  if (!step) {
+    return runtime;
+  }
+  const latestAttempt = latestAttemptResult({
+    stateDir: runtime.stateDir,
+    runId: run.id,
+    stepId: step.id,
+    provider: step.mode === "review" ? null : step.provider
+  });
+  if (!latestAttempt || latestAttempt.status !== "running") {
+    return runtime;
+  }
+  const activeProcesses = listTrackedProcesses({ stateDir: runtime.stateDir, runId: run.id, stepId: step.id })
+    .filter((entry) => entry.status === "running" && Number.isInteger(Number(entry.pid)) && pidIsAlive(Number(entry.pid)));
+  if (activeProcesses.length > 0) {
+    return runtime;
+  }
+  const referenceIso = latestAttempt.lastEventAt ?? latestAttempt.startedAt ?? run.updated_at ?? run.created_at ?? null;
+  const referenceMs = referenceIso ? Date.parse(referenceIso) : NaN;
+  if (Number.isFinite(referenceMs) && Date.now() - referenceMs < staleAfterMs) {
+    return runtime;
+  }
+  const staleEntries = listTrackedProcesses({ stateDir: runtime.stateDir, runId: run.id, stepId: step.id })
+    .filter((entry) => entry.status === "running");
+  const detail = staleEntries.length > 0
+    ? staleEntries.slice(0, 3).map((entry) => entry.label || entry.kind || "process").join(", ")
+    : "no active tracked processes";
+  const reason = `${step.id} stayed running without a live process (${detail}).`;
+  writeAttemptResult({
+    stateDir: runtime.stateDir,
+    runId: run.id,
+    stepId: step.id,
+    attempt: latestAttempt.attempt,
+    result: {
+      ...latestAttempt,
+      status: "failed",
+      finalMessage: reason,
+      stderr: latestAttempt.stderr || reason,
+      finishedAt: new Date().toISOString()
+    }
+  });
+  updateRun(repoPath, {
+    status: "failed",
+    current_step_id: step.id
+  });
+  appendProgressEvent({
+    repoPath,
+    runId: run.id,
+    stepId: step.id,
+    attempt: latestAttempt.attempt ?? null,
+    type: "runtime_stale",
+    provider: "runtime",
+    message: `${step.id} stale running normalized to failed`,
+    payload: {
+      reason,
+      staleAfterMs
+    }
+  });
+  return loadRuntime(repoPath);
+}
+
+function pidIsAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
   }
 }
 

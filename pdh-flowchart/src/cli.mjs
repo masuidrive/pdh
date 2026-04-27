@@ -50,6 +50,7 @@ import { clearStepCommitRecord, loadStepCommitRecord, writeStepCommitRecord } fr
 import {
   appendProgressEvent,
   cleanupRunArtifacts,
+  finishTrackedProcess,
   defaultStateDir,
   ensureCanonicalFiles,
   hasCompletedProviderAttempt,
@@ -62,6 +63,7 @@ import {
   openHumanGate,
   progressPath,
   readProgressEvents,
+  registerTrackedProcess,
   resetStepArtifacts,
   resolveHumanGate,
   saveRun,
@@ -230,7 +232,7 @@ async function cmdRun(argv) {
   assertStepInVariant(flow, variant, startStep);
 
   await withRuntimeLock({ repo, options, action: async () => {
-    const runtime = loadRuntime(repo);
+    const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
     if (runtime.run?.id && options["force-reset"] !== "true") {
       throw new Error("An active run already exists in current-note.md. Pass --force-reset to replace it.");
     }
@@ -266,7 +268,7 @@ function cmdFlowGraph(argv) {
   const variant = options.variant ?? "full";
   const flow = loadFlow(options.flow ?? "pdh-ticket-core");
   const repo = resolve(options.repo ?? process.cwd());
-  const currentStepId = options.current ?? loadRuntime(repo).run?.current_step_id ?? null;
+  const currentStepId = options.current ?? loadRuntime(repo, { normalizeStaleRunning: true }).run?.current_step_id ?? null;
   if (options.format === "json") {
     console.log(JSON.stringify(buildFlowView(flow, variant, currentStepId), null, 2));
     return;
@@ -277,7 +279,7 @@ function cmdFlowGraph(argv) {
 async function cmdGuards(argv) {
   const options = parseOptions(argv);
   const repo = resolve(options.repo ?? process.cwd());
-  const runtime = loadRuntime(repo);
+  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
   const stepId = options.step ?? runtime.run?.current_step_id;
   if (!stepId) {
     throw new Error("No current step. Use --step or start a run first.");
@@ -1240,7 +1242,7 @@ function cmdTicketClose(argv) {
 function cmdCleanup(argv) {
   const options = parseOptions(argv);
   const repo = resolve(options.repo ?? process.cwd());
-  const runtime = loadRuntime(repo);
+  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
   if (!runtime.run?.id) {
     throw new Error("No active run artifacts to clean up");
   }
@@ -1268,7 +1270,7 @@ function cmdCleanup(argv) {
 function cmdStatus(argv) {
   const options = parseOptions(argv);
   const repo = resolve(options.repo ?? process.cwd());
-  const runtime = loadRuntime(repo);
+  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
   const run = runtime.run;
   if (!run) {
     console.log("Status: idle");
@@ -1461,6 +1463,7 @@ async function executeProviderStep({ repo, runtime, step, options }) {
   clearStepCommitRecord({ stateDir: runtime.stateDir, runId, stepId });
   while (attempt <= maxAttempts) {
     rawLogPath = join(runtime.stateDir, "runs", runId, "steps", stepId, `attempt-${attempt}`, `${step.provider}.raw.jsonl`);
+    const trackedProcessId = providerProcessEntryId(stepId, attempt);
     const resume = resolveProviderResume({
       runtime,
       stepId,
@@ -1519,6 +1522,23 @@ async function executeProviderStep({ repo, runtime, step, options }) {
               ...attemptState,
               pid: pid ?? null
             };
+            if (pid) {
+              registerTrackedProcess({
+                stateDir: runtime.stateDir,
+                runId,
+                entry: {
+                  id: trackedProcessId,
+                  kind: "provider",
+                  stepId,
+                  attempt,
+                  provider: step.provider,
+                  label: step.provider,
+                  pid,
+                  status: "running",
+                  startedAt: attemptState.startedAt
+                }
+              });
+            }
             writeAttemptResult({
               stateDir: runtime.stateDir,
               runId,
@@ -1571,6 +1591,23 @@ async function executeProviderStep({ repo, runtime, step, options }) {
               ...attemptState,
               pid: pid ?? null
             };
+            if (pid) {
+              registerTrackedProcess({
+                stateDir: runtime.stateDir,
+                runId,
+                entry: {
+                  id: trackedProcessId,
+                  kind: "provider",
+                  stepId,
+                  attempt,
+                  provider: step.provider,
+                  label: step.provider,
+                  pid,
+                  status: "running",
+                  startedAt: attemptState.startedAt
+                }
+              });
+            }
             writeAttemptResult({
               stateDir: runtime.stateDir,
               runId,
@@ -1609,6 +1646,15 @@ async function executeProviderStep({ repo, runtime, step, options }) {
 
     lastResult = result;
     status = result.exitCode === 0 ? "completed" : "failed";
+    finishTrackedProcess({
+      stateDir: runtime.stateDir,
+      runId,
+      entryId: trackedProcessId,
+      status,
+      pid: result.pid ?? attemptState.pid ?? null,
+      exitCode: result.exitCode ?? null,
+      finishedAt: new Date().toISOString()
+    });
     writeAttemptResult({
       stateDir: runtime.stateDir,
       runId,
@@ -2211,6 +2257,7 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, roun
     payload: { reviewerId: reviewer.reviewerId, artifactPath: promptArtifact.artifactPath, round }
   });
   const provider = reviewer.provider || step.provider;
+  const trackedProcessId = reviewerProcessEntryId(step.id, round, reviewer.reviewerId, attempt);
   const rawLogPath = join(reviewRoundReviewerAttemptDir({
     stateDir: runtime.stateDir,
     runId: runtime.run.id,
@@ -2270,6 +2317,25 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, roun
         ...reviewerAttemptState,
         pid: pid ?? null
       };
+      if (pid) {
+        registerTrackedProcess({
+          stateDir: runtime.stateDir,
+          runId: runtime.run.id,
+          entry: {
+            id: trackedProcessId,
+            kind: "reviewer",
+            stepId: step.id,
+            attempt,
+            round,
+            reviewerId: reviewer.reviewerId,
+            provider,
+            label: `${reviewer.reviewerId} (round-${round})`,
+            pid,
+            status: "running",
+            startedAt: reviewerAttemptState.startedAt
+          }
+        });
+      }
       writeReviewerAttemptResult({
         stateDir: runtime.stateDir,
         runId: runtime.run.id,
@@ -2297,6 +2363,15 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, roun
         }
       });
     }
+  });
+  finishTrackedProcess({
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    entryId: trackedProcessId,
+    status: result.exitCode === 0 ? "completed" : "failed",
+    pid: result.pid ?? reviewerAttemptState.pid ?? null,
+    exitCode: result.exitCode ?? null,
+    finishedAt: new Date().toISOString()
   });
   writeReviewerAttemptResult({
     stateDir: runtime.stateDir,
@@ -2408,6 +2483,7 @@ async function executeReviewRepair({ repo, runtime, step, reviewPlan, aggregate,
     stepId: step.id,
     round
   }), `${provider}.raw.jsonl`);
+  const trackedProcessId = repairProcessEntryId(step.id, round);
   appendProgressEvent({
     repoPath: repo,
     runId: runtime.run.id,
@@ -2457,6 +2533,24 @@ async function executeReviewRepair({ repo, runtime, step, reviewPlan, aggregate,
         ...repairAttemptState,
         pid: pid ?? null
       };
+      if (pid) {
+        registerTrackedProcess({
+          stateDir: runtime.stateDir,
+          runId: runtime.run.id,
+          entry: {
+            id: trackedProcessId,
+            kind: "repair",
+            stepId: step.id,
+            attempt,
+            round,
+            provider,
+            label: `repair (round-${round})`,
+            pid,
+            status: "running",
+            startedAt: repairAttemptState.startedAt
+          }
+        });
+      }
       writeReviewRepairResult({
         stateDir: runtime.stateDir,
         runId: runtime.run.id,
@@ -2482,6 +2576,15 @@ async function executeReviewRepair({ repo, runtime, step, reviewPlan, aggregate,
         }
       });
     }
+  });
+  finishTrackedProcess({
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    entryId: trackedProcessId,
+    status: result.exitCode === 0 ? "completed" : "failed",
+    pid: result.pid ?? repairAttemptState.pid ?? null,
+    exitCode: result.exitCode ?? null,
+    finishedAt: new Date().toISOString()
   });
 
   const resultPath = writeReviewRepairResult({
@@ -3273,7 +3376,7 @@ function maybeStartTicket({ repo, ticket, required = false }) {
 }
 
 function syncStepUiRuntime({ repo, stepId = null, guardResults = null, nextCommands = null }) {
-  const runtime = loadRuntime(repo);
+  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
   if (!runtime.run?.id || !runtime.run.current_step_id) {
     return null;
   }
@@ -3308,7 +3411,7 @@ function defaultUiNextCommands({ repo, runtime, step }) {
 }
 
 function requireRuntime(repo) {
-  const runtime = loadRuntime(repo);
+  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
   if (!runtime.run?.current_step_id || !runtime.run?.flow_id) {
     throw new Error("No active run found in current-note.md");
   }
@@ -3316,7 +3419,7 @@ function requireRuntime(repo) {
 }
 
 async function withRuntimeLock({ repo, options = {}, action }) {
-  const runtime = loadRuntime(repo);
+  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
   const runId = runtime.run?.id ?? "active";
   return await withRunLock({
     stateDir: defaultStateDir(repo),
@@ -3676,6 +3779,18 @@ function latestStepCommit(repo, stepId, { short = true } = {}) {
 
 function currentHead(repo) {
   return runGit(repo, ["rev-parse", "HEAD"])?.stdout.trim() || null;
+}
+
+function providerProcessEntryId(stepId, attempt) {
+  return `provider:${stepId}:attempt-${attempt}`;
+}
+
+function reviewerProcessEntryId(stepId, round, reviewerId, attempt) {
+  return `reviewer:${stepId}:round-${round}:${reviewerId}:attempt-${attempt}`;
+}
+
+function repairProcessEntryId(stepId, round) {
+  return `repair:${stepId}:round-${round}`;
 }
 
 function runGit(repo, args) {

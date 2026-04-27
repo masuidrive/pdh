@@ -15,7 +15,7 @@ import { extractSection, loadCurrentNote, parseStepHistory } from "./note-state.
 import { createRedactor } from "./redaction.mjs";
 import { loadReviewerOutputsForStep } from "./review-runtime.mjs";
 import { loadStepUiOutput, loadStepUiRuntime } from "./step-ui.mjs";
-import { hasCompletedProviderAttempt, latestAttemptResult, latestHumanGate, loadRuntime, readProgressEvents, stepDir } from "./runtime-state.mjs";
+import { hasCompletedProviderAttempt, latestAttemptResult, latestHumanGate, listTrackedProcesses, loadRuntime, readProgressEvents, stepDir } from "./runtime-state.mjs";
 
 const MAX_TEXT = 120000;
 const MARKDOWN_EXTENSIONS = new Set([".md", ".markdown"]);
@@ -408,7 +408,7 @@ function spawnBackgroundCli({ repo, args }) {
 }
 
 function collectState({ repo }) {
-  const runtime = loadRuntime(repo);
+  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
   const redactor = createRedactor({ repoPath: repo });
   const note = runtime.note;
   const ticketText = existsSync(join(repo, "current-ticket.md")) ? readFileSync(join(repo, "current-ticket.md"), "utf8") : "";
@@ -745,9 +745,7 @@ function buildSummary({ runtime, activeVariant, ac, currentStep, currentGate, in
 }
 
 function collectStepProcessState({ stateDir, runId, step, attempt }) {
-  const entries = step.mode === "review"
-    ? collectReviewProcessEntries({ stateDir, runId, stepId: step.id })
-    : collectProviderProcessEntries({ attempt });
+  const entries = collectTrackedProcessEntries({ stateDir, runId, step, attempt });
   if (!entries.length) {
     return {
       activeCount: 0,
@@ -779,6 +777,23 @@ function collectStepProcessState({ stateDir, runId, step, attempt }) {
       ? `${dead[0].label} は終了しています。runtime の state が stale です。`
       : `${dead.length} 個の provider process はすでに終了しています。runtime の state が stale です。`
   };
+}
+
+function collectTrackedProcessEntries({ stateDir, runId, step, attempt }) {
+  const tracked = listTrackedProcesses({ stateDir, runId, stepId: step.id })
+    .filter((entry) => entry.status === "running")
+    .map((entry) => ({
+      label: entry.label || entry.provider || entry.kind || "process",
+      pid: Number(entry.pid),
+      alive: Number.isInteger(Number(entry.pid)) && Number(entry.pid) > 0 ? isPidAlive(Number(entry.pid)) : false
+    }))
+    .filter((entry) => Number.isInteger(entry.pid) && entry.pid > 0);
+  if (tracked.length > 0) {
+    return tracked;
+  }
+  return step.mode === "review"
+    ? collectReviewProcessEntries({ stateDir, runId, stepId: step.id })
+    : collectProviderProcessEntries({ attempt });
 }
 
 function collectProviderProcessEntries({ attempt }) {
@@ -1203,12 +1218,12 @@ function visitArtifacts(dir, artifacts, root) {
 }
 
 function collectMermaid({ repo, variant = null }) {
-  const runtime = loadRuntime(repo);
+  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
   return renderMermaidFlow(runtime.flow, variant ?? runtime.run?.flow_variant ?? "full", runtime.run?.current_step_id ?? null);
 }
 
 function collectArtifactPayload({ repo, stepId, name }) {
-  const runtime = loadRuntime(repo);
+  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
   const runId = runtime.run?.id;
   if (!runId || !stepId || !name) {
     return null;
@@ -1243,7 +1258,7 @@ function collectArtifactPayload({ repo, stepId, name }) {
 }
 
 function resolveDiffBaseline({ repo, stepId }) {
-  const runtime = loadRuntime(repo);
+  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
   const run = runtime.run;
   if (!run?.id || !stepId) {
     return null;
