@@ -221,6 +221,70 @@ SH
   printf '%s\n' "$path"
 }
 
+write_fake_claude_purpose_validation() {
+  local path="$TMP_ROOT/fake-claude-purpose-validation.sh"
+  cat >"$path" <<'SH'
+#!/usr/bin/env bash
+prompt=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-p" ]; then
+    prompt="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+review_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*review.yaml\)`\.$/\1/p' | head -1)"
+if [ -n "$review_path" ]; then
+  mkdir -p "$(dirname "$review_path")"
+  cat >"$review_path" <<'YAML'
+status: No Unverified
+summary: every Product AC has concrete evidence and no close blocker remains
+findings: []
+notes: purpose validation passed
+YAML
+fi
+printf '%s\n' '{"type":"system","subtype":"init","session_id":"fake-session"}'
+printf '%s\n' '{"type":"assistant","message":{"content":"fake PD-C-8 review success"}}'
+printf '%s\n' '{"type":"result","subtype":"success","result":"fake PD-C-8 review success"}'
+SH
+  chmod +x "$path"
+  printf '%s\n' "$path"
+}
+
+write_fake_codex_guard_repair() {
+  local path="$TMP_ROOT/fake-codex-guard-repair.sh"
+  cat >"$path" <<'SH'
+#!/usr/bin/env bash
+prompt="$(cat || true)"
+repair_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write plain YAML to `\([^`]*repair.yaml\)`\.$/\1/p' | head -1)"
+if [ -n "$repair_path" ]; then
+  cat >>current-note.md <<'MD'
+
+## AC 裏取り結果
+
+| item | classification | status | evidence | deferral ticket |
+| --- | --- | --- | --- | --- |
+| parentheses success case | functional | verified | scripts/test-all.sh covers committed parentheses success paths | - |
+| malformed parentheses failure case | edge-case | verified | scripts/test-all.sh asserts exit status 2 and `error:` prefix for malformed parentheses | - |
+
+MD
+  mkdir -p "$(dirname "$repair_path")"
+  cat >"$repair_path" <<'YAML'
+summary: added the AC verification table required by the guard
+verification:
+  - checked current-note.md for AC 裏取り結果 rows
+remaining_risks: []
+notes: guard repair
+YAML
+fi
+printf '%s\n' '{"type":"thread.started","thread_id":"fake-thread"}'
+printf '%s\n' '{"type":"turn.completed","final_message":"fake guard repair success"}'
+SH
+  chmod +x "$path"
+  printf '%s\n' "$path"
+}
+
 test_frontmatter_run() {
   local repo
   repo="$(seed_repo frontmatter)"
@@ -379,6 +443,22 @@ test_review_loop_auto_repair() {
   grep -q '"status": "No Critical/Major"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
 }
 
+test_review_guard_auto_repair() {
+  local repo run_id fake_claude fake_codex
+  repo="$(seed_repo review-guard-auto-repair)"
+  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-8 | sed -n '1p')"
+  fake_claude="$(write_fake_claude_purpose_validation)"
+  fake_codex="$(write_fake_codex_guard_repair)"
+  CLAUDE_BIN="$fake_claude" CODEX_BIN="$fake_codex" \
+    node "$ROOT/src/cli.mjs" run-next --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.review-guard-repair.txt"
+  grep -q "PD-C-9" "$TMP_ROOT/$run_id.review-guard-repair.txt"
+  grep -q "## AC 裏取り結果" "$repo/current-note.md"
+  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-8/review-rounds/round-2/repair.yaml"
+  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-8/step-commit.json"
+  node "$ROOT/src/cli.mjs" status --repo "$repo" >"$TMP_ROOT/$run_id.review-guard-status.txt"
+  grep -q "Current Step: PD-C-9" "$TMP_ROOT/$run_id.review-guard-status.txt"
+}
+
 test_failed_run() {
   local repo run_id fake summary_path
   repo="$(seed_repo failed)"
@@ -410,6 +490,13 @@ test_auto_resume_after_idle_timeout() {
   grep -q '"status": "failed"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/attempt-1/result.json"
   grep -q '"sessionId": "fake-resume-thread"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/attempt-1/result.json"
   grep -q '"timeoutKind": "idle"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/attempt-1/result.json"
+}
+
+test_stale_normalization_respects_step_finished() {
+  local repo run_id
+  repo="$(seed_repo stale-normalization-finished)"
+  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-8 | sed -n '1p')"
+  node --input-type=module -e "import { appendProgressEvent, defaultStateDir, loadRuntime, updateRun, writeAttemptResult, latestAttemptResult } from '$ROOT/src/runtime-state.mjs'; const repo = '$repo'; const runId = '$run_id'; const stateDir = defaultStateDir(repo); writeAttemptResult({ stateDir, runId, stepId: 'PD-C-8', attempt: 1, result: { provider: 'claude', status: 'running', pid: null, exitCode: null, finalMessage: null, stderr: '', timedOut: false, timeoutKind: null, signal: null, sessionId: null, resumeToken: null, rawLogPath: 'raw', startedAt: '2026-04-27T00:00:00.000Z', lastEventAt: '2026-04-27T00:00:00.000Z' } }); appendProgressEvent({ repoPath: repo, runId, stepId: 'PD-C-8', attempt: 1, type: 'step_finished', provider: 'runtime', message: 'PD-C-8 completed', payload: { finalMessage: 'done' } }); updateRun(repo, { status: 'running', current_step_id: 'PD-C-8' }); loadRuntime(repo, { normalizeStaleRunning: true, staleAfterMs: 0 }); const runtime = loadRuntime(repo); const latest = latestAttemptResult({ stateDir, runId, stepId: 'PD-C-8', provider: null }); if (runtime.run.status !== 'running') throw new Error('run status should stay running'); if (latest.status !== 'completed') throw new Error('attempt should be normalized to completed');"
 }
 
 test_resumed_run() {
@@ -636,6 +723,8 @@ test_auto_review_judgement
 test_review_loop_auto_repair
 test_failed_run
 test_auto_resume_after_idle_timeout
+test_review_guard_auto_repair
+test_stale_normalization_respects_step_finished
 test_resumed_run
 test_interrupted_run
 test_assist_gate_flow

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { join, relative, resolve } from "node:path";
 import { loadDotEnv } from "./env.mjs";
@@ -406,6 +406,22 @@ async function cmdRunNext(argv) {
       const guardResults = evaluateCurrentGuards({ repo, runtime, step, gate });
       const failed = guardResults.filter((guard) => guard.status === "failed");
       if (failed.length > 0) {
+        const guardRepair = await maybeAutoRepairReviewGuards({
+          repo,
+          runtime,
+          step,
+          failedGuards: failed,
+          options
+        });
+        if (guardRepair?.status === "repaired") {
+          trace.push({
+            status: "guard_repaired",
+            stepId: step.id,
+            repairedGuards: guardRepair.repairedGuards,
+            rounds: guardRepair.rounds
+          });
+          continue;
+        }
         updateRun(repo, { status: "blocked", current_step_id: step.id });
         const message = describeGuardFailureMessage(failed);
         const summary = createFailureSummaryForBlock({ repo, runtime, step, failedGuards: failed, message });
@@ -3064,6 +3080,212 @@ function createFailureSummaryForBlock({ repo, runtime, step, failedGuards, messa
     payload: { artifactPath: summary.artifactPath, reason: "guard_failed" }
   });
   return summary;
+}
+
+async function maybeAutoRepairReviewGuards({ repo, runtime, step, failedGuards, options }) {
+  if (step.mode !== "review" || failedGuards.length === 0) {
+    return null;
+  }
+  const reviewPlan = activeReviewPlan(runtime.flow, runtime.run.flow_variant, step.id);
+  if (!reviewPlan) {
+    return null;
+  }
+  const repairProvider = reviewRepairProviderForStep(runtime.flow, step, reviewPlan);
+  if (!repairProvider) {
+    return null;
+  }
+  const latestAttempt = latestAttemptResult({
+    stateDir: runtime.stateDir,
+    runId: runtime.run.id,
+    stepId: step.id,
+    provider: step.provider
+  });
+  if (!latestAttempt || latestAttempt.status !== "completed") {
+    return null;
+  }
+
+  const maxGuardRepairRounds = 2;
+  let pendingGuards = failedGuards;
+  let rounds = 0;
+  while (rounds < maxGuardRepairRounds) {
+    const repairFindings = guardRepairFindingsForStep(step, pendingGuards);
+    if (!repairFindings) {
+      return null;
+    }
+    rounds += 1;
+    const round = nextReviewRoundNumber({
+      stateDir: runtime.stateDir,
+      runId: runtime.run.id,
+      stepId: step.id
+    });
+    const beforeCommit = currentHead(repo);
+    appendProgressEvent({
+      repoPath: repo,
+      runId: runtime.run.id,
+      stepId: step.id,
+      attempt: latestAttempt.attempt ?? null,
+      type: "guard_repair_started",
+      provider: "runtime",
+      message: `${step.id} auto repair for guard failures started`,
+      payload: {
+        round,
+        provider: repairProvider,
+        failedGuards: pendingGuards.map((guard) => guard.guardId)
+      }
+    });
+    const repair = await executeReviewRepair({
+      repo,
+      runtime,
+      step,
+      reviewPlan,
+      aggregate: {
+        status: "Guard Repair Required",
+        acceptedStatus: null,
+        summary: `Guard-facing evidence is still missing after ${step.id} review acceptance.`,
+        reviewers: [],
+        findings: repairFindings,
+        blockingFindings: repairFindings,
+        topFindings: repairFindings.filter((finding) => ["critical", "major"].includes(finding.severity)),
+        readyWhen: Array.isArray(reviewPlan.passWhen) ? reviewPlan.passWhen : []
+      },
+      attempt: latestAttempt.attempt ?? nextStepAttempt({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }),
+      round,
+      provider: repairProvider,
+      timeoutMs: providerTimeoutMs({ options, flow: runtime.flow, step }),
+      idleTimeoutMs: providerIdleTimeoutMs({ options, flow: runtime.flow, step }),
+      options
+    });
+    if (repair.result.exitCode !== 0 || !repair.output || repair.output.parseErrors?.length) {
+      appendProgressEvent({
+        repoPath: repo,
+        runId: runtime.run.id,
+        stepId: step.id,
+        attempt: latestAttempt.attempt ?? null,
+        type: "guard_repair_failed",
+        provider: "runtime",
+        message: `${step.id} auto repair for guard failures failed`,
+        payload: {
+          round,
+          provider: repairProvider,
+          exitCode: repair.result.exitCode,
+          parseErrors: repair.output?.parseErrors ?? []
+        }
+      });
+      return null;
+    }
+
+    const commitResult = commitStep({
+      repoPath: repo,
+      stepId: step.id,
+      message: repair.output.summary ? `Guard repair: ${repair.output.summary}` : "Guard repair"
+    });
+    let stepCommit = null;
+    if (commitResult.status === "committed") {
+      stepCommit = writeStepCommitRecord({
+        repoPath: repo,
+        stateDir: runtime.stateDir,
+        runId: runtime.run.id,
+        stepId: step.id,
+        beforeCommit
+      });
+      if (stepCommit) {
+        appendProgressEvent({
+          repoPath: repo,
+          runId: runtime.run.id,
+          stepId: step.id,
+          attempt: latestAttempt.attempt ?? null,
+          type: "artifact",
+          provider: "runtime",
+          message: `step commit ${stepCommit.short_commit}`,
+          payload: { artifactPath: stepCommit.artifactPath, stepCommit }
+        });
+      }
+    }
+
+    const refreshedRuntime = requireRuntime(repo);
+    hydrateStepArtifactsBeforeGuards({ repo, runtime: refreshedRuntime, step });
+    const refreshedGuards = evaluateCurrentGuards({ repo, runtime: refreshedRuntime, step, gate: null });
+    const stillFailed = refreshedGuards.filter((guard) => guard.status === "failed");
+    appendProgressEvent({
+      repoPath: repo,
+      runId: runtime.run.id,
+      stepId: step.id,
+      attempt: latestAttempt.attempt ?? null,
+      type: "guard_repair_finished",
+      provider: "runtime",
+      message: `${step.id} auto repair for guard failures ${stillFailed.length === 0 ? "resolved" : "left blockers"}`,
+      payload: {
+        round,
+        provider: repairProvider,
+        remainingGuards: stillFailed.map((guard) => guard.guardId),
+        verification: repair.output.verification ?? []
+      }
+    });
+    if (stillFailed.length === 0) {
+      updateRun(repo, { status: "running", current_step_id: step.id });
+      syncStepUiRuntime({ repo, stepId: step.id, guardResults: refreshedGuards, nextCommands: [runNextCommand(repo)] });
+      return {
+        status: "repaired",
+        repairedGuards: failedGuards.map((guard) => guard.guardId),
+        rounds
+      };
+    }
+    pendingGuards = stillFailed;
+  }
+  return null;
+}
+
+function guardRepairFindingsForStep(step, failedGuards) {
+  const findings = failedGuards.map((guard) => guardRepairFinding(step, guard));
+  return findings.every(Boolean) ? findings : null;
+}
+
+function guardRepairFinding(step, guard) {
+  if (guard.type === "note_section_updated") {
+    return {
+      severity: "major",
+      reviewerId: "runtime-guard",
+      reviewerLabel: "Runtime Guard",
+      title: `Missing note evidence for ${guard.guardId}`,
+      evidence: guard.evidence,
+      recommendation: `Update \`current-note.md\` section \`${guard.section}\` so it exists, is non-empty, and reflects the accepted ${step.id} review outcome.`
+    };
+  }
+  if (guard.type === "ticket_section_updated") {
+    return {
+      severity: "major",
+      reviewerId: "runtime-guard",
+      reviewerLabel: "Runtime Guard",
+      title: `Missing ticket evidence for ${guard.guardId}`,
+      evidence: guard.evidence,
+      recommendation: `Update \`current-ticket.md\` section \`${guard.section}\` so it records the durable ticket intent or evidence required by ${step.id}.`
+    };
+  }
+  if (guard.type === "ac_verification_table") {
+    return {
+      severity: "major",
+      reviewerId: "runtime-guard",
+      reviewerLabel: "Runtime Guard",
+      title: `AC verification evidence missing for ${step.id}`,
+      evidence: guard.evidence,
+      recommendation: "Write or update `AC 裏取り結果` in `current-note.md` with one row per Product AC. Use the exact columns `item`, `classification`, `status`, `evidence`, and `deferral ticket`, and make the evidence concrete enough for deterministic guard checks."
+    };
+  }
+  return null;
+}
+
+function nextReviewRoundNumber({ stateDir, runId, stepId }) {
+  const dir = join(stateDir, "runs", runId, "steps", stepId, "review-rounds");
+  if (!existsSync(dir)) {
+    return 1;
+  }
+  const rounds = readdirSync(dir)
+    .map((entry) => {
+      const match = entry.match(/^round-(\d+)$/);
+      return match ? Number(match[1]) : null;
+    })
+    .filter((value) => Number.isInteger(value));
+  return rounds.length > 0 ? Math.max(...rounds) + 1 : 1;
 }
 
 function createProviderFailureSummary({ repo, runtime, step, attempt, maxAttempts, rawLogPath, result, reviewContext = null }) {

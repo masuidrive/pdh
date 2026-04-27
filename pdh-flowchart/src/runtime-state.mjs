@@ -634,6 +634,36 @@ export function normalizeStaleRunningRuntime(repoPath, options = {}) {
   if (!latestAttempt || latestAttempt.status !== "running") {
     return runtime;
   }
+  const finishedEvent = latestFinishedStepEvent({
+    repoPath,
+    runId: run.id,
+    stepId: step.id,
+    attempt: latestAttempt.attempt
+  });
+  const finishedStatus = statusFromStepFinishedEvent(finishedEvent);
+  if (finishedStatus) {
+    writeAttemptResult({
+      stateDir: runtime.stateDir,
+      runId: run.id,
+      stepId: step.id,
+      attempt: latestAttempt.attempt,
+      result: {
+        ...latestAttempt,
+        status: finishedStatus,
+        finalMessage: latestAttempt.finalMessage || finishedEvent.payload?.finalMessage || latestAttempt.stderr || null,
+        stderr: latestAttempt.stderr || "",
+        finishedAt: finishedEvent.ts || new Date().toISOString(),
+        lastEventAt: finishedEvent.ts || latestAttempt.lastEventAt || latestAttempt.startedAt || null
+      }
+    });
+    if (finishedStatus !== "completed") {
+      updateRun(repoPath, {
+        status: finishedStatus,
+        current_step_id: step.id
+      });
+    }
+    return loadRuntime(repoPath);
+  }
   const activeProcesses = listTrackedProcesses({ stateDir: runtime.stateDir, runId: run.id, stepId: step.id })
     .filter((entry) => entry.status === "running" && Number.isInteger(Number(entry.pid)) && pidIsAlive(Number(entry.pid)));
   if (activeProcesses.length > 0) {
@@ -695,4 +725,25 @@ function pidIsAlive(pid) {
 function createRunId() {
   const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
   return `run-${stamp}-${randomBytes(3).toString("hex")}`;
+}
+
+function latestFinishedStepEvent({ repoPath, runId, stepId, attempt }) {
+  const events = readProgressEvents({ repoPath, runId, limit: 200 });
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.stepId !== stepId || event?.type !== "step_finished") {
+      continue;
+    }
+    if (attempt !== undefined && event.attempt !== null && event.attempt !== undefined && Number(event.attempt) !== Number(attempt)) {
+      continue;
+    }
+    return event;
+  }
+  return null;
+}
+
+function statusFromStepFinishedEvent(event) {
+  const message = String(event?.message ?? "");
+  const match = message.match(/\s(completed|failed|blocked)$/);
+  return match?.[1] ?? null;
 }

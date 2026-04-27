@@ -507,6 +507,7 @@ function reviewRepairRulesForStep(stepId) {
     ],
     "PD-C-8": [
       "Treat this as a purpose-fit repair loop. Close missing AC coverage, missing outcomes, or weak evidence, and update ticket intent when the product scope changed.",
+      "If AC verification evidence is missing or incomplete, write or update `AC 裏取り結果` in `current-note.md` now instead of deferring that record to a later step.",
       "If you change code or tests here, make sure `current-note.md` explains why the purpose validation required it."
     ],
     "PD-C-9": [
