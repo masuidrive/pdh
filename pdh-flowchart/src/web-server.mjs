@@ -6282,7 +6282,7 @@ function renderHtml(initialState = null) {
       html +=
         '<div class="detail-section"><div class="detail-section-title">Preview</div>' +
         '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);white-space:pre-wrap;">' +
-          esc(ticket.body.length > 1200 ? ticket.body.slice(0, 1200) + '\n…' : ticket.body) +
+          esc(ticket.body.length > 1200 ? ticket.body.slice(0, 1200) + '\\n…' : ticket.body) +
         '</div></div>';
     }
 
