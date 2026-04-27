@@ -995,10 +995,10 @@ function stepProgress({ runtime, sequence, index, step, historyEntry, gate, atte
       if (gate?.recommendation?.status === "pending") {
         return progress("waiting", "ユーザ回答待ち", "agent recommendation を適用するか、Open Terminal で再作業するかを選びます。");
       }
-      return progress("waiting", "ユーザ回答待ち", gate?.summary ? "gate summary を確認して CLI で判断します。" : "gate summary を生成中です。");
+      return progress("waiting", "ユーザ回答待ち", gate?.summary ? "gate summary を確認して Web で判断します。" : "gate summary を生成中です。");
     }
     if (run.status === "interrupted") {
-      return progress("waiting", "割り込み待ち", interruptions.length > 0 ? "CLI で answer すると継続します。" : "割り込み回答待ちです。");
+      return progress("waiting", "割り込み待ち", interruptions.length > 0 ? "質問に回答すると継続します。" : "割り込み回答待ちです。");
     }
     if (run.status === "blocked") {
       return progress("blocked", "ガード待ち", "必要な記録や検証を追加してから `run-next` を再実行します。");
@@ -6606,7 +6606,7 @@ function renderHtml(initialState = null) {
         }
       } else if (state.data.runtime.run.status === 'interrupted') {
         const latest = interruptions[interruptions.length - 1];
-        questionBody.push('<p>割り込み質問に未回答です。CLI の <code>answer</code> で回答してください。</p>');
+        questionBody.push('<p>割り込み質問に未回答です。内容を確認して回答すると継続します。</p>');
         if (latest?.message) {
           questionBody.push('<p>' + esc(latest.message) + '</p>');
         }
@@ -6633,7 +6633,6 @@ function renderHtml(initialState = null) {
             '<span class="title">' + esc(nextAction.title) + '</span>' +
           '</div>' +
           '<div class="question-body">' + questionBody.join('') + '</div>' +
-          '<div class="viewer-note"><span class="info-icon">i</span><span>この UI は viewer を基本にしつつ、Claude assist terminal だけはここから開けます。runtime の進行判断は CLI か assist signal で行います。</span></div>' +
         '</div>';
     }
 

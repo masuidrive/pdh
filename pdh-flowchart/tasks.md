@@ -56,3 +56,13 @@
 - [x] Runtime-owned review repair and re-review loop.
 - [ ] Richer review result schemas.
 - [ ] Optional SDK adapters after the CLI path is stable.
+
+## Next: Structured Runtime Artifacts
+
+- [ ] Expand `current-note.md` frontmatter for compact current-state fields such as gate summary status and rerun target.
+- [ ] Add `runtime-supervisor.json` lifecycle checks to close / cleanup paths and fail safe if cleanup does not complete.
+- [ ] Add `step-record.json` as the primary per-step record guard input.
+- [ ] Add `step-commit.json` as the primary commit guard input and retire commit-subject regex as the main authority.
+- [ ] Add `ac-verification.json` and stop treating the markdown AC table as the primary authority.
+- [ ] Replace markdown-section rerun derivation with structured gate baseline artifacts plus git file changes.
+- [ ] Retire markdown body section guards after structured coverage is complete.

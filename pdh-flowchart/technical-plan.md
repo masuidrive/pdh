@@ -9,6 +9,7 @@
 - Canonical runtime state lives in `current-note.md` frontmatter.
 - Durable ticket intent lives in `current-ticket.md`.
 - `.pdh-flowchart/` stores transient local artifacts only.
+- Markdown body stays human-facing. Runtime transitions should prefer frontmatter and structured artifacts over markdown body parsing.
 - CLI commands are repo-centric.
 - Web UI is viewer-first and derives state from note frontmatter plus transient artifacts. It may launch a stop-state assist terminal, but progression still belongs to runtime commands and assist signals.
 - Flow semantics are internalized in this repo; runtime execution does not depend on external `pdh-dev` or `tmux-director` skills.
@@ -54,6 +55,31 @@ Body:
 - discoveries
 - step history
 
+Frontmatter is the only markdown content the runtime should treat as canonical state. It should stay small, readable, and hand-editable. Only short scalar values, enums, timestamps, and compact status summaries belong there.
+
+Target direction:
+
+```yaml
+---
+pdh:
+  ticket: calc-cli
+  flow: pdh-ticket-core
+  variant: full
+  status: needs_human
+  current_step: PD-C-5
+  run_id: run-20260424022333-726697
+  gate:
+    step: PD-C-5
+    status: pending
+  rerun_target: null
+  started_at: 2026-04-24T02:23:33.060Z
+  updated_at: 2026-04-24T02:23:33.060Z
+  completed_at: null
+---
+```
+
+Do not store long findings, AC tables, diffs, or logs in frontmatter.
+
 #### `current-ticket.md`
 
 - Why
@@ -68,6 +94,7 @@ No runtime metadata is written to this file.
 
 ```text
 .pdh-flowchart/
+  runtime-supervisor.json
   locks/
   runs/
     run-20260424022333-726697/
@@ -80,6 +107,8 @@ No runtime metadata is written to this file.
           prompt.md
           ui-output.yaml
           ui-runtime.yaml
+          step-record.json
+          step-commit.json
           attempt-1/
             codex.raw.jsonl
             result.json
@@ -87,6 +116,8 @@ No runtime metadata is written to this file.
         PD-C-7/
           judgements/
             quality_review.json
+        PD-C-8/
+          ac-verification.json
         PD-C-10/
           human-gate-summary.md
           human-gate.json
@@ -102,6 +133,37 @@ These files are used for:
 - transient diagnostics
 
 They are not authoritative.
+
+### 2.3 Structured artifact policy
+
+Structured artifacts are machine-readable runtime evidence. They live only under `.pdh-flowchart/`, are gitignored, and must not be committed or retained after ticket close.
+
+Primary runtime-facing artifacts:
+
+- `runtime-supervisor.json`
+  - top-level runtime execution only
+  - tracks `run-next` / `run-provider` / `resume` liveness
+- `step-record.json`
+  - compact per-step runtime summary
+  - replaces markdown section presence as the main step-record guard input
+- `step-commit.json`
+  - explicit step commit record
+  - replaces commit-subject regex as the primary commit guard input
+- `ac-verification.json`
+  - machine-readable AC status and counts
+  - replaces markdown AC table parsing as the primary AC authority
+- `human-gate.json`
+  - gate state, recommendation, rerun requirement, and baseline metadata
+
+Lifecycle rules:
+
+- Artifacts may exist only while a ticket run is active.
+- Web UI may read them directly.
+- On close, the runtime removes the active run directory and any remaining supervisor file.
+- Durable repo state after close should be only:
+  - product/source changes
+  - durable ticket/note files
+  - human-readable history mirrored into note body
 
 ## 3. Runtime Modules
 
@@ -123,6 +185,7 @@ Responsibilities:
 - update repo-centric run state
 - append progress events
 - manage step attempts and provider session metadata
+- manage runtime-supervisor and structured step artifacts
 - manage human gate artifacts
 - clean transient run artifacts
 
@@ -211,21 +274,29 @@ The prompt does not inline the full contents of canonical files. The provider is
 
 Guard types still include:
 
-- note section updated
-- ticket section updated
-- git commit exists
+- note frontmatter state present
+- ticket existence / path checks
+- step record present
+- step commit recorded
 - command
-- AC verification table
+- AC verification artifact
 - artifact exists
 - human approved
 - judgement status
 
 The runtime evaluates guards directly against:
 
+- note frontmatter
 - repo files
 - current human gate artifact
 - judgement artifacts
 - transient local artifacts
+
+Markdown body parsing is transitional only. The target state is:
+
+- no markdown section guards for runtime transitions
+- no markdown table parsing for AC authority
+- no markdown section diff as the primary rerun decision input
 
 ## 8. Human Gates and Interruptions
 
@@ -276,9 +347,10 @@ At `PD-C-10` approval:
 
 1. append durable step-history lines to `current-note.md`
 2. remove `.pdh-flowchart/runs/<run-id>/`
-3. run `ticket.sh close` when available
-4. mark note frontmatter `status: completed`
-5. clear `run_id`
+3. remove `.pdh-flowchart/runtime-supervisor.json`
+4. run `ticket.sh close` when available
+5. mark note frontmatter `status: completed`
+6. clear `run_id`
 
 This keeps the repo with one durable story:
 
@@ -288,6 +360,11 @@ This keeps the repo with one durable story:
 - git history
 
 and removes transient execution noise.
+
+Additional constraint:
+
+- structured runtime artifacts must never survive onto `main`
+- if close cannot remove them automatically, the close path should fail safe and return to a human-fixable state rather than silently leaving runtime files behind
 
 ## 10. Verification Strategy
 
@@ -323,3 +400,13 @@ This remains an explicit smoke path and is not part of normal unit-style verific
 - richer review schemas
 - Epic flow support
 - optional SDK-based adapters after the CLI path is stable
+
+## 12. Migration Direction
+
+Implementation should proceed in this order:
+
+1. expand `current-note.md` frontmatter for compact current-state fields
+2. add `step-record.json` and `ac-verification.json`
+3. switch `git_commit_exists` to `step-commit.json` as the primary source
+4. move rerun requirement derivation away from markdown section diff
+5. retire markdown body guards after artifact coverage is complete
