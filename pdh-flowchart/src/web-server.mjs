@@ -3173,7 +3173,7 @@ function renderHtml(initialState = null) {
     <div class="main">
       <section class="panel-left">
         <div class="section-head">
-          <div class="section-title" id="left-flow-variant">Flow: Full</div>
+          <div class="section-title" id="left-flow-variant">PD-C: Ticket 開発 (Full)</div>
         </div>
         <div class="flow-container"><div class="pdc-list" id="pdc-list"></div></div>
       </section>
@@ -4823,7 +4823,7 @@ function renderHtml(initialState = null) {
       : '未開始';
     const leftFlowVariant = document.getElementById('left-flow-variant');
     if (leftFlowVariant) {
-      leftFlowVariant.textContent = 'Flow: ' + leftVariant;
+      leftFlowVariant.textContent = 'PD-C: Ticket 開発 (' + leftVariant + ')';
     }
     document.getElementById('header-right').innerHTML =
       '<span class="flow-badge">Flow: ' + esc(variant) + '</span>' +
