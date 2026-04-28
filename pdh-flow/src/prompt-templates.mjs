@@ -45,7 +45,7 @@ export function writeReviewRepairPromptArtifact({ repoPath, stateDir, run, flow,
   return { artifactPath, body };
 }
 
-export function renderStepPrompt({ repoPath, run, flow, step, interruptions = [] }) {
+export function renderStepPrompt({ repoPath, run, flow, step, interruptions = [], reviewerOutputs = null }) {
   const promptContext = mergePromptContext(flow, step);
   const flowView = buildFlowView(flow, run.flow_variant, step.id);
   const flowStep = flowView.steps.find((item) => item.id === step.id);
@@ -79,6 +79,7 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
           `- Update canonical records and satisfy the guards for ${step.id}.`,
           ""
         ]),
+    ...(reviewerOutputs?.length ? renderReviewerOutputsSection(reviewerOutputs) : []),
     "## Compiled Context",
     "",
     ...(renderPromptContext(promptContext)),
@@ -92,6 +93,41 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
     ...renderUiOutputPromptSection({ run, step }),
     ""
   ].join("\n");
+}
+
+function renderReviewerOutputsSection(reviewerOutputs) {
+  const lines = [
+    "## Reviewer Outputs",
+    "",
+    `Runtime ran ${reviewerOutputs.length} reviewer${reviewerOutputs.length === 1 ? "" : "s"} in parallel for this round. Their \`review.yaml\` artifacts are listed below in full so you can read them without opening additional files. Treat each block as the canonical output of that reviewer.`,
+    ""
+  ];
+  for (const reviewer of reviewerOutputs) {
+    lines.push(`### ${reviewer.label} (${reviewer.reviewerId})`);
+    lines.push("");
+    if (reviewer.provider) {
+      lines.push(`- provider: ${reviewer.provider}`);
+    }
+    if (reviewer.round !== null && reviewer.round !== undefined) {
+      lines.push(`- round: ${reviewer.round}`);
+    }
+    if (reviewer.artifactPath) {
+      lines.push(`- artifact: \`${reviewer.artifactPath}\``);
+    }
+    if (reviewer.status) {
+      lines.push(`- status: ${reviewer.status}`);
+    }
+    lines.push("");
+    if (reviewer.rawText) {
+      lines.push("```yaml");
+      lines.push(reviewer.rawText.trimEnd());
+      lines.push("```");
+    } else {
+      lines.push("_(reviewer produced no readable output)_");
+    }
+    lines.push("");
+  }
+  return lines;
 }
 
 function formatGuards(step) {
