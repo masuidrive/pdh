@@ -91,6 +91,8 @@ export function App() {
         <Workspace
           step={focusedStep}
           next={next}
+          allSteps={variant.steps}
+          history={slot.state.history}
           onOpenTerminal={(id) => setTerminalStep(id)}
           onOpenArtifact={(stepId, name) => setArtifactTarget({ stepId, name })}
           onConfirm={requestConfirm}

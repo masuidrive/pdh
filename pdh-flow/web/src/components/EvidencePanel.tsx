@@ -1,19 +1,64 @@
-import type { ArtifactEntry, JudgementEntry, ReviewDiff, ReviewFinding, StepView } from "../lib/types";
+import type { ArtifactEntry, NextAction, StepView, HistoryEntry } from "../lib/types";
+import { resolveStepEvidence, resolveStepReady, type EvidenceItem, type EvidenceKind } from "../lib/evidence-resolver";
 
 type Props = {
   step: StepView;
+  next?: NextAction | null;
+  allSteps: StepView[];
+  history?: HistoryEntry[];
   onOpenArtifact: (name: string) => void;
+  onOpenDiff?: (stepId: string) => void;
+  onOpenFile?: (stepId: string, path: string) => void;
 };
 
-export function EvidencePanel({ step, onOpenArtifact }: Props) {
+const KIND_LABELS: Record<EvidenceKind, string> = {
+  diff: "diff",
+  plan: "plan",
+  risk: "risk",
+  risks: "risks",
+  verification: "verification",
+  commands: "CLI",
+  note: "note",
+  ticket_notes: "ticket",
+  provider: "provider",
+  guards: "guards",
+  interruptions: "interruptions",
+  review: "review",
+  ac: "AC",
+  purpose: "purpose",
+  cleanup: "cleanup",
+  changed_files: "files",
+  ready: "ready",
+};
+
+const KIND_TONE: Record<EvidenceKind, string> = {
+  diff: "info",
+  plan: "ghost",
+  risk: "warning",
+  risks: "warning",
+  verification: "success",
+  commands: "neutral",
+  note: "ghost",
+  ticket_notes: "ghost",
+  provider: "info",
+  guards: "warning",
+  interruptions: "warning",
+  review: "info",
+  ac: "success",
+  purpose: "info",
+  cleanup: "neutral",
+  changed_files: "info",
+  ready: "success",
+};
+
+export function EvidencePanel({ step, next, allSteps, history, onOpenArtifact, onOpenDiff }: Props) {
+  const resolved = resolveStepEvidence(step, next ?? null, { allSteps, history: history ?? [] });
+  const ready = resolveStepReady(step);
   const artifacts = step.artifacts ?? [];
-  const reviewDiff = step.reviewDiff ?? null;
   const findings = step.reviewFindings ?? [];
   const judgements = step.judgements ?? [];
-  const noteSection = (step.noteSection ?? "").trim();
-  const hasDiff = (reviewDiff?.changedFiles?.length ?? 0) > 0;
 
-  if (!artifacts.length && !hasDiff && !findings.length && !judgements.length && !noteSection) {
+  if (!resolved.length && !ready.length && !artifacts.length && !findings.length && !judgements.length) {
     return null;
   }
 
@@ -22,85 +67,94 @@ export function EvidencePanel({ step, onOpenArtifact }: Props) {
       <div className="card-body">
         <h3 className="card-title">判断材料</h3>
         <div className="grid gap-3">
-          {hasDiff ? <DiffRow reviewDiff={reviewDiff!} /> : null}
-          {noteSection ? <NoteRow text={noteSection} stepId={step.id} /> : null}
-          {findings.length ? <FindingsRow findings={findings} /> : null}
-          {judgements.length ? <JudgementsRow judgements={judgements} /> : null}
-          {artifacts.map((a) => (
-            <ArtifactRow key={a.name} artifact={a} onOpen={() => onOpenArtifact(a.name)} />
+          {resolved.map((it, i) => (
+            <ContractRow
+              key={`${it.label}-${i}`}
+              item={it}
+              onOpenDiff={onOpenDiff ? () => onOpenDiff(it.diffStepId ?? step.id) : undefined}
+            />
           ))}
+
+          {ready.length ? <ReadyRow ready={ready} /> : null}
+
+          {findings.length ? <FindingsRow findings={findings} /> : null}
+
+          {judgements.length ? <JudgementsRow judgements={judgements} /> : null}
+
+          {artifacts.length ? (
+            <details className="rounded-box border border-base-300 bg-base-200 p-4">
+              <summary className="cursor-pointer text-sm font-bold">Artifacts ({artifacts.length})</summary>
+              <ul className="mt-3 grid gap-2">
+                {artifacts.map((a) => (
+                  <ArtifactRow key={a.name} artifact={a} onOpen={() => onOpenArtifact(a.name)} />
+                ))}
+              </ul>
+            </details>
+          ) : null}
         </div>
       </div>
     </section>
   );
 }
 
-function EvidenceRow({
-  title,
-  badge,
-  badgeTone = "ghost",
-  description,
-  meta,
-  onClick,
-  children,
-}: {
-  title: string;
-  badge?: string;
-  badgeTone?: string;
-  description?: string;
-  meta?: string;
-  onClick?: () => void;
-  children?: React.ReactNode;
-}) {
-  const baseClass = "rounded-box border border-base-300 bg-base-200 p-4 text-left transition-colors";
-  const hover = onClick ? "cursor-pointer hover:bg-base-300/40" : "";
+function ContractRow({ item, onOpenDiff }: { item: EvidenceItem; onOpenDiff?: () => void }) {
+  const tone = KIND_TONE[item.kind] ?? "ghost";
+  const isClickable = Boolean(onOpenDiff && item.kind === "diff");
+  const onClick = isClickable ? onOpenDiff : undefined;
   const Tag = onClick ? "button" : "div";
   return (
-    <Tag type={onClick ? "button" : undefined} onClick={onClick} className={`${baseClass} ${hover}`}>
+    <Tag
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className={`rounded-box border border-base-300 bg-base-200 p-4 text-left ${onClick ? "cursor-pointer hover:bg-base-300/40" : ""}`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h4 className="truncate font-bold">{title}</h4>
-            {meta ? <span className="text-xs text-base-content/50">{meta}</span> : null}
+            <h4 className="truncate font-bold">{item.label}</h4>
+            <span className={`badge badge-${tone} badge-sm`}>{KIND_LABELS[item.kind]}</span>
           </div>
-          {description ? <p className="mt-1 text-sm text-base-content/70">{description}</p> : null}
-          {children}
+          {item.source ? <p className="mt-1 text-xs text-base-content/50">{item.source}</p> : null}
+          {item.body ? (
+            <pre className="mt-2 max-h-44 overflow-hidden whitespace-pre-wrap text-xs leading-6 text-base-content/80">
+              {item.body}
+            </pre>
+          ) : (
+            <p className="mt-2 text-xs italic text-base-content/40">(まだデータなし)</p>
+          )}
         </div>
-        {badge ? <span className={`badge badge-${badgeTone} shrink-0`}>{badge}</span> : null}
       </div>
     </Tag>
   );
 }
 
-function DiffRow({ reviewDiff }: { reviewDiff: ReviewDiff }) {
-  const changed = reviewDiff.changedFiles ?? [];
-  const preview = changed.slice(0, 6).join(" · ");
-  const extra = changed.length > 6 ? ` · +${changed.length - 6} more` : "";
+function ReadyRow({ ready }: { ready: { label: string; kind: string }[] }) {
   return (
-    <EvidenceRow
-      title="変更差分"
-      badge={reviewDiff.baseLabel ?? "diff"}
-      meta={`${changed.length} files`}
-      description={preview ? preview + extra : undefined}
-    />
+    <div className="rounded-box border border-base-300 bg-base-200 p-4">
+      <div className="flex items-center gap-2">
+        <h4 className="font-bold">Ready when</h4>
+        <span className="badge badge-success badge-sm">{ready.length} items</span>
+      </div>
+      <ul className="mt-2 space-y-1 text-sm">
+        {ready.map((r, i) => (
+          <li key={i} className="flex items-baseline gap-2">
+            <span className={`badge badge-${readyTone(r.kind)} badge-sm`}>{r.kind}</span>
+            <span className="text-base-content/80">{r.label}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
-function NoteRow({ text, stepId }: { text: string; stepId: string }) {
-  const preview = text.split("\n").filter(Boolean).slice(0, 4).join("\n");
-  return (
-    <EvidenceRow title="current-note.md" badge={stepId}>
-      <pre className="mt-2 max-h-32 overflow-hidden whitespace-pre-wrap text-xs leading-6 text-base-content/70">
-        {preview}
-      </pre>
-    </EvidenceRow>
-  );
-}
-
-function FindingsRow({ findings }: { findings: ReviewFinding[] }) {
+function FindingsRow({ findings }: { findings: NonNullable<StepView["reviewFindings"]> }) {
   const top = findings.slice(0, 5);
   return (
-    <EvidenceRow title="Reviewer findings" badge={`${findings.length} items`} badgeTone="warning">
+    <div className="rounded-box border border-base-300 bg-base-200 p-4">
+      <div className="flex items-center gap-2">
+        <h4 className="font-bold">Reviewer findings</h4>
+        <span className="badge badge-warning badge-sm">{findings.length} items</span>
+      </div>
       <ul className="mt-2 space-y-1.5">
         {top.map((f, i) => (
           <li key={i} className="flex items-start gap-2">
@@ -108,6 +162,7 @@ function FindingsRow({ findings }: { findings: ReviewFinding[] }) {
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold">{f.title ?? "(untitled)"}</div>
               {f.evidence ? <div className="truncate text-xs text-base-content/60">{f.evidence}</div> : null}
+              {f.reviewerLabel ? <div className="text-xs text-base-content/40">{f.reviewerLabel}</div> : null}
             </div>
           </li>
         ))}
@@ -115,13 +170,17 @@ function FindingsRow({ findings }: { findings: ReviewFinding[] }) {
           <li className="text-xs text-base-content/50">+{findings.length - top.length} more</li>
         ) : null}
       </ul>
-    </EvidenceRow>
+    </div>
   );
 }
 
-function JudgementsRow({ judgements }: { judgements: JudgementEntry[] }) {
+function JudgementsRow({ judgements }: { judgements: NonNullable<StepView["judgements"]> }) {
   return (
-    <EvidenceRow title="Judgement" badge={`${judgements.length} items`}>
+    <div className="rounded-box border border-base-300 bg-base-200 p-4">
+      <div className="flex items-center gap-2">
+        <h4 className="font-bold">Judgement</h4>
+        <span className="badge badge-info badge-sm">{judgements.length} items</span>
+      </div>
       <ul className="mt-2 space-y-1 text-sm">
         {judgements.map((j) => (
           <li key={j.kind} className="flex flex-wrap items-baseline gap-2">
@@ -131,44 +190,35 @@ function JudgementsRow({ judgements }: { judgements: JudgementEntry[] }) {
           </li>
         ))}
       </ul>
-    </EvidenceRow>
+    </div>
   );
 }
 
 function ArtifactRow({ artifact, onOpen }: { artifact: ArtifactEntry; onOpen: () => void }) {
   return (
-    <EvidenceRow
-      title={artifact.name}
-      badge={artifactKind(artifact.name)}
-      meta={artifact.size ? String(artifact.size) : undefined}
-      description={artifactHint(artifact.name)}
-      onClick={onOpen}
-    />
+    <li>
+      <button
+        type="button"
+        className="btn btn-ghost h-auto w-full justify-between gap-3 border border-base-300 bg-base-100 py-2 text-left font-normal hover:bg-base-200"
+        onClick={onOpen}
+      >
+        <span className="truncate text-sm">{artifact.name}</span>
+        <span className="flex items-center gap-2">
+          {artifact.size ? <span className="badge badge-ghost badge-sm">{String(artifact.size)}</span> : null}
+          <span className="badge badge-outline badge-sm">{artifactKind(artifact.name)}</span>
+        </span>
+      </button>
+    </li>
   );
 }
 
 function artifactKind(name: string) {
   const ext = name.toLowerCase().split(".").pop() ?? "";
-  if (["md", "markdown"].includes(ext)) return "markdown";
+  if (["md", "markdown"].includes(ext)) return "md";
   if (["json"].includes(ext)) return "json";
   if (["yaml", "yml"].includes(ext)) return "yaml";
-  if (["txt", "log"].includes(ext)) return ext;
   if (["patch", "diff"].includes(ext)) return "diff";
-  return "file";
-}
-
-function artifactHint(name: string) {
-  if (name.endsWith("/manifest.json")) return "Assist セッションのメタ情報";
-  if (name.endsWith("/prompt.md")) return "Provider に渡された run プロンプト";
-  if (name.endsWith("/session.json")) return "Provider 実行セッションのログ";
-  if (name.endsWith("/system-prompt.txt")) return "system prompt の内容";
-  if (name.endsWith("ui-output.json")) return "step の UI 出力";
-  if (name.endsWith("ui-runtime.json")) return "runtime が観測した UI 状態";
-  if (name.endsWith("human-gate-summary.md")) return "Gate に提示する要点まとめ";
-  if (name.includes("review")) return "Review round の出力";
-  if (name.includes("aggregate")) return "Aggregator のまとめ";
-  if (name.includes("repair")) return "Repair round の出力";
-  return "クリックで全文表示";
+  return ext || "file";
 }
 
 function severityTone(severity: string) {
@@ -180,5 +230,23 @@ function severityTone(severity: string) {
       return "warning";
     default:
       return "neutral";
+  }
+}
+
+function readyTone(kind: string) {
+  switch (kind) {
+    case "ok":
+    case "ready":
+    case "verified":
+      return "success";
+    case "fail":
+    case "failed":
+    case "blocked":
+      return "error";
+    case "pending":
+    case "unverified":
+      return "warning";
+    default:
+      return "ghost";
   }
 }

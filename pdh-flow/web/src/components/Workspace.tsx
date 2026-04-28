@@ -1,11 +1,14 @@
-import type { ActionButton, NextAction, StepView } from "../lib/types";
+import type { ActionButton, HistoryEntry, NextAction, StepView } from "../lib/types";
 import { EvidencePanel } from "./EvidencePanel";
 
 type Props = {
   step: StepView | null;
   next?: NextAction | null;
+  allSteps: StepView[];
+  history?: HistoryEntry[];
   onOpenTerminal: (stepId: string) => void;
   onOpenArtifact: (stepId: string, name: string) => void;
+  onOpenDiff?: (stepId: string) => void;
   onConfirm: (kind: string, ctx: { stepId?: string; stepLabel?: string; recommendationText?: string }) => void;
 };
 
@@ -24,7 +27,7 @@ const TONE_ALERT: Record<string, string> = {
   blocked: "alert-error",
 };
 
-export function Workspace({ step, next, onOpenTerminal, onOpenArtifact, onConfirm }: Props) {
+export function Workspace({ step, next, allSteps, history, onOpenTerminal, onOpenArtifact, onOpenDiff, onConfirm }: Props) {
   if (!step) {
     return <section className="p-8 text-base-content/60">step を選択してください</section>;
   }
@@ -112,7 +115,14 @@ export function Workspace({ step, next, onOpenTerminal, onOpenArtifact, onConfir
             </section>
           ) : null}
 
-          <EvidencePanel step={step} onOpenArtifact={(name) => onOpenArtifact(step.id, name)} />
+          <EvidencePanel
+            step={step}
+            next={next}
+            allSteps={allSteps}
+            history={history}
+            onOpenArtifact={(name) => onOpenArtifact(step.id, name)}
+            onOpenDiff={onOpenDiff}
+          />
         </div>
       </div>
     </section>
