@@ -325,8 +325,8 @@ if [ -n "$ui_path" ]; then
   "notes": "aggregator final verification passed",
   "judgement": {
     "kind": "final_verification",
-    "status": "No Critical/Major",
-    "summary": "aggregator confirms No Critical/Major"
+    "status": "Ready",
+    "summary": "aggregator confirms Ready"
   }
 }
 JSON

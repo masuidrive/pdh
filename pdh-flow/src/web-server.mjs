@@ -919,14 +919,7 @@ function collectTopLevelRuntimeProcessState({ runtime, step }) {
     ? [{ label, pid, alive: supervisor.status === "running", kind: "runtime" }]
     : [];
   if (supervisor.status === "running") {
-    return {
-      activeCount: 1,
-      stale: false,
-      scope: "runtime",
-      active: baseEntry.length > 0 ? baseEntry : [{ label, pid: null, alive: true, kind: "runtime" }],
-      dead: [],
-      note: `${label} が実行中です。`
-    };
+    return null;
   }
   if (supervisor.status === "stale") {
     return {
@@ -946,8 +939,10 @@ function collectTrackedProcessEntries({ stateDir, runId, step, attempt }) {
     .filter((entry) => entry.status === "running")
     .map((entry) => ({
       label: entry.label || entry.provider || entry.kind || "process",
+      kind: entry.kind || null,
       pid: Number(entry.pid),
-      alive: Number.isInteger(Number(entry.pid)) && Number(entry.pid) > 0 ? isPidAlive(Number(entry.pid)) : false
+      alive: Number.isInteger(Number(entry.pid)) && Number(entry.pid) > 0 ? isPidAlive(Number(entry.pid)) : false,
+      startedAt: entry.startedAt || null
     }))
     .filter((entry) => Number.isInteger(entry.pid) && entry.pid > 0);
   if (tracked.length > 0) {
@@ -1204,7 +1199,8 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
           label: "Run Next",
           description: "完了済み step の guard 評価と flow transition を進めます。",
           command,
-          tone: "approve"
+          tone: "approve",
+          kind: "run_next_direct"
         }),
         nextActionChoice({
           label: "Open Terminal",
@@ -1264,7 +1260,8 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
           label: "Run Next",
           description: "不足している guard-facing artifact を補完したうえで、この step を再評価します。",
           command,
-          tone: "revise"
+          tone: "revise",
+          kind: "run_next_direct"
         })
       ],
       selection: "single_optional_assist",
@@ -1282,7 +1279,8 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
         label: "Run Next",
         description: "通常進行です。次の gate / interruption / failure / complete まで自動で進めます。",
         command,
-        tone: "approve"
+        tone: "approve",
+        kind: "run_next_direct"
       }),
       nextActionChoice({
         label: "Open Terminal",
@@ -2154,6 +2152,11 @@ function renderHtml(initialState = null) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .bottom-bar-title-suffix {
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: 4px;
   }
   .bottom-bar-status {
     flex: 0 0 auto;
@@ -3922,15 +3925,37 @@ function renderHtml(initialState = null) {
     }
     if (processState.activeCount > 0) {
       const entries = listOf(processState.active);
-      const labels = entries.slice(0, 3).map((entry) => {
-        const pid = Number(entry?.pid);
-        return String(entry?.label || 'process') + (Number.isInteger(pid) && pid > 0 ? ' #' + pid : '');
+      const groups = new Map();
+      for (const entry of entries) {
+        const kind = String(entry?.kind || entry?.label || 'process');
+        const startedMs = Date.parse(entry?.startedAt || '');
+        const oldestMs = Number.isFinite(startedMs) ? startedMs : null;
+        const existing = groups.get(kind);
+        if (!existing) {
+          groups.set(kind, { count: 1, oldestMs });
+        } else {
+          existing.count += 1;
+          if (oldestMs !== null && (existing.oldestMs === null || oldestMs < existing.oldestMs)) {
+            existing.oldestMs = oldestMs;
+          }
+        }
+      }
+      const now = Date.now();
+      const groupLabels = [...groups.entries()].map(([kind, info]) => {
+        const head = info.count === 1 ? kind : kind + ' ×' + info.count;
+        if (info.oldestMs === null) {
+          return head;
+        }
+        const elapsed = Math.max(0, Math.round((now - info.oldestMs) / 1000));
+        const mins = Math.floor(elapsed / 60);
+        const secs = String(elapsed % 60).padStart(2, '0');
+        return head + ' (' + mins + ':' + secs + ')';
       });
-      const suffix = entries.length > 3 ? ' +' + String(entries.length - 3) : '';
+      const totalCount = entries.length;
       const prefix = processState.scope === 'runtime'
         ? 'Runtime: '
-        : (entries.length > 1 ? 'Processes: ' : 'Process: ');
-      return prefix + labels.join(' / ') + suffix;
+        : (totalCount > 1 ? 'Processes: ' : 'Process: ');
+      return prefix + groupLabels.join(' / ');
     }
     if (processState.stale) {
       return (processState.scope === 'runtime' ? 'Runtime stale: ' : 'Stale: ') + preferredText(processState.note, 'provider process は終了しています。');
@@ -3960,6 +3985,26 @@ function renderHtml(initialState = null) {
     }
     const run = state.data.runtime.run || {};
     const currentStep = stepById(run.current_step_id) || state.data.runtime.currentStep || null;
+    const stepStartedMs = (() => {
+      const candidates = [
+        currentStep?.uiRuntime?.latestAttempt?.startedAt,
+        run.updated_at,
+        run.created_at
+      ].filter(Boolean);
+      for (const value of candidates) {
+        const ms = Date.parse(value);
+        if (Number.isFinite(ms)) return ms;
+      }
+      return null;
+    })();
+    const stepElapsedSuffix = stepStartedMs !== null
+      ? (() => {
+          const elapsed = Math.max(0, Math.round((Date.now() - stepStartedMs) / 1000));
+          const mins = Math.floor(elapsed / 60);
+          const secs = String(elapsed % 60).padStart(2, '0');
+          return '(' + mins + ':' + secs + ')';
+        })()
+      : '';
     const title = preferredText(run.ticket_id, 'unknown-ticket') +
       ' · ' +
       preferredText(currentStep?.id, 'no-step') +
@@ -3992,6 +4037,7 @@ function renderHtml(initialState = null) {
     }
     return {
       title,
+      titleSuffix: stepElapsedSuffix,
       status: String(run.status || 'idle'),
       lines
     };
@@ -5097,7 +5143,9 @@ function renderHtml(initialState = null) {
     root.classList.remove('hidden');
     root.innerHTML =
       '<div class="bottom-bar-head">' +
-        '<div class="bottom-bar-title">' + esc(model.title || '') + '</div>' +
+        '<div class="bottom-bar-title">' + esc(model.title || '') +
+          (model.titleSuffix ? ' <span class="bottom-bar-title-suffix">' + esc(model.titleSuffix) + '</span>' : '') +
+        '</div>' +
         '<div class="bottom-bar-status">' + esc(model.status || '') + '</div>' +
       '</div>' +
       '<div class="bottom-bar-lines">' +

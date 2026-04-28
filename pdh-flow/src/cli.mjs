@@ -2679,7 +2679,7 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, roun
             round,
             reviewerId: reviewer.reviewerId,
             provider,
-            label: `${reviewer.reviewerId} (round-${round})`,
+            label: `${reviewer.label || reviewer.reviewerId} (round ${round})`,
             pid,
             status: "running",
             startedAt: reviewerAttemptState.startedAt
@@ -3051,7 +3051,7 @@ async function executeReviewRepair({ repo, runtime, step, reviewPlan, aggregate,
             attempt,
             round,
             provider,
-            label: `repair (round-${round})`,
+            label: `repair (round ${round})`,
             pid,
             status: "running",
             startedAt: repairAttemptState.startedAt

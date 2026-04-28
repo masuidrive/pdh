@@ -4,13 +4,15 @@ import { basename, join } from "node:path";
 const DEFAULT_KIND_BY_STEP = {
   "PD-C-4": "plan_review",
   "PD-C-7": "quality_review",
-  "PD-C-8": "purpose_validation"
+  "PD-C-8": "purpose_validation",
+  "PD-C-9": "final_verification"
 };
 
 const DEFAULT_ACCEPTED_STATUS_BY_KIND = {
   plan_review: "No Critical/Major",
   quality_review: "No Critical/Major",
-  purpose_validation: "No Unverified"
+  purpose_validation: "No Unverified",
+  final_verification: "Ready"
 };
 
 export function defaultJudgementKind(stepId) {
