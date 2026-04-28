@@ -4,9 +4,9 @@ import { spawnSync } from "node:child_process";
 import { runCodex } from "./codex-adapter.mjs";
 import { loadDotEnv } from "./env.mjs";
 
-export async function runCalcSmoke({ rootDir = "/tmp/pdh-flowchart-calc-smoke", stateDir = null, store = null, bypass = true, timeoutMs = 10 * 60 * 1000 } = {}) {
+export async function runCalcSmoke({ rootDir = "/tmp/pdh-flow-calc-smoke", stateDir = null, store = null, bypass = true, timeoutMs = 10 * 60 * 1000 } = {}) {
   loadDotEnv();
-  const uvCache = "/tmp/pdh-flowchart-uv-cache";
+  const uvCache = "/tmp/pdh-flow-uv-cache";
   rmSync(rootDir, { recursive: true, force: true });
   mkdirSync(rootDir, { recursive: true });
   mkdirSync(uvCache, { recursive: true });
@@ -16,13 +16,13 @@ export async function runCalcSmoke({ rootDir = "/tmp/pdh-flowchart-calc-smoke", 
     UV_CACHE_DIR: uvCache
   };
   spawnSync("git", ["init"], { cwd: rootDir, stdio: "ignore" });
-  spawnSync("git", ["config", "user.email", "pdh-flowchart@example.local"], { cwd: rootDir, stdio: "ignore" });
-  spawnSync("git", ["config", "user.name", "pdh-flowchart smoke"], { cwd: rootDir, stdio: "ignore" });
+  spawnSync("git", ["config", "user.email", "pdh-flow@example.local"], { cwd: rootDir, stdio: "ignore" });
+  spawnSync("git", ["config", "user.name", "pdh-flow smoke"], { cwd: rootDir, stdio: "ignore" });
 
   writeFileSync(join(rootDir, "current-ticket.md"), `# Ticket: calc-cli
 
 ## Why
-Provide a tiny smoke target for pdh-flowchart Codex execution.
+Provide a tiny smoke target for pdh-flow Codex execution.
 
 ## What
 Create a Python CLI calculator that can run through uv.
@@ -63,7 +63,7 @@ Constraints:
 - After implementing, run "uv run calc \"1+2\"" and fix issues until it works.
 `;
 
-  const rawLogPath = join(rootDir, ".pdh-flowchart", "runs", "calc-smoke", "steps", "PD-C-6", "attempt-1", "codex.raw.jsonl");
+  const rawLogPath = join(rootDir, ".pdh-flow", "runs", "calc-smoke", "steps", "PD-C-6", "attempt-1", "codex.raw.jsonl");
   const events = [];
   const result = await runCodex({
     cwd: rootDir,

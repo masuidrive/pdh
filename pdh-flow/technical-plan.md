@@ -1,4 +1,4 @@
-# pdh-flowchart Technical Plan
+# pdh-flow Technical Plan
 
 更新日: 2026-04-24
 
@@ -8,7 +8,7 @@
 
 - Canonical runtime state lives in `current-note.md` frontmatter.
 - Durable ticket intent lives in `current-ticket.md`.
-- `.pdh-flowchart/` stores transient local artifacts only.
+- `.pdh-flow/` stores transient local artifacts only.
 - Markdown body stays human-facing. Runtime transitions should prefer frontmatter and structured artifacts over markdown body parsing.
 - CLI commands are repo-centric.
 - Web UI is viewer-first and derives state from note frontmatter plus transient artifacts. It may launch a stop-state assist terminal, but progression still belongs to runtime commands and assist signals.
@@ -93,7 +93,7 @@ No runtime metadata is written to this file.
 ### 2.2 Transient artifact layout
 
 ```text
-.pdh-flowchart/
+.pdh-flow/
   runtime-supervisor.json
   locks/
   runs/
@@ -136,7 +136,7 @@ They are not authoritative.
 
 ### 2.3 Structured artifact policy
 
-Structured artifacts are machine-readable runtime evidence. They live only under `.pdh-flowchart/`, are gitignored, and must not be committed or retained after ticket close.
+Structured artifacts are machine-readable runtime evidence. They live only under `.pdh-flow/`, are gitignored, and must not be committed or retained after ticket close.
 
 Primary runtime-facing artifacts:
 
@@ -265,7 +265,7 @@ The prompt includes:
 - compiled semantic rules from `flows/pdh-ticket-core.yaml`
 - required guards
 - canonical file references for `current-ticket.md` and `current-note.md`
-- a YAML contract for `.pdh-flowchart/.../ui-output.yaml`
+- a YAML contract for `.pdh-flow/.../ui-output.yaml`
 - a required judgement payload for review steps whose guards consume judgement artifacts
 
 The prompt does not inline the full contents of canonical files. The provider is expected to read those files directly inside the repo.
@@ -324,16 +324,16 @@ When the run is `needs_human`, `interrupted`, or `blocked`, the runtime can prep
 
 Artifacts:
 
-- `.pdh-flowchart/runs/<run-id>/steps/<step-id>/assist/manifest.yaml`
-- `.pdh-flowchart/runs/<run-id>/steps/<step-id>/assist/prompt.md`
-- `.pdh-flowchart/runs/<run-id>/steps/<step-id>/assist/system-prompt.txt`
-- `.pdh-flowchart/runs/<run-id>/steps/<step-id>/assist/session.json`
-- `.pdh-flowchart/runs/<run-id>/steps/<step-id>/assist/signals.jsonl`
+- `.pdh-flow/runs/<run-id>/steps/<step-id>/assist/manifest.yaml`
+- `.pdh-flow/runs/<run-id>/steps/<step-id>/assist/prompt.md`
+- `.pdh-flow/runs/<run-id>/steps/<step-id>/assist/system-prompt.txt`
+- `.pdh-flow/runs/<run-id>/steps/<step-id>/assist/session.json`
+- `.pdh-flow/runs/<run-id>/steps/<step-id>/assist/signals.jsonl`
 
 Wrapper scripts:
 
-- `./.pdh-flowchart/bin/assist-signal`
-- `./.pdh-flowchart/bin/assist-test`
+- `./.pdh-flow/bin/assist-signal`
+- `./.pdh-flow/bin/assist-test`
 
 Runtime guarantees:
 
@@ -346,8 +346,8 @@ Runtime guarantees:
 At `PD-C-10` approval:
 
 1. append durable step-history lines to `current-note.md`
-2. remove `.pdh-flowchart/runs/<run-id>/`
-3. remove `.pdh-flowchart/runtime-supervisor.json`
+2. remove `.pdh-flow/runs/<run-id>/`
+3. remove `.pdh-flow/runtime-supervisor.json`
 4. run `ticket.sh close` when available
 5. mark note frontmatter `status: completed`
 6. clear `run_id`

@@ -6,7 +6,7 @@ import { createRedactor } from "./redaction.mjs";
 import { loadCurrentNote, saveCurrentNote } from "./note-state.mjs";
 
 export function defaultStateDir(repoPath = process.cwd()) {
-  return join(repoPath, ".pdh-flowchart");
+  return join(repoPath, ".pdh-flow");
 }
 
 export function ensureCanonicalFiles(repoPath, ticket = null) {

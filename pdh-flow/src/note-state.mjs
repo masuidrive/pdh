@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { parse, stringify } from "yaml";
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
-const LEGACY_START = "<!-- pdh-flowchart:metadata:start -->";
-const LEGACY_END = "<!-- pdh-flowchart:metadata:end -->";
+const LEGACY_START = "<!-- pdh-flow:metadata:start -->";
+const LEGACY_END = "<!-- pdh-flow:metadata:end -->";
 const STEP_HISTORY_HEADING = "## Step History";
 
 export function loadCurrentNote(repoPath) {

@@ -39,7 +39,7 @@ function captureSnapshotDiff({ repoPath, stateDir, runId, stepId, attempt, befor
     if ((before[path] ?? "") === after) {
       continue;
     }
-    const tempDir = mkdtempSync(join(tmpdir(), "pdh-flowchart-diff-"));
+    const tempDir = mkdtempSync(join(tmpdir(), "pdh-flow-diff-"));
     try {
       const beforePath = join(tempDir, "before");
       const afterPath = join(tempDir, "after");

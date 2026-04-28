@@ -52,9 +52,9 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
   const reviewPlan = flowStep?.review ?? null;
 
   return [
-    "# pdh-flowchart Provider Prompt",
+    "# pdh-flow Provider Prompt",
     "",
-    "You are executing one PDH ticket-development step inside `pdh-flowchart`.",
+    "You are executing one PDH ticket-development step inside `pdh-flow`.",
     "Do only the current step. Do not claim later gates are complete.",
     "",
     "## Run Context",
@@ -77,6 +77,7 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
     "- If a guard cannot be satisfied, record the blocker in `current-note.md` and explain what is missing.",
     "- If answered interruptions are listed below, treat them as user instructions for this step.",
     "- If an open interruption is listed, stop and report that user input is still required.",
+    "- If local evidence is insufficient and you need one precise user answer, run `node src/provider-cli.mjs ask --repo . --message \"<question>\"` and then stop.",
     "- Do not ask the user to choose among implementation options if local evidence is enough to decide.",
     "- Do not mark PD-C-5 or PD-C-10 approved; those are explicit human gates.",
     "",
@@ -230,14 +231,14 @@ function renderReviewSemantics(step, reviewPlan) {
 export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, reviewer, round = null, priorFindings = [] }) {
   const acceptedStatus = acceptedReviewerStatus(step.id);
   const outputPath = round
-    ? `.pdh-flowchart/runs/${run.id}/steps/${step.id}/review-rounds/round-${round}/reviewers/${reviewer.reviewerId}/review.yaml`
-    : `.pdh-flowchart/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.yaml`;
+    ? `.pdh-flow/runs/${run.id}/steps/${step.id}/review-rounds/round-${round}/reviewers/${reviewer.reviewerId}/review.yaml`
+    : `.pdh-flow/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.yaml`;
   const reviewerStepRules = reviewerRulesForStep(step.id);
   return [
-    "# pdh-flowchart Reviewer Prompt",
+    "# pdh-flow Reviewer Prompt",
     "",
     `You are ${reviewer.label} for ${step.id}.`,
-    "This is a fresh reviewer role owned by pdh-flowchart runtime semantics.",
+    "This is a fresh reviewer role owned by pdh-flow runtime semantics.",
     "",
     "## Run Context",
     "",
@@ -318,9 +319,9 @@ export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, re
 }
 
 export function renderReviewRepairPrompt({ repoPath, run, flow, step, reviewPlan, aggregate, round, provider }) {
-  const outputPath = `.pdh-flowchart/runs/${run.id}/steps/${step.id}/review-rounds/round-${round}/repair.yaml`;
+  const outputPath = `.pdh-flow/runs/${run.id}/steps/${step.id}/review-rounds/round-${round}/repair.yaml`;
   const lines = [
-    "# pdh-flowchart Review Repair Prompt",
+    "# pdh-flow Review Repair Prompt",
     "",
     `You are the repair provider for ${step.id} round ${round}.`,
     "Your job is to resolve the current blocking review findings, update the repo state, run the smallest meaningful verification, and prepare the next review round.",

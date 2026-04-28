@@ -83,12 +83,12 @@ export function writeReviewerPrompt({ stateDir, run, step, reviewPlan, reviewer 
   });
   mkdirSync(join(path, ".."), { recursive: true });
   const acceptedStatus = reviewerAcceptedStatus(step.id);
-  const outputPath = `.pdh-flowchart/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.yaml`;
+  const outputPath = `.pdh-flow/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.yaml`;
   const body = [
-    "# pdh-flowchart Reviewer Prompt",
+    "# pdh-flow Reviewer Prompt",
     "",
     `You are ${reviewer.label} for ${step.id}.`,
-    "This is a fresh reviewer role inside pdh-flowchart runtime semantics.",
+    "This is a fresh reviewer role inside pdh-flow runtime semantics.",
     "",
     "## Reviewer Contract",
     "",

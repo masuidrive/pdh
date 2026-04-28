@@ -28,7 +28,7 @@ Repo-centric runtime refactor completed. `current-note.md` frontmatter is now th
 - Introduce repo-centric runtime helpers for progress events, attempts, gate artifacts, and cleanup.
 - Rebuild the CLI so `run-next --repo .` is the primary control surface.
 - Rebuild the Web UI to read directly from note frontmatter plus local artifacts.
-- Rewrite docs around canonical markdown state and transient `.pdh-flowchart/`.
+- Rewrite docs around canonical markdown state and transient `.pdh-flow/`.
 
 ## PD-C-6
 

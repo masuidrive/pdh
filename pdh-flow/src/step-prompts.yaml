@@ -65,8 +65,8 @@ prompts:
 
     ### runtime しか読まない (transient, commit しない)
 
-    - `.pdh-flowchart/runs/<run-id>/steps/<step-id>/` — step 単位の structured artifact (`ui-output.yaml` / `review.yaml` / `repair.yaml` 等)。runtime が guard で読む契約
-    - `.pdh-flowchart/` 配下全般 — transient local artifact。あなたの判断根拠として読み書きするのは構わないが、durable な product truth を置く場所ではない。クリーンアップ等で消える可能性がある前提で扱う
+    - `.pdh-flow/runs/<run-id>/steps/<step-id>/` — step 単位の structured artifact (`ui-output.yaml` / `review.yaml` / `repair.yaml` 等)。runtime が guard で読む契約
+    - `.pdh-flow/` 配下全般 — transient local artifact。あなたの判断根拠として読み書きするのは構わないが、durable な product truth を置く場所ではない。クリーンアップ等で消える可能性がある前提で扱う
 
     ## 構造化出力 (runtime contract)
 
@@ -176,7 +176,7 @@ prompts:
 
     ## コミット / ローカルファイル制約
 
-    - `.env`, `.codex`, `.pdh-flowchart/`, 生成された smoke repo, 実行ログは commit してはならない
+    - `.env`, `.codex`, `.pdh-flow/`, 生成された smoke repo, 実行ログは commit してはならない
     - `current-note.md` frontmatter には短い state だけを置き、長い findings, AC table, logs, diff は本文 / structured artifact に書く
 
   common-review: |

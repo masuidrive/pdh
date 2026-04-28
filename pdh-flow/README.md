@@ -1,12 +1,12 @@
-# pdh-flowchart
+# pdh-flow
 
-`pdh-flowchart` is a repo-centric runtime for executing the PD-C ticket flow with explicit gates, transient local artifacts, and a viewer-first progress UI with stop-state assist launch.
+`pdh-flow` is a repo-centric runtime for executing the PD-C ticket flow with explicit gates, transient local artifacts, and a viewer-first progress UI with stop-state assist launch.
 
 ## Core Model
 
 - `current-note.md` frontmatter is the canonical runtime state.
 - `current-ticket.md` is the durable ticket record for Why / What / Product AC / Implementation Notes.
-- `.pdh-flowchart/` holds transient prompts, raw provider logs, gate summaries, interruptions, and other local artifacts. It is not committed.
+- `.pdh-flow/` holds transient prompts, raw provider logs, gate summaries, interruptions, and other local artifacts. It is not committed.
 - The CLI operates on a repo, not on a separate SQLite run database.
 - The Web UI is viewer-first. It can launch a stop-state assist terminal, but runtime decisions and execution still stay in CLI commands or assist signals.
 - Runtime semantics are owned by this repo's flow YAML and prompt/runtime code. `pdh-dev` and `tmux-director` are not runtime dependencies.
@@ -43,6 +43,7 @@ node src/cli.mjs assist-open --repo .
 node src/cli.mjs assist-signal --repo . --signal continue --reason "ready"
 node src/cli.mjs interrupt --repo . --message "Need clarification"
 node src/cli.mjs answer --repo . --message "Use the existing fallback"
+node src/provider-cli.mjs ask --repo . --message "Need clarification"
 node src/cli.mjs prompt --repo .
 node src/cli.mjs metadata --repo .
 node src/cli.mjs flow --variant full
@@ -93,7 +94,7 @@ When a gate opens:
 {
   "status": "needs_human",
   "stepId": "PD-C-5",
-  "summary": "/path/to/repo/.pdh-flowchart/runs/.../steps/PD-C-5/human-gate-summary.md",
+  "summary": "/path/to/repo/.pdh-flow/runs/.../steps/PD-C-5/human-gate-summary.md",
   "nextCommands": [
     "node src/cli.mjs approve --repo /path/to/repo --step PD-C-5 --reason ok"
   ]
@@ -105,14 +106,14 @@ Review the summary, then decide in the terminal:
 ```sh
 node src/cli.mjs show-gate --repo .
 node src/cli.mjs assist-open --repo .
-./.pdh-flowchart/bin/assist-signal --step PD-C-5 --signal recommend-approve --reason "ready to implement"
+./.pdh-flow/bin/assist-signal --step PD-C-5 --signal recommend-approve --reason "ready to implement"
 node src/cli.mjs accept-recommendation --repo . --step PD-C-5
 ```
 
 If you want a fresh Claude session to discuss code or run tests before deciding, use `assist-open`. It prepares repo-local wrappers:
 
-- `./.pdh-flowchart/bin/assist-signal`
-- `./.pdh-flowchart/bin/assist-test`
+- `./.pdh-flow/bin/assist-signal`
+- `./.pdh-flow/bin/assist-test`
 
 The assist session stays in the same repo checkout, but the runtime still owns progression. At human gates the assist should hand control back with a single recommendation signal, and the user then confirms it with `accept-recommendation` or sends it back with `decline-recommendation`.
 
@@ -163,7 +164,7 @@ The assist session is hardened for this use case:
 - disables slash commands
 - loads user settings only
 - tells Claude not to follow repo-local PDH automation docs for progression
-- tells Claude to hand control back with `./.pdh-flowchart/bin/assist-signal`
+- tells Claude to hand control back with `./.pdh-flow/bin/assist-signal`
 
 At human gates, the expected pattern is:
 
@@ -171,7 +172,7 @@ At human gates, the expected pattern is:
 2. assist emits one recommendation signal such as:
 
 ```sh
-./.pdh-flowchart/bin/assist-signal --step PD-C-5 --signal recommend-rerun-from --target-step PD-C-4 --reason "plan changed after app review"
+./.pdh-flow/bin/assist-signal --step PD-C-5 --signal recommend-rerun-from --target-step PD-C-4 --reason "plan changed after app review"
 ```
 
 3. the user answers Yes or No by running:
@@ -190,7 +191,7 @@ Provider prompts now include:
 - compiled semantic rules from `flows/pdh-ticket-core.yaml`
 - required guards
 - canonical file paths for `current-ticket.md` and `current-note.md`
-- a YAML contract for step-local UI output written to `.pdh-flowchart/.../ui-output.yaml`
+- a YAML contract for step-local UI output written to `.pdh-flow/.../ui-output.yaml`
 - a review-step judgement block in `ui-output.yaml` when the step guard requires one
 
 They do not inline the full contents of `current-ticket.md` or `current-note.md`.
@@ -236,7 +237,7 @@ pdh:
 ## Local Artifact Layout
 
 ```text
-.pdh-flowchart/
+.pdh-flow/
   locks/
   runs/
     run-20260424022333-726697/
@@ -265,7 +266,7 @@ These files are local evidence only. The canonical runtime state stays in `curre
 
 ## Cleanup Rule
 
-Before close, the runtime appends durable step-history lines to `current-note.md` and removes the local `.pdh-flowchart/runs/<run-id>/` artifacts. The repo should retain:
+Before close, the runtime appends durable step-history lines to `current-note.md` and removes the local `.pdh-flow/runs/<run-id>/` artifacts. The repo should retain:
 
 - code changes
 - `current-ticket.md`
@@ -305,12 +306,13 @@ See [examples/fake-pdh-dev/README.md](examples/fake-pdh-dev/README.md) for a com
 ## Current Scope
 
 - Full `pdh-ticket-core` flow is the baseline; Light remains a supported variant.
-- Codex and Claude adapters save raw JSONL logs under `.pdh-flowchart/`.
+- Codex and Claude adapters save raw JSONL logs under `.pdh-flow/`.
 - Guards validate note sections, ticket sections, commits, commands, AC tables, and human approvals.
 - `run-next` is the main user command.
 - Human gates and interruptions are explicit blocking states.
 - `current-note.md` frontmatter replaces the old SQLite / metadata-block state model.
 - The Web UI stays viewer-first and follows the repo-centric CLI. Its only direct action is launching a stop-state assist terminal.
+- Providers should not drive runtime progression directly. When a provider needs one precise user answer, it should call `node src/provider-cli.mjs ask --repo . --message "..."` and stop.
 
 ## Deferred
 

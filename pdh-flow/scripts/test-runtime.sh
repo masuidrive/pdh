@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TMP_ROOT="${TMPDIR:-/tmp}/pdh-flowchart-runtime-tests"
+TMP_ROOT="${TMPDIR:-/tmp}/pdh-flow-runtime-tests"
 rm -rf "$TMP_ROOT"
 mkdir -p "$TMP_ROOT"
 
@@ -330,16 +330,16 @@ test_recorded_step_commit_guard() {
   printf '\nrecorded commit test\n' >>"$repo/current-note.md"
   git -C "$repo" add current-note.md
   git -C "$repo" -c user.name="pdh runtime test" -c user.email="pdh-runtime@example.invalid" commit -m "Unrelated commit subject" >/dev/null
-  node --input-type=module -e "import { writeStepCommitRecord, loadStepCommitRecord } from '$ROOT/src/step-commit.mjs'; const record = writeStepCommitRecord({ repoPath: '$repo', stateDir: '$repo/.pdh-flowchart', runId: 'run-test', stepId: 'PD-C-2', beforeCommit: '$before' }); if (!record?.commit) throw new Error('step commit record missing'); const loaded = loadStepCommitRecord({ stateDir: '$repo/.pdh-flowchart', runId: 'run-test', stepId: 'PD-C-2' }); if (!loaded?.commit) throw new Error('step commit record not reloadable');"
-  node --input-type=module -e "import { evaluateGuard } from '$ROOT/src/guards.mjs'; import { loadStepCommitRecord } from '$ROOT/src/step-commit.mjs'; const stepCommit = loadStepCommitRecord({ stateDir: '$repo/.pdh-flowchart', runId: 'run-test', stepId: 'PD-C-2' }); const result = evaluateGuard({ id: 'step-commit', type: 'git_commit_exists', pattern: '^\\\\[PD-C-2\\\\]', stepCommit }, { repoPath: '$repo' }); console.log(JSON.stringify(result));" >"$TMP_ROOT/recorded-step-commit.json"
+  node --input-type=module -e "import { writeStepCommitRecord, loadStepCommitRecord } from '$ROOT/src/step-commit.mjs'; const record = writeStepCommitRecord({ repoPath: '$repo', stateDir: '$repo/.pdh-flow', runId: 'run-test', stepId: 'PD-C-2', beforeCommit: '$before' }); if (!record?.commit) throw new Error('step commit record missing'); const loaded = loadStepCommitRecord({ stateDir: '$repo/.pdh-flow', runId: 'run-test', stepId: 'PD-C-2' }); if (!loaded?.commit) throw new Error('step commit record not reloadable');"
+  node --input-type=module -e "import { evaluateGuard } from '$ROOT/src/guards.mjs'; import { loadStepCommitRecord } from '$ROOT/src/step-commit.mjs'; const stepCommit = loadStepCommitRecord({ stateDir: '$repo/.pdh-flow', runId: 'run-test', stepId: 'PD-C-2' }); const result = evaluateGuard({ id: 'step-commit', type: 'git_commit_exists', pattern: '^\\\\[PD-C-2\\\\]', stepCommit }, { repoPath: '$repo' }); console.log(JSON.stringify(result));" >"$TMP_ROOT/recorded-step-commit.json"
   grep -q '"status":"passed"' "$TMP_ROOT/recorded-step-commit.json"
 }
 
 test_reviewer_placeholder_sanitization() {
   local repo
   repo="$(seed_repo reviewer-placeholder-sanitization)"
-  mkdir -p "$repo/.pdh-flowchart/runs/run-test/steps/PD-C-7/reviewers/code_reviewer-1"
-  cat >"$repo/.pdh-flowchart/runs/run-test/steps/PD-C-7/reviewers/code_reviewer-1/review.yaml" <<'YAML'
+  mkdir -p "$repo/.pdh-flow/runs/run-test/steps/PD-C-7/reviewers/code_reviewer-1"
+  cat >"$repo/.pdh-flow/runs/run-test/steps/PD-C-7/reviewers/code_reviewer-1/review.yaml" <<'YAML'
 status: No Critical/Major
 summary: looks fine
 findings:
@@ -358,7 +358,7 @@ notes:
     - one
     - two
 YAML
-  node --input-type=module -e "import { loadReviewerOutput } from '$ROOT/src/review-runtime.mjs'; const output = loadReviewerOutput({ stateDir: '$repo/.pdh-flowchart', runId: 'run-test', stepId: 'PD-C-7', reviewerId: 'code_reviewer-1' }); if (output.findings.length !== 1) throw new Error('placeholder finding should be dropped'); if (!output.findings[0].evidence.includes('command: uv run calc \"2-5\"')) throw new Error('structured evidence not preserved'); if (output.notes !== 'lines:\\n  - one\\n  - two') throw new Error('structured notes not rendered');"
+  node --input-type=module -e "import { loadReviewerOutput } from '$ROOT/src/review-runtime.mjs'; const output = loadReviewerOutput({ stateDir: '$repo/.pdh-flow', runId: 'run-test', stepId: 'PD-C-7', reviewerId: 'code_reviewer-1' }); if (output.findings.length !== 1) throw new Error('placeholder finding should be dropped'); if (!output.findings[0].evidence.includes('command: uv run calc \"2-5\"')) throw new Error('structured evidence not preserved'); if (output.notes !== 'lines:\\n  - one\\n  - two') throw new Error('structured notes not rendered');"
 }
 
 test_replace_note_section_with_nested_headings() {
@@ -380,6 +380,7 @@ test_prompt_context() {
   grep -q 'Match the primary language used in `current-ticket.md`' "$prompt_path"
   grep -q "Analyze nearby existing patterns first" "$prompt_path"
   grep -q "Include how the PD-C-2 concerns will be handled" "$prompt_path"
+  grep -q "node src/provider-cli.mjs ask --repo . --message" "$prompt_path"
   if grep -q "## current-ticket.md" "$prompt_path"; then
     echo "prompt should not inline current-ticket.md" >&2
     exit 1
@@ -415,8 +416,8 @@ test_auto_provider_run() {
   args="$TMP_ROOT/$run_id.auto-provider-args.txt"
   CODEX_BIN="$fake" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-next --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.auto-provider.txt" || true
   test -f "$args"
-  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/ui-output.yaml"
-  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/ui-runtime.yaml"
+  test -f "$repo/.pdh-flow/runs/$run_id/steps/PD-C-6/ui-output.yaml"
+  test -f "$repo/.pdh-flow/runs/$run_id/steps/PD-C-6/ui-runtime.yaml"
   grep -q "guard_failed" "$TMP_ROOT/$run_id.auto-provider.txt"
 }
 
@@ -429,9 +430,9 @@ test_auto_review_judgement() {
   args="$TMP_ROOT/$run_id.review-claude-args.txt"
   CLAUDE_BIN="$fake_claude" CODEX_BIN="$fake_codex" FAKE_CLAUDE_ARGS_FILE="$args" \
     node "$ROOT/src/cli.mjs" run-provider --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.review.txt"
-  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/ui-output.yaml"
-  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
-  grep -q '"status": "No Critical/Major"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
+  test -f "$repo/.pdh-flow/runs/$run_id/steps/PD-C-4/ui-output.yaml"
+  test -f "$repo/.pdh-flow/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
+  grep -q '"status": "No Critical/Major"' "$repo/.pdh-flow/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
   grep -q "Devil's Advocate" "$repo/current-note.md"
   grep -q "codex reviewer found no blocking issues" "$repo/current-note.md"
   grep -q -- "--disable-slash-commands" "$args"
@@ -453,14 +454,14 @@ test_review_loop_auto_repair() {
   CLAUDE_BIN="$fake_claude" CODEX_BIN="$fake_codex" FAKE_REVIEW_COUNT_FILE="$count_file" \
     node "$ROOT/src/cli.mjs" run-provider --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.review-loop.txt"
   grep -q "completed" "$TMP_ROOT/$run_id.review-loop.txt"
-  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/review-rounds/round-1/aggregate.yaml"
-  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/review-rounds/round-1/repair.yaml"
-  find "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/review-rounds/round-1/reviewers" -name review.yaml | grep -q .
-  find "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/review-rounds/round-2/reviewers" -name review.yaml | grep -q .
-  grep -R -q "Prior blocking findings from this reviewer role" "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/review-rounds/round-2/reviewers"
+  test -f "$repo/.pdh-flow/runs/$run_id/steps/PD-C-4/review-rounds/round-1/aggregate.yaml"
+  test -f "$repo/.pdh-flow/runs/$run_id/steps/PD-C-4/review-rounds/round-1/repair.yaml"
+  find "$repo/.pdh-flow/runs/$run_id/steps/PD-C-4/review-rounds/round-1/reviewers" -name review.yaml | grep -q .
+  find "$repo/.pdh-flow/runs/$run_id/steps/PD-C-4/review-rounds/round-2/reviewers" -name review.yaml | grep -q .
+  grep -R -q "Prior blocking findings from this reviewer role" "$repo/.pdh-flow/runs/$run_id/steps/PD-C-4/review-rounds/round-2/reviewers"
   grep -q "#### Round 1" "$repo/current-note.md"
   grep -q "Repair summary: fake repair applied" "$repo/current-note.md"
-  grep -q '"status": "No Critical/Major"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
+  grep -q '"status": "No Critical/Major"' "$repo/.pdh-flow/runs/$run_id/steps/PD-C-4/judgements/plan_review.json"
 }
 
 test_review_guard_auto_repair() {
@@ -473,8 +474,8 @@ test_review_guard_auto_repair() {
     node "$ROOT/src/cli.mjs" run-next --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.review-guard-repair.txt"
   grep -q "PD-C-10" "$TMP_ROOT/$run_id.review-guard-repair.txt"
   grep -q "## AC 裏取り結果" "$repo/current-note.md"
-  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-8/review-rounds/round-2/repair.yaml"
-  test -f "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-8/step-commit.json"
+  test -f "$repo/.pdh-flow/runs/$run_id/steps/PD-C-8/review-rounds/round-2/repair.yaml"
+  test -f "$repo/.pdh-flow/runs/$run_id/steps/PD-C-8/step-commit.json"
   node "$ROOT/src/cli.mjs" status --repo "$repo" >"$TMP_ROOT/$run_id.review-guard-status.txt"
   grep -q "Current Step: PD-C-10" "$TMP_ROOT/$run_id.review-guard-status.txt"
 }
@@ -507,9 +508,9 @@ test_auto_resume_after_idle_timeout() {
   grep -q "completed" "$TMP_ROOT/$run_id.auto-resume.txt"
   grep -q "resume" "$args_dir/args-2.txt"
   grep -q "fake-resume-thread" "$args_dir/args-2.txt"
-  grep -q '"status": "failed"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/attempt-1/result.json"
-  grep -q '"sessionId": "fake-resume-thread"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/attempt-1/result.json"
-  grep -q '"timeoutKind": "idle"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/attempt-1/result.json"
+  grep -q '"status": "failed"' "$repo/.pdh-flow/runs/$run_id/steps/PD-C-6/attempt-1/result.json"
+  grep -q '"sessionId": "fake-resume-thread"' "$repo/.pdh-flow/runs/$run_id/steps/PD-C-6/attempt-1/result.json"
+  grep -q '"timeoutKind": "idle"' "$repo/.pdh-flow/runs/$run_id/steps/PD-C-6/attempt-1/result.json"
 }
 
 test_stale_normalization_respects_step_finished() {
@@ -554,7 +555,7 @@ test_interrupted_run() {
   fake="$(write_fake_codex_success)"
   args="$TMP_ROOT/$run_id.interrupted-args.txt"
 
-  node "$ROOT/src/cli.mjs" interrupt --repo "$repo" --message "Should multiplication use integer arithmetic?" >"$TMP_ROOT/$run_id.interrupt.txt"
+  node "$ROOT/src/provider-cli.mjs" ask --repo "$repo" --message "Should multiplication use integer arithmetic?" >"$TMP_ROOT/$run_id.interrupt.txt"
   grep -q "interrupted" "$TMP_ROOT/$run_id.interrupt.txt"
 
   node "$ROOT/src/cli.mjs" status --repo "$repo" >"$TMP_ROOT/$run_id.interrupted-status.txt"
@@ -592,15 +593,15 @@ test_assist_gate_flow() {
   grep -q "## What This Stop Means" "$prompt_path"
   grep -q "## Checkpoints For This Step" "$prompt_path"
   grep -q "If plan or ticket intent changed during the gate, prefer a rerun recommendation instead of approve." "$prompt_path"
-  grep -q "Do not run ticket.sh" "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-5/assist/system-prompt.txt"
-  test -x "$repo/.pdh-flowchart/bin/assist-signal"
-  test -x "$repo/.pdh-flowchart/bin/assist-test"
+  grep -q "Do not run ticket.sh" "$repo/.pdh-flow/runs/$run_id/steps/PD-C-5/assist/system-prompt.txt"
+  test -x "$repo/.pdh-flow/bin/assist-signal"
+  test -x "$repo/.pdh-flow/bin/assist-test"
   node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-5 --signal recommend-approve --reason ok --no-run-next >"$TMP_ROOT/$run_id.assist-signal.json"
   grep -q '"action": "approve"' "$TMP_ROOT/$run_id.assist-signal.json"
-  signal_path="$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-5/assist/latest-signal.json"
+  signal_path="$repo/.pdh-flow/runs/$run_id/steps/PD-C-5/assist/latest-signal.json"
   test -f "$signal_path"
   grep -q '"signal": "recommend-approve"' "$signal_path"
-  "$repo/.pdh-flowchart/bin/assist-signal" --step PD-C-5 --signal recommend-rerun-from --target-step PD-C-4 --reason "wrapper path check" --no-run-next >"$TMP_ROOT/$run_id.wrapper-rerun.json"
+  "$repo/.pdh-flow/bin/assist-signal" --step PD-C-5 --signal recommend-rerun-from --target-step PD-C-4 --reason "wrapper path check" --no-run-next >"$TMP_ROOT/$run_id.wrapper-rerun.json"
   grep -q '"target_step_id": "PD-C-4"' "$TMP_ROOT/$run_id.wrapper-rerun.json"
   node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-5 --signal recommend-approve --reason ok --no-run-next >"$TMP_ROOT/$run_id.assist-signal-2.json"
   node "$ROOT/src/cli.mjs" accept-recommendation --repo "$repo" --step PD-C-5 --no-run-next >"$TMP_ROOT/$run_id.accept-recommendation.json"
@@ -620,7 +621,7 @@ test_gate_baseline_rerun_requirement() {
   baseline_commit="$(cd "$repo" && git rev-parse HEAD)"
   run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --variant full --start-step PD-C-5 | sed -n '1p')"
   node "$ROOT/src/cli.mjs" run-next --repo "$repo" >/dev/null
-  node -e "const fs=require('fs'); const gate=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(gate.baseline.step_id!=='PD-C-4') throw new Error('baseline step mismatch'); if(gate.baseline.commit!==process.argv[2]) throw new Error('baseline commit mismatch');" "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-5/human-gate.json" "$baseline_commit"
+  node -e "const fs=require('fs'); const gate=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(gate.baseline.step_id!=='PD-C-4') throw new Error('baseline step mismatch'); if(gate.baseline.commit!==process.argv[2]) throw new Error('baseline commit mismatch');" "$repo/.pdh-flow/runs/$run_id/steps/PD-C-5/human-gate.json" "$baseline_commit"
 
   python - "$repo/current-ticket.md" <<'PY'
 from pathlib import Path
@@ -631,7 +632,7 @@ replacement = needle + '- `uv run calc "(1+2)*3"` は将来対応候補として
 path.write_text(text.replace(needle, replacement, 1))
 PY
   node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-5 --signal recommend-approve --reason "looks good" --no-run-next >/dev/null
-  node -e "const fs=require('fs'); const gate=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(gate.rerun_requirement.target_step_id!=='PD-C-3') throw new Error('rerun requirement missing');" "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-5/human-gate.json"
+  node -e "const fs=require('fs'); const gate=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(gate.rerun_requirement.target_step_id!=='PD-C-3') throw new Error('rerun requirement missing');" "$repo/.pdh-flow/runs/$run_id/steps/PD-C-5/human-gate.json"
   if node "$ROOT/src/cli.mjs" accept-recommendation --repo "$repo" --step PD-C-5 --no-run-next >"$TMP_ROOT/$run_id.accept-should-fail.txt" 2>&1; then
     echo "accept-recommendation should fail when gate edits require rerun" >&2
     exit 1
@@ -660,7 +661,7 @@ test_assist_answer_flow() {
   node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(data.allowedSignals.join(',')!=='answer') throw new Error('answer signal missing');" "$TMP_ROOT/$run_id.assist-answer-open.json"
   node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-6 --signal answer --message "Keep integer arithmetic." --no-run-next >"$TMP_ROOT/$run_id.assist-answer.json"
   grep -q '"answered": "interrupt-' "$TMP_ROOT/$run_id.assist-answer.json"
-  grep -q "Keep integer arithmetic." "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/interruptions/"*-answer.md
+  grep -q "Keep integer arithmetic." "$repo/.pdh-flow/runs/$run_id/steps/PD-C-6/interruptions/"*-answer.md
 }
 
 test_assist_failed_continue() {
@@ -677,10 +678,10 @@ test_assist_failed_continue() {
   grep -q 'When the blocker is addressed, send `continue` so the runtime reruns PD-C-6 from the current step.' "$prompt_path"
   node "$ROOT/src/cli.mjs" assist-signal --repo "$repo" --step PD-C-6 --signal continue --reason "edits are ready" --no-run-next >"$TMP_ROOT/$run_id.assist-failed-signal.json"
   grep -q '"pendingConfirmation": true' "$TMP_ROOT/$run_id.assist-failed-signal.json"
-  grep -q '"status": "pending"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/assist/latest-signal.json"
+  grep -q '"status": "pending"' "$repo/.pdh-flow/runs/$run_id/steps/PD-C-6/assist/latest-signal.json"
   node "$ROOT/src/cli.mjs" apply-assist-signal --repo "$repo" --step PD-C-6 --no-run-next >"$TMP_ROOT/$run_id.assist-failed-apply.json"
   grep -q '"status": "ok"' "$TMP_ROOT/$run_id.assist-failed-apply.json"
-  grep -q '"status": "accepted"' "$repo/.pdh-flowchart/runs/$run_id/steps/PD-C-6/assist/latest-signal.json"
+  grep -q '"status": "accepted"' "$repo/.pdh-flow/runs/$run_id/steps/PD-C-6/assist/latest-signal.json"
   grep -q "status: running" "$repo/current-note.md"
   args="$TMP_ROOT/$run_id.assist-failed-rerun-args.txt"
   CODEX_BIN="$fake_success" FAKE_ARGS_FILE="$args" node "$ROOT/src/cli.mjs" run-next --repo "$repo" --force --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >/dev/null || true

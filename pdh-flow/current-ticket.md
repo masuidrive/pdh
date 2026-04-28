@@ -10,7 +10,7 @@ The runtime should not have a second canonical state source separate from `curre
 - Keep `current-ticket.md` free of runtime metadata.
 - Rework the CLI around repo-centric commands such as `run-next --repo .`.
 - Rework the Web UI to read from note frontmatter plus transient local artifacts.
-- Keep `.pdh-flowchart/` transient and remove local run artifacts before close.
+- Keep `.pdh-flow/` transient and remove local run artifacts before close.
 
 ## Product AC
 
@@ -23,7 +23,7 @@ The runtime should not have a second canonical state source separate from `curre
 ## Implementation Notes
 
 - `current-note.md` frontmatter holds `ticket`, `flow`, `variant`, `status`, `current_step`, `run_id`, timestamps.
-- `.pdh-flowchart/runs/<run-id>/` stores prompts, raw logs, gate summaries, interruptions, judgements, and patch proposals.
+- `.pdh-flow/runs/<run-id>/` stores prompts, raw logs, gate summaries, interruptions, judgements, and patch proposals.
 - `run-next` auto-runs providers by default and stops only at gates, interruptions, guard failures, provider failures, or completion.
 - Close cleanup appends step-history lines to `current-note.md` before deleting local artifacts.
 

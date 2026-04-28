@@ -1,14 +1,14 @@
-# pdh-flowchart PRD
+# pdh-flow PRD
 
 ## 1. Product Summary
 
-`pdh-flowchart` turns the PD-C ticket flow into a repo-centric CLI runtime with explicit gates, interruptions, provider prompts, and a viewer-first progress UI.
+`pdh-flow` turns the PD-C ticket flow into a repo-centric CLI runtime with explicit gates, interruptions, provider prompts, and a viewer-first progress UI.
 
 The key product decision is:
 
 - `current-note.md` frontmatter is the canonical runtime state.
 - `current-ticket.md` is the durable ticket record.
-- `.pdh-flowchart/` is transient local evidence and is never the source of truth.
+- `.pdh-flow/` is transient local evidence and is never the source of truth.
 
 This replaces the earlier dual-state model where a separate runtime store tried to mirror note/ticket state.
 
@@ -54,7 +54,7 @@ That made it easy for the runtime to say one thing while the canonical note/tick
    The active flow state lives in `current-note.md` frontmatter.
 
 2. **Durable vs transient is explicit**
-   Ticket intent and step history stay in markdown. Provider raw logs, prompts, and gate artifacts stay under `.pdh-flowchart/`.
+   Ticket intent and step history stay in markdown. Provider raw logs, prompts, and gate artifacts stay under `.pdh-flow/`.
 
 3. **Human state changes are first-class**
    Human gates, assist recommendations, confirmations, rejections, and interruption answers are explicit runtime events.
@@ -76,7 +76,7 @@ node src/cli.mjs run --repo . --ticket calc-cli --variant full
 This creates or updates:
 
 - `current-note.md` frontmatter
-- transient `.pdh-flowchart/runs/<run-id>/`
+- transient `.pdh-flow/runs/<run-id>/`
 - optional `ticket.sh start`
 
 ### Normal progress
@@ -111,7 +111,7 @@ node src/cli.mjs assist-open --repo .
 The assist should then return one recommendation, and the user answers Yes or No:
 
 ```sh
-./.pdh-flowchart/bin/assist-signal --step PD-C-5 --signal recommend-approve --reason "ready to implement"
+./.pdh-flow/bin/assist-signal --step PD-C-5 --signal recommend-approve --reason "ready to implement"
 node src/cli.mjs accept-recommendation --repo . --step PD-C-5
 ```
 
@@ -120,7 +120,7 @@ node src/cli.mjs accept-recommendation --repo . --step PD-C-5
 At close:
 
 1. durable step history is appended to `current-note.md`
-2. `.pdh-flowchart/runs/<run-id>/` is removed
+2. `.pdh-flow/runs/<run-id>/` is removed
 3. `ticket.sh close` runs when available
 
 ## 8. Functional Requirements
@@ -191,7 +191,7 @@ In scope:
 
 - repo-centric CLI
 - note frontmatter state model
-- transient `.pdh-flowchart/` artifacts
+- transient `.pdh-flow/` artifacts
 - Codex / Claude provider adapters
 - parallel reviewer execution for review steps
 - explicit human gates and interruptions

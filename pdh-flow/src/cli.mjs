@@ -172,52 +172,52 @@ try {
     throw new Error(`Unknown command: ${command}`);
   }
 } catch (error) {
-  console.error(`pdh-flowchart: ${error.message}`);
+  console.error(`pdh-flow: ${error.message}`);
   process.exitCode = 1;
 }
 
 function printHelp() {
-  console.log(`pdh-flowchart
+  console.log(`pdh-flow
 
 Usage:
-  pdh-flowchart init [--repo DIR]
-  pdh-flowchart run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5] [--force-reset]
-  pdh-flowchart run-next [--repo DIR] [--limit 20] [--manual-provider] [--stop-after-step] [--timeout-ms MS] [--idle-timeout-ms MS]
-  pdh-flowchart run-provider [--repo DIR] [--step PD-C-6] [--prompt-file FILE] [--timeout-ms MS] [--idle-timeout-ms MS] [--max-attempts N]
-  pdh-flowchart resume [--repo DIR] [--step PD-C-6]
-  pdh-flowchart prompt [--repo DIR] [--step PD-C-6]
-  pdh-flowchart metadata [--repo DIR]
-  pdh-flowchart judgement [--repo DIR] [--step PD-C-4] [--kind plan_review] [--status "No Critical/Major"] [--summary TEXT]
-  pdh-flowchart verify [--repo DIR] [--command "scripts/test-all.sh"]
-  pdh-flowchart guards [--repo DIR] [--step PD-C-9]
-  pdh-flowchart gate-summary [--repo DIR] [--step PD-C-5]
-  pdh-flowchart approve [--repo DIR] [--step PD-C-5] [--reason TEXT]
-  pdh-flowchart reject [--repo DIR] [--step PD-C-5] [--reason TEXT]
-  pdh-flowchart request-changes [--repo DIR] [--step PD-C-5] [--reason TEXT]
-  pdh-flowchart interrupt [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6]
-  pdh-flowchart answer [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6]
-  pdh-flowchart assist-open [--repo DIR] [--step PD-C-5] [--prepare-only] [--model MODEL] [--bare]
-  pdh-flowchart ticket-assist-open [--repo DIR] --ticket TICKET [--prepare-only] [--model MODEL] [--bare] [--variant full|light]
-  pdh-flowchart assist-signal [--repo DIR] [--step PD-C-5] --signal recommend-approve|recommend-request-changes|recommend-reject|recommend-rerun-from|answer|continue [--reason TEXT] [--target-step PD-C-4] [--message TEXT] [--file FILE] [--no-run-next]
-  pdh-flowchart ticket-start-request [--repo DIR] --ticket TICKET [--variant full|light] [--reason TEXT]
-  pdh-flowchart apply-assist-signal [--repo DIR] [--step PD-C-4] [--no-run-next]
-  pdh-flowchart accept-recommendation [--repo DIR] [--step PD-C-5] [--no-run-next]
-  pdh-flowchart decline-recommendation [--repo DIR] [--step PD-C-5] [--reason TEXT]
-  pdh-flowchart show-interrupts [--repo DIR] [--step PD-C-6] [--all] [--path]
-  pdh-flowchart status [--repo DIR]
-  pdh-flowchart logs [--repo DIR] [--follow] [--json]
-  pdh-flowchart show-gate [--repo DIR] [--step PD-C-5] [--path]
-  pdh-flowchart cleanup [--repo DIR] [--clear-run-id]
-  pdh-flowchart flow [--variant full|light]
-  pdh-flowchart flow-graph [--variant full|light] [--format mermaid|json] [--repo DIR]
-  pdh-flowchart doctor [--repo DIR] [--json]
-  pdh-flowchart web [--repo DIR] [--host 127.0.0.1] [--port 8765]
-  pdh-flowchart smoke-calc [--workdir DIR]
+  pdh-flow init [--repo DIR]
+  pdh-flow run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5] [--force-reset]
+  pdh-flow run-next [--repo DIR] [--limit 20] [--manual-provider] [--stop-after-step] [--timeout-ms MS] [--idle-timeout-ms MS]
+  pdh-flow run-provider [--repo DIR] [--step PD-C-6] [--prompt-file FILE] [--timeout-ms MS] [--idle-timeout-ms MS] [--max-attempts N]
+  pdh-flow resume [--repo DIR] [--step PD-C-6]
+  pdh-flow prompt [--repo DIR] [--step PD-C-6]
+  pdh-flow metadata [--repo DIR]
+  pdh-flow judgement [--repo DIR] [--step PD-C-4] [--kind plan_review] [--status "No Critical/Major"] [--summary TEXT]
+  pdh-flow verify [--repo DIR] [--command "scripts/test-all.sh"]
+  pdh-flow guards [--repo DIR] [--step PD-C-9]
+  pdh-flow gate-summary [--repo DIR] [--step PD-C-5]
+  pdh-flow approve [--repo DIR] [--step PD-C-5] [--reason TEXT]
+  pdh-flow reject [--repo DIR] [--step PD-C-5] [--reason TEXT]
+  pdh-flow request-changes [--repo DIR] [--step PD-C-5] [--reason TEXT]
+  pdh-flow interrupt [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6]
+  pdh-flow answer [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6]
+  pdh-flow assist-open [--repo DIR] [--step PD-C-5] [--prepare-only] [--model MODEL] [--bare]
+  pdh-flow ticket-assist-open [--repo DIR] --ticket TICKET [--prepare-only] [--model MODEL] [--bare] [--variant full|light]
+  pdh-flow assist-signal [--repo DIR] [--step PD-C-5] --signal recommend-approve|recommend-request-changes|recommend-reject|recommend-rerun-from|answer|continue [--reason TEXT] [--target-step PD-C-4] [--message TEXT] [--file FILE] [--no-run-next]
+  pdh-flow ticket-start-request [--repo DIR] --ticket TICKET [--variant full|light] [--reason TEXT]
+  pdh-flow apply-assist-signal [--repo DIR] [--step PD-C-4] [--no-run-next]
+  pdh-flow accept-recommendation [--repo DIR] [--step PD-C-5] [--no-run-next]
+  pdh-flow decline-recommendation [--repo DIR] [--step PD-C-5] [--reason TEXT]
+  pdh-flow show-interrupts [--repo DIR] [--step PD-C-6] [--all] [--path]
+  pdh-flow status [--repo DIR]
+  pdh-flow logs [--repo DIR] [--follow] [--json]
+  pdh-flow show-gate [--repo DIR] [--step PD-C-5] [--path]
+  pdh-flow cleanup [--repo DIR] [--clear-run-id]
+  pdh-flow flow [--variant full|light]
+  pdh-flow flow-graph [--variant full|light] [--format mermaid|json] [--repo DIR]
+  pdh-flow doctor [--repo DIR] [--json]
+  pdh-flow web [--repo DIR] [--host 127.0.0.1] [--port 8765]
+  pdh-flow smoke-calc [--workdir DIR]
 
 Notes:
   - current-note.md frontmatter is the canonical runtime state.
   - current-ticket.md and current-note.md stay repo-local and human-readable.
-  - .pdh-flowchart/ holds transient prompts, raw logs, interruptions, gate summaries, and other local artifacts.
+  - .pdh-flow/ holds transient prompts, raw logs, interruptions, gate summaries, and other local artifacts.
   - Provider commands load .env for API keys. Unit-style checks do not call external providers.
 `);
 }
@@ -1373,7 +1373,7 @@ function cmdCleanup(argv) {
   appendStepHistoryEntry(repo, {
     stepId: "CLEANUP",
     status: "local_artifacts_removed",
-    summary: `Removed .pdh-flowchart/runs/${runtime.run.id}`,
+    summary: `Removed .pdh-flow/runs/${runtime.run.id}`,
     commit: "-"
   });
   const removed = cleanupRunArtifacts({ repoPath: repo, runId: runtime.run.id });
@@ -1532,7 +1532,7 @@ async function cmdSmokeCalc(argv) {
   const options = parseOptions(argv);
   loadDotEnv();
   const result = await runCalcSmoke({
-    rootDir: resolve(options.workdir ?? "/tmp/pdh-flowchart-calc-smoke"),
+    rootDir: resolve(options.workdir ?? "/tmp/pdh-flow-calc-smoke"),
     bypass: options.bypass !== "false",
     timeoutMs: nonNegativeInteger(options["timeout-ms"] ?? String(10 * 60 * 1000), "--timeout-ms")
   });

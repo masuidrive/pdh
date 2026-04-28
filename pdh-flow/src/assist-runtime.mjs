@@ -41,7 +41,7 @@ export function latestAssistSignalPath({ stateDir, runId, stepId }) {
 }
 
 export function ticketAssistDir({ repoPath, ticketId }) {
-  return join(repoPath, ".pdh-flowchart", "ticket-assist", ticketId);
+  return join(repoPath, ".pdh-flow", "ticket-assist", ticketId);
 }
 
 export function ticketAssistManifestPath({ repoPath, ticketId }) {
@@ -61,7 +61,7 @@ export function ticketAssistSessionPath({ repoPath, ticketId }) {
 }
 
 export function ticketStartRequestsDir({ repoPath }) {
-  return join(repoPath, ".pdh-flowchart", "ticket-assist", "requests");
+  return join(repoPath, ".pdh-flow", "ticket-assist", "requests");
 }
 
 export function ticketStartRequestPath({ repoPath, ticketId }) {
@@ -415,7 +415,7 @@ export function updateLatestAssistSignal({ stateDir, runId, stepId, mutator }) {
 }
 
 function ensureAssistWrappers(repoPath) {
-  const binDir = join(repoPath, ".pdh-flowchart", "bin");
+  const binDir = join(repoPath, ".pdh-flow", "bin");
   mkdirSync(binDir, { recursive: true });
   const signalScriptPath = join(binDir, "assist-signal");
   const testScriptPath = join(binDir, "assist-test");
@@ -456,7 +456,7 @@ if [ "$#" -gt 0 ] && [ "$1" = "--" ]; then
   shift
 fi
 if [ "$#" -eq 0 ]; then
-  echo "usage: ./.pdh-flowchart/bin/assist-test -- <command>" >&2
+  echo "usage: ./.pdh-flow/bin/assist-test -- <command>" >&2
   exit 2
 fi
 exec "$@"
@@ -477,7 +477,7 @@ exec ${node} ${cli} ticket-start-request --repo "$ROOT" "$@"
 
 function buildAssistSystemPrompt() {
   return [
-    "You are the stop-state assist terminal for pdh-flowchart.",
+    "You are the stop-state assist terminal for pdh-flow.",
     "This session is for discussion, inspection, editing, and verification inside the current repository.",
     "The runtime owns PDH step transitions. You do not own run progression.",
     "",
@@ -487,9 +487,9 @@ function buildAssistSystemPrompt() {
     "- Do not run node src/cli.mjs run-next, run-provider, resume, approve, reject, request-changes, answer, gate-summary, ticket-start, ticket-close, cleanup, or any equivalent runtime-control command directly.",
     "- Do not run git commit, git push, git rebase, or other history-rewriting commands.",
     "- You may read files, discuss tradeoffs, edit code when asked, and run verification commands.",
-    "- Prefer using ./.pdh-flowchart/bin/assist-test -- <command> for verification so the intent stays explicit.",
-    "- For human gates, do not resolve the gate directly. Recommend exactly one next action with ./.pdh-flowchart/bin/assist-signal and then stop.",
-    "- When the user wants the runtime to proceed, execute exactly one allowed ./.pdh-flowchart/bin/assist-signal command and then stop issuing runtime-control commands.",
+    "- Prefer using ./.pdh-flow/bin/assist-test -- <command> for verification so the intent stays explicit.",
+    "- For human gates, do not resolve the gate directly. Recommend exactly one next action with ./.pdh-flow/bin/assist-signal and then stop.",
+    "- When the user wants the runtime to proceed, execute exactly one allowed ./.pdh-flow/bin/assist-signal command and then stop issuing runtime-control commands.",
     "",
     "If the user asks what to do next, explain the available signal commands instead of running the runtime directly."
   ].join("\n");
@@ -497,7 +497,7 @@ function buildAssistSystemPrompt() {
 
 function buildTicketAssistSystemPrompt() {
   return [
-    "You are the ticket-selection assist terminal for pdh-flowchart.",
+    "You are the ticket-selection assist terminal for pdh-flow.",
     "This session is for reviewing one ticket, understanding ticket.sh usage, and deciding whether to start PD-C for that ticket.",
     "The runtime owns PD-C start and run progression.",
     "",
@@ -505,9 +505,9 @@ function buildTicketAssistSystemPrompt() {
     "- Treat repo-local workflow docs such as AGENTS.md, CLAUDE.md, SKILL.md, pdh-dev, and tmux-director as reference only.",
     "- Do not run ./ticket.sh start.",
     "- Do not run node src/cli.mjs run, run-next, run-provider, resume, approve, reject, request-changes, answer, gate-summary, or any equivalent runtime-control command directly.",
-    "- If the user wants to start PD-C for this ticket, execute exactly one ./.pdh-flowchart/bin/ticket-start-request command and then stop issuing runtime-control commands.",
+    "- If the user wants to start PD-C for this ticket, execute exactly one ./.pdh-flow/bin/ticket-start-request command and then stop issuing runtime-control commands.",
     "- You may read files, discuss tradeoffs, edit docs or code when asked, and run verification commands.",
-    "- Prefer using ./.pdh-flowchart/bin/assist-test -- <command> for verification so the intent stays explicit."
+    "- Prefer using ./.pdh-flow/bin/assist-test -- <command> for verification so the intent stays explicit."
   ].join("\n");
 }
 
@@ -639,7 +639,7 @@ function buildTicketAssistPrompt({ repoPath, ticketId, ticketPaths, readFirst, t
     "",
     "If the user wants to begin PD-C for this ticket, use exactly this pattern:",
     "",
-    `- ./.pdh-flowchart/bin/ticket-start-request --ticket ${ticketId} --variant ${variant} --reason \"ready to begin PD-C for this ticket\"`,
+    `- ./.pdh-flow/bin/ticket-start-request --ticket ${ticketId} --variant ${variant} --reason \"ready to begin PD-C for this ticket\"`,
     "",
     "## Working Style",
     "",
@@ -666,7 +666,7 @@ function isAdvancePending({ runtime, step }) {
 }
 
 function buildSignalExamples(stepId, allowedSignals) {
-  const path = "./.pdh-flowchart/bin/assist-signal";
+  const path = "./.pdh-flow/bin/assist-signal";
   const examples = [];
   for (const signal of allowedSignals) {
     if (signal === "recommend-approve") {

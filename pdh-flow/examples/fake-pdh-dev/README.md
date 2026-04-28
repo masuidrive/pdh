@@ -1,6 +1,6 @@
 # fake-pdh-dev Fixture
 
-This is a tiny throwaway target repo for trying `pdh-flowchart` without touching a real project.
+This is a tiny throwaway target repo for trying `pdh-flow` without touching a real project.
 
 The fixture starts with:
 
@@ -11,8 +11,8 @@ The fixture starts with:
 ## Repo-Centric Walkthrough
 
 ```sh
-FLOW_ROOT=/home/masuidrive/Develop/pdh/pdh-flowchart
-TARGET=/tmp/pdh-flowchart-fake-pdh-dev
+FLOW_ROOT=/home/masuidrive/Develop/pdh/pdh-flow
+TARGET=/tmp/pdh-flow-fake-pdh-dev
 
 rm -rf "$TARGET"
 cp -R "$FLOW_ROOT/examples/fake-pdh-dev" "$TARGET"

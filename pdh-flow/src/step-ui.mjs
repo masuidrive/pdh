@@ -65,7 +65,7 @@ export function judgementFromUiOutput(stepId, uiOutput) {
 }
 
 export function renderUiOutputPromptSection({ run, step }) {
-  const relativePath = `.pdh-flowchart/runs/${run.id}/steps/${step.id}/ui-output.yaml`;
+  const relativePath = `.pdh-flow/runs/${run.id}/steps/${step.id}/ui-output.yaml`;
   const contract = stepUiContract(step);
   const judgementKind = defaultJudgementKind(step.id);
   const templateObject = {
