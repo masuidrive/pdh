@@ -1,0 +1,137 @@
+# Ticket system configuration
+# https://github.com/masuidrive/ticket.sh
+
+# Directory settings
+tickets_dir: "tickets"
+
+# Git settings
+default_branch: "main"
+branch_prefix: "features/"
+repository: "origin"
+
+# Automatically push changes to remote repository during close command
+auto_push: true
+
+# Automatically delete remote feature branch after closing ticket
+delete_remote_on_close: true
+
+# Success messages
+new_success_message: |
+  Ticket を作成しました。内容を編集してから `./ticket.sh start <ticket_name>` で作業を開始してください。
+
+start_success_message: |
+  @product-delivery-hierarchy.md のプロセスの一部として処理するチケットを開始しました。
+  `current-ticket.md` の Acceptance Criteria を確認してから作業を開始してください。
+  Epic との整合性は `epics/` を参照。判断に迷ったら `product-brief.md` の Constraints を確認。
+  PD-C ステップ: C-1 開始前→C-2 調査→C-3 計画→C-4 レビュー→C-5 実装承認→C-6 実装→C-7 品質検証→C-8 目的妥当性→C-9 完了検証→C-10 クローズ
+
+restore_success_message: |
+
+close_success_message: |
+  Ticket をクローズしました。
+  `./ticket.sh list` で残りの TODO ticket を確認してください。
+
+# Note template — 作業記録用。プロセス通過の証跡はセクション構造が担う
+note_content: |
+  # Work Notes: $$TICKET_NAME$$
+
+  ## Status: PD-C-1 (Opening) | Flow: (light/full — PD-C-1 で選択)
+
+  ## PD-C-2. 調査結果
+  <!-- Explore Agent による変更対象の調査結果。
+       git log で関連 ticket を特定し、背景・設計判断を記録する。
+       技術的な懸念事項もここに記録する。 -->
+
+  ## PD-C-3. 計画
+  <!-- 実装計画。以下を含める:
+       - 変更するファイルと内容、ファイル所有権の分担
+       - テスト観点（unit / integration / e2e）
+       - E2E スモークテスト手順
+       - 設計判断とその理由 -->
+
+  ### チケット固有の実装タスク
+  <!-- このチケットで実際にやることを箇条書きで。 -->
+  - [ ] ...
+
+  ## PD-C-4. 計画レビュー結果
+  <!-- Devil's Advocate×2 + Engineer + codex の結果を統合。
+       Critical/Major → 計画修正 → 再レビュー → 「問題なし」まで繰り返す。
+       ※ 全レビュアーが Critical/Major = 0 を回答したことがプロセス通過の証跡になる -->
+
+  ## PD-C-7. 品質検証結果
+  <!-- Devil's Advocate×2 + Code Reviewer×2 + codex の結果を統合。
+       Critical/Major → 修正 → テスト全件パス → 再レビュー → 「問題なし」まで繰り返す。
+       ※ 全レビュアーが Critical/Major = 0 を回答したことがプロセス通過の証跡になる -->
+
+  ## PD-C-8. 目的妥当性確認
+  <!-- 成果物がチケット目的を十分に達成しているか確認。
+       AC の実質的達成・成果物の十分性・抜け漏れを棚卸し。
+       不足がある場合は追加実装 → テスト → PD-C-8 再確認。 -->
+
+  ## PD-C-9. プロセスチェックリスト
+  PD-C-9 完了検証時にチェックする。
+  問題修正などでプロセスを繰り返すときは、2回目以降のチェック項目をリストに追加すること。
+  Light フローでは (Full only) の項目はスキップしてよい。
+  - [ ] PD-C-4: 計画レビューで全レビュアーが Critical/Major = 0 を回答 (Full only)
+  - [ ] PD-C-6: 実装は Engineer が行い、リードは直接コードを書いていない (Full only)
+  - [ ] PD-C-7: 品質検証で全レビュアーが Critical/Major = 0 を回答
+  - [ ] PD-C-6: コードの最終変更後に全てのテストが通った（backend / frontend / E2E）
+  - [ ] PD-C-6: `scripts/test-all.sh` 全スイートパス確認済み
+  - [ ] PD-C-6: E2E 実環境にアクセスして動作確認済み（UI: Playwright、API: curl）
+  - [ ] PD-C-9: ドキュメント更新済み（/update-docs）
+  - [ ] PD-C-10: ユーザが確認手順を実施し、クローズを承認した
+
+  ## Discoveries
+  <!-- 実装中に発見した想定外の事実を記録する。
+       例: API の未文書化の挙動、ライブラリの制約、既存コードの隠れた依存関係。
+       計画変更が必要なら PD-C-3 を更新し、ここには事実だけを残す。 -->
+
+# Ticket template — product-delivery-hierarchy.md の Ticket テンプレートに準拠
+# このテンプレートには frontmatter が含まれていない。
+# YAML frontmatter (created_at, started_at, closed_at) は ticket.sh が自動挿入する。
+#
+# Acceptance Criteria にはプロダクトの振る舞いだけを書く。
+# プロセス要件（レビュー済み、テストパス等）は SKILL.md のワークフローが保証し、
+# note のセクション構造が通過証跡になるので、ticket の Acceptance Criteria には書かない。
+default_content: |
+  ## $$TICKET_NAME$$
+
+  ### Why
+  <!-- なぜやるのか。Epic ベースの場合、どの Epic のどの部分を担うか明記する。
+       Epic の Outcome のうち、この Ticket が実現する範囲を書く。 -->
+
+  ### What
+  <!-- 何をするのか。想定方針・関連 module / file / api / UI。
+       着手前の仮説でよい。変わったら更新する。 -->
+
+  ### Acceptance Criteria
+  <!-- 完了を判定できる条件。プロダクトの観察可能な振る舞いだけを書く。
+       coding agent はここを実装のゴールとして使う。
+       例: 「/api/users に GET すると JSON 配列が返る」
+       例: 「画面幅 375px 以下でメニューがハンバーガーに切り替わる」
+
+       プロセス要件（PD-C-4レビュー済み、テストパス等）はここには書かない。
+       ワークフロー（SKILL.md）と作業ノート（note）が保証する。 -->
+  - [ ] ...
+
+  ▼ 以下は該当する情報がある場合のみ ▼
+
+  ### Implementation Notes
+  <!-- 想定方針の詳細。関連ファイル・影響範囲など。
+       着手前の仮説でよい。変わったら更新する。
+       設計判断が必要な場合はここに理由を記録する。
+       試したが却下した方法も残す（後世への記録）。
+       coding agent はここを出発点にコードを書き始める。 -->
+
+  ### Dependencies
+  <!-- この ticket に着手するために完了が必要な他の ticket。
+       「参考情報」ではなく「ブロッカー」だけ書く。なければ省略。
+       ブロッカー = これが未完了だと実装・テストが物理的にできない依存。
+       例: 「DB migration の ticket が先に必要」「認証 API が存在しないと結合できない」
+       参考情報（設計の参考にした ticket 等）は書かない。
+       coding agent は未完了の依存がある場合、着手せず報告する。 -->
+
+  ---
+  Work notes: `$$NOTE_PATH$$`
+
+# Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/.ticket-config.yaml

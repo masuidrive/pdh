@@ -299,9 +299,9 @@ It does not execute providers or record decisions.
 
 ## Example Fixture
 
-`examples/fake-pdh-dev` is a tiny throwaway repo for user-flow checks. It starts with a working `uv run calc "1+2"` path and a failing multiplication AC.
+`examples/sample1` is a tiny throwaway repo for user-flow checks. It starts with a working `uv run calc "1+2"` path and a failing multiplication AC.
 
-See [examples/fake-pdh-dev/README.md](examples/fake-pdh-dev/README.md) for a complete repo-centric walkthrough.
+See [examples/sample1/README.md](examples/sample1/README.md) for a complete repo-centric walkthrough.
 
 ## Current Scope
 

@@ -1,26 +1,30 @@
-# fake-pdh-dev Fixture
+# sample1
 
-This is a tiny throwaway target repo for trying `pdh-flow` without touching a real project.
+`pdh-flow` の最小サンプル兼 runtime テストフィクスチャ。実プロジェクトに触らずに PD-C サイクルを 1 周回せる。
 
-The fixture starts with:
+## 同梱されているもの
 
-- a working `uv run calc "1+2"` path
-- a failing multiplication AC
-- canonical `current-ticket.md` and `current-note.md`
+- `ticket.sh` (`masuidrive/ticket.sh` の generated build) と `.ticket-config.yaml`
+- `tickets/calc-multiply.md` を始点 ticket とした calc 評価器の課題セット
+- `current-ticket.md` と `current-note.md` (frontmatter は runtime canonical state)
+- 実装ターゲット: `src/calc_demo/` の Python 評価器、`scripts/test-all.sh`
+- `product-brief.md` と `docs/product-delivery-hierarchy.md` (PDH 運用ドキュメント)
+
+`uv run calc "1+2"` は通るが、乗算 `2*5+1` は未実装で AC が落ちる状態が初期。
 
 ## Repo-Centric Walkthrough
 
 ```sh
 FLOW_ROOT=/home/masuidrive/Develop/pdh/pdh-flow
-TARGET=/tmp/pdh-flow-fake-pdh-dev
+TARGET=/tmp/pdh-flow-sample1
 
 rm -rf "$TARGET"
-cp -R "$FLOW_ROOT/examples/fake-pdh-dev" "$TARGET"
+cp -R "$FLOW_ROOT/examples/sample1" "$TARGET"
 if [ -f "$FLOW_ROOT/.env" ]; then cp "$FLOW_ROOT/.env" "$TARGET/.env"; fi
 cd "$TARGET"
 git init
 git add .
-git commit -m "Seed fake pdh-dev fixture"
+git commit -m "Seed sample1 fixture"
 
 source /home/masuidrive/.nvm/nvm.sh
 
@@ -33,26 +37,27 @@ node "$FLOW_ROOT/src/cli.mjs" run-next --repo "$PWD" --stop-after-step
 node "$FLOW_ROOT/src/cli.mjs" status --repo "$PWD"
 ```
 
-At that point the run is on `PD-C-6`.
+この時点で run は `PD-C-6` で停止する。
 
-Normal path:
+通常パス:
 
 ```sh
 node "$FLOW_ROOT/src/cli.mjs" run-next --repo "$PWD"
 ```
 
-Debug path:
+デバッグパス:
 
 ```sh
 node "$FLOW_ROOT/src/cli.mjs" prompt --repo "$PWD"
 node "$FLOW_ROOT/src/cli.mjs" run-provider --repo "$PWD"
 ```
 
-Useful local checks:
+ローカル確認:
 
 ```sh
 uv run calc "1+2"
 uv run calc "2*5+1"
 uv run calc "2**10"
 scripts/test-all.sh
+./ticket.sh list
 ```

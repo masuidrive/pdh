@@ -1,8 +1,8 @@
-.pdh-flow/
+.pdh-flow/*
+!.pdh-flow/runtime.json
 .env
 .venv/
 __pycache__/
 .pytest_cache/
-.tickets/
 dist/
 *.egg-info/
