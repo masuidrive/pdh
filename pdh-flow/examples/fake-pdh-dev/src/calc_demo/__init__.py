@@ -1,1 +1,1 @@
-"""Tiny calculator package used by the pdh-flowchart fake fixture."""
+"""Tiny calculator package used by the pdh-flow fake fixture."""
