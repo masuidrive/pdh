@@ -53,7 +53,7 @@ export function Timeline({ steps, currentStepId, onSelect }: Props) {
               className={`timeline-end timeline-box w-full text-left ${tone.box} ${isCurrent ? "ring-2 ring-base-content/20" : ""}`}
             >
               <div className="flex items-center justify-between gap-3">
-                <span className={`font-bold ${tone.tone}`}>{step.label.replace(/^PD-C-\d+\s+/, "")}</span>
+                <span className={`font-bold ${tone.tone}`}>{step.label.replace(/^PD-C-\d+\s+/, "") || step.label}</span>
                 <span className="text-xs font-semibold text-base-content/50">{step.id}</span>
               </div>
               {step.progress.note ? <p className="mt-1 text-xs text-base-content/60">{step.progress.note}</p> : null}

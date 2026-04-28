@@ -93,7 +93,7 @@ export type StepView = {
   interruptions?: Interruption[];
   judgements?: JudgementEntry[];
   reviewFindings?: ReviewFinding[];
-  reviewDiff?: { totalChanged?: number; summary?: string } | null;
+  reviewDiff?: ReviewDiff | null;
   artifacts?: ArtifactEntry[];
   events?: EventEntry[];
 };
@@ -168,7 +168,16 @@ export type HistoryEntry = {
   attempts?: AttemptInfo[];
 };
 
-export type EventEntry = { kind: string; message?: string; created_at?: string };
+export type EventEntry = {
+  id?: string;
+  ts?: string;
+  created_at?: string;
+  type?: string;
+  kind?: string;
+  message?: string;
+  stepId?: string;
+  provider?: string;
+};
 
 export type Interruption = { kind: string; message?: string; created_at?: string };
 
@@ -183,7 +192,18 @@ export type ReviewFinding = {
   recommendation?: string;
 };
 
-export type ArtifactEntry = { name: string; path?: string; size?: number };
+export type ReviewDiff = {
+  stepId?: string;
+  baseLabel?: string;
+  baseCommit?: string;
+  diffStat?: unknown[];
+  changedFiles?: string[];
+  patch?: string | null;
+  totalChanged?: number;
+  summary?: string;
+};
+
+export type ArtifactEntry = { name: string; path?: string; size?: number | string };
 
 export type GitInfo = { branch?: string; head?: string; tickets?: TicketEntry[] };
 

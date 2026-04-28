@@ -5,11 +5,14 @@ import { Timeline } from "./components/Timeline";
 import { Workspace } from "./components/Workspace";
 import { BottomBar } from "./components/BottomBar";
 import { TerminalModal } from "./components/TerminalModal";
+import { ArtifactModal } from "./components/ArtifactModal";
+import { EventsFeed } from "./components/EventsFeed";
 
 export function App() {
   const slot = useAppState();
   const [collapsed, setCollapsed] = useState(false);
   const [terminalStep, setTerminalStep] = useState<string | null>(null);
+  const [artifactTarget, setArtifactTarget] = useState<{ stepId: string; name: string } | null>(null);
   const [selectedStep, setSelectedStep] = useState<string | null>(null);
 
   const variant = useMemo(() => {
@@ -44,7 +47,7 @@ export function App() {
     <>
       <Navbar
         ticketId={slot.state.runtime?.run?.ticket_id ?? null}
-        ticketTitle={slot.state.tickets?.[0]?.title ?? null}
+        ticketTitle={slot.state.tickets?.find((t) => t.id === slot.state?.runtime?.run?.ticket_id)?.title ?? null}
         branch={slot.state.git?.branch}
         collapsed={collapsed}
         onToggle={() => setCollapsed((v) => !v)}
@@ -67,12 +70,26 @@ export function App() {
               currentStepId={focusedStepId}
               onSelect={(id) => setSelectedStep(id)}
             />
+            <div className="mt-6">
+              <EventsFeed events={slot.state.events} />
+            </div>
           </aside>
         ) : null}
-        <Workspace step={focusedStep} next={next} onOpenTerminal={(id) => setTerminalStep(id)} />
+        <Workspace
+          step={focusedStep}
+          next={next}
+          onOpenTerminal={(id) => setTerminalStep(id)}
+          onOpenArtifact={(stepId, name) => setArtifactTarget({ stepId, name })}
+        />
       </main>
       <BottomBar step={focusedStep} ticketId={slot.state.runtime?.run?.ticket_id ?? null} />
       <TerminalModal open={terminalStep !== null} stepId={terminalStep} onClose={() => setTerminalStep(null)} />
+      <ArtifactModal
+        open={artifactTarget !== null}
+        stepId={artifactTarget?.stepId ?? null}
+        name={artifactTarget?.name ?? null}
+        onClose={() => setArtifactTarget(null)}
+      />
     </>
   );
 }

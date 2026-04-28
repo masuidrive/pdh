@@ -1,11 +1,13 @@
 import { useState } from "react";
 import type { ActionButton, NextAction, StepView } from "../lib/types";
 import { actions } from "../lib/api";
+import { EvidencePanel } from "./EvidencePanel";
 
 type Props = {
   step: StepView | null;
   next?: NextAction | null;
   onOpenTerminal: (stepId: string) => void;
+  onOpenArtifact: (stepId: string, name: string) => void;
 };
 
 const TONE_BADGE: Record<string, string> = {
@@ -23,19 +25,15 @@ const TONE_ALERT: Record<string, string> = {
   blocked: "alert-error",
 };
 
-export function Workspace({ step, next, onOpenTerminal }: Props) {
+export function Workspace({ step, next, onOpenTerminal, onOpenArtifact }: Props) {
   const [pendingKind, setPendingKind] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (!step) {
-    return (
-      <section className="p-8 text-base-content/60">step を選択してください</section>
-    );
+    return <section className="p-8 text-base-content/60">step を選択してください</section>;
   }
 
   const status = step.progress.status;
-  const stepTitle = step.label.replace(/^PD-C-\d+\s+/, "");
-  const ack = step.gate?.recommendationText ?? step.gate?.summaryText ?? null;
 
   async function runAction(action: ActionButton) {
     setPendingKind(action.kind);
@@ -90,7 +88,7 @@ export function Workspace({ step, next, onOpenTerminal }: Props) {
                 {status ? <li>{labelForStatus(status)}</li> : null}
               </ul>
             </div>
-            <h2 className="mt-2 text-3xl font-bold">{stepTitle || step.id}</h2>
+            <h2 className="mt-2 text-3xl font-bold">{step.label}</h2>
             {step.summary ? <p className="mt-2 max-w-3xl text-sm text-base-content/70">{step.summary}</p> : null}
             {status ? (
               <div className={`badge ${TONE_BADGE[status] ?? "badge-neutral"} badge-soft mt-4 gap-2`}>
@@ -119,20 +117,19 @@ export function Workspace({ step, next, onOpenTerminal }: Props) {
         ) : null}
 
         <div className="grid gap-5">
-          {step.noteSection ? (
-            <section className="card border border-base-300 bg-base-100 shadow-sm">
-              <div className="card-body">
-                <h3 className="card-title">要点</h3>
-                <pre className="whitespace-pre-wrap text-sm leading-7">{step.noteSection.slice(0, 2000)}</pre>
-              </div>
-            </section>
-          ) : null}
-
           {actionButtons.length ? (
             <section className="card border border-base-300 bg-base-100 shadow-sm">
               <div className="card-body">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h3 className="card-title">Next</h3>
+                  {next?.commands?.length ? (
+                    <details className="dropdown dropdown-end">
+                      <summary className="btn btn-ghost btn-xs">CLI で実行</summary>
+                      <pre className="mt-2 max-w-md overflow-auto rounded-box border border-base-300 bg-base-200 p-3 text-xs">
+                        {next.commands.join("\n")}
+                      </pre>
+                    </details>
+                  ) : null}
                 </div>
                 <div className="grid gap-4 xl:grid-cols-2">
                   {others.map((btn) => (
@@ -156,33 +153,7 @@ export function Workspace({ step, next, onOpenTerminal }: Props) {
             </section>
           ) : null}
 
-          {ack ? (
-            <section className="card border border-base-300 bg-base-100 shadow-sm">
-              <div className="card-body">
-                <h3 className="card-title">判断材料</h3>
-                <pre className="whitespace-pre-wrap text-sm leading-7">{ack}</pre>
-              </div>
-            </section>
-          ) : null}
-
-          {step.judgements && step.judgements.length ? (
-            <section className="card border border-base-300 bg-base-100 shadow-sm">
-              <div className="card-body">
-                <h3 className="card-title">Judgement</h3>
-                <ul className="space-y-2">
-                  {step.judgements.map((j) => (
-                    <li key={j.kind} className="flex items-start gap-3">
-                      <span className="badge badge-outline">{j.kind}</span>
-                      <div>
-                        <div className="font-semibold">{j.status ?? "—"}</div>
-                        {j.summary ? <div className="text-sm text-base-content/70">{j.summary}</div> : null}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </section>
-          ) : null}
+          <EvidencePanel step={step} onOpenArtifact={(name) => onOpenArtifact(step.id, name)} />
         </div>
       </div>
     </section>
