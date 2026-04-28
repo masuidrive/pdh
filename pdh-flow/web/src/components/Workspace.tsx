@@ -9,6 +9,7 @@ type Props = {
   onOpenTerminal: (stepId: string) => void;
   onOpenArtifact: (stepId: string, name: string) => void;
   onOpenDiff?: (stepId: string) => void;
+  onOpenFile?: (stepId: string, path: string) => void;
   onConfirm: (kind: string, ctx: { stepId?: string; stepLabel?: string; recommendationText?: string }) => void;
 };
 

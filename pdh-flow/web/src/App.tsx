@@ -9,6 +9,9 @@ import { ArtifactModal } from "./components/ArtifactModal";
 import { EventsFeed } from "./components/EventsFeed";
 import { ConfirmModal, type ConfirmRequest } from "./components/ConfirmModal";
 import { buildConfirmRequest } from "./lib/confirm";
+import { DiffModal } from "./components/DiffModal";
+import { MermaidModal } from "./components/MermaidModal";
+import { RepoFileModal } from "./components/RepoFileModal";
 
 export function App() {
   const slot = useAppState();
@@ -17,6 +20,9 @@ export function App() {
   const [artifactTarget, setArtifactTarget] = useState<{ stepId: string; name: string } | null>(null);
   const [selectedStep, setSelectedStep] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+  const [diffStep, setDiffStep] = useState<string | null>(null);
+  const [mermaidOpen, setMermaidOpen] = useState(false);
+  const [fileTarget, setFileTarget] = useState<{ stepId: string; path: string } | null>(null);
 
   function requestConfirm(kind: string, ctx: { stepId?: string; stepLabel?: string; recommendationText?: string; ticketId?: string }) {
     const req = buildConfirmRequest(kind, ctx);
@@ -59,6 +65,7 @@ export function App() {
         branch={slot.state.git?.branch}
         collapsed={collapsed}
         onToggle={() => setCollapsed((v) => !v)}
+        onOpenFlow={() => setMermaidOpen(true)}
         runtime={slot.state.runtime}
         summary={slot.state.summary}
         git={slot.state.git}
@@ -95,6 +102,8 @@ export function App() {
           history={slot.state.history}
           onOpenTerminal={(id) => setTerminalStep(id)}
           onOpenArtifact={(stepId, name) => setArtifactTarget({ stepId, name })}
+          onOpenDiff={(stepId) => setDiffStep(stepId)}
+          onOpenFile={(stepId, p) => setFileTarget({ stepId, path: p })}
           onConfirm={requestConfirm}
         />
       </main>
@@ -107,6 +116,9 @@ export function App() {
         onClose={() => setArtifactTarget(null)}
       />
       <ConfirmModal request={confirm} onClose={() => setConfirm(null)} />
+      <DiffModal open={diffStep !== null} stepId={diffStep} onClose={() => setDiffStep(null)} />
+      <MermaidModal open={mermaidOpen} variant={slot.state.flow.activeVariant} onClose={() => setMermaidOpen(false)} />
+      <RepoFileModal open={fileTarget !== null} stepId={fileTarget?.stepId ?? null} path={fileTarget?.path ?? null} onClose={() => setFileTarget(null)} />
     </>
   );
 }

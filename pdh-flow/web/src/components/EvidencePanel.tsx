@@ -71,7 +71,7 @@ export function EvidencePanel({ step, next, allSteps, history, onOpenArtifact, o
             <ContractRow
               key={`${it.label}-${i}`}
               item={it}
-              onOpenDiff={onOpenDiff ? () => onOpenDiff(it.diffStepId ?? step.id) : undefined}
+              onOpenDiff={onOpenDiff && it.kind === "diff" && it.diffStepId ? () => onOpenDiff(it.diffStepId!) : undefined}
             />
           ))}
 
@@ -99,8 +99,7 @@ export function EvidencePanel({ step, next, allSteps, history, onOpenArtifact, o
 
 function ContractRow({ item, onOpenDiff }: { item: EvidenceItem; onOpenDiff?: () => void }) {
   const tone = KIND_TONE[item.kind] ?? "ghost";
-  const isClickable = Boolean(onOpenDiff && item.kind === "diff");
-  const onClick = isClickable ? onOpenDiff : undefined;
+  const onClick = onOpenDiff;
   const Tag = onClick ? "button" : "div";
   return (
     <Tag

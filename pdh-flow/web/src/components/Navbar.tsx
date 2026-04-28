@@ -6,6 +6,7 @@ type Props = {
   branch?: string;
   collapsed: boolean;
   onToggle: () => void;
+  onOpenFlow?: () => void;
   runtime?: RuntimeBlock | null;
   summary?: SummaryBlock | null;
   git?: GitInfo | null;
@@ -21,7 +22,7 @@ const RUN_BADGE: Record<string, string> = {
   paused: "badge-warning",
 };
 
-export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, runtime, summary, git, mode, repoName }: Props) {
+export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onOpenFlow, runtime, summary, git, mode, repoName }: Props) {
   const run = runtime?.run ?? null;
   const supervisor = runtime?.supervisor ?? null;
   const ac = summary?.acCounts ?? {};
@@ -57,6 +58,11 @@ export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, run
         </div>
       </div>
       <div className="navbar-end gap-3">
+        {onOpenFlow ? (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onOpenFlow}>
+            Flow
+          </button>
+        ) : null}
         {ticketTitle ? (
           <div className="hidden flex-col items-end leading-tight md:flex">
             <span className="text-sm font-semibold text-base-content/80">{ticketTitle}</span>
