@@ -10,8 +10,8 @@ type Props = {
 declare global {
   interface Window {
     Terminal?: typeof import("@xterm/xterm").Terminal;
-    FitAddon?: typeof import("@xterm/addon-fit").FitAddon;
-    WebLinksAddon?: typeof import("@xterm/addon-web-links").WebLinksAddon;
+    FitAddon?: { FitAddon: typeof import("@xterm/addon-fit").FitAddon };
+    WebLinksAddon?: { WebLinksAddon: typeof import("@xterm/addon-web-links").WebLinksAddon };
   }
 }
 
@@ -79,10 +79,11 @@ export function TerminalModal({ open, stepId, onClose }: Props) {
       await loadXterm();
       if (cancelled) return;
       const session = await actions.openAssist(stepId);
-      const sessionId = (session as { session_id?: string }).session_id;
+      const data = (session as { result?: { sessionId?: string }; sessionId?: string });
+      const sessionId = data.result?.sessionId ?? data.sessionId;
       if (!sessionId) return;
       const TerminalCtor = window.Terminal!;
-      const FitCtor = window.FitAddon!;
+      const FitCtor = window.FitAddon!.FitAddon;
       const term = new TerminalCtor({ convertEol: true, theme: { background: "#1f1d18" }, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 13 });
       const fit = new FitCtor();
       term.loadAddon(fit);
