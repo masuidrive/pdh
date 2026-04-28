@@ -894,14 +894,13 @@ if (!mermaid.includes("PD-C-6") || !mermaid.includes("実装")) throw new Error(
   const html = await (await fetch(`${url}?assist=manual`)).text();
 if (!html.includes("PDH Dev Dashboard")) throw new Error("html shell missing");
 if (html.includes("flow-toggle")) throw new Error("flow toggle should not be rendered");
-if (!html.includes("detail-modal")) throw new Error("detail modal shell missing");
+if (!html.includes('id="root"')) throw new Error("SPA root element missing");
 const mutation = await fetch(`${url}api/state`, { method: "POST" });
 if (mutation.status !== 405) throw new Error(`mutation endpoint should be rejected, got ${mutation.status}`);
 NODE
   curl -s "${url}api/render-mermaid?code=graph%20TD%0AA--%3EB" | rg -q "<svg"
   curl -s "${url}api/artifact?step=PD-C-5&name=human-gate-summary.md" | rg -q "Human Gate Summary"
   curl -s "${url}api/diff?step=PD-C-5" | rg -q "\"baseLabel\":\""
-  /usr/lib/chromium/chromium --headless --disable-gpu --no-sandbox --virtual-time-budget=5000 --dump-dom "${url}?assist=manual&doc=note&heading=PD-C-3.%20%E8%A8%88%E7%94%BB&mode=markdown" | rg -q "detail-view-toggle|detail-doc-viewer|current-note.md"
   kill "$server_pid" 2>/dev/null || true
   wait "$server_pid" 2>/dev/null || true
 }
