@@ -5,6 +5,7 @@ import { buildFlowView, getStep, nextStep, resolveStepReviewPlan } from "./flow.
 import { defaultAcceptedJudgementStatus, defaultJudgementKind } from "./judgements.mjs";
 import { loadStepInterruptions, renderInterruptionsForPrompt } from "./interruptions.mjs";
 import { renderUiOutputPromptSection } from "./step-ui.mjs";
+import { hasStepPrompt, renderStepPromptBody } from "./step-prompts.mjs";
 
 export function writeStepPrompt({ repoPath, stateDir, run, flow, stepId }) {
   const step = getStep(flow, stepId);
@@ -45,17 +46,14 @@ export function writeReviewRepairPromptArtifact({ repoPath, stateDir, run, flow,
 }
 
 export function renderStepPrompt({ repoPath, run, flow, step, interruptions = [] }) {
-  const instructions = stepInstructions(step.id);
   const promptContext = mergePromptContext(flow, step);
   const flowView = buildFlowView(flow, run.flow_variant, step.id);
   const flowStep = flowView.steps.find((item) => item.id === step.id);
   const reviewPlan = flowStep?.review ?? null;
+  const stepBody = hasStepPrompt(step.id) ? renderStepPromptBody(step.id) : null;
 
   return [
-    "# pdh-flow Provider Prompt",
-    "",
-    "You are executing one PDH ticket-development step inside `pdh-flow`.",
-    "Do only the current step. Do not claim later gates are complete.",
+    "# pdh-flow Step Prompt",
     "",
     "## Run Context",
     "",
@@ -68,33 +66,19 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
     ...(step.summary ? [`- Step summary: ${step.summary}`] : []),
     `- Success transition: ${nextStep(flow, run.flow_variant, step.id, "success") ?? "(none)"}`,
     "",
-    "## Operating Rules",
-    "",
-    "- Treat `current-ticket.md` and `current-note.md` as the canonical records.",
-    "- Keep changes scoped to this step's purpose.",
-    `- Before finishing, satisfy every guard listed for ${step.id}.`,
-    `- If you commit, the commit subject must start with \`[${step.id}]\`.`,
-    "- If a guard cannot be satisfied, record the blocker in `current-note.md` and explain what is missing.",
-    "- If answered interruptions are listed below, treat them as user instructions for this step.",
-    "- If an open interruption is listed, stop and report that user input is still required.",
-    "- If local evidence is insufficient and you need one precise user answer, run `node src/provider-cli.mjs ask --repo . --message \"<question>\"` and then stop.",
-    "- Do not ask the user to choose among implementation options if local evidence is enough to decide.",
-    "- Do not mark PD-C-5 or PD-C-10 approved; those are explicit human gates.",
-    "",
     "## Interruptions",
     "",
     ...renderInterruptionsForPrompt(interruptions),
     "",
-    "## Step Instructions",
-    "",
-    ...instructions.map((line) => `- ${line}`),
-    "",
-    "## Canonical Files",
-    "",
-    "- `current-ticket.md` at repo root: durable ticket intent, Product AC, and implementation notes.",
-    "- `current-note.md` at repo root: workflow state in frontmatter plus process evidence and step history.",
-    "- Read both files before acting. Use repo-local references called out there when you need additional context.",
-    "",
+    ...(stepBody
+      ? [stepBody.trimEnd(), ""]
+      : [
+          "## Step Instructions",
+          "",
+          `- Execute ${step.id} according to the flow definition and repo rules.`,
+          `- Update canonical records and satisfy the guards for ${step.id}.`,
+          ""
+        ]),
     "## Compiled Context",
     "",
     ...(renderPromptContext(promptContext)),
@@ -404,74 +388,6 @@ export function renderReviewRepairPrompt({ repoPath, run, flow, step, reviewPlan
 function acceptedReviewerStatus(stepId) {
   const kind = defaultJudgementKind(stepId);
   return kind ? defaultAcceptedJudgementStatus(kind) : null;
-}
-
-function stepInstructions(stepId) {
-  const instructions = {
-    "PD-C-2": [
-      "Investigate the current implementation, design history, execution paths, and blast radius.",
-      "Check recent git history for relevant files and read related tickets or notes when available.",
-      "Cover at least the app code, tests, UI or API surfaces, SDK or CLI entrypoints, migrations or generated assets, docs or specs, repo rule files, and examples when they are in scope.",
-      "Record findings, risks, external dependencies, blast radius, and real-environment verification needs in `current-note.md` under `PD-C-2. 調査結果`.",
-      "Write enough concrete evidence that PD-C-3 can plan without redoing the same repository walk.",
-      "Commit the investigation record with a subject beginning `[PD-C-2]`."
-    ],
-    "PD-C-3": [
-      "Create an implementation plan from the investigation and ticket goal.",
-      "Analyze nearby existing patterns first and prefer the local implementation style over inventing a new abstraction.",
-      "Document file-level changes, ownership, file-specific context, design decisions, test plan, E2E or real-environment verification steps, and risk handling in `current-note.md` under `PD-C-3. 計画`.",
-      "Record durable design decisions and rationale in `current-ticket.md` under `Implementation Notes`.",
-      "Include how the PD-C-2 concerns will be handled, not just a happy-path implementation outline.",
-      "Choose a concrete plan from local evidence instead of leaving unresolved options for the user.",
-      "Commit the plan with a subject beginning `[PD-C-3]`."
-    ],
-    "PD-C-4": [
-      "Review the plan for Full flow before implementation starts.",
-      "Evaluate whether the plan solves the ticket purpose, follows existing patterns, covers risks, and has a credible test or verification path.",
-      "Review the proposed correction strategy, not just the historical bug report or current code smell list.",
-      "Record the integrated review result in `current-note.md` under `PD-C-4. 計画レビュー結果`.",
-      "Use `No Critical/Major` only when there are no unresolved critical or major issues; otherwise state the required revision.",
-      "Commit the review with a subject beginning `[PD-C-4]`."
-    ],
-    "PD-C-6": [
-      "Implement the approved plan with changes scoped to this ticket.",
-      "Keep `current-ticket.md`, `current-note.md`, code, and tests consistent with the approved plan as you implement.",
-      "Update `current-note.md` under `PD-C-6` with implementation summary, changed files, tests run, remaining risks, and any deviations from the original plan.",
-      "Run the smallest meaningful verification first; broaden coverage when the change risk or affected surface requires it.",
-      "If `scripts/test-all.sh` exists and is appropriate for this repo, run it or record why it cannot be run.",
-      "Do not treat failing, skipped, or environment-blocked verification as complete implementation.",
-      "Commit the implementation with a subject beginning `[PD-C-6]`."
-    ],
-    "PD-C-7": [
-      "Review the implemented change for quality, regressions, authorization or data-integrity issues, security, error handling, and test adequacy.",
-      "Check the change against product-brief intent and Acceptance Criteria.",
-      "When critical or major findings remain, push concrete corrections, rerun impacted verification, and review again until the latest reviewer state is clear or user-accepted.",
-      "Record quality verification in `current-note.md` under `PD-C-7. 品質検証結果`.",
-      "Use `No Critical/Major` only when all latest reviewer concerns at those severities are resolved or explicitly user-accepted.",
-      "Commit the review result with a subject beginning `[PD-C-7]`."
-    ],
-    "PD-C-8": [
-      "Validate purpose fit: look for reasons the ticket should not close even if the implementation appears correct.",
-      "Review every Acceptance Criteria item and classify it as `verified`, `deferred`, or `unverified` with evidence.",
-      "Act like a counterexample-seeking product reviewer: look for missing outcomes, missing scope, and things that should have been written but were not.",
-      "Record purpose validation in `current-note.md` under `PD-C-8. 目的妥当性確認`.",
-      "Do not treat follow-up work as acceptable deferral unless there is explicit user approval and a real follow-up ticket.",
-      "Commit the validation with a subject beginning `[PD-C-8]`."
-    ],
-    "PD-C-9": [
-      "Perform final verification against every product Acceptance Criteria and process checklist item.",
-      "Write or update `AC 裏取り結果` in `current-note.md` with one row per AC: item, classification, status, evidence, and deferral ticket.",
-      "Run final verification commands appropriate for the repo, including `scripts/test-all.sh` when present and applicable.",
-      "Check changed external surfaces from a consumer perspective when the ticket affects UI, HTTP API, SDK, or CLI behavior.",
-      "Do not leave any AC as implicit. `unverified` means the ticket is not ready to close.",
-      "Commit final verification evidence with a subject beginning `[PD-C-9]`."
-    ]
-  };
-  return instructions[stepId] ?? [
-    `Execute ${stepId} according to the flow definition and repo rules.`,
-    `Update canonical records and satisfy the guards for ${stepId}.`,
-    `Commit with a subject beginning \`[${stepId}]\`.`
-  ];
 }
 
 function reviewerRulesForStep(stepId) {
