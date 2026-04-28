@@ -1,6 +1,4 @@
-import { useState } from "react";
 import type { ActionButton, NextAction, StepView } from "../lib/types";
-import { actions } from "../lib/api";
 import { EvidencePanel } from "./EvidencePanel";
 
 type Props = {
@@ -8,6 +6,7 @@ type Props = {
   next?: NextAction | null;
   onOpenTerminal: (stepId: string) => void;
   onOpenArtifact: (stepId: string, name: string) => void;
+  onConfirm: (kind: string, ctx: { stepId?: string; stepLabel?: string; recommendationText?: string }) => void;
 };
 
 const TONE_BADGE: Record<string, string> = {
@@ -25,51 +24,20 @@ const TONE_ALERT: Record<string, string> = {
   blocked: "alert-error",
 };
 
-export function Workspace({ step, next, onOpenTerminal, onOpenArtifact }: Props) {
-  const [pendingKind, setPendingKind] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
+export function Workspace({ step, next, onOpenTerminal, onOpenArtifact, onConfirm }: Props) {
   if (!step) {
     return <section className="p-8 text-base-content/60">step を選択してください</section>;
   }
 
   const status = step.progress.status;
+  const recommendationText = step.gate?.recommendationText ?? step.gate?.summaryText ?? undefined;
 
-  async function runAction(action: ActionButton) {
-    setPendingKind(action.kind);
-    setError(null);
-    try {
-      switch (action.kind) {
-        case "gate_approve":
-          await actions.approve(step!.id);
-          break;
-        case "accept_recommendation":
-          await actions.acceptRecommendation(step!.id);
-          break;
-        case "apply_assist":
-          await actions.applyAssist(step!.id);
-          break;
-        case "assist":
-        case "open_terminal":
-          onOpenTerminal(step!.id);
-          break;
-        case "run_next_direct":
-          await actions.runNext(false);
-          break;
-        case "resume_direct":
-          await actions.resume(false);
-          break;
-        case "stop_direct":
-          await actions.stop();
-          break;
-        default:
-          setError(`Unsupported action: ${action.kind}`);
-      }
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setPendingKind(null);
+  function runAction(action: ActionButton) {
+    if (action.kind === "assist" || action.kind === "open_terminal") {
+      onOpenTerminal(step!.id);
+      return;
     }
+    onConfirm(action.kind, { stepId: step!.id, stepLabel: step!.label, recommendationText });
   }
 
   const actionButtons = next?.actions ?? [];
@@ -109,13 +77,6 @@ export function Workspace({ step, next, onOpenTerminal, onOpenArtifact }: Props)
           </div>
         ) : null}
 
-        {error ? (
-          <div className="alert alert-error">
-            <span>{error}</span>
-            <button className="btn btn-ghost btn-sm" onClick={() => setError(null)} type="button">Dismiss</button>
-          </div>
-        ) : null}
-
         <div className="grid gap-5">
           {actionButtons.length ? (
             <section className="card border border-base-300 bg-base-100 shadow-sm">
@@ -136,7 +97,6 @@ export function Workspace({ step, next, onOpenTerminal, onOpenArtifact }: Props)
                     <ActionTile
                       key={btn.kind + btn.label}
                       action={btn}
-                      pending={pendingKind === btn.kind}
                       onClick={() => runAction(btn)}
                     />
                   ))}
@@ -144,7 +104,6 @@ export function Workspace({ step, next, onOpenTerminal, onOpenArtifact }: Props)
                     <ActionTile
                       action={primary}
                       featured
-                      pending={pendingKind === primary.kind}
                       onClick={() => runAction(primary)}
                     />
                   ) : null}
@@ -162,12 +121,10 @@ export function Workspace({ step, next, onOpenTerminal, onOpenArtifact }: Props)
 
 function ActionTile({
   action,
-  pending,
   featured,
   onClick,
 }: {
   action: ActionButton;
-  pending: boolean;
   featured?: boolean;
   onClick: () => void;
 }) {
@@ -181,8 +138,7 @@ function ActionTile({
         <h4 className="card-title text-base">{action.label}</h4>
         {action.description ? <p className="text-sm">{action.description}</p> : null}
         <div className="card-actions justify-end">
-          <button className={buttonClass} onClick={onClick} disabled={pending} type="button">
-            {pending ? <span className="loading loading-spinner loading-xs" /> : null}
+          <button className={buttonClass} onClick={onClick} type="button">
             {action.label}
           </button>
         </div>

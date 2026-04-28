@@ -7,6 +7,8 @@ import { BottomBar } from "./components/BottomBar";
 import { TerminalModal } from "./components/TerminalModal";
 import { ArtifactModal } from "./components/ArtifactModal";
 import { EventsFeed } from "./components/EventsFeed";
+import { ConfirmModal, type ConfirmRequest } from "./components/ConfirmModal";
+import { buildConfirmRequest } from "./lib/confirm";
 
 export function App() {
   const slot = useAppState();
@@ -14,6 +16,12 @@ export function App() {
   const [terminalStep, setTerminalStep] = useState<string | null>(null);
   const [artifactTarget, setArtifactTarget] = useState<{ stepId: string; name: string } | null>(null);
   const [selectedStep, setSelectedStep] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+
+  function requestConfirm(kind: string, ctx: { stepId?: string; stepLabel?: string; recommendationText?: string; ticketId?: string }) {
+    const req = buildConfirmRequest(kind, ctx);
+    if (req) setConfirm(req);
+  }
 
   const variant = useMemo(() => {
     if (!slot.state) return null;
@@ -85,6 +93,7 @@ export function App() {
           next={next}
           onOpenTerminal={(id) => setTerminalStep(id)}
           onOpenArtifact={(stepId, name) => setArtifactTarget({ stepId, name })}
+          onConfirm={requestConfirm}
         />
       </main>
       <BottomBar step={focusedStep} ticketId={slot.state.runtime?.run?.ticket_id ?? null} />
@@ -95,6 +104,7 @@ export function App() {
         name={artifactTarget?.name ?? null}
         onClose={() => setArtifactTarget(null)}
       />
+      <ConfirmModal request={confirm} onClose={() => setConfirm(null)} />
     </>
   );
 }
