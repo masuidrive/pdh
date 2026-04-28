@@ -14,13 +14,16 @@ import { MermaidModal } from "./components/MermaidModal";
 import { RepoFileModal } from "./components/RepoFileModal";
 import { TicketDrawer } from "./components/TicketDrawer";
 import { actions } from "./lib/api";
+import { DocumentModal } from "./components/DocumentModal";
+import { useUrlState } from "./lib/use-url-state";
 
 export function App() {
   const slot = useAppState();
+  const [urlState, updateUrl] = useUrlState();
   const [collapsed, setCollapsed] = useState(false);
   const [terminalStep, setTerminalStep] = useState<string | null>(null);
   const [artifactTarget, setArtifactTarget] = useState<{ stepId: string; name: string } | null>(null);
-  const [selectedStep, setSelectedStep] = useState<string | null>(null);
+  const [selectedStep, setSelectedStep] = useState<string | null>(urlState.step);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [diffStep, setDiffStep] = useState<string | null>(null);
   const [mermaidOpen, setMermaidOpen] = useState(false);
@@ -54,7 +57,7 @@ export function App() {
   }, [slot.state]);
 
   const focusedStepId =
-    selectedStep ?? slot.state?.runtime?.run?.current_step_id ?? variant?.steps?.[0]?.id ?? null;
+    selectedStep ?? urlState.step ?? slot.state?.runtime?.run?.current_step_id ?? variant?.steps?.[0]?.id ?? null;
   const focusedStep = variant?.steps.find((s) => s.id === focusedStepId) ?? null;
   const next = focusedStep?.current ? slot.state?.current?.nextAction ?? null : null;
 
@@ -108,7 +111,10 @@ export function App() {
             <Timeline
               steps={variant.steps}
               currentStepId={focusedStepId}
-              onSelect={(id) => setSelectedStep(id)}
+              onSelect={(id) => {
+                setSelectedStep(id);
+                updateUrl({ step: id });
+              }}
             />
             <div className="mt-6">
               <EventsFeed events={slot.state.events} />
@@ -152,6 +158,19 @@ export function App() {
         }}
         onOpenTicketTerminal={openTicketTerminal}
       />
+      <DocumentModal
+        open={Boolean(urlState.doc)}
+        docId={urlState.doc}
+        heading={urlState.heading}
+        text={resolveDocText(slot.state, urlState.doc)}
+        onClose={() => updateUrl({ doc: null, heading: null, mode: null })}
+      />
     </>
   );
+}
+
+function resolveDocText(state: { documents?: Record<string, { text?: string }> } | null, docId: string | null) {
+  if (!state || !docId) return "";
+  const doc = state.documents?.[docId];
+  return doc?.text ?? "";
 }
