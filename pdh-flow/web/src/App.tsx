@@ -12,6 +12,8 @@ import { buildConfirmRequest } from "./lib/confirm";
 import { DiffModal } from "./components/DiffModal";
 import { MermaidModal } from "./components/MermaidModal";
 import { RepoFileModal } from "./components/RepoFileModal";
+import { TicketDrawer } from "./components/TicketDrawer";
+import { actions } from "./lib/api";
 
 export function App() {
   const slot = useAppState();
@@ -23,10 +25,26 @@ export function App() {
   const [diffStep, setDiffStep] = useState<string | null>(null);
   const [mermaidOpen, setMermaidOpen] = useState(false);
   const [fileTarget, setFileTarget] = useState<{ stepId: string; path: string } | null>(null);
+  const [ticketsOpen, setTicketsOpen] = useState(false);
 
   function requestConfirm(kind: string, ctx: { stepId?: string; stepLabel?: string; recommendationText?: string; ticketId?: string }) {
     const req = buildConfirmRequest(kind, ctx);
     if (req) setConfirm(req);
+  }
+
+  function startTicket(ticketId: string, force: boolean) {
+    requestConfirm(force ? "ticket_force_restart" : "ticket_start", { ticketId });
+  }
+
+  async function openTicketTerminal(ticketId: string) {
+    try {
+      await actions.openTicketTerminal(ticketId);
+      setTicketsOpen(false);
+      setTerminalStep(`ticket:${ticketId}`);
+    } catch (err) {
+      // surface via confirm error path; for now just log
+      console.error(err);
+    }
   }
 
   const variant = useMemo(() => {
@@ -66,6 +84,8 @@ export function App() {
         collapsed={collapsed}
         onToggle={() => setCollapsed((v) => !v)}
         onOpenFlow={() => setMermaidOpen(true)}
+        onOpenTickets={() => setTicketsOpen(true)}
+        pendingTicketCount={slot.state.ticketRequests?.length ?? 0}
         runtime={slot.state.runtime}
         summary={slot.state.summary}
         git={slot.state.git}
@@ -119,6 +139,18 @@ export function App() {
       <DiffModal open={diffStep !== null} stepId={diffStep} onClose={() => setDiffStep(null)} />
       <MermaidModal open={mermaidOpen} variant={slot.state.flow.activeVariant} onClose={() => setMermaidOpen(false)} />
       <RepoFileModal open={fileTarget !== null} stepId={fileTarget?.stepId ?? null} path={fileTarget?.path ?? null} onClose={() => setFileTarget(null)} />
+      <TicketDrawer
+        open={ticketsOpen}
+        tickets={slot.state.tickets ?? []}
+        pendingRequests={slot.state.ticketRequests}
+        activeTicketId={slot.state.runtime?.run?.ticket_id ?? null}
+        onClose={() => setTicketsOpen(false)}
+        onStart={(id, force) => {
+          setTicketsOpen(false);
+          startTicket(id, force);
+        }}
+        onOpenTicketTerminal={openTicketTerminal}
+      />
     </>
   );
 }
