@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "./lib/use-app-state";
 import { Navbar } from "./components/Navbar";
 import { Timeline } from "./components/Timeline";
@@ -34,6 +34,26 @@ export function App() {
     const req = buildConfirmRequest(kind, ctx);
     if (req) setConfirm(req);
   }
+
+  // ⌘/Ctrl+Enter triggers the primary nextAction
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        const next = slot.state?.current?.nextAction;
+        const primary = next?.actions?.find((a) => a.tone === "approve");
+        if (primary && focusedStep) {
+          e.preventDefault();
+          if (primary.kind === "assist" || primary.kind === "open_terminal") {
+            setTerminalStep(focusedStep.id);
+          } else {
+            requestConfirm(primary.kind, { stepId: focusedStep.id, stepLabel: focusedStep.label });
+          }
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   function startTicket(ticketId: string, force: boolean) {
     requestConfirm(force ? "ticket_force_restart" : "ticket_start", { ticketId });
@@ -94,6 +114,7 @@ export function App() {
         git={slot.state.git}
         mode={slot.state.mode}
         repoName={slot.state.repoName}
+        generatedAt={slot.state.generatedAt}
       />
       <main
         id="workspace"

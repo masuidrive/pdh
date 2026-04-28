@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { RuntimeBlock, SummaryBlock, GitInfo } from "../lib/types";
 
 type Props = {
@@ -14,6 +15,7 @@ type Props = {
   git?: GitInfo | null;
   mode?: string | null;
   repoName?: string | null;
+  generatedAt?: string;
 };
 
 const RUN_BADGE: Record<string, string> = {
@@ -24,7 +26,8 @@ const RUN_BADGE: Record<string, string> = {
   paused: "badge-warning",
 };
 
-export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onOpenFlow, onOpenTickets, pendingTicketCount, runtime, summary, git, mode, repoName }: Props) {
+export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onOpenFlow, onOpenTickets, pendingTicketCount, runtime, summary, git, mode, repoName, generatedAt }: Props) {
+  const elapsed = useRelativeTime(generatedAt);
   const run = runtime?.run ?? null;
   const supervisor = runtime?.supervisor ?? null;
   const ac = summary?.acCounts ?? {};
@@ -60,6 +63,7 @@ export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onO
         </div>
       </div>
       <div className="navbar-end gap-3">
+        {elapsed ? <span className="hidden text-xs text-base-content/50 lg:inline">updated {elapsed}</span> : null}
         {onOpenTickets ? (
           <button type="button" className="btn btn-ghost btn-sm gap-1" onClick={onOpenTickets}>
             Tickets
@@ -126,4 +130,22 @@ export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onO
       </div>
     </div>
   );
+}
+
+function useRelativeTime(iso?: string) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!iso) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [iso]);
+  if (!iso) return null;
+  void tick;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  const diff = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (diff < 5) return "just now";
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  return `${Math.floor(diff / 3600)}h ago`;
 }

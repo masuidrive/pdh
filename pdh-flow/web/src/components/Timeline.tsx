@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { StepView } from "../lib/types";
 
 type Props = {
@@ -25,6 +26,11 @@ const STATUS_ICON: Record<string, string> = {
 };
 
 export function Timeline({ steps, currentStepId, onSelect }: Props) {
+  const activeRef = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [currentStepId]);
+
   return (
     <ul className="timeline timeline-vertical timeline-compact">
       {steps.map((step, i) => {
@@ -35,7 +41,7 @@ export function Timeline({ steps, currentStepId, onSelect }: Props) {
         const prevStatus = steps[i - 1]?.progress.status ?? "";
         const prevRail = STATUS_DOT[prevStatus]?.rail ?? "";
         return (
-          <li key={step.id}>
+          <li key={step.id} ref={isCurrent ? activeRef : undefined}>
             {i > 0 ? <hr className={prevRail} /> : null}
             <div className="timeline-middle">
               <button
