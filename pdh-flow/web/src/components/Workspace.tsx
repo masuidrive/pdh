@@ -1,11 +1,13 @@
-import type { ActionButton, HistoryEntry, NextAction, StepView } from "../lib/types";
+import type { ActionButton, HistoryEntry, Interruption, NextAction, StepView } from "../lib/types";
 import { EvidencePanel } from "./EvidencePanel";
+import { FailureCard } from "./FailureCard";
 
 type Props = {
   step: StepView | null;
   next?: NextAction | null;
   allSteps: StepView[];
   history?: HistoryEntry[];
+  interruptions?: Interruption[];
   onOpenTerminal: (stepId: string) => void;
   onOpenArtifact: (stepId: string, name: string) => void;
   onOpenDiff?: (stepId: string) => void;
@@ -28,7 +30,7 @@ const TONE_ALERT: Record<string, string> = {
   blocked: "alert-error",
 };
 
-export function Workspace({ step, next, allSteps, history, onOpenTerminal, onOpenArtifact, onOpenDiff, onConfirm }: Props) {
+export function Workspace({ step, next, allSteps, history, interruptions, onOpenTerminal, onOpenArtifact, onOpenDiff, onConfirm }: Props) {
   if (!step) {
     return <section className="p-8 text-base-content/60">step を選択してください</section>;
   }
@@ -82,6 +84,7 @@ export function Workspace({ step, next, allSteps, history, onOpenTerminal, onOpe
         ) : null}
 
         <div className="grid gap-5">
+          <FailureCard step={step} interruptions={interruptions} onOpenTerminal={() => onOpenTerminal(step.id)} />
           {actionButtons.length ? (
             <section className="card border border-base-300 bg-base-100 shadow-sm">
               <div className="card-body">

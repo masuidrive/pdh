@@ -120,6 +120,7 @@ export function App() {
           next={next}
           allSteps={variant.steps}
           history={slot.state.history}
+          interruptions={slot.state.current?.interruptions}
           onOpenTerminal={(id) => setTerminalStep(id)}
           onOpenArtifact={(stepId, name) => setArtifactTarget({ stepId, name })}
           onOpenDiff={(stepId) => setDiffStep(stepId)}
