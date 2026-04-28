@@ -369,48 +369,46 @@ prompts:
   PD-C-4: |
     {{common}}
     {{common-c}}
-    {{common-review}}
 
-    # PD-C-4. 計画レビュー
+    # PD-C-4. 計画レビュー (aggregator)
 
     ## 役割
 
-    あなたは PD-C-3 の計画を多視点でレビューする step を回す coordinator (PM 役) です。reviewer 群を並行 spawn し、結果を統合します。
+    あなたは PD-C-4 の **aggregator** です。runtime が並行起動した N 名の reviewer (Devil's Advocate / Coding Engineer / codex) が書いた `review.yaml` を読み、dedupe・consensus 把握・blocker 抽出・集約 judgement を出すのが仕事です。reviewer 自身の起動・並行制御・schema 検証は runtime の責務。あなたは reviewer は spawn しません。
 
     ※ Light variant ではこの step は実行されません (runtime がスキップ)。
 
-    ## reviewer 構成 (並行 spawn)
+    ## 入力
 
-    - Devil's Advocate ×2: 計画の修正方針に矛盾・見落としがないか
-    - Coding Engineer ×1:  技術的実現可能性、依存関係、実装量の妥当性
-    - codex ×1:            致命的な点のみ指摘
+    - prompt 末尾の "## Reviewer Outputs" セクションに、各 reviewer の `reviewerId` / `label` / `provider` / `review.yaml` の path と inline 内容が runtime から注入されます
+    - `current-ticket.md` / `current-note.md` (PD-C-3 の計画を含む)
+    - 同 step の prior round が `.pdh-flow/runs/<run-id>/steps/PD-C-4/review-rounds/round-<n>/` にあれば差分把握に使ってよい
 
-    ユーザが reviewer role を指定した場合は、その role 名・人数をそのまま使う。各 reviewer には「計画の目的 (何を解決するためのものか)」を伝え、「現状の問題点」ではなく「計画の修正方針の妥当性」を評価させる。
+    ## 集約方針
 
-    reviewer は自分の `review.yaml` に結論を出す (詳細は別途 reviewer prompt で渡る)。共通の reviewer 規範は `common-review` を参照。
+    - 全 reviewer の findings を読み、同じ実体 (同じファイル / 同じ問題) を指す指摘を 1 つに dedupe する。dedupe 後の finding には consensus (何人が指摘したか / reviewer ID リスト) を残す
+    - 観点が違う指摘 (Devil's Advocate の脆弱性指摘 vs Coding Engineer の実装可能性指摘) は別 finding として保持する
+    - **worst-status-wins を尊重する**: 1 人でも accepted 系でない status を出していたら集約 status も accepted にしない
+    - reviewer の severity を集約段階で下げない
+    - reviewer 全員に見落とされた新規問題を自分で指摘しない (それは別 round の reviewer タスク)
 
-    ## 統合の仕事
-
-    - 各 reviewer の `review.yaml` を読む
-    - findings を統合する (同一指摘の重複排除、コード上の事実誤認の除外)
-    - Critical / Major があれば計画修正をかける (note の「PD-C-3. 計画」を更新)。修正後の再レビューは runtime が次 round を起こす
-    - 統合した結果を note の「PD-C-4. 計画レビュー結果」に reviewer 別ステータス + 統合された指摘・対応として記録
-
-    ## 統合時にやってはいけないこと
+    ## やってはいけないこと
 
     - 「計画に書いてあるから問題ない」と reviewer の指摘を却下する
-    - reviewer が出した severity を勝手に下げる
-    - reviewer の判定を上書きして「対応済み」とクローズする
+    - 同一実体でない指摘を強引に dedupe する
+    - reviewer の severity を勝手に下げる
+    - reviewer 自身を spawn する (runtime の責務)
+    - 計画修正そのものを行う (修正は次 round の前段で別 step / 別 agent が担当)
 
     ## 成果物
 
-    - `current-note.md` の「PD-C-4. 計画レビュー結果」
+    - `current-note.md` の「PD-C-4. 計画レビュー結果」: dedupe 後の reviewer 別ステータステーブル + 統合 findings (consensus 付き)
     - `ui-output.yaml`:
-        - `summary`: 統合レビュー結果の要点
+        - `summary`: dedupe 後 findings 数 / consensus パターン / 主な blocker
         - `risks`: 残存懸念
         - `judgement.kind`: `plan-review`
-        - `judgement.status`: 自分の集約結論 (blocker が残るなら accepted 系にしない)
-        - `judgement.summary`: 結論の理由
+        - `judgement.status`: 集約結論 (worst-status-wins。blocker が残るなら accepted 系にしない)
+        - `judgement.summary`: 結論の理由 + どの reviewer が主に上げたか
 
   PD-C-5: |
     {{common}}
@@ -492,15 +490,14 @@ prompts:
   PD-C-7: |
     {{common}}
     {{common-c}}
-    {{common-review}}
 
-    # PD-C-7. 品質検証
+    # PD-C-7. 品質検証 (aggregator)
 
     ## 役割
 
-    あなたは reviewer 群を spawn して実装の品質を多視点で検証する step を回す coordinator (PM 役) です。
+    あなたは PD-C-7 の **aggregator** です。runtime が並行起動した reviewer 群が書いた `review.yaml` を読み、dedupe・consensus 把握・blocker 抽出・集約 judgement を出すのが仕事です。reviewer 自身の起動・並行制御・schema 検証は runtime の責務。あなたは reviewer は spawn しません。
 
-    ## reviewer 構成 (並行 spawn)
+    runtime が立てる reviewer の構成 (参考):
 
     Full variant:
 
@@ -513,9 +510,15 @@ prompts:
       - Devil's Advocate ×1: セキュリティ脆弱性、設計上の論理バグ
       - codex ×1:            致命的な点のみ指摘
 
-    各 reviewer には「ticket の目的と変更内容の概要」を伝える。共通の reviewer 規範は `common-review` を参照。
+    ## 入力
 
-    ## レビュー観点
+    - prompt 末尾の "## Reviewer Outputs" セクションに、各 reviewer の `reviewerId` / `label` / `provider` / `review.yaml` の path と inline 内容が runtime から注入されます
+    - `current-ticket.md` / `current-note.md` (PD-C-6 の実装結果を含む)
+    - 同 step の prior round が `.pdh-flow/runs/<run-id>/steps/PD-C-7/review-rounds/round-<n>/` にあれば差分把握に使ってよい
+
+    ## 集約観点
+
+    reviewer の findings を以下の観点で読み、ticket の目的に対する重要度を判断する:
 
     - `product-brief.md` との整合性
     - Acceptance Criteria の達成状況
@@ -524,21 +527,30 @@ prompts:
     - 影響レイヤーの漏れ
     - テスト手法・実動確認手法が変更内容に見合っているか
 
-    ## Critical / Major があった場合
+    ## 集約方針
 
-    1. 修正は Coding Engineer に委譲する (PM が直接コードを編集しない)
-    2. テスト再実行は QA Engineer に委譲する。中間 round では変更影響範囲に限定して再実行 (変更ファイルと import chain 上で依存する test のみ)。フルスイート / E2E / 長時間スイートは中間 round ではスキップ可。フル実行は PD-C-9 で 1 回行う
-    3. 修正後の再レビューは runtime が次 round を起こす
+    - 全 reviewer の findings を読み、同じ実体を指す指摘を 1 つに dedupe する。dedupe 後の finding には consensus (何人が指摘したか / reviewer ID リスト) を残す
+    - 観点が違う指摘 (脆弱性 vs 整合性) は別 finding として保持する
+    - **worst-status-wins を尊重する**: 1 人でも accepted 系でない status を出していたら集約 status も accepted にしない
+    - reviewer の severity を集約段階で下げない
+    - reviewer 全員に見落とされた新規問題を自分で指摘しない (それは別 round の reviewer タスク)
+
+    ## やってはいけないこと
+
+    - reviewer 自身を spawn する (runtime の責務)
+    - 修正そのものを行う (修正は次 round の前段で別 step / 別 agent が担当)
+    - 同一実体でない指摘を強引に dedupe する
+    - reviewer の severity を勝手に下げる
 
     ## 成果物
 
-    - `current-note.md` の「PD-C-7. 品質検証結果」(reviewer 別ステータステーブル + 統合された指摘・対応・修正コミット参照)
+    - `current-note.md` の「PD-C-7. 品質検証結果」: dedupe 後の reviewer 別ステータステーブル + 統合 findings (consensus 付き) + 修正コミット参照
     - `ui-output.yaml`:
-        - `summary`: 品質検証の要点
+        - `summary`: dedupe 後 findings 数 / consensus パターン / 主な blocker
         - `risks`: 残懸念
         - `judgement.kind`: `quality-review`
-        - `judgement.status`: 自分の集約結論 (blocker が残るなら accepted 系にしない)
-        - `judgement.summary`: 結論の理由
+        - `judgement.status`: 集約結論 (worst-status-wins。blocker が残るなら accepted 系にしない)
+        - `judgement.summary`: 結論の理由 + どの reviewer が主に上げたか
 
   PD-C-8: |
     {{common}}
@@ -758,60 +770,71 @@ prompts:
   PD-D-2: |
     {{common}}
     {{common-d}}
-    {{common-review}}
 
-    # PD-D-2. ゼロベースレビュー
+    # PD-D-2. ゼロベースレビュー (aggregator)
 
     ## 役割
 
-    あなたは reviewer 群を並行 spawn し、結果を PdM に渡して採否判定させる coordinator (PM 役) です。「ゼロから自由に再設計できるとしたら、どうするか」の観点で Epic 全体を振り返り、Ticket 単位のレビューでは見落としがちな設計レベルの改善機会を発見するのが目的。
+    あなたは PD-D-2 の **aggregator** (PdM 役) です。runtime が並行起動した reviewer 群が書いた `review.yaml` を読み、Epic 全体に対して「今すぐ修正 / future-list / 問題なし」の採否判定を反証要求型 (「close してはいけない理由を探せ」) で出します。reviewer 自身の起動・並行制御・schema 検証は runtime の責務。あなたは reviewer は spawn しません。
 
-    ## reviewer 構成 (並行 spawn)
+    runtime が立てる reviewer の構成 (参考):
 
-    - Devil's Advocate ×2: 「今の実装を白紙にして再設計するなら何を変えるか」— アーキテクチャ / データモデル / API 設計の改善点。「過剰な複雑さはないか、より少ないコード・シンプルな設計で同じ目的を達成できなかったか」も検証
-    - Code Reviewer ×1 + ×1: 「コードベース全体で技術的負債や構造上の問題はないか」— 重複コード・責務の混在・拡張性の課題
-    - codex ×1: 致命的な設計問題のみ指摘
+      - Devil's Advocate ×2: 「今の実装を白紙にして再設計するなら何を変えるか」— アーキテクチャ / データモデル / API 設計の改善点。過剰な複雑さの検出
+      - Code Reviewer ×1 + ×1: 「コードベース全体で技術的負債や構造上の問題はないか」— 重複コード・責務の混在・拡張性の課題
+      - codex ×1: 致命的な設計問題のみ指摘
 
-    コード重複の検出には `similarity-ts` / `similarity-py` (`cargo install` で導入) を活用し、構造的重複を定量的に把握する。
+    コード重複の検出には reviewer 側で `similarity-ts` / `similarity-py` (`cargo install` で導入) を活用させてある。
 
-    共通の reviewer 規範は `common-review` を参照。
+    ## 入力
 
-    ## 実環境スモークテスト (必須)
+    - prompt 末尾の "## Reviewer Outputs" セクションに、各 reviewer の `reviewerId` / `label` / `provider` / `review.yaml` の path と inline 内容が runtime から注入されます
+    - `product-brief.md`
+    - 該当 Epic ファイル
+    - PD-D-1 の Exit Criterion 裏取り表 (Epic の `verification.md`)
 
-    コードレビューに加え、以下のうち該当するものを必ず実施:
+    ## 実環境スモークテストの確認
+
+    reviewer の review.yaml に実環境スモークテスト結果が含まれているはず。以下のうち該当するものが実施されたか確認する:
 
       - API 変更がある場合: curl で実エンドポイントを叩く
       - UI 変更がある場合: browser automation で操作する
       - 外部サービス連携がある場合: 実モデル / 実プロバイダで 1 回は実行する
 
-    ## PdM (Opus) に判定を委譲
+    実施されていなければ集約段階で「スモークテスト未実施」を blocker として記録する。
 
-    Critical / Major の採否と future-list 振り分けは PdM (Opus) を spawn して委譲する。PdM への指示は反証要求型 (「close してはいけない理由を探せ」)。
+    ## 集約 / 採否判定
 
-    PdM に渡すもの:
+    全 reviewer の findings を以下の 3 区分に振り分ける:
 
-      - `product-brief.md`
-      - 該当 Epic
-      - reviewer 群の結果一覧
-      - PD-D-1 の Exit Criterion 裏取り表
-
-    PdM は以下を判定する:
-
-      - 今すぐ修正すべき問題 (Critical / Major) → 追加 Ticket を切って対応
+      - 今すぐ修正すべき問題 (Critical / Major) → 追加 Ticket を切って対応 (集約段階では推奨を出すだけ。Ticket 化は別 step)
       - 将来の改善候補 → `docs/future-list.md` に記録
       - 問題なし → そのまま次工程へ
 
-    PdM が未達の Exit Criterion や `unverified` AC を発見したら future-list に回さず「close 不可」と報告する。future-list は「改善候補」であって「未達 AC を逃がす場所」ではない。
+    指示は反証要求型で受けている。「close してはいけない理由」を全 reviewer findings から探し、未達の Exit Criterion や `unverified` AC を発見したら future-list に回さず「close 不可」と報告する。future-list は「改善候補」であって「未達 AC を逃がす場所」ではない。
+
+    ## 集約方針
+
+    - 全 reviewer の findings を dedupe する (consensus 付き)
+    - 観点が違う指摘 (アーキテクチャ vs 重複コード vs 致命的設計問題) は別 finding として保持する
+    - worst-status-wins を尊重する。1 人でも未達 Exit Criterion / unverified AC を指摘していたら status は accepted にしない
+    - reviewer の severity を集約段階で下げない
+
+    ## やってはいけないこと
+
+    - reviewer 自身を spawn する (runtime の責務)
+    - 修正そのものを行う・追加 Ticket を勝手に切る (推奨は出してよいが起票は別)
+    - 未達 Exit Criterion を future-list に逃がして「close 可」とする
+    - reviewer 全員に見落とされた新規問題を自分で指摘する
 
     ## 成果物
 
-    - Epic ファイルの `Close Summary` セクションにゼロベースレビュー結果の要約を記載
+    - Epic ファイルの `Close Summary` セクションにゼロベースレビュー結果の要約 (dedup 後の構造的改善案・blocker 一覧・future-list 推奨) を記載
     - `ui-output.yaml`:
         - `summary`: ゼロベースレビューの要点 (構造的な改善余地・重複度・スモークテスト結果)
-        - `risks`: PdM が指摘した残課題
+        - `risks`: 残課題・blocker 推奨追加 Ticket
         - `judgement.kind`: `zero-base-review`
-        - `judgement.status`: PdM の集約結論
-        - `judgement.summary`: 結論の理由
+        - `judgement.status`: 集約結論 (未達 Exit Criterion / unverified AC があれば pass にしない)
+        - `judgement.summary`: 結論の理由 + 主要な改善余地
 
   PD-D-3: |
     {{common}}
