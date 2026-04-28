@@ -51,6 +51,11 @@ export function App() {
         branch={slot.state.git?.branch}
         collapsed={collapsed}
         onToggle={() => setCollapsed((v) => !v)}
+        runtime={slot.state.runtime}
+        summary={slot.state.summary}
+        git={slot.state.git}
+        mode={slot.state.mode}
+        repoName={slot.state.repoName}
       />
       <main
         id="workspace"

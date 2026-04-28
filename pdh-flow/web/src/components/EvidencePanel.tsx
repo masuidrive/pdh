@@ -1,4 +1,4 @@
-import type { ArtifactEntry, StepView } from "../lib/types";
+import type { ArtifactEntry, JudgementEntry, ReviewDiff, ReviewFinding, StepView } from "../lib/types";
 
 type Props = {
   step: StepView;
@@ -10,9 +10,10 @@ export function EvidencePanel({ step, onOpenArtifact }: Props) {
   const reviewDiff = step.reviewDiff ?? null;
   const findings = step.reviewFindings ?? [];
   const judgements = step.judgements ?? [];
-  const noteSection = step.noteSection ?? "";
+  const noteSection = (step.noteSection ?? "").trim();
+  const hasDiff = (reviewDiff?.changedFiles?.length ?? 0) > 0;
 
-  if (!artifacts.length && !reviewDiff?.changedFiles?.length && !findings.length && !judgements.length && !noteSection.trim()) {
+  if (!artifacts.length && !hasDiff && !findings.length && !judgements.length && !noteSection) {
     return null;
   }
 
@@ -20,128 +21,154 @@ export function EvidencePanel({ step, onOpenArtifact }: Props) {
     <section className="card border border-base-300 bg-base-100 shadow-sm">
       <div className="card-body">
         <h3 className="card-title">判断材料</h3>
-        <div className="grid gap-4">
-          {reviewDiff?.changedFiles?.length ? (
-            <DiffCard reviewDiff={reviewDiff} />
-          ) : null}
-          {noteSection.trim() ? (
-            <NoteSectionCard text={noteSection} stepId={step.id} />
-          ) : null}
-          {findings.length ? <FindingsCard findings={findings} /> : null}
-          {judgements.length ? <JudgementsCard judgements={judgements} /> : null}
-          {artifacts.length ? (
-            <ArtifactsCard artifacts={artifacts} onOpen={onOpenArtifact} />
-          ) : null}
+        <div className="grid gap-3">
+          {hasDiff ? <DiffRow reviewDiff={reviewDiff!} /> : null}
+          {noteSection ? <NoteRow text={noteSection} stepId={step.id} /> : null}
+          {findings.length ? <FindingsRow findings={findings} /> : null}
+          {judgements.length ? <JudgementsRow judgements={judgements} /> : null}
+          {artifacts.map((a) => (
+            <ArtifactRow key={a.name} artifact={a} onOpen={() => onOpenArtifact(a.name)} />
+          ))}
         </div>
       </div>
     </section>
   );
 }
 
-function DiffCard({ reviewDiff }: { reviewDiff: NonNullable<StepView["reviewDiff"]> }) {
+function EvidenceRow({
+  title,
+  badge,
+  badgeTone = "ghost",
+  description,
+  meta,
+  onClick,
+  children,
+}: {
+  title: string;
+  badge?: string;
+  badgeTone?: string;
+  description?: string;
+  meta?: string;
+  onClick?: () => void;
+  children?: React.ReactNode;
+}) {
+  const baseClass = "rounded-box border border-base-300 bg-base-200 p-4 text-left transition-colors";
+  const hover = onClick ? "cursor-pointer hover:bg-base-300/40" : "";
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag type={onClick ? "button" : undefined} onClick={onClick} className={`${baseClass} ${hover}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h4 className="truncate font-bold">{title}</h4>
+            {meta ? <span className="text-xs text-base-content/50">{meta}</span> : null}
+          </div>
+          {description ? <p className="mt-1 text-sm text-base-content/70">{description}</p> : null}
+          {children}
+        </div>
+        {badge ? <span className={`badge badge-${badgeTone} shrink-0`}>{badge}</span> : null}
+      </div>
+    </Tag>
+  );
+}
+
+function DiffRow({ reviewDiff }: { reviewDiff: ReviewDiff }) {
   const changed = reviewDiff.changedFiles ?? [];
+  const preview = changed.slice(0, 6).join(" · ");
+  const extra = changed.length > 6 ? ` · +${changed.length - 6} more` : "";
   return (
-    <div className="card border border-base-300 bg-base-200">
-      <div className="card-body">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h4 className="font-bold">変更差分</h4>
-            <p className="mt-1 text-sm text-base-content/70">{changed.length} files</p>
-            <ul className="mt-2 list-disc pl-5 text-sm text-base-content/70">
-              {changed.slice(0, 8).map((f) => (
-                <li key={f}>{f}</li>
-              ))}
-            </ul>
-            {changed.length > 8 ? <p className="text-xs text-base-content/50">+{changed.length - 8} more</p> : null}
-          </div>
-          <span className="badge badge-ghost">{reviewDiff.baseLabel ?? "diff"}</span>
-        </div>
-      </div>
-    </div>
+    <EvidenceRow
+      title="変更差分"
+      badge={reviewDiff.baseLabel ?? "diff"}
+      meta={`${changed.length} files`}
+      description={preview ? preview + extra : undefined}
+    />
   );
 }
 
-function NoteSectionCard({ text, stepId }: { text: string; stepId: string }) {
-  const preview = text.split("\n").slice(0, 6).join("\n");
+function NoteRow({ text, stepId }: { text: string; stepId: string }) {
+  const preview = text.split("\n").filter(Boolean).slice(0, 4).join("\n");
   return (
-    <div className="card border border-base-300 bg-base-200">
-      <div className="card-body">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h4 className="font-bold">current-note.md</h4>
-            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs leading-6 text-base-content/70">{preview}</pre>
-          </div>
-          <span className="badge badge-ghost">{stepId}</span>
-        </div>
-      </div>
-    </div>
+    <EvidenceRow title="current-note.md" badge={stepId}>
+      <pre className="mt-2 max-h-32 overflow-hidden whitespace-pre-wrap text-xs leading-6 text-base-content/70">
+        {preview}
+      </pre>
+    </EvidenceRow>
   );
 }
 
-function FindingsCard({ findings }: { findings: NonNullable<StepView["reviewFindings"]> }) {
+function FindingsRow({ findings }: { findings: ReviewFinding[] }) {
+  const top = findings.slice(0, 5);
   return (
-    <div className="card border border-base-300 bg-base-200">
-      <div className="card-body">
-        <h4 className="font-bold">Reviewer findings</h4>
-        <ul className="space-y-2">
-          {findings.map((f, i) => (
-            <li key={i} className="flex items-start gap-3">
-              <span className={`badge badge-${severityTone(f.severity)} badge-sm`}>{f.severity}</span>
-              <div>
-                <div className="font-semibold text-sm">{f.title ?? "(untitled)"}</div>
-                {f.evidence ? <div className="text-xs text-base-content/70">{f.evidence}</div> : null}
-                {f.recommendation ? <div className="text-xs text-base-content/60">→ {f.recommendation}</div> : null}
-                {f.reviewerLabel ? <div className="text-xs text-base-content/50">{f.reviewerLabel}</div> : null}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
+    <EvidenceRow title="Reviewer findings" badge={`${findings.length} items`} badgeTone="warning">
+      <ul className="mt-2 space-y-1.5">
+        {top.map((f, i) => (
+          <li key={i} className="flex items-start gap-2">
+            <span className={`badge badge-${severityTone(f.severity)} badge-sm`}>{f.severity}</span>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold">{f.title ?? "(untitled)"}</div>
+              {f.evidence ? <div className="truncate text-xs text-base-content/60">{f.evidence}</div> : null}
+            </div>
+          </li>
+        ))}
+        {findings.length > top.length ? (
+          <li className="text-xs text-base-content/50">+{findings.length - top.length} more</li>
+        ) : null}
+      </ul>
+    </EvidenceRow>
   );
 }
 
-function JudgementsCard({ judgements }: { judgements: NonNullable<StepView["judgements"]> }) {
+function JudgementsRow({ judgements }: { judgements: JudgementEntry[] }) {
   return (
-    <div className="card border border-base-300 bg-base-200">
-      <div className="card-body">
-        <h4 className="font-bold">Judgement</h4>
-        <ul className="space-y-1 text-sm">
-          {judgements.map((j) => (
-            <li key={j.kind} className="flex items-center gap-3">
-              <span className="badge badge-outline">{j.kind}</span>
-              <span className="font-semibold">{j.status ?? "—"}</span>
-              {j.summary ? <span className="text-base-content/70">{j.summary}</span> : null}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
+    <EvidenceRow title="Judgement" badge={`${judgements.length} items`}>
+      <ul className="mt-2 space-y-1 text-sm">
+        {judgements.map((j) => (
+          <li key={j.kind} className="flex flex-wrap items-baseline gap-2">
+            <span className="badge badge-outline badge-sm">{j.kind}</span>
+            <span className="font-semibold">{j.status ?? "—"}</span>
+            {j.summary ? <span className="text-base-content/70">{j.summary}</span> : null}
+          </li>
+        ))}
+      </ul>
+    </EvidenceRow>
   );
 }
 
-function ArtifactsCard({ artifacts, onOpen }: { artifacts: ArtifactEntry[]; onOpen: (name: string) => void }) {
+function ArtifactRow({ artifact, onOpen }: { artifact: ArtifactEntry; onOpen: () => void }) {
   return (
-    <div className="card border border-base-300 bg-base-200">
-      <div className="card-body">
-        <h4 className="font-bold">Artifacts</h4>
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {artifacts.map((a) => (
-            <li key={a.name}>
-              <button
-                type="button"
-                className="btn btn-sm btn-ghost h-auto w-full justify-between gap-3 border border-base-300 bg-base-100 py-2 text-left font-normal hover:bg-base-200"
-                onClick={() => onOpen(a.name)}
-              >
-                <span className="truncate">{a.name}</span>
-                {a.size ? <span className="badge badge-ghost badge-sm">{a.size}</span> : null}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
+    <EvidenceRow
+      title={artifact.name}
+      badge={artifactKind(artifact.name)}
+      meta={artifact.size ? String(artifact.size) : undefined}
+      description={artifactHint(artifact.name)}
+      onClick={onOpen}
+    />
   );
+}
+
+function artifactKind(name: string) {
+  const ext = name.toLowerCase().split(".").pop() ?? "";
+  if (["md", "markdown"].includes(ext)) return "markdown";
+  if (["json"].includes(ext)) return "json";
+  if (["yaml", "yml"].includes(ext)) return "yaml";
+  if (["txt", "log"].includes(ext)) return ext;
+  if (["patch", "diff"].includes(ext)) return "diff";
+  return "file";
+}
+
+function artifactHint(name: string) {
+  if (name.endsWith("/manifest.json")) return "Assist セッションのメタ情報";
+  if (name.endsWith("/prompt.md")) return "Provider に渡された run プロンプト";
+  if (name.endsWith("/session.json")) return "Provider 実行セッションのログ";
+  if (name.endsWith("/system-prompt.txt")) return "system prompt の内容";
+  if (name.endsWith("ui-output.json")) return "step の UI 出力";
+  if (name.endsWith("ui-runtime.json")) return "runtime が観測した UI 状態";
+  if (name.endsWith("human-gate-summary.md")) return "Gate に提示する要点まとめ";
+  if (name.includes("review")) return "Review round の出力";
+  if (name.includes("aggregate")) return "Aggregator のまとめ";
+  if (name.includes("repair")) return "Repair round の出力";
+  return "クリックで全文表示";
 }
 
 function severityTone(severity: string) {
