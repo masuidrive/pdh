@@ -1,19 +1,128 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { loadFlow, getInitialStep, getStep } from "./flow.mjs";
 import { createRedactor } from "./redaction.mjs";
-import { loadCurrentNote, saveCurrentNote } from "./note-state.mjs";
+import { stepRecoveryTag } from "./actions.mjs";
+import {
+  loadCurrentNote,
+  saveCurrentNote,
+  normalizePdh,
+  serializePdh
+} from "./note-state.mjs";
 
 export function defaultStateDir(repoPath = process.cwd()) {
   return join(repoPath, ".pdh-flow");
+}
+
+export function runtimeMetaPath(repoPath) {
+  return join(defaultStateDir(repoPath), "runtime.json");
+}
+
+export function loadPdhMeta(repoPath) {
+  const path = runtimeMetaPath(repoPath);
+  if (!existsSync(path)) {
+    return normalizePdh({});
+  }
+  try {
+    const data = JSON.parse(readFileSync(path, "utf8")) ?? {};
+    return normalizePdh(data.pdh ?? data ?? {});
+  } catch {
+    return normalizePdh({});
+  }
+}
+
+export function savePdhMeta(repoPath, pdh) {
+  const path = runtimeMetaPath(repoPath);
+  mkdirSync(defaultStateDir(repoPath), { recursive: true });
+  writeFileSync(path, `${JSON.stringify({ pdh: serializePdh(pdh) }, null, 2)}\n`);
+  return path;
+}
+
+export function recoverRuntimeFromTags(repoPath, options = {}) {
+  if (existsSync(runtimeMetaPath(repoPath))) {
+    return { status: "skipped", reason: "runtime.yaml_already_exists" };
+  }
+  const tagResult = spawnSync(
+    "git",
+    [
+      "for-each-ref",
+      "--sort=-creatordate",
+      "--format=%(refname:short)|%(objectname)|%(creatordate:iso8601-strict)",
+      "refs/tags/pdh-flow/*/*"
+    ],
+    { cwd: repoPath, encoding: "utf8" }
+  );
+  if (tagResult.status !== 0) {
+    return { status: "git_error", message: (tagResult.stderr || tagResult.stdout || "").trim() };
+  }
+  const lines = tagResult.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) {
+    return { status: "no_tags" };
+  }
+  const candidates = [];
+  for (const line of lines) {
+    const [ref, commit, createdAt] = line.split("|");
+    const match = /^pdh-flow\/(.+)\/([^/]+)$/.exec(ref ?? "");
+    if (!match) continue;
+    candidates.push({ tag: ref, ticket: match[1], stepId: match[2], commit, createdAt: createdAt || null });
+  }
+  if (candidates.length === 0) {
+    return { status: "no_tags" };
+  }
+  const preferredTicket = options.ticket || candidates[0].ticket;
+  const filtered = candidates.filter((entry) => entry.ticket === preferredTicket);
+  if (filtered.length === 0) {
+    return { status: "no_tags_for_ticket", ticket: preferredTicket };
+  }
+  const latest = [...filtered].sort((a, b) => stepNumericOrder(b.stepId) - stepNumericOrder(a.stepId))[0];
+  const runId = createRunId();
+  const now = new Date().toISOString();
+  savePdhMeta(repoPath, {
+    ticket: latest.ticket,
+    flow: options.flow || "pdh-ticket-core",
+    variant: options.variant || "full",
+    status: "running",
+    current_step: latest.stepId,
+    run_id: runId,
+    started_at: latest.createdAt || now,
+    updated_at: now,
+    completed_at: null
+  });
+  const stateDir = defaultStateDir(repoPath);
+  startRunSupervisor({ stateDir, repoPath, runId, stepId: latest.stepId, command: "recover-from-tags", pid: 0 });
+  finishRunSupervisor({ stateDir, status: "stale", exitCode: null, signal: null });
+  updateRunSupervisor({ stateDir, fields: { staleReason: "recovered_from_tags" } });
+  mkdirSync(runDir(stateDir, runId), { recursive: true });
+  appendProgressEvent({
+    repoPath,
+    runId,
+    stepId: latest.stepId,
+    type: "runtime_recovered",
+    provider: "runtime",
+    message: `Recovered runtime from ${stepRecoveryTag({ ticket: latest.ticket, stepId: latest.stepId })}`,
+    payload: { commit: latest.commit, candidates: candidates.length }
+  });
+  return {
+    status: "recovered",
+    ticket: latest.ticket,
+    stepId: latest.stepId,
+    commit: latest.commit,
+    runId,
+    tag: latest.tag
+  };
+}
+
+function stepNumericOrder(stepId) {
+  const match = /^PD-[A-Z]-(\d+)$/.exec(String(stepId ?? ""));
+  return match ? Number(match[1]) : -1;
 }
 
 export function ensureCanonicalFiles(repoPath, ticket = null) {
   const notePath = join(repoPath, "current-note.md");
   if (!existsSync(notePath)) {
     saveCurrentNote(repoPath, {
-      pdh: {},
       body: [
         "# current-note.md",
         "",
@@ -69,26 +178,28 @@ export function loadRuntime(repoPath, options = {}) {
   }
   const repo = repoPath;
   const stateDir = defaultStateDir(repo);
+  const pdh = loadPdhMeta(repo);
   const note = loadCurrentNote(repo);
-  const run = note.pdh.current_step
+  const run = pdh.current_step
     ? {
-        id: note.pdh.run_id,
-        flow_id: note.pdh.flow,
-        flow_variant: note.pdh.variant,
-        ticket_id: note.pdh.ticket,
-        status: note.pdh.status,
-        current_step_id: note.pdh.current_step,
+        id: pdh.run_id,
+        flow_id: pdh.flow,
+        flow_variant: pdh.variant,
+        ticket_id: pdh.ticket,
+        status: pdh.status,
+        current_step_id: pdh.current_step,
         repo_path: repo,
-        created_at: note.pdh.started_at,
-        updated_at: note.pdh.updated_at,
-        completed_at: note.pdh.completed_at
+        created_at: pdh.started_at,
+        updated_at: pdh.updated_at,
+        completed_at: pdh.completed_at
       }
     : null;
-  const flow = run ? loadFlow(run.flow_id) : loadFlow(note.pdh.flow ?? "pdh-ticket-core");
+  const flow = run ? loadFlow(run.flow_id) : loadFlow(pdh.flow ?? "pdh-ticket-core");
   return {
     repoPath: repo,
     stateDir,
-    note,
+    note: { ...note, pdh },
+    pdh,
     run,
     flow,
     supervisor: loadRunSupervisor({ stateDir })
@@ -101,22 +212,18 @@ export function startRun({ repoPath, ticket = null, variant = "full", flowId = "
   const runId = createRunId();
   const now = new Date().toISOString();
   const currentStepId = startStep ?? getInitialStep(flow, variant);
-  const note = loadCurrentNote(repoPath);
-  saveCurrentNote(repoPath, {
-    pdh: {
-      ...note.pdh,
-      ticket,
-      flow: flowId,
-      variant,
-      status: "running",
-      current_step: currentStepId,
-      run_id: runId,
-      started_at: now,
-      updated_at: now,
-      completed_at: null
-    },
-    body: note.body,
-    extraFrontmatter: note.extraFrontmatter
+  const previous = loadPdhMeta(repoPath);
+  savePdhMeta(repoPath, {
+    ...previous,
+    ticket,
+    flow: flowId,
+    variant,
+    status: "running",
+    current_step: currentStepId,
+    run_id: runId,
+    started_at: now,
+    updated_at: now,
+    completed_at: null
   });
   mkdirSync(runDir(defaultStateDir(repoPath), runId), { recursive: true });
   appendProgressEvent({
@@ -136,30 +243,26 @@ export function startRun({ repoPath, ticket = null, variant = "full", flowId = "
   return loadRuntime(repoPath);
 }
 
-export function saveRun(repoPath, run, note = null) {
-  const existing = note ?? loadCurrentNote(repoPath);
-  saveCurrentNote(repoPath, {
-    pdh: {
-      ...existing.pdh,
-      ticket: run.ticket_id,
-      flow: run.flow_id,
-      variant: run.flow_variant,
-      status: run.status,
-      current_step: run.current_step_id,
-      run_id: run.id,
-      started_at: run.created_at,
-      updated_at: run.updated_at ?? new Date().toISOString(),
-      completed_at: run.completed_at
-    },
-    body: existing.body,
-    extraFrontmatter: existing.extraFrontmatter
+export function saveRun(repoPath, run) {
+  const existing = loadPdhMeta(repoPath);
+  savePdhMeta(repoPath, {
+    ...existing,
+    ticket: run.ticket_id,
+    flow: run.flow_id,
+    variant: run.flow_variant,
+    status: run.status,
+    current_step: run.current_step_id,
+    run_id: run.id,
+    started_at: run.created_at,
+    updated_at: run.updated_at ?? new Date().toISOString(),
+    completed_at: run.completed_at
   });
 }
 
 export function updateRun(repoPath, fields) {
   const runtime = loadRuntime(repoPath);
   if (!runtime.run) {
-    throw new Error("No active run in current-note.md");
+    throw new Error("No active run in .pdh-flow/runtime.json");
   }
   const now = new Date().toISOString();
   const next = {
@@ -170,8 +273,8 @@ export function updateRun(repoPath, fields) {
   if (next.status !== "completed" && fields.completed_at === undefined) {
     next.completed_at = null;
   }
-  saveRun(repoPath, next, runtime.note);
-  return { ...runtime, run: next, note: loadCurrentNote(repoPath) };
+  saveRun(repoPath, next);
+  return loadRuntime(repoPath);
 }
 
 export function appendProgressEvent({ repoPath, runId, stepId = null, attempt = null, type, provider = "runtime", message = null, payload = null }) {

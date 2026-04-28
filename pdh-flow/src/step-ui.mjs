@@ -1,7 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readlinkSync, writeFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { parseDocument, stringify } from "yaml";
 import { defaultJudgementKind, loadJudgements } from "./judgements.mjs";
 import { loadStepInterruptions } from "./interruptions.mjs";
 import { extractSection } from "./note-state.mjs";
@@ -18,22 +17,22 @@ export function stepUiContract(step) {
 }
 
 export function uiOutputArtifactPath({ stateDir, runId, stepId }) {
-  return join(stateDir, "runs", runId, "steps", stepId, "ui-output.yaml");
+  return join(stateDir, "runs", runId, "steps", stepId, "ui-output.json");
 }
 
 export function uiRuntimeArtifactPath({ stateDir, runId, stepId }) {
-  return join(stateDir, "runs", runId, "steps", stepId, "ui-runtime.yaml");
+  return join(stateDir, "runs", runId, "steps", stepId, "ui-runtime.json");
 }
 
 export function loadStepUiOutput({ stateDir, runId, stepId }) {
-  return loadYamlArtifact({
+  return loadJsonArtifact({
     path: uiOutputArtifactPath({ stateDir, runId, stepId }),
     normalizer: normalizeUiOutput
   });
 }
 
 export function loadStepUiRuntime({ stateDir, runId, stepId }) {
-  return loadYamlArtifact({
+  return loadJsonArtifact({
     path: uiRuntimeArtifactPath({ stateDir, runId, stepId }),
     normalizer: normalizeUiRuntime
   });
@@ -47,7 +46,7 @@ export function writeStepUiRuntime({ repoPath, runtime, step, guardResults = nul
   });
   mkdirSync(join(path, ".."), { recursive: true });
   const data = buildRuntimeUiData({ repoPath, runtime, step, guardResults, nextCommands });
-  writeFileSync(path, `${stringify(data).trimEnd()}\n`);
+  writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
   return { artifactPath: path, data };
 }
 
@@ -65,7 +64,7 @@ export function judgementFromUiOutput(stepId, uiOutput) {
 }
 
 export function renderUiOutputPromptSection({ run, step }) {
-  const relativePath = `.pdh-flow/runs/${run.id}/steps/${step.id}/ui-output.yaml`;
+  const relativePath = `.pdh-flow/runs/${run.id}/steps/${step.id}/ui-output.json`;
   const contract = stepUiContract(step);
   const judgementKind = defaultJudgementKind(step.id);
   const templateObject = {
@@ -78,7 +77,7 @@ export function renderUiOutputPromptSection({ run, step }) {
     ready_when: [
       "Concrete conditions that mean this step is ready to advance"
     ],
-    notes: "Optional free text. Use a block scalar when needed."
+    notes: "Optional free text. Multi-line strings should use \\n inside the JSON string."
   };
   if (judgementKind) {
     templateObject.judgement = {
@@ -87,21 +86,21 @@ export function renderUiOutputPromptSection({ run, step }) {
       summary: "Short rationale for that judgement"
     };
   }
-  const template = stringify(templateObject).trimEnd();
+  const template = JSON.stringify(templateObject, null, 2);
 
   return [
     "## UI Output Artifact",
     "",
-    `Write plain YAML to \`${relativePath}\`.`,
+    `Write valid JSON to \`${relativePath}\`.`,
     "Do not use markdown fences. Do not add extra top-level keys.",
     "",
     "Field rules:",
     "- `summary`: 2-4 concrete bullets about what changed or what was found in this step.",
     "- `risks`: unresolved risks only. Use `[]` when there are none.",
     "- `ready_when`: concrete conditions that mean this step is ready to advance.",
-    "- `notes`: optional free text. Use a block scalar when it helps.",
+    "- `notes`: optional free text. Multi-line content uses `\\n` inside the JSON string.",
     "- Match the primary language used in `current-ticket.md` for all human-readable text in this file.",
-    "- Quote any YAML string that starts with punctuation or contains backticks, brackets, or colons.",
+    "- All keys and strings must be double-quoted. Escape inner double quotes with `\\\"`. Escape backslashes with `\\\\`.",
     ...(judgementKind
       ? [`- \`judgement\`: required for this review step. Use \`kind: ${judgementKind}\`, the exact guard-facing \`status\`, and a short \`summary\`.`]
       : []),
@@ -116,7 +115,7 @@ export function renderUiOutputPromptSection({ run, step }) {
       ? ["- omit:", ...contract.omit.map((item) => `  - ${item}`)]
       : ["- omit: (none)"]),
     "",
-    "Use this YAML shape:",
+    "Use this JSON shape:",
     "",
     template,
     ""
@@ -156,7 +155,7 @@ function buildRuntimeUiData({ repoPath, runtime, step, guardResults = null, next
   return normalizeUiRuntime({
     generated_at: new Date().toISOString(),
     run_status: runtime.run.status,
-    changed_files: splitLines(diffNameOnly.stdout),
+    changed_files: aliasCurrentDocPaths(repoPath, splitLines(diffNameOnly.stdout)),
     diff_stat: splitLines(diffStat.stdout),
     guards: Array.isArray(guardResults)
       ? guardResults.map((result) => ({
@@ -200,23 +199,24 @@ function buildRuntimeUiData({ repoPath, runtime, step, guardResults = null, next
   });
 }
 
-function loadYamlArtifact({ path, normalizer }) {
+function loadJsonArtifact({ path, normalizer }) {
   if (!existsSync(path)) {
     return null;
   }
+  const rawText = readFileSync(path, "utf8");
+  let raw = {};
+  const parseErrors = [];
   try {
-    const rawText = readFileSync(path, "utf8");
-    const doc = parseDocument(rawText, { prettyErrors: false });
-    const raw = doc.toJS() ?? {};
-    return normalizer(raw, {
-      artifactPath: path,
-      rawText,
-      parseErrors: doc.errors.map((error) => error.message),
-      parseWarnings: doc.warnings.map((warning) => warning.message)
-    });
-  } catch {
-    return null;
+    raw = JSON.parse(rawText) ?? {};
+  } catch (error) {
+    parseErrors.push(error?.message || String(error));
   }
+  return normalizer(raw, {
+    artifactPath: path,
+    rawText,
+    parseErrors,
+    parseWarnings: []
+  });
 }
 
 function normalizeUiOutput(value, meta = {}) {
@@ -347,6 +347,17 @@ function splitLines(value) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function aliasCurrentDocPaths(repoPath, paths) {
+  const aliases = new Map();
+  for (const alias of ["current-note.md", "current-ticket.md"]) {
+    try {
+      const target = readlinkSync(join(repoPath, alias));
+      aliases.set(relative(repoPath, resolve(repoPath, target)).replaceAll("\\", "/"), alias);
+    } catch {}
+  }
+  return paths.map((path) => aliases.get(path) ?? path);
 }
 
 function runGit(repoPath, args) {

@@ -3,7 +3,6 @@ import { randomBytes } from "node:crypto";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { stringify } from "yaml";
 import { latestOpenInterruption } from "./interruptions.mjs";
 import { latestAttemptResult, latestHumanGate } from "./runtime-state.mjs";
 import { loadStepUiRuntime } from "./step-ui.mjs";
@@ -17,7 +16,7 @@ export function assistDir({ stateDir, runId, stepId }) {
 }
 
 export function assistManifestPath({ stateDir, runId, stepId }) {
-  return join(assistDir({ stateDir, runId, stepId }), "manifest.yaml");
+  return join(assistDir({ stateDir, runId, stepId }), "manifest.json");
 }
 
 export function assistPromptPath({ stateDir, runId, stepId }) {
@@ -45,7 +44,7 @@ export function ticketAssistDir({ repoPath, ticketId }) {
 }
 
 export function ticketAssistManifestPath({ repoPath, ticketId }) {
-  return join(ticketAssistDir({ repoPath, ticketId }), "manifest.yaml");
+  return join(ticketAssistDir({ repoPath, ticketId }), "manifest.json");
 }
 
 export function ticketAssistPromptPath({ repoPath, ticketId }) {
@@ -166,7 +165,7 @@ export function prepareAssistSession({ repoPath, runtime, step, bare = false, mo
   const promptPath = assistPromptPath({ stateDir: runtime.stateDir, runId, stepId });
   const systemPromptPath = assistSystemPromptPath({ stateDir: runtime.stateDir, runId, stepId });
   const sessionPath = assistSessionPath({ stateDir: runtime.stateDir, runId, stepId });
-  writeFileSync(manifestPath, `${stringify(manifest).trimEnd()}\n`);
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   writeFileSync(promptPath, prompt);
   writeFileSync(systemPromptPath, `${systemPrompt.trimEnd()}\n`);
   writeFileSync(sessionPath, JSON.stringify({
@@ -254,7 +253,7 @@ export function prepareTicketAssistSession({ repoPath, ticketId, bare = false, m
   const promptPath = ticketAssistPromptPath({ repoPath, ticketId });
   const systemPromptPath = ticketAssistSystemPromptPath({ repoPath, ticketId });
   const sessionPath = ticketAssistSessionPath({ repoPath, ticketId });
-  writeFileSync(manifestPath, `${stringify(manifest).trimEnd()}\n`);
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   writeFileSync(promptPath, prompt);
   writeFileSync(systemPromptPath, `${systemPrompt.trimEnd()}\n`);
   writeFileSync(sessionPath, JSON.stringify({

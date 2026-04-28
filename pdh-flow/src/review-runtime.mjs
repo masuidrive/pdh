@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { parseDocument, stringify } from "yaml";
 import { commitStep } from "./actions.mjs";
 import { resolveStepReviewPlan } from "./flow.mjs";
 import { defaultAcceptedJudgementStatus, defaultJudgementKind, writeJudgement } from "./judgements.mjs";
@@ -31,7 +30,7 @@ export function reviewerPromptPath({ stateDir, runId, stepId, reviewerId }) {
 }
 
 export function reviewerOutputPath({ stateDir, runId, stepId, reviewerId }) {
-  return join(stateDir, "runs", runId, "steps", stepId, "reviewers", reviewerId, "review.yaml");
+  return join(stateDir, "runs", runId, "steps", stepId, "reviewers", reviewerId, "review.json");
 }
 
 export function reviewerAttemptDir({ stateDir, runId, stepId, reviewerId, attempt }) {
@@ -51,7 +50,7 @@ export function reviewRoundReviewerDir({ stateDir, runId, stepId, round, reviewe
 }
 
 export function reviewRoundReviewerOutputPath({ stateDir, runId, stepId, round, reviewerId }) {
-  return join(reviewRoundReviewerDir({ stateDir, runId, stepId, round, reviewerId }), "review.yaml");
+  return join(reviewRoundReviewerDir({ stateDir, runId, stepId, round, reviewerId }), "review.json");
 }
 
 export function reviewRoundReviewerAttemptDir({ stateDir, runId, stepId, round, reviewerId, attempt }) {
@@ -63,7 +62,7 @@ export function reviewRoundReviewerAttemptResultPath({ stateDir, runId, stepId, 
 }
 
 export function reviewRepairOutputPath({ stateDir, runId, stepId, round }) {
-  return join(reviewRoundDir({ stateDir, runId, stepId, round }), "repair.yaml");
+  return join(reviewRoundDir({ stateDir, runId, stepId, round }), "repair.json");
 }
 
 export function reviewRepairResultPath({ stateDir, runId, stepId, round }) {
@@ -71,7 +70,7 @@ export function reviewRepairResultPath({ stateDir, runId, stepId, round }) {
 }
 
 export function reviewRoundAggregatePath({ stateDir, runId, stepId, round }) {
-  return join(reviewRoundDir({ stateDir, runId, stepId, round }), "aggregate.yaml");
+  return join(reviewRoundDir({ stateDir, runId, stepId, round }), "aggregate.json");
 }
 
 export function writeReviewerPrompt({ stateDir, run, step, reviewPlan, reviewer }) {
@@ -83,7 +82,7 @@ export function writeReviewerPrompt({ stateDir, run, step, reviewPlan, reviewer 
   });
   mkdirSync(join(path, ".."), { recursive: true });
   const acceptedStatus = reviewerAcceptedStatus(step.id);
-  const outputPath = `.pdh-flow/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.yaml`;
+  const outputPath = `.pdh-flow/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.json`;
   const body = [
     "# pdh-flow Reviewer Prompt",
     "",
@@ -111,13 +110,13 @@ export function writeReviewerPrompt({ stateDir, run, step, reviewPlan, reviewer 
     "",
     "## Output",
     "",
-    `Write plain YAML to \`${outputPath}\`.`,
-    "Do not use markdown fences.",
+    `Write valid JSON to \`${outputPath}\`.`,
+    "Do not use markdown fences. All keys and strings must be double-quoted; escape inner double quotes with `\\\"` and backslashes with `\\\\`.",
     "Required fields:",
     "- `status`: exact reviewer conclusion string.",
     "- `summary`: one short sentence.",
     "- `findings`: array of finding objects. Use `[]` when there are no findings.",
-    "- `notes`: optional free text.",
+    "- `notes`: optional free text. Multi-line content uses `\\n` inside the JSON string.",
     "",
     "Finding object shape:",
     "- `severity`: one of `critical`, `major`, `minor`, `note`, `none`",
@@ -132,7 +131,7 @@ export function writeReviewerPrompt({ stateDir, run, step, reviewPlan, reviewer 
     "",
     "Template:",
     "",
-    stringify({
+    JSON.stringify({
       status: acceptedStatus || "Ready",
       summary: "Short reviewer summary",
       findings: [
@@ -144,7 +143,7 @@ export function writeReviewerPrompt({ stateDir, run, step, reviewPlan, reviewer 
         }
       ],
       notes: "Optional free text"
-    }).trimEnd(),
+    }, null, 2),
     ""
   ].join("\n");
   writeFileSync(path, body);
@@ -174,19 +173,20 @@ export function loadReviewerOutput({ stateDir, runId, stepId, reviewerId, round 
   if (!existsSync(path)) {
     return null;
   }
+  const rawText = readFileSync(path, "utf8");
+  let raw = {};
+  const parseErrors = [];
   try {
-    const rawText = readFileSync(path, "utf8");
-    const doc = parseDocument(rawText, { prettyErrors: false });
-    const raw = doc.toJS() ?? {};
-    return normalizeReviewerOutput(raw, {
-      artifactPath: path,
-      rawText,
-      parseErrors: doc.errors.map((error) => error.message),
-      parseWarnings: doc.warnings.map((warning) => warning.message)
-    });
-  } catch {
-    return null;
+    raw = JSON.parse(rawText) ?? {};
+  } catch (error) {
+    parseErrors.push(error?.message || String(error));
   }
+  return normalizeReviewerOutput(raw, {
+    artifactPath: path,
+    rawText,
+    parseErrors,
+    parseWarnings: []
+  });
 }
 
 export function loadReviewerOutputsForStep({ stateDir, runId, stepId }) {
@@ -225,7 +225,7 @@ export function loadReviewerOutputsForStepRound({ stateDir, runId, stepId, round
 export function writeLatestReviewerOutputMirror({ stateDir, runId, stepId, reviewerId, output }) {
   const path = reviewerOutputPath({ stateDir, runId, stepId, reviewerId });
   mkdirSync(join(path, ".."), { recursive: true });
-  writeFileSync(path, `${stringify(output).trimEnd()}\n`);
+  writeFileSync(path, `${JSON.stringify(output, null, 2)}\n`);
   return path;
 }
 
@@ -280,6 +280,30 @@ export function aggregateReviewerOutputs({ step, reviewPlan, reviewers }) {
   };
 }
 
+export function recordAggregatorReviewArtifacts({ repoPath, runtime, step, aggregate, aggregatorJudgement, rounds = [], commit = true }) {
+  const section = noteSectionForStep(step);
+  if (!section) {
+    throw new Error(`${step.id} has no note_section_updated guard to record review output`);
+  }
+  const overlaidAggregate = {
+    ...aggregate,
+    status: aggregatorJudgement?.status ?? aggregate.status,
+    summary: aggregatorJudgement?.summary ?? aggregate.summary,
+    kind: aggregatorJudgement?.kind ?? aggregate.kind
+  };
+  const noteBody = renderReviewSection(step.id, overlaidAggregate, rounds);
+  replaceNoteSection(repoPath, section, noteBody);
+  const commitResult = commit
+    ? commitStep({
+        repoPath,
+        stepId: step.id,
+        message: reviewCommitSummary(step.id),
+        ticket: runtime?.run?.ticket_id ?? null
+      })
+    : { status: "skipped", message: "Commit deferred until review loop finishes" };
+  return { noteSection: section, noteBody, commit: commitResult };
+}
+
 export function materializeAggregatedReview({ repoPath, runtime, step, reviewPlan, aggregate, rounds = [], commit = true }) {
   const section = noteSectionForStep(step);
   if (!section) {
@@ -294,7 +318,7 @@ export function materializeAggregatedReview({ repoPath, runtime, step, reviewPla
     stepId: step.id
   });
   mkdirSync(join(uiOutputPath, ".."), { recursive: true });
-  writeFileSync(uiOutputPath, `${stringify(renderAggregateUiOutput(step, reviewPlan, aggregate)).trimEnd()}\n`);
+  writeFileSync(uiOutputPath, `${JSON.stringify(renderAggregateUiOutput(step, reviewPlan, aggregate), null, 2)}\n`);
 
   let judgement = null;
   if (aggregate.kind) {
@@ -323,7 +347,8 @@ export function materializeAggregatedReview({ repoPath, runtime, step, reviewPla
     ? commitStep({
         repoPath,
         stepId: step.id,
-        message: reviewCommitSummary(step.id)
+        message: reviewCommitSummary(step.id),
+        ticket: runtime?.run?.ticket_id ?? null
       })
     : { status: "skipped", message: "Commit deferred until review loop finishes" };
 
@@ -339,7 +364,7 @@ export function materializeAggregatedReview({ repoPath, runtime, step, reviewPla
 export function writeReviewRoundAggregate({ stateDir, runId, stepId, round, aggregate }) {
   const path = reviewRoundAggregatePath({ stateDir, runId, stepId, round });
   mkdirSync(join(path, ".."), { recursive: true });
-  writeFileSync(path, `${stringify({
+  writeFileSync(path, `${JSON.stringify({
     round,
     status: aggregate.status,
     summary: aggregate.summary,
@@ -359,7 +384,7 @@ export function writeReviewRoundAggregate({ stateDir, runId, stepId, round, aggr
       evidence: finding.evidence,
       recommendation: finding.recommendation
     }))
-  }).trimEnd()}\n`);
+  }, null, 2)}\n`);
   return path;
 }
 
@@ -375,19 +400,20 @@ export function loadReviewRepairOutput({ stateDir, runId, stepId, round }) {
   if (!existsSync(path)) {
     return null;
   }
+  const rawText = readFileSync(path, "utf8");
+  let raw = {};
+  const parseErrors = [];
   try {
-    const rawText = readFileSync(path, "utf8");
-    const doc = parseDocument(rawText, { prettyErrors: false });
-    const raw = doc.toJS() ?? {};
-    return normalizeReviewRepairOutput(raw, {
-      artifactPath: path,
-      rawText,
-      parseErrors: doc.errors.map((error) => error.message),
-      parseWarnings: doc.warnings.map((warning) => warning.message)
-    });
-  } catch {
-    return null;
+    raw = JSON.parse(rawText) ?? {};
+  } catch (error) {
+    parseErrors.push(error?.message || String(error));
   }
+  return normalizeReviewRepairOutput(raw, {
+    artifactPath: path,
+    rawText,
+    parseErrors,
+    parseWarnings: []
+  });
 }
 
 export function reviewAccepted(aggregate) {
@@ -584,7 +610,7 @@ function normalizeReviewText(value) {
   if (typeof value === "number" || typeof value === "boolean") {
     return String(value).trim();
   }
-  const rendered = stringify(value).replace(/^---\n/, "").trim();
+  const rendered = JSON.stringify(value, null, 2);
   return scrubPlaceholderText(rendered);
 }
 

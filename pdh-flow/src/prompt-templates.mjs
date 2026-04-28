@@ -1,6 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { stringify } from "yaml";
 import { buildFlowView, getStep, nextStep, resolveStepReviewPlan } from "./flow.mjs";
 import { defaultAcceptedJudgementStatus, defaultJudgementKind } from "./judgements.mjs";
 import { loadStepInterruptions, renderInterruptionsForPrompt } from "./interruptions.mjs";
@@ -99,7 +98,7 @@ function renderReviewerOutputsSection(reviewerOutputs) {
   const lines = [
     "## Reviewer Outputs",
     "",
-    `Runtime ran ${reviewerOutputs.length} reviewer${reviewerOutputs.length === 1 ? "" : "s"} in parallel for this round. Their \`review.yaml\` artifacts are listed below in full so you can read them without opening additional files. Treat each block as the canonical output of that reviewer.`,
+    `Runtime ran ${reviewerOutputs.length} reviewer${reviewerOutputs.length === 1 ? "" : "s"} in parallel for this round. Their \`review.json\` artifacts are listed below in full so you can read them without opening additional files. Treat each block as the canonical output of that reviewer.`,
     ""
   ];
   for (const reviewer of reviewerOutputs) {
@@ -119,7 +118,7 @@ function renderReviewerOutputsSection(reviewerOutputs) {
     }
     lines.push("");
     if (reviewer.rawText) {
-      lines.push("```yaml");
+      lines.push("```json");
       lines.push(reviewer.rawText.trimEnd());
       lines.push("```");
     } else {
@@ -251,8 +250,8 @@ function renderReviewSemantics(step, reviewPlan) {
 export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, reviewer, round = null, priorFindings = [] }) {
   const acceptedStatus = acceptedReviewerStatus(step.id);
   const outputPath = round
-    ? `.pdh-flow/runs/${run.id}/steps/${step.id}/review-rounds/round-${round}/reviewers/${reviewer.reviewerId}/review.yaml`
-    : `.pdh-flow/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.yaml`;
+    ? `.pdh-flow/runs/${run.id}/steps/${step.id}/review-rounds/round-${round}/reviewers/${reviewer.reviewerId}/review.json`
+    : `.pdh-flow/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.json`;
   const reviewerStepRules = reviewerRulesForStep(step.id);
   return [
     "# pdh-flow Reviewer Prompt",
@@ -306,22 +305,22 @@ export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, re
     "",
     "## Output Artifact",
     "",
-    `Write plain YAML to \`${outputPath}\`.`,
-    "Do not use markdown fences. Do not add extra top-level keys.",
+    `Write valid JSON to \`${outputPath}\`.`,
+    "Do not use markdown fences. Do not add extra top-level keys. All keys and strings must be double-quoted; escape inner double quotes with `\\\"` and backslashes with `\\\\`.",
     "",
     "Field rules:",
     "- `status`: exact reviewer conclusion string.",
     "- `summary`: one short sentence.",
     "- `findings`: use `[]` when there are no findings.",
-    "- `notes`: optional free text.",
+    "- `notes`: optional free text. Multi-line content uses `\\n` inside the JSON string.",
     "- Each finding must have `severity`, `title`, `evidence`, and `recommendation`.",
     "- Allowed severities: `critical`, `major`, `minor`, `note`, `none`.",
     "- Match the primary language used in `current-ticket.md` for all human-readable text in this file.",
     ...(acceptedStatus ? [`- Use \`status: ${acceptedStatus}\` only when your latest review has no unresolved blocker at that threshold.`] : []),
     "",
-    "Use this YAML shape:",
+    "Use this JSON shape:",
     "",
-    stringify({
+    JSON.stringify({
       status: acceptedStatus || "Ready",
       summary: "Short reviewer summary",
       findings: [
@@ -333,13 +332,13 @@ export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, re
         }
       ],
       notes: "Optional free text"
-    }).trimEnd(),
+    }, null, 2),
     ""
   ].join("\n");
 }
 
 export function renderReviewRepairPrompt({ repoPath, run, flow, step, reviewPlan, aggregate, round, provider }) {
-  const outputPath = `.pdh-flow/runs/${run.id}/steps/${step.id}/review-rounds/round-${round}/repair.yaml`;
+  const outputPath = `.pdh-flow/runs/${run.id}/steps/${step.id}/review-rounds/round-${round}/repair.json`;
   const lines = [
     "# pdh-flow Review Repair Prompt",
     "",
@@ -395,18 +394,18 @@ export function renderReviewRepairPrompt({ repoPath, run, flow, step, reviewPlan
     "",
     "## Output Artifact",
     "",
-    `Write plain YAML to \`${outputPath}\`.`,
-    "Do not use markdown fences. Do not add extra top-level keys.",
+    `Write valid JSON to \`${outputPath}\`.`,
+    "Do not use markdown fences. Do not add extra top-level keys. All keys and strings must be double-quoted; escape inner double quotes with `\\\"` and backslashes with `\\\\`.",
     "",
     "Field rules:",
     "- `summary`: one short sentence describing what you changed.",
     "- `verification`: commands or checks you actually ran in this repair round.",
     "- `remaining_risks`: unresolved blockers or follow-up risks only. Use `[]` when there are none.",
-    "- `notes`: optional free text.",
+    "- `notes`: optional free text. Multi-line content uses `\\n` inside the JSON string.",
     "",
-    "Use this YAML shape:",
+    "Use this JSON shape:",
     "",
-    stringify({
+    JSON.stringify({
       summary: "Short repair summary",
       verification: [
         "command or check that was actually run"
@@ -415,7 +414,7 @@ export function renderReviewRepairPrompt({ repoPath, run, flow, step, reviewPlan
         "Unresolved blocker or follow-up risk"
       ],
       notes: "Optional free text"
-    }).trimEnd(),
+    }, null, 2),
     ""
   );
   return lines.join("\n");

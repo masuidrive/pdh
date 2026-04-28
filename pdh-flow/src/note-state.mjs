@@ -3,37 +3,29 @@ import { join } from "node:path";
 import { parse, stringify } from "yaml";
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
-const LEGACY_START = "<!-- pdh-flow:metadata:start -->";
-const LEGACY_END = "<!-- pdh-flow:metadata:end -->";
 const STEP_HISTORY_HEADING = "## Step History";
 
 export function loadCurrentNote(repoPath) {
   const path = join(repoPath, "current-note.md");
   const text = existsSync(path) ? readFileSync(path, "utf8") : "# current-note.md\n";
   const frontmatter = parseFrontmatter(text);
-  const legacy = readLegacyMetadata(frontmatter.body);
-  const pdh = normalizePdh({
-    ...(frontmatter.data?.pdh ?? {}),
-    ...(legacy?.pdh ?? {})
-  });
-  const extraFrontmatter = { ...(frontmatter.data ?? {}) };
-  delete extraFrontmatter.pdh;
   return {
     path,
     text,
-    pdh,
-    extraFrontmatter,
-    body: stripLegacyMetadata(frontmatter.body).trimStart()
+    extraFrontmatter: { ...(frontmatter.data ?? {}) },
+    body: frontmatter.body.trimStart()
   };
 }
 
-export function saveCurrentNote(repoPath, { pdh, body, extraFrontmatter = {} }) {
+export function saveCurrentNote(repoPath, { body, extraFrontmatter = {} }) {
   const path = join(repoPath, "current-note.md");
-  const document = stringify({
-    ...extraFrontmatter,
-    pdh: serializePdh(pdh)
-  }).trimEnd();
   const nextBody = normalizeBody(body);
+  const hasExtra = extraFrontmatter && Object.keys(extraFrontmatter).length > 0;
+  if (!hasExtra) {
+    writeFileSync(path, nextBody);
+    return path;
+  }
+  const document = stringify({ ...extraFrontmatter }).trimEnd();
   const rendered = `---\n${document}\n---\n\n${nextBody}`;
   writeFileSync(path, rendered);
   return path;
@@ -43,7 +35,6 @@ export function updateCurrentNote(repoPath, updater) {
   const note = loadCurrentNote(repoPath);
   const next = updater({
     ...note,
-    pdh: { ...note.pdh },
     extraFrontmatter: { ...note.extraFrontmatter }
   }) ?? note;
   saveCurrentNote(repoPath, next);
@@ -119,44 +110,7 @@ function parseFrontmatter(text) {
   };
 }
 
-function readLegacyMetadata(text) {
-  const start = text.indexOf(LEGACY_START);
-  const end = text.indexOf(LEGACY_END);
-  if (start < 0 || end <= start) {
-    return null;
-  }
-  const block = text.slice(start, end + LEGACY_END.length);
-  const values = {};
-  for (const line of block.split(/\r?\n/)) {
-    const match = line.match(/^- ([^:]+):\s*(.*)$/);
-    if (!match) {
-      continue;
-    }
-    values[match[1].trim()] = match[2].trim();
-  }
-  return {
-    pdh: normalizePdh({
-      run_id: normalizeScalar(values.Run),
-      flow: normalizeScalar(values.Flow),
-      variant: normalizeScalar(values.Variant),
-      ticket: normalizeScalar(values.Ticket),
-      status: normalizeScalar(values.Status),
-      current_step: normalizeScalar(values["Current Step"]),
-      updated_at: normalizeScalar(values.Updated)
-    })
-  };
-}
-
-function stripLegacyMetadata(text) {
-  const start = text.indexOf(LEGACY_START);
-  const end = text.indexOf(LEGACY_END);
-  if (start < 0 || end <= start) {
-    return text;
-  }
-  return `${text.slice(0, start).trimEnd()}\n\n${text.slice(end + LEGACY_END.length).trimStart()}`.trim();
-}
-
-function normalizePdh(pdh) {
+export function normalizePdh(pdh) {
   return {
     ticket: normalizeScalar(pdh.ticket),
     flow: normalizeScalar(pdh.flow) ?? "pdh-ticket-core",
@@ -170,7 +124,7 @@ function normalizePdh(pdh) {
   };
 }
 
-function serializePdh(pdh) {
+export function serializePdh(pdh) {
   const result = {};
   for (const [key, value] of Object.entries(normalizePdh(pdh))) {
     if (value !== null && value !== undefined && value !== "") {

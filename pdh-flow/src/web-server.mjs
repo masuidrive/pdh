@@ -60,7 +60,7 @@ export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", p
 
 function handleRequest({ request, response, repo, assistTerminalManager }) {
   const method = request.method ?? "GET";
-  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept") || request.url?.startsWith("/api/gate/approve") || request.url?.startsWith("/api/ticket/start") || request.url?.startsWith("/api/ticket/terminal") || request.url?.startsWith("/api/run-next")))) {
+  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept") || request.url?.startsWith("/api/gate/approve") || request.url?.startsWith("/api/ticket/start") || request.url?.startsWith("/api/ticket/terminal") || request.url?.startsWith("/api/run-next") || request.url?.startsWith("/api/runtime/resume") || request.url?.startsWith("/api/runtime/stop")))) {
     sendJson(response, 405, { error: "read_only_web_ui" });
     return;
   }
@@ -132,12 +132,13 @@ function handleRequest({ request, response, repo, assistTerminalManager }) {
     }
     const ticketId = url.searchParams.get("ticket");
     const variant = url.searchParams.get("variant") || "full";
+    const force = url.searchParams.get("force") === "1";
     if (!ticketId) {
       sendJson(response, 400, { error: "missing_ticket" });
       return;
     }
     try {
-      sendJson(response, 200, startTicketFromWeb({ repo, ticketId, variant }));
+      sendJson(response, 200, startTicketFromWeb({ repo, ticketId, variant, force }));
     } catch (error) {
       sendJson(response, Number(error?.statusCode || 500), { error: "ticket_start_failed", message: error?.message || String(error) });
     }
@@ -170,6 +171,31 @@ function handleRequest({ request, response, repo, assistTerminalManager }) {
       sendJson(response, 200, runNextFromWeb({ repo, force }));
     } catch (error) {
       sendJson(response, Number(error?.statusCode || 500), { error: "run_next_failed", message: error?.message || String(error) });
+    }
+    return;
+  }
+  if (url.pathname === "/api/runtime/resume") {
+    if (method !== "POST") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    const force = url.searchParams.get("force") === "1";
+    try {
+      sendJson(response, 200, resumeRuntimeFromWeb({ repo, force }));
+    } catch (error) {
+      sendJson(response, Number(error?.statusCode || 500), { error: "resume_failed", message: error?.message || String(error) });
+    }
+    return;
+  }
+  if (url.pathname === "/api/runtime/stop") {
+    if (method !== "POST") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    try {
+      sendJson(response, 200, stopRuntimeFromWeb({ repo }));
+    } catch (error) {
+      sendJson(response, Number(error?.statusCode || 500), { error: "stop_failed", message: error?.message || String(error) });
     }
     return;
   }
@@ -339,10 +365,14 @@ function approveGateFromWeb({ repo, stepId }) {
   };
 }
 
-function startTicketFromWeb({ repo, ticketId, variant = "full" }) {
+function startTicketFromWeb({ repo, ticketId, variant = "full", force = false }) {
+  const cliArgs = ["run", "--repo", repo, "--ticket", ticketId, "--variant", variant];
+  if (force) {
+    cliArgs.push("--force-reset");
+  }
   const started = runCliText({
     repo,
-    args: ["run", "--repo", repo, "--ticket", ticketId, "--variant", variant, "--force-reset"]
+    args: cliArgs
   });
   clearTicketStartRequest({ repoPath: repo, ticketId });
   const runNextPid = spawnBackgroundCli({
@@ -369,6 +399,27 @@ function runNextFromWeb({ repo, force = false }) {
     runNextPid,
     force
   };
+}
+
+function resumeRuntimeFromWeb({ repo, force = false }) {
+  const args = ["resume", "--repo", repo];
+  if (force) {
+    args.push("--force");
+  }
+  const pid = spawnBackgroundCli({ repo, args });
+  return {
+    status: "ok",
+    resumeStarted: true,
+    pid,
+    force
+  };
+}
+
+function stopRuntimeFromWeb({ repo }) {
+  return runCliJson({
+    repo,
+    args: ["stop", "--repo", repo, "--reason", "stopped via web ui"]
+  });
 }
 
 function openTicketTerminalFromWeb({ repo, ticketId, assistTerminalManager }) {
@@ -484,7 +535,7 @@ function collectState({ repo }) {
     variant,
     buildVariantState({ repo, runtime, variant, history, events, redactor, noteBody: note.body, ticketText, ac })
   ]));
-  const activeVariant = run?.flow_variant ?? note.pdh.variant ?? "full";
+  const activeVariant = run?.flow_variant ?? runtime.pdh.variant ?? "full";
   const currentStepView = currentStep ? variants[activeVariant]?.steps?.find((step) => step.id === currentStep.id) ?? null : null;
   const summary = buildSummary({ runtime, activeVariant: variants[activeVariant], ac, currentStep: currentStepView ?? currentStep, currentGate, interruptions });
   return {
@@ -494,7 +545,7 @@ function collectState({ repo }) {
     generatedAt: new Date().toISOString(),
     runtime: {
       run: run ? redactObject(run, redactor) : null,
-      noteState: redactObject(note.pdh, redactor),
+      noteState: redactObject(runtime.pdh, redactor),
       currentStep: currentStep ? stepMeta(currentStep) : null,
       supervisor: runtime.supervisor ? redactObject(runtime.supervisor, redactor) : null
     },
@@ -1074,12 +1125,12 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
     const command = `node src/cli.mjs run --repo ${shellQuote(repo)} --ticket <ticket-id> --variant full`;
     return {
       title: "最初にすること",
-      body: "repo root で `run` を実行して current-note.md の frontmatter を初期化します。",
+      body: "repo root で `run` を実行して .pdh-flow/runtime.json を初期化します。",
       commands: [command],
       actions: [
         nextActionChoice({
           label: "Run",
-          description: "新しい flow を開始して current-note.md の state を初期化します。",
+          description: "新しい flow を開始して .pdh-flow/runtime.json の runtime state を初期化します。",
           command
         })
       ],
@@ -1089,12 +1140,11 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
   }
   if (runtime.run.status === "needs_human") {
     const actions = humanDecisionActions(repo, currentStep.id);
-    const decisionRequired = gateDecisionRequiredText(currentGate?.summaryText);
     return {
       title: `${currentStep.id} の判断`,
       body: currentGate?.recommendation?.status === "pending"
         ? recommendationBody(currentGate.recommendation, currentStep.id)
-        : (decisionRequired || ""),
+        : "",
       commands: actions.map((item) => item.command),
       actions,
       selection: "choose_one_optional_assist",
@@ -1113,28 +1163,21 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
     };
   }
   if (runtime.run.status === "failed") {
-    const command = `node src/cli.mjs resume --repo ${shellQuote(repo)}`;
     const assist = assistOpenCommand(repo, currentStep.id);
     return {
-      title: `${currentStep.id} の再実行`,
+      title: `${currentStep.id} の失敗を解析`,
       body: failedActionBody(currentStep),
-      commands: [assist, command],
+      commands: [assist],
       actions: [
         nextActionChoice({
           label: "Open Terminal",
-          description: "failed のままコード、計画、テストを見直します。修正後に Resume で同じ step を再実行します。",
+          description: "failure-summary と artifacts を assist で確認し、原因に応じて手で修正します。修正後は assist から `assist-signal --signal continue` を送って runtime に再評価させます。",
           command: assist,
           tone: "neutral",
           kind: "assist"
-        }),
-        nextActionChoice({
-          label: "Resume",
-          description: "保存済み provider session から再開します。summary を確認してから使います。",
-          command,
-          tone: "revise"
         })
       ],
-      selection: "single_optional_assist",
+      selection: "single",
       targetTab: "detail"
     };
   }
@@ -1194,7 +1237,8 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
           label: "Resume",
           description: "同じ step を再実行します。",
           command,
-          tone: "revise"
+          tone: "revise",
+          kind: "resume_direct"
         })
       ],
       selection: "single_optional_assist",
@@ -1261,10 +1305,10 @@ function blockedActionBody(step) {
   }
   const evidence = String(first.evidence || "");
   if (/ui-output\.yaml has parse errors/i.test(evidence)) {
-    return "provider は完了していますが、ui-output.yaml の構文エラーで review judgement を guard 用 artifact に落とせていません。通常は `run-next` の再実行で補完されます。繰り返す場合は ui-output.yaml を確認します。";
+    return "provider は完了していますが、ui-output.json の構文エラーで review judgement を guard 用 artifact に落とせていません。通常は `run-next` の再実行で補完されます。繰り返す場合は ui-output.json を確認します。";
   }
   if (/present in ui-output\.yaml/i.test(evidence)) {
-    return "provider は judgement 自体を書いていますが、guard が読む judgement artifact が不足しています。通常は `run-next` の再実行で補完されます。繰り返す場合は ui-output.yaml と judgements/ を確認します。";
+    return "provider は judgement 自体を書いていますが、guard が読む judgement artifact が不足しています。通常は `run-next` の再実行で補完されます。繰り返す場合は ui-output.json と judgements/ を確認します。";
   }
   if (/provider step completed/i.test(evidence)) {
     return "provider step は完了していますが、guard が必要とする structured evidence が不足しています。step artifacts を確認してから `run-next` を再実行します。";
@@ -1374,7 +1418,7 @@ function resolveDiffBaseline({ repo, stepId }) {
   if (!run?.id || !stepId) {
     return null;
   }
-  const variant = run.flow_variant ?? runtime.note.pdh.variant ?? "full";
+  const variant = run.flow_variant ?? runtime.pdh.variant ?? "full";
   const view = buildFlowView(runtime.flow, variant, run.current_step_id ?? null);
   const stepIndex = view.sequence.indexOf(stepId);
   if (stepIndex < 0) {
@@ -1696,22 +1740,6 @@ function approveRecommendationLabelForStep(stepId) {
 
 function recommendationBody(recommendation, stepId = null) {
   return `Claude assist の推奨は「${recommendationLabel(recommendation, stepId)}」です。そのまま適用するか、assist で再作業して推奨を更新します。`;
-}
-
-function gateDecisionRequiredText(summaryText) {
-  const text = String(summaryText || "");
-  if (!text) {
-    return "";
-  }
-  const match = text.match(/## Decision Required\s+([\s\S]*?)(?:\n## |\n# |$)/);
-  if (!match) {
-    return "";
-  }
-  return match[1]
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join(" ");
 }
 
 function recommendationLabel(recommendation, stepId = null) {
@@ -3114,7 +3142,7 @@ function renderHtml(initialState = null) {
     position: relative;
     width: min(1120px, calc(100vw - 32px));
     max-width: calc(100vw - 32px);
-    height: min(820px, calc(100dvh - 32px));
+    height: min(90dvh, calc(100dvh - 32px));
     max-height: calc(100dvh - 32px);
     min-width: 0;
     min-height: 0;
@@ -3123,7 +3151,7 @@ function renderHtml(initialState = null) {
     border-radius: 12px;
     box-shadow: 0 22px 60px rgba(0, 0, 0, 0.18);
     display: grid;
-    grid-template-rows: auto auto 1fr auto;
+    grid-template-rows: auto auto auto auto auto 1fr;
     overflow: hidden;
   }
   .assist-dialog-head {
@@ -3237,7 +3265,8 @@ function renderHtml(initialState = null) {
   .assist-terminal-shell {
     position: relative;
     background: #111111;
-    min-height: 0;
+    height: min(60dvh, 480px);
+    min-height: 240px;
     min-width: 0;
     overflow: hidden;
     touch-action: none;
@@ -3749,40 +3778,9 @@ function renderHtml(initialState = null) {
       return;
     }
     element.dataset.primaryPressBound = 'true';
-    let suppressClick = false;
-    element.addEventListener('pointerdown', (event) => {
-      if (event.button !== undefined && event.button !== 0) {
-        return;
-      }
-      suppressClick = true;
-      event.preventDefault();
-      handler(event);
-    });
     element.addEventListener('click', (event) => {
-      if (suppressClick) {
-        suppressClick = false;
-        event.preventDefault();
-        return;
-      }
       handler(event);
     });
-  }
-
-  function claimDelegatedPress(target) {
-    if (!target) {
-      return false;
-    }
-    if (target.dataset.pointerActivated === 'true') {
-      delete target.dataset.pointerActivated;
-      return true;
-    }
-    target.dataset.pointerActivated = 'true';
-    window.setTimeout(() => {
-      if (target.dataset.pointerActivated === 'true') {
-        delete target.dataset.pointerActivated;
-      }
-    }, 400);
-    return false;
   }
 
   function keepElementClearOfFixedBars(element) {
@@ -4013,30 +4011,6 @@ function renderHtml(initialState = null) {
       .join('\\n');
   }
 
-  function stepFocusText(step) {
-    switch (step.id) {
-      case 'PD-C-2':
-        return '調査として、変更対象と blast radius が後続の計画を拘束できる粒度まで固まっているかを見ます。';
-      case 'PD-C-3':
-        return '実装者として、変更ファイル・検証方針・リスク対応がこの ticket でそのまま実行できるかを見ます。';
-      case 'PD-C-4':
-        return 'レビュアーとして、実装前に残る Critical/Major や計画の穴がないかを見ます。';
-      case 'PD-C-5':
-        return '承認者として、計画・レビュー結果・テスト方針を見て PD-C-6 に進めてよいかを決めます。';
-      case 'PD-C-6':
-        return '実装担当として、承認済み計画との差分、未通過 guard、検証の残りを見て次の手を決めます。';
-      case 'PD-C-7':
-        return 'レビュアーとして、品質・回帰・security の懸念が残っていないかを見ます。';
-      case 'PD-C-8':
-        return 'PdM 視点で、動いていても close すべきでない理由が残っていないかを見ます。';
-      case 'PD-C-9':
-        return '完了確認者として、AC 裏取りと最終検証の証跡が close 判断に足るかを見ます。';
-      case 'PD-C-10':
-        return '承認者として、close-ready かどうかを最終確認します。';
-      default:
-        return step.userAction || step.summary || '';
-    }
-  }
 
   function derivedSummaryLines(step) {
     const persisted = listOf(step.uiRuntime?.highlights?.summary);
@@ -4342,7 +4316,7 @@ function renderHtml(initialState = null) {
         (finding.evidence ? '\\nEvidence: ' + finding.evidence : '') +
         (finding.recommendation ? '\\nRecommendation: ' + finding.recommendation : '')
       ).join('\\n\\n');
-      items.push(buildShowItem('レビュー指摘', 'review_findings', 'review.yaml', detail));
+      items.push(buildShowItem('レビュー指摘', 'review_findings', 'review.json', detail));
     }
     items.push(noteMaterialItem(step));
     items.push(ticketMaterialItem(step));
@@ -4699,10 +4673,10 @@ function renderHtml(initialState = null) {
       return buildShowItem(label, 'diff', 'git diff --stat', diffStat || changedFiles);
     }
     if (lower.includes('risk') || lower.includes('リスク') || lower.includes('懸念')) {
-      return buildShowItem(label, 'risks', 'ui-output.yaml / current-note.md', risks || noteSection);
+      return buildShowItem(label, 'risks', 'ui-output.json / current-note.md', risks || noteSection);
     }
     if (lower.includes('テスト') || lower.includes('verify') || lower.includes('検証')) {
-      return buildShowItem(label, 'verification', 'current-note.md / ui-output.yaml', ready || noteSection);
+      return buildShowItem(label, 'verification', 'current-note.md / ui-output.json', ready || noteSection);
     }
     if (lower.includes('設計判断') || lower.includes('durable')) {
       return buildShowItem(label, 'ticket_notes', 'current-ticket.md#Implementation Notes', ticketNotes);
@@ -4774,16 +4748,16 @@ function renderHtml(initialState = null) {
     const lower = String(label).toLowerCase();
     const planText = stepById('PD-C-3')?.noteSection || '';
     if (lower.includes('provider')) {
-      return buildShowItem(label, 'provider', 'ui-output.yaml / latest attempt', preferredText(joinedText(step.uiOutput?.summary), step.uiRuntime?.latestAttempt ? step.uiRuntime.latestAttempt.provider + ' attempt ' + step.uiRuntime.latestAttempt.attempt + ': ' + step.uiRuntime.latestAttempt.status : '', step.noteSection));
+      return buildShowItem(label, 'provider', 'ui-output.json / latest attempt', preferredText(joinedText(step.uiOutput?.summary), step.uiRuntime?.latestAttempt ? step.uiRuntime.latestAttempt.provider + ' attempt ' + step.uiRuntime.latestAttempt.attempt + ': ' + step.uiRuntime.latestAttempt.status : '', step.noteSection));
     }
     if (lower.includes('guard')) {
-      return buildShowItem(label, 'guards', 'ui-runtime.yaml', preferredText(formatGuardText(step, true), formatGuardText(step, false)));
+      return buildShowItem(label, 'guards', 'ui-runtime.json', preferredText(formatGuardText(step, true), formatGuardText(step, false)));
     }
     if (lower.includes('割り込み')) {
-      return buildShowItem(label, 'interruptions', 'ui-runtime.yaml', joinedText(listOf(step.uiRuntime?.interruptions).map((item) => item.message || item.artifact || item.id)));
+      return buildShowItem(label, 'interruptions', 'ui-runtime.json', joinedText(listOf(step.uiRuntime?.interruptions).map((item) => item.message || item.artifact || item.id)));
     }
     if (lower.includes('test') || lower.includes('commit')) {
-      return buildShowItem(label, 'verification', 'current-note.md#PD-C-6 / ui-runtime.yaml', preferredText(step.noteSection, formatGuardText(step, true)));
+      return buildShowItem(label, 'verification', 'current-note.md#PD-C-6 / ui-runtime.json', preferredText(step.noteSection, formatGuardText(step, true)));
     }
     if (lower.includes('承認済み計画')) {
       return buildShowItem(label, 'plan', 'current-note.md#PD-C-3. 計画', planText);
@@ -4994,6 +4968,7 @@ function renderHtml(initialState = null) {
   function fetchState() {
     return fetch('/api/state', { cache: 'no-store' }).then((response) => response.json());
   }
+
 
   function markdownizeDocumentSegment(text, _document) {
     return String(text || '').trim();
@@ -5464,10 +5439,7 @@ function renderHtml(initialState = null) {
       if (leftFlowVariant) {
         leftFlowVariant.textContent = 'Tickets';
       }
-      document.getElementById('breadcrumbs').innerHTML =
-        '<span>' + esc(data.repoName) + '</span>' +
-        '<span class="sep">/</span>' +
-        '<span class="current">tickets</span>';
+      document.getElementById('breadcrumbs').innerHTML = '';
       document.getElementById('header-right').innerHTML = '';
       return;
     }
@@ -5800,6 +5772,14 @@ function renderHtml(initialState = null) {
   function closeAssistModal({ suppressAutoOpenDismissal = false } = {}) {
     const stopKey = currentStopAssistKey();
     closeAssistSocket();
+    if (state.assist.shellObserver) {
+      try {
+        state.assist.shellObserver.disconnect();
+      } catch {
+        // Ignore observer disconnect races.
+      }
+      state.assist.shellObserver = null;
+    }
     if (state.assist.terminal) {
       try {
         state.assist.terminal.dispose();
@@ -6018,6 +5998,13 @@ function renderHtml(initialState = null) {
     state.assist.fitAddon = fitAddon;
     const shell = document.querySelector('.assist-terminal-shell');
     bindAssistShellInteractions(shell);
+    if (shell && typeof window.ResizeObserver === 'function') {
+      const observer = new window.ResizeObserver(() => {
+        resizeAssistTerminal();
+      });
+      observer.observe(shell);
+      state.assist.shellObserver = observer;
+    }
     terminal.onData((data) => {
       clearAssistLoginAvailability();
       if (state.assist.socket && state.assist.socket.readyState === window.WebSocket.OPEN) {
@@ -6649,12 +6636,6 @@ function renderHtml(initialState = null) {
         '</div></div>';
     }
 
-    html +=
-      '<div class="detail-section"><div class="detail-section-title">この step の観点</div>' +
-      '<div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);">' +
-      esc(stepFocusText(step)) +
-      '</div></div>';
-
     const contract = step.uiContract || {};
     const materialItems = judgementMaterialItems(step);
     const readyItems = stepReadyItems(step);
@@ -6701,14 +6682,15 @@ function renderHtml(initialState = null) {
             '</div>' +
             (item.description ? '<div class="next-action-description">' + esc(item.description) + '</div>' : '') +
             (item.kind === 'assist'
-              ? '<button class="next-action-launch" type="button" data-assist-step="' + esc(step.id) + '">Open Terminal</button>' +
-                '<div class="next-action-hint">Launch a fresh assist terminal in this browser.</div>'
+              ? '<button class="next-action-launch" type="button" data-assist-step="' + esc(step.id) + '">Open Terminal</button>'
               : item.kind === 'approve_direct'
                 ? '<button class="next-action-direct" type="button" data-approve-step="' + esc(step.id) + '">Approve</button>'
                 : item.kind === 'run_next_direct'
                   ? '<button class="next-action-direct" type="button" data-run-next-step="' + esc(step.id) + '"' + (item.force ? ' data-run-next-force="1"' : '') + '>Run Next</button>'
+                : item.kind === 'resume_direct'
+                  ? '<button class="next-action-direct" type="button" data-resume-step="' + esc(step.id) + '">Resume</button>'
                 : '') +
-            ((item.kind === 'assist' || item.kind === 'approve_direct' || item.kind === 'run_next_direct') ? '' : '<div class="next-action-command"' + ' data-click-copy="' + encodeURIComponent(item.command || '') + '">' + esc(item.command || '') + '</div>') +
+            ((item.kind === 'assist' || item.kind === 'approve_direct' || item.kind === 'run_next_direct' || item.kind === 'resume_direct') ? '' : '<div class="next-action-command"' + ' data-click-copy="' + encodeURIComponent(item.command || '') + '">' + esc(item.command || '') + '</div>') +
           '</div>';
       });
       html += '</div></div>';
@@ -7011,7 +6993,14 @@ function renderHtml(initialState = null) {
           throw new Error(payload.message || payload.error || 'gate_approve_failed');
         }
       } else if (action.kind === 'ticket-start') {
-        const response = await fetch('/api/ticket/start?ticket=' + encodeURIComponent(action.ticketId) + '&variant=' + encodeURIComponent(action.variant || 'full'), {
+        const params = new URLSearchParams({
+          ticket: action.ticketId,
+          variant: action.variant || 'full'
+        });
+        if (action.force) {
+          params.set('force', '1');
+        }
+        const response = await fetch('/api/ticket/start?' + params.toString(), {
           method: 'POST',
           cache: 'no-store'
         });
@@ -7045,14 +7034,10 @@ function renderHtml(initialState = null) {
       window.alert('Failed to apply recommendation: ' + (error?.message || String(error)));
     }
   });
-  document.getElementById('assist-login-button').addEventListener('pointerdown', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    sendAssistLoginSequence();
-  });
   document.getElementById('assist-login-button').addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
+    sendAssistLoginSequence();
   });
   document.getElementById('assist-prompt-toggle').addEventListener('click', (event) => {
     event.preventDefault();
@@ -7131,6 +7116,30 @@ function renderHtml(initialState = null) {
       return true;
     }
 
+    const resumeButton = event.target.closest('[data-resume-step]');
+    if (resumeButton) {
+      const original = resumeButton.innerHTML;
+      resumeButton.disabled = true;
+      resumeButton.innerHTML = 'Resuming…';
+      try {
+        const response = await fetch('/api/runtime/resume?force=1', {
+          method: 'POST',
+          cache: 'no-store'
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.message || payload.error || 'resume_failed');
+        }
+        refresh();
+      } catch (error) {
+        window.alert('Failed to resume: ' + (error?.message || String(error)));
+      } finally {
+        resumeButton.disabled = false;
+        resumeButton.innerHTML = original;
+      }
+      return true;
+    }
+
     const ticketTerminalButton = event.target.closest('[data-ticket-terminal]');
     if (ticketTerminalButton) {
       const ticketId = ticketTerminalButton.dataset.ticketTerminal;
@@ -7158,10 +7167,50 @@ function renderHtml(initialState = null) {
       if (!ticketId) {
         return;
       }
+      const activeRun = state.data?.runtime?.run || null;
+      const activeTicketId = activeRun?.ticket_id || null;
+      const activeStepId = activeRun?.current_step_id || null;
+      const activeStatus = activeRun?.status || null;
+      if (activeRun && activeTicketId === ticketId) {
+        const original = startButton.innerHTML;
+        startButton.disabled = true;
+        startButton.innerHTML = 'Resuming…';
+        try {
+          const response = await fetch('/api/runtime/resume?force=1', {
+            method: 'POST',
+            cache: 'no-store'
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.message || payload.error || 'resume_failed');
+          }
+          refresh();
+        } catch (error) {
+          window.alert('Failed to resume: ' + (error?.message || String(error)));
+        } finally {
+          startButton.disabled = false;
+          startButton.innerHTML = original;
+        }
+        return true;
+      }
+      if (activeRun && activeTicketId && activeTicketId !== ticketId) {
+        openActionConfirm({
+          kind: 'ticket-start',
+          ticketId,
+          variant,
+          force: true,
+          title: '別チケットへ切替',
+          body: '現在進行中: ' + activeTicketId + ' (' + (activeStepId || '?') + ' / ' + (activeStatus || '?') + ')。' +
+                ' / ' + ticketId + ' を開始すると、現在の run はリセットされ、巻き戻し用の git tag (pdh-flow-archive/...) を残します。続行しますか？',
+          confirmLabel: 'Reset & Start'
+        });
+        return true;
+      }
       openActionConfirm({
         kind: 'ticket-start',
         ticketId,
         variant,
+        force: false,
         title: 'チケット開始',
         body: ticketId + ' を ' + variant + ' flow で開始します。',
         confirmLabel: 'Start'
@@ -7171,25 +7220,9 @@ function renderHtml(initialState = null) {
     return false;
   }
 
-  document.addEventListener('pointerdown', async (event) => {
-    const target = event.target.closest('[data-assist-step], [data-approve-step], [data-run-next-step], [data-ticket-terminal], [data-start-ticket]');
-    if (!target) {
-      return;
-    }
-    if (event.button !== undefined && event.button !== 0) {
-      return;
-    }
-    event.preventDefault();
-    claimDelegatedPress(target);
-    await handleDelegatedPrimaryAction(event);
-  });
   document.addEventListener('click', async (event) => {
-    const target = event.target.closest('[data-assist-step], [data-approve-step], [data-run-next-step], [data-ticket-terminal], [data-start-ticket]');
+    const target = event.target.closest('[data-assist-step], [data-approve-step], [data-run-next-step], [data-resume-step], [data-ticket-terminal], [data-start-ticket]');
     if (!target) {
-      return;
-    }
-    if (claimDelegatedPress(target)) {
-      event.preventDefault();
       return;
     }
     await handleDelegatedPrimaryAction(event);

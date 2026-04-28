@@ -8,7 +8,7 @@ import { evaluateStepGuards } from "./guards.mjs";
 import { runCodex } from "./codex-adapter.mjs";
 import { runClaude } from "./claude-adapter.mjs";
 import { runCalcSmoke } from "./smoke-calc.mjs";
-import { createGateSummary, commitStep, ticketClose, ticketStart } from "./actions.mjs";
+import { archivePriorRunTag, createGateSummary, commitStep, ticketClose, ticketStart } from "./actions.mjs";
 import { renderStepPrompt, writeReviewerPromptArtifact, writeReviewRepairPromptArtifact, writeStepPrompt } from "./prompt-templates.mjs";
 import { captureNoteTicketPatchProposal, snapshotNoteTicketFiles } from "./patch-proposals.mjs";
 import { defaultAcceptedJudgementStatus, defaultJudgementKind, loadJudgements, writeJudgement } from "./judgements.mjs";
@@ -38,6 +38,7 @@ import {
   loadReviewRepairOutput,
   loadReviewerOutput,
   loadReviewerOutputsForStepRound,
+  recordAggregatorReviewArtifacts,
   reviewAccepted,
   reviewRoundDir,
   reviewRoundReviewerAttemptDir,
@@ -61,8 +62,11 @@ import {
   latestHumanGate,
   clearHumanGateRecommendation,
   latestProviderSession,
+  loadPdhMeta,
   loadRuntime,
   nextStepAttempt,
+  recoverRuntimeFromTags,
+  savePdhMeta,
   openHumanGate,
   progressPath,
   readProgressEvents,
@@ -127,6 +131,10 @@ try {
     await cmdRunProvider(args);
   } else if (command === "resume") {
     await cmdResume(args);
+  } else if (command === "stop") {
+    await cmdStop(args);
+  } else if (command === "recover") {
+    await cmdRecover(args);
   } else if (command === "run-next") {
     await cmdRunNext(args);
   } else if (command === "gate-summary") {
@@ -183,7 +191,9 @@ Usage:
   pdh-flow run --ticket ID [--repo DIR] [--variant full|light] [--start-step PD-C-5] [--force-reset]
   pdh-flow run-next [--repo DIR] [--limit 20] [--manual-provider] [--stop-after-step] [--timeout-ms MS] [--idle-timeout-ms MS]
   pdh-flow run-provider [--repo DIR] [--step PD-C-6] [--prompt-file FILE] [--timeout-ms MS] [--idle-timeout-ms MS] [--max-attempts N]
-  pdh-flow resume [--repo DIR] [--step PD-C-6]
+  pdh-flow resume [--repo DIR] [--step PD-C-6] [--force]
+  pdh-flow stop [--repo DIR] [--reason TEXT]
+  pdh-flow recover [--repo DIR] [--ticket ID] [--variant full|light]
   pdh-flow prompt [--repo DIR] [--step PD-C-6]
   pdh-flow metadata [--repo DIR]
   pdh-flow judgement [--repo DIR] [--step PD-C-4] [--kind plan_review] [--status "No Critical/Major"] [--summary TEXT]
@@ -214,9 +224,9 @@ Usage:
   pdh-flow smoke-calc [--workdir DIR]
 
 Notes:
-  - current-note.md frontmatter is the canonical runtime state.
+  - .pdh-flow/runtime.json is the canonical runtime state (committed).
   - current-ticket.md and current-note.md stay repo-local and human-readable.
-  - .pdh-flow/ holds transient prompts, raw logs, interruptions, gate summaries, and other local artifacts.
+  - .pdh-flow/runs/ holds transient prompts, raw logs, interruptions, gate summaries, and other local artifacts (gitignored).
   - Provider commands load .env for API keys. Unit-style checks do not call external providers.
 `);
 }
@@ -246,9 +256,26 @@ async function cmdRun(argv) {
   await withRuntimeLock({ repo, options, action: async () => {
     const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
     if (runtime.run?.id && options["force-reset"] !== "true") {
-      throw new Error("An active run already exists in current-note.md. Pass --force-reset to replace it.");
+      const activeTicket = runtime.run.ticket_id || "<unknown>";
+      const activeStep = runtime.run.current_step_id || "<unknown>";
+      const activeStatus = runtime.run.status || "<unknown>";
+      throw new Error(
+        `Active run already exists (ticket=${activeTicket}, step=${activeStep}, status=${activeStatus}). ` +
+        `To continue: \`pdh-flow resume --repo ${repo}\`. ` +
+        `To stop and discard: \`pdh-flow stop --repo ${repo}\` then re-run. ` +
+        `To overwrite anyway: pass --force-reset (this archives the current state under a git tag).`
+      );
     }
-    const ticketStartResult = maybeStartTicket({ repo, ticket, required: options["require-ticket-start"] === "true" });
+    let archiveTag = null;
+    if (runtime.run?.id && options["force-reset"] === "true") {
+      archiveTag = archivePriorRunTag({ repoPath: repo, run: runtime.run });
+      if (archiveTag) {
+        console.log(`Archived prior run state under git tag ${archiveTag} (run ${runtime.run.id}).`);
+      }
+    }
+    const ticketStartResult = options["no-ticket-start"] === "true"
+      ? null
+      : maybeStartTicket({ repo, ticket, required: options["require-ticket-start"] === "true" });
     const started = startRun({ repoPath: repo, ticket, variant, flowId, startStep });
     if (ticketStartResult) {
       appendProgressEvent({
@@ -259,6 +286,17 @@ async function cmdRun(argv) {
         provider: "runtime",
         message: ticketStartResult.status === "ok" ? `ticket.sh start ${ticket}` : ticketStartResult.message,
         payload: ticketStartResult
+      });
+    }
+    if (archiveTag) {
+      appendProgressEvent({
+        repoPath: repo,
+        runId: started.run.id,
+        stepId: started.run.current_step_id,
+        type: "status",
+        provider: "runtime",
+        message: `prior run archived under ${archiveTag}`,
+        payload: { archiveTag, priorRunId: runtime.run?.id ?? null, priorStepId: runtime.run?.current_step_id ?? null }
       });
     }
     syncStepUiRuntime({ repo });
@@ -530,7 +568,94 @@ async function cmdRunProvider(argv) {
 }
 
 async function cmdResume(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
+  const supervisor = runtime.supervisor;
+  const run = runtime.run;
+  const isStaleSupervisor = supervisor?.status === "stale";
+  const isUserStopped = supervisor?.staleReason === "user_stopped";
+
+  if (run?.id && isStaleSupervisor) {
+    if (isUserStopped && options.force !== "true") {
+      throw new Error("Run was stopped by `pdh-flow stop`. Pass --force to override or call `pdh-flow run` to start fresh.");
+    }
+    const stepId = run.current_step_id;
+    if (!stepId) {
+      throw new Error("Active run has no current_step_id; nothing to resume.");
+    }
+    resetStepArtifacts({ stateDir: runtime.stateDir, runId: run.id, stepId });
+    updateRun(repo, { status: "running", current_step_id: stepId });
+    if (runtime.supervisor) {
+      finishRunSupervisor({ stateDir: runtime.stateDir, status: "exited", exitCode: 0 });
+      updateRunSupervisor({ stateDir: runtime.stateDir, fields: { staleReason: null } });
+    }
+    appendProgressEvent({
+      repoPath: repo,
+      runId: run.id,
+      stepId,
+      type: "runtime_resumed",
+      provider: "runtime",
+      message: `${stepId} resumed after ${isUserStopped ? "user stop" : "process loss"}`,
+      payload: {
+        staleReason: supervisor?.staleReason ?? null,
+        priorStatus: run.status,
+        forced: options.force === "true"
+      }
+    });
+    const passthrough = ["--repo", repo];
+    if (options["timeout-ms"]) passthrough.push("--timeout-ms", options["timeout-ms"]);
+    if (options["idle-timeout-ms"]) passthrough.push("--idle-timeout-ms", options["idle-timeout-ms"]);
+    if (options["max-attempts"]) passthrough.push("--max-attempts", options["max-attempts"]);
+    if (options["retry-backoff-ms"]) passthrough.push("--retry-backoff-ms", options["retry-backoff-ms"]);
+    await cmdRunNext(passthrough);
+    return;
+  }
+
   await cmdRunProvider([...argv, "--resume", "latest", "--supervisor-command", "resume"]);
+}
+
+async function cmdRecover(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  const result = recoverRuntimeFromTags(repo, {
+    ticket: options.ticket,
+    variant: options.variant,
+    flow: options.flow
+  });
+  console.log(JSON.stringify(result, null, 2));
+  if (result.status !== "recovered") {
+    process.exitCode = result.status === "skipped" ? 0 : 1;
+  }
+}
+
+async function cmdStop(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  const runtime = loadRuntime(repo);
+  const supervisor = runtime.supervisor;
+  const run = runtime.run;
+  if (!run?.id) {
+    console.log(JSON.stringify({ status: "no_active_run" }, null, 2));
+    return;
+  }
+  if (supervisor?.status === "running") {
+    finishRunSupervisor({ stateDir: runtime.stateDir, status: "stale", exitCode: null, signal: null });
+  }
+  updateRunSupervisor({ stateDir: runtime.stateDir, fields: { staleReason: "user_stopped" } });
+  if (run.status === "running") {
+    updateRun(repo, { status: "failed", current_step_id: run.current_step_id });
+  }
+  appendProgressEvent({
+    repoPath: repo,
+    runId: run.id,
+    stepId: run.current_step_id,
+    type: "runtime_stopped",
+    provider: "runtime",
+    message: `${run.current_step_id ?? "run"} marked stopped by user`,
+    payload: { reason: options.reason ?? null }
+  });
+  console.log(JSON.stringify({ status: "stopped", runId: run.id, stepId: run.current_step_id }, null, 2));
 }
 
 async function cmdPrompt(argv) {
@@ -557,8 +682,8 @@ async function cmdPrompt(argv) {
 function cmdMetadata(argv) {
   const options = parseOptions(argv);
   const repo = resolve(options.repo ?? process.cwd());
-  const note = loadCurrentNote(repo);
-  console.log(JSON.stringify(note.pdh, null, 2));
+  const pdh = loadPdhMeta(repo);
+  console.log(JSON.stringify(pdh, null, 2));
 }
 
 async function cmdJudgement(argv) {
@@ -637,7 +762,9 @@ async function cmdGateSummary(argv) {
     if (!isHumanGateStep(step)) {
       throw new Error(`${stepId} is not a human gate step`);
     }
-    const summary = ensureGateSummary({ repo, runtime, step });
+    const summary = options.refresh === "true"
+      ? refreshGateSummary({ repo, runtime, step })
+      : ensureGateSummary({ repo, runtime, step });
     updateRun(repo, { status: "needs_human", current_step_id: stepId });
     syncStepUiRuntime({ repo, stepId, nextCommands: humanStopCommands(repo, stepId) });
     console.log(summary.artifactPath);
@@ -1344,7 +1471,8 @@ function cmdShowInterrupts(argv) {
 function cmdCommitStep(argv) {
   const options = parseOptions(argv);
   const repo = resolve(options.repo ?? process.cwd());
-  const result = commitStep({ repoPath: repo, stepId: required(options, "step"), message: options.message ?? null });
+  const ticket = options.ticket ?? loadPdhMeta(repo).ticket ?? null;
+  const result = commitStep({ repoPath: repo, stepId: required(options, "step"), message: options.message ?? null, ticket });
   console.log(JSON.stringify(result, null, 2));
 }
 
@@ -1377,14 +1505,11 @@ function cmdCleanup(argv) {
   });
   const removed = cleanupRunArtifacts({ repoPath: repo, runId: runtime.run.id });
   if (options["clear-run-id"] === "true") {
-    const note = loadCurrentNote(repo);
-    saveCurrentNote(repo, {
-      ...note,
-      pdh: {
-        ...note.pdh,
-        run_id: null,
-        updated_at: new Date().toISOString()
-      }
+    const pdh = loadPdhMeta(repo);
+    savePdhMeta(repo, {
+      ...pdh,
+      run_id: null,
+      updated_at: new Date().toISOString()
     });
   }
   console.log(`Removed ${removed}`);
@@ -2104,8 +2229,8 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
         status = "failed";
         lastResult = {
           exitCode: 4,
-          finalMessage: `${stepId} aggregator did not produce a usable ui-output.yaml judgement in round ${round}`,
-          stderr: aggregatorUi?.parseErrors?.join("\n") || "ui-output.yaml missing or judgement field absent",
+          finalMessage: `${stepId} aggregator did not produce a usable ui-output.json judgement in round ${round}`,
+          stderr: aggregatorUi?.parseErrors?.join("\n") || "ui-output.json missing or judgement field absent",
           timedOut: false,
           timeoutKind: null,
           signal: null
@@ -2149,6 +2274,35 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
       roundHistory.push(roundRecord);
 
       if (judgementAcceptedForStep(stepId, aggregatorJudgement)) {
+        const recorded = recordAggregatorReviewArtifacts({
+          repoPath: repo,
+          runtime,
+          step,
+          aggregate,
+          aggregatorJudgement,
+          rounds: roundHistory,
+          commit: true
+        });
+        appendProgressEvent({
+          repoPath: repo,
+          runId,
+          stepId,
+          attempt,
+          type: "artifact",
+          provider: "runtime",
+          message: `review note updated ${recorded.noteSection}`,
+          payload: { section: recorded.noteSection }
+        });
+        appendProgressEvent({
+          repoPath: repo,
+          runId,
+          stepId,
+          attempt,
+          type: "commit",
+          provider: "runtime",
+          message: recorded.commit?.message ?? `${stepId} commit ${recorded.commit?.status}`,
+          payload: recorded.commit ?? {}
+        });
         appendProgressEvent({
           repoPath: repo,
           runId,
@@ -2172,6 +2326,35 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
       }
 
       if (round >= maxRounds) {
+        const recorded = recordAggregatorReviewArtifacts({
+          repoPath: repo,
+          runtime,
+          step,
+          aggregate,
+          aggregatorJudgement,
+          rounds: roundHistory,
+          commit: true
+        });
+        appendProgressEvent({
+          repoPath: repo,
+          runId,
+          stepId,
+          attempt,
+          type: "artifact",
+          provider: "runtime",
+          message: `review note updated ${recorded.noteSection}`,
+          payload: { section: recorded.noteSection }
+        });
+        appendProgressEvent({
+          repoPath: repo,
+          runId,
+          stepId,
+          attempt,
+          type: "commit",
+          provider: "runtime",
+          message: recorded.commit?.message ?? `${stepId} commit ${recorded.commit?.status}`,
+          payload: recorded.commit ?? {}
+        });
         appendProgressEvent({
           repoPath: repo,
           runId,
@@ -3239,7 +3422,8 @@ function finalizeCompletedRun({ repo, runtime, step }) {
   const closeCommit = commitStep({
     repoPath: repo,
     stepId: step.id,
-    message: "Record final gate approval before ticket close"
+    message: "Record final gate approval before ticket close",
+    ticket: runtime.run?.ticket_id ?? null
   });
   let closeResult = { status: "skipped", reason: "ticket.sh not found" };
   if (existsSync(join(repo, "ticket.sh"))) {
@@ -3354,13 +3538,13 @@ function describeGuardFailureMessage(failedGuards) {
   }
   const [guard] = failedGuards;
   if (guard.type === "judgement_status" && /ui-output\.yaml has parse errors/i.test(guard.evidence || "")) {
-    return `The provider finished, but the guard-facing judgement could not be materialized because ui-output.yaml is malformed. Re-run \`run-next\`; if it repeats, inspect ui-output.yaml and the step prompt.`;
+    return `The provider finished, but the guard-facing judgement could not be materialized because ui-output.json is malformed. Re-run \`run-next\`; if it repeats, inspect ui-output.json and the step prompt.`;
   }
   if (guard.type === "judgement_status" && /present in ui-output\.yaml/i.test(guard.evidence || "")) {
-    return `The provider wrote a review judgement into ui-output.yaml, but the runtime judgement artifact is missing. Re-run \`run-next\`; if it repeats, inspect ui-output.yaml and judgements/.`;
+    return `The provider wrote a review judgement into ui-output.json, but the runtime judgement artifact is missing. Re-run \`run-next\`; if it repeats, inspect ui-output.json and judgements/.`;
   }
   if (guard.type === "judgement_status" && /provider step completed/i.test(guard.evidence || "")) {
-    return `The provider step completed, but the review evidence needed by the guard is still missing. Inspect ui-output.yaml and judgements/ before retrying.`;
+    return `The provider step completed, but the review evidence needed by the guard is still missing. Inspect ui-output.json and judgements/ before retrying.`;
   }
   return `${guard.guardId} is still incomplete: ${guard.evidence}`;
 }
@@ -3485,7 +3669,8 @@ async function maybeAutoRepairReviewGuards({ repo, runtime, step, failedGuards, 
     const commitResult = commitStep({
       repoPath: repo,
       stepId: step.id,
-      message: repair.output.summary ? `Guard repair: ${repair.output.summary}` : "Guard repair"
+      message: repair.output.summary ? `Guard repair: ${repair.output.summary}` : "Guard repair",
+      ticket: runtime.run?.ticket_id ?? null
     });
     let stepCommit = null;
     if (commitResult.status === "committed") {
@@ -4114,7 +4299,8 @@ function gateBaselineDiff({ repo, baseline }) {
   const ticketAfter = readFileIfExists(join(repo, "current-ticket.md"));
   const noteBefore = stripPdhMetadata(gitShowFile(repo, baseline.commit, noteDocPath));
   const noteAfter = stripPdhMetadata(readFileIfExists(join(repo, "current-note.md")));
-  const changedFiles = normalizeGateChangedFiles(repo, splitLines(runGit(repo, ["diff", "--name-only", baseline.commit, "--"]).stdout));
+  const rawChangedFiles = normalizeGateChangedFiles(repo, splitLines(runGit(repo, ["diff", "--name-only", baseline.commit, "--"]).stdout));
+  const changedFiles = rawChangedFiles.filter((path) => !path.startsWith(".pdh-flow/"));
   return {
     changedFiles,
     ticketSections: changedMarkdownSections(ticketBefore, ticketAfter),
@@ -4134,7 +4320,7 @@ function inferHumanGateRerunRequirement({ stepId, changedFiles, noteSections, ti
     if (note.some((section) => ["PD-C-2. 調査結果", "Discoveries"].includes(section))) {
       return rerunRequirement("PD-C-2", "gate edits changed investigation evidence", files, ticket, note);
     }
-    if (ticket.some((section) => ["Why", "What", "Product AC", "Implementation Notes"].includes(section))
+    if (ticket.some((section) => ["Why", "What", "Product AC", "Acceptance Criteria", "Implementation Notes"].includes(section))
       || note.includes("PD-C-3. 計画")) {
       return rerunRequirement("PD-C-3", "gate edits changed ticket intent or implementation plan", files, ticket, note);
     }
@@ -4147,7 +4333,7 @@ function inferHumanGateRerunRequirement({ stepId, changedFiles, noteSections, ti
     if (signalFiles.length > 0) {
       return rerunRequirement("PD-C-7", "gate edits changed implementation or tests after review", files, ticket, note);
     }
-    if (ticket.some((section) => ["Why", "What", "Product AC", "Implementation Notes"].includes(section))
+    if (ticket.some((section) => ["Why", "What", "Product AC", "Acceptance Criteria", "Implementation Notes"].includes(section))
       || note.some((section) => ["PD-C-7. 品質検証結果", "PD-C-8. 目的妥当性確認"].includes(section))) {
       return rerunRequirement("PD-C-7", "gate edits changed review or product-validity evidence", files, ticket, note);
     }
@@ -4184,7 +4370,7 @@ function changedMarkdownSections(beforeText, afterText, { ignoreSections = new S
 function markdownSections(text, { ignoreSections = new Set() } = {}) {
   const body = String(text ?? "").replace(/\r\n/g, "\n");
   const map = new Map();
-  const matches = [...body.matchAll(/^##\s+(.+)$/gm)];
+  const matches = [...body.matchAll(/^#{2,3}\s+(.+)$/gm)];
   for (let index = 0; index < matches.length; index += 1) {
     const heading = matches[index][1].trim();
     if (ignoreSections.has(heading)) {
@@ -4240,8 +4426,20 @@ function gitFileExists(repo, commit, relativePath) {
   return Boolean(runGit(repo, ["cat-file", "-e", `${commit}:${relativePath}`]));
 }
 
-function gitShowFile(repo, commit, relativePath) {
-  return runGit(repo, ["show", `${commit}:${relativePath}`])?.stdout ?? "";
+function gitShowFile(repo, commit, relativePath, depth = 0) {
+  const result = runGit(repo, ["show", `${commit}:${relativePath}`])?.stdout ?? "";
+  if (depth > 4) return result;
+  const lsTree = runGit(repo, ["ls-tree", commit, relativePath])?.stdout ?? "";
+  const mode = lsTree.trim().split(/\s+/)[0];
+  if (mode === "120000") {
+    const target = result.trim();
+    if (target && !target.startsWith("/")) {
+      const baseDir = relativePath.includes("/") ? relativePath.slice(0, relativePath.lastIndexOf("/") + 1) : "";
+      const resolved = baseDir + target;
+      return gitShowFile(repo, commit, resolved, depth + 1);
+    }
+  }
+  return result;
 }
 
 function readFileIfExists(path) {

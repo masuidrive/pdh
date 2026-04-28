@@ -176,20 +176,20 @@ function checkJudgementStatus(guard, context) {
       return passIf(
         guard,
         false,
-        `${guard.artifactKind} not materialized because ui-output.yaml has parse errors: ${parseErrors[0]}`
+        `${guard.artifactKind} not materialized because ui-output.json has parse errors: ${parseErrors[0]}`
       );
     }
     return passIf(
       guard,
       false,
-      `${guard.artifactKind} is present in ui-output.yaml (${uiJudgement.status}) but the judgement artifact was not written`
+      `${guard.artifactKind} is present in ui-output.json (${uiJudgement.status}) but the judgement artifact was not written`
     );
   }
   if (context.latestAttempt?.status === "completed") {
     return passIf(
       guard,
       false,
-      `${guard.artifactKind} is still missing even though the provider step completed; inspect ui-output.yaml and judgements/`
+      `${guard.artifactKind} is still missing even though the provider step completed; inspect ui-output.json and judgements/`
     );
   }
   return passIf(guard, false, `${guard.artifactKind} missing`);

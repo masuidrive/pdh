@@ -65,16 +65,16 @@ prompts:
 
     ### runtime しか読まない (transient, commit しない)
 
-    - `.pdh-flow/runs/<run-id>/steps/<step-id>/` — step 単位の structured artifact (`ui-output.yaml` / `review.yaml` / `repair.yaml` 等)。runtime が guard で読む契約
+    - `.pdh-flow/runs/<run-id>/steps/<step-id>/` — step 単位の structured artifact (`ui-output.json` / `review.json` / `repair.json` 等)。runtime が guard で読む契約
     - `.pdh-flow/` 配下全般 — transient local artifact。あなたの判断根拠として読み書きするのは構わないが、durable な product truth を置く場所ではない。クリーンアップ等で消える可能性がある前提で扱う
 
     ## 構造化出力 (runtime contract)
 
     runtime が遷移を決めるために読む構造化出力には種類があり、各 step prompt が schema と書き出し先を末尾で指示する:
 
-      - `ui-output.yaml` (各 step の主担当 agent が書く): summary / risks / ready_when / notes / (judgement を出す step なら) judgement
-      - `review.yaml` (reviewer 役): status / summary / findings / notes
-      - `repair.yaml` (repair 役 / review repair round): summary / verification / remaining_risks / notes
+      - `ui-output.json` (各 step の主担当 agent が書く): summary / risks / ready_when / notes / (judgement を出す step なら) judgement
+      - `review.json` (reviewer 役): status / summary / findings / notes
+      - `repair.json` (repair 役 / review repair round): summary / verification / remaining_risks / notes
       - `current-note.md` 本文の `AC 裏取り結果` テーブル (PD-C-9)
       - Epic の `verification.md` 内 Exit Criterion 裏取り表 (PD-D-1)
 
@@ -88,8 +88,8 @@ prompts:
 
     AC / Exit Criteria 未達のまま「close 可能」「verified」「No Critical/Major」などを構造化出力に書いてはならない。具体的に書いてはいけないのは:
 
-      - `ui-output.yaml` の `judgement.status` を guard-pass 文字列にする (`Approved` / `Ready` / `No Critical/Major` 等) — 実証跡が無い時
-      - `review.yaml` の `status` を accepted 系 (`No Critical/Major`, `Ready` 等) にする — 自分の reviewer 観点で blocker が残っている時
+      - `ui-output.json` の `judgement.status` を guard-pass 文字列にする (`Approved` / `Ready` / `No Critical/Major` 等) — 実証跡が無い時
+      - `review.json` の `status` を accepted 系 (`No Critical/Major`, `Ready` 等) にする — 自分の reviewer 観点で blocker が残っている時
       - `current-note.md` の `AC 裏取り結果` で AC を `verified` にする — 実証跡 (テストファイル:行、ログ path、screenshot、コマンド出力) が無い時
       - `AC 裏取り結果` で `unverified` を `deferred` に格下げする — ユーザの明示承認も follow-up ticket slug も無い時
       - `verification.md` の Exit Criterion を `verified` にする — `real-env-required` 分類なのに mock / `provider=none` / スタブの証跡しか無い時
@@ -193,13 +193,13 @@ prompts:
 
     ## 結論の出し方
 
-    - 自分の reviewer 観点で blocker が残るなら、`review.yaml` の `status` を accepted 系 (`No Critical/Major` / `Ready` 等) にしない
-    - 結論は `review.yaml` の status / summary / findings にだけ書く。「次にどの step に戻るか」「ループを何回回すか」は判定しない (runtime が判定する)
+    - 自分の reviewer 観点で blocker が残るなら、`review.json` の `status` を accepted 系 (`No Critical/Major` / `Ready` 等) にしない
+    - 結論は `review.json` の status / summary / findings にだけ書く。「次にどの step に戻るか」「ループを何回回すか」は判定しない (runtime が判定する)
 
     ## repair として呼ばれた場合
 
     - 自分の判断で「もう blocker は無い」と既成事実化しない。新しい reviewer round を起こすかは runtime が決める
-    - 修正範囲・実行した検証・残った懸念を `repair.yaml` に正直に書く
+    - 修正範囲・実行した検証・残った懸念を `repair.json` に正直に書く
 
   common-c: |
     # PD-C 共通: Ticket 開発の前提
@@ -213,7 +213,7 @@ prompts:
 
     ## Flow variant (Light / Full)
 
-    どちらの variant で実行するかは runtime が確定する。step prompt が指示する内容に従って成果物を出すこと。variant 判定の根拠を出すよう指示された step では、その分類を `ui-output.yaml` に出す (確定は runtime)。
+    どちらの variant で実行するかは runtime が確定する。step prompt が指示する内容に従って成果物を出すこと。variant 判定の根拠を出すよう指示された step では、その分類を `ui-output.json` に出す (確定は runtime)。
 
     ## current-note.md のセクション構成
 
@@ -297,7 +297,7 @@ prompts:
     ## 成果物
 
     - `current-note.md` の `AC 裏取り計画` セクション (各 AC の分類タグ + `real-env-required` の必要環境一覧)
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: AC 整備状況・variant 推奨と理由 (どの条件を満たさなかったか)
         - `risks`: 未解決の前置事項 (credential 不足・解釈の余地等)
         - `ready_when`: 着手前提が揃った状態の条件
@@ -330,7 +330,7 @@ prompts:
     ## 成果物
 
     - `current-note.md` の「PD-C-2. 調査結果」セクション (主要な調査結果・blast radius・実装方針への含意・技術懸念)
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: 調査結果の要点
         - `risks`: 計画・実装で留意すべき技術懸念・実環境裏取り懸念
         - `ready_when`: 「PD-C-3 計画に進める」と言える状態
@@ -361,7 +361,7 @@ prompts:
 
     - `current-note.md` の「PD-C-3. 計画」セクション
     - `current-ticket.md` の `Implementation Notes`: 設計判断とその理由 (durable な意思決定だけ)
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: 計画の要点 (実装ファイル・主要な設計判断・テスト方針)
         - `risks`: 計画上の未解消リスク
         - `ready_when`: 「これで実装に進める」と言える条件
@@ -374,13 +374,13 @@ prompts:
 
     ## 役割
 
-    あなたは PD-C-4 の **aggregator** です。runtime が並行起動した N 名の reviewer (Devil's Advocate / Coding Engineer / codex) が書いた `review.yaml` を読み、dedupe・consensus 把握・blocker 抽出・集約 judgement を出すのが仕事です。reviewer 自身の起動・並行制御・schema 検証は runtime の責務。あなたは reviewer は spawn しません。
+    あなたは PD-C-4 の **aggregator** です。runtime が並行起動した N 名の reviewer (Devil's Advocate / Coding Engineer / codex) が書いた `review.json` を読み、dedupe・consensus 把握・blocker 抽出・集約 judgement を出すのが仕事です。reviewer 自身の起動・並行制御・schema 検証は runtime の責務。あなたは reviewer は spawn しません。
 
     ※ Light variant ではこの step は実行されません (runtime がスキップ)。
 
     ## 入力
 
-    - prompt 末尾の "## Reviewer Outputs" セクションに、各 reviewer の `reviewerId` / `label` / `provider` / `review.yaml` の path と inline 内容が runtime から注入されます
+    - prompt 末尾の "## Reviewer Outputs" セクションに、各 reviewer の `reviewerId` / `label` / `provider` / `review.json` の path と inline 内容が runtime から注入されます
     - `current-ticket.md` / `current-note.md` (PD-C-3 の計画を含む)
     - 同 step の prior round が `.pdh-flow/runs/<run-id>/steps/PD-C-4/review-rounds/round-<n>/` にあれば差分把握に使ってよい
 
@@ -403,7 +403,7 @@ prompts:
     ## 成果物
 
     - `current-note.md` の「PD-C-4. 計画レビュー結果」: dedupe 後の reviewer 別ステータステーブル + 統合 findings (consensus 付き)
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: dedupe 後 findings 数 / consensus パターン / 主な blocker
         - `risks`: 残存懸念
         - `judgement.kind`: `plan-review`
@@ -418,7 +418,7 @@ prompts:
 
     ## 役割
 
-    PD-C-5 は明示的な human gate です。あなたの仕事は「ユーザが実装に進めて良いか判断するための材料」を `ui-output.yaml` に揃えることだけ。承認自体はユーザが Web UI / CLI で行い、その確定は runtime が握ります。
+    PD-C-5 は明示的な human gate です。あなたの仕事は「ユーザが実装に進めて良いか判断するための材料」を `ui-output.json` に揃えることだけ。承認自体はユーザが Web UI / CLI で行い、その確定は runtime が握ります。
 
     ## 報告に含める内容
 
@@ -430,7 +430,7 @@ prompts:
 
     ## 成果物
 
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: 実装承認に必要な計画概要 (3〜5 行)
         - `risks`: 承認前に承知しておくべきリスク
         - `ready_when`: 承認後に着手する条件
@@ -482,7 +482,7 @@ prompts:
         - QA Engineer のテスト結果 (合否・スイート名・出力 path)
         - 計画からの逸脱 (あれば)
         - 残リスク
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: 実装と検証の要点
         - `risks`: 残リスク
         - `ready_when`: 「品質検証 (PD-C-7) に進めるか」の条件
@@ -495,7 +495,7 @@ prompts:
 
     ## 役割
 
-    あなたは PD-C-7 の **aggregator** です。runtime が並行起動した reviewer 群が書いた `review.yaml` を読み、dedupe・consensus 把握・blocker 抽出・集約 judgement を出すのが仕事です。reviewer 自身の起動・並行制御・schema 検証は runtime の責務。あなたは reviewer は spawn しません。
+    あなたは PD-C-7 の **aggregator** です。runtime が並行起動した reviewer 群が書いた `review.json` を読み、dedupe・consensus 把握・blocker 抽出・集約 judgement を出すのが仕事です。reviewer 自身の起動・並行制御・schema 検証は runtime の責務。あなたは reviewer は spawn しません。
 
     runtime が立てる reviewer の構成 (参考):
 
@@ -512,7 +512,7 @@ prompts:
 
     ## 入力
 
-    - prompt 末尾の "## Reviewer Outputs" セクションに、各 reviewer の `reviewerId` / `label` / `provider` / `review.yaml` の path と inline 内容が runtime から注入されます
+    - prompt 末尾の "## Reviewer Outputs" セクションに、各 reviewer の `reviewerId` / `label` / `provider` / `review.json` の path と inline 内容が runtime から注入されます
     - `current-ticket.md` / `current-note.md` (PD-C-6 の実装結果を含む)
     - 同 step の prior round が `.pdh-flow/runs/<run-id>/steps/PD-C-7/review-rounds/round-<n>/` にあれば差分把握に使ってよい
 
@@ -545,7 +545,7 @@ prompts:
     ## 成果物
 
     - `current-note.md` の「PD-C-7. 品質検証結果」: dedupe 後の reviewer 別ステータステーブル + 統合 findings (consensus 付き) + 修正コミット参照
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: dedupe 後 findings 数 / consensus パターン / 主な blocker
         - `risks`: 残懸念
         - `judgement.kind`: `quality-review`
@@ -599,7 +599,7 @@ prompts:
     ## 成果物
 
     - `current-note.md` の「PD-C-8. 目的妥当性確認」セクション (全 AC ごとの verified / unverified / deferred 判定 + 証跡 + 抜け漏れ・残課題)
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: 目的妥当性確認の要点
         - `risks`: PdM が指摘した残課題
         - `judgement.kind`: `purpose-validation`
@@ -674,7 +674,7 @@ prompts:
         - 「PD-C-9. AC 裏取り結果」セクション (AC 裏取り表)
         - プロセスチェックリスト更新 (`[x]` / `[N/A]`)
         - Surface Observer 観察結果 または skip 理由
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: verified 件数 / unverified 件数 / deferred 件数 / Surface Observer 結果概要
         - `risks`: 残った unverified / 観察で見つけた懸念
         - `judgement.kind`: `completion-check`
@@ -689,11 +689,11 @@ prompts:
 
     ## 役割
 
-    PD-C-10 は明示的な human gate です。あなたの仕事は「ユーザが ticket を close して良いか判断するための材料」を `ui-output.yaml` に揃えることだけ。`./ticket.sh close` 実行や Epic ファイルの Tickets セクション更新は runtime の仕事です。
+    PD-C-10 は明示的な human gate です。あなたの仕事は「ユーザが ticket を close して良いか判断するための材料」を `ui-output.json` に揃えることだけ。`./ticket.sh close` 実行や Epic ファイルの Tickets セクション更新は runtime の仕事です。
 
     ## 事前確認
 
-    - `current-note.md` の「PD-C-9. AC 裏取り結果」を確認する。`unverified` が 1 件でも残るなら、`ui-output.yaml` の judgement を pass にしない
+    - `current-note.md` の「PD-C-9. AC 裏取り結果」を確認する。`unverified` が 1 件でも残るなら、`ui-output.json` の judgement を pass にしない
     - `deferred` があれば、follow-up ticket が実作成済かつユーザ承認済か確認する。未承認なら `provider-cli.mjs ask` で承認を取りに行く
 
     ## 報告に含める内容 (gate summary)
@@ -708,7 +708,7 @@ prompts:
 
     ## 成果物
 
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: クローズ可否を判断するための要点 (作業サマリ・AC 状況)
         - `risks`: 残課題・懸念
         - `ready_when`: クローズに進める条件 (`unverified` 0 件など)
@@ -760,7 +760,7 @@ prompts:
     ## 成果物
 
     - Epic の `verification.md` 内 Exit Criterion 裏取り表
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: Exit Criteria の verified / unverified / deferred 件数
         - `risks`: 未達の Exit Criterion・裏取り困難な項目
         - `judgement.kind`: `exit-criteria-check`
@@ -775,7 +775,7 @@ prompts:
 
     ## 役割
 
-    あなたは PD-D-2 の **aggregator** (PdM 役) です。runtime が並行起動した reviewer 群が書いた `review.yaml` を読み、Epic 全体に対して「今すぐ修正 / future-list / 問題なし」の採否判定を反証要求型 (「close してはいけない理由を探せ」) で出します。reviewer 自身の起動・並行制御・schema 検証は runtime の責務。あなたは reviewer は spawn しません。
+    あなたは PD-D-2 の **aggregator** (PdM 役) です。runtime が並行起動した reviewer 群が書いた `review.json` を読み、Epic 全体に対して「今すぐ修正 / future-list / 問題なし」の採否判定を反証要求型 (「close してはいけない理由を探せ」) で出します。reviewer 自身の起動・並行制御・schema 検証は runtime の責務。あなたは reviewer は spawn しません。
 
     runtime が立てる reviewer の構成 (参考):
 
@@ -787,14 +787,14 @@ prompts:
 
     ## 入力
 
-    - prompt 末尾の "## Reviewer Outputs" セクションに、各 reviewer の `reviewerId` / `label` / `provider` / `review.yaml` の path と inline 内容が runtime から注入されます
+    - prompt 末尾の "## Reviewer Outputs" セクションに、各 reviewer の `reviewerId` / `label` / `provider` / `review.json` の path と inline 内容が runtime から注入されます
     - `product-brief.md`
     - 該当 Epic ファイル
     - PD-D-1 の Exit Criterion 裏取り表 (Epic の `verification.md`)
 
     ## 実環境スモークテストの確認
 
-    reviewer の review.yaml に実環境スモークテスト結果が含まれているはず。以下のうち該当するものが実施されたか確認する:
+    reviewer の review.json に実環境スモークテスト結果が含まれているはず。以下のうち該当するものが実施されたか確認する:
 
       - API 変更がある場合: curl で実エンドポイントを叩く
       - UI 変更がある場合: browser automation で操作する
@@ -829,7 +829,7 @@ prompts:
     ## 成果物
 
     - Epic ファイルの `Close Summary` セクションにゼロベースレビュー結果の要約 (dedup 後の構造的改善案・blocker 一覧・future-list 推奨) を記載
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: ゼロベースレビューの要点 (構造的な改善余地・重複度・スモークテスト結果)
         - `risks`: 残課題・blocker 推奨追加 Ticket
         - `judgement.kind`: `zero-base-review`
@@ -907,7 +907,7 @@ prompts:
 
     - `epics/done/<slug>/verification.md`
     - Epic ファイルの Close Summary 更新 (UCS 結果・ドキュメント整備状況・retrospective 結果)
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: UCS の通過状況・ドキュメント整備状況・retrospective 結果
         - `risks`: 残課題・修正中の項目
         - `judgement.kind`: `user-case-test`
@@ -922,7 +922,7 @@ prompts:
 
     ## 役割
 
-    PD-D-4 は明示的な human gate です。あなたの仕事は「ユーザが Epic を close して良いか判断するための材料」を `ui-output.yaml` に揃え、Epic ファイルの Close Summary を整えることだけ。frontmatter 更新 / `epics/done/` への移動 / Epic ブランチの main マージは runtime の仕事です。
+    PD-D-4 は明示的な human gate です。あなたの仕事は「ユーザが Epic を close して良いか判断するための材料」を `ui-output.json` に揃え、Epic ファイルの Close Summary を整えることだけ。frontmatter 更新 / `epics/done/` への移動 / Epic ブランチの main マージは runtime の仕事です。
 
     ## Close Summary に含める内容
 
@@ -937,7 +937,7 @@ prompts:
     ## 成果物
 
     - Epic ファイル本文の Close Summary セクション
-    - `ui-output.yaml`:
+    - `ui-output.json`:
         - `summary`: Epic 達成 Outcome・残課題の要点
         - `risks`: 残課題・リスク
         - `ready_when`: クローズに進める条件 (`unverified` Exit Criterion 0 件、PD-D-3 追加 Ticket がすべて閉じている等)

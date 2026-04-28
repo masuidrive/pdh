@@ -64,7 +64,7 @@ function renderGateContext(gate) {
   return lines;
 }
 
-export function commitStep({ repoPath, stepId, message }) {
+export function commitStep({ repoPath, stepId, message, ticket = null }) {
   if (!stepId) {
     throw new Error("stepId is required");
   }
@@ -75,12 +75,48 @@ export function commitStep({ repoPath, stepId, message }) {
     throw new Error((status.stderr || status.stdout || "git status failed").trim());
   }
   if (!status.stdout.trim()) {
+    if (ticket) {
+      tagStepCommit({ repoPath, ticket, stepId });
+    }
     return { status: "skipped", message: "No changes to commit" };
   }
   const commitMessage = `[${stepId}] ${summary}`;
   run("git", ["commit", "-m", commitMessage], repoPath);
   const rev = spawnSync("git", ["rev-parse", "--short", "HEAD"], { cwd: repoPath, text: true, encoding: "utf8" });
+  if (ticket) {
+    tagStepCommit({ repoPath, ticket, stepId });
+  }
   return { status: "committed", message: commitMessage, commit: rev.stdout.trim() };
+}
+
+export function stepRecoveryTag({ ticket, stepId }) {
+  if (!ticket || !stepId) return null;
+  const safeTicket = String(ticket).replace(/[^A-Za-z0-9._-]/g, "-");
+  const safeStep = String(stepId).replace(/[^A-Za-z0-9._-]/g, "-");
+  return `pdh-flow/${safeTicket}/${safeStep}`;
+}
+
+function tagStepCommit({ repoPath, ticket, stepId }) {
+  const tag = stepRecoveryTag({ ticket, stepId });
+  if (!tag) return;
+  const result = spawnSync("git", ["tag", "-f", tag, "HEAD"], { cwd: repoPath, encoding: "utf8" });
+  if (result.status !== 0) {
+    process.stderr.write(`pdh-flow: warning: failed to set tag ${tag}: ${(result.stderr || result.stdout || "").trim()}\n`);
+  }
+}
+
+export function archivePriorRunTag({ repoPath, run }) {
+  if (!run?.ticket_id) return null;
+  const safeTicket = String(run.ticket_id).replace(/[^A-Za-z0-9._-]/g, "-");
+  const stepPart = run.current_step_id ? String(run.current_step_id).replace(/[^A-Za-z0-9._-]/g, "-") : "unknown";
+  const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+  const tag = `pdh-flow-archive/${safeTicket}/${stamp}-${stepPart}`;
+  const result = spawnSync("git", ["tag", "-f", tag, "HEAD"], { cwd: repoPath, encoding: "utf8" });
+  if (result.status !== 0) {
+    process.stderr.write(`pdh-flow: warning: failed to set archive tag ${tag}: ${(result.stderr || result.stdout || "").trim()}\n`);
+    return null;
+  }
+  return tag;
 }
 
 export function ticketStart({ repoPath, ticket }) {
