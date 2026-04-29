@@ -1,6 +1,8 @@
 import type { ActionButton, HistoryEntry, Interruption, NextAction, StepView } from "../lib/types";
 import { EvidencePanel } from "./EvidencePanel";
 import { FailureCard } from "./FailureCard";
+import { GateSummaryCard } from "./GateSummaryCard";
+import { UiOutputCard } from "./UiOutputCard";
 
 type Props = {
   step: StepView | null;
@@ -94,6 +96,8 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
 
         <div className="grid gap-5">
           <FailureCard step={step} interruptions={interruptions} onOpenTerminal={() => onOpenTerminal(step.id)} />
+          {step.gate?.summaryText || step.gate?.recommendationText ? <GateSummaryCard gate={step.gate} /> : null}
+          <UiOutputCard step={step} />
           {actionButtons.length ? (
             <section className="card border border-base-300 bg-base-100 shadow-sm">
               <div className="card-body">
