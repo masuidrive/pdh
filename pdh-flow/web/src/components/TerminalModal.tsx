@@ -93,7 +93,7 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const termRef = useRef<{ write: (data: string) => void; writeln: (data: string) => void; cols: number; rows: number; focus: () => void; dispose: () => void } | null>(null);
+  const termRef = useRef<{ write: (data: string) => void; writeln: (data: string) => void; cols: number; rows: number; focus: () => void; dispose: () => void; onData: (cb: (data: string) => void) => void } | null>(null);
   const fitRef = useRef<{ fit: () => void } | null>(null);
   const [status, setStatus] = useState<string>("connecting");
   const [title, setTitle] = useState<string>("Terminal");
@@ -143,6 +143,9 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
     if (!open) return;
     if (!stepId && !providedSessionId) return;
     let cancelled = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let resolvedSessionId: string | null = null;
+    let attempt = 0;
     setStatus("connecting");
     const labelTarget = stepId ?? ticketId ?? "session";
     setTitle(`Terminal · ${labelTarget}`);
@@ -151,23 +154,93 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
     setDrawerOpen(false);
     setDrawerText(defaultPromptText(stepId ?? "current step"));
 
+    function connect() {
+      if (cancelled || !resolvedSessionId) return;
+      const term = termRef.current;
+      if (!term) return;
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${protocol}//${window.location.host}/api/assist/ws?session=${encodeURIComponent(resolvedSessionId)}`);
+      wsRef.current = ws;
+
+      ws.addEventListener("open", () => {
+        attempt = 0;
+        setStatus("running");
+        if (term.cols && term.rows) {
+          ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+        }
+        term.focus();
+      });
+      ws.addEventListener("message", (event) => {
+        let payload: { type?: string; data?: string; message?: string; status?: string; title?: string } | null = null;
+        try {
+          payload = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+        if (!payload) return;
+        if (payload.type === "snapshot") {
+          if (payload.title) setTitle(`${payload.title} · ${labelTarget}`);
+          if (payload.status) setStatus(payload.status);
+          if (payload.data) {
+            if (detectLogin(payload.data)) setLoginAvailable(true);
+            term.write(payload.data);
+          }
+        } else if (payload.type === "output") {
+          const text = payload.data ?? "";
+          if (detectLogin(text)) setLoginAvailable(true);
+          term.write(text);
+        } else if (payload.type === "exit") {
+          setStatus("exited");
+          term.writeln("");
+          term.writeln("[assist session exited]");
+        } else if (payload.type === "error") {
+          term.writeln("");
+          term.writeln(`[assist error] ${payload.message ?? "unknown"}`);
+        }
+      });
+      ws.addEventListener("close", () => {
+        if (cancelled) return;
+        setStatus((s) => (s === "exited" ? "exited" : "reconnecting"));
+        const delay = Math.min(10000, 500 * 2 ** Math.min(attempt, 5));
+        attempt += 1;
+        if (attempt === 1) {
+          term.writeln("");
+          term.writeln("[connection lost — reconnecting...]");
+        }
+        reconnectTimer = setTimeout(() => {
+          if (!cancelled) connect();
+        }, delay);
+      });
+      ws.addEventListener("error", () => {
+        // close handler will run reconnect
+      });
+
+      term.onData((data: string) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "input", data }));
+        }
+      });
+    }
+
     (async () => {
       try {
         await loadXterm();
         if (cancelled) return;
-        let sessionId: string | undefined = providedSessionId ?? undefined;
         let sessionTitle: string | undefined;
-        if (!sessionId && stepId) {
+        if (providedSessionId) {
+          resolvedSessionId = providedSessionId;
+        } else if (stepId) {
           const session = await actions.openAssist(stepId);
           const data = session as { result?: { sessionId?: string; title?: string; status?: string }; sessionId?: string; title?: string; status?: string };
-          sessionId = data.result?.sessionId ?? data.sessionId;
+          resolvedSessionId = data.result?.sessionId ?? data.sessionId ?? null;
           sessionTitle = data.result?.title ?? data.title;
         }
         if (sessionTitle) setTitle(`${sessionTitle} · ${labelTarget}`);
-        if (!sessionId) {
+        if (!resolvedSessionId) {
           setError("session_id missing");
           return;
         }
+
         const TerminalCtor = window.Terminal!;
         const FitCtor = window.FitAddon!.FitAddon;
         const term = new TerminalCtor({
@@ -189,62 +262,16 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
         termRef.current = term as unknown as typeof termRef.current;
         fitRef.current = fit;
 
-        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const ws = new WebSocket(`${protocol}//${window.location.host}/api/assist/ws?session=${encodeURIComponent(sessionId)}`);
-        wsRef.current = ws;
-
-        ws.addEventListener("open", () => {
-          setStatus("running");
-          if (term.cols && term.rows) {
-            ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
-          }
-          term.focus();
-        });
-        ws.addEventListener("message", (event) => {
-          let payload: { type?: string; data?: string; message?: string; status?: string; title?: string } | null = null;
-          try {
-            payload = JSON.parse(event.data);
-          } catch {
-            return;
-          }
-          if (!payload) return;
-          if (payload.type === "snapshot") {
-            if (payload.title) setTitle(`${payload.title} · ${labelTarget}`);
-            if (payload.status) setStatus(payload.status);
-            if (payload.data) {
-              if (detectLogin(payload.data)) setLoginAvailable(true);
-              term.write(payload.data);
-            }
-          } else if (payload.type === "output") {
-            const text = payload.data ?? "";
-            if (detectLogin(text)) setLoginAvailable(true);
-            term.write(text);
-          } else if (payload.type === "exit") {
-            setStatus("exited");
-            term.writeln("");
-            term.writeln("[assist session exited]");
-          } else if (payload.type === "error") {
-            term.writeln("");
-            term.writeln(`[assist error] ${payload.message ?? "unknown"}`);
-          }
-        });
-        ws.addEventListener("close", () => {
-          setStatus((s) => (s === "running" ? "disconnected" : s));
-        });
-
-        term.onData((data: string) => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "input", data }));
-          }
-        });
-
         const ro = new ResizeObserver(() => {
           fit.fit();
-          if (ws.readyState === WebSocket.OPEN) {
+          const ws = wsRef.current;
+          if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
           }
         });
         if (containerRef.current) ro.observe(containerRef.current);
+
+        connect();
       } catch (err) {
         setError((err as Error).message);
       }
@@ -252,6 +279,7 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
 
     return () => {
       cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       const ws = wsRef.current as unknown as SocketShape | null;
       ws?.close();
       wsRef.current = null;
@@ -285,7 +313,7 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
   }
 
   return (
-    <dialog ref={dialogRef} className="modal" onClose={onClose}>
+    <dialog ref={dialogRef} className="modal items-start" onClose={onClose}>
       <div
         className="modal-box w-11/12 max-w-6xl flex flex-col p-3 sm:p-4"
         style={{
@@ -377,6 +405,7 @@ function statusBadge(status: string) {
     case "running":
       return "badge-info";
     case "connecting":
+    case "reconnecting":
       return "badge-warning";
     case "exited":
       return "badge-neutral";
