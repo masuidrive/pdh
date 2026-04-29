@@ -1,5 +1,65 @@
+import { useEffect, useState } from "react";
 import type { ArtifactEntry, NextAction, StepView, HistoryEntry, JudgementEntry, ReviewFinding } from "../lib/types";
 import { resolveStepEvidence, resolveStepReady, type EvidenceItem, type EvidenceKind } from "../lib/evidence-resolver";
+
+declare global {
+  interface Window {
+    markdownit?: (options?: Record<string, unknown>) => { render: (input: string) => string };
+  }
+}
+
+let mdLoader: Promise<void> | null = null;
+function loadMarkdownIt() {
+  if (window.markdownit) return Promise.resolve();
+  if (mdLoader) return mdLoader;
+  mdLoader = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector('script[data-src="/assets/markdown-it.js"]');
+    if (existing) {
+      resolve();
+      return;
+    }
+    const el = document.createElement("script");
+    el.src = "/assets/markdown-it.js";
+    el.dataset.src = "/assets/markdown-it.js";
+    el.onload = () => resolve();
+    el.onerror = () => reject(new Error("markdown-it failed to load"));
+    document.head.appendChild(el);
+  });
+  return mdLoader;
+}
+
+function MarkdownBody({ text }: { text: string }) {
+  const [html, setHtml] = useState<string | null>(null);
+  useEffect(() => {
+    if (!text) {
+      setHtml("");
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      await loadMarkdownIt();
+      if (cancelled) return;
+      const md = window.markdownit?.({ html: false, linkify: true });
+      setHtml(md ? md.render(text) : text);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [text]);
+  if (html === null) {
+    return (
+      <pre className="mt-2 w-full whitespace-pre-wrap break-words text-sm leading-6 text-base-content/60">
+        {text}
+      </pre>
+    );
+  }
+  return (
+    <div
+      className="evidence-md mt-2 w-full break-words text-sm leading-6 text-base-content/85"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
 
 type Props = {
   step: StepView;
@@ -185,9 +245,7 @@ function DocumentRow({ label, text, onOpen }: { label: string; badge?: string; t
     >
       <h4 className="font-bold">{label}</h4>
       {text ? (
-        <pre className="mt-2 w-full whitespace-pre-wrap break-words text-sm leading-6 text-base-content/80">
-          {text}
-        </pre>
+        <MarkdownBody text={text} />
       ) : (
         <p className="mt-2 text-xs italic text-base-content/40">未記録</p>
       )}

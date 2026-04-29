@@ -66,6 +66,129 @@ pre {
   word-break: break-word;
 }
 
+.evidence-md h1,
+.evidence-md h2,
+.evidence-md h3,
+.evidence-md h4,
+.evidence-md h5,
+.evidence-md h6 {
+  font-weight: 700;
+  margin-top: 0.6em;
+  margin-bottom: 0.3em;
+  line-height: 1.3;
+}
+
+.evidence-md > :first-child {
+  margin-top: 0;
+}
+
+.evidence-md h1 {
+  font-size: 1.4em;
+}
+
+.evidence-md h2 {
+  font-size: 1.2em;
+}
+
+.evidence-md h3 {
+  font-size: 1em;
+}
+
+.evidence-md h4,
+.evidence-md h5,
+.evidence-md h6 {
+  font-size: 0.95em;
+}
+
+.evidence-md p {
+  margin: 0.3em 0;
+}
+
+.evidence-md ul,
+.evidence-md ol {
+  margin: 0.3em 0;
+  padding-left: 1.4em;
+}
+
+.evidence-md ul {
+  list-style: disc;
+}
+
+.evidence-md ol {
+  list-style: decimal;
+}
+
+.evidence-md li {
+  margin: 0.15em 0;
+}
+
+.evidence-md li > ul,
+.evidence-md li > ol {
+  margin: 0.15em 0;
+}
+
+.evidence-md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0 0.25em;
+  border-radius: 0.25em;
+  background: oklch(from var(--color-base-300) l c h / 0.4);
+}
+
+.evidence-md pre {
+  margin: 0.4em 0;
+  padding: 0.5em 0.7em;
+  border-radius: 0.5em;
+  background: oklch(from var(--color-base-100) l c h / 0.7);
+  border: 1px solid var(--color-base-300);
+  font-size: 0.85em;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.evidence-md pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.evidence-md table {
+  margin: 0.4em 0;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.evidence-md th,
+.evidence-md td {
+  border: 1px solid var(--color-base-300);
+  padding: 0.2em 0.5em;
+  text-align: left;
+}
+
+.evidence-md th {
+  background: oklch(from var(--color-base-300) l c h / 0.3);
+  font-weight: 600;
+}
+
+.evidence-md blockquote {
+  margin: 0.4em 0;
+  padding-left: 0.7em;
+  border-left: 2px solid var(--color-base-300);
+  color: var(--color-base-content);
+  opacity: 0.8;
+}
+
+.evidence-md hr {
+  border: 0;
+  border-top: 1px solid var(--color-base-300);
+  margin: 0.6em 0;
+}
+
+.evidence-md a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .fade-in {
   animation: fade-in 120ms ease-out;
 }
