@@ -246,27 +246,48 @@ function resolveFinalVerification(label: string, step: StepView): EvidenceItem {
 function resolveCloseApproval(label: string, step: StepView, nextAction: NextAction | null, ctx: Ctx): EvidenceItem {
   const lower = label.toLowerCase();
   const acTable = (step as { acTableText?: string }).acTableText ?? "";
-  const verificationText = preferred(lookupNote(ctx, "PD-C-9"), acTable);
-  const riskText = preferred(lookupNote(ctx, "PD-C-8"), lookupNote(ctx, "PD-C-7"), verificationText);
+  const verificationText = preferred(lookupNote(ctx, "PD-C-9"), acTable, gateSection(step, "AC"));
+  const riskText = preferred(lookupNote(ctx, "PD-C-8"), lookupNote(ctx, "PD-C-7"), verificationText, gateSection(step, "Risk"));
   if (lower.includes("diff") || lower.includes("差分")) {
     const diff = step.reviewDiff;
-    const body = preferred(joinedText(diff?.changedFiles), joinedText((diff as { diffStat?: string[] } | null | undefined)?.diffStat), "click to open diff");
+    const body = preferred(joinedText((diff as { diffStat?: string[] } | null | undefined)?.diffStat), joinedText(diff?.changedFiles), "click to open diff");
     return item(label, "diff", diff?.baseLabel || "previous gate baseline", body, { diffStepId: diff ? step.id : null });
   }
   if (lower.includes("ac")) {
-    return item(label, "ac", "current-note.md#AC 裏取り結果", acTable);
+    return item(label, "ac", "current-note.md#AC 裏取り結果", preferred(acTable, gateSection(step, "AC")));
   }
   if (lower.includes("risk")) {
     return item(label, "risk", "current-note.md#PD-C-8 / PD-C-9", riskText);
   }
   if (lower.includes("cleanup")) {
     const recent = (ctx.history ?? []).slice(-4).map((h) => `${h.completed_at ?? h.started_at ?? ""} | ${h.step_id ?? ""} | ${h.status ?? ""}`);
-    return item(label, "cleanup", "current-note.md#Step History", preferred(step.noteSection, joinedText(recent)));
+    return item(label, "cleanup", "current-note.md#Step History", preferred(step.noteSection, joinedText(recent), gateSection(step, "cleanup")));
   }
   if (lower.includes("approve") || lower.includes("reject") || lower.includes("cli")) {
     return item(label, "commands", "CLI", joinedText(nextAction?.commands));
   }
-  return item(label, "verification", "current-note.md#PD-C-9", verificationText);
+  return item(label, "verification", "current-note.md#PD-C-9", preferred(verificationText, gateSection(step, "Decision")));
+}
+
+function gateSection(step: StepView, headingHint: string): string {
+  const text = step.gate?.summaryText ?? "";
+  if (!text) return "";
+  const lines = text.split(/\r?\n/);
+  let capture = false;
+  const out: string[] = [];
+  for (const line of lines) {
+    const heading = line.match(/^#{2,4}\s+(.+)$/);
+    if (heading) {
+      const t = heading[1].toLowerCase();
+      capture = t.includes(headingHint.toLowerCase());
+      continue;
+    }
+    if (capture) {
+      if (out.length > 12) break;
+      out.push(line);
+    }
+  }
+  return out.join("\n").trim();
 }
 
 function item(label: string, kind: EvidenceKind, source: string, body: string, extras: Partial<EvidenceItem> = {}): EvidenceItem {

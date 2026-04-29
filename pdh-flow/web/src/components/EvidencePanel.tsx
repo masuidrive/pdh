@@ -1,4 +1,4 @@
-import type { ArtifactEntry, NextAction, StepView, HistoryEntry } from "../lib/types";
+import type { ArtifactEntry, NextAction, StepView, HistoryEntry, JudgementEntry, ReviewFinding } from "../lib/types";
 import { resolveStepEvidence, resolveStepReady, type EvidenceItem, type EvidenceKind } from "../lib/evidence-resolver";
 
 type Props = {
@@ -6,9 +6,10 @@ type Props = {
   next?: NextAction | null;
   allSteps: StepView[];
   history?: HistoryEntry[];
+  documents?: Record<string, { path: string; text: string }>;
   onOpenArtifact: (name: string) => void;
   onOpenDiff?: (stepId: string) => void;
-  onOpenFile?: (stepId: string, path: string) => void;
+  onOpenDocument?: (docId: string, heading?: string | null) => void;
 };
 
 const KIND_LABELS: Record<EvidenceKind, string> = {
@@ -51,16 +52,31 @@ const KIND_TONE: Record<EvidenceKind, string> = {
   ready: "success",
 };
 
-export function EvidencePanel({ step, next, allSteps, history, onOpenArtifact, onOpenDiff }: Props) {
+const NOTE_HEADING_BY_STEP: Record<string, string> = {
+  "PD-C-2": "PD-C-2",
+  "PD-C-3": "PD-C-3",
+  "PD-C-4": "PD-C-4",
+  "PD-C-5": "PD-C-5",
+  "PD-C-6": "PD-C-6",
+  "PD-C-7": "PD-C-7",
+  "PD-C-8": "PD-C-8",
+  "PD-C-9": "PD-C-9",
+  "PD-C-10": "PD-C-10",
+};
+
+export function EvidencePanel({ step, next, allSteps, history, documents, onOpenArtifact, onOpenDiff, onOpenDocument }: Props) {
   const resolved = resolveStepEvidence(step, next ?? null, { allSteps, history: history ?? [] });
   const ready = resolveStepReady(step);
   const artifacts = step.artifacts ?? [];
   const findings = step.reviewFindings ?? [];
   const judgements = step.judgements ?? [];
+  const docs = documents ?? {};
 
-  if (!resolved.length && !ready.length && !artifacts.length && !findings.length && !judgements.length) {
+  if (!resolved.length && !ready.length && !artifacts.length && !findings.length && !judgements.length && !Object.keys(docs).length) {
     return null;
   }
+
+  const noteHeading = NOTE_HEADING_BY_STEP[step.id] ?? null;
 
   return (
     <section className="card border border-base-300 bg-base-100 shadow-sm">
@@ -76,21 +92,50 @@ export function EvidencePanel({ step, next, allSteps, history, onOpenArtifact, o
           ))}
 
           {ready.length ? <ReadyRow ready={ready} /> : null}
-
           {findings.length ? <FindingsRow findings={findings} /> : null}
-
           {judgements.length ? <JudgementsRow judgements={judgements} /> : null}
 
-          {artifacts.length ? (
-            <details className="rounded-box border border-base-300 bg-base-200 p-4">
-              <summary className="cursor-pointer text-sm font-bold">Artifacts ({artifacts.length})</summary>
-              <ul className="mt-3 grid gap-2">
-                {artifacts.map((a) => (
-                  <ArtifactRow key={a.name} artifact={a} onOpen={() => onOpenArtifact(a.name)} />
-                ))}
-              </ul>
-            </details>
+          {docs.note ? (
+            <DocumentRow
+              docId="note"
+              label="current-note.md"
+              badge={noteHeading ? `current-note.md#${noteHeading}` : "current-note.md"}
+              text={excerptByHeading(docs.note.text, noteHeading)}
+              onOpen={onOpenDocument ? () => onOpenDocument("note", noteHeading) : undefined}
+            />
           ) : null}
+
+          {docs.ticket ? (
+            <DocumentRow
+              docId="ticket"
+              label="current-ticket.md"
+              badge="current-ticket.md"
+              text={excerptByHeading(docs.ticket.text, "Acceptance Criteria") || excerptByHeading(docs.ticket.text, "AC") || preview(docs.ticket.text)}
+              onOpen={onOpenDocument ? () => onOpenDocument("ticket") : undefined}
+            />
+          ) : null}
+
+          {docs.productBrief ? (
+            <DocumentRow
+              docId="productBrief"
+              label="product-brief.md"
+              badge="product-brief.md"
+              text={preview(docs.productBrief.text)}
+              onOpen={onOpenDocument ? () => onOpenDocument("productBrief") : undefined}
+            />
+          ) : null}
+
+          {docs.epic ? (
+            <DocumentRow
+              docId="epic"
+              label="current-epic.md"
+              badge="current-epic.md"
+              text={preview(docs.epic.text)}
+              onOpen={onOpenDocument ? () => onOpenDocument("epic") : undefined}
+            />
+          ) : null}
+
+          {artifacts.length ? <ArtifactsBlock artifacts={artifacts} onOpen={onOpenArtifact} /> : null}
         </div>
       </div>
     </section>
@@ -113,15 +158,41 @@ function ContractRow({ item, onOpenDiff }: { item: EvidenceItem; onOpenDiff?: ()
             <h4 className="truncate font-bold">{item.label}</h4>
             <span className={`badge badge-${tone} badge-sm`}>{KIND_LABELS[item.kind]}</span>
           </div>
-          {item.source ? <p className="mt-1 text-xs text-base-content/50">{item.source}</p> : null}
           {item.body ? (
-            <pre className="mt-2 max-h-44 overflow-hidden whitespace-pre-wrap text-xs leading-6 text-base-content/80">
+            <pre className="mt-2 max-h-44 overflow-hidden whitespace-pre-wrap text-sm leading-6 text-base-content/80">
               {item.body}
             </pre>
           ) : (
-            <p className="mt-2 text-xs italic text-base-content/40">(まだデータなし)</p>
+            <p className="mt-2 text-xs italic text-base-content/40">未記録</p>
           )}
         </div>
+        {item.source ? <span className="badge badge-ghost shrink-0">{item.source}</span> : null}
+      </div>
+    </Tag>
+  );
+}
+
+function DocumentRow({ docId, label, badge, text, onOpen }: { docId: string; label: string; badge: string; text: string; onOpen?: () => void }) {
+  void docId;
+  const Tag = onOpen ? "button" : "div";
+  return (
+    <Tag
+      type={onOpen ? "button" : undefined}
+      onClick={onOpen}
+      className={`rounded-box border border-base-300 bg-base-200 p-4 text-left ${onOpen ? "cursor-pointer hover:bg-base-300/40" : ""}`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h4 className="font-bold">{label}</h4>
+          {text ? (
+            <pre className="mt-2 max-h-32 overflow-hidden whitespace-pre-wrap text-sm leading-6 text-base-content/80">
+              {text}
+            </pre>
+          ) : (
+            <p className="mt-2 text-xs italic text-base-content/40">未記録</p>
+          )}
+        </div>
+        <span className="badge badge-ghost shrink-0">{badge}</span>
       </div>
     </Tag>
   );
@@ -146,7 +217,7 @@ function ReadyRow({ ready }: { ready: { label: string; kind: string }[] }) {
   );
 }
 
-function FindingsRow({ findings }: { findings: NonNullable<StepView["reviewFindings"]> }) {
+function FindingsRow({ findings }: { findings: ReviewFinding[] }) {
   const top = findings.slice(0, 5);
   return (
     <div className="rounded-box border border-base-300 bg-base-200 p-4">
@@ -173,7 +244,7 @@ function FindingsRow({ findings }: { findings: NonNullable<StepView["reviewFindi
   );
 }
 
-function JudgementsRow({ judgements }: { judgements: NonNullable<StepView["judgements"]> }) {
+function JudgementsRow({ judgements }: { judgements: JudgementEntry[] }) {
   return (
     <div className="rounded-box border border-base-300 bg-base-200 p-4">
       <div className="flex items-center gap-2">
@@ -193,22 +264,64 @@ function JudgementsRow({ judgements }: { judgements: NonNullable<StepView["judge
   );
 }
 
-function ArtifactRow({ artifact, onOpen }: { artifact: ArtifactEntry; onOpen: () => void }) {
+function ArtifactsBlock({ artifacts, onOpen }: { artifacts: ArtifactEntry[]; onOpen: (name: string) => void }) {
   return (
-    <li>
-      <button
-        type="button"
-        className="btn btn-ghost h-auto w-full justify-between gap-3 border border-base-300 bg-base-100 py-2 text-left font-normal hover:bg-base-200"
-        onClick={onOpen}
-      >
-        <span className="truncate text-sm">{artifact.name}</span>
-        <span className="flex items-center gap-2">
-          {artifact.size ? <span className="badge badge-ghost badge-sm">{String(artifact.size)}</span> : null}
-          <span className="badge badge-outline badge-sm">{artifactKind(artifact.name)}</span>
-        </span>
-      </button>
-    </li>
+    <details className="rounded-box border border-base-300 bg-base-200 p-4">
+      <summary className="cursor-pointer text-sm font-bold">Artifacts ({artifacts.length})</summary>
+      <ul className="mt-3 grid gap-2">
+        {artifacts.map((a) => (
+          <li key={a.name}>
+            <button
+              type="button"
+              className="btn btn-ghost h-auto w-full justify-between gap-3 border border-base-300 bg-base-100 py-2 text-left font-normal hover:bg-base-200"
+              onClick={() => onOpen(a.name)}
+            >
+              <span className="truncate text-sm">{a.name}</span>
+              <span className="flex items-center gap-2">
+                {a.size ? <span className="badge badge-ghost badge-sm">{String(a.size)}</span> : null}
+                <span className="badge badge-outline badge-sm">{artifactKind(a.name)}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
+}
+
+function preview(text: string, lines = 6) {
+  return (text || "")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .slice(0, lines)
+    .join("\n");
+}
+
+function excerptByHeading(text: string, heading: string | null) {
+  if (!text) return "";
+  if (!heading) return preview(text);
+  const lines = text.split(/\r?\n/);
+  const wanted = heading.toLowerCase();
+  let start = -1;
+  let level = 6;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(#{1,6})\s+(.+)$/);
+    if (!m) continue;
+    const t = m[2].toLowerCase().trim();
+    if (t === wanted || t.startsWith(wanted) || wanted.startsWith(t)) {
+      start = i;
+      level = m[1].length;
+      break;
+    }
+  }
+  if (start === -1) return preview(text);
+  const out: string[] = [lines[start]];
+  for (let i = start + 1; i < lines.length && out.length < 14; i++) {
+    const m = lines[i].match(/^(#{1,6})\s+/);
+    if (m && m[1].length <= level) break;
+    out.push(lines[i]);
+  }
+  return out.join("\n").trim();
 }
 
 function artifactKind(name: string) {

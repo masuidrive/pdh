@@ -8,10 +8,12 @@ type Props = {
   allSteps: StepView[];
   history?: HistoryEntry[];
   interruptions?: Interruption[];
+  documents?: Record<string, { path: string; text: string }>;
   onOpenTerminal: (stepId: string) => void;
   onOpenArtifact: (stepId: string, name: string) => void;
   onOpenDiff?: (stepId: string) => void;
   onOpenFile?: (stepId: string, path: string) => void;
+  onOpenDocument?: (docId: string, heading?: string | null) => void;
   onConfirm: (kind: string, ctx: { stepId?: string; stepLabel?: string; recommendationText?: string }) => void;
 };
 
@@ -30,7 +32,7 @@ const TONE_ALERT: Record<string, string> = {
   blocked: "alert-error",
 };
 
-export function Workspace({ step, next, allSteps, history, interruptions, onOpenTerminal, onOpenArtifact, onOpenDiff, onConfirm }: Props) {
+export function Workspace({ step, next, allSteps, history, interruptions, documents, onOpenTerminal, onOpenArtifact, onOpenDiff, onOpenDocument, onConfirm }: Props) {
   if (!step) {
     return <section className="p-8 text-base-content/60">step を選択してください</section>;
   }
@@ -124,8 +126,10 @@ export function Workspace({ step, next, allSteps, history, interruptions, onOpen
             next={next}
             allSteps={allSteps}
             history={history}
+            documents={documents}
             onOpenArtifact={(name) => onOpenArtifact(step.id, name)}
             onOpenDiff={onOpenDiff}
+            onOpenDocument={onOpenDocument}
           />
         </div>
       </div>

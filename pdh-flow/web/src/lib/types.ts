@@ -143,14 +143,19 @@ export type ActionButton = {
 
 export type GateView = {
   step_id?: string;
+  stepId?: string;
   status?: string;
+  prompt?: string;
   recommendation?: { kind?: string } | null;
   diff_summary?: string;
   summary?: string;
   summaryText?: string;
+  baseline?: { commit?: string; step_id?: string; ref?: string; captured_at?: string };
   baseline_step?: string;
-  rerun_requirement?: { reason?: string; from?: string } | null;
+  rerun_requirement?: { reason?: string; from?: string; target_step_id?: string; changed_ticket_sections?: string[]; changed_note_sections?: string[] } | null;
   recommendationText?: string;
+  decision?: string | null;
+  reason?: string | null;
 };
 
 export type AttemptInfo = {

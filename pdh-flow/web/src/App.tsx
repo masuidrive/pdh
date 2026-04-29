@@ -148,10 +148,12 @@ export function App() {
           allSteps={variant.steps}
           history={slot.state.history}
           interruptions={slot.state.current?.interruptions}
+          documents={slot.state.documents}
           onOpenTerminal={(id) => setTerminalStep(id)}
           onOpenArtifact={(stepId, name) => setArtifactTarget({ stepId, name })}
           onOpenDiff={(stepId) => setDiffStep(stepId)}
           onOpenFile={(stepId, p) => setFileTarget({ stepId, path: p })}
+          onOpenDocument={(docId, heading) => updateUrl({ doc: docId, heading: heading ?? null })}
           onConfirm={requestConfirm}
         />
       </main>
