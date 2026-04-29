@@ -89,8 +89,6 @@ export function buildConfirmRequest(kind: string, ctx: Ctx): ConfirmRequest | nu
         ].join("\n"),
         confirmLabel: "フローを破棄",
         confirmTone: "danger",
-        reasonLabel: "理由 (任意)",
-        reasonPlaceholder: "例: agent が ticket.sh close を踏んで flow が宙ぶらりん",
         onConfirm: () => actions.discard().then(() => {}),
       };
     case "stop_direct":
