@@ -87,7 +87,7 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
           </div>
         </div>
 
-        {next ? (
+        {next && !hasPendingRecommendation(step) ? (
           <div className={`alert ${TONE_ALERT[status] ?? "alert-info"}`}>
             <span className="badge badge-lg">!</span>
             <div>
@@ -201,6 +201,11 @@ function toneToBtn(tone: string | undefined, featured?: boolean) {
     default:
       return "btn-outline";
   }
+}
+
+function hasPendingRecommendation(step: StepView): boolean {
+  const rec = (step.gate?.recommendation as { status?: string } | null | undefined) ?? null;
+  return rec?.status === "pending";
 }
 
 function labelForStatus(status: string) {
