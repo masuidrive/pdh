@@ -106,7 +106,7 @@ export function createAssistTerminalManager({ repoPath }) {
     return openManagedSession({
       key: `step:${stepId}`,
       kind: "assist",
-      title: "Claude Assist",
+      title: "Assist",
       stepId,
       command: process.execPath,
       args: [CLI_PATH, "assist-open", "--repo", repoPath, "--step", stepId]
@@ -117,7 +117,7 @@ export function createAssistTerminalManager({ repoPath }) {
     return openManagedSession({
       key: `ticket:${ticketId}`,
       kind: "ticket",
-      title: "Claude Assist",
+      title: "Assist",
       ticketId,
       command: process.execPath,
       args: [CLI_PATH, "ticket-assist-open", "--repo", repoPath, "--ticket", ticketId]

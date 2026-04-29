@@ -1242,7 +1242,7 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
     const actions = interruptAnswerActions(repo, currentStep.id);
     return {
       title: `${currentStep.id} の割り込み回答`,
-      body: "質問内容を確認して回答します。必要なら Claude assist でコードやテストを見てから `answer` を返します。",
+      body: "質問内容を確認して回答します。必要なら assist でコードやテストを見てから `answer` を返します。",
       commands: actions.map((item) => item.command),
       actions,
       selection: "ordered_optional_assist",
@@ -1343,7 +1343,7 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
       actions: [
         nextActionChoice({
           label: "Open Terminal",
-          description: "止まった理由を Claude assist と一緒に確認し、必要な変更や検証をその場で詰めます。",
+          description: "止まった理由を assist と一緒に確認し、必要な変更や検証をその場で詰めます。",
           command: assist,
           tone: "neutral",
           kind: "assist"
@@ -1791,7 +1791,7 @@ function humanDecisionActions(repo, stepId) {
   return [
     nextActionChoice({
       label: "Open Terminal",
-      description: "判断に迷う場合は Claude assist と一緒にコード・テスト・関連ドキュメントを確認できます。必要なら assist の中で修正・検証も実施可能です。",
+      description: "判断に迷う場合は assist と一緒にコード・テスト・関連ドキュメントを確認できます。必要なら assist の中で修正・検証も実施可能です。",
       command: assistOpenCommand(repo, stepId),
       tone: "neutral",
       kind: "assist"
@@ -1826,7 +1826,7 @@ function approveRecommendationLabelForStep(stepId) {
 }
 
 function recommendationBody(recommendation, stepId = null) {
-  return `Claude assist の推奨は「${recommendationLabel(recommendation, stepId)}」です。そのまま適用するか、assist で再作業して推奨を更新します。`;
+  return `assist の推奨は「${recommendationLabel(recommendation, stepId)}」です。そのまま適用するか、assist で再作業して推奨を更新します。`;
 }
 
 function recommendationLabel(recommendation, stepId = null) {
@@ -2013,7 +2013,7 @@ function interruptAnswerActions(repo, stepId) {
     }),
     nextActionChoice({
       label: "Open Terminal",
-      description: "質問に答える前に Claude assist でコードとテストを確認します。",
+      description: "質問に答える前に assist でコードとテストを確認します。",
       command: assistOpenCommand(repo, stepId),
       tone: "neutral",
       kind: "assist"
