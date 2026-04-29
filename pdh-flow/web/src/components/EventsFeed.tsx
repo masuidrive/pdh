@@ -92,10 +92,12 @@ export function EventsFeed({ step, events, limit = 3 }: Props) {
         </div>
         <ul className="space-y-1.5 text-xs">
           {lines.map((l, i) => (
-            <li key={i} className="flex items-baseline gap-2 break-all">
-              <span className="font-mono text-base-content/50">{formatTime(l.ts)}</span>
-              <span className="badge badge-ghost badge-xs shrink-0">{l.prefix}</span>
-              <span className="text-base-content/80">{l.message}</span>
+            <li key={i} className="break-all">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="font-mono text-base-content/50">{formatTime(l.ts)}</span>
+                <span className="badge badge-ghost badge-xs shrink-0">{l.prefix}</span>
+              </div>
+              <p className="mt-0.5 text-base-content/80">{l.message}</p>
             </li>
           ))}
         </ul>
