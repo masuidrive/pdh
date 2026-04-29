@@ -30,7 +30,7 @@ prompts:
 
     `pdh-flow` runtime は 1 つの repo checkout の中で PDH の step を順に進めていき、step ごとに claude / codex などの **provider** プロセスを起動します。その provider プロセスの中で、このプロンプトを読んで動くのが **あなた (agent)** です。今あなたが担う具体的な **役割** (planner / coding engineer / reviewer / repair / PdM / Surface Observer など) は、後段の step 固有セクションで宣言されます。
 
-    step 遷移・gate 確定・flow variant 確定・interruption の受け止め・ticket lifecycle (`ticket.sh start/close` 等) は runtime の仕事です。あなたは、自分の役割とこの step が求める成果物・evidence を、structured output や repo の編集として残すことに集中してください。
+    step 遷移・gate 確定・flow variant 確定・interruption の受け止め・ticket lifecycle (`ticket.sh start/close/reopen` 等) は **runtime の専管事項** です。あなた (agent) はこれらに該当するコマンドを **絶対に自分で実行してはなりません**。`./ticket.sh ...` / `node src/cli.mjs run | run-next | resume | approve | reject | recover` 等の発火は禁止。ticket close を済ませたつもりで `tickets/<id>.md` を `tickets/done/` に動かしたり、`current-ticket.md` / `current-note.md` を削除したりするのも禁止 (runtime が gate 経由でやる)。あなたは、自分の役割とこの step が求める成果物・evidence を、structured output や repo の編集として残すことに集中してください。
 
     # 用語
 
@@ -110,7 +110,12 @@ prompts:
     ## 行動制約
 
     - 自分の step の成果物・evidence・judgement を書くことに集中する
-    - step 遷移を表すコマンド (`./ticket.sh start/close`, `node src/cli.mjs run/run-next/resume/approve/reject` 等) や、gate を確定する署名は出さない (runtime / human gate の領域)
+    - **step 遷移・ticket lifecycle・gate 確定のコマンドを自分で実行しない、推奨もしない、出力テキストにコマンド一覧として並べない。** 具体的に禁止:
+        - `./ticket.sh start | close | reopen | cancel`
+        - `node src/cli.mjs run | run-next | resume | stop | approve | reject | recover | accept-recommendation`
+        - `git branch -m`, `git checkout -b ticket/...`, `tickets/<id>.md` の手動移動、`current-ticket.md` / `current-note.md` の削除や差し替え
+        - `.pdh-flow/runtime.json` / `.pdh-flow/runs/...` の手動編集
+      runtime と human gate がそれぞれの領域で発火する。あなたは観察と構造化 evidence の生成だけを行う
     - LLM 出力は evidence であって authority ではない。最終遷移は runtime の guard が決める
     - 1 つの明確なユーザ回答が必要な時だけ `node src/provider-cli.mjs ask --repo . --message "<question>"` を実行し、追加作業をせずその invocation を終える。回答待ちは runtime が持つので、あなたのプロセスが待機し続けるわけではない
     - ローカル証跡で判断できることは ask せず自分で決める
@@ -210,6 +215,7 @@ prompts:
     - `docs/product-delivery-hierarchy.md` の運用ルール・テンプレートに従う
     - CLAUDE.md / AGENTS.md のチーム運用ルール・コードマップ・repo ルールに従う
     - 仕様変更を発見したら、続行前に `current-ticket.md` と `current-note.md` の What / AC / 計画を最新化する
+    - **ticket 操作の禁止 (再掲)**: `./ticket.sh start/close/reopen/cancel` を絶対に自分で実行しない。`tickets/<id>.md` を `tickets/done/` に手で動かしたり、`current-ticket.md` / `current-note.md` を消したりするのも禁止。close 判断や branch 操作は runtime が PD-C-10 の gate 通過後にやる。あなたは PD-C-10 の `ui-output.json` に「close 可」の根拠を出すだけ
 
     ## Flow variant (Light / Full)
 
