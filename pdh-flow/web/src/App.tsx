@@ -13,6 +13,7 @@ import { DiffModal } from "./components/DiffModal";
 import { MermaidModal } from "./components/MermaidModal";
 import { RepoFileModal } from "./components/RepoFileModal";
 import { TicketDrawer } from "./components/TicketDrawer";
+import { StaleRunBanner } from "./components/StaleRunBanner";
 import { actions } from "./lib/api";
 import { DocumentModal } from "./components/DocumentModal";
 import { useUrlState } from "./lib/use-url-state";
@@ -116,6 +117,15 @@ export function App() {
         repoName={slot.state.repoName}
         generatedAt={slot.state.generatedAt}
       />
+      <div className="px-5 pt-4 lg:px-8">
+        <StaleRunBanner
+          runtime={slot.state.runtime}
+          tickets={slot.state.tickets}
+          onApprove={() => requestConfirm("gate_approve", { stepId: "PD-C-10", stepLabel: "完了承認" })}
+          onStop={() => requestConfirm("stop_direct", {})}
+          onOpenTickets={() => setTicketsOpen(true)}
+        />
+      </div>
       <main
         id="workspace"
         className={`grid min-h-[calc(100vh-4rem)] grid-cols-1 ${collapsed ? "lg:grid-cols-1" : "lg:grid-cols-[24rem_minmax(0,1fr)]"}`}
@@ -132,6 +142,7 @@ export function App() {
             <Timeline
               steps={variant.steps}
               currentStepId={focusedStepId}
+              ticketClosed={isTicketClosed(slot.state)}
               onSelect={(id) => {
                 setSelectedStep(id);
                 updateUrl({ step: id });
@@ -190,6 +201,14 @@ export function App() {
       />
     </>
   );
+}
+
+function isTicketClosed(state: { runtime?: { run?: { ticket_id?: string } | null }; tickets?: { id: string; status?: string }[] } | null): boolean {
+  if (!state) return false;
+  const tid = state.runtime?.run?.ticket_id;
+  if (!tid) return false;
+  const t = state.tickets?.find((x) => x.id === tid);
+  return Boolean(t && (t.status === "done" || t.status === "canceled"));
 }
 
 function resolveDocText(state: { documents?: Record<string, { text?: string }> } | null, docId: string | null) {

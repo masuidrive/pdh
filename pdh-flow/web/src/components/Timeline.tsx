@@ -4,11 +4,13 @@ import type { StepView } from "../lib/types";
 type Props = {
   steps: StepView[];
   currentStepId?: string | null;
+  ticketClosed?: boolean;
   onSelect: (stepId: string) => void;
 };
 
 const STATUS_DOT: Record<string, { btn: string; box: string; tone: string; rail: string }> = {
   done: { btn: "btn-success", box: "bg-success/10", tone: "text-success", rail: "bg-success" },
+  completed: { btn: "btn-success", box: "bg-success/10", tone: "text-success", rail: "bg-success" },
   active: { btn: "btn-primary", box: "border-primary bg-primary/10", tone: "text-primary", rail: "bg-warning" },
   running: { btn: "btn-primary", box: "border-primary bg-primary/10", tone: "text-primary", rail: "bg-warning" },
   needs_human: { btn: "btn-warning", box: "border-warning bg-warning/10", tone: "text-warning", rail: "bg-warning" },
@@ -21,6 +23,7 @@ const STATUS_DOT: Record<string, { btn: string; box: string; tone: string; rail:
 
 const STATUS_ICON: Record<string, string> = {
   done: "✓",
+  completed: "✓",
   active: "▶",
   running: "▶",
   needs_human: "?",
@@ -31,7 +34,7 @@ const STATUS_ICON: Record<string, string> = {
   pending: "",
 };
 
-export function Timeline({ steps, currentStepId, onSelect }: Props) {
+export function Timeline({ steps, currentStepId, ticketClosed, onSelect }: Props) {
   const activeRef = useRef<HTMLLIElement | null>(null);
   useEffect(() => {
     activeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -40,11 +43,13 @@ export function Timeline({ steps, currentStepId, onSelect }: Props) {
   return (
     <ul className="timeline timeline-vertical timeline-compact">
       {steps.map((step, i) => {
-        const status = step.progress.status;
+        const rawStatus = step.progress.status;
+        const status = ticketClosed && (rawStatus === "needs_human" || rawStatus === "waiting") ? "done" : rawStatus;
         const tone = STATUS_DOT[status] ?? STATUS_DOT.pending;
         const icon = STATUS_ICON[status] ?? "";
         const isCurrent = step.id === currentStepId;
-        const prevStatus = steps[i - 1]?.progress.status ?? "";
+        const prevRaw = steps[i - 1]?.progress.status ?? "";
+        const prevStatus = ticketClosed && (prevRaw === "needs_human" || prevRaw === "waiting") ? "done" : prevRaw;
         const prevRail = STATUS_DOT[prevStatus]?.rail ?? "";
         return (
           <li key={step.id} ref={isCurrent ? activeRef : undefined}>
