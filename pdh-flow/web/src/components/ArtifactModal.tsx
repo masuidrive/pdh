@@ -103,7 +103,7 @@ export function ArtifactModal({ open, stepId, name, onClose }: Props) {
         {!loading && !error ? (
           renderedHtml ? (
             <article
-              className="prose prose-sm max-w-none overflow-auto rounded-box border border-base-300 bg-base-100 p-4"
+              className="evidence-md max-w-none overflow-auto rounded-box border border-base-300 bg-base-100 p-4 text-sm leading-6"
               style={{ maxHeight: "70dvh" }}
               dangerouslySetInnerHTML={{ __html: renderedHtml }}
             />

@@ -119,7 +119,7 @@ export function RepoFileModal({ open, stepId, path, onClose }: Props) {
             <div className="alert alert-error m-3">{error}</div>
           ) : isMarkdown && mode === "render" && renderedHtml ? (
             <article
-              className="prose prose-sm max-w-none p-4"
+              className="evidence-md max-w-none p-4 text-sm leading-6"
               dangerouslySetInnerHTML={{ __html: renderedHtml }}
             />
           ) : (

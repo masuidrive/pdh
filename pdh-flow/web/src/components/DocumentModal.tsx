@@ -92,7 +92,7 @@ export function DocumentModal({ open, docId, heading, text, onClose }: Props) {
           {mode === "render" && renderedHtml ? (
             <article
               ref={articleRef}
-              className="prose prose-sm max-w-none p-4"
+              className="evidence-md max-w-none p-4 text-sm leading-6"
               dangerouslySetInnerHTML={{ __html: renderedHtml }}
             />
           ) : (
