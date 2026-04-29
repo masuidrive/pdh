@@ -3,6 +3,7 @@ import { EvidencePanel } from "./EvidencePanel";
 import { FailureCard } from "./FailureCard";
 import { UiOutputCard } from "./UiOutputCard";
 import { GateContextCard } from "./GateContextCard";
+import { RecommendationCard } from "./RecommendationCard";
 import { CompletionCard } from "./CompletionCard";
 import { AssistSignalBanner } from "./AssistSignalBanner";
 
@@ -98,6 +99,12 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
 
         <div className="grid gap-5">
           <FailureCard step={step} interruptions={interruptions} onOpenTerminal={() => onOpenTerminal(step.id)} />
+          <RecommendationCard
+            stepId={step.id}
+            gate={step.gate}
+            onAccept={() => onConfirm("accept_recommendation", { stepId: step.id, stepLabel: step.label, recommendationText })}
+            onOpenTerminal={() => onOpenTerminal(step.id)}
+          />
           <AssistSignalBanner signal={step.assistSignal} />
           {step.gate ? <GateContextCard stepId={step.id} gate={step.gate} /> : null}
           {step.progress.status === "done" || step.progress.status === "completed" ? (
