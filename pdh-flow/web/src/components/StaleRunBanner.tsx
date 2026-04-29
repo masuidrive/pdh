@@ -3,27 +3,23 @@ import type { RuntimeBlock, TicketEntry, AppState } from "../lib/types";
 type Props = {
   state: AppState;
   onDiscard: () => void;
-  onOpenTickets: () => void;
 };
 
-export function StaleRunBanner({ state, onDiscard, onOpenTickets }: Props) {
+export function StaleRunBanner({ state, onDiscard }: Props) {
   const reason = detectStale(state);
   if (!reason) return null;
   return (
     <div className="alert alert-warning shadow-sm">
       <div>
-        <h3 className="font-bold">runtime が外部変更とずれています</h3>
+        <h3 className="font-bold">flow と外部変更がずれています</h3>
         <p className="text-sm">{reason}</p>
         <p className="mt-1 text-xs text-base-content/70">
-          現実的な復旧は「破棄して ticket 選択に戻る」だけです。reopen は CLI でファイル復元と branch 復元が必要なので Web からは未対応 (`docs/web-ui-inventory.md` 参照)。
+          ticket 自体は既に決着している (close / canceled / 削除) ので、破棄するのは pdh-flow runtime 側の flow 実行状態だけです。reopen 相当はファイル復元と branch 復元が必要なので Web からは未対応 (`docs/web-ui-inventory.md` 参照)。
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className="btn btn-error btn-sm" onClick={onDiscard}>
-          破棄して ticket 選択に戻る
-        </button>
-        <button type="button" className="btn btn-outline btn-sm" onClick={onOpenTickets}>
-          Tickets を開く
+          フローを破棄
         </button>
       </div>
     </div>

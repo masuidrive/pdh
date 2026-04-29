@@ -78,20 +78,19 @@ export function buildConfirmRequest(kind: string, ctx: Ctx): ConfirmRequest | nu
       };
     case "runtime_discard":
       return {
-        title: "runtime を破棄して ticket 選択に戻る",
+        title: "進行中のフローを破棄",
         body: [
-          "現在の run を archive タグに退避してから .pdh-flow/runtime.json を削除します。",
-          "この操作で:",
-          " - 進行中の step artifacts (ui-output / review / judgements 等) は archive タグ pdh-flow-archive/<ticket>/<stamp>-<step> に保存され、参照可能です",
-          " - ticket ファイル (tickets/done/<id>.md など) と git 履歴は触りません",
-          " - supervisor は強制的に止まり、UI は ticket 選択画面に戻ります",
+          "ticket は既に決着している (close / canceled / 削除) ので、破棄するのは pdh-flow runtime 上の flow 実行状態だけです。具体的には:",
+          " - 進行中の step artifacts (ui-output / review / judgements 等) を archive タグ pdh-flow-archive/<ticket>/<stamp>-<step> に退避",
+          " - .pdh-flow/runtime.json を削除して flow をリセット",
+          " - ticket ファイル (tickets/done/<id>.md など) と git 履歴は触らない",
           "",
-          "この後やり直したい場合は、ticket リストから別の ticket を選択するか、必要なら CLI で reopen 相当の手順を実行してください。",
+          "リセット後はトップの ticket 選択画面に戻ります。再度同じ ticket をやり直したい場合は CLI で reopen 相当の手順が必要です。",
         ].join("\n"),
-        confirmLabel: "破棄して戻る",
+        confirmLabel: "フローを破棄",
         confirmTone: "danger",
         reasonLabel: "理由 (任意)",
-        reasonPlaceholder: "例: agent が ticket.sh close を踏んで runtime が宙ぶらりん",
+        reasonPlaceholder: "例: agent が ticket.sh close を踏んで flow が宙ぶらりん",
         onConfirm: () => actions.discard().then(() => {}),
       };
     case "stop_direct":

@@ -121,7 +121,6 @@ export function App() {
         <StaleRunBanner
           state={slot.state}
           onDiscard={() => requestConfirm("runtime_discard", {})}
-          onOpenTickets={() => setTicketsOpen(true)}
         />
       </div>
       <main
