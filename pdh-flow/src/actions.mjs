@@ -2,17 +2,19 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRedactor } from "./redaction.mjs";
+import { extractSection } from "./note-state.mjs";
 
 export function createGateSummary({ repoPath, stateDir, runId, stepId, gate = null }) {
   const ticketPath = join(repoPath, "current-ticket.md");
   const notePath = join(repoPath, "current-note.md");
   const redact = createRedactor({ repoPath });
-  const ticket = redact(existsSync(ticketPath) ? readFileSync(ticketPath, "utf8") : "(missing current-ticket.md)");
-  const note = redact(existsSync(notePath) ? readFileSync(notePath, "utf8") : "(missing current-note.md)");
+  const ticketRaw = existsSync(ticketPath) ? readFileSync(ticketPath, "utf8") : "";
+  const noteRaw = existsSync(notePath) ? readFileSync(notePath, "utf8") : "";
   const artifactDir = join(stateDir, "runs", runId, "steps", stepId);
   mkdirSync(artifactDir, { recursive: true });
   const artifactPath = join(artifactDir, "human-gate-summary.md");
-  const body = [
+
+  const lines = [
     `# Human Gate Summary: ${stepId}`,
     "",
     `Generated: ${new Date().toISOString()}`,
@@ -22,17 +24,83 @@ export function createGateSummary({ repoPath, stateDir, runId, stepId, gate = nu
     "",
     ...renderGateContext(gate),
     "",
-    "## current-ticket.md",
+    ...renderPointers(stepId, ticketRaw, noteRaw),
     "",
-    ticket.trim(),
-    "",
-    "## current-note.md",
-    "",
-    note.trim(),
-    ""
-  ].join("\n");
+    ...renderRelevantSections(stepId, ticketRaw, noteRaw, redact),
+  ];
+  const body = lines.filter((line, i, arr) => !(line === "" && arr[i - 1] === "")).join("\n").trimEnd() + "\n";
   writeFileSync(artifactPath, body);
   return { artifactPath, body };
+}
+
+function renderPointers(stepId, ticketRaw, noteRaw) {
+  const pointers = ["## What to read (pointers)", ""];
+  const noteHeadings = noteHeadingsFor(stepId);
+  if (ticketRaw) {
+    const ticketSection = ticketHeadingFor(stepId);
+    pointers.push(`- \`current-ticket.md\`${ticketSection ? ` → ${ticketSection}` : ""}`);
+  } else {
+    pointers.push("- `current-ticket.md` (missing)");
+  }
+  if (noteRaw && noteHeadings.length) {
+    for (const h of noteHeadings) {
+      pointers.push(`- \`current-note.md\` → ${h}`);
+    }
+  } else if (!noteRaw) {
+    pointers.push("- `current-note.md` (missing)");
+  }
+  return pointers;
+}
+
+function renderRelevantSections(stepId, ticketRaw, noteRaw, redact) {
+  const out = [];
+  const ticketSection = ticketHeadingFor(stepId);
+  const ticketExcerpt = ticketSection ? extractSectionExcerpt(ticketRaw, ticketSection, redact) : "";
+  if (ticketExcerpt) {
+    out.push(`## current-ticket.md > ${ticketSection}`, "", ticketExcerpt, "");
+  }
+  for (const heading of noteHeadingsFor(stepId)) {
+    const excerpt = extractSectionExcerpt(noteRaw, heading, redact);
+    if (excerpt) {
+      out.push(`## current-note.md > ${heading}`, "", excerpt, "");
+    }
+  }
+  if (out.length === 0) {
+    out.push("## Source", "", "(該当 step の note セクションがまだ書かれていません。runtime / agent が durable な evidence を残す前にこの gate に到達しています。)", "");
+  }
+  return out;
+}
+
+function extractSectionExcerpt(raw, heading, redact, maxLines = 40) {
+  if (!raw) return "";
+  const section = extractSection(raw, heading);
+  if (!section) return "";
+  const trimmed = redact(section).split(/\r?\n/);
+  if (trimmed.length <= maxLines) return trimmed.join("\n").trim();
+  return [...trimmed.slice(0, maxLines), "", `… (truncated, ${trimmed.length - maxLines} more lines — see current-note.md)`]
+    .join("\n").trim();
+}
+
+const NOTE_HEADINGS_BY_STEP = {
+  "PD-C-5": ["## PD-C-3. 計画", "## PD-C-4. 計画レビュー結果"],
+  "PD-C-10": [
+    "## PD-C-9. AC 裏取り結果",
+    "## PD-C-8. 目的妥当性確認",
+    "## PD-C-7. 品質検証結果"
+  ]
+};
+
+function noteHeadingsFor(stepId) {
+  return NOTE_HEADINGS_BY_STEP[stepId] ?? [];
+}
+
+const TICKET_HEADINGS_BY_STEP = {
+  "PD-C-5": "## Implementation Notes",
+  "PD-C-10": "## Product AC"
+};
+
+function ticketHeadingFor(stepId) {
+  return TICKET_HEADINGS_BY_STEP[stepId] ?? null;
 }
 
 function renderGateContext(gate) {
