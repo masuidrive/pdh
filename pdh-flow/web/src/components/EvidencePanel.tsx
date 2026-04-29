@@ -125,7 +125,6 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
           {productBriefHasContent ? (
             <CollapsedDocumentRow
               label="product-brief.md"
-              badge="product-brief.md"
               onOpen={onOpenDocument ? () => onOpenDocument("productBrief") : undefined}
             />
           ) : null}
@@ -133,7 +132,6 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
           {epicHasContent ? (
             <CollapsedDocumentRow
               label="current-epic.md"
-              badge="current-epic.md"
               onOpen={onOpenDocument ? () => onOpenDocument("epic") : undefined}
             />
           ) : null}
@@ -200,7 +198,7 @@ function DocumentRow({ label, badge, text, onOpen }: { label: string; badge: str
   );
 }
 
-function CollapsedDocumentRow({ label, badge, onOpen }: { label: string; badge: string; onOpen?: () => void }) {
+function CollapsedDocumentRow({ label, onOpen }: { label: string; onOpen?: () => void }) {
   const Tag = onOpen ? "button" : "div";
   return (
     <Tag
@@ -209,10 +207,7 @@ function CollapsedDocumentRow({ label, badge, onOpen }: { label: string; badge: 
       className={`flex w-full flex-wrap items-center justify-between gap-3 rounded-box border border-base-300 bg-base-200 p-3 text-left ${onOpen ? "cursor-pointer hover:bg-base-300/40" : ""}`}
     >
       <h4 className="font-bold">{label}</h4>
-      <span className="flex items-center gap-2">
-        <span className="text-xs text-base-content/50">クリックで全文</span>
-        <span className="badge badge-ghost">{badge}</span>
-      </span>
+      <span className="text-xs text-base-content/50">クリックで全文</span>
     </Tag>
   );
 }
