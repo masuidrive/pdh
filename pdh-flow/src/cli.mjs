@@ -17,7 +17,7 @@ import { formatDoctor, runDoctor } from "./doctor.mjs";
 import { withRunLock } from "./locks.mjs";
 import { answerLatestInterruption, createInterruption, latestOpenInterruption, loadStepInterruptions, renderInterruptionMarkdown } from "./interruptions.mjs";
 import { writeFailureSummary } from "./failure-summary.mjs";
-import { appendStepHistoryEntry, loadCurrentNote, saveCurrentNote } from "./note-state.mjs";
+import { appendStepHistoryEntry, loadCurrentNote, replaceNoteSection, saveCurrentNote } from "./note-state.mjs";
 import {
   allowedAssistSignals,
   appendAssistSignal,
@@ -2449,6 +2449,39 @@ async function executeParallelReviewStep({ repo, runtime, step, reviewPlan, opti
         rawLogPath = repair.result.rawLogPath ?? rawLogPath;
         break;
       }
+      if (repair.output.commitRequired) {
+        const requestedTarget = repair.output.rerunTargetStep && getStep(runtime.flow, repair.output.rerunTargetStep) ? repair.output.rerunTargetStep : "PD-C-6";
+        const targetStepId = requestedTarget;
+        const reviewBlockers = aggregate.blockingFindings ?? aggregate.topFindings ?? [];
+        recordReviewBlockerEscalation({
+          repo,
+          runId,
+          stepId,
+          attempt,
+          round,
+          targetStepId,
+          aggregate,
+          repair: repair.output,
+          blockers: reviewBlockers
+        });
+        rerunFromStep({
+          repo,
+          runtime,
+          step,
+          targetStepId,
+          reason: repair.output.summary || `${stepId} repair signaled commit_required`
+        });
+        status = "rerun_requested";
+        lastResult = {
+          exitCode: 0,
+          finalMessage: `${stepId} rerun-from ${targetStepId} (commit required)`,
+          stderr: "",
+          timedOut: false,
+          timeoutKind: null,
+          signal: null
+        };
+        break;
+      }
       appendProgressEvent({
         repoPath: repo,
         runId,
@@ -3388,6 +3421,72 @@ function advanceRun({ repo, runtime, step, outcome }) {
   syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [runNextCommand(repo)] });
   syncStepUiRuntime({ repo, stepId: target, nextCommands: [runNextCommand(repo)] });
   return { status: "advanced", from: step.id, to: target, outcome };
+}
+
+function recordReviewBlockerEscalation({ repo, runId, stepId, attempt, round, targetStepId, aggregate, repair, blockers }) {
+  const now = new Date().toISOString();
+  const findings = Array.isArray(blockers) ? blockers : [];
+  const lines = [
+    `Updated: ${now}`,
+    `Round ${round} の repair が commit を要する blocker と判定したため、${targetStepId} へ差し戻します。`,
+    "",
+    "## Review aggregate",
+    "",
+    `- Status: ${aggregate?.status ?? "(unknown)"}`,
+    `- Summary: ${aggregate?.summary ?? "(none)"}`
+  ];
+  if (findings.length > 0) {
+    lines.push("", "## 残っている blocker", "");
+    for (const finding of findings) {
+      const severity = finding.severity ?? "review";
+      const reviewer = finding.reviewerLabel ?? finding.reviewerId ?? "reviewer";
+      lines.push(`- [${severity}] ${reviewer}: ${finding.title ?? "(untitled)"}`);
+      if (finding.evidence) lines.push(`  - Evidence: ${finding.evidence}`);
+      if (finding.recommendation) lines.push(`  - Recommendation: ${finding.recommendation}`);
+    }
+  }
+  lines.push("", "## Repair report", "");
+  lines.push(`- Summary: ${repair?.summary ?? "(none)"}`);
+  if (Array.isArray(repair?.verification) && repair.verification.length > 0) {
+    lines.push(`- Verification: ${repair.verification.join(" / ")}`);
+  }
+  if (Array.isArray(repair?.remainingRisks) && repair.remainingRisks.length > 0) {
+    lines.push("- Remaining risks:");
+    for (const risk of repair.remainingRisks) {
+      lines.push(`  - ${risk}`);
+    }
+  }
+  lines.push(
+    "",
+    "## ${targetStepId} 担当への申し送り".replace("${targetStepId}", targetStepId),
+    "",
+    "- 上記 blocker を解消する commit を作る (revert / 追加 commit / amend のどれかが必要)。",
+    "- commit 後に runtime が再度 review を回します。",
+    `- もとの ${stepId} round ${round} の repair artifact: \`.pdh-flow/runs/${runId}/steps/${stepId}/review-rounds/round-${round}/repair.json\``
+  );
+  const sectionHeading = `${stepId}. 修正依頼 (commit 必須)`;
+  try {
+    const note = loadCurrentNote(repo);
+    const next = replaceNoteSection(note.body ?? "", sectionHeading, lines.join("\n"));
+    saveCurrentNote(repo, { body: next });
+  } catch (error) {
+    process.stderr.write(`pdh-flow: warning: failed to record review blocker escalation note: ${error?.message || String(error)}\n`);
+  }
+  appendProgressEvent({
+    repoPath: repo,
+    runId,
+    stepId,
+    attempt,
+    type: "review_rerun_requested",
+    provider: "runtime",
+    message: `${stepId} round ${round} commit_required → rerun-from ${targetStepId}`,
+    payload: {
+      round,
+      targetStepId,
+      blockerCount: findings.length,
+      summary: repair?.summary ?? null
+    }
+  });
 }
 
 function rerunFromStep({ repo, runtime, step, targetStepId, reason = null }) {

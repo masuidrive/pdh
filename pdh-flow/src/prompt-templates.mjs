@@ -402,6 +402,8 @@ export function renderReviewRepairPrompt({ repoPath, run, flow, step, reviewPlan
     "- `verification`: commands or checks you actually ran in this repair round.",
     "- `remaining_risks`: unresolved blockers or follow-up risks only. Use `[]` when there are none.",
     "- `notes`: optional free text. Multi-line content uses `\\n` inside the JSON string.",
+    "- `commit_required`: set to `true` when a blocker can only be resolved by creating, reverting, or amending a commit (HEAD must change). Repair cannot commit, so the runtime will rerun an earlier step on your behalf. Default `false`.",
+    "- `rerun_target_step`: when `commit_required` is `true`, name the earliest implementation step that should redo the commit (typically `PD-C-6`). Omit otherwise.",
     "",
     "Use this JSON shape:",
     "",
@@ -413,7 +415,9 @@ export function renderReviewRepairPrompt({ repoPath, run, flow, step, reviewPlan
       remaining_risks: [
         "Unresolved blocker or follow-up risk"
       ],
-      notes: "Optional free text"
+      notes: "Optional free text",
+      commit_required: false,
+      rerun_target_step: null
     }, null, 2),
     ""
   );

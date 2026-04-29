@@ -565,6 +565,8 @@ function normalizeReviewRepairOutput(value, meta = {}) {
     verification: asReviewStringList(source.verification),
     remainingRisks: asReviewStringList(source.remaining_risks ?? source.remainingRisks),
     notes: normalizeReviewText(source.notes),
+    commitRequired: source.commit_required === true || source.commitRequired === true,
+    rerunTargetStep: asString(source.rerun_target_step ?? source.rerunTargetStep),
     artifactPath: asString(meta.artifactPath),
     parseErrors: asStringList(meta.parseErrors),
     parseWarnings: asStringList(meta.parseWarnings),
