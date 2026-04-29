@@ -123,19 +123,17 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
           ) : null}
 
           {productBriefHasContent ? (
-            <DocumentRow
+            <CollapsedDocumentRow
               label="product-brief.md"
               badge="product-brief.md"
-              text={preview(docs.productBrief!.text)}
               onOpen={onOpenDocument ? () => onOpenDocument("productBrief") : undefined}
             />
           ) : null}
 
           {epicHasContent ? (
-            <DocumentRow
+            <CollapsedDocumentRow
               label="current-epic.md"
               badge="current-epic.md"
-              text={preview(docs.epic!.text)}
               onOpen={onOpenDocument ? () => onOpenDocument("epic") : undefined}
             />
           ) : null}
@@ -187,21 +185,36 @@ function DocumentRow({ label, badge, text, onOpen }: { label: string; badge: str
     <Tag
       type={onOpen ? "button" : undefined}
       onClick={onOpen}
-      className={`rounded-box border border-base-300 bg-base-200 p-4 text-left ${onOpen ? "cursor-pointer hover:bg-base-300/40" : ""}`}
+      className={`block w-full rounded-box border border-base-300 bg-base-200 p-4 text-left ${onOpen ? "cursor-pointer hover:bg-base-300/40" : ""}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h4 className="font-bold">{label}</h4>
-          {text ? (
-            <pre className="mt-2 max-h-40 overflow-hidden whitespace-pre-wrap text-sm leading-6 text-base-content/80">
-              {text}
-            </pre>
-          ) : (
-            <p className="mt-2 text-xs italic text-base-content/40">未記録</p>
-          )}
-        </div>
+        <h4 className="font-bold">{label}</h4>
         <span className="badge badge-ghost shrink-0">{badge}</span>
       </div>
+      {text ? (
+        <pre className="mt-2 w-full whitespace-pre-wrap break-words text-sm leading-6 text-base-content/80">
+          {text}
+        </pre>
+      ) : (
+        <p className="mt-2 text-xs italic text-base-content/40">未記録</p>
+      )}
+    </Tag>
+  );
+}
+
+function CollapsedDocumentRow({ label, badge, onOpen }: { label: string; badge: string; onOpen?: () => void }) {
+  const Tag = onOpen ? "button" : "div";
+  return (
+    <Tag
+      type={onOpen ? "button" : undefined}
+      onClick={onOpen}
+      className={`flex w-full flex-wrap items-center justify-between gap-3 rounded-box border border-base-300 bg-base-200 p-3 text-left ${onOpen ? "cursor-pointer hover:bg-base-300/40" : ""}`}
+    >
+      <h4 className="font-bold">{label}</h4>
+      <span className="flex items-center gap-2">
+        <span className="text-xs text-base-content/50">クリックで全文</span>
+        <span className="badge badge-ghost">{badge}</span>
+      </span>
     </Tag>
   );
 }

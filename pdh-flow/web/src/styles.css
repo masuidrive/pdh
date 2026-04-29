@@ -49,17 +49,13 @@
 }
 
 html,
-body,
-#root {
-  height: 100%;
-}
-
-html,
 body {
+  min-height: 100%;
   overflow-x: hidden;
 }
 
 #root {
+  min-height: 100vh;
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
