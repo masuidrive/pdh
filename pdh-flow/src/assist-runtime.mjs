@@ -101,7 +101,6 @@ export function prepareAssistSession({ repoPath, runtime, step, bare = false, mo
   const readFirst = [
     "./current-ticket.md",
     "./current-note.md",
-    gate?.summary ? repoRelativePath(repoPath, gate.summary) : null,
     interruption?.artifactPath ? repoRelativePath(repoPath, interruption.artifactPath) : null,
     uiRuntime?.artifactPath ? repoRelativePath(repoPath, uiRuntime.artifactPath) : null
   ].filter(Boolean);
@@ -151,7 +150,6 @@ export function prepareAssistSession({ repoPath, runtime, step, bare = false, mo
     },
     allowed_signals: allowedSignals,
     signal_examples: signalExamples,
-    gate_summary: gate?.summary ? repoRelativePath(repoPath, gate.summary) : null,
     open_interruption: interruption?.artifactPath ? repoRelativePath(repoPath, interruption.artifactPath) : null,
     blocked_guards: blockedGuards,
     launch: {
@@ -531,8 +529,15 @@ function buildAssistPrompt({ runtime, step, gate, interruption, blockedGuards, r
     ...readFirst.map((item) => `- ${item}`)
   ];
 
-  if (gate?.summary) {
-    lines.push("", "## Human Gate Context", "", `- Summary: ${repoRelativePath(runtime.repoPath, gate.summary)}`);
+  if (gate?.status === "needs_human") {
+    const gateLines = ["", "## Human Gate Context", ""];
+    if (gate.baseline?.commit) {
+      gateLines.push(`- Baseline: ${gate.baseline.commit.slice(0, 7)}${gate.baseline.step_id ? ` from ${gate.baseline.step_id}` : ""}`);
+    }
+    if (gate.rerun_requirement?.target_step_id) {
+      gateLines.push(`- Rerun target: ${gate.rerun_requirement.target_step_id}${gate.rerun_requirement.reason ? ` (${gate.rerun_requirement.reason})` : ""}`);
+    }
+    lines.push(...gateLines);
   }
   if (interruption?.artifactPath) {
     lines.push("", "## Interruption Context", "", `- Open interruption: ${repoRelativePath(runtime.repoPath, interruption.artifactPath)}`);

@@ -223,9 +223,6 @@ steps:
     provider: runtime
     mode: human
     guards:
-      - id: gate-summary
-        type: artifact_exists
-        kind: human_gate_summary
       - id: explicit-approval
         type: human_approved
     human_gate:
@@ -499,9 +496,6 @@ steps:
       - id: ac-verification-table
         type: ac_verification_table
         allowUnverified: false
-      - id: gate-summary
-        type: artifact_exists
-        kind: human_gate_summary
       - id: explicit-approval
         type: human_approved
     human_gate:

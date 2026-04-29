@@ -899,7 +899,6 @@ const mutation = await fetch(`${url}api/state`, { method: "POST" });
 if (mutation.status !== 405) throw new Error(`mutation endpoint should be rejected, got ${mutation.status}`);
 NODE
   curl -s "${url}api/render-mermaid?code=graph%20TD%0AA--%3EB" | rg -q "<svg"
-  curl -s "${url}api/artifact?step=PD-C-5&name=human-gate-summary.md" | rg -q "Human Gate Summary"
   curl -s "${url}api/diff?step=PD-C-5" | rg -q "\"baseLabel\":\""
   kill "$server_pid" 2>/dev/null || true
   wait "$server_pid" 2>/dev/null || true

@@ -405,7 +405,7 @@ export function latestHumanGate({ stateDir, runId, stepId }) {
   return readJson(humanGatePath(stateDir, runId, stepId));
 }
 
-export function openHumanGate({ stateDir, runId, stepId, prompt, summary, baseline = null, rerunRequirement = null }) {
+export function openHumanGate({ stateDir, runId, stepId, prompt, baseline = null, rerunRequirement = null }) {
   return updateHumanGate({
     stateDir,
     runId,
@@ -416,7 +416,6 @@ export function openHumanGate({ stateDir, runId, stepId, prompt, summary, baseli
         stepId,
         status: "needs_human",
         prompt,
-        summary,
         decision: existingGate?.decision ?? null,
         reason: existingGate?.reason ?? null,
         recommendation: existingGate?.recommendation ?? null,

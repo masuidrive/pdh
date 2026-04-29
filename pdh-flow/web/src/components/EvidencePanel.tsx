@@ -301,7 +301,7 @@ function DiagnosticsBlock({ step, onOpenArtifact }: { step: StepView; onOpenArti
   const parseErrors = uiRuntime?.parseErrors ?? [];
   const parseWarnings = uiRuntime?.parseWarnings ?? [];
 
-  const hasState = Boolean(gate?.summary) || (recommendation?.status === "pending") || interruptions.length > 0;
+  const hasState = Boolean(gate?.status === "needs_human") || (recommendation?.status === "pending") || interruptions.length > 0;
   const hasLogs = events.length > 0;
   const hasArtifacts = artifacts.length > 0;
   const hasOmit = omit.length > 0;
@@ -385,8 +385,8 @@ function CurrentStateSection({
 }) {
   return (
     <Section title="Current State">
-      {gate?.summary ? (
-        <Pill name="human gate summary" sub={gate.decision ?? gate.status ?? ""} />
+      {gate?.status === "needs_human" ? (
+        <Pill name="human gate" sub={gate.decision ?? gate.status ?? ""} />
       ) : null}
       {recommendation?.status === "pending" ? (
         <Pill name="agent recommendation" sub="pending" />

@@ -1133,7 +1133,7 @@ function stepProgress({ runtime, sequence, index, step, historyEntry, gate, atte
       if (gate?.recommendation?.status === "pending") {
         return progress("waiting", "ユーザ回答待ち", "agent recommendation を適用するか、Open Terminal で再作業するかを選びます。");
       }
-      return progress("waiting", "ユーザ回答待ち", gate?.summary ? "gate summary を確認して Web で判断します。" : "gate summary を生成中です。");
+      return progress("waiting", "ユーザ回答待ち", "判断材料を確認して Web で判断します。");
     }
     if (run.status === "interrupted") {
       return progress("waiting", "割り込み待ち", interruptions.length > 0 ? "質問に回答すると継続します。" : "割り込み回答待ちです。");
@@ -1428,10 +1428,7 @@ function failedAuthMismatchText(step) {
 }
 
 function gatePayload(gate, redactor) {
-  return {
-    ...redactObject(gate, redactor),
-    summaryText: gate.summary && existsSync(gate.summary) ? safeReadText(gate.summary, redactor) : ""
-  };
+  return redactObject(gate, redactor);
 }
 
 function listStepArtifacts({ stateDir, runId, stepId, redactor }) {

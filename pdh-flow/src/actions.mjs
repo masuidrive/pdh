@@ -1,85 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { createRedactor } from "./redaction.mjs";
-import { extractSection } from "./note-state.mjs";
-
-export function createGateSummary({ repoPath, stateDir, runId, stepId, gate = null }) {
-  const ticketPath = join(repoPath, "current-ticket.md");
-  const notePath = join(repoPath, "current-note.md");
-  const redact = createRedactor({ repoPath });
-  const ticketRaw = existsSync(ticketPath) ? readFileSync(ticketPath, "utf8") : "";
-  const noteRaw = existsSync(notePath) ? readFileSync(notePath, "utf8") : "";
-  const artifactDir = join(stateDir, "runs", runId, "steps", stepId);
-  mkdirSync(artifactDir, { recursive: true });
-  const artifactPath = join(artifactDir, "human-gate-summary.md");
-
-  const lines = [
-    `# Human Gate Summary: ${stepId}`,
-    "",
-    `Generated: ${new Date().toISOString()}`,
-    "",
-    "## Decision Required",
-    gateDecisionText(stepId),
-    "",
-    ...renderGateContext(gate),
-    "",
-    ...renderPointers(stepId, ticketRaw, noteRaw),
-    "",
-    ...renderRelevantSections(stepId, ticketRaw, noteRaw, redact),
-  ];
-  const body = lines.filter((line, i, arr) => !(line === "" && arr[i - 1] === "")).join("\n").trimEnd() + "\n";
-  writeFileSync(artifactPath, body);
-  return { artifactPath, body };
-}
-
-function renderPointers(stepId, ticketRaw, noteRaw) {
-  const pointers = ["## What to read (pointers)", ""];
-  const noteHeadings = noteHeadingsFor(stepId);
-  if (ticketRaw) {
-    const ticketSection = ticketHeadingFor(stepId);
-    pointers.push(`- \`current-ticket.md\`${ticketSection ? ` → ${ticketSection}` : ""}`);
-  } else {
-    pointers.push("- `current-ticket.md` (missing)");
-  }
-  if (noteRaw && noteHeadings.length) {
-    for (const h of noteHeadings) {
-      pointers.push(`- \`current-note.md\` → ${h}`);
-    }
-  } else if (!noteRaw) {
-    pointers.push("- `current-note.md` (missing)");
-  }
-  return pointers;
-}
-
-function renderRelevantSections(stepId, ticketRaw, noteRaw, redact) {
-  const out = [];
-  const ticketSection = ticketHeadingFor(stepId);
-  const ticketExcerpt = ticketSection ? extractSectionExcerpt(ticketRaw, ticketSection, redact) : "";
-  if (ticketExcerpt) {
-    out.push(`## current-ticket.md > ${ticketSection}`, "", ticketExcerpt, "");
-  }
-  for (const heading of noteHeadingsFor(stepId)) {
-    const excerpt = extractSectionExcerpt(noteRaw, heading, redact);
-    if (excerpt) {
-      out.push(`## current-note.md > ${heading}`, "", excerpt, "");
-    }
-  }
-  if (out.length === 0) {
-    out.push("## Source", "", "(該当 step の note セクションがまだ書かれていません。runtime / agent が durable な evidence を残す前にこの gate に到達しています。)", "");
-  }
-  return out;
-}
-
-function extractSectionExcerpt(raw, heading, redact, maxLines = 40) {
-  if (!raw) return "";
-  const section = extractSection(raw, heading);
-  if (!section) return "";
-  const trimmed = redact(section).split(/\r?\n/);
-  if (trimmed.length <= maxLines) return trimmed.join("\n").trim();
-  return [...trimmed.slice(0, maxLines), "", `… (truncated, ${trimmed.length - maxLines} more lines — see current-note.md)`]
-    .join("\n").trim();
-}
 
 const NOTE_HEADINGS_BY_STEP = {
   "PD-C-5": ["## PD-C-3. 計画", "## PD-C-4. 計画レビュー結果"],
@@ -90,46 +10,27 @@ const NOTE_HEADINGS_BY_STEP = {
   ]
 };
 
-function noteHeadingsFor(stepId) {
-  return NOTE_HEADINGS_BY_STEP[stepId] ?? [];
-}
-
 const TICKET_HEADINGS_BY_STEP = {
   "PD-C-5": "## Implementation Notes",
   "PD-C-10": "## Product AC"
 };
 
-function ticketHeadingFor(stepId) {
+export function gateNoteHeadingsFor(stepId) {
+  return NOTE_HEADINGS_BY_STEP[stepId] ?? [];
+}
+
+export function gateTicketHeadingFor(stepId) {
   return TICKET_HEADINGS_BY_STEP[stepId] ?? null;
 }
 
-function renderGateContext(gate) {
-  const baseline = gate?.baseline ?? null;
-  const rerunRequirement = gate?.rerun_requirement ?? null;
-  const lines = ["## Gate Context", ""];
-  if (baseline?.commit) {
-    lines.push(`- Baseline commit: \`${baseline.commit.slice(0, 7)}\`${baseline.step_id ? ` from ${baseline.step_id}` : ""}`);
-  } else {
-    lines.push("- Baseline commit: (none)");
+export function gateDecisionText(stepId) {
+  if (stepId === "PD-C-5") {
+    return "Approve implementation start, reject, or request changes to the plan.";
   }
-  if (rerunRequirement?.target_step_id) {
-    lines.push(`- Required rerun target if gate edits continue: \`${rerunRequirement.target_step_id}\``);
-    if (rerunRequirement.reason) {
-      lines.push(`- Why: ${rerunRequirement.reason}`);
-    }
-    if (Array.isArray(rerunRequirement.changed_files) && rerunRequirement.changed_files.length > 0) {
-      lines.push(`- Changed since baseline: ${rerunRequirement.changed_files.join(", ")}`);
-    }
-    if (Array.isArray(rerunRequirement.changed_ticket_sections) && rerunRequirement.changed_ticket_sections.length > 0) {
-      lines.push(`- Ticket sections changed: ${rerunRequirement.changed_ticket_sections.join(", ")}`);
-    }
-    if (Array.isArray(rerunRequirement.changed_note_sections) && rerunRequirement.changed_note_sections.length > 0) {
-      lines.push(`- Note sections changed: ${rerunRequirement.changed_note_sections.join(", ")}`);
-    }
-  } else {
-    lines.push("- Required rerun target if gate edits continue: (none)");
+  if (stepId === "PD-C-10") {
+    return "Approve ticket close, reject, or request changes before close.";
   }
-  return lines;
+  return "Approve, reject, or request changes.";
 }
 
 export function commitStep({ repoPath, stepId, message, ticket = null }) {
@@ -235,14 +136,4 @@ function stageCommitChanges(repoPath) {
   if (add.status !== 0) {
     throw new Error((add.stderr || add.stdout || "git add failed").trim());
   }
-}
-
-function gateDecisionText(stepId) {
-  if (stepId === "PD-C-5") {
-    return "Approve implementation start, reject, or request changes to the plan.";
-  }
-  if (stepId === "PD-C-10") {
-    return "Approve ticket close, reject, or request changes before close.";
-  }
-  return "Approve, reject, or request changes.";
 }

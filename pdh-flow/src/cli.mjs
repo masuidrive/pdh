@@ -8,7 +8,7 @@ import { evaluateStepGuards } from "./guards.mjs";
 import { runCodex } from "./codex-adapter.mjs";
 import { runClaude } from "./claude-adapter.mjs";
 import { runCalcSmoke } from "./smoke-calc.mjs";
-import { archivePriorRunTag, createGateSummary, commitStep, ticketClose, ticketStart } from "./actions.mjs";
+import { archivePriorRunTag, commitStep, gateDecisionText, gateNoteHeadingsFor, gateTicketHeadingFor, ticketClose, ticketStart } from "./actions.mjs";
 import { renderStepPrompt, writeReviewerPromptArtifact, writeReviewRepairPromptArtifact, writeStepPrompt } from "./prompt-templates.mjs";
 import { captureNoteTicketPatchProposal, snapshotNoteTicketFiles } from "./patch-proposals.mjs";
 import { defaultAcceptedJudgementStatus, defaultJudgementKind, loadJudgements, writeJudgement } from "./judgements.mjs";
@@ -762,12 +762,25 @@ async function cmdGateSummary(argv) {
     if (!isHumanGateStep(step)) {
       throw new Error(`${stepId} is not a human gate step`);
     }
-    const summary = options.refresh === "true"
+    const gate = options.refresh === "true"
       ? refreshGateSummary({ repo, runtime, step })
       : ensureGateSummary({ repo, runtime, step });
     updateRun(repo, { status: "needs_human", current_step_id: stepId });
     syncStepUiRuntime({ repo, stepId, nextCommands: humanStopCommands(repo, stepId) });
-    console.log(summary.artifactPath);
+    console.log(`Decision: ${gateDecisionText(stepId)}`);
+    if (gate?.baseline?.commit) {
+      console.log(`Baseline: ${gate.baseline.commit.slice(0, 7)}${gate.baseline.step_id ? ` from ${gate.baseline.step_id}` : ""}`);
+    }
+    if (gate?.rerun_requirement?.target_step_id) {
+      console.log(`Rerun: ${gate.rerun_requirement.target_step_id}${gate.rerun_requirement.reason ? ` (${gate.rerun_requirement.reason})` : ""}`);
+    }
+    const ticketHeading = gateTicketHeadingFor(stepId);
+    if (ticketHeading) {
+      console.log(`Read: current-ticket.md ${ticketHeading}`);
+    }
+    for (const heading of gateNoteHeadingsFor(stepId)) {
+      console.log(`Read: current-note.md ${heading}`);
+    }
     console.log(`Next: ${showGateCommand(repo, stepId)}`);
   } });
 }
@@ -1546,8 +1559,11 @@ function cmdStatus(argv) {
   const gate = run.id ? latestHumanGate({ stateDir: runtime.stateDir, runId: run.id, stepId: step.id }) : null;
   if (gate) {
     console.log(`Human Gate: ${gate.status}${gate.decision ? ` (${gate.decision})` : ""}`);
-    if (gate.summary) {
-      console.log(`Gate Summary: ${gate.summary}`);
+    if (gate.baseline?.commit) {
+      console.log(`Gate Baseline: ${gate.baseline.commit.slice(0, 7)}${gate.baseline.step_id ? ` from ${gate.baseline.step_id}` : ""}`);
+    }
+    if (gate.rerun_requirement?.target_step_id) {
+      console.log(`Gate Rerun: ${gate.rerun_requirement.target_step_id}`);
     }
     if (gate.recommendation?.status === "pending") {
       console.log(`Recommendation: ${formatRecommendation(gate.recommendation)}`);
@@ -1611,14 +1627,28 @@ function cmdShowGate(argv) {
   const stepId = options.step ?? runtime.run.current_step_id;
   assertCurrentStep(runtime.run, stepId, options);
   const gate = latestHumanGate({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId });
-  if (!gate?.summary) {
-    throw new Error(`No human gate summary found for ${stepId}`);
+  if (!gate || gate.status !== "needs_human") {
+    throw new Error(`No active human gate for ${stepId}`);
   }
-  if (options.path === "true") {
-    console.log(gate.summary);
+  if (options.json === "true") {
+    console.log(JSON.stringify(gate, null, 2));
     return;
   }
-  console.log(readFileSync(gate.summary, "utf8"));
+  console.log(`Step: ${stepId}`);
+  console.log(`Decision: ${gateDecisionText(stepId)}`);
+  if (gate.baseline?.commit) {
+    console.log(`Baseline: ${gate.baseline.commit.slice(0, 7)}${gate.baseline.step_id ? ` from ${gate.baseline.step_id}` : ""}`);
+  }
+  if (gate.rerun_requirement?.target_step_id) {
+    console.log(`Rerun: ${gate.rerun_requirement.target_step_id}${gate.rerun_requirement.reason ? ` (${gate.rerun_requirement.reason})` : ""}`);
+  }
+  const ticketHeading = gateTicketHeadingFor(stepId);
+  if (ticketHeading) {
+    console.log(`Read: current-ticket.md ${ticketHeading}`);
+  }
+  for (const heading of gateNoteHeadingsFor(stepId)) {
+    console.log(`Read: current-note.md ${heading}`);
+  }
 }
 
 function cmdDoctor(argv) {
@@ -3440,54 +3470,20 @@ function finalizeCompletedRun({ repo, runtime, step }) {
 
 function ensureGateSummary({ repo, runtime, step }) {
   const existing = latestHumanGate({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id });
-  if (existing?.summary && existsSync(existing.summary)) {
-    return { artifactPath: existing.summary, body: readFileSync(existing.summary, "utf8") };
+  if (existing && existing.status === "needs_human") {
+    return existing;
   }
-  const gateContext = deriveHumanGateContext({ repo, runtime, step, existingGate: existing });
-  const summary = createGateSummary({
-    repoPath: repo,
-    stateDir: runtime.stateDir,
-    runId: runtime.run.id,
-    stepId: step.id,
-    gate: gateContext
-  });
-  openHumanGate({
-    stateDir: runtime.stateDir,
-    runId: runtime.run.id,
-    stepId: step.id,
-    prompt: step.human_gate?.prompt ?? `${step.id} human gate`,
-    summary: summary.artifactPath,
-    baseline: gateContext.baseline,
-    rerunRequirement: gateContext.rerun_requirement
-  });
-  appendProgressEvent({
-    repoPath: repo,
-    runId: runtime.run.id,
-    stepId: step.id,
-    type: "artifact",
-    provider: "runtime",
-    message: `human gate summary ${summary.artifactPath}`,
-    payload: { artifactPath: summary.artifactPath }
-  });
-  return summary;
+  return refreshGateSummary({ repo, runtime, step });
 }
 
 function refreshGateSummary({ repo, runtime, step }) {
   const existing = latestHumanGate({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id });
   const gateContext = deriveHumanGateContext({ repo, runtime, step, existingGate: existing });
-  const summary = createGateSummary({
-    repoPath: repo,
-    stateDir: runtime.stateDir,
-    runId: runtime.run.id,
-    stepId: step.id,
-    gate: gateContext
-  });
   openHumanGate({
     stateDir: runtime.stateDir,
     runId: runtime.run.id,
     stepId: step.id,
     prompt: step.human_gate?.prompt ?? `${step.id} human gate`,
-    summary: summary.artifactPath,
     baseline: gateContext.baseline,
     rerunRequirement: gateContext.rerun_requirement
   });
@@ -3495,18 +3491,21 @@ function refreshGateSummary({ repo, runtime, step }) {
     repoPath: repo,
     runId: runtime.run.id,
     stepId: step.id,
-    type: "artifact",
+    type: "gate_opened",
     provider: "runtime",
-    message: `human gate summary refreshed ${summary.artifactPath}`,
-    payload: { artifactPath: summary.artifactPath }
+    message: `${step.id} human gate ready`,
+    payload: {
+      decision: gateDecisionText(step.id),
+      baseline: gateContext.baseline ?? null,
+      rerunRequirement: gateContext.rerun_requirement ?? null
+    }
   });
-  return summary;
+  return latestHumanGate({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id });
 }
 
 function collectGuardArtifacts(runtime, stepId) {
   const stepPath = stepDir(runtime.stateDir, runtime.run.id, stepId);
   return [
-    { kind: "human_gate_summary", path: join(stepPath, "human-gate-summary.md") },
     { kind: "step_commit", path: join(stepPath, "step-commit.json") },
     ...loadJudgements({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId }).map((judgement) => ({
       kind: judgement.kind,

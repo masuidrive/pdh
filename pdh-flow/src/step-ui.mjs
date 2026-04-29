@@ -267,7 +267,6 @@ function normalizeUiRuntime(value, meta = {}) {
       ? {
           status: asString(source.gate.status),
           decision: asString(source.gate.decision),
-          summary: asString(source.gate.summary),
           baseline: source.gate.baseline
             ? {
                 commit: asString(source.gate.baseline.commit),

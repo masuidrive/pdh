@@ -1,8 +1,8 @@
 import type { ActionButton, HistoryEntry, Interruption, NextAction, StepView } from "../lib/types";
 import { EvidencePanel } from "./EvidencePanel";
 import { FailureCard } from "./FailureCard";
-import { GateSummaryCard } from "./GateSummaryCard";
 import { UiOutputCard } from "./UiOutputCard";
+import { GateContextCard } from "./GateContextCard";
 import { CompletionCard } from "./CompletionCard";
 import { AssistSignalBanner } from "./AssistSignalBanner";
 
@@ -49,7 +49,7 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
   }
 
   const status = step.progress.status;
-  const recommendationText = step.gate?.recommendationText ?? step.gate?.summaryText ?? undefined;
+  const recommendationText: string | undefined = undefined;
 
   function runAction(action: ActionButton) {
     if (action.kind === "assist" || action.kind === "open_terminal") {
@@ -99,7 +99,7 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
         <div className="grid gap-5">
           <FailureCard step={step} interruptions={interruptions} onOpenTerminal={() => onOpenTerminal(step.id)} />
           <AssistSignalBanner signal={step.assistSignal} />
-          {step.gate?.summaryText || step.gate?.recommendationText ? <GateSummaryCard gate={step.gate} /> : null}
+          {step.gate ? <GateContextCard stepId={step.id} gate={step.gate} /> : null}
           {step.progress.status === "done" || step.progress.status === "completed" ? (
             <CompletionCard history={step.historyEntry} />
           ) : null}

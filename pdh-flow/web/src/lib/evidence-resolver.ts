@@ -269,25 +269,8 @@ function resolveCloseApproval(label: string, step: StepView, nextAction: NextAct
   return item(label, "verification", "current-note.md#PD-C-9", preferred(verificationText, gateSection(step, "Decision")));
 }
 
-function gateSection(step: StepView, headingHint: string): string {
-  const text = step.gate?.summaryText ?? "";
-  if (!text) return "";
-  const lines = text.split(/\r?\n/);
-  let capture = false;
-  const out: string[] = [];
-  for (const line of lines) {
-    const heading = line.match(/^#{2,4}\s+(.+)$/);
-    if (heading) {
-      const t = heading[1].toLowerCase();
-      capture = t.includes(headingHint.toLowerCase());
-      continue;
-    }
-    if (capture) {
-      if (out.length > 12) break;
-      out.push(line);
-    }
-  }
-  return out.join("\n").trim();
+function gateSection(_step: StepView, _headingHint: string): string {
+  return "";
 }
 
 function item(label: string, kind: EvidenceKind, source: string, body: string, extras: Partial<EvidenceItem> = {}): EvidenceItem {
