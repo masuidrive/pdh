@@ -71,7 +71,7 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
   const findings = step.reviewFindings ?? [];
   const judgements = step.judgements ?? [];
   const docs = documents ?? {};
-  const commands = next?.commands ?? [];
+  void next;
 
   // diff item is the only mustShow row we render full inline
   const diffItem = resolved.find((it) => it.kind === "diff");
@@ -84,8 +84,21 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
   const noteHeading = noteHeadings[0]?.heading ?? DEFAULT_NOTE_HEADING[step.id] ?? null;
   const ticketHeading = ticketHeadings[0]?.heading ?? defaultTicketHeading(step.id);
 
+  const noteHasContent = hasMeaningfulContent(docs.note?.text);
+  const ticketHasContent = hasMeaningfulContent(docs.ticket?.text);
+  const productBriefHasContent = hasMeaningfulContent(docs.productBrief?.text);
+  const epicHasContent = hasMeaningfulContent(docs.epic?.text);
+
   const showSection =
-    !diffItem && !commands.length && !Object.keys(docs).length && !ready.length && !artifacts.length && !findings.length && !judgements.length;
+    !diffItem &&
+    !noteHasContent &&
+    !ticketHasContent &&
+    !productBriefHasContent &&
+    !epicHasContent &&
+    !ready.length &&
+    !artifacts.length &&
+    !findings.length &&
+    !judgements.length;
   if (showSection) {
     return null;
   }
@@ -99,7 +112,7 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
             <ContractRow item={diffItem} onOpenDiff={onOpenDiff && diffItem.diffStepId ? () => onOpenDiff(diffItem.diffStepId!) : undefined} />
           ) : null}
 
-          {docs.note ? (
+          {noteHasContent ? (
             <DocumentRow
               label="current-note.md"
               badge={`current-note.md${noteHeading ? `#${noteHeading}` : ""}`}
@@ -109,35 +122,33 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
             />
           ) : null}
 
-          {docs.ticket ? (
+          {ticketHasContent ? (
             <DocumentRow
               label="current-ticket.md"
               badge={`current-ticket.md${ticketHeading ? `#${ticketHeading}` : ""}`}
               chips={ticketHeadings.map((h) => `#${h.heading}`)}
-              text={preferred(excerptByHeading(docs.ticket.text, ticketHeading), preview(docs.ticket.text))}
+              text={preferred(excerptByHeading(docs.ticket!.text, ticketHeading), preview(docs.ticket!.text))}
               onOpen={onOpenDocument ? () => onOpenDocument("ticket", ticketHeading) : undefined}
             />
           ) : null}
 
-          {docs.productBrief ? (
+          {productBriefHasContent ? (
             <DocumentRow
               label="product-brief.md"
               badge="product-brief.md"
-              text={preview(docs.productBrief.text)}
+              text={preview(docs.productBrief!.text)}
               onOpen={onOpenDocument ? () => onOpenDocument("productBrief") : undefined}
             />
           ) : null}
 
-          {docs.epic ? (
+          {epicHasContent ? (
             <DocumentRow
               label="current-epic.md"
               badge="current-epic.md"
-              text={preview(docs.epic.text)}
+              text={preview(docs.epic!.text)}
               onOpen={onOpenDocument ? () => onOpenDocument("epic") : undefined}
             />
           ) : null}
-
-          {commands.length ? <CommandsRow commands={commands} /> : null}
 
           {ready.length ? <ReadyRow ready={ready} /> : null}
           {findings.length ? <FindingsRow findings={findings} /> : null}
@@ -210,22 +221,6 @@ function DocumentRow({ label, badge, chips, text, onOpen }: { label: string; bad
         <span className="badge badge-ghost shrink-0">{badge}</span>
       </div>
     </Tag>
-  );
-}
-
-function CommandsRow({ commands }: { commands: string[] }) {
-  return (
-    <div className="rounded-box border border-base-300 bg-base-200 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h4 className="font-bold">CLI</h4>
-          <pre className="mt-2 overflow-x-auto rounded-box border border-base-300 bg-base-100 p-3 text-xs leading-5">
-            {commands.join("\n")}
-          </pre>
-        </div>
-        <span className="badge badge-ghost shrink-0">CLI</span>
-      </div>
-    </div>
   );
 }
 
@@ -351,6 +346,16 @@ function collectHeadings(items: EvidenceItem[], filename: string): { label: stri
     }
   }
   return out;
+}
+
+function hasMeaningfulContent(text: string | undefined) {
+  if (!text) return false;
+  const stripped = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !/^#+\s/.test(l) && l !== "---")
+    .join("\n");
+  return stripped.length > 0;
 }
 
 function preview(text: string, lines = 6) {
