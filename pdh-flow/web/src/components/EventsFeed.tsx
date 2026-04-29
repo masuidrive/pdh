@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { EventEntry, StepView } from "../lib/types";
 
 type Props = {
@@ -16,6 +17,8 @@ const ACTIVITY_TYPES = new Set([
   "reviewer_finished",
   "review_repair_started",
   "review_repair_finished",
+  "aggregator_started",
+  "aggregator_finished",
 ]);
 
 const ACTIVITY_PREFIXES = [
@@ -25,6 +28,9 @@ const ACTIVITY_PREFIXES = [
   "review_repair_tool_",
   "review_repair_message",
   "review_repair_status",
+  "aggregator_tool_",
+  "aggregator_message",
+  "aggregator_status",
 ];
 
 const LABEL_BY_TYPE: Record<string, string> = {
@@ -37,6 +43,8 @@ const LABEL_BY_TYPE: Record<string, string> = {
   reviewer_finished: "reviewer done",
   review_repair_started: "repair",
   review_repair_finished: "repair done",
+  aggregator_started: "aggregator",
+  aggregator_finished: "aggregator done",
 };
 
 function isActivity(event: EventEntry): boolean {
@@ -53,6 +61,9 @@ function activityLabel(type: string): string {
   if (type.startsWith("review_repair_tool_started")) return "repair tool";
   if (type.startsWith("review_repair_tool_finished")) return "repair tool done";
   if (type.startsWith("review_repair_message") || type.startsWith("review_repair_status")) return "repair";
+  if (type.startsWith("aggregator_tool_started")) return "aggregator tool";
+  if (type.startsWith("aggregator_tool_finished")) return "aggregator tool done";
+  if (type.startsWith("aggregator_message") || type.startsWith("aggregator_status")) return "aggregator";
   return type || "event";
 }
 
@@ -62,6 +73,11 @@ function truncateInline(value: string, limit = 140): string {
 }
 
 export function EventsFeed({ step, events, limit = 3 }: Props) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 5000);
+    return () => clearInterval(id);
+  }, []);
   if (!step || step.progress.status !== "running" && step.progress.status !== "active") return null;
   const all = events ?? [];
   const lines = all
@@ -110,6 +126,15 @@ function formatTime(iso?: string) {
   if (!iso) return "";
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return iso;
-  const d = new Date(t);
-  return d.toLocaleTimeString();
+  const diff = Date.now() - t;
+  if (diff < 0) return "just now";
+  const sec = Math.floor(diff / 1000);
+  if (sec < 5) return "just now";
+  if (sec < 60) return `${sec} sec ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} hr ago`;
+  const day = Math.floor(hr / 24);
+  return `${day} day ago`;
 }

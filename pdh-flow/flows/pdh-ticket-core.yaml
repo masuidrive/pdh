@@ -356,43 +356,28 @@ steps:
 
   - id: PD-C-8
     label: 目的妥当性
-    summary: チケットの目的と Acceptance Criteria を満たしているか確認する。
-    userAction: 未検証 AC や目的ずれがあれば実装修正へ戻す。
+    summary: PdM 反証要求型で「書くべきだったのに書いていないもの」「目的ずれ」を検査する。
+    userAction: PdM が Block 結論を出した場合は 3 択 (進める / 計画から rerun / 実装から rerun) を選ぶ。
     ui:
       viewer: PdM / 批判的レビュアー
-      decision: 正しく動いていても close すべきでない理由が残っていないかを判断する。
+      decision: 抜け漏れ・目的ずれ・product-brief 違反が残っていないかを判断する。
       mustShow:
-        - Product AC ごとの到達状況
-        - 目的ずれ
-        - 未検証の仮定
-        - follow-up が必要な点
+        - PdM が探した観点と所見
+        - 抜け漏れ・目的ずれ
+        - PD-C-2 で記録した懸念の再点検結果
+        - ユーザ判断が要る論点
       omit:
         - 実装イベントの生時系列
+        - per-AC の verified/unverified 表 (PD-C-9 の責務)
     provider: claude
-    mode: review
-    review:
-      intent: 正しく動いて見えても close してはいけない理由を反証要求型で探す。
-      maxRounds: 6
-      repairProvider: codex
-      passWhen:
-        - "`No Unverified` である"
-        - または未解消点についてユーザが明示的に受け入れている
-      onFindings:
-        - 未検証 AC や目的ずれがあれば PD-C-6 に戻して不足を埋める
-        - follow-up で済ませる判断を reviewer 側で勝手に正当化しない
-      reviewersByVariant:
-        full:
-          - role: pdm_counterexample
-            count: 1
-            focus:
-              - close してはいけない理由を AC ごとに探す
-              - 未検証項目を証跡付きで分類する
-              - 目的ずれや成果物不足を明文化する
+    mode: edit
+    assistEscalation: purpose-validation
     promptContext:
-      contextSummary: 実装が正しく見えても close すべきでない理由が残っていないかを洗う。
+      contextSummary: PdM 視点で書くべきだったのに書かれていないもの・目的ずれを反証要求型で探す。AC 裏取り表は PD-C-9 の責務なので作らない。
       semanticRules:
-        - Review every Acceptance Criteria item and classify it with evidence; do not hand-wave missing verification.
-        - Do not accept follow-up deferrals unless there is explicit user approval and a real follow-up ticket.
+        - Do not produce a per-AC verified/unverified table; that is PD-C-9's responsibility.
+        - Do not reference forward artifacts under PD-C-9 (they have not been generated yet).
+        - On Block judgement, present a single recommended next step among missing_implementation / plan_misalignment / needs_user_decision; never auto-rerun.
     guards:
       - id: purpose-recorded
         type: note_section_updated
@@ -404,14 +389,14 @@ steps:
         accepted:
           - No Unverified
           - user_accepted
-      - id: no-unverified
-        type: ac_verification_table
-        allowUnverified: false
       - id: step-commit
         type: git_commit_exists
         pattern: "^\\[PD-C-8\\]"
     on_success: PD-C-9
     on_failure: PD-C-6
+    on_human_approved: PD-C-9
+    on_human_changes_requested: PD-C-6
+    on_human_rejected: PD-C-6
 
   - id: PD-C-9
     label: 最終検証

@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 
 const NOTE_HEADINGS_BY_STEP = {
   "PD-C-5": ["## PD-C-3. 計画", "## PD-C-4. 計画レビュー結果"],
+  "PD-C-8": ["## PD-C-8. 目的妥当性確認"],
   "PD-C-10": [
     "## PD-C-9. AC 裏取り結果",
     "## PD-C-8. 目的妥当性確認",
@@ -26,6 +27,9 @@ export function gateTicketHeadingFor(stepId) {
 export function gateDecisionText(stepId) {
   if (stepId === "PD-C-5") {
     return "Approve implementation start, reject, or request changes to the plan.";
+  }
+  if (stepId === "PD-C-8") {
+    return "Approve to proceed to PD-C-9, or rerun from PD-C-3 (plan) / PD-C-6 (implementation).";
   }
   if (stepId === "PD-C-10") {
     return "Approve ticket close, reject, or request changes before close.";

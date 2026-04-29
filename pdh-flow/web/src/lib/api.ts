@@ -22,9 +22,8 @@ async function postAction(path: string): Promise<ActionResponse> {
 }
 
 export const actions = {
-  approve(stepId: string, reason?: string) {
-    const q = reason ? `&reason=${encodeURIComponent(reason)}` : "";
-    return postAction(`/api/gate/approve?step=${encodeURIComponent(stepId)}${q}`);
+  approve(stepId: string) {
+    return postAction(`/api/gate/approve?step=${encodeURIComponent(stepId)}`);
   },
   acceptRecommendation(stepId: string) {
     return postAction(`/api/recommendation/accept?step=${encodeURIComponent(stepId)}`);
@@ -52,9 +51,8 @@ export const actions = {
   resume(force = false) {
     return postAction(`/api/runtime/resume?force=${force ? "1" : "0"}`);
   },
-  stop(reason?: string) {
-    const q = reason ? `?reason=${encodeURIComponent(reason)}` : "";
-    return postAction(`/api/runtime/stop${q}`);
+  stop() {
+    return postAction(`/api/runtime/stop`);
   },
   discard() {
     return postAction("/api/runtime/discard");

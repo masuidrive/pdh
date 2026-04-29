@@ -477,6 +477,44 @@ async function cmdRunNext(argv) {
             });
             continue;
           }
+          if (step.assistEscalation) {
+            const message = describeGuardFailureMessage(failed);
+            openHumanGate({
+              stateDir,
+              runId: run.id,
+              stepId: step.id,
+              baseline: latestStepCommit(repo, step.id) ?? null,
+              rerunRequirement: null
+            });
+            updateRun(repo, { status: "needs_human", current_step_id: step.id });
+            supervisor.sync();
+            syncStepUiRuntime({ repo, stepId: step.id, guardResults, nextCommands: humanStopCommands(repo, step.id) });
+            appendProgressEvent({
+              repoPath: repo,
+              runId: run.id,
+              stepId: step.id,
+              type: "assist_escalation_opened",
+              provider: "runtime",
+              message: `${step.id} assist escalation opened (${step.assistEscalation})`,
+              payload: {
+                escalation: step.assistEscalation,
+                failedGuards: failed.map((guard) => guard.guardId ?? guard.id ?? null),
+                message
+              }
+            });
+            const escalation = {
+              status: "needs_human",
+              stepId: step.id,
+              reason: "assist_escalation",
+              escalation: step.assistEscalation,
+              message,
+              failedGuards: failed,
+              nextCommands: humanStopCommands(repo, step.id)
+            };
+            trace.push(escalation);
+            console.log(JSON.stringify({ ...escalation, trace }, null, 2));
+            return;
+          }
           updateRun(repo, { status: "blocked", current_step_id: step.id });
           supervisor.sync();
           const message = describeGuardFailureMessage(failed);
@@ -653,7 +691,7 @@ async function cmdStop(argv) {
     type: "runtime_stopped",
     provider: "runtime",
     message: `${run.current_step_id ?? "run"} marked stopped by user`,
-    payload: { reason: options.reason ?? null }
+    payload: {}
   });
   console.log(JSON.stringify({ status: "stopped", runId: run.id, stepId: run.current_step_id }, null, 2));
 }
@@ -700,8 +738,7 @@ async function cmdJudgement(argv) {
       kind: options.kind ?? defaultJudgementKind(stepId),
       status: options.status ?? null,
       summary: options.summary ?? null,
-      source: options.source ?? "runtime",
-      details: { reason: options.reason ?? null }
+      source: options.source ?? "runtime"
     });
     appendProgressEvent({
       repoPath: repo,
@@ -807,8 +844,7 @@ async function cmdHumanDecision(command, argv) {
       stateDir: runtime.stateDir,
       runId: runtime.run.id,
       stepId,
-      decision: decisionByCommand[command],
-      reason: options.reason ?? null
+      decision: decisionByCommand[command]
     });
     updateRun(repo, { status: "running", current_step_id: stepId });
     appendProgressEvent({
@@ -1127,8 +1163,7 @@ async function cmdAssistSignal(argv) {
         stepId,
         action: signal.replace(/^recommend-/, "").replaceAll("-", "_"),
         reason,
-        target_step_id: targetStepId,
-        source: "assist"
+        target_step_id: targetStepId
       });
       updateRun(repo, { status: "needs_human", current_step_id: stepId });
       appendProgressEvent({
@@ -1354,8 +1389,7 @@ async function cmdAcceptRecommendation(argv) {
         stateDir: runtime.stateDir,
         runId: runtime.run.id,
         stepId,
-        decision: "changes_requested",
-        reason: recommendation.reason ?? `accepted recommendation to rerun from ${targetStepId}`
+        decision: "changes_requested"
       });
       advanced = rerunFromStep({
         repo,
@@ -1373,8 +1407,7 @@ async function cmdAcceptRecommendation(argv) {
         stateDir: runtime.stateDir,
         runId: runtime.run.id,
         stepId,
-        decision,
-        reason: recommendation.reason ?? null
+        decision
       });
       advanced = advanceRun({
         repo,
@@ -1444,8 +1477,7 @@ async function cmdDeclineRecommendation(argv) {
       provider: "runtime",
       message: `${stepId} declined ${recommendation.action}`,
       payload: {
-        recommendation,
-        reason: options.reason ?? null
+        recommendation
       }
     });
     syncStepUiRuntime({ repo, stepId, nextCommands: humanStopCommands(repo, stepId) });
@@ -3582,7 +3614,6 @@ function refreshGateSummary({ repo, runtime, step }) {
     stateDir: runtime.stateDir,
     runId: runtime.run.id,
     stepId: step.id,
-    prompt: step.human_gate?.prompt ?? `${step.id} human gate`,
     baseline: gateContext.baseline,
     rerunRequirement: gateContext.rerun_requirement
   });
@@ -4640,7 +4671,13 @@ function assertCurrentStep(run, stepId, options = {}) {
 }
 
 function isHumanGateStep(step) {
-  return step.provider === "runtime" && step.mode === "human" && Boolean(step.human_gate);
+  if (step.provider === "runtime" && step.mode === "human" && Boolean(step.human_gate)) {
+    return true;
+  }
+  if (step.assistEscalation) {
+    return true;
+  }
+  return false;
 }
 
 function formatStepName(step) {

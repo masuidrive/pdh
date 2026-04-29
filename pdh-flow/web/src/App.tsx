@@ -133,10 +133,6 @@ export function App() {
           onOpenFlow={undefined}
           onOpenTickets={undefined}
           runtime={slot.state.runtime}
-          summary={slot.state.summary}
-          git={slot.state.git}
-          mode={slot.state.mode}
-          repoName={slot.state.repoName}
           generatedAt={slot.state.generatedAt}
         />
         <main className="min-h-[calc(100vh-4rem)]">
@@ -179,10 +175,9 @@ export function App() {
         onOpenTickets={() => setTicketsOpen(true)}
         pendingTicketCount={slot.state.ticketRequests?.length ?? 0}
         runtime={slot.state.runtime}
-        summary={slot.state.summary}
-        git={slot.state.git}
-        mode={slot.state.mode}
-        repoName={slot.state.repoName}
+        steps={variant?.steps}
+        currentStepId={focusedStepId}
+        onSelectStep={(id) => setSelectedStep(id)}
         generatedAt={slot.state.generatedAt}
       />
       <div className="px-5 pt-4 lg:px-8">

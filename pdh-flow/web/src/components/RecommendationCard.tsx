@@ -5,7 +5,6 @@ type Recommendation = {
   action?: string;
   reason?: string;
   target_step_id?: string | null;
-  source?: string;
   status?: string;
   updated_at?: string;
 };
@@ -42,7 +41,6 @@ export function RecommendationCard({ stepId, gate, onAccept, onOpenTerminal }: P
     <section className="rounded-box border-2 border-info/60 bg-info/10 p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="font-bold text-info">Assist の推奨</h3>
-        <span className="badge badge-info badge-sm">{rec.source ?? "assist"}</span>
         <span className="badge badge-outline badge-sm">{rec.action}</span>
         {target ? <span className="badge badge-warning badge-sm">→ {target}</span> : null}
       </div>

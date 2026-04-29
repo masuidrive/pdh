@@ -15,7 +15,6 @@ export type EvidenceKind =
   | "risk"
   | "risks"
   | "verification"
-  | "commands"
   | "note"
   | "ticket_notes"
   | "provider"
@@ -55,18 +54,18 @@ export function resolveStepReady(step: StepView): { label: string; kind: string 
   return items;
 }
 
-function resolveContractItem(label: string, step: StepView, nextAction: NextAction | null, ctx: Ctx): EvidenceItem {
+function resolveContractItem(label: string, step: StepView, _nextAction: NextAction | null, ctx: Ctx): EvidenceItem {
   switch (step.id) {
     case "PD-C-2":
-      return resolveGeneric(label, step, nextAction);
+      return resolveGeneric(label, step);
     case "PD-C-3":
       return resolvePlan(label, step);
     case "PD-C-4":
       return resolvePlanReview(label, step, ctx);
     case "PD-C-5":
-      return resolveImplementationApproval(label, step, nextAction, ctx);
+      return resolveImplementationApproval(label, step, ctx);
     case "PD-C-6":
-      return resolveImplementation(label, step, nextAction, ctx);
+      return resolveImplementation(label, step, ctx);
     case "PD-C-7":
       return resolveQualityReview(label, step, ctx);
     case "PD-C-8":
@@ -74,13 +73,13 @@ function resolveContractItem(label: string, step: StepView, nextAction: NextActi
     case "PD-C-9":
       return resolveFinalVerification(label, step);
     case "PD-C-10":
-      return resolveCloseApproval(label, step, nextAction, ctx);
+      return resolveCloseApproval(label, step, ctx);
     default:
-      return resolveGeneric(label, step, nextAction);
+      return resolveGeneric(label, step);
   }
 }
 
-function resolveGeneric(label: string, step: StepView, nextAction: NextAction | null): EvidenceItem {
+function resolveGeneric(label: string, step: StepView): EvidenceItem {
   const lower = label.toLowerCase();
   const noteSection = step.noteSection ?? "";
   const ticketNotes = (step as { ticketImplementationNotes?: string }).ticketImplementationNotes ?? "";
@@ -91,7 +90,6 @@ function resolveGeneric(label: string, step: StepView, nextAction: NextAction | 
   const ready = joinedText(ui.readyWhen);
   const changedFiles = joinedText(runtime.changedFiles);
   const diffStat = joinedText(runtime.diffStat);
-  const commands = joinedText(nextAction?.commands);
   const judgements = (step.judgements ?? [])
     .map((j) => `${j.kind}: ${j.status}${j.summary ? " - " + j.summary : ""}`)
     .join("\n");
@@ -110,9 +108,6 @@ function resolveGeneric(label: string, step: StepView, nextAction: NextAction | 
   }
   if (lower.includes("設計判断") || lower.includes("durable")) {
     return item(label, "ticket_notes", "current-ticket.md#Implementation Notes", ticketNotes);
-  }
-  if (lower.includes("approve") || lower.includes("reject") || lower.includes("cli")) {
-    return item(label, "commands", "CLI", commands);
   }
   if (lower.includes("review") || lower.includes("指摘") || lower.includes("目的ずれ") || lower.includes("security")) {
     return item(label, "review", "judgements / current-note.md", judgements || noteSection);
@@ -147,7 +142,7 @@ function resolvePlanReview(label: string, step: StepView, ctx: Ctx): EvidenceIte
   return item(label, "plan", "current-note.md#PD-C-3. 計画", planText);
 }
 
-function resolveImplementationApproval(label: string, step: StepView, nextAction: NextAction | null, ctx: Ctx): EvidenceItem {
+function resolveImplementationApproval(label: string, step: StepView, ctx: Ctx): EvidenceItem {
   const lower = label.toLowerCase();
   const planText = lookupNote(ctx, "PD-C-3");
   const reviewText = preferred(lookupNote(ctx, "PD-C-4"), judgementText(lookupStep(ctx, "PD-C-4")));
@@ -166,13 +161,10 @@ function resolveImplementationApproval(label: string, step: StepView, nextAction
   if (lower.includes("テスト")) {
     return item(label, "verification", "current-note.md#PD-C-3. 計画", planText);
   }
-  if (lower.includes("approve") || lower.includes("request-changes") || lower.includes("cli")) {
-    return item(label, "commands", "CLI", joinedText(nextAction?.commands));
-  }
   return item(label, "plan", "current-note.md#PD-C-3 / PD-C-4", preferred(planText, reviewText));
 }
 
-function resolveImplementation(label: string, step: StepView, nextAction: NextAction | null, ctx: Ctx): EvidenceItem {
+function resolveImplementation(label: string, step: StepView, ctx: Ctx): EvidenceItem {
   const lower = label.toLowerCase();
   const planText = lookupNote(ctx, "PD-C-3");
   const ui = (step.uiOutput ?? {}) as { summary?: string[] };
@@ -196,7 +188,7 @@ function resolveImplementation(label: string, step: StepView, nextAction: NextAc
   if (lower.includes("承認済み計画")) {
     return item(label, "plan", "current-note.md#PD-C-3. 計画", planText);
   }
-  return resolveGeneric(label, step, nextAction);
+  return resolveGeneric(label, step);
 }
 
 function resolveQualityReview(label: string, step: StepView, ctx: Ctx): EvidenceItem {
@@ -217,7 +209,7 @@ function resolveQualityReview(label: string, step: StepView, ctx: Ctx): Evidence
   if (lower.includes("設計逸脱") || lower.includes("security")) {
     return item(label, "review", "current-note.md#PD-C-7. 品質検証結果", preferred(step.noteSection, reviewText, implText));
   }
-  return resolveGeneric(label, step, null);
+  return resolveGeneric(label, step);
 }
 
 function resolvePurposeValidation(label: string, step: StepView): EvidenceItem {
@@ -243,7 +235,7 @@ function resolveFinalVerification(label: string, step: StepView): EvidenceItem {
   return item(label, "verification", "current-note.md#PD-C-9. プロセスチェックリスト", preferred(step.noteSection, acTable));
 }
 
-function resolveCloseApproval(label: string, step: StepView, nextAction: NextAction | null, ctx: Ctx): EvidenceItem {
+function resolveCloseApproval(label: string, step: StepView, ctx: Ctx): EvidenceItem {
   const lower = label.toLowerCase();
   const acTable = (step as { acTableText?: string }).acTableText ?? "";
   const verificationText = preferred(lookupNote(ctx, "PD-C-9"), acTable, gateSection(step, "AC"));
@@ -262,9 +254,6 @@ function resolveCloseApproval(label: string, step: StepView, nextAction: NextAct
   if (lower.includes("cleanup")) {
     const recent = (ctx.history ?? []).slice(-4).map((h) => `${h.completed_at ?? h.started_at ?? ""} | ${h.step_id ?? ""} | ${h.status ?? ""}`);
     return item(label, "cleanup", "current-note.md#Step History", preferred(step.noteSection, joinedText(recent), gateSection(step, "cleanup")));
-  }
-  if (lower.includes("approve") || lower.includes("reject") || lower.includes("cli")) {
-    return item(label, "commands", "CLI", joinedText(nextAction?.commands));
   }
   return item(label, "verification", "current-note.md#PD-C-9", preferred(verificationText, gateSection(step, "Decision")));
 }

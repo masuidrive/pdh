@@ -566,13 +566,23 @@ prompts:
 
     ## 役割
 
-    あなたは PdM (Opus) を spawn してこの step を回す coordinator (PM 役) です。PD-C-7 は「書いたコードにバグ・脆弱性・設計問題がないか」を見ますが、PD-C-8 は「書くべきだったのに書いていないものがないか」を見ます。
+    あなたは PdM (Opus) を spawn してこの step を回す coordinator (PM 役) です。PD-C-7 は「書いたコードにバグ・脆弱性・設計問題がないか」を見ますが、PD-C-8 は「書く**べきだったのに**書いていないものがないか」を反証要求型で見ます。
 
     ※ Light variant ではこの step は実行されません。
 
+    ## 責務境界 (重要)
+
+    PD-C-8 は **per-AC の verified / unverified 判定や AC 裏取り表は作りません**。それは PD-C-9 (完了検証) の専任です。PD-C-9 はテストスイートの最終実行、AC 裏取り表、Surface Observer を担当します。PD-C-8 はそれより一段手前で「PdM 視点で **見落とし・目的ずれ・product-brief 違反** が無いか」を検査するだけです。
+
+    具体的に PD-C-8 でやらないこと:
+
+      - per-AC の `verified` / `unverified` / `deferred` 判定 → PD-C-9 で行う
+      - 実動証跡 (コマンド出力・ログ・screenshot) の収集 → PD-C-9 で行う
+      - PD-C-9 で生成される `result.json` 等への forward reference → 参照しない
+
     ## PdM への指示は反証要求型で
 
-    「close してよいか判断して」ではなく「close してはいけない理由を全 AC について探せ」として spawn する。
+    「close してよいか判断して」ではなく「**close してはいけない理由**を product 視点で探せ」として spawn する。
 
     PdM に渡すもの:
 
@@ -581,36 +591,39 @@ prompts:
       - `current-ticket.md`
       - PD-C-6 / PD-C-7 の実装結果と note セクション
 
-    PdM が出すべき判定:
+    PdM が探すべきもの:
 
-      - 全 AC を走査し、各項目を `verified` / `unverified` / `deferred` のいずれかで判定
-      - `verified` には実動証跡 (コマンド出力・ログ・screenshot・テストのファイルパス) を添える
-      - mock テストだけで `verified` とできるのは AC が `unit-test-sufficient` 分類の場合のみ。`real-env-required` で mock しか証跡が無いものは `unverified`
-      - `unverified` が 1 件でもあれば、PdM はその段階で「close 不可」を報告する。「follow-up で済ませる」を自発的に提案しない (deferral はユーザ判断)
+      1. **AC の実質的達成度** (形式だけでなく Why を満たしているか・解決したいユーザ課題に届いているか)
+      2. **成果物の十分性** (主要フロー網羅、ユーザが使える状態か、見落としているシナリオはないか)
+      3. **抜け漏れの棚卸し** (書く**べきだったのに**書かれていない機能・ドキュメント・運用手順)
+      4. **PD-C-2 の懸念再点検** (PD-C-2 で記録した懸念事項が問題化していないか)
+      5. **product-brief / Epic との整合** (目的ずれ・スコープ逸脱・他 ticket との重複や矛盾)
 
-    ## 確認観点
+    ## 結論の出し方 (3-way)
 
-    1. AC の実質的達成 (形式だけでなく Why を満たしているか)
-    2. 成果物の十分性 (主要フロー網羅、ユーザが使える状態)
-    3. 抜け漏れの棚卸し
-    4. 懸念事項の確認 (PD-C-2 の懸念が問題化していないか)
-    5. AC 分類との整合 (`real-env-required` が実環境で裏取りされているか)
+    PdM の集約結論は 1 つに絞る。`ui-output.json` の `judgement.status` で表現する:
 
-    ## 不足が見つかった場合の扱い
+      - `No Unverified`: 抜け漏れ・目的ずれが見つからない。PD-C-9 へ進めてよい
+      - `Block: missing_implementation`: コード/テスト/ドキュメントを **書くべきだったのに書いていない** ものが見つかった。PD-C-6 (実装) からやり直す必要がある
+      - `Block: plan_misalignment`: 目的ずれ・AC 解釈の取り違え・product-brief との不整合が見つかった。PD-C-3 (計画) からやり直す必要がある
+      - `Block: needs_user_decision`: deferral / 別 ticket 切り出し / 実環境裏取りに必要な credential 等、ユーザの明示判断が要る論点がある
 
-    - この ticket 内で対応すべきもの → PD-C-6 でやり直すべき内容として note に明記する (具体的にどう動くべきか・どのファイルが追加対象か)。runtime に対しては judgement で blocker を表現する
-    - 別 ticket に切り出すべきもの → `provider-cli.mjs ask` でユーザ確認
-    - 実環境裏取り未実施のもの → 自発的に「follow-up」を選ばない。可能な限り credential / 環境を `provider-cli.mjs ask` で確認して裏取りを実施する
+    `Block: ...` は **PdM が自発的に解消しようとしないこと**。「follow-up で済ませる」を勝手に提案しない。`needs_user_decision` を選ぶときは「ユーザに確認すべき具体的な質問」を judgement.summary に含める。
+
+    runtime はこの judgement を受けて、ユーザが 3 択 (approve で C-9 へ進む / C-3 rerun / C-6 rerun) で次の遷移を選ぶ human gate を開く。**PdM / PM が直接 rerun を実行してはいけない**。
 
     ## 成果物
 
-    - `current-note.md` の「PD-C-8. 目的妥当性確認」セクション (全 AC ごとの verified / unverified / deferred 判定 + 証跡 + 抜け漏れ・残課題)
+    - `current-note.md` の「PD-C-8. 目的妥当性確認」セクション:
+        - PdM が探した観点 (上記 1〜5) ごとの所見
+        - `Block` 結論なら、抜け漏れ / 目的ずれ / ユーザ確認事項を箇条書きで明記 (どう埋めるべきか・どのファイルが対象か・なぜ問題か)
+        - `No Unverified` 結論なら、各観点で問題が無かった根拠を 1〜2 行ずつ
     - `ui-output.json`:
-        - `summary`: 目的妥当性確認の要点
-        - `risks`: PdM が指摘した残課題
+        - `summary`: 目的妥当性確認の要点 (1〜2 行)
+        - `risks`: PdM が指摘した残課題 (Block の場合は具体的な見落とし内容)
         - `judgement.kind`: `purpose-validation`
-        - `judgement.status`: PdM の集約結論 (`unverified` があるなら pass にしない)
-        - `judgement.summary`: 結論の理由
+        - `judgement.status`: 上記 4 値のいずれか
+        - `judgement.summary`: 結論の理由 (`needs_user_decision` の場合はユーザへの質問)
 
   PD-C-9: |
     {{common}}
@@ -683,8 +696,8 @@ prompts:
     - `ui-output.json`:
         - `summary`: verified 件数 / unverified 件数 / deferred 件数 / Surface Observer 結果概要
         - `risks`: 残った unverified / 観察で見つけた懸念
-        - `judgement.kind`: `completion-check`
-        - `judgement.status`: 自分の集約結論 (`unverified` が残るなら pass にしない)
+        - `judgement.kind`: `final_verification` (runtime guard はこの kind を期待)
+        - `judgement.status`: 全 AC が `verified` (unverified 0 件) なら `Ready`。1 件でも `unverified` が残るなら `Unverified` 等の他の文字列にして pass を避ける (`No Unverified` は PD-C-8 の status であり PD-C-9 では使わない)
         - `judgement.summary`: 結論の理由
 
   PD-C-10: |

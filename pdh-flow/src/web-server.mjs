@@ -416,7 +416,7 @@ function acceptRecommendationFromWeb({ repo, stepId }) {
 function approveGateFromWeb({ repo, stepId }) {
   const approved = runCliText({
     repo,
-    args: ["approve", "--repo", repo, "--step", stepId, "--reason", "ok"]
+    args: ["approve", "--repo", repo, "--step", stepId]
   });
   const runNextPid = spawnBackgroundCli({
     repo,
@@ -483,7 +483,7 @@ function resumeRuntimeFromWeb({ repo, force = false }) {
 function stopRuntimeFromWeb({ repo }) {
   return runCliJson({
     repo,
-    args: ["stop", "--repo", repo, "--reason", "stopped via web ui"]
+    args: ["stop", "--repo", repo]
   });
 }
 
@@ -637,8 +637,6 @@ function collectState({ repo }) {
     generatedAt: new Date().toISOString(),
     runtime: {
       run: run ? redactObject(run, redactor) : null,
-      noteState: redactObject(runtime.pdh, redactor),
-      currentStep: currentStep ? stepMeta(currentStep) : null,
       supervisor: runtime.supervisor ? redactObject(runtime.supervisor, redactor) : null
     },
     summary,
@@ -649,25 +647,13 @@ function collectState({ repo }) {
     current: {
       gate: currentGate ? gatePayload(currentGate, redactor) : null,
       interruptions,
-      nextAction: describeNextAction({ repo, runtime, currentStep: currentStepView ?? currentStep, currentGate, interruptions }),
-      stepArtifacts: currentStep && run?.id ? listStepArtifacts({ stateDir: runtime.stateDir, runId: run.id, stepId: currentStep.id, redactor }) : []
+      nextAction: describeNextAction({ repo, runtime, currentStep: currentStepView ?? currentStep, currentGate, interruptions })
     },
     history,
     events,
-    ac: {
-      ok: ac.ok,
-      counts: ac.counts,
-      errors: ac.errors
-    },
     git: gitState(repo, redactor),
     tickets,
     ticketRequests: loadPendingTicketStartRequests({ repoPath: repo }),
-    files: {
-      note: join(repo, "current-note.md"),
-      ticket: join(repo, "current-ticket.md"),
-      ...(optionalDocs.productBrief ? { productBrief: optionalDocs.productBrief.path } : {}),
-      ...(optionalDocs.epic ? { epic: optionalDocs.epic.path } : {})
-    },
     documents: {
       note: {
         path: join(repo, "current-note.md"),
@@ -939,7 +925,6 @@ function buildSummary({ runtime, activeVariant, ac, currentStep, currentGate, in
   return {
     doneCount,
     totalSteps: total,
-    currentLabel: currentStep ? `${currentStep.id} ${currentStep.label}` : "未開始",
     acCounts: ac.counts,
     openItems,
     gateStatus: currentGate?.decision ?? currentGate?.status ?? null
@@ -1116,56 +1101,56 @@ function isPidAlive(pid) {
 function stepProgress({ runtime, sequence, index, step, historyEntry, gate, attempt, processState, interruptions }) {
   const run = runtime.run;
   if (!sequence.includes(step.id)) {
-    return progress("skipped", "スキップ", "選択中 variant では実行しない step です。");
+    return progress("skipped", "選択中 variant では実行しない step です。");
   }
   if (!run) {
-    return progress("pending", "未開始", "まだ run が始まっていません。");
+    return progress("pending", "まだ run が始まっていません。");
   }
   if (run.status === "completed") {
-    return progress("done", "完了", "この run は完了しています。");
+    return progress("done", "この run は完了しています。");
   }
   const currentIndex = sequence.indexOf(run.current_step_id);
   if (step.id === run.current_step_id) {
     if (run.status === "running" && processState?.stale) {
-      return progress("failed", "stalled", processState.note || "provider process is no longer alive.");
+      return progress("failed", processState.note || "provider process is no longer alive.");
     }
     if (run.status === "needs_human") {
       if (gate?.recommendation?.status === "pending") {
-        return progress("waiting", "ユーザ回答待ち", "agent recommendation を適用するか、Open Terminal で再作業するかを選びます。");
+        return progress("waiting", "agent recommendation を適用するか、Open Terminal で再作業するかを選びます。");
       }
-      return progress("waiting", "ユーザ回答待ち", "判断材料を確認して Web で判断します。");
+      return progress("waiting", "判断材料を確認して Web で判断します。");
     }
     if (run.status === "interrupted") {
-      return progress("waiting", "割り込み待ち", interruptions.length > 0 ? "質問に回答すると継続します。" : "割り込み回答待ちです。");
+      return progress("waiting", interruptions.length > 0 ? "質問に回答すると継続します。" : "割り込み回答待ちです。");
     }
     if (run.status === "blocked") {
-      return progress("blocked", "ガード待ち", "必要な記録や検証を追加してから `run-next` を再実行します。");
+      return progress("blocked", "必要な記録や検証を追加してから `run-next` を再実行します。");
     }
     if (run.status === "failed") {
-      return progress("failed", "再試行待ち", "provider の再実行または resume が必要です。");
+      return progress("failed", "provider の再実行または resume が必要です。");
     }
     if (step.provider !== "runtime" && run.id && hasCompletedProviderAttempt({ stateDir: runtime.stateDir, runId: run.id, stepId: step.id, provider: step.provider })) {
-      return progress("waiting", "advance待ち", "`run-next` で guard 評価と遷移を進めます。");
+      return progress("waiting", "`run-next` で guard 評価と遷移を進めます。");
     }
     if (processState?.activeCount > 0) {
-      return progress("running", "実行中", processState.note || "provider がこの step を実行しています。");
+      return progress("running", processState.note || "provider がこの step を実行しています。");
     }
-    return progress("running", "実行中", "provider がこの step を実行しています。");
+    return progress("running", "provider がこの step を実行しています。");
   }
   if (historyEntry) {
-    return progress("done", "完了", historyEntry.summary);
+    return progress("done", historyEntry.summary);
   }
   if (currentIndex >= 0 && index < currentIndex) {
-    return progress("done", "完了", "履歴行がなくても先行 step とみなします。");
+    return progress("done", "履歴行がなくても先行 step とみなします。");
   }
   if (attempt?.status === "failed") {
-    return progress("failed", "失敗", "最新 attempt が失敗しています。");
+    return progress("failed", "最新 attempt が失敗しています。");
   }
-  return progress("pending", "未着手", "前段 step の完了後に自動で開始されます。");
+  return progress("pending", "前段 step の完了後に自動で開始されます。");
 }
 
-function progress(status, label, note = "") {
-  return { status, label, note };
+function progress(status, note = "") {
+  return { status, note };
 }
 
 function latestHistoryByStep(entries) {
@@ -1181,8 +1166,6 @@ function stepMeta(step) {
     id: step.id,
     label: step.label ?? step.id,
     summary: step.summary ?? "",
-    userAction: step.userAction ?? "",
-    ui: step.ui ?? null,
     provider: step.provider,
     mode: step.mode
   };
@@ -1209,63 +1192,45 @@ function redactSection(text, redactor) {
 
 function describeNextAction({ repo, runtime, currentStep, currentGate, interruptions }) {
   if (!runtime.run || !currentStep) {
-    const command = `node src/cli.mjs run --repo ${shellQuote(repo)} --ticket <ticket-id> --variant full`;
     return {
       title: "最初にすること",
       body: "repo root で `run` を実行して .pdh-flow/runtime.json を初期化します。",
-      commands: [command],
       actions: [
         nextActionChoice({
           label: "Run",
-          description: "新しい flow を開始して .pdh-flow/runtime.json の runtime state を初期化します。",
-          command
+          description: "新しい flow を開始して .pdh-flow/runtime.json の runtime state を初期化します。"
         })
-      ],
-      selection: "single",
-      targetTab: "commands"
+      ]
     };
   }
   if (runtime.run.status === "needs_human") {
-    const actions = humanDecisionActions(repo, currentStep.id);
     return {
       title: `${currentStep.id} の判断`,
       body: currentGate?.recommendation?.status === "pending"
         ? recommendationBody(currentGate.recommendation, currentStep.id)
         : "",
-      commands: actions.map((item) => item.command),
-      actions,
-      selection: "choose_one_optional_assist",
-      targetTab: "gate"
+      actions: humanDecisionActions()
     };
   }
   if (interruptions.length > 0 || runtime.run.status === "interrupted") {
-    const actions = interruptAnswerActions(repo, currentStep.id);
     return {
       title: `${currentStep.id} の割り込み回答`,
       body: "質問内容を確認して回答します。必要なら assist でコードやテストを見てから `answer` を返します。",
-      commands: actions.map((item) => item.command),
-      actions,
-      selection: "ordered_optional_assist",
-      targetTab: "detail"
+      actions: interruptAnswerActions()
     };
   }
   if (runtime.run.status === "failed") {
-    const assist = assistOpenCommand(repo, currentStep.id);
     return {
       title: `${currentStep.id} の失敗を解析`,
       body: failedActionBody(currentStep),
-      commands: [assist],
       actions: [
         nextActionChoice({
           label: "Open Terminal",
           description: "failure-summary と artifacts を assist で確認し、原因に応じて手で修正します。修正後は assist から `assist-signal --signal continue` を送って runtime に再評価させます。",
-          command: assist,
           tone: "neutral",
           kind: "assist"
         })
-      ],
-      selection: "single",
-      targetTab: "detail"
+      ]
     };
   }
   if (
@@ -1280,110 +1245,85 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
     }) &&
     !currentStep?.processState?.activeCount
   ) {
-    const command = `node src/cli.mjs run-next --repo ${shellQuote(repo)}`;
-    const assist = assistOpenCommand(repo, currentStep.id);
     return {
       title: `${currentStep.id} の遷移を進める`,
       body: "この step の provider/review は完了しています。`run-next` で guard 評価と次 step への遷移を進めます。必要なら先に Open Terminal で差分や note/ticket を確認します。",
-      commands: [command, assist],
       actions: [
         nextActionChoice({
           label: "Run Next",
           description: "完了済み step の guard 評価と flow transition を進めます。",
-          command,
           tone: "approve",
           kind: "run_next_direct"
         }),
         nextActionChoice({
           label: "Open Terminal",
           description: "次に進める前に current repo state を terminal で確認します。",
-          command: assist,
           tone: "neutral",
           kind: "assist"
         })
-      ],
-      selection: "single_optional_assist",
-      targetTab: "commands"
+      ]
     };
   }
   if (runtime.run.status === "running" && currentStep?.processState?.stale) {
-    const command = `node src/cli.mjs resume --repo ${shellQuote(repo)}`;
-    const assist = assistOpenCommand(repo, currentStep.id);
     return {
       title: `${currentStep.id} の再実行`,
       body: currentStep.processState.note || "provider process は終了していますが、runtime state は running のままです。summary を確認してから再実行します。",
-      commands: [assist, command],
       actions: [
         nextActionChoice({
           label: "Open Terminal",
           description: "stale running になる直前の変更や reviewer 指摘を確認します。",
-          command: assist,
           tone: "neutral",
           kind: "assist"
         }),
         nextActionChoice({
           label: "Resume",
           description: "同じ step を再実行します。",
-          command,
           tone: "revise",
           kind: "resume_direct"
         })
-      ],
-      selection: "single_optional_assist",
-      targetTab: "detail"
+      ]
     };
   }
   if (runtime.run.status === "blocked") {
-    const command = `node src/cli.mjs run-next --repo ${shellQuote(repo)}`;
-    const assist = assistOpenCommand(repo, currentStep.id);
     return {
       title: `${currentStep.id} の不足を解消`,
       body: blockedActionBody(currentStep),
-      commands: [assist, command],
       actions: [
         nextActionChoice({
           label: "Open Terminal",
           description: "止まった理由を assist と一緒に確認し、必要な変更や検証をその場で詰めます。",
-          command: assist,
           tone: "neutral",
           kind: "assist"
         }),
         nextActionChoice({
           label: "Run Next",
           description: "不足している guard-facing artifact を補完したうえで、この step を再評価します。",
-          command,
           tone: "revise",
           kind: "run_next_direct"
         })
-      ],
-      selection: "single_optional_assist",
-      targetTab: "detail"
+      ]
     };
   }
-  const command = `node src/cli.mjs run-next --repo ${shellQuote(repo)}`;
-  const assist = assistOpenCommand(repo, currentStep.id);
+  if (runtime.run.status === "running" && currentStep?.processState?.activeCount > 0) {
+    return null;
+  }
   return {
     title: `${currentStep.id} を進める`,
-    body: "通常は `run-next` だけで、gate や割り込みまで自動で進みます。",
-    commands: [command, assist],
+    body: "",
     actions: [
       nextActionChoice({
         label: "Run Next",
         description: "通常進行です。次の gate / interruption / failure / complete まで自動で進めます。",
-        command,
         tone: "approve",
         kind: "run_next_direct"
       }),
       nextActionChoice({
         label: "Open Terminal",
         description: "current step の repo state を terminal で確認したり、会話しながら調査します。",
-        command: assist,
         tone: "neutral",
         kind: "assist"
       })
-    ],
-    selection: "single_optional_assist",
-    targetTab: "commands"
+    ]
   };
 }
 
@@ -1653,12 +1593,10 @@ function collectRepoFilePayload({ repo, stepId, path }) {
 function gitState(repo, redactor) {
   const branch = runGit(repo, ["rev-parse", "--abbrev-ref", "HEAD"]);
   const status = runGit(repo, ["status", "--short"]);
-  const diff = runGit(repo, ["diff", "--", "current-note.md", "current-ticket.md", "src", "flows", "README.md", "product-brief.md", "technical-plan.md", "tasks.md"]);
   return {
     branch: firstLine(branch.stdout || branch.stderr || "unknown"),
     clean: !(status.stdout ?? "").trim(),
-    statusLines: redactLines(status.stdout, redactor, 20),
-    diffText: clampText(redactor(diff.stdout ?? ""), MAX_TEXT)
+    statusLines: redactLines(status.stdout, redactor, 20)
   };
 }
 
@@ -1753,73 +1691,27 @@ function shellQuote(value) {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-function humanDecisionCommands(repo, stepId) {
-  const repoArg = ` --repo ${shellQuote(repo)}`;
-  return [
-    `node src/cli.mjs approve${repoArg} --step ${stepId} --reason ok`,
-    `node src/cli.mjs request-changes${repoArg} --step ${stepId} --reason "<reason>"`,
-    `node src/cli.mjs reject${repoArg} --step ${stepId} --reason "<reason>"`
-  ];
+function nextActionChoice({ label, description, tone = "neutral", kind = "command" }) {
+  return { label, description, tone, kind };
 }
 
-function recommendationDecisionCommands(repo, stepId) {
-  const repoArg = ` --repo ${shellQuote(repo)}`;
-  return [
-    `node src/cli.mjs accept-recommendation${repoArg} --step ${stepId}`,
-    `node src/cli.mjs decline-recommendation${repoArg} --step ${stepId} --reason "<reason>"`
-  ];
-}
-
-function assistOpenCommand(repo, stepId) {
-  return `node src/cli.mjs assist-open --repo ${shellQuote(repo)} --step ${stepId}`;
-}
-
-function interruptAnswerCommands(repo, stepId) {
-  const repoArg = ` --repo ${shellQuote(repo)}`;
-  return [
-    `node src/cli.mjs show-interrupts${repoArg} --step ${stepId}`,
-    `node src/cli.mjs answer${repoArg} --step ${stepId} --message "<answer>"`
-  ];
-}
-
-function nextActionChoice({ label, description, command, tone = "neutral", kind = "command" }) {
-  return { label, description, command, tone, kind };
-}
-
-function humanDecisionActions(repo, stepId) {
-  const [approve] = humanDecisionCommands(repo, stepId);
+function humanDecisionActions() {
   return [
     nextActionChoice({
       label: "Open Terminal",
       description: "判断に迷う場合は assist と一緒にコード・テスト・関連ドキュメントを確認できます。必要なら assist の中で修正・検証も実施可能です。",
-      command: assistOpenCommand(repo, stepId),
       tone: "neutral",
       kind: "assist"
     }),
     nextActionChoice({
       label: "Approve",
       description: "この gate をそのまま通して次へ進めます。",
-      command: approve,
       tone: "approve",
       kind: "approve_direct"
     })
   ];
 }
 
-function recommendationDecisionActions(repo, runtime, step, recommendation) {
-  const [accept] = recommendationDecisionCommands(repo, step.id);
-  const primary = recommendationPrimaryAction(repo, runtime, step, recommendation, accept);
-  return [
-    primary,
-    nextActionChoice({
-      label: "Assistで再作業",
-      description: "recommendation を見直す場合や、さらに大きく直す場合は assist でそのまま続けます。新しい recommendation が出れば上書きされます。",
-      command: assistOpenCommand(repo, step.id),
-      tone: "neutral",
-      kind: "assist"
-    })
-  ];
-}
 
 function approveRecommendationLabelForStep(stepId) {
   return stepId === "PD-C-10" ? "チケット完了" : "実装開始";
@@ -1869,123 +1761,6 @@ function recommendationAcceptText(recommendation, stepId = null) {
   return "この recommendation を適用します。";
 }
 
-function recommendationTone(recommendation) {
-  if (!recommendation) {
-    return "approve";
-  }
-  if (recommendation.action === "approve") {
-    return "approve";
-  }
-  if (recommendation.action === "rerun_from" || recommendation.action === "request_changes") {
-    return "revise";
-  }
-  return "reject";
-}
-
-function recommendationPrimaryAction(repo, runtime, step, recommendation, command) {
-  const targetApprove = nextStep(runtime.flow, runtime.run.flow_variant, step.id, "human_approved");
-  const targetChanges = nextStep(runtime.flow, runtime.run.flow_variant, step.id, "human_changes_requested");
-  const targetReject = nextStep(runtime.flow, runtime.run.flow_variant, step.id, "human_rejected");
-
-  if (!recommendation) {
-    return nextActionChoice({
-      label: "Apply Recommendation",
-      description: "現在の recommendation を適用します。",
-      command,
-      tone: "approve"
-    });
-  }
-
-  if (recommendation.action === "approve") {
-    const targetStep = targetApprove && targetApprove !== "COMPLETE" ? getStep(runtime.flow, targetApprove) : null;
-    const approveLabel = targetApprove === "COMPLETE"
-      ? "チケット完了"
-      : implementationStartLabel(targetStep, targetApprove);
-    return nextActionChoice({
-      label: approveLabel,
-      description: targetApprove === "COMPLETE"
-        ? "この recommendation を適用して close に進めます。"
-        : `${formatStepTarget(targetStep, targetApprove)} に進めます。`,
-      command,
-      tone: "approve"
-    });
-  }
-
-  if (recommendation.action === "rerun_from") {
-    const targetStep = recommendation.target_step_id ? getStep(runtime.flow, recommendation.target_step_id) : null;
-    return nextActionChoice({
-      label: redoActionLabel(targetStep, recommendation.target_step_id),
-      description: `この recommendation を適用し、${formatStepTarget(targetStep, recommendation.target_step_id)} から再実行します。`,
-      command,
-      tone: "revise"
-    });
-  }
-
-  if (recommendation.action === "request_changes") {
-    const targetStep = targetChanges && targetChanges !== "COMPLETE" ? getStep(runtime.flow, targetChanges) : null;
-    return nextActionChoice({
-      label: redoActionLabel(targetStep, targetChanges),
-      description: `${formatStepTarget(targetStep, targetChanges)} に戻して修正を続けます。`,
-      command,
-      tone: "revise"
-    });
-  }
-
-  if (recommendation.action === "reject") {
-    const targetStep = targetReject && targetReject !== "COMPLETE" ? getStep(runtime.flow, targetReject) : null;
-    return nextActionChoice({
-      label: targetReject && targetReject !== "COMPLETE" ? redoActionLabel(targetStep, targetReject) : "この案を採用しない",
-      description: targetReject && targetReject !== "COMPLETE"
-        ? `${formatStepTarget(targetStep, targetReject)} に戻して、この案は採用しません。`
-        : "この recommendation を reject として適用します。",
-      command,
-      tone: "reject"
-    });
-  }
-
-  return nextActionChoice({
-    label: "Apply Recommendation",
-    description: "現在の recommendation を適用します。",
-    command,
-    tone: recommendationTone(recommendation)
-  });
-}
-
-function redoActionLabel(step, fallbackStepId) {
-  const label = step?.label || fallbackStepId || "";
-  if (/調査/.test(label)) {
-    return "調査からやり直し";
-  }
-  if (label === "計画" || (/計画/.test(label) && !/レビュー/.test(label))) {
-    return "計画からやり直し";
-  }
-  if (/レビュー/.test(label)) {
-    return "レビューやり直し";
-  }
-  if (/検証|妥当性|チェック/.test(label)) {
-    return "検証やり直し";
-  }
-  return `${formatStepTarget(step, fallbackStepId)} からやり直し`;
-}
-
-function formatStepTarget(step, fallbackStepId) {
-  if (step?.label) {
-    return `${step.id} ${step.label}`;
-  }
-  return fallbackStepId || "previous step";
-}
-
-function implementationStartLabel(step, fallbackStepId) {
-  const label = step?.label || fallbackStepId || "";
-  if (/実装/.test(label)) {
-    return "実装開始";
-  }
-  if (/検証|レビュー/.test(label)) {
-    return "レビュー開始";
-  }
-  return `${formatStepTarget(step, fallbackStepId)} に進む`;
-}
-
 function rerunLabelFromStepId(stepId) {
   if (stepId === "PD-C-2") {
     return "調査からやり直し";
@@ -2002,27 +1777,13 @@ function rerunLabelFromStepId(stepId) {
   return `${stepId || "前の step"} からやり直し`;
 }
 
-function interruptAnswerActions(repo, stepId) {
-  const [showInterrupts, answer] = interruptAnswerCommands(repo, stepId);
+function interruptAnswerActions() {
   return [
     nextActionChoice({
-      label: "Show Interrupt",
-      description: "未回答の質問内容を terminal で確認します。",
-      command: showInterrupts,
-      tone: "neutral"
-    }),
-    nextActionChoice({
       label: "Open Terminal",
-      description: "質問に答える前に assist でコードとテストを確認します。",
-      command: assistOpenCommand(repo, stepId),
+      description: "質問に答える前に assist でコードとテストを確認し、そのまま回答します。",
       tone: "neutral",
       kind: "assist"
-    }),
-    nextActionChoice({
-      label: "Answer",
-      description: "質問への回答を返して current step を再開します。",
-      command: answer,
-      tone: "approve"
     })
   ];
 }

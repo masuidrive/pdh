@@ -14,13 +14,11 @@ export function buildConfirmRequest(kind: string, ctx: Ctx): ConfirmRequest | nu
     case "approve_direct":
       return {
         title: `${ctx.stepLabel ?? ctx.stepId ?? "Gate"} を承認`,
-        body: "この gate を通して次の step に進めます。承認理由を残しておくと履歴で追えます。",
+        body: "この gate を通して次の step に進めます。",
         preview: ctx.recommendationText,
-        reasonLabel: "承認メモ (省略可)",
-        reasonPlaceholder: "実装方針で問題なし、AC も妥当",
         confirmLabel: "承認する",
         confirmTone: "approve",
-        onConfirm: (reason) => actions.approve(ctx.stepId!, reason || undefined).then(() => {}),
+        onConfirm: () => actions.approve(ctx.stepId!).then(() => {}),
       };
     case "accept_recommendation":
       return {
@@ -53,9 +51,6 @@ export function buildConfirmRequest(kind: string, ctx: Ctx): ConfirmRequest | nu
         body: "強制再実行します。失敗中の step を再投入します。",
         confirmLabel: "Force Run Next",
         confirmTone: "warning",
-        reasonLabel: "理由",
-        reasonRequired: true,
-        reasonPlaceholder: "前回失敗の原因を修正済み",
         onConfirm: () => actions.runNext(true).then(() => {}),
       };
     case "resume_direct":
@@ -72,8 +67,6 @@ export function buildConfirmRequest(kind: string, ctx: Ctx): ConfirmRequest | nu
         body: "supervisor を強制リセットして該当 step を再実行します。",
         confirmLabel: "Force Resume",
         confirmTone: "warning",
-        reasonLabel: "理由",
-        reasonRequired: true,
         onConfirm: () => actions.resume(true).then(() => {}),
       };
     case "runtime_discard":
@@ -97,10 +90,7 @@ export function buildConfirmRequest(kind: string, ctx: Ctx): ConfirmRequest | nu
         body: "runtime supervisor に停止シグナルを送ります。実行中の provider は終了します。",
         confirmLabel: "Stop",
         confirmTone: "danger",
-        reasonLabel: "停止理由",
-        reasonRequired: true,
-        reasonPlaceholder: "user_stopped",
-        onConfirm: (reason) => actions.stop(reason).then(() => {}),
+        onConfirm: () => actions.stop().then(() => {}),
       };
     case "ticket_start": {
       if (!ctx.ticketId) return null;
@@ -119,9 +109,6 @@ export function buildConfirmRequest(kind: string, ctx: Ctx): ConfirmRequest | nu
         body: "現在の run を archive タグに退避して、ticket を最初から再起動します。元には戻せません。",
         confirmLabel: "Force Restart",
         confirmTone: "danger",
-        reasonLabel: "再開理由",
-        reasonRequired: true,
-        reasonPlaceholder: "前回 run のリセットが必要",
         onConfirm: () =>
           actions.startTicket(ctx.ticketId!, { force: true }).then(() => {}),
       };

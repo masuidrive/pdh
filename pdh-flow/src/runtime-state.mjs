@@ -405,7 +405,7 @@ export function latestHumanGate({ stateDir, runId, stepId }) {
   return readJson(humanGatePath(stateDir, runId, stepId));
 }
 
-export function openHumanGate({ stateDir, runId, stepId, prompt, baseline = null, rerunRequirement = null }) {
+export function openHumanGate({ stateDir, runId, stepId, baseline = null, rerunRequirement = null }) {
   return updateHumanGate({
     stateDir,
     runId,
@@ -415,9 +415,7 @@ export function openHumanGate({ stateDir, runId, stepId, prompt, baseline = null
         runId,
         stepId,
         status: "needs_human",
-        prompt,
         decision: existingGate?.decision ?? null,
-        reason: existingGate?.reason ?? null,
         recommendation: existingGate?.recommendation ?? null,
         baseline: baseline ?? existingGate?.baseline ?? null,
         rerun_requirement: rerunRequirement,
@@ -428,7 +426,7 @@ export function openHumanGate({ stateDir, runId, stepId, prompt, baseline = null
   });
 }
 
-export function resolveHumanGate({ stateDir, runId, stepId, decision, reason = null }) {
+export function resolveHumanGate({ stateDir, runId, stepId, decision }) {
   return updateHumanGate({
     stateDir,
     runId,
@@ -438,13 +436,10 @@ export function resolveHumanGate({ stateDir, runId, stepId, decision, reason = n
         ...(existing ?? {
           runId,
           stepId,
-          prompt: `${stepId} human gate`,
-          summary: null,
           created_at: new Date().toISOString()
         }),
         status: "resolved",
         decision,
-        reason,
         baseline: existing?.baseline ?? null,
         rerun_requirement: existing?.rerun_requirement ?? null,
         resolved_at: new Date().toISOString(),
@@ -466,8 +461,7 @@ export function updateHumanGateRecommendation({
   stepId,
   action,
   reason = null,
-  target_step_id = null,
-  source = "assist"
+  target_step_id = null
 }) {
   return updateHumanGate({
     stateDir,
@@ -479,10 +473,7 @@ export function updateHumanGateRecommendation({
           runId,
           stepId,
           status: "needs_human",
-          prompt: `${stepId} human gate`,
-          summary: null,
           decision: null,
-          reason: null,
           created_at: new Date().toISOString(),
           resolved_at: null
         }),
@@ -494,7 +485,6 @@ export function updateHumanGateRecommendation({
           action,
           reason,
           target_step_id,
-          source,
           status: "pending",
           updated_at: new Date().toISOString()
         }

@@ -69,6 +69,9 @@ export function ticketStartRequestPath({ repoPath, ticketId }) {
 
 export function allowedAssistSignals({ runStatus, step, runtime = null }) {
   if (runStatus === "needs_human" && isHumanGateStep(step)) {
+    if (step?.assistEscalation && step?.mode !== "human") {
+      return ["recommend-approve", "recommend-rerun-from"];
+    }
     return ["recommend-approve", "recommend-request-changes", "recommend-reject", "recommend-rerun-from"];
   }
   if (runStatus === "interrupted") {
@@ -851,5 +854,11 @@ function clampText(text, maxChars) {
 }
 
 function isHumanGateStep(step) {
-  return step?.provider === "runtime" && step?.mode === "human" && Boolean(step?.human_gate);
+  if (step?.provider === "runtime" && step?.mode === "human" && Boolean(step?.human_gate)) {
+    return true;
+  }
+  if (step?.assistEscalation) {
+    return true;
+  }
+  return false;
 }

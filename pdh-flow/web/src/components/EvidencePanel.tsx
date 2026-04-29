@@ -78,7 +78,6 @@ const KIND_LABELS: Record<EvidenceKind, string> = {
   risk: "risk",
   risks: "risks",
   verification: "verification",
-  commands: "CLI",
   note: "note",
   ticket_notes: "ticket",
   provider: "provider",
@@ -98,7 +97,6 @@ const KIND_TONE: Record<EvidenceKind, string> = {
   risk: "warning",
   risks: "warning",
   verification: "success",
-  commands: "neutral",
   note: "ghost",
   ticket_notes: "ghost",
   provider: "info",
@@ -359,33 +357,17 @@ function JudgementsRow({ judgements }: { judgements: JudgementEntry[] }) {
 }
 
 function DiagnosticsBlock({ step, onOpenArtifact }: { step: StepView; onOpenArtifact: (name: string) => void }) {
-  const gate = step.gate ?? null;
-  const interruptions = step.interruptions ?? [];
   const events = step.events ?? [];
   const artifacts = step.artifacts ?? [];
-  const omit = ((step.uiContract as { omit?: string[] } | undefined)?.omit) ?? [];
-  const recommendation = (gate?.recommendation as { status?: string } | null | undefined) ?? null;
-  const uiRuntime = (step.uiRuntime as { nextCommands?: string[]; parseErrors?: string[]; parseWarnings?: string[] } | null | undefined) ?? null;
-  const nextCommands = uiRuntime?.nextCommands ?? [];
-  const parseErrors = uiRuntime?.parseErrors ?? [];
-  const parseWarnings = uiRuntime?.parseWarnings ?? [];
 
-  const hasState = Boolean(gate?.status === "needs_human") || (recommendation?.status === "pending") || interruptions.length > 0;
   const hasLogs = events.length > 0;
   const hasArtifacts = artifacts.length > 0;
-  const hasOmit = omit.length > 0;
-  const hasNextCommands = nextCommands.length > 0;
-  const hasParse = parseErrors.length > 0 || parseWarnings.length > 0;
 
-  if (!hasState && !hasLogs && !hasArtifacts && !hasOmit && !hasNextCommands && !hasParse) return null;
+  if (!hasLogs && !hasArtifacts) return null;
 
   const subParts: string[] = [];
-  if (hasState) subParts.push("state");
   if (hasLogs) subParts.push(`logs ${events.length}`);
   if (hasArtifacts) subParts.push(`artifacts ${artifacts.length}`);
-  if (hasNextCommands) subParts.push(`commands ${nextCommands.length}`);
-  if (hasParse) subParts.push(`parse ${parseErrors.length + parseWarnings.length}`);
-  if (hasOmit) subParts.push(`omit ${omit.length}`);
 
   return (
     <details className="rounded-box border border-base-300 bg-base-200 p-4">
@@ -394,43 +376,10 @@ function DiagnosticsBlock({ step, onOpenArtifact }: { step: StepView; onOpenArti
         <span className="text-xs text-base-content/60">{subParts.join(" · ")}</span>
       </summary>
       <div className="mt-3 grid gap-3">
-        {hasState ? <CurrentStateSection gate={gate} recommendation={recommendation} interruptions={interruptions} /> : null}
-        {hasNextCommands ? <NextCommandsSection commands={nextCommands} /> : null}
         {hasLogs ? <LogsSection events={events} /> : null}
-        {hasParse ? <ParseSection errors={parseErrors} warnings={parseWarnings} /> : null}
         {hasArtifacts ? <ArtifactsSection artifacts={artifacts} onOpen={onOpenArtifact} /> : null}
-        {hasOmit ? <OmitSection items={omit} /> : null}
       </div>
     </details>
-  );
-}
-
-function NextCommandsSection({ commands }: { commands: string[] }) {
-  return (
-    <Section title="次に runtime が叩くコマンド">
-      <pre className="overflow-x-auto rounded-box border border-base-300 bg-base-100 p-2 text-xs leading-5">{commands.join("\n")}</pre>
-    </Section>
-  );
-}
-
-function ParseSection({ errors, warnings }: { errors: string[]; warnings: string[] }) {
-  return (
-    <Section title="Parse">
-      {errors.length ? (
-        <ul className="text-xs text-error">
-          {errors.map((e, i) => (
-            <li key={`e-${i}`}>error: {e}</li>
-          ))}
-        </ul>
-      ) : null}
-      {warnings.length ? (
-        <ul className="text-xs text-warning">
-          {warnings.map((w, i) => (
-            <li key={`w-${i}`}>warn: {w}</li>
-          ))}
-        </ul>
-      ) : null}
-    </Section>
   );
 }
 
@@ -440,30 +389,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h5 className="text-xs uppercase tracking-wide text-base-content/50">{title}</h5>
       <div className="mt-1.5 grid gap-1">{children}</div>
     </section>
-  );
-}
-
-function CurrentStateSection({
-  gate,
-  recommendation,
-  interruptions,
-}: {
-  gate: StepView["gate"] | null;
-  recommendation: { status?: string } | null;
-  interruptions: { kind: string; message?: string; status?: string }[];
-}) {
-  return (
-    <Section title="Current State">
-      {gate?.status === "needs_human" ? (
-        <Pill name="human gate" sub={gate.decision ?? gate.status ?? ""} />
-      ) : null}
-      {recommendation?.status === "pending" ? (
-        <Pill name="agent recommendation" sub="pending" />
-      ) : null}
-      {interruptions.map((it, i) => (
-        <Pill key={i} name={it.message ?? it.kind ?? "interruption"} sub={it.status ?? it.kind ?? "open"} />
-      ))}
-    </Section>
   );
 }
 
@@ -515,29 +440,6 @@ function ArtifactsSection({ artifacts, onOpen }: { artifacts: ArtifactEntry[]; o
         ))}
       </ul>
     </Section>
-  );
-}
-
-function OmitSection({ items }: { items: string[] }) {
-  return (
-    <Section title="Omitted From Main View">
-      <ul className="flex flex-wrap gap-1.5 text-xs">
-        {items.map((item) => (
-          <li key={item}>
-            <span className="badge badge-ghost badge-sm">{item}</span>
-          </li>
-        ))}
-      </ul>
-    </Section>
-  );
-}
-
-function Pill({ name, sub }: { name: string; sub: string }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-base-300/50 bg-base-100 px-2 py-1 text-sm">
-      <span className="break-all">{name}</span>
-      {sub ? <span className="badge badge-ghost badge-sm">{sub}</span> : null}
-    </div>
   );
 }
 

@@ -8,7 +8,7 @@ type Props = {
 
 export function FailureCard({ step, interruptions, onOpenTerminal }: Props) {
   if (step.progress.status !== "failed" && step.progress.status !== "blocked") return null;
-  const attempt = (step.latestAttempt as { provider?: string; attempt?: number; status?: string; finalMessage?: string; exitCode?: number; pid?: number; startedAt?: string } | null | undefined) ?? null;
+  const attempt = (step.latestAttempt as { provider?: string; attempt?: number; status?: string; finalMessage?: string; exitCode?: number } | null | undefined) ?? null;
   const guards = ((step.uiRuntime as { guards?: { id: string; status: string; evidence?: string }[] } | undefined)?.guards) ?? [];
   const failedGuards = guards.filter((g) => g.status === "failed" || g.status === "fail");
   const findings = step.reviewFindings ?? [];
@@ -32,8 +32,6 @@ export function FailureCard({ step, interruptions, onOpenTerminal }: Props) {
             <Field label="attempt" value={attempt.attempt != null ? String(attempt.attempt) : "—"} />
             <Field label="status" value={attempt.status ?? "—"} />
             {attempt.exitCode != null ? <Field label="exit" value={String(attempt.exitCode)} /> : null}
-            {attempt.pid != null ? <Field label="pid" value={String(attempt.pid)} /> : null}
-            {attempt.startedAt ? <Field label="started" value={attempt.startedAt} /> : null}
           </div>
         ) : null}
 

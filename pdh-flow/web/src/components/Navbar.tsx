@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { RuntimeBlock, SummaryBlock, GitInfo } from "../lib/types";
+import type { RuntimeBlock, StepView } from "../lib/types";
 
 type Props = {
   ticketId?: string | null;
@@ -11,33 +11,33 @@ type Props = {
   onOpenTickets?: () => void;
   pendingTicketCount?: number;
   runtime?: RuntimeBlock | null;
-  summary?: SummaryBlock | null;
-  git?: GitInfo | null;
-  mode?: string | null;
-  repoName?: string | null;
+  steps?: StepView[];
+  currentStepId?: string | null;
+  onSelectStep?: (stepId: string) => void;
   generatedAt?: string;
 };
 
-const RUN_BADGE: Record<string, string> = {
-  running: "badge-info",
-  completed: "badge-success",
-  failed: "badge-error",
-  blocked: "badge-warning",
-  paused: "badge-warning",
+const STATUS_DOT: Record<string, string> = {
+  done: "bg-success",
+  completed: "bg-success",
+  running: "bg-info animate-pulse",
+  active: "bg-info animate-pulse",
+  waiting: "bg-warning",
+  needs_human: "bg-warning",
+  blocked: "bg-error",
+  failed: "bg-error",
+  interrupted: "bg-warning",
+  pending: "bg-base-300",
+  skipped: "bg-base-200",
 };
 
-export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onOpenFlow, onOpenTickets, pendingTicketCount, runtime, summary, git, mode, repoName, generatedAt }: Props) {
+export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onOpenFlow, onOpenTickets, pendingTicketCount, runtime, steps, currentStepId, onSelectStep, generatedAt }: Props) {
   const elapsed = useRelativeTime(generatedAt);
   const run = runtime?.run ?? null;
-  const supervisor = runtime?.supervisor ?? null;
-  const ac = summary?.acCounts ?? {};
-  const acVerified = ac.verified ?? 0;
-  const acDeferred = ac.deferred ?? 0;
-  const acUnverified = ac.unverified ?? 0;
-  const head = git?.head ? git.head.slice(0, 7) : null;
+  const visibleSteps = (steps ?? []).filter((s) => s.progress.status !== "skipped");
   return (
-    <div className="navbar sticky top-0 z-30 border-b border-base-300 bg-base-100">
-      <div className="navbar-start gap-3">
+    <div className="navbar sticky top-0 z-30 border-b border-base-300 bg-base-100 gap-3">
+      <div className="navbar-start gap-3 shrink-0">
         <button
           className="btn btn-ghost btn-square btn-sm"
           aria-label={collapsed ? "タイムラインを開く" : "タイムラインを折りたたむ"}
@@ -47,11 +47,6 @@ export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onO
         >
           <span className="text-xl">{collapsed ? "›" : "☰"}</span>
         </button>
-        <div className="avatar avatar-placeholder">
-          <div className="w-9 rounded-box bg-neutral text-neutral-content">
-            <span className="text-xs font-bold">PD</span>
-          </div>
-        </div>
         <div>
           <p className="text-base font-bold leading-tight">PDH Dev</p>
           <div className="breadcrumbs hidden p-0 text-xs sm:block">
@@ -62,7 +57,36 @@ export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onO
           </div>
         </div>
       </div>
-      <div className="navbar-end gap-2 min-w-0 flex-wrap justify-end">
+
+      {visibleSteps.length > 0 ? (
+        <div className="navbar-center hidden flex-1 min-w-0 md:flex">
+          <ol className="flex flex-1 items-center gap-1 overflow-x-auto px-2">
+            {visibleSteps.map((s, i) => {
+              const status = s.progress.status;
+              const isCurrent = s.id === currentStepId;
+              const dot = STATUS_DOT[status] ?? "bg-base-300";
+              return (
+                <li key={s.id} className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    className={`flex items-center gap-1.5 rounded px-1.5 py-1 text-xs hover:bg-base-200 ${isCurrent ? "bg-base-200 font-semibold" : "text-base-content/70"}`}
+                    title={`${s.id} ${s.label} — ${status}`}
+                    onClick={() => onSelectStep?.(s.id)}
+                  >
+                    <span className={`inline-block h-2 w-2 rounded-full ${dot}`} />
+                    <span className="font-mono">{shortStepId(s.id)}</span>
+                  </button>
+                  {i < visibleSteps.length - 1 ? (
+                    <span className="text-base-content/30">›</span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      ) : null}
+
+      <div className="navbar-end gap-2 shrink-0">
         {elapsed ? <span className="hidden text-xs text-base-content/50 lg:inline">updated {elapsed}</span> : null}
         {onOpenTickets ? (
           <button type="button" className="btn btn-ghost btn-sm gap-1" onClick={onOpenTickets}>
@@ -77,59 +101,19 @@ export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onO
         ) : null}
         {ticketTitle ? (
           <div className="hidden flex-col items-end leading-tight md:flex">
-            <span className="text-sm font-semibold text-base-content/80">{ticketTitle}</span>
-            {ticketId ? <span className="text-xs text-base-content/50">{ticketId}</span> : null}
-          </div>
-        ) : null}
-
-        {summary ? (
-          <div className="hidden items-center gap-2 lg:flex">
-            <span className="badge badge-outline badge-sm">
-              steps {summary.doneCount}/{summary.totalSteps}
-            </span>
-            {acVerified || acDeferred || acUnverified ? (
-              <span
-                className={`badge badge-sm ${
-                  acUnverified > 0 ? "badge-warning badge-outline" : "badge-success badge-outline"
-                }`}
-                title="AC verified / deferred / unverified"
-              >
-                AC {acVerified}/{acDeferred}/{acUnverified}
-              </span>
-            ) : null}
-            {summary.openItems ? (
-              <span className="badge badge-warning badge-sm">open {summary.openItems}</span>
-            ) : null}
-            {summary.gateStatus ? (
-              <span className="badge badge-warning badge-outline badge-sm">gate {summary.gateStatus}</span>
-            ) : null}
-          </div>
-        ) : null}
-
-        {run ? (
-          <div className="hidden flex-col items-end leading-tight xl:flex">
-            <div className="flex items-center gap-2">
-              <span className={`badge ${RUN_BADGE[run.status ?? ""] ?? "badge-neutral"} badge-sm`}>{run.status ?? "—"}</span>
-              {supervisor?.running ? <span className="badge badge-info badge-sm">supervisor</span> : null}
-              {supervisor?.status === "stale" ? <span className="badge badge-error badge-sm">stale</span> : null}
-            </div>
-            <span className="font-mono text-[11px] text-base-content/50">{run.id ?? ""}</span>
-          </div>
-        ) : null}
-
-        {(branch || head || repoName) ? (
-          <div className="hidden flex-col items-end leading-tight xl:flex">
-            {branch ? <span className="text-xs text-base-content/70">⎇ {branch}</span> : null}
-            <span className="font-mono text-[11px] text-base-content/50">
-              {repoName ?? ""}
-              {head ? ` · ${head}` : ""}
-              {mode ? ` · ${mode}` : ""}
-            </span>
+            <span className="text-sm font-semibold text-base-content/80 truncate max-w-xs">{ticketTitle}</span>
+            {run?.status ? <span className="text-xs text-base-content/50">{run.status}</span> : null}
           </div>
         ) : null}
       </div>
     </div>
   );
+}
+
+function shortStepId(id: string) {
+  // PD-C-7 → C-7 / PD-D-2 → D-2
+  const m = /^PD-([A-Z])-(\d+)$/.exec(id);
+  return m ? `${m[1]}-${m[2]}` : id;
 }
 
 function useRelativeTime(iso?: string) {

@@ -4,13 +4,10 @@ export type ConfirmRequest = {
   title: string;
   body?: string;
   preview?: string;
-  reasonLabel?: string;
-  reasonRequired?: boolean;
-  reasonPlaceholder?: string;
   confirmLabel: string;
   confirmTone?: "approve" | "warning" | "danger" | "neutral";
   cancelLabel?: string;
-  onConfirm: (reason: string) => Promise<void> | void;
+  onConfirm: () => Promise<void> | void;
 };
 
 type Props = {
@@ -20,7 +17,6 @@ type Props = {
 
 export function ConfirmModal({ request, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
-  const [reason, setReason] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,7 +24,6 @@ export function ConfirmModal({ request, onClose }: Props) {
     const dlg = dialogRef.current;
     if (!dlg) return;
     if (request && !dlg.open) {
-      setReason("");
       setError(null);
       dlg.showModal();
     } else if (!request && dlg.open) {
@@ -46,14 +41,10 @@ export function ConfirmModal({ request, onClose }: Props) {
 
   async function submit() {
     if (!request) return;
-    if (request.reasonRequired && !reason.trim()) {
-      setError("理由を入力してください");
-      return;
-    }
     setPending(true);
     setError(null);
     try {
-      await request.onConfirm(reason.trim());
+      await request.onConfirm();
       onClose();
     } catch (err) {
       setError((err as Error).message);
@@ -72,22 +63,6 @@ export function ConfirmModal({ request, onClose }: Props) {
           <pre className="mt-4 max-h-60 overflow-auto whitespace-pre-wrap rounded-box border border-base-300 bg-base-200 p-3 text-xs leading-6">
             {request.preview}
           </pre>
-        ) : null}
-        {request.reasonLabel || request.reasonRequired ? (
-          <label className="form-control mt-4 w-full">
-            <span className="label">
-              <span className="label-text">{request.reasonLabel ?? "理由"}</span>
-              {request.reasonRequired ? <span className="label-text-alt text-error">必須</span> : null}
-            </span>
-            <textarea
-              className="textarea textarea-bordered w-full"
-              rows={3}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder={request.reasonPlaceholder ?? ""}
-              disabled={pending}
-            />
-          </label>
         ) : null}
         {error ? (
           <div className="alert alert-error mt-3 text-sm">

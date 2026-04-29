@@ -547,15 +547,15 @@ test_review_loop_auto_repair() {
 test_review_guard_auto_repair() {
   local repo run_id fake_claude fake_codex
   repo="$(seed_repo review-guard-auto-repair)"
-  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-8 | sed -n '1p')"
+  run_id="$(node "$ROOT/src/cli.mjs" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-9 | sed -n '1p')"
   fake_claude="$(write_fake_claude_purpose_validation)"
   fake_codex="$(write_fake_codex_guard_repair)"
   CLAUDE_BIN="$fake_claude" CODEX_BIN="$fake_codex" \
     node "$ROOT/src/cli.mjs" run-next --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.review-guard-repair.txt"
   grep -q "PD-C-10" "$TMP_ROOT/$run_id.review-guard-repair.txt"
   grep -q "## AC 裏取り結果" "$repo/current-note.md"
-  test -f "$repo/.pdh-flow/runs/$run_id/steps/PD-C-8/review-rounds/round-2/repair.json"
-  test -f "$repo/.pdh-flow/runs/$run_id/steps/PD-C-8/step-commit.json"
+  test -f "$repo/.pdh-flow/runs/$run_id/steps/PD-C-9/review-rounds/round-2/repair.json"
+  test -f "$repo/.pdh-flow/runs/$run_id/steps/PD-C-9/step-commit.json"
   node "$ROOT/src/cli.mjs" status --repo "$repo" >"$TMP_ROOT/$run_id.review-guard-status.txt"
   grep -q "Current Step: PD-C-10" "$TMP_ROOT/$run_id.review-guard-status.txt"
 }
@@ -885,7 +885,7 @@ if (!state.documents?.note?.path?.endsWith("current-note.md")) throw new Error("
 if (!state.documents?.note?.text?.includes("PD-C-3")) throw new Error("note document text missing");
 if (!state.documents?.ticket?.path?.endsWith("current-ticket.md")) throw new Error("ticket document path missing");
 if (!state.current?.nextAction?.actions?.some((action) => action.kind === "assist")) throw new Error("assist action missing");
-if (!state.current.nextAction.commands.some((command) => command.includes("run-next"))) throw new Error("next action command missing");
+if (!state.current?.nextAction?.actions?.some((action) => action.kind === "run_next_direct")) throw new Error("run_next_direct action missing");
 const gateStep = state.flow.variants.full.steps.find((step) => step.id === "PD-C-5");
 if (!gateStep?.uiContract?.mustShow?.includes("変更差分")) throw new Error("gate diff contract missing");
 if (!gateStep?.reviewDiff?.baseLabel) throw new Error("gate diff summary missing");

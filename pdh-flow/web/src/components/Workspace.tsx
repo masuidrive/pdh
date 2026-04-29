@@ -69,12 +69,10 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
       <div className="mx-auto grid max-w-7xl gap-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <div className="breadcrumbs p-0 text-sm text-base-content/60">
-              <ul>
-                <li>{step.id}</li>
-                {step.mode ? <li>{step.mode}</li> : null}
-                {status ? <li>{labelForStatus(status)}</li> : null}
-              </ul>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-base-content/60">
+              <span className="font-mono">{step.id}</span>
+              {step.mode ? <span>·</span> : null}
+              {step.mode ? <span>{step.mode}</span> : null}
             </div>
             <h2 className="mt-2 text-3xl font-bold">{step.label}</h2>
             {step.summary ? <p className="mt-2 max-w-3xl text-sm text-base-content/70">{step.summary}</p> : null}
@@ -114,17 +112,7 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
           {actionButtons.length ? (
             <section className="card border border-base-300 bg-base-100 shadow-sm">
               <div className="card-body">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="card-title">Next</h3>
-                  {next?.commands?.length ? (
-                    <details className="dropdown dropdown-end">
-                      <summary className="btn btn-ghost btn-xs">CLI で実行</summary>
-                      <pre className="mt-2 max-w-md overflow-auto rounded-box border border-base-300 bg-base-200 p-3 text-xs">
-                        {next.commands.join("\n")}
-                      </pre>
-                    </details>
-                  ) : null}
-                </div>
+                <h3 className="card-title">Next</h3>
                 <div className="grid gap-4 xl:grid-cols-2">
                   {others.map((btn) => (
                     <ActionTile

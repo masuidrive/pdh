@@ -11,18 +11,14 @@ export type AppState = {
   current: CurrentBlock;
   history?: HistoryEntry[];
   events?: EventEntry[];
-  ac?: { ok: boolean; counts: Record<string, number>; errors?: unknown[] };
   git?: GitInfo;
   tickets?: TicketEntry[];
   ticketRequests?: TicketRequest[];
-  files?: Record<string, string>;
   documents?: Record<string, { path: string; text: string }>;
 };
 
 export type RuntimeBlock = {
   run: RunRecord | null;
-  noteState?: { ticket?: string | null; current_step?: string | null; status?: string | null };
-  currentStep?: { id: string; label?: string } | null;
   supervisor?: SupervisorState | null;
 };
 
@@ -50,7 +46,6 @@ export type SupervisorState = {
 export type SummaryBlock = {
   doneCount: number;
   totalSteps: number;
-  currentLabel?: string;
   acCounts?: Record<string, number>;
   openItems?: number;
   gateStatus?: string | null;
@@ -74,11 +69,9 @@ export type StepView = {
   id: string;
   label: string;
   summary?: string;
-  userAction?: string | null;
-  ui?: unknown;
   provider?: string | null;
   mode?: string | null;
-  progress: { status: ProgressStatus; label?: string; note?: string };
+  progress: { status: ProgressStatus; note?: string };
   current: boolean;
   processState?: ProcessState | null;
   uiContract?: unknown;
@@ -120,39 +113,29 @@ export type CurrentBlock = {
   gate: GateView | null;
   interruptions: Interruption[];
   nextAction: NextAction | null;
-  stepArtifacts?: ArtifactEntry[];
 };
 
 export type NextAction = {
   title: string;
   body?: string;
-  commands?: string[];
   actions?: ActionButton[];
-  selection?: string;
-  targetTab?: string;
 };
 
 export type ActionButton = {
   label: string;
   description?: string;
-  command?: string;
   tone?: "approve" | "reject" | "neutral" | "warning" | "danger" | string;
   kind: string;
-  payload?: Record<string, unknown>;
 };
 
 export type GateView = {
   step_id?: string;
   stepId?: string;
   status?: string;
-  prompt?: string;
-  recommendation?: { kind?: string; status?: string } | null;
-  diff_summary?: string;
+  recommendation?: { status?: string } | null;
   baseline?: { commit?: string; step_id?: string; ref?: string; captured_at?: string };
-  baseline_step?: string;
   rerun_requirement?: { reason?: string; from?: string; target_step_id?: string; changed_ticket_sections?: string[]; changed_note_sections?: string[] } | null;
   decision?: string | null;
-  reason?: string | null;
 };
 
 export type AttemptInfo = {
@@ -209,11 +192,8 @@ export type ArtifactEntry = { name: string; path?: string; size?: number | strin
 
 export type GitInfo = {
   branch?: string;
-  head?: string;
   clean?: boolean;
   statusLines?: string[];
-  diffText?: string;
-  tickets?: TicketEntry[];
 };
 
 export type TicketEntry = {
