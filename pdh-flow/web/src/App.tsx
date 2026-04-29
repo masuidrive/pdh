@@ -14,6 +14,7 @@ import { MermaidModal } from "./components/MermaidModal";
 import { RepoFileModal } from "./components/RepoFileModal";
 import { TicketDrawer } from "./components/TicketDrawer";
 import { StaleRunBanner } from "./components/StaleRunBanner";
+import { TicketChooser } from "./components/TicketChooser";
 import { actions } from "./lib/api";
 import { DocumentModal } from "./components/DocumentModal";
 import { useUrlState } from "./lib/use-url-state";
@@ -96,6 +97,40 @@ export function App() {
           <span>{slot.status === "error" ? slot.error : "状態を取得できませんでした"}</span>
         </div>
       </div>
+    );
+  }
+
+  const hasActiveRun = Boolean(slot.state.runtime?.run?.id && slot.state.runtime?.run?.current_step_id);
+  if (!hasActiveRun) {
+    return (
+      <>
+        <Navbar
+          ticketId={null}
+          ticketTitle={null}
+          branch={slot.state.git?.branch}
+          collapsed
+          onToggle={() => {}}
+          onOpenFlow={undefined}
+          onOpenTickets={undefined}
+          runtime={slot.state.runtime}
+          summary={slot.state.summary}
+          git={slot.state.git}
+          mode={slot.state.mode}
+          repoName={slot.state.repoName}
+          generatedAt={slot.state.generatedAt}
+        />
+        <main className="min-h-[calc(100vh-4rem)]">
+          <TicketChooser
+            tickets={slot.state.tickets ?? []}
+            pendingRequests={slot.state.ticketRequests}
+            onStart={(id) => startTicket(id, false)}
+            onForceStart={(id) => startTicket(id, true)}
+            onOpenTerminal={openTicketTerminal}
+          />
+        </main>
+        <ConfirmModal request={confirm} onClose={() => setConfirm(null)} />
+        <TerminalModal open={terminalStep !== null} stepId={terminalStep} onClose={() => setTerminalStep(null)} />
+      </>
     );
   }
 
