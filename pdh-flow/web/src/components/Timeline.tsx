@@ -10,18 +10,24 @@ type Props = {
 const STATUS_DOT: Record<string, { btn: string; box: string; tone: string; rail: string }> = {
   done: { btn: "btn-success", box: "bg-success/10", tone: "text-success", rail: "bg-success" },
   active: { btn: "btn-primary", box: "border-primary bg-primary/10", tone: "text-primary", rail: "bg-warning" },
+  running: { btn: "btn-primary", box: "border-primary bg-primary/10", tone: "text-primary", rail: "bg-warning" },
   needs_human: { btn: "btn-warning", box: "border-warning bg-warning/10", tone: "text-warning", rail: "bg-warning" },
+  waiting: { btn: "btn-warning", box: "border-warning bg-warning/10", tone: "text-warning", rail: "bg-warning" },
   failed: { btn: "btn-error", box: "border-error bg-error/10", tone: "text-error", rail: "bg-error" },
   blocked: { btn: "btn-error", box: "bg-error/5", tone: "text-error", rail: "bg-error" },
+  interrupted: { btn: "btn-warning", box: "border-warning bg-warning/10", tone: "text-warning", rail: "bg-warning" },
   pending: { btn: "btn-disabled", box: "bg-base-200 text-base-content/50", tone: "", rail: "" },
 };
 
 const STATUS_ICON: Record<string, string> = {
   done: "✓",
   active: "▶",
+  running: "▶",
   needs_human: "?",
+  waiting: "?",
   failed: "!",
   blocked: "■",
+  interrupted: "!",
   pending: "",
 };
 

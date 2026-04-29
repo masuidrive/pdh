@@ -19,17 +19,24 @@ type Props = {
 
 const TONE_BADGE: Record<string, string> = {
   needs_human: "badge-warning",
+  waiting: "badge-warning",
   failed: "badge-error",
   active: "badge-info",
+  running: "badge-info",
   done: "badge-success",
+  completed: "badge-success",
   blocked: "badge-error",
+  interrupted: "badge-warning",
 };
 
 const TONE_ALERT: Record<string, string> = {
   needs_human: "alert-warning",
+  waiting: "alert-warning",
   failed: "alert-error",
   active: "alert-info",
+  running: "alert-info",
   blocked: "alert-error",
+  interrupted: "alert-warning",
 };
 
 export function Workspace({ step, next, allSteps, history, interruptions, documents, onOpenTerminal, onOpenArtifact, onOpenDiff, onOpenDocument, onConfirm }: Props) {
@@ -182,10 +189,13 @@ function toneToBtn(tone: string | undefined, featured?: boolean) {
 function labelForStatus(status: string) {
   switch (status) {
     case "needs_human":
+    case "waiting":
       return "ユーザ回答待ち";
     case "active":
+    case "running":
       return "実行中";
     case "done":
+    case "completed":
       return "完了";
     case "failed":
       return "失敗";
@@ -193,6 +203,8 @@ function labelForStatus(status: string) {
       return "ブロック";
     case "pending":
       return "未着手";
+    case "interrupted":
+      return "割り込み";
     default:
       return status;
   }

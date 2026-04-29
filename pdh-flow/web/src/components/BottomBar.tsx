@@ -7,10 +7,14 @@ type Props = {
 
 const STATUS_BADGE: Record<string, string> = {
   needs_human: "badge-warning",
+  waiting: "badge-warning",
   failed: "badge-error",
   active: "badge-info",
+  running: "badge-info",
   done: "badge-success",
+  completed: "badge-success",
   blocked: "badge-error",
+  interrupted: "badge-warning",
   pending: "badge-neutral",
 };
 
@@ -88,20 +92,5 @@ function formatElapsed(iso?: string) {
 }
 
 function labelForStatus(status: string) {
-  switch (status) {
-    case "needs_human":
-      return "needs_human";
-    case "active":
-      return "running";
-    case "done":
-      return "done";
-    case "failed":
-      return "failed";
-    case "blocked":
-      return "blocked";
-    case "pending":
-      return "pending";
-    default:
-      return status;
-  }
+  return status;
 }

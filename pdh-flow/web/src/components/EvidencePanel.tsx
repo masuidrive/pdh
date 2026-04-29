@@ -52,7 +52,7 @@ const KIND_TONE: Record<EvidenceKind, string> = {
   ready: "success",
 };
 
-const NOTE_HEADING_BY_STEP: Record<string, string> = {
+const DEFAULT_NOTE_HEADING: Record<string, string> = {
   "PD-C-2": "PD-C-2",
   "PD-C-3": "PD-C-3",
   "PD-C-4": "PD-C-4",
@@ -71,53 +71,56 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
   const findings = step.reviewFindings ?? [];
   const judgements = step.judgements ?? [];
   const docs = documents ?? {};
+  const commands = next?.commands ?? [];
 
-  if (!resolved.length && !ready.length && !artifacts.length && !findings.length && !judgements.length && !Object.keys(docs).length) {
+  // diff item is the only mustShow row we render full inline
+  const diffItem = resolved.find((it) => it.kind === "diff");
+  // remaining mustShow items get folded into doc rows by the heading they point at
+  const noteHeadings = collectHeadings(resolved, "current-note.md");
+  const ticketHeadings = collectHeadings(resolved, "current-ticket.md");
+
+  const noteSection = step.noteSection ?? "";
+  const noteText = docs.note?.text ?? "";
+  const noteHeading = noteHeadings[0]?.heading ?? DEFAULT_NOTE_HEADING[step.id] ?? null;
+  const ticketHeading = ticketHeadings[0]?.heading ?? defaultTicketHeading(step.id);
+
+  const showSection =
+    !diffItem && !commands.length && !Object.keys(docs).length && !ready.length && !artifacts.length && !findings.length && !judgements.length;
+  if (showSection) {
     return null;
   }
-
-  const noteHeading = NOTE_HEADING_BY_STEP[step.id] ?? null;
 
   return (
     <section className="card border border-base-300 bg-base-100 shadow-sm">
       <div className="card-body">
         <h3 className="card-title">判断材料</h3>
         <div className="grid gap-3">
-          {resolved.map((it, i) => (
-            <ContractRow
-              key={`${it.label}-${i}`}
-              item={it}
-              onOpenDiff={onOpenDiff && it.kind === "diff" && it.diffStepId ? () => onOpenDiff(it.diffStepId!) : undefined}
-            />
-          ))}
-
-          {ready.length ? <ReadyRow ready={ready} /> : null}
-          {findings.length ? <FindingsRow findings={findings} /> : null}
-          {judgements.length ? <JudgementsRow judgements={judgements} /> : null}
+          {diffItem ? (
+            <ContractRow item={diffItem} onOpenDiff={onOpenDiff && diffItem.diffStepId ? () => onOpenDiff(diffItem.diffStepId!) : undefined} />
+          ) : null}
 
           {docs.note ? (
             <DocumentRow
-              docId="note"
               label="current-note.md"
-              badge={noteHeading ? `current-note.md#${noteHeading}` : "current-note.md"}
-              text={excerptByHeading(docs.note.text, noteHeading)}
+              badge={`current-note.md${noteHeading ? `#${noteHeading}` : ""}`}
+              chips={noteHeadings.map((h) => `#${h.heading}`)}
+              text={preferred(noteSection, excerptByHeading(noteText, noteHeading), preview(noteText))}
               onOpen={onOpenDocument ? () => onOpenDocument("note", noteHeading) : undefined}
             />
           ) : null}
 
           {docs.ticket ? (
             <DocumentRow
-              docId="ticket"
               label="current-ticket.md"
-              badge="current-ticket.md"
-              text={excerptByHeading(docs.ticket.text, "Acceptance Criteria") || excerptByHeading(docs.ticket.text, "AC") || preview(docs.ticket.text)}
-              onOpen={onOpenDocument ? () => onOpenDocument("ticket") : undefined}
+              badge={`current-ticket.md${ticketHeading ? `#${ticketHeading}` : ""}`}
+              chips={ticketHeadings.map((h) => `#${h.heading}`)}
+              text={preferred(excerptByHeading(docs.ticket.text, ticketHeading), preview(docs.ticket.text))}
+              onOpen={onOpenDocument ? () => onOpenDocument("ticket", ticketHeading) : undefined}
             />
           ) : null}
 
           {docs.productBrief ? (
             <DocumentRow
-              docId="productBrief"
               label="product-brief.md"
               badge="product-brief.md"
               text={preview(docs.productBrief.text)}
@@ -127,7 +130,6 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
 
           {docs.epic ? (
             <DocumentRow
-              docId="epic"
               label="current-epic.md"
               badge="current-epic.md"
               text={preview(docs.epic.text)}
@@ -135,6 +137,13 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
             />
           ) : null}
 
+          {commands.length ? <CommandsRow commands={commands} /> : null}
+
+          {ready.length ? <ReadyRow ready={ready} /> : null}
+          {findings.length ? <FindingsRow findings={findings} /> : null}
+          {judgements.length ? <JudgementsRow judgements={judgements} /> : null}
+
+          <DiagnosticsRow artifactCount={artifacts.length} onOpen={() => artifacts[0] && onOpenArtifact(artifacts[0].name)} />
           {artifacts.length ? <ArtifactsBlock artifacts={artifacts} onOpen={onOpenArtifact} /> : null}
         </div>
       </div>
@@ -172,8 +181,7 @@ function ContractRow({ item, onOpenDiff }: { item: EvidenceItem; onOpenDiff?: ()
   );
 }
 
-function DocumentRow({ docId, label, badge, text, onOpen }: { docId: string; label: string; badge: string; text: string; onOpen?: () => void }) {
-  void docId;
+function DocumentRow({ label, badge, chips, text, onOpen }: { label: string; badge: string; chips?: string[]; text: string; onOpen?: () => void }) {
   const Tag = onOpen ? "button" : "div";
   return (
     <Tag
@@ -184,6 +192,13 @@ function DocumentRow({ docId, label, badge, text, onOpen }: { docId: string; lab
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h4 className="font-bold">{label}</h4>
+          {chips && chips.length > 1 ? (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {chips.map((c) => (
+                <span key={c} className="badge badge-outline badge-xs">{c}</span>
+              ))}
+            </div>
+          ) : null}
           {text ? (
             <pre className="mt-2 max-h-32 overflow-hidden whitespace-pre-wrap text-sm leading-6 text-base-content/80">
               {text}
@@ -195,6 +210,38 @@ function DocumentRow({ docId, label, badge, text, onOpen }: { docId: string; lab
         <span className="badge badge-ghost shrink-0">{badge}</span>
       </div>
     </Tag>
+  );
+}
+
+function CommandsRow({ commands }: { commands: string[] }) {
+  return (
+    <div className="rounded-box border border-base-300 bg-base-200 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h4 className="font-bold">CLI</h4>
+          <pre className="mt-2 overflow-x-auto rounded-box border border-base-300 bg-base-100 p-3 text-xs leading-5">
+            {commands.join("\n")}
+          </pre>
+        </div>
+        <span className="badge badge-ghost shrink-0">CLI</span>
+      </div>
+    </div>
+  );
+}
+
+function DiagnosticsRow({ artifactCount, onOpen }: { artifactCount: number; onOpen?: () => void }) {
+  if (!artifactCount) return null;
+  void onOpen;
+  return (
+    <div className="rounded-box border border-base-300 bg-base-200 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h4 className="font-bold">Diagnostics</h4>
+          <p className="text-xs text-base-content/60">artifacts {artifactCount} · 詳細は下のリストから</p>
+        </div>
+        <span className="badge badge-ghost shrink-0">state / logs / artifacts</span>
+      </div>
+    </div>
   );
 }
 
@@ -289,12 +336,41 @@ function ArtifactsBlock({ artifacts, onOpen }: { artifacts: ArtifactEntry[]; onO
   );
 }
 
+function collectHeadings(items: EvidenceItem[], filename: string): { label: string; heading: string }[] {
+  const out: { label: string; heading: string }[] = [];
+  for (const it of items) {
+    const src = it.source ?? "";
+    if (!src.startsWith(filename)) continue;
+    const headingPart = src.slice(filename.length).replace(/^#/, "").trim();
+    if (!headingPart) continue;
+    const headings = headingPart.split(/\s*\/\s*/);
+    for (const h of headings) {
+      if (h && !out.some((existing) => existing.heading === h)) {
+        out.push({ label: it.label, heading: h });
+      }
+    }
+  }
+  return out;
+}
+
 function preview(text: string, lines = 6) {
   return (text || "")
     .split(/\r?\n/)
     .filter(Boolean)
     .slice(0, lines)
     .join("\n");
+}
+
+function defaultTicketHeading(stepId: string) {
+  if (stepId === "PD-C-10" || stepId === "PD-C-8" || stepId === "PD-C-9") return "Product AC";
+  return "Implementation Notes";
+}
+
+function preferred(...values: string[]) {
+  for (const v of values) {
+    if (v && v.trim()) return v;
+  }
+  return "";
 }
 
 function excerptByHeading(text: string, heading: string | null) {
