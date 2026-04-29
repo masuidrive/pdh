@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { basename, extname, join, relative, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
@@ -15,7 +15,8 @@ import { extractSection, loadCurrentNote, parseStepHistory } from "./note-state.
 import { createRedactor } from "./redaction.mjs";
 import { loadReviewerOutputsForStep } from "./review-runtime.mjs";
 import { loadStepUiOutput, loadStepUiRuntime } from "./step-ui.mjs";
-import { hasCompletedProviderAttempt, latestAttemptResult, latestHumanGate, listTrackedProcesses, loadRuntime, readProgressEvents, stepDir } from "./runtime-state.mjs";
+import { hasCompletedProviderAttempt, latestAttemptResult, latestHumanGate, listTrackedProcesses, loadRuntime, readProgressEvents, runtimeMetaPath, stepDir } from "./runtime-state.mjs";
+import { archivePriorRunTag } from "./actions.mjs";
 
 const MAX_TEXT = 120000;
 const MARKDOWN_EXTENSIONS = new Set([".md", ".markdown"]);
@@ -89,7 +90,7 @@ export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", p
 
 function handleRequest({ request, response, repo, assistTerminalManager }) {
   const method = request.method ?? "GET";
-  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept") || request.url?.startsWith("/api/gate/approve") || request.url?.startsWith("/api/ticket/start") || request.url?.startsWith("/api/ticket/terminal") || request.url?.startsWith("/api/run-next") || request.url?.startsWith("/api/runtime/resume") || request.url?.startsWith("/api/runtime/stop")))) {
+  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept") || request.url?.startsWith("/api/gate/approve") || request.url?.startsWith("/api/ticket/start") || request.url?.startsWith("/api/ticket/terminal") || request.url?.startsWith("/api/run-next") || request.url?.startsWith("/api/runtime/resume") || request.url?.startsWith("/api/runtime/stop") || request.url?.startsWith("/api/runtime/discard")))) {
     sendJson(response, 405, { error: "read_only_web_ui" });
     return;
   }
@@ -236,6 +237,18 @@ function handleRequest({ request, response, repo, assistTerminalManager }) {
       sendJson(response, 200, stopRuntimeFromWeb({ repo }));
     } catch (error) {
       sendJson(response, Number(error?.statusCode || 500), { error: "stop_failed", message: error?.message || String(error) });
+    }
+    return;
+  }
+  if (url.pathname === "/api/runtime/discard") {
+    if (method !== "POST") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    try {
+      sendJson(response, 200, discardRuntimeFromWeb({ repo }));
+    } catch (error) {
+      sendJson(response, Number(error?.statusCode || 500), { error: "discard_failed", message: error?.message || String(error) });
     }
     return;
   }
@@ -460,6 +473,33 @@ function stopRuntimeFromWeb({ repo }) {
     repo,
     args: ["stop", "--repo", repo, "--reason", "stopped via web ui"]
   });
+}
+
+function discardRuntimeFromWeb({ repo }) {
+  const runtime = loadRuntime(repo, { normalizeStaleRunning: false });
+  const run = runtime?.run ?? null;
+  let archiveTag = null;
+  if (run?.ticket_id) {
+    archiveTag = archivePriorRunTag({ repoPath: repo, run });
+  }
+  const metaPath = runtimeMetaPath(repo);
+  let removed = false;
+  if (existsSync(metaPath)) {
+    try {
+      rmSync(metaPath, { force: true });
+      removed = true;
+    } catch (error) {
+      const wrapped = new Error(`discard_failed: ${error?.message || String(error)}`);
+      wrapped.statusCode = 500;
+      throw wrapped;
+    }
+  }
+  return {
+    ok: true,
+    archiveTag,
+    removed,
+    run: run ? { id: run.id, ticket_id: run.ticket_id, current_step_id: run.current_step_id } : null
+  };
 }
 
 function openTicketTerminalFromWeb({ repo, ticketId, assistTerminalManager }) {

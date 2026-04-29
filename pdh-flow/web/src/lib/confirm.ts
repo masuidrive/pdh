@@ -76,6 +76,24 @@ export function buildConfirmRequest(kind: string, ctx: Ctx): ConfirmRequest | nu
         reasonRequired: true,
         onConfirm: () => actions.resume(true).then(() => {}),
       };
+    case "runtime_discard":
+      return {
+        title: "runtime を破棄して ticket 選択に戻る",
+        body: [
+          "現在の run を archive タグに退避してから .pdh-flow/runtime.json を削除します。",
+          "この操作で:",
+          " - 進行中の step artifacts (ui-output / review / judgements 等) は archive タグ pdh-flow-archive/<ticket>/<stamp>-<step> に保存され、参照可能です",
+          " - ticket ファイル (tickets/done/<id>.md など) と git 履歴は触りません",
+          " - supervisor は強制的に止まり、UI は ticket 選択画面に戻ります",
+          "",
+          "この後やり直したい場合は、ticket リストから別の ticket を選択するか、必要なら CLI で reopen 相当の手順を実行してください。",
+        ].join("\n"),
+        confirmLabel: "破棄して戻る",
+        confirmTone: "danger",
+        reasonLabel: "理由 (任意)",
+        reasonPlaceholder: "例: agent が ticket.sh close を踏んで runtime が宙ぶらりん",
+        onConfirm: () => actions.discard().then(() => {}),
+      };
     case "stop_direct":
       return {
         title: "Stop runtime",

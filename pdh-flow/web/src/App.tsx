@@ -119,10 +119,8 @@ export function App() {
       />
       <div className="px-5 pt-4 lg:px-8">
         <StaleRunBanner
-          runtime={slot.state.runtime}
-          tickets={slot.state.tickets}
-          onApprove={() => requestConfirm("gate_approve", { stepId: "PD-C-10", stepLabel: "完了承認" })}
-          onStop={() => requestConfirm("stop_direct", {})}
+          state={slot.state}
+          onDiscard={() => requestConfirm("runtime_discard", {})}
           onOpenTickets={() => setTicketsOpen(true)}
         />
       </div>

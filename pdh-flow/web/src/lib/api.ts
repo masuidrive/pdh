@@ -56,6 +56,9 @@ export const actions = {
     const q = reason ? `?reason=${encodeURIComponent(reason)}` : "";
     return postAction(`/api/runtime/stop${q}`);
   },
+  discard() {
+    return postAction("/api/runtime/discard");
+  },
 };
 
 export async function fetchArtifact(stepId: string, name: string) {
