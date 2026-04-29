@@ -3,6 +3,8 @@ import { EvidencePanel } from "./EvidencePanel";
 import { FailureCard } from "./FailureCard";
 import { GateSummaryCard } from "./GateSummaryCard";
 import { UiOutputCard } from "./UiOutputCard";
+import { CompletionCard } from "./CompletionCard";
+import { AssistSignalBanner } from "./AssistSignalBanner";
 
 type Props = {
   step: StepView | null;
@@ -96,7 +98,11 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
 
         <div className="grid gap-5">
           <FailureCard step={step} interruptions={interruptions} onOpenTerminal={() => onOpenTerminal(step.id)} />
+          <AssistSignalBanner signal={step.assistSignal} />
           {step.gate?.summaryText || step.gate?.recommendationText ? <GateSummaryCard gate={step.gate} /> : null}
+          {step.progress.status === "done" || step.progress.status === "completed" ? (
+            <CompletionCard history={step.historyEntry} />
+          ) : null}
           <UiOutputCard step={step} />
           {actionButtons.length ? (
             <section className="card border border-base-300 bg-base-100 shadow-sm">

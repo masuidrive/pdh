@@ -296,18 +296,26 @@ function DiagnosticsBlock({ step, onOpenArtifact }: { step: StepView; onOpenArti
   const artifacts = step.artifacts ?? [];
   const omit = ((step.uiContract as { omit?: string[] } | undefined)?.omit) ?? [];
   const recommendation = (gate?.recommendation as { status?: string } | null | undefined) ?? null;
+  const uiRuntime = (step.uiRuntime as { nextCommands?: string[]; parseErrors?: string[]; parseWarnings?: string[] } | null | undefined) ?? null;
+  const nextCommands = uiRuntime?.nextCommands ?? [];
+  const parseErrors = uiRuntime?.parseErrors ?? [];
+  const parseWarnings = uiRuntime?.parseWarnings ?? [];
 
   const hasState = Boolean(gate?.summary) || (recommendation?.status === "pending") || interruptions.length > 0;
   const hasLogs = events.length > 0;
   const hasArtifacts = artifacts.length > 0;
   const hasOmit = omit.length > 0;
+  const hasNextCommands = nextCommands.length > 0;
+  const hasParse = parseErrors.length > 0 || parseWarnings.length > 0;
 
-  if (!hasState && !hasLogs && !hasArtifacts && !hasOmit) return null;
+  if (!hasState && !hasLogs && !hasArtifacts && !hasOmit && !hasNextCommands && !hasParse) return null;
 
   const subParts: string[] = [];
   if (hasState) subParts.push("state");
   if (hasLogs) subParts.push(`logs ${events.length}`);
   if (hasArtifacts) subParts.push(`artifacts ${artifacts.length}`);
+  if (hasNextCommands) subParts.push(`commands ${nextCommands.length}`);
+  if (hasParse) subParts.push(`parse ${parseErrors.length + parseWarnings.length}`);
   if (hasOmit) subParts.push(`omit ${omit.length}`);
 
   return (
@@ -318,11 +326,42 @@ function DiagnosticsBlock({ step, onOpenArtifact }: { step: StepView; onOpenArti
       </summary>
       <div className="mt-3 grid gap-3">
         {hasState ? <CurrentStateSection gate={gate} recommendation={recommendation} interruptions={interruptions} /> : null}
+        {hasNextCommands ? <NextCommandsSection commands={nextCommands} /> : null}
         {hasLogs ? <LogsSection events={events} /> : null}
+        {hasParse ? <ParseSection errors={parseErrors} warnings={parseWarnings} /> : null}
         {hasArtifacts ? <ArtifactsSection artifacts={artifacts} onOpen={onOpenArtifact} /> : null}
         {hasOmit ? <OmitSection items={omit} /> : null}
       </div>
     </details>
+  );
+}
+
+function NextCommandsSection({ commands }: { commands: string[] }) {
+  return (
+    <Section title="次に runtime が叩くコマンド">
+      <pre className="overflow-x-auto rounded-box border border-base-300 bg-base-100 p-2 text-xs leading-5">{commands.join("\n")}</pre>
+    </Section>
+  );
+}
+
+function ParseSection({ errors, warnings }: { errors: string[]; warnings: string[] }) {
+  return (
+    <Section title="Parse">
+      {errors.length ? (
+        <ul className="text-xs text-error">
+          {errors.map((e, i) => (
+            <li key={`e-${i}`}>error: {e}</li>
+          ))}
+        </ul>
+      ) : null}
+      {warnings.length ? (
+        <ul className="text-xs text-warning">
+          {warnings.map((w, i) => (
+            <li key={`w-${i}`}>warn: {w}</li>
+          ))}
+        </ul>
+      ) : null}
+    </Section>
   );
 }
 
