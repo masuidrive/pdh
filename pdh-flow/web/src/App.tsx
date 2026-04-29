@@ -24,6 +24,7 @@ export function App() {
   const [urlState, updateUrl] = useUrlState();
   const [collapsed, setCollapsed] = useState(false);
   const [terminalStep, setTerminalStep] = useState<string | null>(null);
+  const [terminalTicket, setTerminalTicket] = useState<{ ticketId: string; sessionId: string } | null>(null);
   const [artifactTarget, setArtifactTarget] = useState<{ stepId: string; name: string } | null>(null);
   const [selectedStep, setSelectedStep] = useState<string | null>(urlState.step);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
@@ -63,11 +64,15 @@ export function App() {
 
   async function openTicketTerminal(ticketId: string) {
     try {
-      await actions.openTicketTerminal(ticketId);
+      const session = (await actions.openTicketTerminal(ticketId)) as { sessionId?: string; result?: { sessionId?: string } };
+      const sessionId = session.sessionId ?? session.result?.sessionId;
+      if (!sessionId) {
+        console.error("ticket terminal: session_id missing", session);
+        return;
+      }
       setTicketsOpen(false);
-      setTerminalStep(`ticket:${ticketId}`);
+      setTerminalTicket({ ticketId, sessionId });
     } catch (err) {
-      // surface via confirm error path; for now just log
       console.error(err);
     }
   }
@@ -129,7 +134,16 @@ export function App() {
           />
         </main>
         <ConfirmModal request={confirm} onClose={() => setConfirm(null)} />
-        <TerminalModal open={terminalStep !== null} stepId={terminalStep} onClose={() => setTerminalStep(null)} />
+        <TerminalModal
+          open={terminalStep !== null || terminalTicket !== null}
+          stepId={terminalStep}
+          ticketId={terminalTicket?.ticketId ?? null}
+          sessionId={terminalTicket?.sessionId ?? null}
+          onClose={() => {
+            setTerminalStep(null);
+            setTerminalTicket(null);
+          }}
+        />
       </>
     );
   }
@@ -201,7 +215,16 @@ export function App() {
         />
       </main>
       <BottomBar step={focusedStep} ticketId={slot.state.runtime?.run?.ticket_id ?? null} />
-      <TerminalModal open={terminalStep !== null} stepId={terminalStep} onClose={() => setTerminalStep(null)} />
+      <TerminalModal
+        open={terminalStep !== null || terminalTicket !== null}
+        stepId={terminalStep}
+        ticketId={terminalTicket?.ticketId ?? null}
+        sessionId={terminalTicket?.sessionId ?? null}
+        onClose={() => {
+          setTerminalStep(null);
+          setTerminalTicket(null);
+        }}
+      />
       <ArtifactModal
         open={artifactTarget !== null}
         stepId={artifactTarget?.stepId ?? null}

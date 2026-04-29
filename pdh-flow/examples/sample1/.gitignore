@@ -1,5 +1,4 @@
-.pdh-flow/*
-!.pdh-flow/runtime.json
+.pdh-flow/
 .env
 .venv/
 __pycache__/

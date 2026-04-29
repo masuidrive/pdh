@@ -3,7 +3,9 @@ import { actions } from "../lib/api";
 
 type Props = {
   open: boolean;
-  stepId: string | null;
+  stepId?: string | null;
+  ticketId?: string | null;
+  sessionId?: string | null;
   onClose: () => void;
 };
 
@@ -90,7 +92,7 @@ async function loadXterm() {
   await loadScript("/assets/xterm-addon-web-links.js");
 }
 
-export function TerminalModal({ open, stepId, onClose }: Props) {
+export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessionId, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -114,26 +116,32 @@ export function TerminalModal({ open, stepId, onClose }: Props) {
   }, [open]);
 
   useEffect(() => {
-    if (!open || !stepId) return;
+    if (!open) return;
+    if (!stepId && !providedSessionId) return;
     let cancelled = false;
     setStatus("connecting");
-    setTitle(`Terminal · ${stepId}`);
+    const labelTarget = stepId ?? ticketId ?? "session";
+    setTitle(`Terminal · ${labelTarget}`);
     setLoginAvailable(false);
     setError(null);
     setDrawerOpen(false);
-    setDrawerText(defaultPromptText(stepId));
+    setDrawerText(defaultPromptText(stepId ?? "current step"));
 
     (async () => {
       try {
         await loadXterm();
         if (cancelled) return;
-        const session = await actions.openAssist(stepId);
-        const data = session as { result?: { sessionId?: string; title?: string; status?: string }; sessionId?: string; title?: string; status?: string };
-        const sessionId = data.result?.sessionId ?? data.sessionId;
-        const sessionTitle = data.result?.title ?? data.title;
-        if (sessionTitle) setTitle(`${sessionTitle} · ${stepId}`);
+        let sessionId: string | undefined = providedSessionId ?? undefined;
+        let sessionTitle: string | undefined;
+        if (!sessionId && stepId) {
+          const session = await actions.openAssist(stepId);
+          const data = session as { result?: { sessionId?: string; title?: string; status?: string }; sessionId?: string; title?: string; status?: string };
+          sessionId = data.result?.sessionId ?? data.sessionId;
+          sessionTitle = data.result?.title ?? data.title;
+        }
+        if (sessionTitle) setTitle(`${sessionTitle} · ${labelTarget}`);
         if (!sessionId) {
-          setError("session_id missing from /api/assist/open");
+          setError("session_id missing");
           return;
         }
         const TerminalCtor = window.Terminal!;
@@ -177,7 +185,7 @@ export function TerminalModal({ open, stepId, onClose }: Props) {
           }
           if (!payload) return;
           if (payload.type === "snapshot") {
-            if (payload.title) setTitle(`${payload.title} · ${stepId}`);
+            if (payload.title) setTitle(`${payload.title} · ${labelTarget}`);
             if (payload.status) setStatus(payload.status);
             if (payload.data) {
               if (detectLogin(payload.data)) setLoginAvailable(true);
@@ -227,7 +235,7 @@ export function TerminalModal({ open, stepId, onClose }: Props) {
       termRef.current = null;
       fitRef.current = null;
     };
-  }, [open, stepId]);
+  }, [open, stepId, ticketId, providedSessionId]);
 
   function sendInput(seq: string) {
     if (!seq) return;
