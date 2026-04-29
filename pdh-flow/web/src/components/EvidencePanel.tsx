@@ -52,16 +52,16 @@ const KIND_TONE: Record<EvidenceKind, string> = {
   ready: "success",
 };
 
-const DEFAULT_NOTE_HEADING: Record<string, string> = {
-  "PD-C-2": "PD-C-2",
-  "PD-C-3": "PD-C-3",
-  "PD-C-4": "PD-C-4",
-  "PD-C-5": "PD-C-5",
-  "PD-C-6": "PD-C-6",
-  "PD-C-7": "PD-C-7",
-  "PD-C-8": "PD-C-8",
-  "PD-C-9": "PD-C-9",
-  "PD-C-10": "PD-C-10",
+const NOTE_HEADINGS_BY_STEP: Record<string, string[]> = {
+  "PD-C-2": ["PD-C-2. 調査結果"],
+  "PD-C-3": ["PD-C-3. 計画"],
+  "PD-C-4": ["PD-C-4. 計画レビュー結果", "PD-C-3. 計画"],
+  "PD-C-5": ["PD-C-3. 計画", "PD-C-4. 計画レビュー結果"],
+  "PD-C-6": ["PD-C-6. 実装"],
+  "PD-C-7": ["PD-C-7. 品質検証結果", "PD-C-6. 実装"],
+  "PD-C-8": ["PD-C-8. 目的妥当性確認", "AC 裏取り結果"],
+  "PD-C-9": ["PD-C-9. AC 裏取り結果", "AC 裏取り結果"],
+  "PD-C-10": ["PD-C-9. AC 裏取り結果", "PD-C-8. 目的妥当性確認", "PD-C-7. 品質検証結果"],
 };
 
 export function EvidencePanel({ step, next, allSteps, history, documents, onOpenArtifact, onOpenDiff, onOpenDocument }: Props) {
@@ -75,14 +75,11 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
 
   // diff item is the only mustShow row we render full inline
   const diffItem = resolved.find((it) => it.kind === "diff");
-  // remaining mustShow items get folded into doc rows by the heading they point at
-  const noteHeadings = collectHeadings(resolved, "current-note.md");
-  const ticketHeadings = collectHeadings(resolved, "current-ticket.md");
 
   const noteSection = step.noteSection ?? "";
   const noteText = docs.note?.text ?? "";
-  const noteHeading = noteHeadings[0]?.heading ?? DEFAULT_NOTE_HEADING[step.id] ?? null;
-  const ticketHeading = ticketHeadings[0]?.heading ?? defaultTicketHeading(step.id);
+  const noteHeadings = NOTE_HEADINGS_BY_STEP[step.id] ?? [];
+  const ticketHeading = defaultTicketHeading(step.id);
 
   const noteHasContent = hasMeaningfulContent(docs.note?.text);
   const ticketHasContent = hasMeaningfulContent(docs.ticket?.text);
@@ -112,22 +109,15 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
             <ContractRow item={diffItem} onOpenDiff={onOpenDiff && diffItem.diffStepId ? () => onOpenDiff(diffItem.diffStepId!) : undefined} />
           ) : null}
 
-          {noteHasContent ? (
-            <DocumentRow
-              label="current-note.md"
-              badge={`current-note.md${noteHeading ? `#${noteHeading}` : ""}`}
-              chips={noteHeadings.map((h) => `#${h.heading}`)}
-              text={preferred(noteSection, excerptByHeading(noteText, noteHeading), preview(noteText))}
-              onOpen={onOpenDocument ? () => onOpenDocument("note", noteHeading) : undefined}
-            />
-          ) : null}
+          {noteHasContent
+            ? renderNoteRows(noteText, noteSection, noteHeadings, onOpenDocument)
+            : null}
 
           {ticketHasContent ? (
             <DocumentRow
-              label="current-ticket.md"
+              label={`current-ticket.md${ticketHeading ? ` > ${ticketHeading}` : ""}`}
               badge={`current-ticket.md${ticketHeading ? `#${ticketHeading}` : ""}`}
-              chips={ticketHeadings.map((h) => `#${h.heading}`)}
-              text={preferred(excerptByHeading(docs.ticket!.text, ticketHeading), preview(docs.ticket!.text))}
+              text={excerptByHeading(docs.ticket!.text, ticketHeading)}
               onOpen={onOpenDocument ? () => onOpenDocument("ticket", ticketHeading) : undefined}
             />
           ) : null}
@@ -191,7 +181,7 @@ function ContractRow({ item, onOpenDiff }: { item: EvidenceItem; onOpenDiff?: ()
   );
 }
 
-function DocumentRow({ label, badge, chips, text, onOpen }: { label: string; badge: string; chips?: string[]; text: string; onOpen?: () => void }) {
+function DocumentRow({ label, badge, text, onOpen }: { label: string; badge: string; text: string; onOpen?: () => void }) {
   const Tag = onOpen ? "button" : "div";
   return (
     <Tag
@@ -202,15 +192,8 @@ function DocumentRow({ label, badge, chips, text, onOpen }: { label: string; bad
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h4 className="font-bold">{label}</h4>
-          {chips && chips.length > 1 ? (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {chips.map((c) => (
-                <span key={c} className="badge badge-outline badge-xs">{c}</span>
-              ))}
-            </div>
-          ) : null}
           {text ? (
-            <pre className="mt-2 max-h-32 overflow-hidden whitespace-pre-wrap text-sm leading-6 text-base-content/80">
+            <pre className="mt-2 max-h-40 overflow-hidden whitespace-pre-wrap text-sm leading-6 text-base-content/80">
               {text}
             </pre>
           ) : (
@@ -220,6 +203,31 @@ function DocumentRow({ label, badge, chips, text, onOpen }: { label: string; bad
         <span className="badge badge-ghost shrink-0">{badge}</span>
       </div>
     </Tag>
+  );
+}
+
+function renderNoteRows(
+  noteText: string,
+  noteSection: string,
+  headings: string[],
+  onOpenDocument?: (docId: string, heading?: string | null) => void
+) {
+  if (!headings.length) return null;
+  return (
+    <>
+      {headings.map((heading, i) => {
+        const excerpt = excerptByHeading(noteText, heading) || (i === 0 ? noteSection : "");
+        return (
+          <DocumentRow
+            key={heading}
+            label={`current-note.md > ${heading}`}
+            badge={`current-note.md#${heading}`}
+            text={excerpt}
+            onOpen={onOpenDocument ? () => onOpenDocument("note", heading) : undefined}
+          />
+        );
+      })}
+    </>
   );
 }
 
@@ -485,22 +493,6 @@ function actorBadge(provider: string) {
   }
 }
 
-function collectHeadings(items: EvidenceItem[], filename: string): { label: string; heading: string }[] {
-  const out: { label: string; heading: string }[] = [];
-  for (const it of items) {
-    const src = it.source ?? "";
-    if (!src.startsWith(filename)) continue;
-    const headingPart = src.slice(filename.length).replace(/^#/, "").trim();
-    if (!headingPart) continue;
-    const headings = headingPart.split(/\s*\/\s*/);
-    for (const h of headings) {
-      if (h && !out.some((existing) => existing.heading === h)) {
-        out.push({ label: it.label, heading: h });
-      }
-    }
-  }
-  return out;
-}
 
 function hasMeaningfulContent(text: string | undefined) {
   if (!text) return false;
@@ -523,13 +515,6 @@ function preview(text: string, lines = 6) {
 function defaultTicketHeading(stepId: string) {
   if (stepId === "PD-C-10" || stepId === "PD-C-8" || stepId === "PD-C-9") return "Product AC";
   return "Implementation Notes";
-}
-
-function preferred(...values: string[]) {
-  for (const v of values) {
-    if (v && v.trim()) return v;
-  }
-  return "";
 }
 
 function excerptByHeading(text: string, heading: string | null) {
