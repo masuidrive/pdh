@@ -90,7 +90,7 @@ export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", p
 
 function handleRequest({ request, response, repo, assistTerminalManager }) {
   const method = request.method ?? "GET";
-  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept") || request.url?.startsWith("/api/gate/approve") || request.url?.startsWith("/api/ticket/start") || request.url?.startsWith("/api/ticket/terminal") || request.url?.startsWith("/api/run-next") || request.url?.startsWith("/api/runtime/resume") || request.url?.startsWith("/api/runtime/stop") || request.url?.startsWith("/api/runtime/discard")))) {
+  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/recommendation/accept") || request.url?.startsWith("/api/gate/approve") || request.url?.startsWith("/api/ticket/start") || request.url?.startsWith("/api/ticket/terminal") || request.url?.startsWith("/api/run-next") || request.url?.startsWith("/api/runtime/resume") || request.url?.startsWith("/api/runtime/stop") || request.url?.startsWith("/api/runtime/discard") || request.url?.startsWith("/api/repo/terminal")))) {
     sendJson(response, 405, { error: "read_only_web_ui" });
     return;
   }
@@ -237,6 +237,18 @@ function handleRequest({ request, response, repo, assistTerminalManager }) {
       sendJson(response, 200, stopRuntimeFromWeb({ repo }));
     } catch (error) {
       sendJson(response, Number(error?.statusCode || 500), { error: "stop_failed", message: error?.message || String(error) });
+    }
+    return;
+  }
+  if (url.pathname === "/api/repo/terminal") {
+    if (method !== "POST") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    try {
+      sendJson(response, 200, assistTerminalManager.openRepoSession());
+    } catch (error) {
+      sendJson(response, Number(error?.statusCode || 500), { error: "repo_terminal_failed", message: error?.message || String(error) });
     }
     return;
   }

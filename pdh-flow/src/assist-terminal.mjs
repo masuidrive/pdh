@@ -124,6 +124,17 @@ export function createAssistTerminalManager({ repoPath }) {
     });
   }
 
+  function openRepoSession() {
+    const shell = process.env.SHELL || "/bin/bash";
+    return openManagedSession({
+      key: "repo:shell",
+      kind: "repo",
+      title: "Repo shell",
+      command: shell,
+      args: ["-l"]
+    });
+  }
+
   function openManagedSession({ key, kind, title, stepId = null, ticketId = null, command, args }) {
     pruneSessions();
     const existingId = activeByKey.get(key);
@@ -246,6 +257,7 @@ export function createAssistTerminalManager({ repoPath }) {
   return {
     openSession,
     openTicketSession,
+    openRepoSession,
     handleUpgrade,
     closeAll
   };

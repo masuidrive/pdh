@@ -3,9 +3,12 @@ import type { TicketEntry, TicketRequest } from "../lib/types";
 type Props = {
   tickets: TicketEntry[];
   pendingRequests?: TicketRequest[];
+  dirty?: boolean;
+  statusLines?: string[];
   onStart: (ticketId: string) => void;
   onForceStart: (ticketId: string) => void;
   onOpenTerminal: (ticketId: string) => void;
+  onOpenRepoTerminal?: () => void;
 };
 
 const STATUS_TONE: Record<string, string> = {
@@ -15,7 +18,7 @@ const STATUS_TONE: Record<string, string> = {
   canceled: "badge-warning",
 };
 
-export function TicketChooser({ tickets, pendingRequests, onStart, onForceStart, onOpenTerminal }: Props) {
+export function TicketChooser({ tickets, pendingRequests, dirty, statusLines, onStart, onForceStart, onOpenTerminal, onOpenRepoTerminal }: Props) {
   const sorted = [...tickets].sort((a, b) => statusOrder(a.status) - statusOrder(b.status) || (a.priority ?? 99) - (b.priority ?? 99));
   const todos = sorted.filter((t) => t.status === "todo" || t.status === "doing");
   const done = sorted.filter((t) => t.status === "done" || t.status === "canceled");
@@ -29,6 +32,29 @@ export function TicketChooser({ tickets, pendingRequests, onStart, onForceStart,
           現在 active な flow はありません。新しい ticket を選んで開始するか、過去の done / canceled を確認できます。
         </p>
       </header>
+
+      {dirty ? (
+        <section className="rounded-box border border-warning/40 bg-warning/10 p-4 shadow-sm">
+          <h3 className="font-bold text-warning">未 commit のファイルがあります</h3>
+          <p className="mt-1 text-sm">
+            この状態で ticket を開始すると <code>ticket.sh start</code> が dirty チェックで失敗します。Terminal を開いて
+            <code className="px-1">git status</code> で確認し、<code>git add &amp;&amp; git commit</code> または
+            <code className="px-1">git stash</code> / <code className="px-1">git restore</code> (慎重に) で片付けてください。
+          </p>
+          {statusLines && statusLines.length ? (
+            <pre className="mt-2 max-h-40 overflow-auto rounded-box border border-base-300 bg-base-100 p-2 text-xs leading-5">
+              {statusLines.join("\n")}
+            </pre>
+          ) : null}
+          {onOpenRepoTerminal ? (
+            <div className="mt-3">
+              <button type="button" className="btn btn-warning btn-sm" onClick={onOpenRepoTerminal}>
+                Open Terminal
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {pendingRequests?.length ? (
         <section className="space-y-2">

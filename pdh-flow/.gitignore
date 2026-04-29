@@ -1,7 +1,6 @@
 .env
 .codex
-.pdh-flow/*
-!.pdh-flow/runtime.json
+.pdh-flow/
 node_modules/
 dist/
 coverage/

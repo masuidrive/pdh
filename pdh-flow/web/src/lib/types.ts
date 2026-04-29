@@ -210,7 +210,14 @@ export type ReviewDiff = {
 
 export type ArtifactEntry = { name: string; path?: string; size?: number | string };
 
-export type GitInfo = { branch?: string; head?: string; tickets?: TicketEntry[] };
+export type GitInfo = {
+  branch?: string;
+  head?: string;
+  clean?: boolean;
+  statusLines?: string[];
+  diffText?: string;
+  tickets?: TicketEntry[];
+};
 
 export type TicketEntry = {
   id: string;

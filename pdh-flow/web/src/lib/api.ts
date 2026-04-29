@@ -59,6 +59,9 @@ export const actions = {
   discard() {
     return postAction("/api/runtime/discard");
   },
+  openRepoTerminal() {
+    return postAction("/api/repo/terminal");
+  },
 };
 
 export async function fetchArtifact(stepId: string, name: string) {

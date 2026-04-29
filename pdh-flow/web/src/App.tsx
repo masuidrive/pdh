@@ -25,6 +25,7 @@ export function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [terminalStep, setTerminalStep] = useState<string | null>(null);
   const [terminalTicket, setTerminalTicket] = useState<{ ticketId: string; sessionId: string } | null>(null);
+  const [terminalRepo, setTerminalRepo] = useState<{ sessionId: string } | null>(null);
   const [artifactTarget, setArtifactTarget] = useState<{ stepId: string; name: string } | null>(null);
   const [selectedStep, setSelectedStep] = useState<string | null>(urlState.step);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
@@ -60,6 +61,20 @@ export function App() {
 
   function startTicket(ticketId: string, force: boolean) {
     requestConfirm(force ? "ticket_force_restart" : "ticket_start", { ticketId });
+  }
+
+  async function openRepoTerminal() {
+    try {
+      const session = (await actions.openRepoTerminal()) as { sessionId?: string; result?: { sessionId?: string } };
+      const sessionId = session.sessionId ?? session.result?.sessionId;
+      if (!sessionId) {
+        console.error("repo terminal: session_id missing", session);
+        return;
+      }
+      setTerminalRepo({ sessionId });
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   async function openTicketTerminal(ticketId: string) {
@@ -128,20 +143,24 @@ export function App() {
           <TicketChooser
             tickets={slot.state.tickets ?? []}
             pendingRequests={slot.state.ticketRequests}
+            dirty={slot.state.git?.clean === false}
+            statusLines={slot.state.git?.statusLines}
             onStart={(id) => startTicket(id, false)}
             onForceStart={(id) => startTicket(id, true)}
             onOpenTerminal={openTicketTerminal}
+            onOpenRepoTerminal={openRepoTerminal}
           />
         </main>
         <ConfirmModal request={confirm} onClose={() => setConfirm(null)} />
         <TerminalModal
-          open={terminalStep !== null || terminalTicket !== null}
+          open={terminalStep !== null || terminalTicket !== null || terminalRepo !== null}
           stepId={terminalStep}
           ticketId={terminalTicket?.ticketId ?? null}
-          sessionId={terminalTicket?.sessionId ?? null}
+          sessionId={terminalTicket?.sessionId ?? terminalRepo?.sessionId ?? null}
           onClose={() => {
             setTerminalStep(null);
             setTerminalTicket(null);
+            setTerminalRepo(null);
           }}
         />
       </>
@@ -216,13 +235,14 @@ export function App() {
       </main>
       <BottomBar step={focusedStep} ticketId={slot.state.runtime?.run?.ticket_id ?? null} />
       <TerminalModal
-        open={terminalStep !== null || terminalTicket !== null}
+        open={terminalStep !== null || terminalTicket !== null || terminalRepo !== null}
         stepId={terminalStep}
         ticketId={terminalTicket?.ticketId ?? null}
-        sessionId={terminalTicket?.sessionId ?? null}
+        sessionId={terminalTicket?.sessionId ?? terminalRepo?.sessionId ?? null}
         onClose={() => {
           setTerminalStep(null);
           setTerminalTicket(null);
+          setTerminalRepo(null);
         }}
       />
       <ArtifactModal
