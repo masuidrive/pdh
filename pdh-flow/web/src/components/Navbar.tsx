@@ -62,7 +62,7 @@ export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onO
           </div>
         </div>
       </div>
-      <div className="navbar-end gap-3">
+      <div className="navbar-end gap-2 min-w-0 flex-wrap justify-end">
         {elapsed ? <span className="hidden text-xs text-base-content/50 lg:inline">updated {elapsed}</span> : null}
         {onOpenTickets ? (
           <button type="button" className="btn btn-ghost btn-sm gap-1" onClick={onOpenTickets}>

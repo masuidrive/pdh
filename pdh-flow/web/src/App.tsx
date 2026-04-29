@@ -214,7 +214,7 @@ export function App() {
               }}
             />
             <div className="mt-6">
-              <EventsFeed events={slot.state.events} />
+              <EventsFeed step={focusedStep} events={slot.state.events} />
             </div>
           </aside>
         ) : null}

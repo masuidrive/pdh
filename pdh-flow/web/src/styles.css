@@ -54,6 +54,22 @@ body,
   height: 100%;
 }
 
+html,
+body {
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+pre {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .fade-in {
   animation: fade-in 120ms ease-out;
 }
