@@ -1791,7 +1791,7 @@ function humanDecisionActions(repo, stepId) {
   return [
     nextActionChoice({
       label: "Open Terminal",
-      description: "まずは Claude assist と相談しながら recommendation を作るか、必要な修正をここで進めます。",
+      description: "判断に迷う場合は Claude assist と一緒にコード・テスト・関連ドキュメントを確認できます。必要なら assist の中で修正・検証も実施可能です。",
       command: assistOpenCommand(repo, stepId),
       tone: "neutral",
       kind: "assist"
