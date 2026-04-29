@@ -154,7 +154,6 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
           {findings.length ? <FindingsRow findings={findings} /> : null}
           {judgements.length ? <JudgementsRow judgements={judgements} /> : null}
 
-          <DiagnosticsRow artifactCount={artifacts.length} onOpen={() => artifacts[0] && onOpenArtifact(artifacts[0].name)} />
           {artifacts.length ? <ArtifactsBlock artifacts={artifacts} onOpen={onOpenArtifact} /> : null}
         </div>
       </div>
@@ -221,22 +220,6 @@ function DocumentRow({ label, badge, chips, text, onOpen }: { label: string; bad
         <span className="badge badge-ghost shrink-0">{badge}</span>
       </div>
     </Tag>
-  );
-}
-
-function DiagnosticsRow({ artifactCount, onOpen }: { artifactCount: number; onOpen?: () => void }) {
-  if (!artifactCount) return null;
-  void onOpen;
-  return (
-    <div className="rounded-box border border-base-300 bg-base-200 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h4 className="font-bold">Diagnostics</h4>
-          <p className="text-xs text-base-content/60">artifacts {artifactCount} · 詳細は下のリストから</p>
-        </div>
-        <span className="badge badge-ghost shrink-0">state / logs / artifacts</span>
-      </div>
-    </div>
   );
 }
 
@@ -309,7 +292,10 @@ function JudgementsRow({ judgements }: { judgements: JudgementEntry[] }) {
 function ArtifactsBlock({ artifacts, onOpen }: { artifacts: ArtifactEntry[]; onOpen: (name: string) => void }) {
   return (
     <details className="rounded-box border border-base-300 bg-base-200 p-4">
-      <summary className="cursor-pointer text-sm font-bold">Artifacts ({artifacts.length})</summary>
+      <summary className="flex cursor-pointer items-center justify-between gap-3">
+        <span className="font-bold">Diagnostics</span>
+        <span className="text-xs text-base-content/60">state / logs / artifacts ({artifacts.length})</span>
+      </summary>
       <ul className="mt-3 grid gap-2">
         {artifacts.map((a) => (
           <li key={a.name}>
