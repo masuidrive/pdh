@@ -26,14 +26,11 @@ type SocketShape = {
 const QUICK_KEYS: { label: string; sequence: string; tone?: string }[] = [
   { label: "Enter", sequence: "\r", tone: "primary" },
   { label: "Esc", sequence: "\u001b" },
-  { label: "Ctrl-C", sequence: "\u0003", tone: "warning" },
   { label: "Tab", sequence: "\t" },
   { label: "↑", sequence: "\u001b[A" },
   { label: "↓", sequence: "\u001b[B" },
   { label: "←", sequence: "\u001b[D" },
   { label: "→", sequence: "\u001b[C" },
-  { label: "Ctrl-D", sequence: "\u0004", tone: "ghost" },
-  { label: "Ctrl-L", sequence: "\u000c", tone: "ghost" },
   { label: "y", sequence: "y" },
   { label: "n", sequence: "n" },
 ];
@@ -113,6 +110,33 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
     } else {
       if (dlg.open) dlg.close();
     }
+  }, [open]);
+
+  // Track visualViewport so the modal hugs the visible area when the soft keyboard appears.
+  useEffect(() => {
+    if (!open) return;
+    const vv = window.visualViewport;
+    function update() {
+      const h = vv?.height ?? window.innerHeight;
+      document.documentElement.style.setProperty("--vvh", `${h}px`);
+      fitRef.current?.fit();
+    }
+    update();
+    if (vv) {
+      vv.addEventListener("resize", update);
+      vv.addEventListener("scroll", update);
+    } else {
+      window.addEventListener("resize", update);
+    }
+    return () => {
+      if (vv) {
+        vv.removeEventListener("resize", update);
+        vv.removeEventListener("scroll", update);
+      } else {
+        window.removeEventListener("resize", update);
+      }
+      document.documentElement.style.removeProperty("--vvh");
+    };
   }, [open]);
 
   useEffect(() => {
@@ -262,7 +286,15 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
 
   return (
     <dialog ref={dialogRef} className="modal" onClose={onClose}>
-      <div className="modal-box w-11/12 max-w-6xl flex flex-col" style={{ maxHeight: "min(90dvh, calc(100dvh - 32px))", height: "min(90dvh, calc(100dvh - 32px))" }}>
+      <div
+        className="modal-box w-11/12 max-w-6xl flex flex-col p-3 sm:p-4"
+        style={{
+          height: "var(--vvh, 100dvh)",
+          maxHeight: "var(--vvh, 100dvh)",
+          width: "min(96vw, 1280px)",
+          maxWidth: "min(96vw, 1280px)",
+        }}
+      >
         <div className="flex items-center justify-between gap-3 pb-2">
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <h3 className="font-bold truncate">{title}</h3>
