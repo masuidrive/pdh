@@ -11,6 +11,7 @@ type Ctx = {
 export function buildConfirmRequest(kind: string, ctx: Ctx): ConfirmRequest | null {
   switch (kind) {
     case "gate_approve":
+    case "approve_direct":
       return {
         title: `${ctx.stepLabel ?? ctx.stepId ?? "Gate"} を承認`,
         body: "この gate を通して次の step に進めます。承認理由を残しておくと履歴で追えます。",
