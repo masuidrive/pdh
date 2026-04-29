@@ -157,24 +157,22 @@ function ContractRow({ item, onOpenDiff }: { item: EvidenceItem; onOpenDiff?: ()
     <Tag
       type={onClick ? "button" : undefined}
       onClick={onClick}
-      className={`rounded-box border border-base-300 bg-base-200 p-4 text-left ${onClick ? "cursor-pointer hover:bg-base-300/40" : ""}`}
+      className={`block w-full rounded-box border border-base-300 bg-base-200 p-4 text-left ${onClick ? "cursor-pointer hover:bg-base-300/40" : ""}`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h4 className="truncate font-bold">{item.label}</h4>
-            <span className={`badge badge-${tone} badge-sm`}>{KIND_LABELS[item.kind]}</span>
-          </div>
-          {item.body ? (
-            <pre className="mt-2 max-h-44 overflow-hidden whitespace-pre-wrap text-sm leading-6 text-base-content/80">
-              {item.body}
-            </pre>
-          ) : (
-            <p className="mt-2 text-xs italic text-base-content/40">未記録</p>
-          )}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h4 className="font-bold">{item.label}</h4>
+          <span className={`badge badge-${tone} badge-sm`}>{KIND_LABELS[item.kind]}</span>
         </div>
         {item.source ? <span className="badge badge-ghost shrink-0">{item.source}</span> : null}
       </div>
+      {item.body ? (
+        <pre className="mt-2 w-full whitespace-pre-wrap break-words text-sm leading-6 text-base-content/80">
+          {item.body}
+        </pre>
+      ) : (
+        <p className="mt-2 text-xs italic text-base-content/40">未記録</p>
+      )}
     </Tag>
   );
 }
@@ -548,8 +546,9 @@ function excerptByHeading(text: string, heading: string | null) {
     }
   }
   if (start === -1) return preview(text);
-  const out: string[] = [lines[start]];
-  for (let i = start + 1; i < lines.length && out.length < 14; i++) {
+  // Skip the heading line itself — the row already shows the heading in its title/badge
+  const out: string[] = [];
+  for (let i = start + 1; i < lines.length; i++) {
     const m = lines[i].match(/^(#{1,6})\s+/);
     if (m && m[1].length <= level) break;
     out.push(lines[i]);
