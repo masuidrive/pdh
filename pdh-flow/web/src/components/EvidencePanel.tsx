@@ -175,7 +175,7 @@ function ContractRow({ item, onOpenDiff }: { item: EvidenceItem; onOpenDiff?: ()
   );
 }
 
-function DocumentRow({ label, badge, text, onOpen }: { label: string; badge: string; text: string; onOpen?: () => void }) {
+function DocumentRow({ label, text, onOpen }: { label: string; badge?: string; text: string; onOpen?: () => void }) {
   const Tag = onOpen ? "button" : "div";
   return (
     <Tag
@@ -183,10 +183,7 @@ function DocumentRow({ label, badge, text, onOpen }: { label: string; badge: str
       onClick={onOpen}
       className={`block w-full rounded-box border border-base-300 bg-base-200 p-4 text-left ${onOpen ? "cursor-pointer hover:bg-base-300/40" : ""}`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h4 className="font-bold">{label}</h4>
-        <span className="badge badge-ghost shrink-0">{badge}</span>
-      </div>
+      <h4 className="font-bold">{label}</h4>
       {text ? (
         <pre className="mt-2 w-full whitespace-pre-wrap break-words text-sm leading-6 text-base-content/80">
           {text}
