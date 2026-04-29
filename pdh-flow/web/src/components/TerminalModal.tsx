@@ -351,22 +351,12 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1 pb-2">
-          {QUICK_KEYS.map((k) => (
-            <button
-              key={k.label}
-              type="button"
-              className={`btn btn-xs ${toneBtn(k.tone)}`}
-              onClick={() => sendInput(k.sequence)}
-              title={k.label}
-            >
-              {k.label}
-            </button>
-          ))}
-        </div>
+        {error ? <div className="alert alert-error text-sm mb-2">{error}</div> : null}
+
+        <div ref={containerRef} className="flex-1 rounded-box border border-base-300 bg-[#1f1d18]" />
 
         {drawerOpen ? (
-          <div className="rounded-box border border-base-300 bg-base-200 p-3 mb-2">
+          <div className="rounded-box border border-base-300 bg-base-200 p-3 mt-2">
             <textarea
               className="textarea textarea-bordered w-full text-xs"
               rows={3}
@@ -380,9 +370,19 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
           </div>
         ) : null}
 
-        {error ? <div className="alert alert-error text-sm mb-2">{error}</div> : null}
-
-        <div ref={containerRef} className="flex-1 rounded-box border border-base-300 bg-[#1f1d18]" />
+        <div className="flex flex-wrap items-center gap-1 pt-2">
+          {QUICK_KEYS.map((k) => (
+            <button
+              key={k.label}
+              type="button"
+              className={`btn btn-xs ${toneBtn(k.tone)}`}
+              onClick={() => sendInput(k.sequence)}
+              title={k.label}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
       </div>
       <form method="dialog" className="modal-backdrop">
         <button>close</button>
