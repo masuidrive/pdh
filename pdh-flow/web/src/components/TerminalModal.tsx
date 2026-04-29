@@ -151,7 +151,7 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
     setTitle(`Terminal · ${labelTarget}`);
     setLoginAvailable(false);
     setError(null);
-    setDrawerOpen(true);
+    setDrawerOpen(false);
     setDrawerText(defaultPromptText(stepId ?? "current step"));
 
     function connect() {
