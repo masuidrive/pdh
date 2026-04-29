@@ -154,7 +154,7 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
           {findings.length ? <FindingsRow findings={findings} /> : null}
           {judgements.length ? <JudgementsRow judgements={judgements} /> : null}
 
-          {artifacts.length ? <ArtifactsBlock artifacts={artifacts} onOpen={onOpenArtifact} /> : null}
+          <DiagnosticsBlock step={step} onOpenArtifact={onOpenArtifact} />
         </div>
       </div>
     </section>
@@ -289,14 +289,107 @@ function JudgementsRow({ judgements }: { judgements: JudgementEntry[] }) {
   );
 }
 
-function ArtifactsBlock({ artifacts, onOpen }: { artifacts: ArtifactEntry[]; onOpen: (name: string) => void }) {
+function DiagnosticsBlock({ step, onOpenArtifact }: { step: StepView; onOpenArtifact: (name: string) => void }) {
+  const gate = step.gate ?? null;
+  const interruptions = step.interruptions ?? [];
+  const events = step.events ?? [];
+  const artifacts = step.artifacts ?? [];
+  const omit = ((step.uiContract as { omit?: string[] } | undefined)?.omit) ?? [];
+  const recommendation = (gate?.recommendation as { status?: string } | null | undefined) ?? null;
+
+  const hasState = Boolean(gate?.summary) || (recommendation?.status === "pending") || interruptions.length > 0;
+  const hasLogs = events.length > 0;
+  const hasArtifacts = artifacts.length > 0;
+  const hasOmit = omit.length > 0;
+
+  if (!hasState && !hasLogs && !hasArtifacts && !hasOmit) return null;
+
+  const subParts: string[] = [];
+  if (hasState) subParts.push("state");
+  if (hasLogs) subParts.push(`logs ${events.length}`);
+  if (hasArtifacts) subParts.push(`artifacts ${artifacts.length}`);
+  if (hasOmit) subParts.push(`omit ${omit.length}`);
+
   return (
     <details className="rounded-box border border-base-300 bg-base-200 p-4">
       <summary className="flex cursor-pointer items-center justify-between gap-3">
         <span className="font-bold">Diagnostics</span>
-        <span className="text-xs text-base-content/60">state / logs / artifacts ({artifacts.length})</span>
+        <span className="text-xs text-base-content/60">{subParts.join(" · ")}</span>
       </summary>
-      <ul className="mt-3 grid gap-2">
+      <div className="mt-3 grid gap-3">
+        {hasState ? <CurrentStateSection gate={gate} recommendation={recommendation} interruptions={interruptions} /> : null}
+        {hasLogs ? <LogsSection events={events} /> : null}
+        {hasArtifacts ? <ArtifactsSection artifacts={artifacts} onOpen={onOpenArtifact} /> : null}
+        {hasOmit ? <OmitSection items={omit} /> : null}
+      </div>
+    </details>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h5 className="text-xs uppercase tracking-wide text-base-content/50">{title}</h5>
+      <div className="mt-1.5 grid gap-1">{children}</div>
+    </section>
+  );
+}
+
+function CurrentStateSection({
+  gate,
+  recommendation,
+  interruptions,
+}: {
+  gate: StepView["gate"] | null;
+  recommendation: { status?: string } | null;
+  interruptions: { kind: string; message?: string; status?: string }[];
+}) {
+  return (
+    <Section title="Current State">
+      {gate?.summary ? (
+        <Pill name="human gate summary" sub={gate.decision ?? gate.status ?? ""} />
+      ) : null}
+      {recommendation?.status === "pending" ? (
+        <Pill name="agent recommendation" sub="pending" />
+      ) : null}
+      {interruptions.map((it, i) => (
+        <Pill key={i} name={it.message ?? it.kind ?? "interruption"} sub={it.status ?? it.kind ?? "open"} />
+      ))}
+    </Section>
+  );
+}
+
+function LogsSection({ events }: { events: NonNullable<StepView["events"]> }) {
+  const recent = events.slice(-12);
+  return (
+    <Section title="Logs">
+      <ul className="grid gap-1 text-xs">
+        {recent.map((event, i) => {
+          const ts = (event.ts ?? event.created_at ?? "").replace("T", " ").replace("Z", "");
+          const actor = (event.provider ?? "runtime").toUpperCase();
+          const highlight =
+            event.type === "interrupted" || event.type === "guard_failed" || event.type === "human_gate_resolved";
+          const provider = event.provider ?? "runtime";
+          return (
+            <li
+              key={(event as { id?: string }).id ?? `${ts}-${i}`}
+              className={`grid grid-cols-[max-content_max-content_1fr] gap-2 rounded border px-2 py-1 ${highlight ? "border-warning/40 bg-warning/10" : "border-base-300/50 bg-base-100"}`}
+            >
+              <span className="font-mono text-[10px] text-base-content/40">{ts || "—"}</span>
+              <span className={`badge badge-sm ${actorBadge(provider)}`}>{actor}</span>
+              <span className="break-all">{event.message ?? event.type ?? "—"}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </Section>
+  );
+}
+
+function ArtifactsSection({ artifacts, onOpen }: { artifacts: ArtifactEntry[]; onOpen: (name: string) => void }) {
+  return (
+    <Section title="Artifacts">
+      <ul className="grid gap-2">
         {artifacts.map((a) => (
           <li key={a.name}>
             <button
@@ -313,8 +406,44 @@ function ArtifactsBlock({ artifacts, onOpen }: { artifacts: ArtifactEntry[]; onO
           </li>
         ))}
       </ul>
-    </details>
+    </Section>
   );
+}
+
+function OmitSection({ items }: { items: string[] }) {
+  return (
+    <Section title="Omitted From Main View">
+      <ul className="flex flex-wrap gap-1.5 text-xs">
+        {items.map((item) => (
+          <li key={item}>
+            <span className="badge badge-ghost badge-sm">{item}</span>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+function Pill({ name, sub }: { name: string; sub: string }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-base-300/50 bg-base-100 px-2 py-1 text-sm">
+      <span className="break-all">{name}</span>
+      {sub ? <span className="badge badge-ghost badge-sm">{sub}</span> : null}
+    </div>
+  );
+}
+
+function actorBadge(provider: string) {
+  switch (provider) {
+    case "runtime":
+      return "badge-info";
+    case "claude":
+      return "badge-primary";
+    case "codex":
+      return "badge-warning";
+    default:
+      return "badge-ghost";
+  }
 }
 
 function collectHeadings(items: EvidenceItem[], filename: string): { label: string; heading: string }[] {
