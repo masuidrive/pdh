@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildFlowView, getStep, nextStep, resolveSkillBodies, resolveStepReviewPlan } from "./flow.mjs";
+import { buildFlowView, getStep, nextStep, resolveSkillBodies, resolveStepReviewPlan } from "../core/flow.mjs";
 import { defaultAcceptedJudgementStatus, defaultJudgementKind } from "./judgements.mjs";
 import { loadStepInterruptions, renderInterruptionsForPrompt } from "./interruptions.mjs";
 import { renderUiOutputPromptSection } from "./step-ui.mjs";

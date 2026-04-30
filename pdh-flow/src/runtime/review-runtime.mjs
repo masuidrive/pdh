@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { commitStep } from "./actions.mjs";
-import { resolveStepReviewPlan } from "./flow.mjs";
+import { resolveStepReviewPlan } from "../core/flow.mjs";
 import { defaultAcceptedJudgementStatus, defaultJudgementKind, writeJudgement } from "./judgements.mjs";
-import { replaceNoteSection } from "./note-state.mjs";
+import { replaceNoteSection } from "../core/note-state.mjs";
 import { uiOutputArtifactPath } from "./step-ui.mjs";
 
 export function activeReviewPlan(flow, variant, stepId) {

@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { createRedactor } from "./redaction.mjs";
+import { createRedactor } from "../core/redaction.mjs";
 
 export function writeFailureSummary({
   stateDir,

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { getStep } from "./flow.mjs";
-import { createInterruption } from "./interruptions.mjs";
-import { withRunLock } from "./locks.mjs";
-import { appendProgressEvent, defaultStateDir, loadRuntime, updateRun } from "./runtime-state.mjs";
-import { writeStepUiRuntime } from "./step-ui.mjs";
+import { getStep } from "../core/flow.mjs";
+import { createInterruption } from "../runtime/interruptions.mjs";
+import { withRunLock } from "../runtime/locks.mjs";
+import { appendProgressEvent, defaultStateDir, loadRuntime, updateRun } from "../runtime/runtime-state.mjs";
+import { writeStepUiRuntime } from "../runtime/step-ui.mjs";
 
 const argv = process.argv.slice(2);
 const command = argv[0] && !argv[0].startsWith("--") ? argv[0] : "help";
@@ -81,8 +81,8 @@ function printUsage() {
   console.log(`pdh-provider
 
 Usage:
-  node src/provider-cli.mjs ask [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6] [--kind clarification]
-  node src/provider-cli.mjs help
+  node src/cli/provider-cli.mjs ask [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6] [--kind clarification]
+  node src/cli/provider-cli.mjs help
 
 Provider-safe commands only:
   ask         Open an interruption for the current step and stop for user input.
@@ -154,9 +154,9 @@ function nonNegativeInteger(value, label) {
 
 function interruptStopCommands(repo, stepId) {
   return [
-    `node src/cli.mjs show-interrupts --repo ${shellQuote(repo)} --step ${stepId}`,
-    `node src/cli.mjs assist-open --repo ${shellQuote(repo)} --step ${stepId}`,
-    `node src/cli.mjs answer --repo ${shellQuote(repo)} --step ${stepId} --message "<answer>"`
+    `node src/cli/index.mjs show-interrupts --repo ${shellQuote(repo)} --step ${stepId}`,
+    `node src/cli/index.mjs assist-open --repo ${shellQuote(repo)} --step ${stepId}`,
+    `node src/cli/index.mjs answer --repo ${shellQuote(repo)} --step ${stepId} --message "<answer>"`
   ];
 }
 

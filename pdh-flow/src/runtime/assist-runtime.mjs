@@ -8,8 +8,8 @@ import { latestAttemptResult, latestHumanGate } from "./runtime-state.mjs";
 import { loadStepUiRuntime } from "./step-ui.mjs";
 import { renderTemplate } from "./template-engine.mjs";
 
-const RUNTIME_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const CLI_PATH = join(RUNTIME_ROOT, "src", "cli.mjs");
+const RUNTIME_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const CLI_PATH = join(RUNTIME_ROOT, "src", "cli", "index.mjs");
 const NODE_PATH = process.execPath;
 
 export function assistDir({ stateDir, runId, stepId }) {

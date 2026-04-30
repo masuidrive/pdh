@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import nunjucks from "nunjucks";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const root = dirname(here);
+const root = dirname(dirname(here));
 const templatesDir = join(root, "flows", "prompts");
 
 const env = nunjucks.configure(templatesDir, {

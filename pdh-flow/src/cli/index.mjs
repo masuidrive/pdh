@@ -2,22 +2,22 @@
 import { existsSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { join, relative, resolve } from "node:path";
-import { loadDotEnv } from "./env.mjs";
-import { describeFlow, buildFlowView, getInitialStep, getStep, loadFlow, nextStep, outcomeFromDecision, renderMermaidFlow } from "./flow.mjs";
-import { evaluateStepGuards } from "./guards.mjs";
-import { runCodex } from "./codex-adapter.mjs";
-import { runClaude } from "./claude-adapter.mjs";
-import { runCalcSmoke } from "./smoke-calc.mjs";
-import { archivePriorRunTag, commitStep, gateDecisionText, gateNoteHeadingsFor, gateTicketHeadingFor, ticketClose, ticketStart } from "./actions.mjs";
-import { renderStepPrompt, writeReviewerPromptArtifact, writeReviewRepairPromptArtifact, writeStepPrompt } from "./prompt-templates.mjs";
-import { captureNoteTicketPatchProposal, snapshotNoteTicketFiles } from "./patch-proposals.mjs";
-import { defaultAcceptedJudgementStatus, defaultJudgementKind, loadJudgements, writeJudgement } from "./judgements.mjs";
-import { runFinalVerification } from "./final-verification.mjs";
-import { formatDoctor, runDoctor } from "./doctor.mjs";
-import { withRunLock } from "./locks.mjs";
-import { answerLatestInterruption, createInterruption, latestOpenInterruption, loadStepInterruptions, renderInterruptionMarkdown } from "./interruptions.mjs";
-import { writeFailureSummary } from "./failure-summary.mjs";
-import { appendStepHistoryEntry, loadCurrentNote, replaceNoteSection, saveCurrentNote } from "./note-state.mjs";
+import { loadDotEnv } from "../core/env.mjs";
+import { describeFlow, buildFlowView, getInitialStep, getStep, loadFlow, nextStep, outcomeFromDecision, renderMermaidFlow } from "../core/flow.mjs";
+import { evaluateStepGuards } from "../core/guards.mjs";
+import { runCodex } from "../runtime/codex-adapter.mjs";
+import { runClaude } from "../runtime/claude-adapter.mjs";
+import { runCalcSmoke } from "../runtime/smoke-calc.mjs";
+import { archivePriorRunTag, commitStep, gateDecisionText, gateNoteHeadingsFor, gateTicketHeadingFor, ticketClose, ticketStart } from "../runtime/actions.mjs";
+import { renderStepPrompt, writeReviewerPromptArtifact, writeReviewRepairPromptArtifact, writeStepPrompt } from "../runtime/prompt-templates.mjs";
+import { captureNoteTicketPatchProposal, snapshotNoteTicketFiles } from "../runtime/patch-proposals.mjs";
+import { defaultAcceptedJudgementStatus, defaultJudgementKind, loadJudgements, writeJudgement } from "../runtime/judgements.mjs";
+import { runFinalVerification } from "../core/final-verification.mjs";
+import { formatDoctor, runDoctor } from "../runtime/doctor.mjs";
+import { withRunLock } from "../runtime/locks.mjs";
+import { answerLatestInterruption, createInterruption, latestOpenInterruption, loadStepInterruptions, renderInterruptionMarkdown } from "../runtime/interruptions.mjs";
+import { writeFailureSummary } from "../runtime/failure-summary.mjs";
+import { appendStepHistoryEntry, loadCurrentNote, replaceNoteSection, saveCurrentNote } from "../core/note-state.mjs";
 import {
   allowedAssistSignals,
   appendAssistSignal,
@@ -30,7 +30,7 @@ import {
   prepareTicketAssistSession,
   ticketAssistSessionPath,
   updateLatestAssistSignal
-} from "./assist-runtime.mjs";
+} from "../runtime/assist-runtime.mjs";
 import {
   activeReviewPlan,
   aggregateReviewerOutputs,
@@ -48,9 +48,9 @@ import {
   writeReviewRepairResult,
   writeReviewRoundAggregate,
   writeReviewerAttemptResult
-} from "./review-runtime.mjs";
-import { judgementFromUiOutput, loadStepUiOutput, writeStepUiRuntime } from "./step-ui.mjs";
-import { clearStepCommitRecord, loadStepCommitRecord, writeStepCommitRecord } from "./step-commit.mjs";
+} from "../runtime/review-runtime.mjs";
+import { judgementFromUiOutput, loadStepUiOutput, writeStepUiRuntime } from "../runtime/step-ui.mjs";
+import { clearStepCommitRecord, loadStepCommitRecord, writeStepCommitRecord } from "../runtime/step-commit.mjs";
 import {
   appendProgressEvent,
   cleanupRunArtifacts,
@@ -82,7 +82,7 @@ import {
   updateRunSupervisor,
   updateHumanGateRecommendation,
   writeAttemptResult
-} from "./runtime-state.mjs";
+} from "../runtime/runtime-state.mjs";
 
 const emitWarning = process.emitWarning.bind(process);
 process.emitWarning = (warning, ...warningArgs) => {
@@ -1698,7 +1698,7 @@ function cmdDoctor(argv) {
 }
 
 async function cmdWeb(argv) {
-  const { startWebServer } = await import("./web-server.mjs");
+  const { startWebServer } = await import("../web/index.mjs");
   const options = parseOptions(argv);
   const repo = resolve(options.repo ?? process.cwd());
   const host = options.host ?? "127.0.0.1";

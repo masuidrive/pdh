@@ -2,15 +2,15 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { loadFlow, getInitialStep, getStep } from "./flow.mjs";
-import { createRedactor } from "./redaction.mjs";
+import { loadFlow, getInitialStep, getStep } from "../core/flow.mjs";
+import { createRedactor } from "../core/redaction.mjs";
 import { stepRecoveryTag } from "./actions.mjs";
 import {
   loadCurrentNote,
   saveCurrentNote,
   normalizePdh,
   serializePdh
-} from "./note-state.mjs";
+} from "../core/note-state.mjs";
 
 export function defaultStateDir(repoPath = process.cwd()) {
   return join(repoPath, ".pdh-flow");

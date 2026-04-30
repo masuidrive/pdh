@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import nunjucks from "nunjucks";
 
-const promptsRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "flows", "prompts");
+const promptsRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "flows", "prompts");
 const stepsDir = join(promptsRoot, "steps");
 
 const env = new nunjucks.Environment(new nunjucks.FileSystemLoader(promptsRoot), {

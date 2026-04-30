@@ -3,7 +3,7 @@ import { join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { defaultJudgementKind, loadJudgements } from "./judgements.mjs";
 import { loadStepInterruptions } from "./interruptions.mjs";
-import { extractSection } from "./note-state.mjs";
+import { extractSection } from "../core/note-state.mjs";
 import { collectStepArtifacts, latestAttemptResult } from "./runtime-state.mjs";
 
 export function stepUiContract(step) {

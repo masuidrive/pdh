@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { runCodex } from "./codex-adapter.mjs";
-import { loadDotEnv } from "./env.mjs";
+import { loadDotEnv } from "../core/env.mjs";
 
 export async function runCalcSmoke({ rootDir = "/tmp/pdh-flow-calc-smoke", stateDir = null, store = null, bypass = true, timeoutMs = 10 * 60 * 1000 } = {}) {
   loadDotEnv();
