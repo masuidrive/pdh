@@ -73,83 +73,6 @@ export function reviewRoundAggregatePath({ stateDir, runId, stepId, round }) {
   return join(reviewRoundDir({ stateDir, runId, stepId, round }), "aggregate.json");
 }
 
-export function writeReviewerPrompt({ stateDir, run, step, reviewPlan, reviewer }) {
-  const path = reviewerPromptPath({
-    stateDir,
-    runId: run.id,
-    stepId: step.id,
-    reviewerId: reviewer.reviewerId
-  });
-  mkdirSync(join(path, ".."), { recursive: true });
-  const acceptedStatus = reviewerAcceptedStatus(step.id);
-  const outputPath = `.pdh-flow/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.json`;
-  const body = [
-    "# pdh-flow Reviewer Prompt",
-    "",
-    `You are ${reviewer.label} for ${step.id}.`,
-    "This is a fresh reviewer role inside pdh-flow runtime semantics.",
-    "",
-    "## Reviewer Contract",
-    "",
-    `- Role: ${reviewer.label}`,
-    ...(reviewer.responsibility ? [`- Responsibility: ${reviewer.responsibility}`] : []),
-    ...(reviewer.focus.length > 0 ? ["- Focus:", ...reviewer.focus.map((item) => `  - ${item}`)] : ["- Focus: (none)"]),
-    "",
-    "## Review Rules",
-    "",
-    "- Review the current repo state for this step only.",
-    "- Read `current-ticket.md` and `current-note.md` before concluding.",
-    "- Do not edit repo files.",
-    "- Do not commit.",
-    "- Do not run `ticket.sh` or `node src/cli.mjs ...`.",
-    "- You may inspect git diff, read files, and run narrowly scoped verification commands when needed.",
-    "- This repo owns review semantics.",
-    ...(reviewPlan?.intent ? [`- Review intent: ${reviewPlan.intent}`] : []),
-    ...(reviewPlan?.passWhen?.length ? ["- Step pass conditions:", ...reviewPlan.passWhen.map((item) => `  - ${item}`)] : []),
-    ...(reviewPlan?.onFindings?.length ? ["- If findings remain:", ...reviewPlan.onFindings.map((item) => `  - ${item}`)] : []),
-    "",
-    "## Output",
-    "",
-    `Write valid JSON to \`${outputPath}\`.`,
-    "Do not use markdown fences. All keys and strings must be double-quoted; escape inner double quotes with `\\\"` and backslashes with `\\\\`.",
-    "Required fields:",
-    "- `status`: exact reviewer conclusion string.",
-    "- `summary`: one short sentence.",
-    "- `findings`: array of finding objects. Use `[]` when there are no findings.",
-    "- `notes`: optional free text. Multi-line content uses `\\n` inside the JSON string.",
-    "",
-    "Finding object shape:",
-    "- `severity`: one of `critical`, `major`, `minor`, `note`, `none`",
-    "- `title`: short title",
-    "- `evidence`: concrete evidence",
-    "- `recommendation`: concrete correction or follow-up",
-    "",
-    acceptedStatus
-      ? `Use \`status: ${acceptedStatus}\` only when your latest review has no unresolved blocker at that threshold.`
-      : "Use a short status string that states whether final verification is ready.",
-    "Match the primary language used in `current-ticket.md` for human-readable text.",
-    "",
-    "Template:",
-    "",
-    JSON.stringify({
-      status: acceptedStatus || "Ready",
-      summary: "Short reviewer summary",
-      findings: [
-        {
-          severity: "major",
-          title: "Concrete issue title",
-          evidence: "Concrete evidence",
-          recommendation: "Concrete correction or follow-up"
-        }
-      ],
-      notes: "Optional free text"
-    }, null, 2),
-    ""
-  ].join("\n");
-  writeFileSync(path, body);
-  return { artifactPath: path, body };
-}
-
 export function writeReviewerAttemptResult({ stateDir, runId, stepId, reviewerId, attempt, result }) {
   const path = result.round
     ? reviewRoundReviewerAttemptResultPath({
@@ -576,11 +499,6 @@ function normalizeReviewRepairOutput(value, meta = {}) {
 
 function noteSectionForStep(step) {
   return step.guards?.find((guard) => guard.type === "note_section_updated")?.section ?? null;
-}
-
-function reviewerAcceptedStatus(stepId) {
-  const kind = defaultJudgementKind(stepId);
-  return kind ? defaultAcceptedJudgementStatus(kind) : null;
 }
 
 function reviewCommitSummary(stepId) {

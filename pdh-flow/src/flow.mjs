@@ -245,6 +245,8 @@ function normalizeReviewPlan(review, variant, roleCatalog) {
     repairProvider: normalizeString(source.repairProvider),
     passWhen: normalizeStringList(source.passWhen),
     onFindings: normalizeStringList(source.onFindings),
+    reviewerRules: normalizeStringList(source.reviewerRules),
+    repairRules: normalizeStringList(source.repairRules),
     reviewers: Array.isArray(reviewers)
       ? reviewers.map((reviewer) => normalizeReviewer(reviewer, roleCatalog)).filter((entry) => entry.roleId || entry.label)
       : []

@@ -5,6 +5,7 @@ import { defaultAcceptedJudgementStatus, defaultJudgementKind } from "./judgemen
 import { loadStepInterruptions, renderInterruptionsForPrompt } from "./interruptions.mjs";
 import { renderUiOutputPromptSection } from "./step-ui.mjs";
 import { hasStepPrompt, renderStepPromptBody } from "./step-prompts.mjs";
+import { renderTemplate } from "./template-engine.mjs";
 
 export function writeStepPrompt({ repoPath, stateDir, run, flow, stepId }) {
   const step = getStep(flow, stepId);
@@ -52,93 +53,20 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
   const stepBody = hasStepPrompt(step.id) ? renderStepPromptBody(step.id) : null;
   const skillBodies = resolveSkillBodies(step.role);
 
-  return [
-    "# pdh-flow Step Prompt",
-    "",
-    "## Run Context",
-    "",
-    `- Run: ${run.id}`,
-    `- Ticket: ${run.ticket_id ?? "(none)"}`,
-    `- Flow: ${run.flow_id}@${run.flow_variant}`,
-    `- Current step: ${step.id}`,
-    `- Provider: ${step.provider}`,
-    `- Mode: ${step.mode}`,
-    ...(step.role ? [`- Role: ${step.role}`] : []),
-    ...(step.summary ? [`- Step summary: ${step.summary}`] : []),
-    `- Success transition: ${nextStep(flow, run.flow_variant, step.id, "success") ?? "(none)"}`,
-    "",
-    ...renderSkillsSection(skillBodies),
-    "## Interruptions",
-    "",
-    ...renderInterruptionsForPrompt(interruptions),
-    "",
-    ...(stepBody
-      ? [stepBody.trimEnd(), ""]
-      : [
-          "## Step Instructions",
-          "",
-          `- Execute ${step.id} according to the flow definition and repo rules.`,
-          `- Update canonical records and satisfy the guards for ${step.id}.`,
-          ""
-        ]),
-    ...(reviewerOutputs?.length ? renderReviewerOutputsSection(reviewerOutputs) : []),
-    "## Compiled Context",
-    "",
-    ...(renderPromptContext(promptContext)),
-    "",
-    "## Required Guards",
-    "",
-    ...formatGuards(step),
-    "",
-    ...renderReviewSemantics(step, reviewPlan),
-    ...((step.mode === "review" || reviewPlan?.reviewers?.length) ? [""] : []),
-    ...renderUiOutputPromptSection({ run, step }),
-    ""
-  ].join("\n");
-}
-
-function renderSkillsSection(skillBodies) {
-  if (!skillBodies?.length) return [];
-  const lines = ["## Skills", ""];
-  for (const skill of skillBodies) {
-    lines.push(`### ${skill.label}`, "", skill.body.trimEnd(), "");
-  }
-  return lines;
-}
-
-function renderReviewerOutputsSection(reviewerOutputs) {
-  const lines = [
-    "## Reviewer Outputs",
-    "",
-    `Runtime ran ${reviewerOutputs.length} reviewer${reviewerOutputs.length === 1 ? "" : "s"} in parallel for this round. Their \`review.json\` artifacts are listed below in full so you can read them without opening additional files. Treat each block as the canonical output of that reviewer.`,
-    ""
-  ];
-  for (const reviewer of reviewerOutputs) {
-    lines.push(`### ${reviewer.label} (${reviewer.reviewerId})`);
-    lines.push("");
-    if (reviewer.provider) {
-      lines.push(`- provider: ${reviewer.provider}`);
-    }
-    if (reviewer.round !== null && reviewer.round !== undefined) {
-      lines.push(`- round: ${reviewer.round}`);
-    }
-    if (reviewer.artifactPath) {
-      lines.push(`- artifact: \`${reviewer.artifactPath}\``);
-    }
-    if (reviewer.status) {
-      lines.push(`- status: ${reviewer.status}`);
-    }
-    lines.push("");
-    if (reviewer.rawText) {
-      lines.push("```json");
-      lines.push(reviewer.rawText.trimEnd());
-      lines.push("```");
-    } else {
-      lines.push("_(reviewer produced no readable output)_");
-    }
-    lines.push("");
-  }
-  return lines;
+  return renderTemplate("step-prompt.njk", {
+    run,
+    step,
+    successTransition: nextStep(flow, run.flow_variant, step.id, "success"),
+    skillBodies,
+    interruptionLines: renderInterruptionsForPrompt(interruptions),
+    stepBody,
+    reviewerOutputs: reviewerOutputs ?? [],
+    promptContextLines: renderPromptContext(promptContext),
+    guardLines: formatGuards(step),
+    reviewSemanticsLines: renderReviewSemantics(step, reviewPlan),
+    hasReviewers: Boolean(reviewPlan?.reviewers?.length),
+    uiOutputLines: renderUiOutputPromptSection({ run, step })
+  });
 }
 
 function formatGuards(step) {
@@ -264,229 +192,82 @@ export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, re
   const outputPath = round
     ? `.pdh-flow/runs/${run.id}/steps/${step.id}/review-rounds/round-${round}/reviewers/${reviewer.reviewerId}/review.json`
     : `.pdh-flow/runs/${run.id}/steps/${step.id}/reviewers/${reviewer.reviewerId}/review.json`;
-  const reviewerStepRules = reviewerRulesForStep(step.id);
-  return [
-    "# pdh-flow Reviewer Prompt",
-    "",
-    `You are ${reviewer.label} for ${step.id}.`,
-    "This is a fresh reviewer role owned by pdh-flow runtime semantics.",
-    "",
-    "## Run Context",
-    "",
-    `- Run: ${run.id}`,
-    `- Ticket: ${run.ticket_id ?? "(none)"}`,
-    `- Flow: ${run.flow_id}@${run.flow_variant}`,
-    `- Step: ${step.id}`,
-    `- Reviewer role: ${reviewer.label}`,
-    ...(round ? [`- Review round: ${round}`] : []),
-    ...(reviewer.provider ? [`- Provider: ${reviewer.provider}`] : []),
-    ...(reviewer.responsibility ? [`- Responsibility: ${reviewer.responsibility}`] : []),
-    "",
-    "## Reviewer Rules",
-    "",
-    "- Review the current repo state for this step only.",
-    "- Read `current-ticket.md` and `current-note.md` before concluding.",
-    "- Do not edit repo files.",
-    "- Do not commit.",
-    "- Do not run `ticket.sh` or `node src/cli.mjs ...`.",
-    "- You may inspect git diff, read files, and run narrowly scoped verification commands when needed.",
-    "- This repo owns review semantics.",
-    "- Prioritize critical and major findings over nits. If severe issues remain, do not spend the review on style-only comments.",
-    "- Review the purpose of the plan or change, not only generic code-style concerns.",
-    "- Do not dismiss a finding just because the plan or note claims it is handled. Look for direct evidence in the current repo state.",
-    "- If this reviewer role previously raised a blocker, clear it only when the latest repo state resolves it.",
-    "- The runtime unions the latest reviewer results across roles. Do not assume PM or another reviewer will downgrade your severity for you.",
-    ...(reviewPlan.intent ? [`- Review intent: ${reviewPlan.intent}`] : []),
-    ...(reviewPlan.passWhen?.length ? ["- Step pass conditions:", ...reviewPlan.passWhen.map((item) => `  - ${item}`)] : []),
-    ...(reviewPlan.onFindings?.length ? ["- If findings remain:", ...reviewPlan.onFindings.map((item) => `  - ${item}`)] : []),
-    ...(reviewer.focus?.length ? ["- Your focus:", ...reviewer.focus.map((item) => `  - ${item}`)] : ["- Your focus: (none)"]),
-    ...(reviewerStepRules.length ? ["- Step-specific review rules:", ...reviewerStepRules.map((item) => `  - ${item}`)] : []),
-    ...(priorFindings.length
-      ? [
-          "- Prior blocking findings from this reviewer role that must be re-checked in this round:",
-          ...priorFindings.map((finding) => `  - [${finding.severity}] ${finding.title}: ${finding.evidence || finding.recommendation || "re-check against the latest repo state"}`),
-          "- Clear these only when the current repo state directly resolves them."
-        ]
-      : []),
-    "",
-    "## Canonical Files",
-    "",
-    "- `current-ticket.md` at repo root: durable ticket intent, Product AC, and implementation notes.",
-    "- `current-note.md` at repo root: workflow state in frontmatter plus process evidence and step history.",
-    "- Read both files before acting. Use repo-local references called out there when you need additional context.",
-    "",
-    "## Output Artifact",
-    "",
-    `Write valid JSON to \`${outputPath}\`.`,
-    "Do not use markdown fences. Do not add extra top-level keys. All keys and strings must be double-quoted; escape inner double quotes with `\\\"` and backslashes with `\\\\`.",
-    "",
-    "Field rules:",
-    "- `status`: exact reviewer conclusion string.",
-    "- `summary`: one short sentence.",
-    "- `findings`: use `[]` when there are no findings.",
-    "- `notes`: optional free text. Multi-line content uses `\\n` inside the JSON string.",
-    "- Each finding must have `severity`, `title`, `evidence`, and `recommendation`.",
-    "- Allowed severities: `critical`, `major`, `minor`, `note`, `none`.",
-    "- Match the primary language used in `current-ticket.md` for all human-readable text in this file.",
-    ...(acceptedStatus ? [`- Use \`status: ${acceptedStatus}\` only when your latest review has no unresolved blocker at that threshold.`] : []),
-    "",
-    "Use this JSON shape:",
-    "",
-    JSON.stringify({
-      status: acceptedStatus || "Ready",
-      summary: "Short reviewer summary",
-      findings: [
-        {
-          severity: "major",
-          title: "Concrete issue title",
-          evidence: "Concrete evidence",
-          recommendation: "Concrete correction or follow-up"
-        }
-      ],
-      notes: "Optional free text"
-    }, null, 2),
-    ""
-  ].join("\n");
+  const reviewerStepRules = Array.isArray(reviewPlan?.reviewerRules) ? reviewPlan.reviewerRules : [];
+  const jsonShape = JSON.stringify({
+    status: acceptedStatus || "Ready",
+    summary: "Short reviewer summary",
+    findings: [
+      {
+        severity: "major",
+        title: "Concrete issue title",
+        evidence: "Concrete evidence",
+        recommendation: "Concrete correction or follow-up"
+      }
+    ],
+    notes: "Optional free text"
+  }, null, 2);
+  return renderTemplate("reviewer-prompt.njk", {
+    run,
+    step,
+    reviewPlan,
+    reviewer,
+    round,
+    priorFindings,
+    reviewerStepRules,
+    acceptedStatus,
+    outputPath,
+    jsonShape
+  });
 }
 
 export function renderReviewRepairPrompt({ repoPath, run, flow, step, reviewPlan, aggregate, round, provider }) {
   const outputPath = `.pdh-flow/runs/${run.id}/steps/${step.id}/review-rounds/round-${round}/repair.json`;
   const skillBodies = resolveSkillBodies("repair");
-  const lines = [
-    "# pdh-flow Review Repair Prompt",
-    "",
-    `You are the repair provider for ${step.id} round ${round}.`,
-    "Your job is to resolve the current blocking review findings, update the repo state, run the smallest meaningful verification, and prepare the next review round.",
-    "",
-    "## Run Context",
-    "",
-    `- Run: ${run.id}`,
-    `- Ticket: ${run.ticket_id ?? "(none)"}`,
-    `- Flow: ${run.flow_id}@${run.flow_variant}`,
-    `- Step: ${step.id}`,
-    `- Review round: ${round}`,
-    `- Repair provider: ${provider}`,
-    `- Role: repair`,
-    ...(reviewPlan?.intent ? [`- Review intent: ${reviewPlan.intent}`] : []),
-    "",
-    ...renderSkillsSection(skillBodies),
-    "## Repair Rules",
-    "",
-    "- Read `current-ticket.md` and `current-note.md` before editing.",
-    "- Resolve the current blocking findings for this step only. Do not drift into later steps.",
-    "- You may edit code, tests, `current-ticket.md`, and `current-note.md` when needed to satisfy the findings.",
-    "- Do not commit.",
-    "- Do not run `ticket.sh` or `node src/cli.mjs ...`.",
-    "- Run the smallest meaningful verification that proves the addressed findings are actually resolved.",
-    "- Keep your changes consistent with existing local patterns instead of inventing a parallel design.",
-    "- If you cannot fully resolve every blocker in this round, still fix the highest-leverage subset and record what remains.",
-    "- Match the primary language used in `current-ticket.md` for all human-readable text in the output artifact.",
-    ...reviewRepairRulesForStep(step.id).map((rule) => `- ${rule}`),
-    "",
-    "## Canonical Files",
-    "",
-    "- `current-ticket.md` at repo root: durable ticket intent, Product AC, and implementation notes.",
-    "- `current-note.md` at repo root: workflow state in frontmatter plus process evidence and step history.",
-    "",
-    "## Current Blocking Findings",
-    ""
-  ];
   const blockers = blockingFindings(aggregate);
-  if (blockers.length === 0) {
-    lines.push("- No blocking findings were detected. Clean up any remaining verification or evidence gaps and prepare for the next review round.");
-  } else {
-    for (const finding of blockers) {
-      lines.push(`- [${finding.severity}] ${finding.reviewerLabel}: ${finding.title}`);
-      if (finding.evidence) {
-        lines.push(`  - Evidence: ${finding.evidence}`);
-      }
-      if (finding.recommendation) {
-        lines.push(`  - Recommendation: ${finding.recommendation}`);
-      }
+  const repairStepRules = Array.isArray(reviewPlan?.repairRules) ? reviewPlan.repairRules : [];
+  const jsonShape = JSON.stringify({
+    summary: "Short repair summary",
+    verification: ["command or check that was actually run"],
+    remaining_risks: ["Unresolved blocker or follow-up risk"],
+    notes: "Optional free text",
+    commit_required: false,
+    rerun_target_step: null
+  }, null, 2);
+  const blockerLines = renderBlockerLines(blockers);
+  return renderTemplate("repair-prompt.njk", {
+    run,
+    step,
+    reviewPlan: reviewPlan ?? {},
+    round,
+    provider,
+    skillBodies,
+    repairStepRules,
+    blockerLines,
+    outputPath,
+    jsonShape
+  });
+}
+
+function renderBlockerLines(blockers) {
+  if (!blockers.length) {
+    return ["- No blocking findings were detected. Clean up any remaining verification or evidence gaps and prepare for the next review round."];
+  }
+  const lines = [];
+  for (const finding of blockers) {
+    lines.push(`- [${finding.severity}] ${finding.reviewerLabel}: ${finding.title}`);
+    if (finding.evidence) {
+      lines.push(`  - Evidence: ${finding.evidence}`);
+    }
+    if (finding.recommendation) {
+      lines.push(`  - Recommendation: ${finding.recommendation}`);
     }
   }
-  lines.push(
-    "",
-    "## Output Artifact",
-    "",
-    `Write valid JSON to \`${outputPath}\`.`,
-    "Do not use markdown fences. Do not add extra top-level keys. All keys and strings must be double-quoted; escape inner double quotes with `\\\"` and backslashes with `\\\\`.",
-    "",
-    "Field rules:",
-    "- `summary`: one short sentence describing what you changed.",
-    "- `verification`: commands or checks you actually ran in this repair round.",
-    "- `remaining_risks`: unresolved blockers or follow-up risks only. Use `[]` when there are none.",
-    "- `notes`: optional free text. Multi-line content uses `\\n` inside the JSON string.",
-    "- `commit_required`: set to `true` when a blocker can only be resolved by creating, reverting, or amending a commit (HEAD must change). Repair cannot commit, so the runtime will rerun an earlier step on your behalf. Default `false`.",
-    "- `rerun_target_step`: when `commit_required` is `true`, name the earliest implementation step that should redo the commit (typically `PD-C-6`). Omit otherwise.",
-    "",
-    "Use this JSON shape:",
-    "",
-    JSON.stringify({
-      summary: "Short repair summary",
-      verification: [
-        "command or check that was actually run"
-      ],
-      remaining_risks: [
-        "Unresolved blocker or follow-up risk"
-      ],
-      notes: "Optional free text",
-      commit_required: false,
-      rerun_target_step: null
-    }, null, 2),
-    ""
-  );
-  return lines.join("\n");
+  return lines;
 }
 
 function acceptedReviewerStatus(stepId) {
   const kind = defaultJudgementKind(stepId);
   return kind ? defaultAcceptedJudgementStatus(kind) : null;
-}
-
-function reviewerRulesForStep(stepId) {
-  const rules = {
-    "PD-C-4": [
-      "Judge whether the plan's correction strategy is credible for this repo and ticket purpose.",
-      "Push plan changes back to PD-C-3 with concrete revisions instead of vague cautionary notes."
-    ],
-    "PD-C-7": [
-      "Focus on regressions, security, authorization, data integrity, error handling, and test adequacy against the implemented diff.",
-      "If the repo state changed after earlier severe findings, explicitly check whether those findings are now resolved."
-    ],
-    "PD-C-8": [
-      "Try to find reasons the ticket should not close, especially missing outcomes or insufficient delivery against the product intent.",
-      "Treat unverified or weakly evidenced Acceptance Criteria as blocking, not as optional polish."
-    ],
-    "PD-C-9": [
-      "Treat any unverified Acceptance Criteria row or missing external-surface evidence as blocking.",
-      "Prefer direct evidence over assertions from notes when the two conflict."
-    ]
-  };
-  return rules[stepId] ?? [];
-}
-
-function reviewRepairRulesForStep(stepId) {
-  const rules = {
-    "PD-C-4": [
-      "Treat this as a plan repair loop. Prefer updating `current-ticket.md` and `current-note.md` over editing app code unless the finding proves the plan is impossible without a code spike.",
-      "If the plan changes materially, keep Product AC, implementation notes, and the PD-C-3 plan section aligned."
-    ],
-    "PD-C-7": [
-      "Treat this as a code-quality repair loop. Fix the implementation and impacted tests, then rerun only the verification needed for the changed surface.",
-      "Do not claim quality blockers are resolved unless the changed code path is covered by direct evidence."
-    ],
-    "PD-C-8": [
-      "Treat this as a purpose-fit repair loop. Close missing AC coverage, missing outcomes, or weak evidence, and update ticket intent when the product scope changed.",
-      "If AC verification evidence is missing or incomplete, write or update `AC 裏取り結果` in `current-note.md` now instead of deferring that record to a later step.",
-      "If you change code or tests here, make sure `current-note.md` explains why the purpose validation required it."
-    ],
-    "PD-C-9": [
-      "Treat this as a final-verification repair loop. Fill missing AC evidence and final verification gaps rather than normalizing them away.",
-      "If external-surface observations found problems, fix the surface or its evidence before the next review round."
-    ]
-  };
-  return rules[stepId] ?? [];
 }
 
 function blockingFindings(aggregate) {

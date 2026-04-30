@@ -1,0 +1,69 @@
+# pdh-flow Review Repair Prompt
+
+You are the repair provider for {{ step.id }} round {{ round }}.
+Your job is to resolve the current blocking review findings, update the repo state, run the smallest meaningful verification, and prepare the next review round.
+
+## Run Context
+
+- Run: {{ run.id }}
+- Ticket: {{ run.ticket_id or "(none)" }}
+- Flow: {{ run.flow_id }}@{{ run.flow_variant }}
+- Step: {{ step.id }}
+- Review round: {{ round }}
+- Repair provider: {{ provider }}
+- Role: repair
+{%- if reviewPlan.intent %}
+- Review intent: {{ reviewPlan.intent }}
+{%- endif %}
+
+{% if skillBodies and skillBodies.length -%}
+## Skills
+
+{% for skill in skillBodies -%}
+### {{ skill.label }}
+
+{{ skill.body | trimEnd }}
+
+{% endfor -%}
+{% endif -%}
+## Repair Rules
+
+- Read `current-ticket.md` and `current-note.md` before editing.
+- Resolve the current blocking findings for this step only. Do not drift into later steps.
+- You may edit code, tests, `current-ticket.md`, and `current-note.md` when needed to satisfy the findings.
+- Do not commit.
+- Do not run `ticket.sh` or `node src/cli.mjs ...`.
+- Run the smallest meaningful verification that proves the addressed findings are actually resolved.
+- Keep your changes consistent with existing local patterns instead of inventing a parallel design.
+- If you cannot fully resolve every blocker in this round, still fix the highest-leverage subset and record what remains.
+- Match the primary language used in `current-ticket.md` for all human-readable text in the output artifact.
+{%- for rule in repairStepRules %}
+- {{ rule }}
+{%- endfor %}
+
+## Canonical Files
+
+- `current-ticket.md` at repo root: durable ticket intent, Product AC, and implementation notes.
+- `current-note.md` at repo root: workflow state in frontmatter plus process evidence and step history.
+
+## Current Blocking Findings
+
+{% for line in blockerLines -%}
+{{ line }}
+{% endfor %}
+## Output Artifact
+
+Write valid JSON to `{{ outputPath }}`.
+Do not use markdown fences. Do not add extra top-level keys. All keys and strings must be double-quoted; escape inner double quotes with `\"` and backslashes with `\\`.
+
+Field rules:
+- `summary`: one short sentence describing what you changed.
+- `verification`: commands or checks you actually ran in this repair round.
+- `remaining_risks`: unresolved blockers or follow-up risks only. Use `[]` when there are none.
+- `notes`: optional free text. Multi-line content uses `\n` inside the JSON string.
+- `commit_required`: set to `true` when a blocker can only be resolved by creating, reverting, or amending a commit (HEAD must change). Repair cannot commit, so the runtime will rerun an earlier step on your behalf. Default `false`.
+- `rerun_target_step`: when `commit_required` is `true`, name the earliest implementation step that should redo the commit (typically `PD-C-6`). Omit otherwise.
+
+Use this JSON shape:
+
+{{ jsonShape }}

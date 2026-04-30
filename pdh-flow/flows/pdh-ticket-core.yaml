@@ -134,6 +134,12 @@ steps:
       onFindings:
         - Critical/Major は PD-C-3 に差し戻して計画を修正する
         - vague な caution ではなく、修正すべき内容を具体化する
+      reviewerRules:
+        - Judge whether the plan's correction strategy is credible for this repo and ticket purpose.
+        - Push plan changes back to PD-C-3 with concrete revisions instead of vague cautionary notes.
+      repairRules:
+        - Treat this as a plan repair loop. Prefer updating `current-ticket.md` and `current-note.md` over editing app code unless the finding proves the plan is impossible without a code spike.
+        - If the plan changes materially, keep Product AC, implementation notes, and the PD-C-3 plan section aligned.
       reviewersByVariant:
         full:
           - role: devils_advocate
@@ -270,6 +276,12 @@ steps:
       onFindings:
         - Critical/Major があれば PD-C-6 に戻して修正、必要な再テスト、再レビューを行う
         - 中間 round では変更の影響範囲に絞って再テストし、フル実行は最終検証で担保してよい
+      reviewerRules:
+        - Focus on regressions, security, authorization, data integrity, error handling, and test adequacy against the implemented diff.
+        - If the repo state changed after earlier severe findings, explicitly check whether those findings are now resolved.
+      repairRules:
+        - Treat this as a code-quality repair loop. Fix the implementation and impacted tests, then rerun only the verification needed for the changed surface.
+        - Do not claim quality blockers are resolved unless the changed code path is covered by direct evidence.
       reviewersByVariant:
         full:
           - role: devils_advocate
@@ -392,6 +404,12 @@ steps:
         - 変更した外部 surface に対する最終観察結果が揃っている
       onFindings:
         - 裏取り不足や surface blocker があれば PD-C-6 に戻す
+      reviewerRules:
+        - Treat any unverified Acceptance Criteria row or missing external-surface evidence as blocking.
+        - Prefer direct evidence over assertions from notes when the two conflict.
+      repairRules:
+        - Treat this as a final-verification repair loop. Fill missing AC evidence and final verification gaps rather than normalizing them away.
+        - If external-surface observations found problems, fix the surface or its evidence before the next review round.
       reviewersByVariant:
         full:
           - role: ac_verifier

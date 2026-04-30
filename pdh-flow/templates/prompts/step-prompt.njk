@@ -1,0 +1,93 @@
+# pdh-flow Step Prompt
+
+## Run Context
+
+- Run: {{ run.id }}
+- Ticket: {{ run.ticket_id or "(none)" }}
+- Flow: {{ run.flow_id }}@{{ run.flow_variant }}
+- Current step: {{ step.id }}
+- Provider: {{ step.provider }}
+- Mode: {{ step.mode }}
+{%- if step.role %}
+- Role: {{ step.role }}
+{%- endif %}
+{%- if step.summary %}
+- Step summary: {{ step.summary }}
+{%- endif %}
+- Success transition: {{ successTransition or "(none)" }}
+
+{% if skillBodies and skillBodies.length -%}
+## Skills
+
+{% for skill in skillBodies -%}
+### {{ skill.label }}
+
+{{ skill.body | trimEnd }}
+
+{% endfor -%}
+{% endif -%}
+## Interruptions
+
+{% for line in interruptionLines -%}
+{{ line }}
+{% endfor %}
+{% if stepBody -%}
+{{ stepBody | trimEnd }}
+
+{% else -%}
+## Step Instructions
+
+- Execute {{ step.id }} according to the flow definition and repo rules.
+- Update canonical records and satisfy the guards for {{ step.id }}.
+
+{% endif -%}
+{% if reviewerOutputs and reviewerOutputs.length -%}
+## Reviewer Outputs
+
+Runtime ran {{ reviewerOutputs.length }} reviewer{{ "s" if reviewerOutputs.length != 1 else "" }} in parallel for this round. Their `review.json` artifacts are listed below in full so you can read them without opening additional files. Treat each block as the canonical output of that reviewer.
+
+{% for reviewer in reviewerOutputs -%}
+### {{ reviewer.label }} ({{ reviewer.reviewerId }})
+
+{% if reviewer.provider -%}
+- provider: {{ reviewer.provider }}
+{% endif -%}
+{% if reviewer.round != null and reviewer.round != undefined -%}
+- round: {{ reviewer.round }}
+{% endif -%}
+{% if reviewer.artifactPath -%}
+- artifact: `{{ reviewer.artifactPath }}`
+{% endif -%}
+{% if reviewer.status -%}
+- status: {{ reviewer.status }}
+{% endif %}
+{% if reviewer.rawText -%}
+```json
+{{ reviewer.rawText | trimEnd }}
+```
+{% else -%}
+_(reviewer produced no readable output)_
+{% endif %}
+{% endfor -%}
+{% endif -%}
+## Compiled Context
+
+{% for line in promptContextLines -%}
+{{ line }}
+{% endfor %}
+## Required Guards
+
+{% for line in guardLines -%}
+{{ line }}
+{% endfor %}
+{% if reviewSemanticsLines and reviewSemanticsLines.length -%}
+{% for line in reviewSemanticsLines -%}
+{{ line }}
+{% endfor -%}
+{% if step.mode == "review" or hasReviewers %}
+
+{% endif -%}
+{% endif -%}
+{% for line in uiOutputLines -%}
+{{ line }}
+{% endfor -%}
