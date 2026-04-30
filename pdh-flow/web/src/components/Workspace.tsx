@@ -71,8 +71,6 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
           <div>
             <div className="flex flex-wrap items-center gap-2 text-sm text-base-content/60">
               <span className="font-mono">{step.id}</span>
-              {step.mode ? <span>·</span> : null}
-              {step.mode ? <span>{step.mode}</span> : null}
             </div>
             <h2 className="mt-2 text-3xl font-bold">{step.label}</h2>
             {step.summary ? <p className="mt-2 max-w-3xl text-sm text-base-content/70">{step.summary}</p> : null}

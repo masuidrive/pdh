@@ -6,7 +6,6 @@ defaults:
   maxAttempts: 2
   reviewMaxRounds: 6
   reviewRepairProvider: codex
-  transitionLogFormat: "[{from}] -> [{to}]"
   reviewRoles:
     devils_advocate:
       label: Devil's Advocate
@@ -222,11 +221,7 @@ steps:
     guards:
       - id: explicit-approval
         type: human_approved
-    human_gate:
-      prompt: PD-C-5 implementation approval
-      requiredSources:
-        - current-ticket.md
-        - current-note.md
+    human_gate: true
     on_human_approved: PD-C-6
     on_human_rejected: PD-C-3
     on_human_changes_requested: PD-C-3

@@ -204,6 +204,7 @@ export function App() {
         onJumpToCurrent={currentStepId ? () => {
           setSelectedStep(currentStepId);
           updateUrl({ step: null });
+          window.scrollTo({ top: 0, behavior: "smooth" });
         } : undefined}
       />
       <TerminalModal

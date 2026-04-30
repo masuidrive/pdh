@@ -6,12 +6,21 @@ declare global {
   }
 }
 
+let mdLoader: Promise<void> | null = null;
 function loadMarkdownIt(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const src = "/assets/markdown-it.js";
-    const existing = document.querySelector(`script[data-src="${src}"]`);
+  if (typeof window === "undefined") return Promise.resolve();
+  if (window.markdownit) return Promise.resolve();
+  if (mdLoader) return mdLoader;
+  const src = "/assets/markdown-it.js";
+  mdLoader = new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(`script[data-src="${src}"]`);
     if (existing) {
-      resolve();
+      if (window.markdownit) {
+        resolve();
+        return;
+      }
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error(`failed to load ${src}`)), { once: true });
       return;
     }
     const el = document.createElement("script");
@@ -21,6 +30,7 @@ function loadMarkdownIt(): Promise<void> {
     el.onerror = () => reject(new Error(`failed to load ${src}`));
     document.head.appendChild(el);
   });
+  return mdLoader;
 }
 
 export function useMarkdown(text: string): string | null {
