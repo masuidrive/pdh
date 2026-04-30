@@ -11,9 +11,31 @@ export function loadFlow(flowId = "pdh-ticket-core") {
   return parse(readFileSync(path, "utf8"));
 }
 
+let cachedRoles = null;
 export function loadRoles() {
+  if (cachedRoles) return cachedRoles;
   const path = join(root, "flows", "roles.yaml");
-  return parse(readFileSync(path, "utf8"));
+  cachedRoles = parse(readFileSync(path, "utf8"));
+  return cachedRoles;
+}
+
+export function resolveSkillBodies(roleId) {
+  if (!roleId) return [];
+  const data = loadRoles();
+  const role = data.roles?.[roleId];
+  if (!role || !Array.isArray(role.skills)) return [];
+  const skills = data.skills ?? {};
+  return role.skills
+    .map((skillId) => {
+      const skill = skills[skillId];
+      if (!skill) return null;
+      return {
+        id: skillId,
+        label: typeof skill.label === "string" ? skill.label : skillId,
+        body: typeof skill.body === "string" ? skill.body : ""
+      };
+    })
+    .filter((entry) => entry && entry.body);
 }
 
 export function getInitialStep(flow, variant = "full") {

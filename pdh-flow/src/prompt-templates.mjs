@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildFlowView, getStep, nextStep, resolveStepReviewPlan } from "./flow.mjs";
+import { buildFlowView, getStep, nextStep, resolveSkillBodies, resolveStepReviewPlan } from "./flow.mjs";
 import { defaultAcceptedJudgementStatus, defaultJudgementKind } from "./judgements.mjs";
 import { loadStepInterruptions, renderInterruptionsForPrompt } from "./interruptions.mjs";
 import { renderUiOutputPromptSection } from "./step-ui.mjs";
@@ -50,6 +50,7 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
   const flowStep = flowView.steps.find((item) => item.id === step.id);
   const reviewPlan = flowStep?.review ?? null;
   const stepBody = hasStepPrompt(step.id) ? renderStepPromptBody(step.id) : null;
+  const skillBodies = resolveSkillBodies(step.role);
 
   return [
     "# pdh-flow Step Prompt",
@@ -62,9 +63,11 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
     `- Current step: ${step.id}`,
     `- Provider: ${step.provider}`,
     `- Mode: ${step.mode}`,
+    ...(step.role ? [`- Role: ${step.role}`] : []),
     ...(step.summary ? [`- Step summary: ${step.summary}`] : []),
     `- Success transition: ${nextStep(flow, run.flow_variant, step.id, "success") ?? "(none)"}`,
     "",
+    ...renderSkillsSection(skillBodies),
     "## Interruptions",
     "",
     ...renderInterruptionsForPrompt(interruptions),
@@ -92,6 +95,15 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
     ...renderUiOutputPromptSection({ run, step }),
     ""
   ].join("\n");
+}
+
+function renderSkillsSection(skillBodies) {
+  if (!skillBodies?.length) return [];
+  const lines = ["## Skills", ""];
+  for (const skill of skillBodies) {
+    lines.push(`### ${skill.label}`, "", skill.body.trimEnd(), "");
+  }
+  return lines;
 }
 
 function renderReviewerOutputsSection(reviewerOutputs) {
@@ -206,7 +218,7 @@ function renderReviewSemantics(step, reviewPlan) {
   const lines = [
     "## Runtime Review Semantics",
     "",
-    "- This repo owns the review semantics for this step. Do not rely on external `pdh-dev` or `tmux-director` skills for missing rules."
+    "- This repo owns the review semantics for this step."
   ];
   if (reviewPlan?.intent) {
     lines.push(`- Review intent: ${reviewPlan.intent}`);
@@ -278,7 +290,7 @@ export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, re
     "- Do not commit.",
     "- Do not run `ticket.sh` or `node src/cli.mjs ...`.",
     "- You may inspect git diff, read files, and run narrowly scoped verification commands when needed.",
-    "- This repo owns review semantics. Do not rely on external `pdh-dev` or `tmux-director` skills for missing rules.",
+    "- This repo owns review semantics.",
     "- Prioritize critical and major findings over nits. If severe issues remain, do not spend the review on style-only comments.",
     "- Review the purpose of the plan or change, not only generic code-style concerns.",
     "- Do not dismiss a finding just because the plan or note claims it is handled. Look for direct evidence in the current repo state.",
@@ -339,6 +351,7 @@ export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, re
 
 export function renderReviewRepairPrompt({ repoPath, run, flow, step, reviewPlan, aggregate, round, provider }) {
   const outputPath = `.pdh-flow/runs/${run.id}/steps/${step.id}/review-rounds/round-${round}/repair.json`;
+  const skillBodies = resolveSkillBodies("repair");
   const lines = [
     "# pdh-flow Review Repair Prompt",
     "",
@@ -353,8 +366,10 @@ export function renderReviewRepairPrompt({ repoPath, run, flow, step, reviewPlan
     `- Step: ${step.id}`,
     `- Review round: ${round}`,
     `- Repair provider: ${provider}`,
+    `- Role: repair`,
     ...(reviewPlan?.intent ? [`- Review intent: ${reviewPlan.intent}`] : []),
     "",
+    ...renderSkillsSection(skillBodies),
     "## Repair Rules",
     "",
     "- Read `current-ticket.md` and `current-note.md` before editing.",

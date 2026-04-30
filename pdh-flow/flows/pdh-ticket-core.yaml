@@ -217,6 +217,7 @@ steps:
         - 古い gate 決定の履歴
     provider: codex
     mode: edit
+    role: coding_engineer
     promptContext:
       contextSummary: 承認済み計画をコード、テスト、canonical records に反映し、最小十分な検証まで終える。
       semanticRules:

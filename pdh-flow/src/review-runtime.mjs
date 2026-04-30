@@ -103,7 +103,7 @@ export function writeReviewerPrompt({ stateDir, run, step, reviewPlan, reviewer 
     "- Do not commit.",
     "- Do not run `ticket.sh` or `node src/cli.mjs ...`.",
     "- You may inspect git diff, read files, and run narrowly scoped verification commands when needed.",
-    "- This repo owns review semantics. Do not rely on external `pdh-dev` or `tmux-director` skills.",
+    "- This repo owns review semantics.",
     ...(reviewPlan?.intent ? [`- Review intent: ${reviewPlan.intent}`] : []),
     ...(reviewPlan?.passWhen?.length ? ["- Step pass conditions:", ...reviewPlan.passWhen.map((item) => `  - ${item}`)] : []),
     ...(reviewPlan?.onFindings?.length ? ["- If findings remain:", ...reviewPlan.onFindings.map((item) => `  - ${item}`)] : []),

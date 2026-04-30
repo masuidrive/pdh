@@ -160,7 +160,7 @@ prompts:
         - 該当 Ticket の Acceptance Criteria
         - 担当ファイル範囲 (衝突回避)
         - ファイル別コンテキスト (PD-C-3 計画で作成した直近の設計判断・注意点)
-        - `pdh-coding` スキルを読んでから作業開始すること
+        - 上記 "## Skills" セクション全文 (Coding Engineer も同じルールに従う)
     - 同一ファイルを複数のチームメイトが編集しない (ファイル所有権を分ける)
     - チーム解散時は不要な Team を閉じる
     - 各役割のモデルは CLAUDE.md / AGENTS.md「チーム構成・モデル設定」に従う
@@ -459,7 +459,7 @@ prompts:
 
     ## 実装の進め方
 
-    - Coding Engineer は `pdh-coding` スキルに従って実装する
+    - Coding Engineer には上記 "## Skills" セクション全文を spawn プロンプトに含めて実装ルールに従わせる
     - 変更対象をファイル所有権で分割できる場合は複数 Coding Engineer を並列実行する。Light variant では 1 つの Coding Engineer で十分
     - 各 Coding Engineer の指示には PD-C-3 で作成した「ファイル別コンテキスト」を含める
 
