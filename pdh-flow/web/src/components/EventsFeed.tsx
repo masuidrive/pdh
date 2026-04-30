@@ -5,6 +5,7 @@ type Props = {
   step: StepView | null;
   events?: EventEntry[];
   limit?: number;
+  inline?: boolean;
 };
 
 const ACTIVITY_TYPES = new Set([
@@ -72,7 +73,7 @@ function truncateInline(value: string, limit = 140): string {
   return value.slice(0, limit - 1) + "…";
 }
 
-export function EventsFeed({ step, events, limit = 3 }: Props) {
+export function EventsFeed({ step, events, limit = 3, inline = false }: Props) {
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((n) => n + 1), 5000);
@@ -90,7 +91,7 @@ export function EventsFeed({ step, events, limit = 3 }: Props) {
       const provider = (e.provider ?? "").trim();
       return {
         prefix: provider ? `${provider} · ${label}` : label,
-        message: truncateInline(message, 140),
+        message: truncateInline(message, inline ? 80 : 140),
         ts: e.ts ?? e.created_at,
       };
     })
@@ -98,6 +99,26 @@ export function EventsFeed({ step, events, limit = 3 }: Props) {
     .slice(-limit);
 
   if (!lines.length) return null;
+
+  if (inline) {
+    return (
+      <ul className="flex min-w-0 flex-col gap-0.5 text-xs">
+        {lines.map((l, i) => {
+          const isLatest = i === lines.length - 1;
+          return (
+            <li
+              key={`${l.ts ?? ""}-${l.prefix}-${l.message}`}
+              className={`flex min-w-0 items-center gap-2 ${isLatest ? "animate-[live-slide-in_280ms_ease-out_both]" : ""}`}
+            >
+              <span className="font-mono text-[10px] text-base-content/50 shrink-0">{formatTime(l.ts)}</span>
+              <span className="badge badge-ghost badge-xs shrink-0">{l.prefix}</span>
+              <span className="truncate text-base-content/80">{l.message}</span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
 
   return (
     <section className="card border border-base-300 bg-base-100 shadow-sm">

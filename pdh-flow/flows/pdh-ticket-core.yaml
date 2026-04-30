@@ -197,9 +197,6 @@ steps:
         accepted:
           - No Critical/Major
           - user_accepted
-      - id: step-commit
-        type: git_commit_exists
-        pattern: "^\\[PD-C-4\\]"
     on_success: PD-C-5
     on_failure: PD-C-3
 
@@ -348,9 +345,6 @@ steps:
         accepted:
           - No Critical/Major
           - user_accepted
-      - id: step-commit
-        type: git_commit_exists
-        pattern: "^\\[PD-C-7\\]"
     on_success: PD-C-8
     on_failure: PD-C-6
 
@@ -453,41 +447,52 @@ steps:
       - id: ac-verification-table
         type: ac_verification_table
         allowUnverified: false
-      - id: step-commit
-        type: git_commit_exists
-        pattern: "^\\[PD-C-9\\]"
     on_success: PD-C-10
     on_failure: PD-C-6
 
   - id: PD-C-10
     label: 完了承認
-    summary: 完了してよいかを人間が明示承認し、ticket close へ進める gate。
-    userAction: まず agent recommendation を作らせ、AC 裏取り、差分、残リスクを確認して Yes / No を選ぶ。必要なら direct override を使う。
+    summary: agent が close-gate 判断材料を ui-output.json に集約し、人間が明示承認して ticket close へ進める gate。
+    userAction: agent が出した close summary を確認し、AC 裏取り・差分・残リスクを見て Yes / No を選ぶ。
     ui:
       viewer: 承認者
       decision: この ticket を close してよいかを判断する。
       mustShow:
-        - 変更差分
+        - 作業サマリ (agent 集約)
         - AC 裏取りの最終状態
-        - 残リスク
-        - close 前 cleanup の結果
+        - 変更差分
+        - 残リスク・チケット化候補
         - Yes / No の CLI
       omit:
         - step history
         - provider raw log
-    provider: runtime
-    mode: human
+    provider: claude
+    mode: edit
+    assistEscalation: close-gate
+    promptContext:
+      contextSummary: PD-C-9 までで揃った AC 裏取り表・最終検証 judgement を読み、ticket close 判断のための gate summary を ui-output.json に集約する。close 自体の実行は runtime の仕事。
+      semanticRules:
+        - Do not run ./ticket.sh close yourself; runtime handles the close after human approval.
+        - Use PD-C-9 final-verification judgement as the source of truth for AC pass/deferred/unverified counts.
+        - judgement.kind must be close-gate; judgement.status reflects whether the ticket is ready to close.
     guards:
+      - id: close-summary-recorded
+        type: note_section_updated
+        path: current-note.md
+        section: "PD-C-10. クローズ準備"
+      - id: close-gate-accepted
+        type: judgement_status
+        artifactKind: close-gate
+        accepted:
+          - Ready
+          - user_accepted
       - id: ac-verification-table
         type: ac_verification_table
         allowUnverified: false
       - id: explicit-approval
         type: human_approved
-    human_gate:
-      prompt: PD-C-10 close approval
-      requiredSources:
-        - current-ticket.md
-        - current-note.md
+    on_success: COMPLETE
+    on_failure: PD-C-6
     on_human_approved: COMPLETE
     on_human_rejected: PD-C-6
     on_human_changes_requested: PD-C-6

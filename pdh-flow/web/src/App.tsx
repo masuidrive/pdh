@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "./lib/use-app-state";
 import { Navbar } from "./components/Navbar";
-import { Timeline } from "./components/Timeline";
 import { Workspace } from "./components/Workspace";
 import { BottomBar } from "./components/BottomBar";
 import { TerminalModal } from "./components/TerminalModal";
 import { ArtifactModal } from "./components/ArtifactModal";
-import { EventsFeed } from "./components/EventsFeed";
 import { ConfirmModal, type ConfirmRequest } from "./components/ConfirmModal";
 import { buildConfirmRequest } from "./lib/confirm";
 import { DiffModal } from "./components/DiffModal";
@@ -22,7 +20,6 @@ import { useUrlState } from "./lib/use-url-state";
 export function App() {
   const slot = useAppState();
   const [urlState, updateUrl] = useUrlState();
-  const [collapsed, setCollapsed] = useState(false);
   const [terminalStep, setTerminalStep] = useState<string | null>(null);
   const [terminalTicket, setTerminalTicket] = useState<{ ticketId: string; sessionId: string } | null>(null);
   const [terminalRepo, setTerminalRepo] = useState<{ sessionId: string } | null>(null);
@@ -101,6 +98,8 @@ export function App() {
   const focusedStepId =
     selectedStep ?? urlState.step ?? slot.state?.runtime?.run?.current_step_id ?? variant?.steps?.[0]?.id ?? null;
   const focusedStep = variant?.steps.find((s) => s.id === focusedStepId) ?? null;
+  const currentStepId = slot.state?.runtime?.run?.current_step_id ?? null;
+  const currentStep = currentStepId ? variant?.steps.find((s) => s.id === currentStepId) ?? null : null;
   const next = focusedStep?.current ? slot.state?.current?.nextAction ?? null : null;
 
   if (slot.status === "loading") {
@@ -128,8 +127,6 @@ export function App() {
           ticketId={null}
           ticketTitle={null}
           branch={slot.state.git?.branch}
-          collapsed
-          onToggle={() => {}}
           onOpenFlow={undefined}
           onOpenTickets={undefined}
           runtime={slot.state.runtime}
@@ -169,8 +166,6 @@ export function App() {
         ticketId={slot.state.runtime?.run?.ticket_id ?? null}
         ticketTitle={slot.state.tickets?.find((t) => t.id === slot.state?.runtime?.run?.ticket_id)?.title ?? null}
         branch={slot.state.git?.branch}
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((v) => !v)}
         onOpenFlow={() => setMermaidOpen(true)}
         onOpenTickets={() => setTicketsOpen(true)}
         pendingTicketCount={slot.state.ticketRequests?.length ?? 0}
@@ -186,35 +181,7 @@ export function App() {
           onDiscard={() => requestConfirm("runtime_discard", {})}
         />
       </div>
-      <main
-        id="workspace"
-        className={`grid min-h-[calc(100vh-4rem)] grid-cols-1 ${collapsed ? "lg:grid-cols-1" : "lg:grid-cols-[24rem_minmax(0,1fr)]"}`}
-      >
-        {!collapsed ? (
-          <aside className="border-r border-base-300 bg-base-100 p-5 pb-28">
-            <div className="mb-5 flex items-start justify-between gap-4 sm:hidden">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-base-content/60">Ticket Flow</p>
-                <h1 className="text-xl font-bold">PD-C 開発ライン</h1>
-              </div>
-              <div className="badge badge-neutral">{variant.variant}</div>
-            </div>
-            <div className="sm:hidden">
-              <Timeline
-                steps={variant.steps}
-                currentStepId={focusedStepId}
-                ticketClosed={isTicketClosed(slot.state)}
-                onSelect={(id) => {
-                  setSelectedStep(id);
-                  updateUrl({ step: id });
-                }}
-              />
-            </div>
-            <div className="mt-6 sm:mt-0">
-              <EventsFeed step={focusedStep} events={slot.state.events} />
-            </div>
-          </aside>
-        ) : null}
+      <main id="workspace" className="min-h-[calc(100vh-4rem)] min-w-0 overflow-x-hidden">
         <Workspace
           step={focusedStep}
           next={next}
@@ -230,7 +197,15 @@ export function App() {
           onConfirm={requestConfirm}
         />
       </main>
-      <BottomBar step={focusedStep} ticketId={slot.state.runtime?.run?.ticket_id ?? null} />
+      <BottomBar
+        step={currentStep ?? focusedStep}
+        ticketId={slot.state.runtime?.run?.ticket_id ?? null}
+        events={slot.state.events}
+        onJumpToCurrent={currentStepId ? () => {
+          setSelectedStep(currentStepId);
+          updateUrl({ step: null });
+        } : undefined}
+      />
       <TerminalModal
         open={terminalStep !== null || terminalTicket !== null || terminalRepo !== null}
         stepId={terminalStep}
@@ -273,14 +248,6 @@ export function App() {
       />
     </>
   );
-}
-
-function isTicketClosed(state: { runtime?: { run?: { ticket_id?: string } | null }; tickets?: { id: string; status?: string }[] } | null): boolean {
-  if (!state) return false;
-  const tid = state.runtime?.run?.ticket_id;
-  if (!tid) return false;
-  const t = state.tickets?.find((x) => x.id === tid);
-  return Boolean(t && (t.status === "done" || t.status === "canceled"));
 }
 
 function resolveDocText(state: { documents?: Record<string, { text?: string }> } | null, docId: string | null) {

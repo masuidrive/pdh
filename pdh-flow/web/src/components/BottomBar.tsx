@@ -1,8 +1,11 @@
-import type { StepView, ProcessEntry } from "../lib/types";
+import type { StepView, ProcessEntry, EventEntry } from "../lib/types";
+import { EventsFeed } from "./EventsFeed";
 
 type Props = {
   step: StepView | null;
   ticketId?: string | null;
+  events?: EventEntry[];
+  onJumpToCurrent?: () => void;
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -18,7 +21,7 @@ const STATUS_BADGE: Record<string, string> = {
   pending: "badge-neutral",
 };
 
-export function BottomBar({ step, ticketId }: Props) {
+export function BottomBar({ step, ticketId, events, onJumpToCurrent }: Props) {
   if (!step) return null;
   const status = step.progress.status;
   const badge = STATUS_BADGE[status] ?? "badge-neutral";
@@ -26,19 +29,28 @@ export function BottomBar({ step, ticketId }: Props) {
   const elapsed = formatElapsed(step.latestAttempt?.startedAt ?? step.historyEntry?.started_at);
   const processSummary = describeProcess(step.processState?.active ?? []);
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-base-300 bg-base-100/95 px-5 py-3 backdrop-blur">
-      <div className="flex items-center justify-between gap-4 text-sm">
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {ticketId ? <span className="font-medium text-base-content/80">{ticketId}</span> : null}
+    <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-base-300 bg-base-100/60 px-5 py-2 backdrop-blur-md">
+      <div className="flex items-start gap-4 text-sm">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <button
+            type="button"
+            className="flex min-w-0 flex-wrap items-center gap-2 rounded text-left hover:bg-base-200/60 disabled:cursor-default disabled:hover:bg-transparent"
+            onClick={onJumpToCurrent}
+            disabled={!onJumpToCurrent}
+            title={onJumpToCurrent ? "現在のステップに移動" : undefined}
+          >
+            {ticketId ? <span className="font-medium text-base-content/80 shrink-0">{ticketId}</span> : null}
             <strong className="truncate">{stepTitle}</strong>
-            {elapsed ? <span className="font-normal text-base-content/60">· {elapsed}</span> : null}
-            <span className={`badge ${badge} badge-outline shrink-0`}>{labelForStatus(status)}</span>
-          </div>
-          <span className="block truncate text-base-content/60">
+            {elapsed ? <span className="font-normal text-base-content/60 shrink-0">· {elapsed}</span> : null}
+            <span className={`badge ${badge} badge-outline badge-sm shrink-0`}>{labelForStatus(status)}</span>
+          </button>
+          <span className="truncate text-xs text-base-content/60">
             <span className="font-medium text-base-content/80">Process: </span>
             {processSummary || "active provider なし"}
           </span>
+        </div>
+        <div className="hidden min-w-0 flex-1 sm:block">
+          <EventsFeed step={step} events={events} inline limit={3} />
         </div>
       </div>
     </footer>

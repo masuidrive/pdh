@@ -5,8 +5,6 @@ type Props = {
   ticketId?: string | null;
   ticketTitle?: string | null;
   branch?: string;
-  collapsed: boolean;
-  onToggle: () => void;
   onOpenFlow?: () => void;
   onOpenTickets?: () => void;
   pendingTicketCount?: number;
@@ -31,7 +29,7 @@ const STATUS_DOT: Record<string, string> = {
   skipped: "bg-base-200",
 };
 
-export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onOpenFlow, onOpenTickets, pendingTicketCount, runtime, steps, currentStepId, onSelectStep, generatedAt }: Props) {
+export function Navbar({ ticketId, ticketTitle, branch, onOpenFlow, onOpenTickets, pendingTicketCount, runtime, steps, currentStepId, onSelectStep, generatedAt }: Props) {
   const elapsed = useRelativeTime(generatedAt);
   const run = runtime?.run ?? null;
   const visibleSteps = (steps ?? []).filter((s) => s.progress.status !== "skipped");
@@ -39,15 +37,6 @@ export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onO
     <div className="sticky top-0 z-30 border-b border-base-300 bg-base-100">
       <div className="navbar min-h-12 gap-3">
         <div className="navbar-start gap-3 shrink-0">
-          <button
-            className="btn btn-ghost btn-square btn-sm"
-            aria-label={collapsed ? "タイムラインを開く" : "タイムラインを折りたたむ"}
-            aria-expanded={!collapsed}
-            onClick={onToggle}
-            type="button"
-          >
-            <span className="text-xl">{collapsed ? "›" : "☰"}</span>
-          </button>
           <div>
             <p className="text-base font-bold leading-tight">PDH Dev</p>
             <div className="breadcrumbs hidden p-0 text-xs sm:block">
@@ -82,7 +71,7 @@ export function Navbar({ ticketId, ticketTitle, branch, collapsed, onToggle, onO
       </div>
 
       {visibleSteps.length > 0 ? (
-        <div className="hidden border-t border-base-200 px-3 py-1.5 sm:block">
+        <div className="hidden border-t border-base-200 px-3 py-1.5 sm:block min-w-0 overflow-hidden">
           <ol className="flex items-center overflow-x-auto">
             {visibleSteps.map((s, i) => {
               const status = s.progress.status;

@@ -66,6 +66,17 @@ pre {
   word-break: break-word;
 }
 
+@keyframes live-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .evidence-md h1,
 .evidence-md h2,
 .evidence-md h3,

@@ -85,12 +85,12 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
           </div>
         </div>
 
-        {next && !hasPendingRecommendation(step) ? (
+        {next && !hasPendingRecommendation(step) && next.body ? (
           <div className={`alert ${TONE_ALERT[status] ?? "alert-info"}`}>
             <span className="badge badge-lg">!</span>
             <div>
               <h3 className="font-bold">{next.title}</h3>
-              {next.body ? <div className="text-sm whitespace-pre-line">{next.body}</div> : null}
+              <div className="text-sm whitespace-pre-line">{next.body}</div>
             </div>
           </div>
         ) : null}
@@ -113,7 +113,7 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
             <section className="card border border-base-300 bg-base-100 shadow-sm">
               <div className="card-body">
                 <h3 className="card-title">Next</h3>
-                <div className="grid gap-4 xl:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-2">
                   {others.map((btn) => (
                     <ActionTile
                       key={btn.kind + btn.label}
