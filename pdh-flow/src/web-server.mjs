@@ -784,6 +784,12 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor, 
   const sequenceSet = new Set(view.sequence);
   const historyByStep = latestHistoryByStep(history);
   const ticketImplementationNotes = redactSection(extractSection(ticketText, "Implementation Notes"), redactor);
+  const diffHistory = history
+    .filter((entry) => entry.commit && entry.commit !== "-");
+  const diffGateIds = view.steps.filter((step) => step.mode === "human").map((step) => step.id);
+  const diffContext = runtime.run?.id
+    ? { runtime, view, history: diffHistory, gateIds: diffGateIds }
+    : null;
   const steps = view.steps.map((step, index) => {
     const historyEntry = historyByStep.get(step.id) ?? null;
     const current = runtime.run?.current_step_id === step.id;
@@ -853,7 +859,7 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor, 
             recommendation: finding.recommendation
           }, redactor))
       ),
-      reviewDiff: runtime.run?.id ? redactObject(collectDiffPayload({ repo, stepId: step.id, includePatch: false }), redactor) : null,
+      reviewDiff: runtime.run?.id ? redactObject(collectDiffPayload({ repo, stepId: step.id, includePatch: false, diffContext }), redactor) : null,
       artifacts: runtime.run?.id ? listStepArtifacts({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id, redactor }) : [],
       events: events.filter((event) => event.stepId === step.id).slice(-12)
     };
@@ -1439,21 +1445,34 @@ function collectArtifactPayload({ repo, stepId, name }) {
   };
 }
 
-function resolveDiffBaseline({ repo, stepId }) {
-  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
+function buildDiffContext({ repo, runtime: preloaded = null }) {
+  const runtime = preloaded ?? loadRuntime(repo, { normalizeStaleRunning: true });
   const run = runtime.run;
-  if (!run?.id || !stepId) {
+  if (!run?.id) {
     return null;
   }
   const variant = run.flow_variant ?? runtime.pdh.variant ?? "full";
   const view = buildFlowView(runtime.flow, variant, run.current_step_id ?? null);
+  const history = parseStepHistory(runtime.note.body).entries
+    .filter((entry) => entry.commit && entry.commit !== "-");
+  const gateIds = view.steps.filter((step) => step.mode === "human").map((step) => step.id);
+  return { runtime, view, history, gateIds };
+}
+
+function resolveDiffBaseline({ repo, stepId, diffContext = null }) {
+  const ctx = diffContext ?? buildDiffContext({ repo });
+  if (!ctx) {
+    return null;
+  }
+  const { runtime, view, history, gateIds } = ctx;
+  const run = runtime.run;
+  if (!run?.id || !stepId) {
+    return null;
+  }
   const stepIndex = view.sequence.indexOf(stepId);
   if (stepIndex < 0) {
     return null;
   }
-  const history = parseStepHistory(runtime.note.body).entries
-    .filter((entry) => entry.commit && entry.commit !== "-");
-  const gateIds = view.steps.filter((step) => step.mode === "human").map((step) => step.id);
   const anchorGateId = gateIds.includes(stepId)
     ? stepId
     : gateIds.filter((id) => view.sequence.indexOf(id) < stepIndex).at(-1) ?? null;
@@ -1530,19 +1549,20 @@ function resolveDiffBaseline({ repo, stepId }) {
   };
 }
 
-function collectDiffPayload({ repo, stepId, includePatch = true }) {
-  const baseline = resolveDiffBaseline({ repo, stepId });
+function collectDiffPayload({ repo, stepId, includePatch = true, diffContext = null }) {
+  const baseline = resolveDiffBaseline({ repo, stepId, diffContext });
   if (!baseline) {
     return null;
   }
   const { baseRef, baseLabel, baseCommit } = baseline;
 
-  const diffArgs = ["diff", "--no-ext-diff", "--submodule=diff", "--unified=3", baseRef, "--"];
-  const statArgs = ["diff", "--stat", baseRef, "--"];
-  const filesArgs = ["diff", "--name-only", baseRef, "--"];
-  const diff = runGit(repo, diffArgs);
-  const stat = runGit(repo, statArgs);
-  const files = runGit(repo, filesArgs);
+  const stat = runGit(repo, ["diff", "--stat", baseRef, "--"]);
+  const files = runGit(repo, ["diff", "--name-only", baseRef, "--"]);
+  let patch = null;
+  if (includePatch) {
+    const diff = runGit(repo, ["diff", "--no-ext-diff", "--submodule=diff", "--unified=3", baseRef, "--"]);
+    patch = clampText(diff.stdout, MAX_TEXT);
+  }
 
   return {
     stepId,
@@ -1550,7 +1570,7 @@ function collectDiffPayload({ repo, stepId, includePatch = true }) {
     baseCommit: baseCommit ? baseCommit.slice(0, 7) : null,
     diffStat: splitLines(stat.stdout),
     changedFiles: splitLines(files.stdout),
-    patch: includePatch ? clampText(diff.stdout, MAX_TEXT) : null
+    patch
   };
 }
 

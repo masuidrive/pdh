@@ -3591,6 +3591,13 @@ function finalizeCompletedRun({ repo, runtime, step }) {
     closeResult = ticketClose({ repoPath: repo, args: ["--keep-worktree"] });
   }
   cleanupRunArtifacts({ repoPath: repo, runId });
+  const pdh = loadPdhMeta(repo);
+  savePdhMeta(repo, {
+    ...pdh,
+    status: "completed",
+    current_step: null,
+    completed_at: new Date().toISOString()
+  });
   if (closeResult.status === "ok") {
     console.log(`ticket.sh close: ${firstLine(closeResult.stdout || closeResult.stderr || "ok")}`);
   }

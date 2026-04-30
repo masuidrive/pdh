@@ -192,23 +192,25 @@ export function App() {
       >
         {!collapsed ? (
           <aside className="border-r border-base-300 bg-base-100 p-5 pb-28">
-            <div className="mb-5 flex items-start justify-between gap-4">
+            <div className="mb-5 flex items-start justify-between gap-4 sm:hidden">
               <div>
                 <p className="text-xs uppercase tracking-wide text-base-content/60">Ticket Flow</p>
                 <h1 className="text-xl font-bold">PD-C 開発ライン</h1>
               </div>
               <div className="badge badge-neutral">{variant.variant}</div>
             </div>
-            <Timeline
-              steps={variant.steps}
-              currentStepId={focusedStepId}
-              ticketClosed={isTicketClosed(slot.state)}
-              onSelect={(id) => {
-                setSelectedStep(id);
-                updateUrl({ step: id });
-              }}
-            />
-            <div className="mt-6">
+            <div className="sm:hidden">
+              <Timeline
+                steps={variant.steps}
+                currentStepId={focusedStepId}
+                ticketClosed={isTicketClosed(slot.state)}
+                onSelect={(id) => {
+                  setSelectedStep(id);
+                  updateUrl({ step: id });
+                }}
+              />
+            </div>
+            <div className="mt-6 sm:mt-0">
               <EventsFeed step={focusedStep} events={slot.state.events} />
             </div>
           </aside>

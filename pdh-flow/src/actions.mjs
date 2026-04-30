@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 
 const NOTE_HEADINGS_BY_STEP = {
   "PD-C-5": ["## PD-C-3. 計画", "## PD-C-4. 計画レビュー結果"],
