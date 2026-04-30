@@ -1,67 +1,53 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parse } from "yaml";
 import nunjucks from "nunjucks";
 
-const stepPromptsPath = join(dirname(fileURLToPath(import.meta.url)), "..", "flows", "step-prompts.yaml");
+const promptsRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "flows", "prompts");
+const stepsDir = join(promptsRoot, "steps");
 
-const env = new nunjucks.Environment(null, {
+const env = new nunjucks.Environment(new nunjucks.FileSystemLoader(promptsRoot), {
   autoescape: false,
   trimBlocks: false,
   lstripBlocks: false,
   throwOnUndefined: true
 });
 
-let cached = null;
+let cachedKeys = null;
 
-function loadPrompts() {
-  if (cached) {
-    return cached;
+function loadStepKeys() {
+  if (cachedKeys) {
+    return cachedKeys;
   }
-  const raw = readFileSync(stepPromptsPath, "utf8");
-  const doc = parse(raw);
-  if (!doc || typeof doc !== "object" || !doc.prompts || typeof doc.prompts !== "object") {
-    throw new Error(`step-prompts.yaml must define a top-level prompts map (path: ${stepPromptsPath})`);
+  if (!existsSync(stepsDir)) {
+    cachedKeys = new Set();
+    return cachedKeys;
   }
-  cached = doc.prompts;
-  return cached;
+  cachedKeys = new Set(
+    readdirSync(stepsDir)
+      .filter((name) => name.endsWith(".j2"))
+      .map((name) => name.slice(0, -3))
+  );
+  return cachedKeys;
 }
 
 export function listStepPromptKeys() {
-  return Object.keys(loadPrompts());
+  return [...loadStepKeys()];
 }
 
 export function hasStepPrompt(stepId) {
-  return Object.prototype.hasOwnProperty.call(loadPrompts(), stepId);
+  return loadStepKeys().has(stepId);
 }
 
 export function renderStepPromptBody(stepId) {
-  const prompts = loadPrompts();
-  const body = prompts[stepId];
-  if (typeof body !== "string") {
-    throw new Error(`step-prompts.yaml has no entry for ${stepId}`);
+  if (!hasStepPrompt(stepId)) {
+    throw new Error(`flows/prompts/steps/${stepId}.j2 not found`);
   }
-  return renderUntilStable(body, prompts);
-}
-
-const MAX_EXPANSION_PASSES = 16;
-
-function renderUntilStable(template, context) {
-  let current = template;
-  for (let pass = 0; pass < MAX_EXPANSION_PASSES; pass += 1) {
-    const next = env.renderString(current, context);
-    if (next === current) {
-      return next;
-    }
-    current = next;
-  }
-  throw new Error(
-    `step-prompts.yaml expansion did not converge within ${MAX_EXPANSION_PASSES} passes — likely a placeholder cycle`
-  );
+  const raw = readFileSync(join(stepsDir, `${stepId}.j2`), "utf8");
+  return env.renderString(raw, {});
 }
 
 // Test hook only.
 export function _resetStepPromptsCache() {
-  cached = null;
+  cachedKeys = null;
 }

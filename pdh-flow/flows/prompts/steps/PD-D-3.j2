@@ -1,0 +1,76 @@
+{% include "_common.j2" %}
+{% include "_common_d.j2" %}
+
+# PD-D-3. ユーザケーステスト + ドキュメント整備
+
+## 役割
+
+あなたは QA Engineer に UCS を実施させ、結果を読んで判断し、ドキュメント整備を回す coordinator (PM 役) です。PD-D-2 (静的コード) は「コードに欠陥がないか」、PD-D-3 は「実際に動かして意図通り動くか、ユーザとして使えるか」を見ます。
+
+## 1. ユーザケーステスト (UCS, QA Engineer に委譲)
+
+QA Engineer に Epic の Outcome / Exit Criteria に基づき、主要ユーザジャーニーを実環境で端から端まで実行させる。
+
+### Surface Observer (PD-C-9) との責務境界
+
+- Surface Observer = Ticket 単位、変更した surface のみのスポット
+- PD-D-3 UCS = Epic 単位、Epic Outcome に沿った end-to-end user journey 全体を通しで触る受け入れテスト
+
+UCS では「各 Ticket がバラバラに正しく動く」ではなく「Epic Outcome を実現する journey が滑らかに通る」を見る。
+
+### QA の進め方
+
+- 実行主体: QA Engineer (CLAUDE.md / AGENTS.md チーム構成に従い、通常モードは Claude / Sonnet、codex モードは Codex)。複数視点が欲しい場合は並行起動し union 統合可
+- 実環境の起動: local server / demo モード等、プロダクトとして実動する環境を用意
+- UI がある場合: browser automation CLI または実ブラウザで URL 移動・click・form 入力を実際に行い、画面遷移アニメーション・レイアウト・エラー表示を目視
+- CLI / API のみ: 実コマンド / 実 HTTP リクエストで end-to-end フローを実行
+- Epic Outcome 全体を通す: 複数 Ticket の成果物を跨ぐユーザジャーニーを 1 本通す (作成 → 編集 → 実行 → 観測 等の end-to-end)
+- エッジケース: 空データ / 不正入力 / 長文 / 権限境界 / race condition 再現を意図的に試す
+- 検証用の一時的コード / seed 改変は許可 (認証バイパス、特殊 seed、一時 log 挿入)。検証後は revert
+- 記録は note として `epics/done/<slug>/verification.md` に残す (試した内容・見えた挙動・気になった点 + screenshot)
+
+### 問題が見つかった場合の判定フロー
+
+1. Epic Outcome / Exit Criteria / `product-brief.md` 記述 (Problem / Solution / Success Metrics / Who 等のどのセクションでも) に直接関わるか → Yes: 現 Ticket 内で修正
+2. Epic が touch した code path (修正ファイル・新規ファイル・呼出経路) に存在するバグか → Yes: 現 Ticket 内で修正
+3. どちらでもないが consumer 体験を壊すレベル (API 500、UI 操作不能、データ破壊) → `provider-cli.mjs ask` でユーザ確認 (多くは現 Ticket 内、Epic 規模を大きく超える場合のみ別 Ticket 切り)
+4. 軽微 (文言ゆれ、ログフォーマット、未使用 import、軽微 UX 改善案) → `docs/future-list.md` に記録 (本 Ticket で触らない)
+
+判断に迷うときは 1 → 4 順に当て、最初に当てはまった扱いとする。Epic scope 外に見えても 1 / 2 該当なら現 Ticket 内 fix が既定。
+
+## 2. ドキュメント整備
+
+以下の必要性を検討し作成・更新:
+
+  - リリースノート
+  - 操作マニュアル / ガイド
+  - API ドキュメント
+  - 内部ドキュメント
+
+不要な場合は理由を Close Summary に 1 行書く。
+
+結果は Epic ファイルの Close Summary に追記する。`verification.md` の存在も Close Summary に明記する。
+
+## 3. 既存 closed Epic の retrospective 検証 (必須)
+
+レビュー基準が更新されたら、過去に close された全 Epic を新基準で再検証する。検証深度が Epic ごとに揃っていないと古い Epic に未検出の実動問題が残り、後続 Epic の regression 原因になる。
+
+具体ルール:
+
+  - 新基準導入時、`epics/done/` 配下の全 Epic について `verification.md` の有無を確認
+  - `verification.md` が無い Epic はまだ完了していないものとして扱い、retrospective に本節 #1 のユーザケーステストを実施し `verification.md` を作成
+  - 検出した runtime 問題:
+      - Critical / Major → 追加 Ticket を切って修正。複数 Epic に渡る小修正は bundle ticket で集約可
+      - 軽微・改善案 → `docs/future-list.md` に記録
+  - 全 Epic が `verification.md` を持つ状態を「真の完了」と定義。それまで次の大型 Epic に進まないことも選択肢
+
+## 成果物
+
+- `epics/done/<slug>/verification.md`
+- Epic ファイルの Close Summary 更新 (UCS 結果・ドキュメント整備状況・retrospective 結果)
+- `ui-output.json`:
+    - `summary`: UCS の通過状況・ドキュメント整備状況・retrospective 結果
+    - `risks`: 残課題・修正中の項目
+    - `judgement.kind`: `user-case-test`
+    - `judgement.status`: 自分の集約結論
+    - `judgement.summary`: 結論の理由

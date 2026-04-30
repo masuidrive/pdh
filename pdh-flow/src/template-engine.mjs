@@ -4,7 +4,7 @@ import nunjucks from "nunjucks";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = dirname(here);
-const templatesDir = join(root, "templates", "prompts");
+const templatesDir = join(root, "flows", "prompts");
 
 const env = nunjucks.configure(templatesDir, {
   autoescape: false,

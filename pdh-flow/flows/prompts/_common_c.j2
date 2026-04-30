@@ -1,0 +1,34 @@
+# PD-C 共通: Ticket 開発の前提
+
+## 起動時前提
+
+- `product-brief.md` を最初に読む
+- `docs/product-delivery-hierarchy.md` の運用ルール・テンプレートに従う
+- CLAUDE.md / AGENTS.md のチーム運用ルール・コードマップ・repo ルールに従う
+- 仕様変更を発見したら、続行前に `current-ticket.md` と `current-note.md` の What / AC / 計画を最新化する
+- **ticket 操作の禁止 (再掲)**: `./ticket.sh start/close/reopen/cancel` を絶対に自分で実行しない。`tickets/<id>.md` を `tickets/done/` に手で動かしたり、`current-ticket.md` / `current-note.md` を消したりするのも禁止。close 判断や branch 操作は runtime が PD-C-10 の gate 通過後にやる。あなたは PD-C-10 の `ui-output.json` に「close 可」の根拠を出すだけ
+
+## Flow variant (Light / Full)
+
+どちらの variant で実行するかは runtime が確定する。step prompt が指示する内容に従って成果物を出すこと。variant 判定の根拠を出すよう指示された step では、その分類を `ui-output.json` に出す (確定は runtime)。
+
+## current-note.md のセクション構成
+
+各 step の出力先は以下のセクションに分かれる。step prompt で指示されたセクションに、その step の調査・計画・レビュー・検証結果を記録する。
+
+| セクション                  | 記録する step  | 内容 |
+|---|---|---|
+| PD-C-2. 調査結果            | PD-C-2         | 調査結果統合・技術懸念 |
+| PD-C-3. 計画                | PD-C-3         | 実装計画 (タスク・所有権・テスト) |
+| PD-C-4. 計画レビュー結果    | PD-C-4         | reviewer 別ステータス + 指摘・対応 |
+| PD-C-6. 実装               | PD-C-6         | 実装サマリ・変更ファイル・テスト結果・残リスク |
+| PD-C-7. 品質検証結果        | PD-C-7         | reviewer 別ステータス + 指摘・対応 |
+| PD-C-8. 目的妥当性確認      | PD-C-8         | AC 達成・成果物十分性・抜け漏れ |
+| PD-C-9. AC 裏取り結果       | PD-C-9         | AC 裏取り表・プロセスチェックリスト |
+| Discoveries                 | 随時           | 想定外の事実 |
+
+記録ルール:
+
+  - 各セクションにタイムスタンプを付ける
+  - 空セクションを残さない (該当無しなら理由を 1 行)
+  - セッション終了時、途中なら現状と次にやることを note 本文に残す
