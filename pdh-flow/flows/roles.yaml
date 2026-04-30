@@ -47,6 +47,31 @@ roles:
     responsibility: review-loop の blocker findings を解消するためにコード・テスト・canonical files を修正する。
     skills: [pdh-coding]
 
+  investigator:
+    kind: planner
+    label: Investigator
+    responsibility: 既存実装、影響範囲、リスク、検証方法を確認し、後続の計画を拘束できるだけの事実を固める。
+
+  planner:
+    kind: planner
+    label: Planner
+    responsibility: 調査結果とチケット意図から、実装担当がそのまま実行できる単一の具体計画に落とす。
+
+  aggregator:
+    kind: aggregator
+    label: Aggregator
+    responsibility: 並行起動した reviewer 群の review.json を dedupe・consensus 把握・blocker 抽出して step の集約 judgement を出す。reviewer の severity を集約段階で下げない。
+
+  purpose_validation:
+    kind: assist-escalation
+    label: Purpose Validation
+    responsibility: PdM 視点で「書くべきだったのに書いていないもの」「目的ずれ」を反証要求型で探す。AC 裏取り表は最終検証 step の責務として扱う。
+
+  close_gate:
+    kind: assist-escalation
+    label: Close Gate
+    responsibility: AC 裏取り表・最終検証 judgement を読み、ticket close 判断のための gate summary を ui-output.json に集約する。close 自体の実行は runtime の仕事。
+
 skills:
   pdh-coding:
     label: PDH Coding Standards

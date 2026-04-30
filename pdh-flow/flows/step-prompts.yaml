@@ -1,15 +1,17 @@
 # pdh-flow step プロンプト集
 #
-# 使い方: 各 step の値は `{{common}}` `{{common-c}}` などのプレースホルダを
-# 含む。展開側で同じ prompts ブロック内の他キーを単純文字列置換すれば、
-# その step だけを単独で agent に渡せる完結プロンプトになる。
+# 使い方: 各 step の値は jinja2 (nunjucks) テンプレートとして展開される。
+# `{{common}}` `{{common_c}}` などで同じ prompts マップ内の他キーを参照でき、
+# 必要なら `{% if %}` `{% for %}` 等の jinja2 構文も書ける。展開は
+# `src/step-prompts.mjs:renderUntilStable` が fixed-point まで再帰評価する。
+# 識別子はアンダースコア (`_`) を使う — jinja2 はハイフンを引き算と解釈する。
 #
 # キー設計:
 #   common         - 全 step 共通 (PDH 世界観・runtime contract・honesty・
 #                    行動制約・チーム運用・横断ルール)
-#   common-review  - reviewer / repair として呼ばれる時の共通指針
-#   common-c       - PD-C 系 (Ticket 開発) の前提
-#   common-d       - PD-D 系 (Epic クローズ判定) の前提
+#   common_review  - reviewer / repair として呼ばれる時の共通指針
+#   common_c       - PD-C 系 (Ticket 開発) の前提
+#   common_d       - PD-D 系 (Epic クローズ判定) の前提
 #   PD-C-*         - Ticket 開発の各 step
 #   PD-D-*         - Epic クローズ判定の各 step
 #
@@ -184,7 +186,7 @@ prompts:
     - `.env`, `.codex`, `.pdh-flow/`, 生成された smoke repo, 実行ログは commit してはならない
     - `current-note.md` frontmatter には短い state だけを置き、長い findings, AC table, logs, diff は本文 / structured artifact に書く
 
-  common-review: |
+  common_review: |
     # reviewer / repair として呼ばれる時の共通指針
 
     あなたが reviewer または repair の役で呼ばれる場合の姿勢を定義する。レビューの round 進行・収束判定・どの reviewer を再走させるかは runtime が決める。あなたは「自分の観点で最新の repo 状態を honest に評価する」ことに集中してください。
@@ -206,7 +208,7 @@ prompts:
     - 自分の判断で「もう blocker は無い」と既成事実化しない。新しい reviewer round を起こすかは runtime が決める
     - 修正範囲・実行した検証・残った懸念を `repair.json` に正直に書く
 
-  common-c: |
+  common_c: |
     # PD-C 共通: Ticket 開発の前提
 
     ## 起動時前提
@@ -242,7 +244,7 @@ prompts:
       - 空セクションを残さない (該当無しなら理由を 1 行)
       - セッション終了時、途中なら現状と次にやることを note 本文に残す
 
-  common-d: |
+  common_d: |
     # PD-D 共通: Epic クローズ判定の前提
 
     PD-D は Epic 単位での品質担保:
@@ -256,7 +258,7 @@ prompts:
 
   PD-C-1: |
     {{common}}
-    {{common-c}}
+    {{common_c}}
 
     # PD-C-1. 開始前チェック
 
@@ -310,7 +312,7 @@ prompts:
 
   PD-C-2: |
     {{common}}
-    {{common-c}}
+    {{common_c}}
 
     # PD-C-2. 変更対象の調査
 
@@ -343,7 +345,7 @@ prompts:
 
   PD-C-3: |
     {{common}}
-    {{common-c}}
+    {{common_c}}
 
     # PD-C-3. 計画
 
@@ -374,7 +376,7 @@ prompts:
 
   PD-C-4: |
     {{common}}
-    {{common-c}}
+    {{common_c}}
 
     # PD-C-4. 計画レビュー (aggregator)
 
@@ -418,7 +420,7 @@ prompts:
 
   PD-C-5: |
     {{common}}
-    {{common-c}}
+    {{common_c}}
 
     # PD-C-5. 実装承認 (human gate)
 
@@ -449,7 +451,7 @@ prompts:
 
   PD-C-6: |
     {{common}}
-    {{common-c}}
+    {{common_c}}
 
     # PD-C-6. 実装
 
@@ -495,7 +497,7 @@ prompts:
 
   PD-C-7: |
     {{common}}
-    {{common-c}}
+    {{common_c}}
 
     # PD-C-7. 品質検証 (aggregator)
 
@@ -560,7 +562,7 @@ prompts:
 
   PD-C-8: |
     {{common}}
-    {{common-c}}
+    {{common_c}}
 
     # PD-C-8. 目的妥当性確認
 
@@ -627,7 +629,7 @@ prompts:
 
   PD-C-9: |
     {{common}}
-    {{common-c}}
+    {{common_c}}
 
     # PD-C-9. 完了検証
 
@@ -702,7 +704,7 @@ prompts:
 
   PD-C-10: |
     {{common}}
-    {{common-c}}
+    {{common_c}}
 
     # PD-C-10. クローズ準備 + human gate
 
@@ -748,7 +750,7 @@ prompts:
 
   PD-D-1: |
     {{common}}
-    {{common-d}}
+    {{common_d}}
 
     # PD-D-1. Exit Criteria 確認
 
@@ -792,7 +794,7 @@ prompts:
 
   PD-D-2: |
     {{common}}
-    {{common-d}}
+    {{common_d}}
 
     # PD-D-2. ゼロベースレビュー (aggregator)
 
@@ -861,7 +863,7 @@ prompts:
 
   PD-D-3: |
     {{common}}
-    {{common-d}}
+    {{common_d}}
 
     # PD-D-3. ユーザケーステスト + ドキュメント整備
 
@@ -939,7 +941,7 @@ prompts:
 
   PD-D-4: |
     {{common}}
-    {{common-d}}
+    {{common_d}}
 
     # PD-D-4. Epic クローズ (human gate)
 

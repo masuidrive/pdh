@@ -40,6 +40,7 @@ steps:
   - id: PD-C-2
     label: 調査
     summary: 既存実装、影響範囲、リスク、検証方法を確認する。
+    role: investigator
     userAction: 通常は操作不要。記録内容が不足していれば割り込みで補足する。
     ui:
       viewer: 実装担当
@@ -72,6 +73,7 @@ steps:
   - id: PD-C-3
     label: 計画
     summary: 実装方針、変更ファイル、テスト計画、リスク対応を決める。
+    role: planner
     userAction: 計画に違和感があれば PD-C-5 前に割り込みで修正指示する。
     ui:
       viewer: 実装担当
@@ -111,6 +113,7 @@ steps:
   - id: PD-C-4
     label: 計画レビュー
     summary: 実装前に計画の妥当性、リスク、検証方針をレビューする。
+    role: aggregator
     userAction: Critical/Major が残る場合は計画へ戻す。
     ui:
       viewer: レビュー担当
@@ -252,6 +255,7 @@ steps:
   - id: PD-C-7
     label: 品質レビュー
     summary: 実装の品質、回帰、テスト不足、設計逸脱をレビューする。
+    role: aggregator
     userAction: Critical/Major が残る場合は実装修正へ戻す。
     ui:
       viewer: レビュー担当
@@ -338,6 +342,7 @@ steps:
   - id: PD-C-8
     label: 目的妥当性
     summary: PdM 反証要求型で「書くべきだったのに書いていないもの」「目的ずれ」を検査する。
+    role: purpose_validation
     userAction: PdM が Block 結論を出した場合は 3 択 (進める / 計画から rerun / 実装から rerun) を選ぶ。
     ui:
       viewer: PdM / 批判的レビュアー
@@ -382,6 +387,7 @@ steps:
   - id: PD-C-9
     label: 最終検証
     summary: テストと AC 裏取り表で、完了判断に必要な証跡を揃える。
+    role: aggregator
     userAction: deferred / unverified の扱いを確認する。
     ui:
       viewer: 完了確認者
@@ -449,6 +455,7 @@ steps:
   - id: PD-C-10
     label: 完了承認
     summary: agent が close-gate 判断材料を ui-output.json に集約し、人間が明示承認して ticket close へ進める gate。
+    role: close_gate
     userAction: agent が出した close summary を確認し、AC 裏取り・差分・残リスクを見て Yes / No を選ぶ。
     ui:
       viewer: 承認者

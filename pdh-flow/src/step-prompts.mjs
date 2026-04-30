@@ -2,8 +2,16 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
+import nunjucks from "nunjucks";
 
 const stepPromptsPath = join(dirname(fileURLToPath(import.meta.url)), "..", "flows", "step-prompts.yaml");
+
+const env = new nunjucks.Environment(null, {
+  autoescape: false,
+  trimBlocks: false,
+  lstripBlocks: false,
+  throwOnUndefined: true
+});
 
 let cached = null;
 
@@ -34,22 +42,23 @@ export function renderStepPromptBody(stepId) {
   if (typeof body !== "string") {
     throw new Error(`step-prompts.yaml has no entry for ${stepId}`);
   }
-  return expandPlaceholders(body, prompts, [stepId]);
+  return renderUntilStable(body, prompts);
 }
 
-const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z0-9_-]+)\s*\}\}/g;
+const MAX_EXPANSION_PASSES = 16;
 
-function expandPlaceholders(value, prompts, stack) {
-  return value.replace(PLACEHOLDER_RE, (match, key) => {
-    if (stack.includes(key)) {
-      throw new Error(`step-prompts.yaml placeholder cycle detected: ${stack.join(" -> ")} -> ${key}`);
+function renderUntilStable(template, context) {
+  let current = template;
+  for (let pass = 0; pass < MAX_EXPANSION_PASSES; pass += 1) {
+    const next = env.renderString(current, context);
+    if (next === current) {
+      return next;
     }
-    const sub = prompts[key];
-    if (typeof sub !== "string") {
-      throw new Error(`step-prompts.yaml placeholder {{${key}}} (referenced from ${stack.join(" -> ")}) is not defined`);
-    }
-    return expandPlaceholders(sub, prompts, [...stack, key]);
-  });
+    current = next;
+  }
+  throw new Error(
+    `step-prompts.yaml expansion did not converge within ${MAX_EXPANSION_PASSES} passes — likely a placeholder cycle`
+  );
 }
 
 // Test hook only.
