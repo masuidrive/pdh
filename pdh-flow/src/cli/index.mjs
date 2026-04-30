@@ -2,6 +2,64 @@
 import { existsSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { join, relative, resolve } from "node:path";
+import {
+  cmdAcceptRecommendation,
+  cmdApplyAssistSignal,
+  cmdAssistOpen,
+  cmdAssistSignal,
+  cmdDeclineRecommendation,
+  cmdTicketAssistOpen,
+  cmdTicketStartRequest,
+  formatRecommendation
+} from "./assist.mjs";
+import {
+  cmdGateSummary,
+  cmdHumanDecision,
+  cmdShowGate
+} from "./gate.mjs";
+import {
+  cmdCleanup,
+  cmdCommitStep,
+  cmdTicketClose,
+  cmdTicketStart
+} from "./ticket.mjs";
+import {
+  cmdDoctor,
+  cmdFlow,
+  cmdFlowGraph,
+  cmdLogs,
+  cmdMetadata,
+  cmdShowInterrupts,
+  cmdStatus
+} from "./inspect.mjs";
+import {
+  applyAssistSignalCommand,
+  assertCurrentStep,
+  assertRerunTarget,
+  assertStepInVariant,
+  assistOpenCommand,
+  blockedStopCommands,
+  firstLine,
+  formatStepName,
+  humanDecisionCommands,
+  humanStopCommands,
+  interruptAnswerCommands,
+  interruptStopCommands,
+  isHumanGateStep,
+  nextProviderCommand,
+  parseOptions,
+  recommendationCommands,
+  recommendedStopCommands,
+  requireRuntime,
+  rerunCurrentStepCommand,
+  required,
+  resumeCommand,
+  runNextCommand,
+  shellQuote,
+  showGateCommand,
+  sleep,
+  statusCommand
+} from "./utils.mjs";
 import { loadDotEnv } from "../core/env.mjs";
 import { describeFlow, buildFlowView, getInitialStep, getStep, loadFlow, nextStep, outcomeFromDecision, renderMermaidFlow } from "../core/flow.mjs";
 import { evaluateStepGuards } from "../core/guards.mjs";
@@ -306,25 +364,6 @@ async function cmdRun(argv) {
   } });
 }
 
-function cmdFlow(argv) {
-  const options = parseOptions(argv);
-  const variant = options.variant ?? "full";
-  const flow = loadFlow(options.flow ?? "pdh-ticket-core");
-  console.log(describeFlow(flow, variant));
-}
-
-function cmdFlowGraph(argv) {
-  const options = parseOptions(argv);
-  const variant = options.variant ?? "full";
-  const flow = loadFlow(options.flow ?? "pdh-ticket-core");
-  const repo = resolve(options.repo ?? process.cwd());
-  const currentStepId = options.current ?? loadRuntime(repo, { normalizeStaleRunning: true }).run?.current_step_id ?? null;
-  if (options.format === "json") {
-    console.log(JSON.stringify(buildFlowView(flow, variant, currentStepId), null, 2));
-    return;
-  }
-  console.log(renderMermaidFlow(flow, variant, currentStepId));
-}
 
 async function cmdGuards(argv) {
   const options = parseOptions(argv);
@@ -344,7 +383,7 @@ async function cmdGuards(argv) {
   }
 }
 
-async function cmdRunNext(argv) {
+export async function cmdRunNext(argv) {
   const options = parseOptions(argv);
   const repo = resolve(options.repo ?? process.cwd());
   const limit = Number(options.limit ?? "20");
@@ -717,12 +756,6 @@ async function cmdPrompt(argv) {
   } });
 }
 
-function cmdMetadata(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const pdh = loadPdhMeta(repo);
-  console.log(JSON.stringify(pdh, null, 2));
-}
 
 async function cmdJudgement(argv) {
   const options = parseOptions(argv);
@@ -788,79 +821,6 @@ async function cmdVerify(argv) {
   } });
 }
 
-async function cmdGateSummary(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  await withRuntimeLock({ repo, options, action: async () => {
-    const runtime = requireRuntime(repo);
-    const stepId = options.step ?? runtime.run.current_step_id;
-    assertCurrentStep(runtime.run, stepId, options);
-    const step = getStep(runtime.flow, stepId);
-    if (!isHumanGateStep(step)) {
-      throw new Error(`${stepId} is not a human gate step`);
-    }
-    const gate = options.refresh === "true"
-      ? refreshGateSummary({ repo, runtime, step })
-      : ensureGateSummary({ repo, runtime, step });
-    updateRun(repo, { status: "needs_human", current_step_id: stepId });
-    syncStepUiRuntime({ repo, stepId, nextCommands: humanStopCommands(repo, stepId) });
-    console.log(`Decision: ${gateDecisionText(stepId)}`);
-    if (gate?.baseline?.commit) {
-      console.log(`Baseline: ${gate.baseline.commit.slice(0, 7)}${gate.baseline.step_id ? ` from ${gate.baseline.step_id}` : ""}`);
-    }
-    if (gate?.rerun_requirement?.target_step_id) {
-      console.log(`Rerun: ${gate.rerun_requirement.target_step_id}${gate.rerun_requirement.reason ? ` (${gate.rerun_requirement.reason})` : ""}`);
-    }
-    const ticketHeading = gateTicketHeadingFor(stepId);
-    if (ticketHeading) {
-      console.log(`Read: current-ticket.md ${ticketHeading}`);
-    }
-    for (const heading of gateNoteHeadingsFor(stepId)) {
-      console.log(`Read: current-note.md ${heading}`);
-    }
-    console.log(`Next: ${showGateCommand(repo, stepId)}`);
-  } });
-}
-
-async function cmdHumanDecision(command, argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const decisionByCommand = {
-    approve: "approved",
-    reject: "rejected",
-    "request-changes": "changes_requested",
-    cancel: "cancelled"
-  };
-  await withRuntimeLock({ repo, options, action: async () => {
-    const runtime = requireRuntime(repo);
-    const stepId = options.step ?? runtime.run.current_step_id;
-    assertCurrentStep(runtime.run, stepId, options);
-    const step = getStep(runtime.flow, stepId);
-    if (!isHumanGateStep(step)) {
-      throw new Error(`${stepId} is not a human gate step`);
-    }
-    ensureGateSummary({ repo, runtime, step });
-    const gate = resolveHumanGate({
-      stateDir: runtime.stateDir,
-      runId: runtime.run.id,
-      stepId,
-      decision: decisionByCommand[command]
-    });
-    updateRun(repo, { status: "running", current_step_id: stepId });
-    appendProgressEvent({
-      repoPath: repo,
-      runId: runtime.run.id,
-      stepId,
-      type: "human_gate_resolved",
-      provider: "runtime",
-      message: `${stepId} ${gate.decision}`,
-      payload: gate
-    });
-    syncStepUiRuntime({ repo, stepId, nextCommands: [runNextCommand(repo)] });
-    console.log(`${stepId} ${gate.decision}`);
-    console.log(`Next: ${runNextCommand(repo)}`);
-  } });
-}
 
 async function cmdInterrupt(argv) {
   const options = parseOptions(argv);
@@ -930,772 +890,11 @@ async function cmdAnswer(argv) {
   } });
 }
 
-async function cmdAssistOpen(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  loadDotEnv();
-  let prepared = null;
-  let runId = null;
-  let stepId = null;
-  let runtimeStatus = null;
 
-  await withRuntimeLock({ repo, options, action: async () => {
-    const runtime = requireRuntime(repo);
-    stepId = options.step ?? runtime.run.current_step_id;
-    assertCurrentStep(runtime.run, stepId, options);
-    const step = getStep(runtime.flow, stepId);
-    const allowedSignals = allowedAssistSignals({ runStatus: runtime.run.status, step, runtime });
-    prepared = prepareAssistSession({
-      repoPath: repo,
-      runtime,
-      step,
-      bare: options.bare === "true",
-      model: options.model ?? null
-    });
-    runId = runtime.run.id;
-    runtimeStatus = runtime.run.status;
-    appendProgressEvent({
-      repoPath: repo,
-      runId,
-      stepId,
-      type: "assist_prepared",
-      provider: "runtime",
-      message: `${stepId} assist prepared`,
-      payload: {
-        sessionId: prepared.sessionId,
-        manifestPath: prepared.manifestPath,
-        promptPath: prepared.promptPath,
-        allowedSignals: prepared.allowedSignals
-      }
-    });
-    syncStepUiRuntime({ repo, stepId });
-  } });
 
-  const args = buildAssistClaudeArgs({
-    prepared,
-    model: options.model ?? null,
-    bare: options.bare === "true"
-  });
 
-  if (options["prepare-only"] === "true") {
-    console.log(JSON.stringify({
-      sessionId: prepared.sessionId,
-      manifestPath: prepared.manifestPath,
-      promptPath: prepared.promptPath,
-      systemPromptPath: prepared.systemPromptPath,
-      allowedSignals: prepared.allowedSignals,
-      wrappers: {
-        signal: prepared.wrappers.signalScriptPath,
-        test: prepared.wrappers.testScriptPath
-      },
-      command: [process.env.CLAUDE_BIN || "claude", ...args]
-    }, null, 2));
-    return;
-  }
 
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new Error("assist-open needs a TTY. Use --prepare-only for non-interactive use.");
-  }
 
-  markAssistSessionStarted({
-    stateDir: defaultStateDir(repo),
-    runId,
-    stepId,
-    sessionId: prepared.sessionId,
-    command: [process.env.CLAUDE_BIN || "claude", ...args]
-  });
-  appendProgressEvent({
-    repoPath: repo,
-    runId,
-    stepId,
-    type: "assist_started",
-    provider: "runtime",
-    message: `${stepId} assist started`,
-    payload: {
-      sessionId: prepared.sessionId,
-      status: runtimeStatus
-    }
-  });
-
-  console.log(`Assist session: ${prepared.sessionId}`);
-  console.log(`Manifest: ${prepared.manifestPath}`);
-  console.log(`Prompt: ${prepared.promptPath}`);
-  console.log(`Allowed signals: ${prepared.allowedSignals.join(", ")}`);
-
-  const exit = await spawnAssistClaude({
-    repo,
-    args,
-    command: process.env.CLAUDE_BIN || "claude"
-  });
-
-  markAssistSessionFinished({
-    stateDir: defaultStateDir(repo),
-    runId,
-    stepId,
-    sessionId: prepared.sessionId,
-    exitCode: exit.exitCode,
-    signal: exit.signal
-  });
-  appendProgressEvent({
-    repoPath: repo,
-    runId,
-    stepId,
-    type: "assist_finished",
-    provider: "runtime",
-    message: `${stepId} assist ${exit.exitCode === 0 ? "completed" : "failed"}`,
-    payload: {
-      sessionId: prepared.sessionId,
-      exitCode: exit.exitCode,
-      signal: exit.signal
-    }
-  });
-  if (exit.exitCode !== 0) {
-    process.exitCode = exit.exitCode ?? 1;
-  }
-}
-
-async function cmdTicketAssistOpen(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  loadDotEnv();
-  const ticketId = required(options, "ticket");
-  const variant = options.variant ?? "full";
-  const prepared = prepareTicketAssistSession({
-    repoPath: repo,
-    ticketId,
-    variant,
-    bare: options.bare === "true",
-    model: options.model ?? null
-  });
-  const args = buildAssistClaudeArgs({
-    prepared,
-    model: options.model ?? null,
-    bare: options.bare === "true"
-  });
-
-  if (options["prepare-only"] === "true") {
-    console.log(JSON.stringify({
-      sessionId: prepared.sessionId,
-      manifestPath: prepared.manifestPath,
-      promptPath: prepared.promptPath,
-      systemPromptPath: prepared.systemPromptPath,
-      wrappers: {
-        ticketStartRequest: prepared.wrappers.ticketStartRequestScriptPath,
-        test: prepared.wrappers.testScriptPath
-      },
-      command: [process.env.CLAUDE_BIN || "claude", ...args]
-    }, null, 2));
-    return;
-  }
-
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new Error("ticket-assist-open needs a TTY. Use --prepare-only for non-interactive use.");
-  }
-
-  markTicketAssistSessionStarted({
-    repoPath: repo,
-    ticketId,
-    sessionId: prepared.sessionId,
-    command: [process.env.CLAUDE_BIN || "claude", ...args]
-  });
-
-  console.log(`Assist session: ${prepared.sessionId}`);
-  console.log(`Manifest: ${prepared.manifestPath}`);
-  console.log(`Prompt: ${prepared.promptPath}`);
-
-  const exit = await spawnAssistClaude({
-    repo,
-    args,
-    command: process.env.CLAUDE_BIN || "claude"
-  });
-
-  markTicketAssistSessionFinished({
-    repoPath: repo,
-    ticketId,
-    sessionId: prepared.sessionId,
-    exitCode: exit.exitCode,
-    signal: exit.signal
-  });
-  if (exit.exitCode !== 0) {
-    process.exitCode = exit.exitCode ?? 1;
-  }
-}
-
-async function cmdAssistSignal(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const signal = normalizeAssistSignal(required(options, "signal"));
-  const autoRunNext = options["no-run-next"] !== "true";
-  let response = null;
-  let shouldRunNext = false;
-
-  await withRuntimeLock({ repo, options, action: async () => {
-    const runtime = requireRuntime(repo);
-    const stepId = options.step ?? runtime.run.current_step_id;
-    assertCurrentStep(runtime.run, stepId, options);
-    const step = getStep(runtime.flow, stepId);
-    const allowedSignals = allowedAssistSignals({ runStatus: runtime.run.status, step, runtime });
-    if (!allowedSignals.includes(signal)) {
-      throw new Error(`Signal ${signal} is not allowed while status=${runtime.run.status} step=${stepId}. Allowed: ${allowedSignals.join(", ") || "(none)"}`);
-    }
-
-    const reason = options.reason ?? null;
-    const message = signal === "answer" ? readMessageOption(options, "assist-signal") : null;
-    const targetStepId = signal === "recommend-rerun-from" ? required(options, "target-step") : null;
-    const recorded = appendAssistSignal({
-      stateDir: runtime.stateDir,
-      runId: runtime.run.id,
-      stepId,
-      signal,
-      reason,
-      message,
-      runNext: autoRunNext
-    });
-
-    if (runtime.run.status === "needs_human") {
-      if (signal === "recommend-rerun-from") {
-        assertRerunTarget({ runtime, currentStepId: stepId, targetStepId });
-      }
-      const summary = refreshGateSummary({ repo, runtime, step });
-      const gate = updateHumanGateRecommendation({
-        stateDir: runtime.stateDir,
-        runId: runtime.run.id,
-        stepId,
-        action: signal.replace(/^recommend-/, "").replaceAll("-", "_"),
-        reason,
-        target_step_id: targetStepId
-      });
-      updateRun(repo, { status: "needs_human", current_step_id: stepId });
-      appendProgressEvent({
-        repoPath: repo,
-        runId: runtime.run.id,
-        stepId,
-        type: "human_gate_recommended",
-        provider: "runtime",
-        message: `${stepId} ${gate.recommendation?.action || signal} via assist`,
-        payload: { ...gate, assistSignal: recorded, summary: summary.artifactPath }
-      });
-      syncStepUiRuntime({ repo, stepId, nextCommands: recommendedStopCommands(repo, stepId) });
-      response = {
-        status: "ok",
-        stepId,
-        signal,
-        recommendation: gate.recommendation,
-        summary: summary.artifactPath,
-        runNext: false
-      };
-      return;
-    }
-
-    if (runtime.run.status === "interrupted") {
-      const interruption = answerLatestInterruption({
-        stateDir: runtime.stateDir,
-        runId: runtime.run.id,
-        stepId,
-        message,
-        source: "assist"
-      });
-      updateRun(repo, { status: "running", current_step_id: stepId });
-      appendProgressEvent({
-        repoPath: repo,
-        runId: runtime.run.id,
-        stepId,
-        type: "interrupt_answered",
-        provider: "runtime",
-        message: `${stepId} interrupt answered via assist`,
-        payload: { ...interruption, assistSignal: recorded }
-      });
-      syncStepUiRuntime({ repo, stepId, nextCommands: [runNextCommand(repo)] });
-      response = {
-        status: "ok",
-        stepId,
-        signal,
-        answered: interruption.id,
-        runNext: autoRunNext
-      };
-      shouldRunNext = autoRunNext;
-      return;
-    }
-
-    if (runtime.run.status === "failed") {
-      updateLatestAssistSignal({
-        stateDir: runtime.stateDir,
-        runId: runtime.run.id,
-        stepId,
-        mutator(current) {
-          if (!current || current.id !== recorded.id) {
-            return current;
-          }
-          return {
-            ...current,
-            status: "pending"
-          };
-        }
-      });
-      appendProgressEvent({
-        repoPath: repo,
-        runId: runtime.run.id,
-        stepId,
-        type: "assist_continue_requested",
-        provider: "runtime",
-        message: `${stepId} rerun requested via assist`,
-        payload: recorded
-      });
-      syncStepUiRuntime({ repo, stepId, nextCommands: [assistOpenCommand(repo, stepId), applyAssistSignalCommand(repo, stepId), resumeCommand(repo)] });
-      response = {
-        status: "ok",
-        stepId,
-        signal,
-        pendingConfirmation: true,
-        next: applyAssistSignalCommand(repo, stepId),
-        runNext: false
-      };
-      return;
-    }
-
-    updateRun(repo, { status: "running", current_step_id: stepId });
-    appendProgressEvent({
-      repoPath: repo,
-      runId: runtime.run.id,
-      stepId,
-      type: "assist_continue",
-      provider: "runtime",
-      message: `${stepId} continue via assist`,
-      payload: recorded
-    });
-    syncStepUiRuntime({ repo, stepId, nextCommands: [runNextCommand(repo)] });
-    response = {
-      status: "ok",
-      stepId,
-      signal,
-      runNext: autoRunNext
-    };
-    shouldRunNext = autoRunNext;
-  } });
-
-  console.log(JSON.stringify(response, null, 2));
-  if (shouldRunNext) {
-    await cmdRunNext(["--repo", repo]);
-  }
-}
-
-async function cmdTicketStartRequest(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const ticketId = required(options, "ticket");
-  const variant = options.variant ?? "full";
-  const request = appendTicketStartRequest({
-    repoPath: repo,
-    ticketId,
-    variant,
-    reason: options.reason ?? null,
-    source: options.source ?? "assist"
-  });
-  console.log(JSON.stringify(request, null, 2));
-}
-
-async function cmdApplyAssistSignal(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const autoRunNext = options["no-run-next"] !== "true";
-  let response = null;
-  let shouldRunNext = false;
-
-  await withRuntimeLock({ repo, options, action: async () => {
-    const runtime = requireRuntime(repo);
-    const stepId = options.step ?? runtime.run.current_step_id;
-    assertCurrentStep(runtime.run, stepId, options);
-    const signal = loadLatestAssistSignal({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId });
-    if (!signal) {
-      throw new Error(`${stepId} does not have a latest assist signal`);
-    }
-    if (signal.signal !== "continue") {
-      throw new Error(`${stepId} latest assist signal is ${signal.signal}; only continue can be applied here`);
-    }
-    if (runtime.run.status !== "failed" && runtime.run.status !== "blocked") {
-      throw new Error(`${stepId} assist continue can only be applied while status is failed or blocked; current status is ${runtime.run.status}`);
-    }
-    const updatedSignal = updateLatestAssistSignal({
-      stateDir: runtime.stateDir,
-      runId: runtime.run.id,
-      stepId,
-      mutator(current) {
-        if (!current || current.id !== signal.id) {
-          return current;
-        }
-        return {
-          ...current,
-          status: "accepted",
-          accepted_at: new Date().toISOString()
-        };
-      }
-    }) ?? signal;
-    updateRun(repo, { status: "running", current_step_id: stepId });
-    appendProgressEvent({
-      repoPath: repo,
-      runId: runtime.run.id,
-      stepId,
-      type: "assist_continue_accepted",
-      provider: "runtime",
-      message: `${stepId} rerun accepted via assist`,
-      payload: updatedSignal
-    });
-    syncStepUiRuntime({ repo, stepId, nextCommands: [rerunCurrentStepCommand(repo)] });
-    response = {
-      status: "ok",
-      stepId,
-      signal: updatedSignal.signal,
-      runNext: autoRunNext
-    };
-    shouldRunNext = autoRunNext;
-  } });
-
-  console.log(JSON.stringify(response, null, 2));
-  if (shouldRunNext) {
-    await cmdRunNext(["--repo", repo, "--force"]);
-  }
-}
-
-async function cmdAcceptRecommendation(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const autoRunNext = options["no-run-next"] !== "true";
-  let response = null;
-  let shouldRunNext = false;
-
-  await withRuntimeLock({ repo, options, action: async () => {
-    const runtime = requireRuntime(repo);
-    const stepId = options.step ?? runtime.run.current_step_id;
-    assertCurrentStep(runtime.run, stepId, options);
-    const step = getStep(runtime.flow, stepId);
-    if (!isHumanGateStep(step)) {
-      throw new Error(`${stepId} is not a human gate step`);
-    }
-    const gate = latestHumanGate({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId });
-    const recommendation = gate?.recommendation;
-    if (!recommendation || recommendation.status !== "pending") {
-      throw new Error(`${stepId} does not have a pending recommendation`);
-    }
-    assertRecommendationCompatibleWithGateEdits({ runtime, stepId, gate, recommendation });
-
-    let advanced = null;
-    if (recommendation.action === "rerun_from") {
-      const targetStepId = recommendation.target_step_id;
-      if (!targetStepId) {
-        throw new Error(`${stepId} recommendation is missing target_step_id`);
-      }
-      assertRerunTarget({ runtime, currentStepId: stepId, targetStepId });
-      resolveHumanGate({
-        stateDir: runtime.stateDir,
-        runId: runtime.run.id,
-        stepId,
-        decision: "changes_requested"
-      });
-      advanced = rerunFromStep({
-        repo,
-        runtime,
-        step,
-        targetStepId,
-        reason: recommendation.reason
-      });
-    } else {
-      const decision = gateDecisionFromRecommendation(recommendation.action);
-      if (!decision) {
-        throw new Error(`Unsupported recommendation action: ${recommendation.action}`);
-      }
-      resolveHumanGate({
-        stateDir: runtime.stateDir,
-        runId: runtime.run.id,
-        stepId,
-        decision
-      });
-      advanced = advanceRun({
-        repo,
-        runtime,
-        step,
-        outcome: outcomeFromDecision(decision)
-      });
-    }
-
-    appendProgressEvent({
-      repoPath: repo,
-      runId: runtime.run.id,
-      stepId,
-      type: "human_gate_recommendation_accepted",
-      provider: "runtime",
-      message: `${stepId} accepted ${recommendation.action}`,
-      payload: {
-        recommendation,
-        result: advanced
-      }
-    });
-    response = {
-      status: "ok",
-      stepId,
-      accepted: recommendation,
-      result: advanced,
-      runNext: autoRunNext && advanced?.status !== "completed"
-    };
-    shouldRunNext = autoRunNext && advanced?.status !== "completed";
-  } });
-
-  console.log(JSON.stringify(response, null, 2));
-  if (shouldRunNext) {
-    await cmdRunNext(["--repo", repo]);
-  }
-}
-
-async function cmdDeclineRecommendation(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  let response = null;
-
-  await withRuntimeLock({ repo, options, action: async () => {
-    const runtime = requireRuntime(repo);
-    const stepId = options.step ?? runtime.run.current_step_id;
-    assertCurrentStep(runtime.run, stepId, options);
-    const step = getStep(runtime.flow, stepId);
-    if (!isHumanGateStep(step)) {
-      throw new Error(`${stepId} is not a human gate step`);
-    }
-    const gate = latestHumanGate({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId });
-    const recommendation = gate?.recommendation;
-    if (!recommendation || recommendation.status !== "pending") {
-      throw new Error(`${stepId} does not have a pending recommendation`);
-    }
-    clearHumanGateRecommendation({
-      stateDir: runtime.stateDir,
-      runId: runtime.run.id,
-      stepId
-    });
-    updateRun(repo, { status: "needs_human", current_step_id: stepId });
-    appendProgressEvent({
-      repoPath: repo,
-      runId: runtime.run.id,
-      stepId,
-      type: "human_gate_recommendation_declined",
-      provider: "runtime",
-      message: `${stepId} declined ${recommendation.action}`,
-      payload: {
-        recommendation
-      }
-    });
-    syncStepUiRuntime({ repo, stepId, nextCommands: humanStopCommands(repo, stepId) });
-    response = {
-      status: "ok",
-      stepId,
-      declined: recommendation,
-      next: assistOpenCommand(repo, stepId)
-    };
-  } });
-
-  console.log(JSON.stringify(response, null, 2));
-}
-
-function cmdShowInterrupts(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const runtime = requireRuntime(repo);
-  const stepId = options.step ?? runtime.run.current_step_id;
-  assertCurrentStep(runtime.run, stepId, options);
-  const interruptions = loadStepInterruptions({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId });
-  const selected = options.all === "true" ? interruptions : interruptions.slice(-1);
-  if (!selected.length) {
-    console.log(`No interruptions for ${stepId}`);
-    return;
-  }
-  if (options.path === "true") {
-    for (const interruption of selected) {
-      console.log(interruption.artifactPath);
-    }
-    return;
-  }
-  console.log(selected.map(renderInterruptionMarkdown).join("\n"));
-}
-
-function cmdCommitStep(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const ticket = options.ticket ?? loadPdhMeta(repo).ticket ?? null;
-  const result = commitStep({ repoPath: repo, stepId: required(options, "step"), message: options.message ?? null, ticket });
-  console.log(JSON.stringify(result, null, 2));
-}
-
-function cmdTicketStart(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const result = ticketStart({ repoPath: repo, ticket: required(options, "ticket") });
-  console.log(JSON.stringify(result, null, 2));
-}
-
-function cmdTicketClose(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const result = ticketClose({ repoPath: repo });
-  console.log(JSON.stringify(result, null, 2));
-}
-
-function cmdCleanup(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
-  if (!runtime.run?.id) {
-    throw new Error("No active run artifacts to clean up");
-  }
-  appendStepHistoryEntry(repo, {
-    stepId: "CLEANUP",
-    status: "local_artifacts_removed",
-    summary: `Removed .pdh-flow/runs/${runtime.run.id}`,
-    commit: "-"
-  });
-  const removed = cleanupRunArtifacts({ repoPath: repo, runId: runtime.run.id });
-  if (options["clear-run-id"] === "true") {
-    const pdh = loadPdhMeta(repo);
-    savePdhMeta(repo, {
-      ...pdh,
-      run_id: null,
-      updated_at: new Date().toISOString()
-    });
-  }
-  console.log(`Removed ${removed}`);
-}
-
-function cmdStatus(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
-  const run = runtime.run;
-  if (!run) {
-    console.log("Status: idle");
-    console.log(`Repo: ${repo}`);
-    console.log("Run: -");
-    return;
-  }
-  const step = getStep(runtime.flow, run.current_step_id);
-  console.log(`Run: ${run.id ?? "-"}`);
-  console.log(`Ticket: ${run.ticket_id ?? "-"}`);
-  console.log(`Flow: ${run.flow_id}@${run.flow_variant}`);
-  console.log(`Status: ${run.status}`);
-  console.log(`Current Step: ${formatStepName(step)}`);
-  if (step.summary) {
-    console.log(`Step Summary: ${step.summary}`);
-  }
-  if (step.userAction) {
-    console.log(`User Action: ${step.userAction}`);
-  }
-  console.log(`Provider: ${step.provider}`);
-  console.log(`Mode: ${step.mode}`);
-  if (step.guards?.length) {
-    console.log(`Guards: ${step.guards.map((guard) => guard.id).join(", ")}`);
-  }
-  const gate = run.id ? latestHumanGate({ stateDir: runtime.stateDir, runId: run.id, stepId: step.id }) : null;
-  if (gate) {
-    console.log(`Human Gate: ${gate.status}${gate.decision ? ` (${gate.decision})` : ""}`);
-    if (gate.baseline?.commit) {
-      console.log(`Gate Baseline: ${gate.baseline.commit.slice(0, 7)}${gate.baseline.step_id ? ` from ${gate.baseline.step_id}` : ""}`);
-    }
-    if (gate.rerun_requirement?.target_step_id) {
-      console.log(`Gate Rerun: ${gate.rerun_requirement.target_step_id}`);
-    }
-    if (gate.recommendation?.status === "pending") {
-      console.log(`Recommendation: ${formatRecommendation(gate.recommendation)}`);
-    }
-  }
-  const interruption = run.id ? latestOpenInterruption({ stateDir: runtime.stateDir, runId: run.id, stepId: step.id }) : null;
-  if (interruption) {
-    console.log(`Interruption: open ${interruption.id}`);
-    console.log(`Interruption File: ${interruption.artifactPath}`);
-  }
-  const latestAttempt = run.id ? latestAttemptResult({ stateDir: runtime.stateDir, runId: run.id, stepId: step.id, provider: step.provider }) : null;
-  if (latestAttempt?.rawLogPath) {
-    console.log(`Latest Raw Log: ${latestAttempt.rawLogPath}`);
-  }
-  console.log("Recent Events:");
-  for (const event of readProgressEvents({ repoPath: repo, runId: run.id, limit: Number(options.limit ?? "20") })) {
-    console.log(`- ${event.ts} ${event.stepId ?? "-"} ${event.type} ${event.message ?? ""}`);
-  }
-}
-
-async function cmdLogs(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const runtime = requireRuntime(repo);
-  const path = progressPath(runtime.stateDir, runtime.run.id);
-  let cursor = 0;
-  const events = readProgressEvents({ repoPath: repo, runId: runtime.run.id, limit: Number(options.limit ?? "50") });
-  for (const event of events) {
-    printEvent(event, options.json === "true");
-  }
-  if (!existsSync(path) || options.follow !== "true") {
-    return;
-  }
-  cursor = statSync(path).size;
-  const intervalMs = Number(options.interval ?? "1000");
-  while (true) {
-    await sleep(intervalMs);
-    if (!existsSync(path)) {
-      return;
-    }
-    const size = statSync(path).size;
-    if (size <= cursor) {
-      continue;
-    }
-    const chunk = readFileSync(path, "utf8").slice(cursor);
-    cursor = size;
-    for (const line of chunk.split(/\r?\n/).filter(Boolean)) {
-      try {
-        printEvent(JSON.parse(line), options.json === "true");
-      } catch {
-        // Ignore partial lines.
-      }
-    }
-  }
-}
-
-function cmdShowGate(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const runtime = requireRuntime(repo);
-  const stepId = options.step ?? runtime.run.current_step_id;
-  assertCurrentStep(runtime.run, stepId, options);
-  const gate = latestHumanGate({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId });
-  if (!gate || gate.status !== "needs_human") {
-    throw new Error(`No active human gate for ${stepId}`);
-  }
-  if (options.json === "true") {
-    console.log(JSON.stringify(gate, null, 2));
-    return;
-  }
-  console.log(`Step: ${stepId}`);
-  console.log(`Decision: ${gateDecisionText(stepId)}`);
-  if (gate.baseline?.commit) {
-    console.log(`Baseline: ${gate.baseline.commit.slice(0, 7)}${gate.baseline.step_id ? ` from ${gate.baseline.step_id}` : ""}`);
-  }
-  if (gate.rerun_requirement?.target_step_id) {
-    console.log(`Rerun: ${gate.rerun_requirement.target_step_id}${gate.rerun_requirement.reason ? ` (${gate.rerun_requirement.reason})` : ""}`);
-  }
-  const ticketHeading = gateTicketHeadingFor(stepId);
-  if (ticketHeading) {
-    console.log(`Read: current-ticket.md ${ticketHeading}`);
-  }
-  for (const heading of gateNoteHeadingsFor(stepId)) {
-    console.log(`Read: current-note.md ${heading}`);
-  }
-}
-
-function cmdDoctor(argv) {
-  const options = parseOptions(argv);
-  const repo = resolve(options.repo ?? process.cwd());
-  const result = runDoctor({ repoPath: repo });
-  if (options.json === "true") {
-    console.log(JSON.stringify(result, null, 2));
-  } else {
-    console.log(formatDoctor(result));
-  }
-  if (result.status === "fail") {
-    process.exitCode = 1;
-  }
-}
 
 async function cmdWeb(argv) {
   const { startWebServer } = await import("../web/index.mjs");
@@ -3397,7 +2596,7 @@ function evaluateCurrentGuards({ repo, runtime, step, gate = null }) {
   return guardResults;
 }
 
-function advanceRun({ repo, runtime, step, outcome }) {
+export function advanceRun({ repo, runtime, step, outcome }) {
   const target = nextStep(runtime.flow, runtime.run.flow_variant, step.id, outcome);
   if (!target) {
     throw new Error(`No transition from ${step.id} for ${outcome}`);
@@ -3521,7 +2720,7 @@ function recordReviewBlockerEscalation({ repo, runId, stepId, attempt, round, ta
   });
 }
 
-function rerunFromStep({ repo, runtime, step, targetStepId, reason = null }) {
+export function rerunFromStep({ repo, runtime, step, targetStepId, reason = null }) {
   resetTransitionArtifacts({
     runtime,
     currentStepId: step.id,
@@ -3606,7 +2805,7 @@ function finalizeCompletedRun({ repo, runtime, step }) {
   }
 }
 
-function ensureGateSummary({ repo, runtime, step }) {
+export function ensureGateSummary({ repo, runtime, step }) {
   const existing = latestHumanGate({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id });
   if (existing && existing.status === "needs_human") {
     return existing;
@@ -3614,7 +2813,7 @@ function ensureGateSummary({ repo, runtime, step }) {
   return refreshGateSummary({ repo, runtime, step });
 }
 
-function refreshGateSummary({ repo, runtime, step }) {
+export function refreshGateSummary({ repo, runtime, step }) {
   const existing = latestHumanGate({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id });
   const gateContext = deriveHumanGateContext({ repo, runtime, step, existingGate: existing });
   openHumanGate({
@@ -4181,7 +3380,7 @@ function maybeStartTicket({ repo, ticket, required = false }) {
   return ticketStart({ repoPath: repo, ticket });
 }
 
-function syncStepUiRuntime({ repo, stepId = null, guardResults = null, nextCommands = null }) {
+export function syncStepUiRuntime({ repo, stepId = null, guardResults = null, nextCommands = null }) {
   const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
   if (!runtime.run?.id || !runtime.run.current_step_id) {
     return null;
@@ -4214,14 +3413,6 @@ function defaultUiNextCommands({ repo, runtime, step }) {
     return [statusCommand(repo), resumeCommand(repo)];
   }
   return [runNextCommand(repo)];
-}
-
-function requireRuntime(repo) {
-  const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
-  if (!runtime.run?.current_step_id || !runtime.run?.flow_id) {
-    throw new Error("No active run found in current-note.md");
-  }
-  return runtime;
 }
 
 async function withRunSupervisor({ repo, command, action }) {
@@ -4258,7 +3449,7 @@ async function withRunSupervisor({ repo, command, action }) {
   }
 }
 
-async function withRuntimeLock({ repo, options = {}, action }) {
+export async function withRuntimeLock({ repo, options = {}, action }) {
   const runtime = loadRuntime(repo, { normalizeStaleRunning: true });
   const runId = runtime.run?.id ?? "active";
   return await withRunLock({
@@ -4267,30 +3458,6 @@ async function withRuntimeLock({ repo, options = {}, action }) {
     waitMs: nonNegativeInteger(options["lock-wait-ms"] ?? process.env.PDH_FLOWCHART_LOCK_WAIT_MS ?? "0", "--lock-wait-ms"),
     staleMs: nonNegativeInteger(options["lock-stale-ms"] ?? process.env.PDH_FLOWCHART_LOCK_STALE_MS ?? String(12 * 60 * 60 * 1000), "--lock-stale-ms")
   }, action);
-}
-
-function parseOptions(argv) {
-  const options = {};
-  for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index];
-    if (!token.startsWith("--")) {
-      continue;
-    }
-    const eq = token.indexOf("=");
-    if (eq > 0) {
-      options[token.slice(2, eq)] = token.slice(eq + 1);
-      continue;
-    }
-    const key = token.slice(2);
-    const next = argv[index + 1];
-    if (!next || next.startsWith("--")) {
-      options[key] = "true";
-    } else {
-      options[key] = next;
-      index += 1;
-    }
-  }
-  return options;
 }
 
 function nonNegativeInteger(value, label) {
@@ -4377,14 +3544,7 @@ function resolveProviderResume({ runtime, stepId, provider, option, allowMissing
   return token;
 }
 
-function required(options, key) {
-  if (!options[key]) {
-    throw new Error(`Missing --${key}`);
-  }
-  return options[key];
-}
-
-function readMessageOption(options, commandName) {
+export function readMessageOption(options, commandName) {
   if (options.message !== undefined) {
     return options.message;
   }
@@ -4591,29 +3751,6 @@ function previousStepInVariant(flow, variant, stepId) {
   const index = sequence.indexOf(stepId);
   return index > 0 ? sequence[index - 1] : null;
 }
-
-function assertRecommendationCompatibleWithGateEdits({ runtime, stepId, gate, recommendation }) {
-  const requiredTargetStepId = gate?.rerun_requirement?.target_step_id;
-  if (!requiredTargetStepId) {
-    return;
-  }
-  if (recommendation.action !== "rerun_from") {
-    if (recommendation.action === "reject") {
-      return;
-    }
-    throw new Error(`${stepId} gate edits require rerun from ${requiredTargetStepId}: ${gate.rerun_requirement.reason}`);
-  }
-  const sequence = runtime.flow.variants?.[runtime.run.flow_variant]?.sequence ?? [];
-  const requiredIndex = sequence.indexOf(requiredTargetStepId);
-  const targetIndex = sequence.indexOf(recommendation.target_step_id);
-  if (targetIndex < 0 || requiredIndex < 0) {
-    return;
-  }
-  if (targetIndex > requiredIndex) {
-    throw new Error(`${stepId} gate edits require rerun from ${requiredTargetStepId} or earlier, but the recommendation targets ${recommendation.target_step_id}. ${gate.rerun_requirement.reason}`);
-  }
-}
-
 function latestStepCommit(repo, stepId, { short = true } = {}) {
   const result = runGit(repo, ["log", "--format=%H%x00%s", "-50"]);
   if (!result) {
@@ -4659,253 +3796,4 @@ function splitLines(value) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-}
-
-function assertStepInVariant(flow, variant, stepId) {
-  const sequence = flow.variants?.[variant]?.sequence ?? [];
-  if (!sequence.includes(stepId)) {
-    throw new Error(`${stepId} is not in ${variant} flow`);
-  }
-}
-
-function assertCurrentStep(run, stepId, options = {}) {
-  if (options.force === "true") {
-    return;
-  }
-  if (run.current_step_id !== stepId) {
-    throw new Error(`Current step is ${run.current_step_id}; refusing to operate on ${stepId}. Pass --force to override.`);
-  }
-}
-
-function isHumanGateStep(step) {
-  if (step.provider === "runtime" && step.mode === "human" && Boolean(step.human_gate)) {
-    return true;
-  }
-  if (step.assistEscalation) {
-    return true;
-  }
-  return false;
-}
-
-function formatStepName(step) {
-  return step.label ? `${step.id} ${step.label}` : step.id;
-}
-
-function humanDecisionCommands(repo, stepId) {
-  const repoArg = ` --repo ${shellQuote(repo)}`;
-  return [
-    `node src/cli.mjs approve${repoArg} --step ${stepId} --reason ok`,
-    `node src/cli.mjs request-changes${repoArg} --step ${stepId} --reason "<reason>"`,
-    `node src/cli.mjs reject${repoArg} --step ${stepId} --reason "<reason>"`
-  ];
-}
-
-function humanStopCommands(repo, stepId) {
-  return [showGateCommand(repo, stepId), assistOpenCommand(repo, stepId), ...humanDecisionCommands(repo, stepId)];
-}
-
-function recommendationCommands(repo, stepId) {
-  const repoArg = ` --repo ${shellQuote(repo)}`;
-  return [
-    `node src/cli.mjs accept-recommendation${repoArg} --step ${stepId}`,
-    `node src/cli.mjs decline-recommendation${repoArg} --step ${stepId} --reason "<reason>"`
-  ];
-}
-
-function recommendedStopCommands(repo, stepId) {
-  return [showGateCommand(repo, stepId), assistOpenCommand(repo, stepId), ...recommendationCommands(repo, stepId)];
-}
-
-function runNextCommand(repo) {
-  return `node src/cli.mjs run-next --repo ${shellQuote(repo)}`;
-}
-
-function rerunCurrentStepCommand(repo) {
-  return `node src/cli.mjs run-next --repo ${shellQuote(repo)} --force`;
-}
-
-function statusCommand(repo) {
-  return `node src/cli.mjs status --repo ${shellQuote(repo)}`;
-}
-
-function assistOpenCommand(repo, stepId) {
-  return `node src/cli.mjs assist-open --repo ${shellQuote(repo)} --step ${stepId}`;
-}
-
-function applyAssistSignalCommand(repo, stepId) {
-  return `node src/cli.mjs apply-assist-signal --repo ${shellQuote(repo)} --step ${stepId}`;
-}
-
-function resumeCommand(repo) {
-  return `node src/cli.mjs resume --repo ${shellQuote(repo)}`;
-}
-
-function showGateCommand(repo, stepId) {
-  return `node src/cli.mjs show-gate --repo ${shellQuote(repo)} --step ${stepId}`;
-}
-
-function interruptAnswerCommands(repo, stepId) {
-  return [
-    `node src/cli.mjs show-interrupts --repo ${shellQuote(repo)} --step ${stepId}`,
-    `node src/cli.mjs answer --repo ${shellQuote(repo)} --step ${stepId} --message "<answer>"`
-  ];
-}
-
-function interruptStopCommands(repo, stepId) {
-  return [
-    `node src/cli.mjs show-interrupts --repo ${shellQuote(repo)} --step ${stepId}`,
-    assistOpenCommand(repo, stepId),
-    `node src/cli.mjs answer --repo ${shellQuote(repo)} --step ${stepId} --message "<answer>"`
-  ];
-}
-
-function blockedStopCommands(repo, stepId) {
-  return [
-    assistOpenCommand(repo, stepId),
-    runNextCommand(repo)
-  ];
-}
-
-function nextProviderCommand(repo) {
-  return `node src/cli.mjs run-provider --repo ${shellQuote(repo)}`;
-}
-
-function buildAssistClaudeArgs({ prepared, model = null, bare = false }) {
-  const args = [
-    "--append-system-prompt",
-    prepared.systemPrompt,
-    "--setting-sources",
-    "user",
-    "--permission-mode",
-    "bypassPermissions",
-    "-n",
-    prepared.manifest.step?.id
-      ? `pdh-assist:${prepared.manifest.step.id}`
-      : `pdh-ticket-assist:${prepared.manifest.ticket_id || "ticket"}`
-  ];
-  if (bare) {
-    args.unshift("--bare");
-  }
-  if (model) {
-    args.push("--model", model);
-  }
-  args.push(prepared.prompt);
-  return args;
-}
-
-function markTicketAssistSessionStarted({ repoPath, ticketId, sessionId, command }) {
-  updateTicketAssistSession({
-    repoPath,
-    ticketId,
-    sessionId,
-    mutator(session) {
-      return {
-        ...session,
-        status: "running",
-        command,
-        started_at: new Date().toISOString()
-      };
-    }
-  });
-}
-
-function markTicketAssistSessionFinished({ repoPath, ticketId, sessionId, exitCode, signal = null }) {
-  updateTicketAssistSession({
-    repoPath,
-    ticketId,
-    sessionId,
-    mutator(session) {
-      return {
-        ...session,
-        status: exitCode === 0 ? "completed" : "failed",
-        exit_code: exitCode,
-        signal,
-        finished_at: new Date().toISOString()
-      };
-    }
-  });
-}
-
-function updateTicketAssistSession({ repoPath, ticketId, sessionId, mutator }) {
-  const path = ticketAssistSessionPath({ repoPath, ticketId });
-  let session = {};
-  try {
-    session = JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    session = {};
-  }
-  if (sessionId && session.id && session.id !== sessionId) {
-    return;
-  }
-  writeFileSync(path, `${JSON.stringify(mutator(session), null, 2)}\n`);
-}
-
-function normalizeAssistSignal(signal) {
-  const normalized = String(signal ?? "").trim();
-  const aliases = {
-    approve: "recommend-approve",
-    reject: "recommend-reject",
-    "request-changes": "recommend-request-changes"
-  };
-  return aliases[normalized] ?? normalized;
-}
-
-function gateDecisionFromRecommendation(action) {
-  const mapping = {
-    approve: "approved",
-    request_changes: "changes_requested",
-    reject: "rejected"
-  };
-  return mapping[action] ?? null;
-}
-
-function formatRecommendation(recommendation) {
-  if (!recommendation) {
-    return "-";
-  }
-  const target = recommendation.target_step_id ? ` -> ${recommendation.target_step_id}` : "";
-  const reason = recommendation.reason ? ` (${recommendation.reason})` : "";
-  return `${recommendation.action}${target}${reason}`;
-}
-
-function assertRerunTarget({ runtime, currentStepId, targetStepId }) {
-  const sequence = runtime.flow.variants?.[runtime.run.flow_variant]?.sequence ?? [];
-  const currentIndex = sequence.indexOf(currentStepId);
-  const targetIndex = sequence.indexOf(targetStepId);
-  if (targetIndex < 0) {
-    throw new Error(`Unknown rerun target for ${runtime.run.flow_variant}: ${targetStepId}`);
-  }
-  if (currentIndex < 0) {
-    throw new Error(`Current step ${currentStepId} is not part of ${runtime.run.flow_variant}`);
-  }
-  if (targetIndex >= currentIndex) {
-    throw new Error(`Rerun target must be earlier than ${currentStepId}; got ${targetStepId}`);
-  }
-}
-
-async function spawnAssistClaude({ repo, command, args }) {
-  const child = spawn(command, args, {
-    cwd: repo,
-    stdio: "inherit",
-    env: process.env
-  });
-  return await new Promise((resolve, reject) => {
-    child.on("error", reject);
-    child.on("close", (code, signal) => resolve({ exitCode: code ?? (signal ? 1 : 0), signal }));
-  });
-}
-
-function shellQuote(value) {
-  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(value)) {
-    return value;
-  }
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function firstLine(text) {
-  return String(text ?? "").trim().split(/\r?\n/)[0] || "(empty)";
 }
