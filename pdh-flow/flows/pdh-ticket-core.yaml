@@ -6,35 +6,6 @@ defaults:
   maxAttempts: 2
   reviewMaxRounds: 6
   reviewRepairProvider: codex
-  reviewRoles:
-    devils_advocate:
-      label: Devil's Advocate
-      provider: claude
-      remit: ユーザ側の立場から、見落とし、論理矛盾、セキュリティや設計上の危険を厳しく見る。
-    coding_engineer_reviewer:
-      label: Coding Engineer Reviewer
-      provider: claude
-      remit: 技術的実現可能性、依存関係、実装量、既存パターンとの整合を見る。
-    code_reviewer:
-      label: Code Reviewer
-      provider: claude
-      remit: コード品質、回帰、認可漏れ、整合性、エラーハンドリング、テスト妥当性を見る。
-    codex_critical:
-      label: codex Critical Reviewer
-      provider: codex
-      remit: 致命的な問題だけを短く指摘する。
-    pdm_counterexample:
-      label: PdM Counterexample Reviewer
-      provider: claude
-      remit: close してはいけない理由、未達 AC、目的ずれを反証要求型で探す。
-    ac_verifier:
-      label: AC Verifier
-      provider: claude
-      remit: AC ごとの証跡、裏取り表、最終検証の妥当性を確認する。
-    surface_observer:
-      label: Surface Observer
-      provider: claude
-      remit: UI / HTTP API / SDK / CLI の consumer 視点で、自動テストでは拾いにくい違和感を観察する。
   promptContext:
     semanticRules:
       - current-ticket.md and current-note.md are the canonical records for the active ticket.
@@ -166,17 +137,20 @@ steps:
       reviewersByVariant:
         full:
           - role: devils_advocate
+            provider: claude
             count: 2
             focus:
               - 計画の修正方針に矛盾や見落としがないか
               - セキュリティや設計上の懸念を先回りして潰せているか
           - role: coding_engineer_reviewer
+            provider: claude
             count: 1
             focus:
               - 技術的実現可能性
               - 依存関係と既存パターンとの整合
               - 実装量と検証量の妥当性
-          - role: codex_critical
+          - role: critical_reviewer
+            provider: codex
             count: 1
             focus:
               - 致命的な問題だけを短く指摘する
@@ -298,29 +272,34 @@ steps:
       reviewersByVariant:
         full:
           - role: devils_advocate
+            provider: claude
             count: 2
             focus:
               - セキュリティ脆弱性
               - 設計上の論理バグ
               - 目的から見た危険な抜け
           - role: code_reviewer
+            provider: claude
             count: 2
             focus:
               - コード品質
               - 回帰
               - 認可漏れと整合性
               - エラーハンドリングとテスト妥当性
-          - role: codex_critical
+          - role: critical_reviewer
+            provider: codex
             count: 1
             focus:
               - 致命的な問題だけを短く指摘する
         light:
           - role: devils_advocate
+            provider: claude
             count: 1
             focus:
               - セキュリティ脆弱性
               - 設計上の論理バグ
-          - role: codex_critical
+          - role: critical_reviewer
+            provider: codex
             count: 1
             focus:
               - 致命的な問題だけを短く指摘する
@@ -415,17 +394,20 @@ steps:
       reviewersByVariant:
         full:
           - role: ac_verifier
+            provider: claude
             count: 1
             focus:
               - AC ごとの証跡、分類、deferred の妥当性
               - 最終検証コマンドと結果
           - role: surface_observer
+            provider: claude
             count: 1
             focus:
               - UI / HTTP API / SDK / CLI の consumer 視点の違和感
               - エラー文言や情報ヒエラルキーの破綻
         light:
           - role: ac_verifier
+            provider: claude
             count: 1
             focus:
               - AC ごとの証跡、分類、最終検証結果

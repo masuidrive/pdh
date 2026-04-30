@@ -11,6 +11,11 @@ export function loadFlow(flowId = "pdh-ticket-core") {
   return parse(readFileSync(path, "utf8"));
 }
 
+export function loadRoles() {
+  const path = join(root, "flows", "roles.yaml");
+  return parse(readFileSync(path, "utf8"));
+}
+
 export function getInitialStep(flow, variant = "full") {
   const selected = flow.variants?.[variant];
   if (!selected) {
@@ -63,7 +68,7 @@ export function buildFlowView(flow, variant = "full", currentStepId = null) {
   if (!selected) {
     throw new Error(`Unknown flow variant: ${variant}`);
   }
-  const roleCatalog = normalizeReviewRoleCatalog(flow.defaults?.reviewRoles);
+  const roleCatalog = normalizeRoleCatalog(loadRoles().roles);
   const steps = selected.sequence.map((stepId) => {
     const step = getStep(flow, stepId);
     return {
@@ -193,15 +198,16 @@ function normalizeUiContract(ui) {
   };
 }
 
-function normalizeReviewRoleCatalog(reviewRoles) {
-  const source = reviewRoles ?? {};
+function normalizeRoleCatalog(roles) {
+  const source = roles ?? {};
   return Object.fromEntries(Object.entries(source).map(([id, entry]) => [
     id,
     {
       id,
+      kind: normalizeString(entry?.kind),
       label: normalizeString(entry?.label ?? id),
-      provider: normalizeString(entry?.provider),
-      remit: normalizeString(entry?.remit)
+      responsibility: normalizeString(entry?.responsibility),
+      skills: normalizeStringList(entry?.skills)
     }
   ]));
 }
@@ -229,8 +235,8 @@ function normalizeReviewer(reviewer, roleCatalog) {
   return {
     roleId,
     label: normalizeString(reviewer?.label ?? base.label ?? roleId),
-    provider: normalizeString(reviewer?.provider ?? base.provider),
-    remit: normalizeString(reviewer?.remit ?? base.remit),
+    provider: normalizeString(reviewer?.provider),
+    responsibility: normalizeString(reviewer?.responsibility ?? base.responsibility),
     count: Number.isFinite(Number(reviewer?.count)) ? Number(reviewer.count) : 1,
     focus: normalizeStringList(reviewer?.focus)
   };

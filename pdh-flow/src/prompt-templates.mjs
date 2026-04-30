@@ -233,8 +233,8 @@ function renderReviewSemantics(step, reviewPlan) {
     lines.push("- Reviewer roster for this run variant:");
     for (const reviewer of reviewPlan.reviewers) {
       lines.push(`  - ${reviewer.label} x${reviewer.count}`);
-      if (reviewer.remit) {
-        lines.push(`    - remit: ${reviewer.remit}`);
+      if (reviewer.responsibility) {
+        lines.push(`    - responsibility: ${reviewer.responsibility}`);
       }
       for (const focus of reviewer.focus) {
         lines.push(`    - focus: ${focus}`);
@@ -268,7 +268,7 @@ export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, re
     `- Reviewer role: ${reviewer.label}`,
     ...(round ? [`- Review round: ${round}`] : []),
     ...(reviewer.provider ? [`- Provider: ${reviewer.provider}`] : []),
-    ...(reviewer.remit ? [`- Remit: ${reviewer.remit}`] : []),
+    ...(reviewer.responsibility ? [`- Responsibility: ${reviewer.responsibility}`] : []),
     "",
     "## Reviewer Rules",
     "",

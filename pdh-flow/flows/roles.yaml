@@ -1,0 +1,38 @@
+version: 1
+roles:
+  devils_advocate:
+    kind: reviewer
+    label: Devil's Advocate
+    responsibility: ユーザ側の立場から、見落とし、論理矛盾、セキュリティや設計上の危険を厳しく見る。
+
+  coding_engineer_reviewer:
+    kind: reviewer
+    label: Coding Engineer Reviewer
+    responsibility: 技術的実現可能性、依存関係、実装量、既存パターンとの整合を見る。
+
+  code_reviewer:
+    kind: reviewer
+    label: Code Reviewer
+    responsibility: コード品質、回帰、認可漏れ、整合性、エラーハンドリング、テスト妥当性を見る。
+
+  critical_reviewer:
+    kind: reviewer
+    label: Critical Reviewer
+    responsibility: 致命的な問題だけを短く指摘する。
+
+  pdm_counterexample:
+    kind: reviewer
+    label: PdM Counterexample Reviewer
+    responsibility: close してはいけない理由、未達 AC、目的ずれを反証要求型で探す。
+
+  ac_verifier:
+    kind: reviewer
+    label: AC Verifier
+    responsibility: AC ごとの証跡、裏取り表、最終検証の妥当性を確認する。
+
+  surface_observer:
+    kind: reviewer
+    label: Surface Observer
+    responsibility: UI / HTTP API / SDK / CLI の consumer 視点で、自動テストでは拾いにくい違和感を観察する。
+
+skills: {}

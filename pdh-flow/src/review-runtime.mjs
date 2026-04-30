@@ -19,7 +19,7 @@ export function expandReviewerInstances(reviewPlan) {
       roleId: reviewer.roleId || "",
       label: reviewer.label || reviewer.roleId || `Reviewer ${index + 1}`,
       provider: reviewer.provider || "",
-      remit: reviewer.remit || "",
+      responsibility: reviewer.responsibility || "",
       focus: Array.isArray(reviewer.focus) ? reviewer.focus : []
     }));
   });
@@ -92,7 +92,7 @@ export function writeReviewerPrompt({ stateDir, run, step, reviewPlan, reviewer 
     "## Reviewer Contract",
     "",
     `- Role: ${reviewer.label}`,
-    ...(reviewer.remit ? [`- Remit: ${reviewer.remit}`] : []),
+    ...(reviewer.responsibility ? [`- Responsibility: ${reviewer.responsibility}`] : []),
     ...(reviewer.focus.length > 0 ? ["- Focus:", ...reviewer.focus.map((item) => `  - ${item}`)] : ["- Focus: (none)"]),
     "",
     "## Review Rules",
