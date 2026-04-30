@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 
-const stepPromptsPath = join(dirname(fileURLToPath(import.meta.url)), "step-prompts.yaml");
+const stepPromptsPath = join(dirname(fileURLToPath(import.meta.url)), "..", "flows", "step-prompts.yaml");
 
 let cached = null;
 

@@ -53,7 +53,7 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
   const stepBody = hasStepPrompt(step.id) ? renderStepPromptBody(step.id) : null;
   const skillBodies = resolveSkillBodies(step.role);
 
-  return renderTemplate("step-prompt.njk", {
+  return renderTemplate("step-prompt.j2", {
     run,
     step,
     successTransition: nextStep(flow, run.flow_variant, step.id, "success"),
@@ -206,7 +206,7 @@ export function renderReviewerPrompt({ repoPath, run, flow, step, reviewPlan, re
     ],
     notes: "Optional free text"
   }, null, 2);
-  return renderTemplate("reviewer-prompt.njk", {
+  return renderTemplate("reviewer-prompt.j2", {
     run,
     step,
     reviewPlan,
@@ -234,7 +234,7 @@ export function renderReviewRepairPrompt({ repoPath, run, flow, step, reviewPlan
     rerun_target_step: null
   }, null, 2);
   const blockerLines = renderBlockerLines(blockers);
-  return renderTemplate("repair-prompt.njk", {
+  return renderTemplate("repair-prompt.j2", {
     run,
     step,
     reviewPlan: reviewPlan ?? {},
