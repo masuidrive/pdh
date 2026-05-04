@@ -1,0 +1,88 @@
+# pdh-flow ステッププロンプト
+
+## 実行コンテキスト
+
+- 実行ID: {{ run.id }}
+- チケット: {{ run.ticket_id or "(なし)" }}
+- フロー: {{ run.flow_id }}@{{ run.flow_variant }}
+- 現在ステップ: {{ step.id }}
+- プロバイダ: {{ step.provider }}
+- モード: {{ step.mode }}
+{%- if step.role %}
+- 役割: {{ step.role }}
+{%- endif %}
+{%- if step.summary %}
+- ステップ要約: {{ step.summary }}
+{%- endif %}
+- 成功時の遷移先: {{ successTransition or "(なし)" }}
+
+{% if skillBodies and skillBodies.length -%}
+## スキル
+
+{% for skill in skillBodies -%}
+### {{ skill.label }}
+
+{{ skill.body | trimEnd }}
+
+{% endfor -%}
+{% endif -%}
+## 割り込み
+
+{% for line in interruptionLines -%}
+{{ line }}
+{% endfor %}
+{% if stepBody -%}
+{{ stepBody | trimEnd }}
+
+{% else -%}
+## ステップ指示
+
+- flow 定義と repo ルールに従って {{ step.id }} を実行する。
+- 正本記録を更新し、{{ step.id }} の guard を満たす。
+
+{% endif -%}
+{% if reviewerOutputs and reviewerOutputs.length -%}
+## レビュー担当の出力
+
+runtime はこのラウンドで {{ reviewerOutputs.length }} 件の reviewer を並行実行 (同じ範囲を別レンズで overlap) しました。各 `review.json` 成果物を追加ファイルを開かずに読めるよう、そのまま全文掲載します。各ブロックをその reviewer の正本出力として扱ってください。複数 reviewer が同じ blocker を上げていれば consensus として残し、severity を下げない。
+
+{% for reviewer in reviewerOutputs -%}
+### {{ reviewer.label }} ({{ reviewer.reviewerId }})
+
+{% if reviewer.provider -%}
+- プロバイダ: {{ reviewer.provider }}
+{% endif -%}
+{% if reviewer.round != null and reviewer.round != undefined -%}
+- ラウンド: {{ reviewer.round }}
+{% endif -%}
+{% if reviewer.artifactPath -%}
+- 成果物: `{{ reviewer.artifactPath }}`
+{% endif -%}
+{% if reviewer.status -%}
+- ステータス: {{ reviewer.status }}
+{% endif %}
+{% if reviewer.rawText -%}
+```json
+{{ reviewer.rawText | trimEnd }}
+```
+{% else -%}
+_(レビュー担当から読める出力がありません)_
+{% endif %}
+{% endfor -%}
+{% endif -%}
+## 必須ガード
+
+{% for line in guardLines -%}
+{{ line }}
+{% endfor %}
+{% if reviewSemanticsLines and reviewSemanticsLines.length -%}
+{% for line in reviewSemanticsLines -%}
+{{ line }}
+{% endfor -%}
+{% if step.mode == "review" or hasReviewers %}
+
+{% endif -%}
+{% endif -%}
+{% for line in uiOutputLines -%}
+{{ line }}
+{% endfor -%}

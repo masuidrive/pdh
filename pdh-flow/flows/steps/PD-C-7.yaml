@@ -1,0 +1,58 @@
+id: PD-C-7
+role: aggregator
+mode: review
+noteSection: PD-C-7. 品質検証結果
+commitSummary: Quality verification
+judgement:
+  kind: quality_review
+  acceptedStatuses:
+    - No Critical/Major
+    - user_accepted
+review:
+  maxRounds: 6
+  defaultRerunStep: PD-C-6
+display:
+  label: 品質レビュー
+  summary: 実装の品質、回帰、テスト不足、設計逸脱をレビューする。
+  userAction: Critical/Major が残る場合は実装修正へ戻す。
+  viewer: レビュー担当
+  decision: この実装に Critical/Major が残っていないかを判断する。
+  mustShow:
+    - diff summary
+    - テスト結果
+    - レビュー指摘
+    - 設計逸脱
+    - security / data-integrity の懸念
+  omit:
+    - 過去 step の長文ノート
+prompt:
+  intent: 実装済み変更の品質、回帰、テスト妥当性、設計逸脱を複数視点で洗う。
+  passWhen:
+    - 全 reviewer role の最新結果が `No Critical/Major` である
+    - または未解消点についてユーザが明示的に受け入れている
+  onFindings:
+    - Critical/Major があれば PD-C-6 に戻して修正、必要な再テスト、再レビューを行う
+    - 中間 round では変更の影響範囲に絞って再テストし、フル実行は最終検証で担保してよい
+  reviewerRules:
+    - 実装 diff に対して、regression、security、authorization、data integrity、error handling、テスト妥当性に注力する。
+    - 過去の重大 finding の後で repo 状態が変わったなら、その finding が今は解消しているかを明示的に確認する。
+  repairRules:
+    - これは code-quality 修正ループとして扱う。実装と影響テストを直し、変更 surface に必要な検証だけを再実行する。
+    - 変更した code path が直接証拠で覆われていない限り、品質 blocker を解消済みだと主張しない。
+  assistCheckpoints:
+    - critical / major finding はコード修正か検証証拠で解消し、その後で同じ品質 step を再実行する。
+    - notes に直したと書いてあるだけで重大 finding を閉じず、最新の repo 状態で確認する。
+guards:
+  - id: quality-recorded
+    type: note_section_updated
+    path: current-note.md
+    section: PD-C-7. 品質検証結果
+  - id: no-critical-major
+    type: judgement_status
+    artifactKind: quality_review
+    accepted:
+      - No Critical/Major
+      - user_accepted
+transitions:
+  on_success: PD-C-8
+  on_failure: PD-C-6

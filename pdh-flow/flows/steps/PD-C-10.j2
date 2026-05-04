@@ -1,0 +1,51 @@
+{% include "shared/common.j2" %}
+{% include "shared/common_c.j2" %}
+
+# PD-C-10. クローズ準備 + human gate
+
+## 方針
+
+PD-C-9 までで揃った AC 裏取り表・最終検証 judgement を読み、ticket close 判断のための gate summary を ui-output.json に集約する。close 自体の実行は runtime の仕事。
+
+- AC の pass / deferred / unverified 件数は、PD-C-9 の final-verification judgement を正とする。
+- `judgement.kind` は `close-gate` でなければならず、`judgement.status` は ticket を close できる状態かを表す。
+
+## 役割
+
+PD-C-10 では、PD-C-9 までに揃った成果物 (実装・AC 裏取り表・最終検証 judgement) を読み、**ユーザが ticket を close して良いか判断するための材料**を `current-note.md` と `ui-output.json` に集約することがあなたの仕事です。実装の修正や `./ticket.sh close` の実行、Epic ファイルの Tickets セクション更新は行いません。
+
+判断材料を揃えたあと、runtime が自動で human gate を開きます。`approved` / `OK` のような表現で勝手に承認済み扱いにしないでください。
+
+## 事前確認
+
+- `current-note.md` の `PD-C-9. AC 裏取り結果` を確認する。`unverified` が 1 件でも残るなら、judgement を `Ready` にしない
+- `deferred` があれば、follow-up ticket が実作成済かつユーザ承認済か確認する。未承認なら `{{ runtimeCli }} provider ask` で承認を取りに行く
+- PD-C-9 の `final_verification` judgement (`Ready` 以外なら理由) を summary に引用する
+- **各 step section の `### 未解消事項` を全部読む** (`PD-C-2` から `PD-C-9` まで)。`flows/shared/common_c.j2` で説明されている `defer / followup / accept / info` の慣習に従って書かれている。これらが close summary の「残リスク・チケット化候補」の一次資料になる
+
+## 成果物
+
+- `current-note.md` に `## PD-C-10. クローズ準備` セクションを追加 / 更新し、以下を含める:
+    - 作業サマリ (主な変更を 3〜5 行)
+    - AC 裏取りの最終状態 (PD-C-9 の表を引用してよい)
+    - 確認手順 (ユーザが自分で動作確認する方法)
+    - **未解消事項の棚卸し**: 各 step の `### 未解消事項` を集約して `defer / followup / accept / info` 別に並べる。`defer` のうち target step が PD-C-10 だったものはここで結論を出す (解消済 / `accept` に降格 / `followup` に切替 のいずれか)。`followup` は ticket id (または `tbd:<slug>`) と一緒に列挙
+    - チケット化候補 (将来別チケットに切るべき改善案。上の followup と重複する場合は ref を再掲)
+    - Epic 残チケット状況 (該当する場合のみ)
+
+- `ui-output.json`:
+    - `summary`: クローズ可否を判断するための要点 (作業サマリ・AC 状況)
+    - `risks`: 残課題・懸念 + `unverified` AC が 1 件でもあれば critical で計上 + 既存の defer 先がここ (PD-C-10) になっている risk を再評価して棚卸し。フォーマット: `flows/shared/common_c.j2`
+    - `notes`: AC 裏取り表全件・確認手順・チケット化候補等の詳細
+    - `judgement.kind`: `close-gate`
+    - `judgement.status`: `Ready` (close 可能と判断した場合) または 具体的な Block 理由
+    - `judgement.summary`: 結論の理由
+
+- `[PD-C-10] Prepare close summary` のコミットを 1 本作成 (空コミットでも可、note と ui-output の差分があればそれを含む)
+
+## やらないこと
+
+- `./ticket.sh close` を自分で実行しない
+- Epic ファイルの Tickets セクション更新を自分で実行しない
+- `approved` / `OK` と勝手に書いて gate を既成事実化しない
+- 実装本体・テストの修正 (必要なら Block 判定にして PD-C-6 へ rerun させる)

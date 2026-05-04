@@ -1,0 +1,46 @@
+{% include "shared/common.j2" %}
+{% include "shared/common_c.j2" %}
+
+# PD-C-5. 実装承認 (human gate)
+
+## 方針
+
+PD-C-3 の計画と (full variant では) PD-C-4 のレビュー結果を読み、実装承認判断のための gate summary を current-note.md と ui-output.json に集約する。実装そのものは PD-C-6 で行い、ここでは計画を変更しない。
+
+- 実装計画そのものは変更しない。懸念は `risks` に記録し、修正は PD-C-3 rerun に任せる。
+- `ui-output.json` に `judgement` キーを出さない。この gate には runtime judgement 契約がない。
+
+## 役割
+
+PD-C-5 は明示的な human gate です。あなたの仕事は、PD-C-3 の計画と PD-C-4 のレビュー結果を踏まえて **ユーザが実装に進めて良いか判断するための材料** を `current-note.md` と `ui-output.json` に集約すること。承認自体はユーザが Web UI / CLI で行い、その確定は runtime が握ります。
+
+## 事前確認
+
+- `current-note.md` の `## PD-C-3. 計画` を読み、主要なファイル変更・実装方針・所有権を把握する
+- `## PD-C-4. 計画レビュー結果` セクションが存在する (full variant) 場合のみ、reviewer 別の懸念とその対応状況 (resolved / open) を確認する。light variant では PD-C-4 が無いので skip
+- まだ未対応の Critical/Major 指摘が残っているなら、それを risks に必ず明記する (黙って承認可扱いにしない)
+- `current-ticket.md` の AC を読み直し、計画でカバーされない AC が無いか確認する
+
+## 成果物
+
+- `current-note.md` に `## PD-C-5. 実装承認待ち` セクションを追加 / 更新し、以下を含める:
+    - 作業サマリ (計画の要点を 3〜5 行)
+    - 主要な設計判断とその理由
+    - 主要なファイル変更 (PD-C-3 計画を引用してよい)
+    - 影響範囲 / blast radius (アプリ本体・テスト・frontend・SDK / CLI・migration・docs のどれに触れるか)
+    - テスト計画 (新規・更新するテスト、`scripts/test-all.sh` でカバーされる範囲)
+    - 実環境確認手順 (ユーザが承認後に自分で動作を見るための手順)
+    - 懸念・残リスク (PD-C-4 で挙がった未解決の指摘を含む)
+    - 不確実性 / 代替案 (もし他の設計案を比較したなら)
+
+- `ui-output.json`:
+    - `summary`: 承認可否を判断するための要点 (作業サマリ + 主要設計判断 + 影響範囲)
+    - `risks`: 承認前に承知しておくべきリスク (PD-C-4 の未解決指摘・着手前に解消すべき条件もここ。フォーマット: `flows/shared/common_c.j2`)
+    - `notes`: 計画詳細・テスト計画・実環境確認手順・代替案などの補足
+
+## やらないこと
+
+- 自分で `approved` / `OK` と書いて gate を既成事実化しない
+- 「承認されたものとして」次の作業 (PD-C-6 の実装) を進めない
+- judgement を出さない (PD-C-5 は runtime guard が judgement を要求しない human gate なので、`judgement` キーは ui-output.json に含めない)
+- 計画内容そのものを書き換えない (修正が必要なら risks/notes に書き、PD-C-3 への rerun はユーザ判断に委ねる)

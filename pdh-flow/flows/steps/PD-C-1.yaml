@@ -1,0 +1,44 @@
+id: PD-C-1
+role: coordinator
+mode: edit
+humanGate: true
+noteSection: PD-C-1. 開始前チェック
+commitSummary: Pre-start check
+display:
+  label: 開始前チェック
+  summary: agent が ticket をどう解釈したか・未決事項・不足情報・docs 整合性・variant 提案・チーム編成 を整理して human gate に出す。
+  userAction: 解釈サマリと未決事項を確認し、agent の仮定で進めて OK か / 不足情報があれば answer して埋めるか / リジェクトするかを判断する。
+  viewer: PM 役 (intent gate)
+  decision: agent の解釈・仮定・docs 整合性に同意できるか。同意できれば Approve、要修正なら Request changes、却下なら Reject。
+  mustShow:
+    - チケット解釈 (reading / in_scope / out_of_scope / success_definition)
+    - 未決事項とその仮定 (need_user_decision の有無)
+    - 不足情報 (blocker / nice-to-have)
+    - docs 整合性 (product-brief / current-epic / related past tickets)
+    - flow variant 推奨と理由
+    - team composition (default / per-step)
+    - blocker risks
+  omit:
+    - 過去 gate の履歴
+    - provider event 全件
+  approve:
+    label: 着手承認
+    description: 解釈と前提に同意して flow を確定し、full なら PD-C-2 (調査) / light なら PD-C-3 (計画) に進めます。実装そのものは PD-C-6 で行います。
+prompt:
+  assistCheckpoints:
+    - interpretation / unknowns / context_gaps / alignment / variant / team を前面に出し、人間が 30 秒で承認判断できるようにする。
+    - ここで自分で承認しない。gate は runtime が管理する。
+guards:
+  - id: pre-start-check-recorded
+    type: note_section_updated
+    path: current-note.md
+    section: PD-C-1. 開始前チェック
+  - id: explicit-approval
+    type: human_approved
+transitions:
+  on_human_approved:
+    light: PD-C-3
+    full: PD-C-2
+    default: PD-C-2
+  on_human_rejected: PD-C-1
+  on_human_changes_requested: PD-C-1

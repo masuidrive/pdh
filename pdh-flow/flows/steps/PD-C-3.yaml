@@ -1,0 +1,38 @@
+id: PD-C-3
+role: planner
+mode: edit
+noteSection: PD-C-3. 計画
+commitSummary: Plan
+display:
+  label: 計画
+  summary: 実装方針、変更ファイル、テスト計画、リスク対応を決める。
+  userAction: 計画に違和感があれば PD-C-5 前に割り込みで修正指示する。
+  viewer: 実装担当
+  decision: この ticket で実際にどのファイルをどう触るかを判断する。
+  mustShow:
+    - 実装方針
+    - 変更ファイル
+    - テスト方針
+    - リスク対応
+    - durable な設計判断
+  omit:
+    - 過去 step の history 一覧
+prompt:
+  assistCheckpoints:
+    - review 前に、計画を 1 つの具体的な実装経路へ固定する。
+    - ownership、検証コマンド、リスクを明示し、PD-C-6 がぶれずに実行できるようにする。
+guards:
+  - id: plan-recorded
+    type: note_section_updated
+    path: current-note.md
+    section: PD-C-3. 計画
+  - id: ticket-implementation-notes
+    type: ticket_section_updated
+    path: current-ticket.md
+    section: Implementation Notes
+  - id: step-commit
+    type: step_commit_recorded
+transitions:
+  on_success:
+    light: PD-C-5
+    full: PD-C-4

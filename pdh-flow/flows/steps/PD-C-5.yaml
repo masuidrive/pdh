@@ -1,0 +1,42 @@
+id: PD-C-5
+mode: edit
+humanGate: true
+noteSection: PD-C-5. 実装承認待ち
+commitSummary: Implementation gate
+display:
+  label: 実装承認
+  summary: agent が実装計画を ui-output.json に集約し、人間が明示承認して PD-C-6 に進める gate。
+  userAction: agent が出した計画サマリを確認し、計画・主要リスク・テスト計画を見て Yes / No を選ぶ。必要なら direct override で approve / request-changes / reject を使う。
+  viewer: 承認者
+  decision: この計画で実装に入ってよいかを判断する。
+  readTicketHeading: "## Implementation Notes"
+  readNoteHeadings:
+    - "## PD-C-3. 計画"
+    - "## PD-C-4. 計画レビュー結果"
+  mustShow:
+    - 計画サマリ (agent 集約)
+    - 変更対象
+    - 主要リスク
+    - テスト計画
+    - Yes / No の CLI
+  omit:
+    - 生ログ全件
+    - step history
+  approve:
+    label: 実装開始
+    description: 計画を承認して PD-C-6 (実装) に進めます。
+prompt:
+  assistCheckpoints:
+    - 実装計画、blast radius、明示的なリスクを前面に出し、人間が安心して承認判断できるようにする。
+    - ここで自分で承認しない。gate は runtime が管理する。
+guards:
+  - id: implementation-plan-summary-recorded
+    type: note_section_updated
+    path: current-note.md
+    section: PD-C-5. 実装承認待ち
+  - id: explicit-approval
+    type: human_approved
+transitions:
+  on_human_approved: PD-C-6
+  on_human_rejected: PD-C-3
+  on_human_changes_requested: PD-C-3

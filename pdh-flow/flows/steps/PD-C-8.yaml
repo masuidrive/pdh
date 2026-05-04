@@ -1,0 +1,44 @@
+id: PD-C-8
+role: purpose_validation
+mode: edit
+noteSection: PD-C-8. 目的妥当性確認
+commitSummary: Purpose validation
+judgement:
+  kind: purpose_validation
+  acceptedStatuses:
+    - No Unverified
+    - user_accepted
+display:
+  label: 目的妥当性
+  summary: PdM 反証要求型で「書くべきだったのに書いていないもの」「目的ずれ」を検査する。
+  userAction: 通常は操作不要。PdM が Block 判定を返すと runtime が blocked になるので、recover で計画/実装から rerun する。
+  viewer: PdM / 批判的レビュアー
+  decision: 抜け漏れ・目的ずれ・product-brief 違反が残っていないかを判断する。
+  mustShow:
+    - PdM が探した観点と所見
+    - 抜け漏れ・目的ずれ
+    - PD-C-2 で記録した懸念の再点検結果
+    - ユーザ判断が要る論点
+  omit:
+    - 実装イベントの生時系列
+    - per-AC の verified/unverified 表 (PD-C-9 の責務)
+prompt:
+  assistCheckpoints:
+    - 足りていない outcome、足りていない coverage、まだ ticket を close すべきでない理由を探す。
+    - 実装や scope を変える必要があるなら、PD-C-6 かそれ以前の review へ戻る前提で考える。
+guards:
+  - id: purpose-recorded
+    type: note_section_updated
+    path: current-note.md
+    section: PD-C-8. 目的妥当性確認
+  - id: purpose-validation-accepted
+    type: judgement_status
+    artifactKind: purpose_validation
+    accepted:
+      - No Unverified
+      - user_accepted
+  - id: step-commit
+    type: step_commit_recorded
+transitions:
+  on_success: PD-C-9
+  on_failure: PD-C-6
