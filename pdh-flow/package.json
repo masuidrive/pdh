@@ -6,6 +6,7 @@
   "files": [
     "src/",
     "flows/",
+    "web/bundle/",
     "README.md"
   ],
   "bin": {
@@ -14,7 +15,9 @@
   "scripts": {
     "check": "tsc --project tsconfig.json",
     "smoke:calc": "node src/cli.ts smoke-calc",
-    "test:runtime": "scripts/test-runtime.sh"
+    "test:runtime": "scripts/test-runtime.sh",
+    "build:web": "cd web && npm ci && npm run build",
+    "prepare": "npm run build:web"
   },
   "engines": {
     "node": ">=24.0.0"
