@@ -3,7 +3,8 @@ import { fileURLToPath } from "node:url";
 import { spawn as spawnPty } from "node-pty";
 import { WebSocket, WebSocketServer } from "ws";
 
-const CLI_PATH = fileURLToPath(new URL("../../cli/index.ts", import.meta.url));
+const CLI_EXT = import.meta.url.endsWith(".js") ? ".js" : ".ts";
+const CLI_PATH = fileURLToPath(new URL(`../../cli/index${CLI_EXT}`, import.meta.url));
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 32;
 const MAX_BUFFER = 300000;

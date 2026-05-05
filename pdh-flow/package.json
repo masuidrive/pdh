@@ -4,20 +4,21 @@
   "private": false,
   "type": "module",
   "files": [
-    "src/",
+    "lib/",
     "flows/",
     "web/bundle/",
     "README.md"
   ],
   "bin": {
-    "pdh-flow": "./src/cli.ts"
+    "pdh-flow": "./lib/cli.js"
   },
   "scripts": {
     "check": "tsc --project tsconfig.json",
     "smoke:calc": "node src/cli.ts smoke-calc",
     "test:runtime": "scripts/test-runtime.sh",
     "build:web": "cd web && npm ci && npm run build",
-    "prepare": "npm run build:web"
+    "build:ts": "tsc --project tsconfig.build.json",
+    "prepare": "npm run build:web && npm run build:ts"
   },
   "engines": {
     "node": ">=24.0.0"

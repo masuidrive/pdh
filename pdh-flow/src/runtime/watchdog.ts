@@ -29,7 +29,8 @@ import {
 
 const DIAGNOSABLE_STATUSES = new Set(["blocked", "failed", "needs_human", "interrupted"]);
 const DEFAULT_MAX_ATTEMPTS = 3;
-const CLI_PATH = fileURLToPath(new URL("../cli/index.ts", import.meta.url));
+const CLI_EXT = import.meta.url.endsWith(".js") ? ".js" : ".ts";
+const CLI_PATH = fileURLToPath(new URL(`../cli/index${CLI_EXT}`, import.meta.url));
 
 export function isDiagnoseWatchdogEnabled({ options = {}, env = process.env }: { options?: CliOptions; env?: NodeJS.ProcessEnv } = {}) {
   if (options["auto-diagnose"] === "true") return true;

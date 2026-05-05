@@ -6,3 +6,4 @@ dist/
 coverage/
 smoke-output/
 tmp/
+lib/
