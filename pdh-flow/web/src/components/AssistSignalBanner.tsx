@@ -3,7 +3,6 @@ type AssistSignal = {
   signal?: string;
   message?: string;
   question?: string;
-  recommendation?: string;
   reason?: string;
   ts?: string;
   createdAt?: string;
@@ -17,7 +16,7 @@ export function AssistSignalBanner({ signal }: Props) {
   if (!signal || typeof signal !== "object") return null;
   const s = signal as AssistSignal;
   const kind = s.kind ?? s.signal ?? "assist";
-  const message = s.message ?? s.question ?? s.recommendation ?? s.reason ?? "";
+  const message = s.message ?? s.question ?? s.reason ?? "";
   const ts = s.ts ?? s.createdAt ?? "";
   if (!message) return null;
   return (

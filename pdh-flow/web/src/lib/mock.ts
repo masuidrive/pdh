@@ -103,7 +103,7 @@ const MOCKS: Record<string, () => AppState> = {
       title: "PD-C-5 実装承認 を進める",
       body: "Approve implementation start, reject, or request changes to the plan.",
       actions: [
-        { label: "Open Terminal", description: "assist と相談しながら recommendation を作るか、必要な修正をここで進めます。", tone: "neutral", kind: "assist" },
+        { label: "Open Terminal", description: "assist と相談しながら提案を作るか、必要な修正をここで進めます。", tone: "neutral", kind: "assist" },
         { label: "Approve", description: "この gate をそのまま通して次へ進めます。", tone: "approve", kind: "gate_approve" },
       ],
     }),

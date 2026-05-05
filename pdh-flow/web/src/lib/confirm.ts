@@ -4,7 +4,7 @@ import { actions } from "./api";
 type Ctx = {
   stepId?: string;
   stepLabel?: string;
-  recommendationText?: string;
+  proposalText?: string;
   ticketId?: string;
 };
 
@@ -15,19 +15,25 @@ export function buildConfirmRequest(kind: string, ctx: Ctx): ConfirmRequest | nu
       return {
         title: `${ctx.stepLabel ?? ctx.stepId ?? "Gate"} を承認`,
         body: "この gate を通して次の step に進めます。",
-        preview: ctx.recommendationText,
+        preview: ctx.proposalText,
         confirmLabel: "承認する",
         confirmTone: "approve",
+        // Server-side approveGateFromWeb already spawns run-next via
+        // spawnRunNextIfClear. Don't chain another runNext call here —
+        // the second call races against the spawned process before it
+        // acquires the run lock and trips "already locked by pid X".
         onConfirm: () => actions.approve(ctx.stepId!).then(() => {}),
       };
-    case "accept_recommendation":
+    case "accept_proposal":
       return {
-        title: "Recommendation を反映",
-        body: "Assist が出した recommendation を runtime に渡して次の step を実行します。",
-        preview: ctx.recommendationText,
+        title: "Assist の提案を反映",
+        body: "Assist が出した提案を runtime に渡して次の step を実行します。",
+        preview: ctx.proposalText,
         confirmLabel: "Apply & Run",
         confirmTone: "approve",
-        onConfirm: () => actions.acceptRecommendation(ctx.stepId!).then(() => {}),
+        // Same as approve: server-side acceptProposalFromWeb auto-fires
+        // run-next when the proposal didn't already complete the step.
+        onConfirm: () => actions.acceptProposal(ctx.stepId!).then(() => {}),
       };
     case "apply_assist":
       return {

@@ -114,7 +114,7 @@ out_b="$("${CLI[@]}" --step PD-C-4 --role "Plan DA" --scope x)"
 echo "[10] concurrent-review principle in PD-C-4 / PD-C-7 / PD-C-9 / PD-D-2 step prompts"
 node --experimental-strip-types -e "
 import('$ROOT/src/flow/prompts/template-engine.ts').then(({ renderTemplate }) => {
-  const targets = ['steps/PD-C-4.j2','steps/PD-C-7.j2','steps/PD-C-9.j2','steps/PD-D-2.j2','shared/common.j2','shared/reviewer_prompt.j2'];
+  const targets = ['steps/PD-C-4.j2','steps/PD-C-7.j2','steps/PD-C-9.j2','steps/PD-D-2.j2','shared/reviewer_prompt.j2'];
   let fails = 0;
   for (const t of targets) {
     const out = renderTemplate(t, { run: {id:'r', ticket_id:'t', flow_id:'f', flow_variant:'full'}, step: {id:'PD-C-N', label:'X'}, reviewer: {label:'l', responsibility:'r', focus:[]}, reviewPlan: {}, jsonShape: '{}', outputPath: 'x', round: null, priorFindings: [], reviewerStepRules: [] });

@@ -6,6 +6,7 @@ type Props = {
   stepId?: string | null;
   ticketId?: string | null;
   sessionId?: string | null;
+  forceReprompt?: boolean;
   onClose: () => void;
 };
 
@@ -89,7 +90,7 @@ async function loadXterm() {
   await loadScript("/assets/xterm-addon-web-links.js");
 }
 
-export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessionId, onClose }: Props) {
+export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessionId, forceReprompt = false, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -230,7 +231,7 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
         if (providedSessionId) {
           resolvedSessionId = providedSessionId;
         } else if (stepId) {
-          const session = await actions.openAssist(stepId);
+          const session = await actions.openAssist(stepId, { force: forceReprompt });
           const data = session as { result?: { sessionId?: string; title?: string; status?: string }; sessionId?: string; title?: string; status?: string };
           resolvedSessionId = data.result?.sessionId ?? data.sessionId ?? null;
           sessionTitle = data.result?.title ?? data.title;
@@ -343,7 +344,7 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
               className={`btn btn-xs ${drawerOpen ? "btn-primary" : "btn-outline"}`}
               onClick={() => setDrawerOpen((v) => !v)}
             >
-              {drawerOpen ? "Drawer 閉じる" : "Recommendation prompt"}
+              {drawerOpen ? "Drawer 閉じる" : "Proposal prompt"}
             </button>
             <form method="dialog">
               <button className="btn btn-sm btn-ghost" type="submit">Close</button>
@@ -393,7 +394,7 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
 
 function defaultPromptText(stepId: string) {
   return [
-    `Please give one concrete recommendation for ${stepId}.`,
+    `Please give one concrete proposal for ${stepId}.`,
     "Choose exactly one next action.",
     "If a rerun target is needed, choose one specific earlier step.",
     "If you are confident, run the appropriate assist-signal command yourself and briefly explain the reason.",

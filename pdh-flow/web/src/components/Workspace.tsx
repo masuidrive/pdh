@@ -1,11 +1,15 @@
-import type { ActionButton, HistoryEntry, Interruption, NextAction, StepView } from "../lib/types";
+import type { ActionButton, HistoryEntry, Interruption, NextAction, RunRecord, StepView } from "../lib/types";
 import { EvidencePanel } from "./EvidencePanel";
 import { FailureCard } from "./FailureCard";
 import { UiOutputCard } from "./UiOutputCard";
 import { GateContextCard } from "./GateContextCard";
-import { RecommendationCard } from "./RecommendationCard";
+import { ProposalCard } from "./ProposalCard";
 import { CompletionCard } from "./CompletionCard";
 import { AssistSignalBanner } from "./AssistSignalBanner";
+import { RunCompositionPanel } from "./RunCompositionPanel";
+import { InterpretationCard } from "./InterpretationCard";
+import { PromptPanel } from "./PromptPanel";
+import { statusAlertTone, statusBadgeTone, statusLabel } from "../lib/status";
 
 type Props = {
   step: StepView | null;
@@ -14,50 +18,34 @@ type Props = {
   history?: HistoryEntry[];
   interruptions?: Interruption[];
   documents?: Record<string, { path: string; text: string }>;
+  run?: RunRecord | null;
+  // True while the runtime supervisor is actively running. Used to
+  // disable run-launching buttons (Approve / Apply / Run-next) so the
+  // user can't double-fire while a step is in flight.
+  runtimeBusy?: boolean;
   onOpenTerminal: (stepId: string) => void;
   onOpenArtifact: (stepId: string, name: string) => void;
   onOpenDiff?: (stepId: string) => void;
   onOpenFile?: (stepId: string, path: string) => void;
   onOpenDocument?: (docId: string, heading?: string | null) => void;
-  onConfirm: (kind: string, ctx: { stepId?: string; stepLabel?: string; recommendationText?: string }) => void;
+  onConfirm: (kind: string, ctx: { stepId?: string; stepLabel?: string; proposalText?: string }) => void;
+  onRefresh?: () => void;
 };
 
-const TONE_BADGE: Record<string, string> = {
-  needs_human: "badge-warning",
-  waiting: "badge-warning",
-  failed: "badge-error",
-  active: "badge-info",
-  running: "badge-info",
-  done: "badge-success",
-  completed: "badge-success",
-  blocked: "badge-error",
-  interrupted: "badge-warning",
-};
-
-const TONE_ALERT: Record<string, string> = {
-  needs_human: "alert-warning",
-  waiting: "alert-warning",
-  failed: "alert-error",
-  active: "alert-info",
-  running: "alert-info",
-  blocked: "alert-error",
-  interrupted: "alert-warning",
-};
-
-export function Workspace({ step, next, allSteps, history, interruptions, documents, onOpenTerminal, onOpenArtifact, onOpenDiff, onOpenDocument, onConfirm }: Props) {
+export function Workspace({ step, next, allSteps, history, interruptions, documents, run, runtimeBusy = false, onOpenTerminal, onOpenArtifact, onOpenDiff, onOpenDocument, onConfirm, onRefresh }: Props) {
   if (!step) {
     return <section className="p-8 text-base-content/60">step を選択してください</section>;
   }
 
   const status = step.progress.status;
-  const recommendationText: string | undefined = undefined;
+  const proposalText: string | undefined = undefined;
 
   function runAction(action: ActionButton) {
     if (action.kind === "assist" || action.kind === "open_terminal") {
       onOpenTerminal(step!.id);
       return;
     }
-    onConfirm(action.kind, { stepId: step!.id, stepLabel: step!.label, recommendationText });
+    onConfirm(action.kind, { stepId: step!.id, stepLabel: step!.label, proposalText });
   }
 
   const actionButtons = next?.actions ?? [];
@@ -66,7 +54,7 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
 
   return (
     <section className="min-w-0 p-5 pb-28 lg:p-8 lg:pb-28">
-      <div className="mx-auto grid max-w-7xl gap-6">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2 text-sm text-base-content/60">
@@ -75,34 +63,60 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
             <h2 className="mt-2 text-3xl font-bold">{step.label}</h2>
             {step.summary ? <p className="mt-2 max-w-3xl text-sm text-base-content/70">{step.summary}</p> : null}
             {status ? (
-              <div className={`badge ${TONE_BADGE[status] ?? "badge-neutral"} badge-soft mt-4 gap-2`}>
+              <div className={`badge ${statusBadgeTone(status)} badge-soft mt-4 gap-2`}>
                 <span className="status status-warning"></span>
-                {labelForStatus(status)}
+                {statusLabel(status)}
               </div>
             ) : null}
           </div>
         </div>
 
-        {next && !hasPendingRecommendation(step) && next.body ? (
-          <div className={`alert ${TONE_ALERT[status] ?? "alert-info"}`}>
-            <span className="badge badge-lg">!</span>
-            <div>
+        {next && !hasPendingProposal(step) && next.body ? (
+          <div className={`alert ${statusAlertTone(status)} min-w-0`}>
+            <span className="badge badge-lg shrink-0">!</span>
+            <div className="min-w-0">
               <h3 className="font-bold">{next.title}</h3>
-              <div className="text-sm whitespace-pre-line">{next.body}</div>
+              <div className="text-sm whitespace-pre-line break-words">{next.body}</div>
             </div>
           </div>
         ) : null}
 
-        <div className="grid gap-5">
+        <div className="grid grid-cols-1 gap-5">
+          <PromptPanel stepId={step.id} />
           <FailureCard step={step} interruptions={interruptions} onOpenTerminal={() => onOpenTerminal(step.id)} />
-          <RecommendationCard
+          <ProposalCard
             stepId={step.id}
+            step={step}
             gate={step.gate}
-            onAccept={() => onConfirm("accept_recommendation", { stepId: step.id, stepLabel: step.label, recommendationText })}
+            runtimeBusy={runtimeBusy}
+            onAccept={() => onConfirm("accept_proposal", { stepId: step.id, stepLabel: step.label, proposalText })}
             onOpenTerminal={() => onOpenTerminal(step.id)}
           />
           <AssistSignalBanner signal={step.assistSignal} />
-          {step.gate ? <GateContextCard stepId={step.id} gate={step.gate} /> : null}
+          {step.gate ? <GateContextCard step={step} gate={step.gate} /> : null}
+          {step.id === "PD-C-1" ? <InterpretationCard step={step} /> : null}
+          {step.id === "PD-C-1" ? (
+            <RunCompositionPanel
+              run={run ?? null}
+              steps={allSteps}
+              readOnly={
+                // Lock the editor only when execution has truly progressed
+                // beyond PD-C-1 — i.e. the run advanced to a later step or
+                // the variant lock engaged. PD-C-1's human gate sits with
+                // status `waiting` (and earlier `pending` / `needs_human`),
+                // and during all of those the user is still allowed to
+                // tweak the composition before pressing Approve.
+                run?.flow_variant_locked === true
+                || (run?.current_step_id ?? "PD-C-1") !== "PD-C-1"
+                || !(
+                  step.progress.status === "pending"
+                  || step.progress.status === "needs_human"
+                  || step.progress.status === "waiting"
+                )
+              }
+              onApplied={() => onRefresh?.()}
+            />
+          ) : null}
           {step.progress.status === "done" || step.progress.status === "completed" ? (
             <CompletionCard history={step.historyEntry} />
           ) : null}
@@ -110,12 +124,21 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
           {actionButtons.length ? (
             <section className="card border border-base-300 bg-base-100 shadow-sm">
               <div className="card-body">
-                <h3 className="card-title">Next</h3>
+                <h3 className="card-title flex items-center gap-2">
+                  Next
+                  {runtimeBusy ? (
+                    <span className="badge badge-info badge-soft gap-2">
+                      <span className="loading loading-spinner loading-xs" />
+                      実行中
+                    </span>
+                  ) : null}
+                </h3>
                 <div className="grid gap-4 md:grid-cols-2">
                   {others.map((btn) => (
                     <ActionTile
                       key={btn.kind + btn.label}
                       action={btn}
+                      busy={runtimeBusy}
                       onClick={() => runAction(btn)}
                     />
                   ))}
@@ -123,6 +146,7 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
                     <ActionTile
                       action={primary}
                       featured
+                      busy={runtimeBusy}
                       onClick={() => runAction(primary)}
                     />
                   ) : null}
@@ -150,10 +174,12 @@ export function Workspace({ step, next, allSteps, history, interruptions, docume
 function ActionTile({
   action,
   featured,
+  busy,
   onClick,
 }: {
   action: ActionButton;
   featured?: boolean;
+  busy?: boolean;
   onClick: () => void;
 }) {
   const cardClass = featured
@@ -166,8 +192,9 @@ function ActionTile({
         <h4 className="card-title text-base">{action.label}</h4>
         {action.description ? <p className="text-sm">{action.description}</p> : null}
         <div className="card-actions justify-end">
-          <button className={buttonClass} onClick={onClick} type="button">
-            {action.label}
+          <button className={buttonClass} onClick={onClick} type="button" disabled={busy}>
+            {busy ? <span className="loading loading-spinner loading-xs" /> : null}
+            {busy ? "実行中…" : action.label}
           </button>
         </div>
       </div>
@@ -176,7 +203,7 @@ function ActionTile({
 }
 
 function toneToBtn(tone: string | undefined, featured?: boolean) {
-  if (featured || tone === "approve") return "btn-success";
+  if (featured || tone === "approve") return "btn-success text-white";
   switch (tone) {
     case "warning":
       return "btn-warning";
@@ -185,35 +212,10 @@ function toneToBtn(tone: string | undefined, featured?: boolean) {
       return "btn-error";
     case "neutral":
     default:
-      return "btn-outline";
+      return "btn-neutral";
   }
 }
 
-function hasPendingRecommendation(step: StepView): boolean {
-  const rec = (step.gate?.recommendation as { status?: string } | null | undefined) ?? null;
-  return rec?.status === "pending";
-}
-
-function labelForStatus(status: string) {
-  switch (status) {
-    case "needs_human":
-    case "waiting":
-      return "ユーザ回答待ち";
-    case "active":
-    case "running":
-      return "実行中";
-    case "done":
-    case "completed":
-      return "完了";
-    case "failed":
-      return "失敗";
-    case "blocked":
-      return "ブロック";
-    case "pending":
-      return "未着手";
-    case "interrupted":
-      return "割り込み";
-    default:
-      return status;
-  }
+function hasPendingProposal(step: StepView): boolean {
+  return step.gate?.proposal?.status === "pending";
 }

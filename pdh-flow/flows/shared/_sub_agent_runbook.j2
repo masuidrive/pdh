@@ -1,0 +1,82 @@
+# チーム運用・サブエージェント運用
+
+{% include "shared/_concurrent_review_principle.j2" %}
+## sub-agent の briefing は `{{ runtimeCli }} sub-agent-context` 経由で
+
+**前提**: PD-C-4 / PD-C-7 / PD-D-2 の reviewer / DA は **runtime が起動**します (lead は spawn せず aggregator として `review.json` を読むだけ)。lead が自分で spawn するのは **実装系・検証系** の sub-agent — 具体的には PD-C-2 の調査 sub-agent / PD-C-6 の Coding Engineer・QA Engineer / PD-C-8 の PdM / PD-C-9 の Review Agent (Full)・Surface Observer / PD-D-3 の QA Engineer (UCS) です。renderer はこの lead-spawn 系の briefing を統一するためのものです。
+
+これらを spawn する時は、spawn プロンプトに **renderer のコマンドラインだけ** 書く。lead 側で context を pre-render してテキスト連結する必要はない。sub-agent が起動直後に Bash で renderer を叩き、stdout の bundle を読んでから本タスクに入る。
+
+renderer は以下を bundle として返し、同時に `.pdh-flow/runs/<run>/steps/<step>/sub-agents/<role-slug>-<ts>/context.md` に snapshot を残す: 役割契約 / honest rules / 禁止コマンド / `product-brief.md` / `current-ticket.md` の Why+What+AC / `current-note.md` の AC 裏取り表 (存在時) / 出力 schema (指定時)。
+
+### spawn プロンプト雛形
+
+    あなたは <役割名>。担当 scope: <1 文の責任>
+    最初に Bash で以下を実行し、stdout の bundle を読んでから本タスクに入る:
+
+      {{ runtimeCli }} sub-agent-context \
+        --step <PD-C-N> \
+        --role "<役割名>" \
+        --scope "<scope 1 文>" \
+        [--files <a,b,c>] [--output-schema repair] \
+        [--prior-step <PD-C-N>]
+
+    bundle が指定する役割契約・honest rules に従うこと。
+    本タスク: <この sub-agent に求める仕事>
+    完了条件: <どの artifact を どこに 何形式で 残せば終わりか>
+
+### 引数の使い分け
+
+- `--role` / `--scope`: 役割名と 1 文の責任範囲。lead-spawn 系では基本必須 (reviewer/DA は runtime spawn なので renderer 対象外)
+- `--files`: **編集系 (Coding Engineer / QA Engineer の編集タスク) でファイル所有権を分けたい時のみ**。検証系 (PdM / Review Agent / Surface Observer / UCS QA) には**渡さない** (上記「並行運用原則」のため、同じ範囲を別レンズで overlap させる)
+- `--output-schema repair`: 編集タスクが `repair.json` を書く時。それ以外 (PdM / Review Agent / Surface Observer / Coding Engineer / QA Engineer の通常タスク等) は freeform — bundle に schema を inline せず、本タスク指示で出力先・形式を指定する
+- `--prior-step PD-C-N`: 直前 step の `current-note.md` 該当節を同梱。note が肥大していて特定 step だけ引き継げば十分な時のみ
+
+### 例 1: PD-C-6 Coding Engineer 並列実装 (`--files` で所有権分離)
+
+    # Engineer A
+    あなたは Coding Engineer。担当 scope: 入力検証ロジックの実装。
+    最初に Bash で:
+      {{ runtimeCli }} sub-agent-context --step PD-C-6 \
+        --role "Coding Engineer (input validation)" \
+        --scope "入力検証ロジックの実装" \
+        --files "src/validate.ts,src/validate.test.ts" \
+        --prior-step PD-C-3
+    を実行し bundle を読む。
+    本タスク: PD-C-3 の計画に従って担当ファイルに実装を書き、ユニットテストを通す。
+    完了条件: 担当ファイルの編集 + `current-note.md` の該当節に実装メモを追記。
+
+### 例 2: PD-C-9 Review Agent 並行裏取り (`--files` 無し)
+
+    # Review Agent (AC 1-3 観点)
+    あなたは AC Verification Reviewer。担当 scope: AC が実装・テスト・ノートで裏取りできているか。
+    最初に Bash で:
+      {{ runtimeCli }} sub-agent-context --step PD-C-9 \
+        --role "AC Verification Reviewer" \
+        --scope "AC 全件が実装・テスト・ノートで裏取りできているか"
+    を実行し bundle を読む。
+    本タスク: AC 全件について VERIFIED / NOT VERIFIED / DEFERRED を根拠付きで返す。
+    完了条件: stdout に AC 別の判定と根拠 (file:line, test 名, note 引用)。
+
+複数体起動する場合も `--files` は渡さない (同じ AC を別 lens で overlap させて見落としを潰すため)。
+
+### spawn 機構別の貼り方
+
+- **Claude Code Task tool**: 上記文字列を `Task({prompt: ..., subagent_type: ...})` の `prompt` にそのまま
+- **codex exec**: `codex exec --dangerously-bypass-approvals-and-sandbox '<spawn prompt>'` (Bash で `run_in_background` で直接実行。Agent で wrap しない — stdin フリーズ原因)
+- **agent-browser / mcp agent**: 各々の prompt 引数に貼る
+
+### 注意点
+
+- sub-agent はネストして自分の sub-agent を spawn しない
+- `{{ runtimeCli }} sub-agent-context` が起動直後にコケた場合、本タスクに着手せず lead に `{{ runtimeCli }} provider ask` で報告させる
+- bundle は snapshot。frontmatter / 進行中 step の最新状態は実ファイルで再確認
+
+## その他のチーム運用ルール
+
+- 編集系 sub-agent は **ファイル所有権を分ける** (`--files` 指定)。同一ファイルを複数のチームメイトが同時に書かない
+- 各役割のモデルは CLAUDE.md / AGENTS.md「チーム構成・モデル設定」に従う
+- メインコンテキスト汚染を避けるため、調査・レビュー・長時間テスト・実動確認は積極的に委譲
+- レビュー系は読み取り専用
+- ユーザ指定の review role / loop / subagent 構成は省略・短縮・言い換え・統合で代替してはならない
+- サブエージェントから戻す内容は要約・結論・失敗点・次アクションだけ

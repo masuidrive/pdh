@@ -10,7 +10,7 @@ export type AppStateSlot =
 
 const MOCK_FLAG = new URLSearchParams(window.location.search).get("mock");
 
-export function useAppState(): AppStateSlot {
+export function useAppState(ticket?: string | null): AppStateSlot {
   const [slot, setSlot] = useState<AppStateSlot>({ status: "loading", state: null, error: null });
 
   useEffect(() => {
@@ -19,7 +19,8 @@ export function useAppState(): AppStateSlot {
       return;
     }
     let cancelled = false;
-    fetchState()
+    setSlot({ status: "loading", state: null, error: null });
+    fetchState(ticket)
       .then((state) => {
         if (!cancelled) setSlot({ status: "ready", state, error: null });
       })
@@ -27,7 +28,8 @@ export function useAppState(): AppStateSlot {
         if (!cancelled) setSlot({ status: "error", state: null, error: err.message });
       });
 
-    const source = new EventSource("/api/events");
+    const eventsUrl = ticket ? `/api/events?ticket=${encodeURIComponent(ticket)}` : "/api/events";
+    const source = new EventSource(eventsUrl);
     source.addEventListener("state", (event) => {
       try {
         const data = JSON.parse((event as MessageEvent).data) as AppState;
@@ -44,7 +46,7 @@ export function useAppState(): AppStateSlot {
       cancelled = true;
       source.close();
     };
-  }, []);
+  }, [ticket]);
 
   return slot;
 }

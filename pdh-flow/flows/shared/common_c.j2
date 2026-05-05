@@ -1,0 +1,55 @@
+# PD-C 共通: Ticket 開発の前提
+
+## 起動時前提
+
+- `product-brief.md` を最初に読む
+- CLAUDE.md / AGENTS.md のチーム運用ルール・コードマップ・repo ルールに従う
+- 起動直後に `current-ticket.md` 全文と `current-note.md` 本文 (前 step までの該当セクション + `Discoveries` + `### 未解消事項`) を読んでから着手する
+- 仕様変更を発見したら、続行前に `current-ticket.md` と `current-note.md` の What / AC / 計画を最新化する
+- **commit 主体は runtime**: step 完了時点で durable な変更 (ソース / current-note.md / current-ticket.md) を作業ツリーに残せば、runtime が `[PD-C-N] <step name>` の subject で 1 commit にまとめる。あなたが自分で commit すると subject が崩れ、step-commit.json と diff baseline の整合が取れなくなる (個別の commit 系コマンド禁止リストは `_forbidden_commands.j2` 参照)
+
+## ui-output.json::risks の書き方
+
+`ready_when` は廃止。step gate を通過するための条件チェックは guards / judgement / human gate が担当する。**risks** が「人間が承認前に確認すべき情報」の唯一の集約先。書き方:
+
+- 各 risk は **構造化された object** で書く (string も後方互換で受け付けるが、新規は object)
+- 必須フィールド: `description` (テキスト) と `severity` (`critical | major | minor | note`)
+- 任意: `defer_to_step` (`PD-C-N` または null)。null なら「この step / 直近で対処」、step id なら「その step で再評価する」
+
+例:
+
+```yaml
+risks:
+  - description: 上位 docs の不整合 (product-brief.md / README.md に `2**10` 未対応記述が残っている)
+    severity: minor
+    defer_to_step: PD-C-8
+  - description: 既存 calc 動作の回帰 (binop 追加で意図せず影響する可能性)
+    severity: critical
+    # defer_to_step なし = この step / 次の step で対処済とする
+```
+
+risks がゼロ件 = この step で人間が確認すべき特別な事項なし。書き流しではなく、**書く価値のあるものだけ書く**。
+
+「○○ が承認される」「○○ がパスする」のような **その step の存在理由を言い直す表現** は書かない (gate がそこにあれば自明)。
+
+## 直さないが残しておく事項 (current-note.md 本文の慣習)
+
+`risks` (= `ui-output.json`) は「人間が承認前に判断材料にする」枠なので、原則 blocker 級だけを載せる。一方、**直さないけど後段 step / 別 ticket / audit のために残しておきたい事項** は、`current-note.md` の各 step section 末尾に **`### 未解消事項`** という小節を作って markdown で書く。書式:
+
+```markdown
+### 未解消事項
+- **defer → PD-C-8**: product-brief / README に `2**10` 未対応記述。docs 整合は PD-C-8 で検出 → PD-C-6 に戻る経路で拾われる
+- **followup (tbd:cli-ast-extract)**: cli.py の解析ロジックは将来 AST helper に切り出せる
+- **accept (override 維持判断)**: flow_variant: light は heuristic 不一致だが、AC 7 件中 6 件 verifiable で OK
+- **info**: codex の rollout error が attempt 双方で出ているが、機能影響なし
+```
+
+タイプ別の意味:
+
+- **`defer → PD-C-N`**: この step では直さないが、後続 step が拾う。target step と「なぜ拾えるか」を一文で添える
+- **`followup (<ref>)`**: ticket 内では直さない。別 ticket に渡す。`ref` は既存 ticket id / URL / `tbd:<slug>` (ticket 未作成のプレースホルダ) のいずれか
+- **`accept (<判断>)`**: 認識した上で「直さない」と決めた。理由を一文で
+- **`info`**: 観察事実 / 共有メモ。actionable ではない
+
+`### 未解消事項` セクションは PD-C-10 (`close summary`) で集計対象になります。runtime は触らず、agent が markdown として読み書きします。「直すかどうか自分で判断できないが残しておきたい」程度の懸念はここに書けば、close 時に人 + agent が棚卸しできます。
+

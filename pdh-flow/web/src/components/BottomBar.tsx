@@ -1,4 +1,5 @@
 import type { StepView, ProcessEntry, EventEntry } from "../lib/types";
+import { statusBadgeTone, statusLabel } from "../lib/status";
 import { EventsFeed } from "./EventsFeed";
 
 type Props = {
@@ -8,26 +9,13 @@ type Props = {
   onJumpToCurrent?: () => void;
 };
 
-const STATUS_BADGE: Record<string, string> = {
-  needs_human: "badge-warning",
-  waiting: "badge-warning",
-  failed: "badge-error",
-  active: "badge-info",
-  running: "badge-info",
-  done: "badge-success",
-  completed: "badge-success",
-  blocked: "badge-error",
-  interrupted: "badge-warning",
-  pending: "badge-neutral",
-};
-
 export function BottomBar({ step, ticketId, events, onJumpToCurrent }: Props) {
   if (!step) return null;
   const status = step.progress.status;
-  const badge = STATUS_BADGE[status] ?? "badge-neutral";
+  const badge = statusBadgeTone(status);
   const stepTitle = step.label;
   const elapsed = formatElapsed(step.latestAttempt?.startedAt ?? step.historyEntry?.started_at);
-  const processSummary = describeProcess(step.processState?.active ?? []);
+  const processSummary = describeProcess(step.processState?.active ?? [], step);
   return (
     <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-base-300 bg-base-100/60 px-5 py-2 backdrop-blur-md">
       <div className="flex items-start gap-4 text-sm">
@@ -42,7 +30,7 @@ export function BottomBar({ step, ticketId, events, onJumpToCurrent }: Props) {
             {ticketId ? <span className="font-medium text-base-content/80 shrink-0">{ticketId}</span> : null}
             <strong className="truncate">{stepTitle}</strong>
             {elapsed ? <span className="font-normal text-base-content/60 shrink-0">· {elapsed}</span> : null}
-            <span className={`badge ${badge} badge-outline badge-sm shrink-0`}>{labelForStatus(status)}</span>
+            <span className={`badge ${badge} badge-outline badge-sm shrink-0`}>{statusLabel(status)}</span>
           </button>
           <span className="truncate text-xs text-base-content/60">
             <span className="font-medium text-base-content/80">Process: </span>
@@ -57,12 +45,16 @@ export function BottomBar({ step, ticketId, events, onJumpToCurrent }: Props) {
   );
 }
 
-function describeProcess(active: ProcessEntry[]) {
+function describeProcess(active: ProcessEntry[], step: StepView) {
   if (!active.length) return "";
+  // Group by role-ish key: provider entries fold into the step's
+  // role (= what the agent is doing in PD-C terms), reviewer entries
+  // keep each reviewerId distinct so multi-reviewer rounds show
+  // separately, aggregator/repair stay as their kind names.
   const groups = new Map<string, { count: number; longest: number }>();
   const now = Date.now();
   for (const e of active) {
-    const key = e.kind ?? "unknown";
+    const key = labelForEntry(e, step);
     const startedMs = e.startedAt ? Date.parse(e.startedAt) : now;
     const elapsed = Math.max(0, Math.floor((now - startedMs) / 1000));
     const slot = groups.get(key) ?? { count: 0, longest: 0 };
@@ -71,23 +63,16 @@ function describeProcess(active: ProcessEntry[]) {
     groups.set(key, slot);
   }
   return Array.from(groups.entries())
-    .map(([kind, slot]) => `${kindLabel(kind)}${slot.count > 1 ? ` ×${slot.count}` : ""} (${formatSeconds(slot.longest)})`)
+    .map(([key, slot]) => `${key}${slot.count > 1 ? ` ×${slot.count}` : ""} (${formatSeconds(slot.longest)})`)
     .join(", ");
 }
 
-function kindLabel(kind: string) {
-  switch (kind) {
-    case "reviewer":
-      return "reviewer";
-    case "aggregator":
-      return "aggregator";
-    case "repair":
-      return "repair";
-    case "provider":
-      return "provider";
-    default:
-      return kind;
-  }
+function labelForEntry(entry: ProcessEntry, step: StepView): string {
+  const kind = entry.kind ?? "unknown";
+  if (kind === "provider") return step.role ?? "provider";
+  if (kind === "reviewer") return entry.reviewerId ?? "reviewer";
+  if (kind === "aggregator" || kind === "repair") return kind;
+  return kind;
 }
 
 function formatSeconds(s: number) {
@@ -101,8 +86,4 @@ function formatElapsed(iso?: string) {
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return null;
   return formatSeconds(Math.max(0, Math.floor((Date.now() - t) / 1000)));
-}
-
-function labelForStatus(status: string) {
-  return status;
 }

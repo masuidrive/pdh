@@ -1,5 +1,5 @@
 import type { ArtifactEntry, NextAction, StepView, HistoryEntry, JudgementEntry, ReviewFinding } from "../lib/types";
-import { resolveStepEvidence, resolveStepReady, type EvidenceItem, type EvidenceKind } from "../lib/evidence-resolver";
+import { resolveStepEvidence, type EvidenceItem, type EvidenceKind } from "../lib/evidence-resolver";
 import { useMarkdown } from "../lib/markdown";
 
 declare global {
@@ -88,7 +88,8 @@ const NOTE_HEADINGS_BY_STEP: Record<string, string[]> = {
 
 export function EvidencePanel({ step, next, allSteps, history, documents, onOpenArtifact, onOpenDiff, onOpenDocument }: Props) {
   const resolved = resolveStepEvidence(step, next ?? null, { allSteps, history: history ?? [] });
-  const ready = resolveStepReady(step);
+  // risks are surfaced by UiOutputCard at the top of the page; we deliberately
+  // skip rendering them here to avoid duplicating the same data in two places.
   const artifacts = step.artifacts ?? [];
   const findings = step.reviewFindings ?? [];
   const judgements = step.judgements ?? [];
@@ -114,7 +115,6 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
     !ticketHasContent &&
     !productBriefHasContent &&
     !epicHasContent &&
-    !ready.length &&
     !artifacts.length &&
     !findings.length &&
     !judgements.length;
@@ -137,7 +137,7 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
 
           {ticketHasContent ? (
             <DocumentRow
-              label={`current-ticket.md${ticketHeading ? ` > ${ticketHeading}` : ""}`}
+              label={`current-ticket.md${ticketHeading ? ` > ${ticketHeading}` : " (全文)"}`}
               badge={`current-ticket.md${ticketHeading ? `#${ticketHeading}` : ""}`}
               text={excerptByHeading(docs.ticket!.text, ticketHeading)}
               onOpen={onOpenDocument ? () => onOpenDocument("ticket", ticketHeading) : undefined}
@@ -158,7 +158,6 @@ export function EvidencePanel({ step, next, allSteps, history, documents, onOpen
             />
           ) : null}
 
-          {ready.length ? <ReadyRow ready={ready} /> : null}
           {findings.length ? <FindingsRow findings={findings} /> : null}
           {judgements.length ? <JudgementsRow judgements={judgements} /> : null}
 
@@ -251,25 +250,6 @@ function renderNoteRows(
         );
       })}
     </>
-  );
-}
-
-function ReadyRow({ ready }: { ready: { label: string; kind: string }[] }) {
-  return (
-    <div className="rounded-box border border-base-300 bg-base-200 p-4">
-      <div className="flex items-center gap-2">
-        <h4 className="font-bold">Ready when</h4>
-        <span className="badge badge-success badge-sm">{ready.length} items</span>
-      </div>
-      <ul className="mt-2 space-y-1 text-sm">
-        {ready.map((r, i) => (
-          <li key={i} className="flex items-baseline gap-2">
-            <span className={`badge badge-${readyTone(r.kind)} badge-sm`}>{r.kind}</span>
-            <span className="text-base-content/80">{r.label}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 
@@ -440,13 +420,17 @@ function preview(text: string, lines = 6) {
 }
 
 function defaultTicketHeading(stepId: string) {
+  // PD-C-1 may rewrite any part of the ticket (AC reorganization,
+  // process-vs-function split, real-env-required tagging), so the
+  // gate viewer needs the full ticket text — not just one section.
+  if (stepId === "PD-C-1") return null;
   if (stepId === "PD-C-10" || stepId === "PD-C-8" || stepId === "PD-C-9") return "Product AC";
   return "Implementation Notes";
 }
 
 function excerptByHeading(text: string, heading: string | null) {
   if (!text) return "";
-  if (!heading) return preview(text);
+  if (!heading) return text;
   const lines = text.split(/\r?\n/);
   const wanted = heading.toLowerCase();
   let start = -1;
@@ -493,20 +477,3 @@ function severityTone(severity: string) {
   }
 }
 
-function readyTone(kind: string) {
-  switch (kind) {
-    case "ok":
-    case "ready":
-    case "verified":
-      return "success";
-    case "fail":
-    case "failed":
-    case "blocked":
-      return "error";
-    case "pending":
-    case "unverified":
-      return "warning";
-    default:
-      return "ghost";
-  }
-}

@@ -19,6 +19,7 @@ const STATUS_DOT: Record<string, { btn: string; box: string; tone: string; rail:
   blocked: { btn: "btn-error", box: "bg-error/5", tone: "text-error", rail: "bg-error" },
   interrupted: { btn: "btn-warning", box: "border-warning bg-warning/10", tone: "text-warning", rail: "bg-warning" },
   pending: { btn: "btn-disabled", box: "bg-base-200 text-base-content/50", tone: "", rail: "" },
+  skipped: { btn: "btn-ghost btn-disabled opacity-40", box: "bg-base-200/40 text-base-content/40", tone: "text-base-content/40", rail: "bg-base-300" },
 };
 
 const STATUS_ICON: Record<string, string> = {
@@ -32,6 +33,7 @@ const STATUS_ICON: Record<string, string> = {
   blocked: "■",
   interrupted: "!",
   pending: "",
+  skipped: "–",
 };
 
 export function Timeline({ steps, currentStepId, ticketClosed, onSelect }: Props) {

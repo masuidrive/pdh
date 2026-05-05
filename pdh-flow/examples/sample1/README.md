@@ -28,13 +28,13 @@ git commit -m "Seed sample1 fixture"
 
 source /home/masuidrive/.nvm/nvm.sh
 
-node "$FLOW_ROOT/src/cli.mjs" doctor --repo "$PWD"
-node "$FLOW_ROOT/src/cli.mjs" run --repo "$PWD" --ticket calc-multiply --variant light --start-step PD-C-5
-node "$FLOW_ROOT/src/cli.mjs" run-next --repo "$PWD"
-node "$FLOW_ROOT/src/cli.mjs" show-gate --repo "$PWD"
-node "$FLOW_ROOT/src/cli.mjs" approve --repo "$PWD" --step PD-C-5 --reason ok
-node "$FLOW_ROOT/src/cli.mjs" run-next --repo "$PWD" --stop-after-step
-node "$FLOW_ROOT/src/cli.mjs" status --repo "$PWD"
+node "$FLOW_ROOT/src/cli.ts" doctor --repo "$PWD"
+node "$FLOW_ROOT/src/cli.ts" start --repo "$PWD" --ticket calc-multiply --variant light --start-step PD-C-5
+node "$FLOW_ROOT/src/cli.ts" run-next --repo "$PWD"
+node "$FLOW_ROOT/src/cli.ts" show-gate --repo "$PWD"
+node "$FLOW_ROOT/src/cli.ts" approve --repo "$PWD" --step PD-C-5 --reason ok
+node "$FLOW_ROOT/src/cli.ts" run-next --repo "$PWD" --stop-after-step
+node "$FLOW_ROOT/src/cli.ts" status --repo "$PWD"
 ```
 
 この時点で run は `PD-C-6` で停止する。
@@ -42,14 +42,14 @@ node "$FLOW_ROOT/src/cli.mjs" status --repo "$PWD"
 通常パス:
 
 ```sh
-node "$FLOW_ROOT/src/cli.mjs" run-next --repo "$PWD"
+node "$FLOW_ROOT/src/cli.ts" run-next --repo "$PWD"
 ```
 
 デバッグパス:
 
 ```sh
-node "$FLOW_ROOT/src/cli.mjs" prompt --repo "$PWD"
-node "$FLOW_ROOT/src/cli.mjs" run-provider --repo "$PWD"
+node "$FLOW_ROOT/src/cli.ts" prompt --repo "$PWD"
+node "$FLOW_ROOT/src/cli.ts" provider run --repo "$PWD"
 ```
 
 ローカル確認:

@@ -60,12 +60,13 @@ function flattenStepShape(step: AnyRecord) {
   if (step.label === undefined && display.label !== undefined) step.label = display.label;
   if (step.summary === undefined && display.summary !== undefined) step.summary = display.summary;
   if (step.userAction === undefined && display.userAction !== undefined) step.userAction = display.userAction;
-  if (step.ui === undefined && (display.viewer !== undefined || display.decision !== undefined || display.mustShow !== undefined || display.omit !== undefined)) {
+  if (step.ui === undefined && (display.viewer !== undefined || display.decision !== undefined || display.mustShow !== undefined || display.omit !== undefined || display.skipDefaultSchema !== undefined)) {
     step.ui = {
       viewer: display.viewer,
       decision: display.decision,
       mustShow: display.mustShow,
-      omit: display.omit
+      omit: display.omit,
+      skipDefaultSchema: display.skipDefaultSchema
     };
   }
 
@@ -351,7 +352,8 @@ function normalizeUiContract(ui) {
     viewer: normalizeString(source.viewer),
     decision: normalizeString(source.decision),
     mustShow: normalizeStringList(source.mustShow),
-    omit: normalizeStringList(source.omit)
+    omit: normalizeStringList(source.omit),
+    skipDefaultSchema: source.skipDefaultSchema === true
   };
 }
 

@@ -1,15 +1,19 @@
 {
-  "name": "pdh-flow",
+  "name": "@masuidrive/pdh-flow",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
+  "files": [
+    "src/",
+    "flows/",
+    "README.md"
+  ],
   "bin": {
-    "pdh-flow": "./src/cli/index.mjs",
-    "pdh-provider": "./src/cli/provider-cli.mjs"
+    "pdh-flow": "./src/cli.ts"
   },
   "scripts": {
-    "check": "find src -name '*.mjs' -exec node --check {} +",
-    "smoke:calc": "node src/cli/index.mjs smoke-calc",
+    "check": "tsc --project tsconfig.json",
+    "smoke:calc": "node src/cli.ts smoke-calc",
     "test:runtime": "scripts/test-runtime.sh"
   },
   "engines": {
@@ -25,5 +29,11 @@
     "nunjucks": "^3.2.4",
     "ws": "^8.20.0",
     "yaml": "^2.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/nunjucks": "^3.2.6",
+    "@types/ws": "^8.18.1",
+    "typescript": "^6.0.3"
   }
 }

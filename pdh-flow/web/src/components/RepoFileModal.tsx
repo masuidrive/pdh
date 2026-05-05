@@ -55,7 +55,7 @@ export function RepoFileModal({ open, stepId, path, onClose }: Props) {
     setMode("render");
     (async () => {
       try {
-        const payload = (await fetchRepoFile(stepId, path)) as { text?: string; body?: string };
+        const payload = await fetchRepoFile(stepId, path);
         if (cancelled) return;
         const text = String(payload?.text ?? payload?.body ?? "");
         setBody(text);

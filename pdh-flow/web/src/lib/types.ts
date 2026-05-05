@@ -33,6 +33,11 @@ export type RunRecord = {
   created_at?: string;
   updated_at?: string;
   completed_at?: string | null;
+  flow_variant_locked?: boolean;
+  flow_variant_reason?: string | null;
+  agent_overrides?: Record<string, unknown>;
+  agent_overrides_locked?: Record<string, boolean>;
+  note_overrides_warnings?: string[];
 };
 
 export type SupervisorState = {
@@ -65,12 +70,39 @@ export type VariantState = {
 
 export type ProgressStatus = "done" | "active" | "needs_human" | "failed" | "blocked" | "pending" | string;
 
+export type ReviewerSlot = {
+  role: string;
+  label?: string;
+  // One provider per spawn. devils_advocate ×2 = providers.length === 2;
+  // each entry can be claude or codex independently.
+  providers: string[];
+};
+
 export type StepView = {
   id: string;
   label: string;
   summary?: string;
   provider?: string | null;
   mode?: string | null;
+  role?: string | null;
+  // Review-mode steps expose their variant-resolved aggregator/repair
+  // providers + reviewer roster so the composition editor can render
+  // defaults next to per-step overrides.
+  aggregatorProvider?: string | null;
+  repairProvider?: string | null;
+  reviewers?: ReviewerSlot[];
+  display?: {
+    label?: string;
+    summary?: string;
+    userAction?: string;
+    viewer?: string;
+    decision?: string;
+    mustShow?: string[];
+    omit?: string[];
+    readTicketHeading?: string;
+    readNoteHeadings?: string[];
+    approve?: { label?: string; description?: string } | null;
+  } | null;
   progress: { status: ProgressStatus; note?: string };
   current: boolean;
   processState?: ProcessState | null;
@@ -113,6 +145,17 @@ export type CurrentBlock = {
   gate: GateView | null;
   interruptions: Interruption[];
   nextAction: NextAction | null;
+  notice?: RuntimeNotice | null;
+};
+
+export type RuntimeNotice = {
+  kind: string;
+  stepId?: string | null;
+  ts?: string | null;
+  message?: string | null;
+  escalation?: string | null;
+  failedGuards?: string[] | null;
+  detail?: string | null;
 };
 
 export type NextAction = {
@@ -132,7 +175,7 @@ export type GateView = {
   step_id?: string;
   stepId?: string;
   status?: string;
-  recommendation?: { status?: string } | null;
+  proposal?: { id?: string; status?: string; action?: string; reason?: string; target_step_id?: string | null } | null;
   baseline?: { commit?: string; step_id?: string; ref?: string; captured_at?: string };
   rerun_requirement?: { reason?: string; from?: string; target_step_id?: string; changed_ticket_sections?: string[]; changed_note_sections?: string[] } | null;
   decision?: string | null;
@@ -141,7 +184,11 @@ export type GateView = {
 export type AttemptInfo = {
   attempt?: number;
   startedAt?: string;
+  // attempt lifecycle: running | completed | failed | abandoned
   status?: string;
+  // rerun_from on a completed attempt means the review/repair decided
+  // to redirect the run to a previous step rather than advance.
+  verdict?: string | null;
   pid?: number | null;
 };
 
@@ -194,6 +241,15 @@ export type GitInfo = {
   branch?: string;
   clean?: boolean;
   statusLines?: string[];
+  epicBranches?: EpicBranch[];
+};
+
+export type EpicBranch = {
+  name: string;
+  slug: string;
+  lastCommit?: string | null;
+  lastCommittedAt?: string | null;
+  lastSubject?: string;
 };
 
 export type TicketEntry = {

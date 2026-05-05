@@ -118,7 +118,7 @@ import {
   writeReviewRoundAggregate,
   writeReviewerAttemptResult
 } from "../runtime/review.ts";
-import { judgementFromUiOutput, loadStepUiOutput } from "../flow/prompts/ui-output.ts";
+import { judgementFromUiOutput, loadStepUiOutput, uiOutputArtifactPath } from "../flow/prompts/ui-output.ts";
 import { writeStepUiRuntime } from "../runtime/ui.ts";
 import { clearStepCommitRecord, loadStepCommitRecord, writeStepCommitRecord } from "../runtime/step-commit.ts";
 import {
@@ -1133,6 +1133,16 @@ async function executeProviderStep({ repo, runtime, step: incomingStep, options 
       idleTimeoutMs,
       options,
       resume,
+      debugContext: (() => {
+        const kind = defaultJudgementKind(stepId);
+        const paths: { name: string; path: string }[] = [
+          { name: "ui-output", path: uiOutputArtifactPath({ stateDir: runtime.stateDir, runId, stepId }) }
+        ];
+        if (kind) {
+          paths.push({ name: `judgement-${kind}`, path: join(runtime.stateDir, "runs", runId, "steps", stepId, "judgements", `${kind}.json`) });
+        }
+        return { stateDir: runtime.stateDir, runId, stepId, roleId: step.role || step.provider, artifactPaths: paths };
+      })(),
       onSpawn({ pid }) {
         attemptState = {
           ...attemptState,
@@ -1669,6 +1679,22 @@ async function executeReviewerRun({ repo, runtime, step, reviewer, attempt, roun
     options,
     disableSlashCommands: provider === "claude",
     settingSources: provider === "claude" ? "user" : null,
+    debugContext: {
+      stateDir: runtime.stateDir,
+      runId: runtime.run.id,
+      stepId: step.id,
+      roleId: reviewer.reviewerId,
+      artifactPaths: [{
+        name: "review",
+        path: reviewRoundReviewerOutputPath({
+          stateDir: runtime.stateDir,
+          runId: runtime.run.id,
+          stepId: step.id,
+          round,
+          reviewerId: reviewer.reviewerId
+        })
+      }]
+    },
     onSpawn({ pid }) {
       reviewerAttemptState = {
         ...reviewerAttemptState,
@@ -1839,7 +1865,12 @@ async function executeAggregatorRun({ repo, runtime, step, reviewerRuns, attempt
       reviewerId: reviewerRun.reviewerId
     }),
     status: reviewerRun.output?.status || null,
-    rawText: reviewerRun.output?.rawText || ""
+    // The aggregator only needs status/summary/findings to dedupe and decide
+    // consensus; the reviewer's `notes` field is their working transcript
+    // (commands run, log excerpts) which is valuable for tuning but not for
+    // consensus. Stripping it keeps the aggregator prompt lean — saves ~2-3 KB
+    // per reviewer × N reviewers × rounds. Full review.json is still on disk.
+    rawText: stripReviewerOutputForAggregator(reviewerRun.output) || reviewerRun.output?.rawText || ""
   }));
 
   const interruptions = loadStepInterruptions({
@@ -1890,6 +1921,16 @@ async function executeAggregatorRun({ repo, runtime, step, reviewerRuns, attempt
     options,
     disableSlashCommands: provider === "claude",
     settingSources: provider === "claude" ? "user" : null,
+    debugContext: (() => {
+      const kind = defaultJudgementKind(step.id);
+      const paths: { name: string; path: string }[] = [
+        { name: "ui-output", path: uiOutputArtifactPath({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id }) }
+      ];
+      if (kind) {
+        paths.push({ name: `judgement-${kind}`, path: join(runtime.stateDir, "runs", runtime.run.id, "steps", step.id, "judgements", `${kind}.json`) });
+      }
+      return { stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id, roleId: "aggregator", artifactPaths: paths };
+    })(),
     onSpawn({ pid }) {
       if (pid) {
         registerTrackedProcess({
@@ -2042,6 +2083,16 @@ async function executeReviewRepair({ repo, runtime, step, reviewPlan, aggregate,
     options,
     disableSlashCommands: provider === "claude",
     settingSources: provider === "claude" ? "user" : null,
+    debugContext: {
+      stateDir: runtime.stateDir,
+      runId: runtime.run.id,
+      stepId: step.id,
+      roleId: "repair",
+      artifactPaths: [{
+        name: "repair",
+        path: reviewRepairOutputPath({ stateDir: runtime.stateDir, runId: runtime.run.id, stepId: step.id, round })
+      }]
+    },
     onSpawn({ pid }) {
       repairAttemptState = {
         ...repairAttemptState,
@@ -2439,6 +2490,22 @@ export function advanceRun({ repo, runtime, step, outcome }) {
   syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [runNextCommand(repo)] });
   syncStepUiRuntime({ repo, stepId: target, nextCommands: [runNextCommand(repo)] });
   return { status: "advanced", from: step.id, to: target, outcome };
+}
+
+// Slim a normalized reviewer output for aggregator consumption. The
+// aggregator only needs status/summary/findings to dedupe and decide
+// consensus; `notes` is the reviewer's working transcript (commands,
+// outputs) which inflates the aggregator prompt by ~2-3 KB per reviewer.
+// Returns a JSON string in the same review.json shape, or null if there
+// is nothing useful to embed.
+function stripReviewerOutputForAggregator(output) {
+  if (!output || typeof output !== "object") return null;
+  const slim: AnyRecord = {};
+  if (output.status) slim.status = output.status;
+  if (output.summary) slim.summary = output.summary;
+  if (Array.isArray(output.findings)) slim.findings = output.findings;
+  if (Object.keys(slim).length === 0) return null;
+  return JSON.stringify(slim, null, 2);
 }
 
 // Build the lastResult shape that executeParallelReviewStep persists

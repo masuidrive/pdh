@@ -1296,7 +1296,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
   - With \`--worktree\`: **cd to the worktree directory after start; cd back to the main repo after close.** In environments where cwd resets each command (e.g. LLM agents), cd must be re-run every time.
 - \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name
 - \`$SCRIPT_COMMAND check\` - Check current directory and ticket/branch synchronization status
-- \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree]\` - Complete current ticket (squash merge to default branch)
+- \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree] [--dry-run]\` - Complete current ticket (squash merge to default branch). \`--dry-run\` only checks whether close would succeed (no side effects)
   - From a worktree, close refuses to merge if the main repo is on a non-default branch or has uncommitted changes (protects parallel workers).
   - **Coding agents (Claude Code / Codex / etc.) must pass \`--keep-worktree\`**: without it, the worker's worktree is deleted and the agent's shell cwd points to a removed directory → every subsequent Bash tool call fails.
 - \`$SCRIPT_COMMAND cancel [--force|-f] [--keep-worktree]\` - Cancel current ticket (no merge, moves to done/ with CANCELED marker)
@@ -2673,6 +2673,7 @@ cmd_close() {
     local force=false
     local no_delete_remote=false
     local keep_worktree=false
+    local dry_run=false
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -2693,9 +2694,13 @@ cmd_close() {
                 keep_worktree=true
                 shift
                 ;;
+            --dry-run)
+                dry_run=true
+                shift
+                ;;
             *)
                 echo "Error: Unknown option: $1" >&2
-                echo "Usage: $SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree]" >&2
+                echo "Usage: $SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree] [--dry-run]" >&2
                 return 1
                 ;;
         esac
@@ -2837,6 +2842,70 @@ EOF
         }
     fi
 
+    # Compute paths up front so both --dry-run and the real close share
+    # identical resolution. yaml_get reads from the ticket frontmatter parsed
+    # above; tickets_dir there is rare, so the default usually applies.
+    local ticket_name=$(basename "$ticket_file" .md)
+    local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+    local done_dir="${tickets_dir}/done"
+    local note_file="${tickets_dir}/${ticket_name}-note.md"
+    local new_ticket_path="${done_dir}/$(basename "$ticket_file")"
+    local new_note_path="${done_dir}/$(basename "$note_file")"
+
+    local close_root
+    if [[ "$in_worktree" == "true" ]]; then
+        close_root="$main_repo"
+    else
+        close_root="."
+    fi
+
+    # Pre-flight 1: destination collision in $default_branch's tree. After
+    # the squash merge, `git mv` moves the ticket into tickets/done/. If a
+    # file at that path already exists on $default_branch (left behind by a
+    # prior partial close or an older copy), the close fails mid-flight.
+    if git -C "$close_root" cat-file -e "${default_branch}:${new_ticket_path}" 2>/dev/null; then
+        cat >&2 << EOF
+Error: Destination already exists on '$default_branch': $new_ticket_path
+A previous close may have partially run, or an older copy was left behind.
+Remove it from '$default_branch' (e.g. 'git -C $close_root rm $new_ticket_path && git -C $close_root commit') before closing again.
+EOF
+        return 1
+    fi
+    if [[ -f "$note_file" ]] && git -C "$close_root" cat-file -e "${default_branch}:${new_note_path}" 2>/dev/null; then
+        cat >&2 << EOF
+Error: Destination already exists on '$default_branch': $new_note_path
+Remove it from '$default_branch' before closing again.
+EOF
+        return 1
+    fi
+
+    # Pre-flight 2: simulate the squash merge. `git merge-tree --write-tree`
+    # produces a tree without touching the index/working tree and exits
+    # non-zero on conflicts. Requires git >= 2.38.
+    local merge_base
+    merge_base=$(git -C "$close_root" merge-base "$default_branch" "$current_branch" 2>/dev/null) || {
+        echo "Error: No merge-base between '$default_branch' and '$current_branch'" >&2
+        return 1
+    }
+    if ! git -C "$close_root" merge-tree --write-tree --merge-base="$merge_base" "$default_branch" "$current_branch" >/dev/null 2>&1; then
+        cat >&2 << EOF
+Error: Squash merge would conflict between '$current_branch' and '$default_branch'
+Inspect with:
+  git -C $close_root merge-tree --merge-base=$merge_base $default_branch $current_branch
+EOF
+        return 1
+    fi
+
+    if [[ "$dry_run" == "true" ]]; then
+        echo "DRY-RUN: close would succeed"
+        echo "  branch:  $current_branch -> $default_branch (squash)"
+        echo "  ticket:  $ticket_file -> $new_ticket_path"
+        if [[ -f "${close_root}/${note_file}" ]]; then
+            echo "  note:    $note_file -> $new_note_path"
+        fi
+        return 0
+    fi
+
     # Store original ticket state for rollback
     local original_ticket_content=$(cat "$ticket_file")
     local original_branch=$(get_current_branch)
@@ -2886,9 +2955,9 @@ EOF
         return 1
     }
     
-    # Get ticket name and full content BEFORE switching branches
-    # This ensures we capture the updated content from the feature branch
-    local ticket_name=$(basename "$ticket_file" .md)
+    # Capture the post-closed_at ticket content for the squash commit body.
+    # ticket_name and the done/ paths were computed earlier so preflight could
+    # use them; here we only need the updated content.
     local ticket_content=$(cat "$ticket_file")
 
     # Push feature branch if auto_push
@@ -2904,12 +2973,6 @@ EOF
         commit_msg="[${ticket_name}] Ticket completed"
     fi
     commit_msg="${commit_msg}\n\n${ticket_content}"
-
-    local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
-    local done_dir="${tickets_dir}/done"
-    local note_file="${tickets_dir}/${ticket_name}-note.md"
-    local new_ticket_path="${done_dir}/$(basename "$ticket_file")"
-    local new_note_path="${done_dir}/$(basename "$note_file")"
 
     if [[ "$in_worktree" == "true" ]]; then
         # Worktree mode: perform the merge via "git -C $main_repo" so this

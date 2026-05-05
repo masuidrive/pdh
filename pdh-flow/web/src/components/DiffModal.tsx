@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { fetchDiff } from "../lib/api";
+import { fetchDiff, type DiffResponse } from "../lib/api";
 
 type Props = {
   open: boolean;
@@ -7,18 +7,9 @@ type Props = {
   onClose: () => void;
 };
 
-type DiffPayload = {
-  stepId?: string;
-  baseLabel?: string;
-  baseCommit?: string;
-  changedFiles?: string[];
-  diffStat?: { file: string; insertions: number; deletions: number }[];
-  patch?: string | null;
-};
-
 export function DiffModal({ open, stepId, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
-  const [payload, setPayload] = useState<DiffPayload | null>(null);
+  const [payload, setPayload] = useState<DiffResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"pretty" | "raw">("pretty");
@@ -39,7 +30,7 @@ export function DiffModal({ open, stepId, onClose }: Props) {
     setMode("pretty");
     (async () => {
       try {
-        const body = (await fetchDiff(stepId)) as DiffPayload;
+        const body = await fetchDiff(stepId);
         if (!cancelled) setPayload(body);
       } catch (err) {
         if (!cancelled) setError((err as Error).message);

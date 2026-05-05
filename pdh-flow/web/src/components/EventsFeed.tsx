@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { EventEntry, StepView } from "../lib/types";
 
 type Props = {
@@ -81,7 +81,7 @@ export function EventsFeed({ step, events, limit = 3, inline = false }: Props) {
   }, []);
   if (!step || step.progress.status !== "running" && step.progress.status !== "active") return null;
   const all = events ?? [];
-  const lines = all
+  const filtered = all
     .filter((e) => isActivity(e))
     .filter((e) => !e.stepId || e.stepId === step.id)
     .map((e) => {
@@ -95,30 +95,14 @@ export function EventsFeed({ step, events, limit = 3, inline = false }: Props) {
         ts: e.ts ?? e.created_at,
       };
     })
-    .filter((x): x is { prefix: string; message: string; ts: string | undefined } => Boolean(x))
-    .slice(-limit);
-
-  if (!lines.length) return null;
+    .filter((x): x is { prefix: string; message: string; ts: string | undefined } => Boolean(x));
 
   if (inline) {
-    return (
-      <ul className="flex min-w-0 flex-col gap-0.5 text-xs">
-        {lines.map((l, i) => {
-          const isLatest = i === lines.length - 1;
-          return (
-            <li
-              key={`${l.ts ?? ""}-${l.prefix}-${l.message}`}
-              className={`flex min-w-0 items-center gap-2 ${isLatest ? "animate-[live-slide-in_280ms_ease-out_both]" : ""}`}
-            >
-              <span className="font-mono text-[10px] text-base-content/50 shrink-0">{formatTime(l.ts)}</span>
-              <span className="badge badge-ghost badge-xs shrink-0">{l.prefix}</span>
-              <span className="truncate text-base-content/80">{l.message}</span>
-            </li>
-          );
-        })}
-      </ul>
-    );
+    return <InlineLiveFeed lines={filtered.slice(-INLINE_BUFFER)} />;
   }
+
+  const lines = filtered.slice(-limit);
+  if (!lines.length) return null;
 
   return (
     <section className="card border border-base-300 bg-base-100 shadow-sm">
@@ -140,6 +124,119 @@ export function EventsFeed({ step, events, limit = 3, inline = false }: Props) {
         </ul>
       </div>
     </section>
+  );
+}
+
+type InlineLine = { prefix: string; message: string; ts: string | undefined };
+
+const ROW_HEIGHT_PX = 18;
+const VISIBLE_ROWS = 3;
+const STEP_INTERVAL_MS = 260;
+const MAX_KEEP = 100;
+const INLINE_BUFFER = 100;
+
+function lineKey(l: InlineLine) {
+  return `${l.ts ?? ""}-${l.prefix}-${l.message}`;
+}
+
+function InlineLiveFeed({ lines: target }: { lines: InlineLine[] }) {
+  // committed = lines actually rendered in the DOM. Last VISIBLE_ROWS are visible.
+  // pendingRef = queue of lines waiting to be promoted into committed, paced one per STEP.
+  // seenKeyRef = key of the latest target line we've already routed (initial mount or pending or committed).
+  const [committed, setCommitted] = useState<InlineLine[]>(() => target.slice(-VISIBLE_ROWS));
+  const pendingRef = useRef<InlineLine[]>([]);
+  const seenKeyRef = useRef<string | null>(
+    target.length ? lineKey(target[target.length - 1]) : null
+  );
+  const tickRef = useRef<number | null>(null);
+  const ulRef = useRef<HTMLUListElement>(null);
+  const initialMountRef = useRef(true);
+
+  function scheduleTick() {
+    if (tickRef.current !== null) return;
+    tickRef.current = window.setTimeout(() => {
+      tickRef.current = null;
+      const next = pendingRef.current.shift();
+      if (!next) return;
+      setCommitted((prev) => [...prev, next].slice(-MAX_KEEP));
+      if (pendingRef.current.length > 0) scheduleTick();
+    }, STEP_INTERVAL_MS);
+  }
+
+  // Detect new arrivals in target and append to pending queue.
+  useEffect(() => {
+    if (target.length === 0) return;
+    const lastKey = lineKey(target[target.length - 1]);
+    if (lastKey === seenKeyRef.current) return;
+    let newLines: InlineLine[];
+    if (seenKeyRef.current) {
+      const idx = target.findIndex((l) => lineKey(l) === seenKeyRef.current);
+      newLines = idx >= 0 ? target.slice(idx + 1) : [target[target.length - 1]];
+    } else {
+      newLines = [target[target.length - 1]];
+    }
+    seenKeyRef.current = lastKey;
+    if (newLines.length === 0) return;
+    pendingRef.current.push(...newLines);
+    scheduleTick();
+  }, [target]);
+
+  // Cleanup pending tick on unmount only (no per-update cleanup — that would
+  // cancel the in-flight tick on every state change and stall the queue).
+  useEffect(() => {
+    return () => {
+      if (tickRef.current !== null) {
+        window.clearTimeout(tickRef.current);
+        tickRef.current = null;
+      }
+    };
+  }, []);
+
+  // Animate the column on each committed change. The list is bottom-anchored,
+  // so adding a row natively shifts all rows up by one ROW_HEIGHT_PX. We replay
+  // that shift as an animation: start at translateY(+ROW) (the previous visual
+  // position) and ease to translateY(0) (the new natural position).
+  useLayoutEffect(() => {
+    if (initialMountRef.current) {
+      initialMountRef.current = false;
+      return;
+    }
+    const ul = ulRef.current;
+    if (!ul) return;
+    ul.animate(
+      [
+        { transform: `translateY(${ROW_HEIGHT_PX}px)` },
+        { transform: "translateY(0)" }
+      ],
+      { duration: STEP_INTERVAL_MS, easing: "ease-out" }
+    );
+  }, [committed]);
+
+  return (
+    <div
+      className="relative min-w-0 overflow-hidden"
+      style={{ height: `${ROW_HEIGHT_PX * VISIBLE_ROWS}px` }}
+    >
+      <ul
+        ref={ulRef}
+        className="absolute inset-x-0 bottom-0 flex min-w-0 flex-col text-xs"
+      >
+        {committed.map((l) => {
+          const key = lineKey(l);
+          return (
+            <li
+              key={key}
+              className="flex min-w-0 items-center gap-2"
+              style={{ height: `${ROW_HEIGHT_PX}px`, lineHeight: `${ROW_HEIGHT_PX}px` }}
+            >
+              <span className="font-mono text-[10px] text-base-content/50 shrink-0">{formatTime(l.ts)}</span>
+              <span className="badge badge-ghost badge-xs shrink-0">{l.prefix}</span>
+              <span className="truncate text-base-content/80">{l.message}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { RuntimeBlock, StepView } from "../lib/types";
+import type { RuntimeBlock } from "../lib/types";
 
 type Props = {
   ticketId?: string | null;
@@ -9,46 +9,34 @@ type Props = {
   onOpenTickets?: () => void;
   pendingTicketCount?: number;
   runtime?: RuntimeBlock | null;
-  steps?: StepView[];
-  currentStepId?: string | null;
-  onSelectStep?: (stepId: string) => void;
   generatedAt?: string;
 };
 
-const STATUS_DOT: Record<string, string> = {
-  done: "bg-success",
-  completed: "bg-success",
-  running: "bg-info animate-pulse",
-  active: "bg-info animate-pulse",
-  waiting: "bg-warning",
-  needs_human: "bg-warning",
-  blocked: "bg-error",
-  failed: "bg-error",
-  interrupted: "bg-warning",
-  pending: "bg-base-300",
-  skipped: "bg-base-200",
-};
-
-export function Navbar({ ticketId, ticketTitle, branch, onOpenFlow, onOpenTickets, pendingTicketCount, runtime, steps, currentStepId, onSelectStep, generatedAt }: Props) {
+export function Navbar({ ticketId, ticketTitle, branch, onOpenFlow, onOpenTickets, pendingTicketCount, runtime, generatedAt }: Props) {
   const elapsed = useRelativeTime(generatedAt);
   const run = runtime?.run ?? null;
-  const visibleSteps = (steps ?? []).filter((s) => s.progress.status !== "skipped");
   return (
     <div className="sticky top-0 z-30 border-b border-base-300 bg-base-100">
-      <div className="navbar min-h-12 gap-3">
-        <div className="navbar-start gap-3 shrink-0">
-          <div>
+      <div className="flex flex-col gap-2 px-3 py-2 lg:flex-row lg:items-center lg:gap-3 lg:px-4 lg:py-1.5 lg:min-h-12">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="min-w-0">
             <p className="text-base font-bold leading-tight">PDH Dev</p>
-            <div className="breadcrumbs hidden p-0 text-xs sm:block">
+            <div className="breadcrumbs hidden p-0 text-xs sm:block max-w-full">
               <ul>
-                {branch ? <li>{branch}</li> : null}
-                {ticketId ? <li>{ticketId}</li> : null}
+                {branch ? <li className="truncate">{branch}</li> : null}
+                {ticketId ? <li className="truncate">{ticketId}</li> : null}
               </ul>
             </div>
           </div>
+          {ticketTitle ? (
+            <div className="hidden min-w-0 flex-col items-start leading-tight lg:flex">
+              <span className="text-sm font-semibold text-base-content/80 truncate max-w-xs">{ticketTitle}</span>
+              {run?.status ? <span className="text-xs text-base-content/50">{run.status}</span> : null}
+            </div>
+          ) : null}
         </div>
 
-        <div className="navbar-end gap-2 shrink-0">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           {elapsed ? <span className="hidden text-xs text-base-content/50 lg:inline">updated {elapsed}</span> : null}
           {onOpenTickets ? (
             <button type="button" className="btn btn-ghost btn-sm gap-1" onClick={onOpenTickets}>
@@ -61,56 +49,10 @@ export function Navbar({ ticketId, ticketTitle, branch, onOpenFlow, onOpenTicket
               Flow
             </button>
           ) : null}
-          {ticketTitle ? (
-            <div className="hidden flex-col items-end leading-tight md:flex">
-              <span className="text-sm font-semibold text-base-content/80 truncate max-w-xs">{ticketTitle}</span>
-              {run?.status ? <span className="text-xs text-base-content/50">{run.status}</span> : null}
-            </div>
-          ) : null}
         </div>
       </div>
-
-      {visibleSteps.length > 0 ? (
-        <div className="hidden border-t border-base-200 px-3 py-1.5 sm:block min-w-0 overflow-hidden">
-          <ol className="flex items-center overflow-x-auto">
-            {visibleSteps.map((s, i) => {
-              const status = s.progress.status;
-              const isCurrent = s.id === currentStepId;
-              const dot = STATUS_DOT[status] ?? "bg-base-300";
-              const isDone = status === "done" || status === "completed";
-              return (
-                <li key={s.id} className="flex items-center shrink-0">
-                  <button
-                    type="button"
-                    className={`flex items-center gap-1.5 rounded leading-none hover:bg-base-200 ${isCurrent ? "px-2 py-1 text-xs bg-base-200 font-semibold ring-1 ring-primary/40" : "p-1"}`}
-                    title={`${s.id} ${s.label} — ${status}`}
-                    onClick={() => onSelectStep?.(s.id)}
-                  >
-                    <span className={`inline-block h-2.5 w-2.5 rounded-full ${dot}`} />
-                    {isCurrent ? (
-                      <>
-                        <span className="font-mono">{shortStepId(s.id)}</span>
-                        <span className="truncate max-w-[12rem] text-base-content/80">{s.label}</span>
-                      </>
-                    ) : null}
-                  </button>
-                  {i < visibleSteps.length - 1 ? (
-                    <span className={`mx-0.5 inline-block h-px w-4 ${isDone ? "bg-success/60" : "bg-base-300"}`} />
-                  ) : null}
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-      ) : null}
     </div>
   );
-}
-
-function shortStepId(id: string) {
-  // PD-C-7 → C-7 / PD-D-2 → D-2
-  const m = /^PD-([A-Z])-(\d+)$/.exec(id);
-  return m ? `${m[1]}-${m[2]}` : id;
 }
 
 function useRelativeTime(iso?: string) {

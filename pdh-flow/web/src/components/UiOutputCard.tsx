@@ -1,13 +1,24 @@
 import type { StepView } from "../lib/types";
 import { useMarkdown } from "../lib/markdown";
+import { normalizeRisks } from "../lib/evidence-resolver";
 
 type UiOutput = {
   summary?: string[];
-  risks?: string[];
+  // risks may be a list of either strings (legacy) or
+  // { description, severity, defer_to_step } objects. We normalize both
+  // shapes via normalizeRisks before rendering.
+  risks?: unknown;
   notes?: string;
   judgement?: { status?: string; summary?: string; details?: string };
   parseErrors?: string[];
   parseWarnings?: string[];
+};
+
+const RISK_BADGE: Record<string, string> = {
+  critical: "badge-error",
+  major: "badge-warning",
+  minor: "badge-info",
+  note: "badge-ghost"
 };
 
 type Props = {
@@ -18,7 +29,7 @@ export function UiOutputCard({ step }: Props) {
   const ui = (step.uiOutput as UiOutput | null | undefined) ?? null;
   if (!ui) return null;
   const summary = ui.summary ?? [];
-  const risks = ui.risks ?? [];
+  const risks = normalizeRisks(ui.risks);
   const notes = (ui.notes ?? "").trim();
   const judgement = ui.judgement ?? null;
   const parseErrors = ui.parseErrors ?? [];
@@ -48,9 +59,17 @@ export function UiOutputCard({ step }: Props) {
 
         {risks.length ? (
           <Section title="リスク">
-            <ul className="list-disc space-y-1 pl-5 text-sm leading-6">
+            <ul className="list-none space-y-1 text-sm leading-6">
               {risks.map((r, i) => (
-                <li key={i} className="break-words">{r}</li>
+                <li key={i} className="flex items-baseline gap-2 break-words">
+                  <span className={`badge ${RISK_BADGE[r.severity] ?? "badge-ghost"} badge-sm shrink-0`}>{r.severity}</span>
+                  <span>
+                    {r.description}
+                    {r.defer_to_step ? (
+                      <span className="ml-2 text-xs text-base-content/60">→ {r.defer_to_step}</span>
+                    ) : null}
+                  </span>
+                </li>
               ))}
             </ul>
           </Section>

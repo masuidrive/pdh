@@ -54,6 +54,16 @@ body {
   overflow-x: hidden;
 }
 
+/* daisyUI 5's alert uses grid-template-columns: auto minmax(auto, 1fr) when
+   it has 2+ children, where `auto` resolves to the column's min-content.
+   For long Japanese / mixed text without easy break opportunities that
+   forces the alert wider than its parent and pushes content past the
+   viewport. Switching the lower bound to 0 lets the column shrink and the
+   text wrap. */
+.alert:has(:nth-child(2)) {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
 #root {
   min-height: 100vh;
   width: 100%;

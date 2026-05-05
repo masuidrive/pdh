@@ -21,6 +21,7 @@ display:
   omit:
     - 過去 gate の履歴
     - provider event 全件
+  skipDefaultSchema: true
   approve:
     label: 着手承認
     description: 解釈と前提に同意して flow を確定し、full なら PD-C-2 (調査) / light なら PD-C-3 (計画) に進めます。実装そのものは PD-C-6 で行います。

@@ -3,6 +3,10 @@ role: planner
 mode: edit
 noteSection: PD-C-3. 計画
 commitSummary: Plan
+ui_output:
+  carryover_fields:
+    - plan_tasks
+    - per_file_context
 display:
   label: 計画
   summary: 実装方針、変更ファイル、テスト計画、リスク対応を決める。
@@ -17,6 +21,7 @@ display:
     - durable な設計判断
   omit:
     - 過去 step の history 一覧
+  skipDefaultSchema: true
 prompt:
   assistCheckpoints:
     - review 前に、計画を 1 つの具体的な実装経路へ固定する。

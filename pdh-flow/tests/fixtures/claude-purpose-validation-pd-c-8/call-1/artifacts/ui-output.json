@@ -1,0 +1,18 @@
+{
+  "summary": [
+    "PdM (Opus) が反証要求型で目的妥当性を確認し、書くべきだったのに書かれていないものは検出されなかった。",
+    "runtime-test は product-brief Constraints で明示的に許容された runtime fixture placeholder であり、What の '何もしない' 宣言と整合している。",
+    "git diff main...HEAD は started_at frontmatter 追加のみで、scripts/test-all.sh / current-ticket.md / current-note.md の構造は破壊していない。"
+  ],
+  "risks": [],
+  "ready_when": [
+    "PdM 判定 (No Unverified) が current-note.md の PD-C-8 セクションに記録されている。",
+    "[PD-C-8] 接頭辞のコミットが作成されている。"
+  ],
+  "notes": "観点別所見は current-note.md の 'PD-C-8. 目的妥当性確認' セクションを参照。Epic 不在 / PD-C-2〜PD-C-7 セクション空 / 実装変更ゼロは、すべて 'placeholder ticket / fixture' 性質と整合する設計通りの状態として PdM が確認済み。",
+  "judgement": {
+    "kind": "purpose_validation",
+    "status": "No Unverified",
+    "summary": "runtime-test は product-brief で明示的に許容された runtime fixture placeholder であり、AC・成果物・整合性すべて意図どおり。書くべきだったのに書かれていないものは検出されない。"
+  }
+}

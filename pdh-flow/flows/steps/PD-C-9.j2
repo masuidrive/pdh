@@ -1,5 +1,6 @@
 {% include "shared/common.j2" %}
 {% include "shared/common_c.j2" %}
+{% include "shared/_sub_agent_runbook.j2" %}
 
 # PD-C-9. 完了検証
 
@@ -34,7 +35,6 @@
 
 ## 3. AC チェックの裏取り
 
-{% include "shared/_concurrent_review_principle.j2" %}
 Full variant では Review Agent を並行 spawn し (モデルは CLAUDE.md / AGENTS.md「チーム構成・モデル設定」に従う)、各 AC が実際に達成されているかコード・テスト結果・ノート・証跡表を読んで検証させる。あなたの自己判断だけで「達成済み」としない。NOT VERIFIED が返った項目は証拠を補完してから AC 裏取り表を更新する。
 
 Light variant では裏取り agent なしで、自分で AC 項目と証跡表を確認する。

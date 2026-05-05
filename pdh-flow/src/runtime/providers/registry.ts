@@ -15,6 +15,7 @@
 
 import { runCodex } from "./codex.ts";
 import { runClaude } from "./claude.ts";
+import { readArtifactsForLog, recordProviderRequest, recordProviderResponse, type DebugLogContext } from "./debug-log.ts";
 import type { CliOptions, ProviderEvent, ProviderSpawnInfo } from "../../types.ts";
 
 const KNOWN_PROVIDERS = new Set(["codex", "claude"]);
@@ -40,7 +41,8 @@ export async function runProvider({
   resume = null,
   forceBareClaude = false,
   disableSlashCommands = false,
-  settingSources = null
+  settingSources = null,
+  debugContext = null
 }: {
   provider: string;
   cwd: string;
@@ -55,9 +57,32 @@ export async function runProvider({
   forceBareClaude?: boolean;
   disableSlashCommands?: boolean;
   settingSources?: string | null;
+  debugContext?: DebugLogContext | null;
 }) {
+  const debugHandle = debugContext
+    ? recordProviderRequest(debugContext, {
+        provider,
+        cwd,
+        rawLogPath,
+        timeoutMs,
+        idleTimeoutMs,
+        resume,
+        bypass: options.bypass !== "false",
+        bare: forceBareClaude || options.bare === "true",
+        model: options.model ?? null,
+        permissionMode: options["permission-mode"] ?? null,
+        disableSlashCommands,
+        settingSources,
+        includePartialMessages: options["include-partial-messages"] === "true",
+        startedAt: new Date().toISOString(),
+        promptLength: prompt.length,
+        prompt
+      })
+    : null;
+
+  let result;
   if (provider === "codex") {
-    return runCodex({
+    result = await runCodex({
       cwd,
       prompt,
       rawLogPath,
@@ -70,9 +95,8 @@ export async function runProvider({
       onSpawn,
       onEvent
     });
-  }
-  if (provider === "claude") {
-    return runClaude({
+  } else if (provider === "claude") {
+    result = await runClaude({
       cwd,
       prompt,
       rawLogPath,
@@ -89,8 +113,29 @@ export async function runProvider({
       onSpawn,
       onEvent
     });
+  } else {
+    throw new Error(`runProvider: unknown provider=${provider}`);
   }
-  throw new Error(`runProvider: unknown provider=${provider}`);
+
+  if (debugContext && debugHandle) {
+    const artifacts = readArtifactsForLog(debugContext.artifactPaths);
+    recordProviderResponse(debugContext, debugHandle.seqStr, {
+      provider,
+      finishedAt: new Date().toISOString(),
+      exitCode: result.exitCode ?? null,
+      pid: result.pid ?? null,
+      sessionId: result.sessionId ?? null,
+      finalMessage: result.finalMessage ?? null,
+      stderr: result.stderr ?? null,
+      timedOut: result.timedOut ?? false,
+      timeoutKind: result.timeoutKind ?? null,
+      signal: result.signal ?? null,
+      rawLogPath,
+      artifacts
+    });
+  }
+
+  return result;
 }
 
 export function providerKillGraceMs(options: CliOptions = {}) {

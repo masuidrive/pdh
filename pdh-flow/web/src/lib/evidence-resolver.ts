@@ -27,6 +27,42 @@ export type EvidenceKind =
   | "changed_files"
   | "ready";
 
+// Normalized risk shape after parsing ui-output.json. Accepts both
+// legacy string entries (older runs / hand-written tests) and the
+// structured object form documented in flows/shared/common_c.j2.
+export type RiskItem = {
+  description: string;
+  severity: "critical" | "major" | "minor" | "note";
+  defer_to_step: string | null;
+};
+
+const KNOWN_SEVERITIES = new Set(["critical", "major", "minor", "note"]);
+
+export function normalizeRisks(value: unknown): RiskItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry): RiskItem | null => {
+      if (typeof entry === "string") {
+        const text = entry.trim();
+        if (!text) return null;
+        return { description: text, severity: "minor", defer_to_step: null };
+      }
+      if (entry && typeof entry === "object") {
+        const obj = entry as { description?: unknown; severity?: unknown; defer_to_step?: unknown };
+        const description = typeof obj.description === "string" ? obj.description.trim() : "";
+        if (!description) return null;
+        const sev = typeof obj.severity === "string" ? obj.severity.toLowerCase() : "minor";
+        const severity = (KNOWN_SEVERITIES.has(sev) ? sev : "minor") as RiskItem["severity"];
+        const defer = typeof obj.defer_to_step === "string" && obj.defer_to_step.trim()
+          ? obj.defer_to_step.trim()
+          : null;
+        return { description, severity, defer_to_step: defer };
+      }
+      return null;
+    })
+    .filter((x): x is RiskItem => x !== null);
+}
+
 type Ctx = {
   allSteps: StepView[];
   history: HistoryEntry[];
@@ -42,17 +78,10 @@ export function resolveStepEvidence(step: StepView, nextAction: NextAction | nul
   return labels.map((label) => resolveContractItem(label, step, nextAction, ctx));
 }
 
-export function resolveStepReady(step: StepView): { label: string; kind: string }[] {
-  const items: { label: string; kind: string }[] = [];
-  listOf((step.uiOutput as { readyWhen?: string[] } | undefined)?.readyWhen).forEach((label) => {
-    items.push({ label, kind: "ready" });
-  });
-  listOf((step.uiRuntime as { guards?: { id: string; status: string; evidence?: string }[] } | undefined)?.guards).forEach((guard) => {
-    const evidence = guard.evidence ? ` · ${guard.evidence}` : "";
-    items.push({ label: `${guard.id}: ${guard.status}${evidence}`, kind: guard.status });
-  });
-  return items;
-}
+// Retired: ready_when was consolidated into structured `risks`. Guards
+// remain visible via their own row in the workspace; gate-pass criteria
+// now show up only when an agent surfaces them as risks (with severity
+// and optional defer_to_step).
 
 function resolveContractItem(label: string, step: StepView, _nextAction: NextAction | null, ctx: Ctx): EvidenceItem {
   switch (step.id) {
@@ -83,11 +112,12 @@ function resolveGeneric(label: string, step: StepView): EvidenceItem {
   const lower = label.toLowerCase();
   const noteSection = step.noteSection ?? "";
   const ticketNotes = (step as { ticketImplementationNotes?: string }).ticketImplementationNotes ?? "";
-  const ui = (step.uiOutput ?? {}) as { summary?: string[]; risks?: string[]; readyWhen?: string[] };
+  const ui = (step.uiOutput ?? {}) as { summary?: string[]; risks?: unknown };
   const runtime = (step.uiRuntime ?? {}) as { changedFiles?: string[]; diffStat?: string[] };
   const summary = joinedText(ui.summary);
-  const risks = joinedText(ui.risks);
-  const ready = joinedText(ui.readyWhen);
+  const risks = normalizeRisks(ui.risks)
+    .map((r) => `[${r.severity}${r.defer_to_step ? ` -> ${r.defer_to_step}` : ""}] ${r.description}`)
+    .join("\n");
   const changedFiles = joinedText(runtime.changedFiles);
   const diffStat = joinedText(runtime.diffStat);
   const judgements = (step.judgements ?? [])
@@ -104,7 +134,7 @@ function resolveGeneric(label: string, step: StepView): EvidenceItem {
     return item(label, "risks", "ui-output.json / current-note.md", risks || noteSection);
   }
   if (lower.includes("テスト") || lower.includes("verify") || lower.includes("検証")) {
-    return item(label, "verification", "current-note.md / ui-output.json", ready || noteSection);
+    return item(label, "verification", "current-note.md / ui-output.json", noteSection || risks);
   }
   if (lower.includes("設計判断") || lower.includes("durable")) {
     return item(label, "ticket_notes", "current-ticket.md#Implementation Notes", ticketNotes);

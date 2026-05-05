@@ -1,38 +1,29 @@
-import type { GateView } from "../lib/types";
+import type { GateView, StepView } from "../lib/types";
 
 type Props = {
-  stepId: string;
+  step: StepView;
   gate: GateView;
 };
 
-const DECISION_BY_STEP: Record<string, string> = {
-  "PD-C-5": "Approve implementation start, reject, or request changes to the plan.",
-  "PD-C-10": "Approve ticket close, reject, or request changes before close.",
-};
-
-const TICKET_HEADING_BY_STEP: Record<string, string> = {
-  "PD-C-5": "## Implementation Notes",
-  "PD-C-10": "## Product AC",
-};
-
-const NOTE_HEADINGS_BY_STEP: Record<string, string[]> = {
-  "PD-C-5": ["## PD-C-3. 計画", "## PD-C-4. 計画レビュー結果"],
-  "PD-C-10": ["## PD-C-9. AC 裏取り結果", "## PD-C-8. 目的妥当性確認", "## PD-C-7. 品質検証結果"],
-};
-
-export function GateContextCard({ stepId, gate }: Props) {
+export function GateContextCard({ step, gate }: Props) {
   if (gate.status !== "needs_human" && !gate.baseline?.commit && !gate.rerun_requirement?.target_step_id) {
     return null;
   }
-  const decision = DECISION_BY_STEP[stepId] ?? "Approve, reject, or request changes.";
-  const ticketHeading = TICKET_HEADING_BY_STEP[stepId];
-  const noteHeadings = NOTE_HEADINGS_BY_STEP[stepId] ?? [];
+  const isOpen = gate.status === "needs_human";
+  const decision = step.display?.decision ?? "Approve, reject, or request changes.";
+  const ticketHeading = step.display?.readTicketHeading;
+  const noteHeadings = step.display?.readNoteHeadings ?? [];
+  const tone = isOpen
+    ? "border-warning/40 bg-warning/5"
+    : "border-base-300 bg-base-200/40";
+  const headingTone = isOpen ? "text-warning" : "text-base-content";
+  const statusBadgeTone = isOpen ? "badge-warning" : "badge-success";
 
   return (
-    <section className="rounded-box border border-warning/40 bg-warning/5 p-4 shadow-sm">
+    <section className={`rounded-box border p-4 shadow-sm ${tone}`}>
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="font-bold text-warning">Gate context</h3>
-        {gate.status ? <span className="badge badge-warning badge-sm">{gate.status}</span> : null}
+        <h3 className={`font-bold ${headingTone}`}>Gate context</h3>
+        {gate.status ? <span className={`badge badge-sm ${statusBadgeTone}`}>{gate.status}</span> : null}
         {gate.baseline?.commit ? (
           <span className="badge badge-ghost badge-sm font-mono">
             base {gate.baseline.commit.slice(0, 7)}
@@ -42,7 +33,7 @@ export function GateContextCard({ stepId, gate }: Props) {
         {gate.decision ? <span className="badge badge-info badge-sm">decision: {gate.decision}</span> : null}
       </div>
 
-      <p className="mt-2 text-sm">{decision}</p>
+      {isOpen ? <p className="mt-2 text-sm">{decision}</p> : null}
 
       {gate.rerun_requirement?.target_step_id ? (
         <div className="alert alert-warning mt-3 text-sm">

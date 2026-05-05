@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useNotifications } from "../lib/notifications";
+import { useSingleFlight } from "../lib/use-single-flight";
 
 export type ConfirmRequest = {
   title: string;
@@ -8,6 +10,10 @@ export type ConfirmRequest = {
   confirmTone?: "approve" | "warning" | "danger" | "neutral";
   cancelLabel?: string;
   onConfirm: () => Promise<void> | void;
+  // Fires once after onConfirm resolves successfully and the modal closes.
+  // Used to e.g. shift focus to the new current step after a run/apply.
+  onCompleted?: () => void;
+  secondaryAction?: { label: string; onClick: () => void };
 };
 
 type Props = {
@@ -17,8 +23,10 @@ type Props = {
 
 export function ConfirmModal({ request, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
-  const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const flights = useSingleFlight();
+  const { notifyError } = useNotifications();
+  const pending = flights.isPending("confirm");
 
   useEffect(() => {
     const dlg = dialogRef.current;
@@ -41,15 +49,16 @@ export function ConfirmModal({ request, onClose }: Props) {
 
   async function submit() {
     if (!request) return;
-    setPending(true);
     setError(null);
     try {
-      await request.onConfirm();
+      await flights.run("confirm", () => request.onConfirm());
+      const completed = request.onCompleted;
       onClose();
+      completed?.();
     } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setPending(false);
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      notifyError(err, { title: request.title });
     }
   }
 
@@ -78,15 +87,30 @@ export function ConfirmModal({ request, onClose }: Props) {
           >
             {request.cancelLabel ?? "キャンセル"}
           </button>
-          <button
-            type="button"
-            className={confirmBtn}
-            onClick={submit}
-            disabled={pending}
-          >
-            {pending ? <span className="loading loading-spinner loading-xs" /> : null}
-            {request.confirmLabel}
-          </button>
+          {request.secondaryAction && error ? (
+            <button
+              type="button"
+              className="btn btn-neutral"
+              disabled={pending}
+              onClick={() => {
+                request.secondaryAction!.onClick();
+                onClose();
+              }}
+            >
+              {request.secondaryAction.label}
+            </button>
+          ) : null}
+          {error ? null : (
+            <button
+              type="button"
+              className={confirmBtn}
+              onClick={submit}
+              disabled={pending}
+            >
+              {pending ? <span className="loading loading-spinner loading-xs" /> : null}
+              {request.confirmLabel}
+            </button>
+          )}
         </div>
       </div>
       <form method="dialog" className="modal-backdrop">
@@ -99,7 +123,7 @@ export function ConfirmModal({ request, onClose }: Props) {
 function toneToBtn(tone?: ConfirmRequest["confirmTone"]) {
   switch (tone) {
     case "approve":
-      return "btn-success";
+      return "btn-success text-white";
     case "warning":
       return "btn-warning";
     case "danger":

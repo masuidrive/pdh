@@ -9,7 +9,8 @@ export function stepUiContract(step) {
     viewer: asString(ui.viewer),
     decision: asString(ui.decision),
     mustShow: asStringList(ui.mustShow),
-    omit: asStringList(ui.omit)
+    omit: asStringList(ui.omit),
+    skipDefaultSchema: ui.skipDefaultSchema === true
   };
 }
 
@@ -41,15 +42,35 @@ export function renderUiOutputPromptSection({ run, step }) {
   const relativePath = `.pdh-flow/runs/${run.id}/steps/${step.id}/ui-output.json`;
   const contract = stepUiContract(step);
   const judgementKind = defaultJudgementKind(step.id);
+
+  const header = [
+    "## UI 出力成果物",
+    "",
+    `\`${relativePath}\` に妥当な JSON を書く。`,
+    "markdown fence は使わない。トップレベルキーを勝手に増やさない。",
+    "",
+    "このステップ固有の契約:",
+    `- viewer: ${contract.viewer || "(未指定)"}`,
+    `- decision: ${contract.decision || "(未指定)"}`,
+    ...(contract.mustShow.length > 0
+      ? ["- must_show:", ...contract.mustShow.map((item) => `  - ${item}`)]
+      : ["- must_show: (なし)"]),
+    ...(contract.omit.length > 0
+      ? ["- omit:", ...contract.omit.map((item) => `  - ${item}`)]
+      : ["- omit: (なし)"]),
+    ""
+  ];
+
+  if (contract.skipDefaultSchema) {
+    return [...header, "JSON スキーマ・各フィールドのルールはステップ本文 `## 成果物` を正本として参照してください。", ""];
+  }
+
   const templateObject: AnyRecord = {
     summary: [
       "このステップで何を変えたか、何が分かったかを示す具体的な箇条書き 2-4 件"
     ],
     risks: [
       "未解消のリスクだけを書く。無ければ [] を使う。"
-    ],
-    ready_when: [
-      "このステップが先へ進める状態になったと判断できる具体条件"
     ],
     notes: "任意の自由記述。複数行にしたい場合は JSON 文字列内で \\n を使う。"
   };
@@ -63,31 +84,16 @@ export function renderUiOutputPromptSection({ run, step }) {
   const template = JSON.stringify(templateObject, null, 2);
 
   return [
-    "## UI 出力成果物",
-    "",
-    `\`${relativePath}\` に妥当な JSON を書く。`,
-    "markdown fence は使わない。トップレベルキーを勝手に増やさない。",
-    "",
+    ...header,
     "各フィールドのルール:",
     "- `summary`: このステップで何を変えたか、何が分かったかを示す具体的な箇条書きを 2-4 件書く。",
     "- `risks`: 未解消のリスクだけを書く。無ければ `[]` を使う。",
-    "- `ready_when`: このステップが先へ進める状態になったと判断できる具体条件を書く。",
     "- `notes`: 任意の自由記述。複数行にしたい場合は JSON 文字列内で `\\n` を使う。",
     "- このファイル内の人間向け文面は、`current-ticket.md` の主言語に合わせる。",
     "- すべてのキーと文字列はダブルクォートで囲む。内部のダブルクォートは `\\\"`、バックスラッシュは `\\\\` にエスケープする。",
     ...(judgementKind
       ? [`- \`judgement\`: この review step では必須。 \`kind: ${judgementKind}\`、guard 向けの正確な \`status\`、短い \`summary\` を使う。`]
       : []),
-    "",
-    "このステップ固有の契約:",
-    `- viewer: ${contract.viewer || "(未指定)"}`,
-    `- decision: ${contract.decision || "(未指定)"}`,
-    ...(contract.mustShow.length > 0
-      ? ["- must_show:", ...contract.mustShow.map((item) => `  - ${item}`)]
-      : ["- must_show: (なし)"]),
-    ...(contract.omit.length > 0
-      ? ["- omit:", ...contract.omit.map((item) => `  - ${item}`)]
-      : ["- omit: (なし)"]),
     "",
     "JSON 形は次を使う:",
     "",
@@ -122,6 +128,9 @@ export function normalizeUiOutput(value, meta = {}) {
     contextGaps: Array.isArray(source.context_gaps ?? source.contextGaps) ? (source.context_gaps ?? source.contextGaps) : [],
     alignment: source.alignment && typeof source.alignment === "object" ? source.alignment : null,
     teamRecommendation: source.team_recommendation ?? source.teamRecommendation ?? null,
+    // PD-C-3 plan fields. Carried over to PD-C-6 via auto-embed.
+    plan_tasks: Array.isArray(source.plan_tasks ?? source.planTasks) ? (source.plan_tasks ?? source.planTasks) : [],
+    per_file_context: Array.isArray(source.per_file_context ?? source.perFileContext) ? (source.per_file_context ?? source.perFileContext) : [],
     artifactPath: asString(metadata.artifactPath),
     parseErrors: asStringList(metadata.parseErrors),
     parseWarnings: asStringList(metadata.parseWarnings),

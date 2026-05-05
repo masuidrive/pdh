@@ -26,40 +26,53 @@ Provider commands load `.env` from the repo root. `.env` is ignored by git and m
 
 By default, both Codex and Claude run in bypass mode for provider steps. Use `--bypass=false` or an explicit Claude `--permission-mode` only when intentionally debugging permission behavior.
 
+## External Command Error Contract
+
+All repo, runtime, and web-server shell-outs should follow one rule set:
+
+- Required commands fail closed. If a `git`, `ticket.sh`, or runtime CLI command is required for correctness, the caller throws and includes the exact command, cwd, exit status or signal, and the trailing stderr/stdout summary.
+- Advisory commands may degrade only if the failure is surfaced. Returning `null` / `[]` is allowed only when the caller also records the failure as a warning, structured result field, or API error detail.
+- Web API failures use a stable JSON shape: `{"error":"...","message":"...","details":{...}}`.
+- `details` is reserved for command failures and includes `command`, `cwd`, `exitCode`, `signal`, `timedOut`, and trimmed `stdout` / `stderr`.
+- New external-command call sites should prefer the shared wrapper in `src/core/command.ts` over ad hoc `spawnSync` result checks.
+
 ## Common Commands
 
 ```sh
-node src/cli.mjs init --repo .
-node src/cli.mjs run --repo . --ticket ticket-id --variant full
-node src/cli.mjs status --repo .
-node src/cli.mjs run-next --repo .
-node src/cli.mjs run-next --repo . --stop-after-step
-node src/cli.mjs run-next --repo . --manual-provider
-node src/cli.mjs run-provider --repo .
-node src/cli.mjs resume --repo .
-node src/cli.mjs show-gate --repo .
-node src/cli.mjs approve --repo . --step PD-C-5 --reason ok
-node src/cli.mjs assist-open --repo .
-node src/cli.mjs assist-signal --repo . --signal continue --reason "ready"
-node src/cli.mjs interrupt --repo . --message "Need clarification"
-node src/cli.mjs answer --repo . --message "Use the existing fallback"
-node src/provider-cli.mjs ask --repo . --message "Need clarification"
-node src/cli.mjs prompt --repo .
-node src/cli.mjs metadata --repo .
-node src/cli.mjs flow --variant full
-node src/cli.mjs flow-graph --repo . --variant full
-node src/cli.mjs web --repo . --host 0.0.0.0 --port 8765
-node src/cli.mjs smoke-calc
+npx @masuidrive/pdh-flow status --repo .
+pdh-flow init --repo .
+pdh-flow start --repo . --ticket ticket-id --variant full
+pdh-flow status --repo .
+pdh-flow run-next --repo .
+pdh-flow run-next --repo . --stop-after-step
+pdh-flow run-next --repo . --manual-provider
+pdh-flow provider run --repo .
+pdh-flow resume --repo .
+pdh-flow show-gate --repo .
+pdh-flow approve --repo . --step PD-C-5 --reason ok
+pdh-flow assist-open --repo .
+pdh-flow assist-signal --repo . --signal continue --reason "ready"
+pdh-flow interrupt --repo . --message "Need clarification"
+pdh-flow answer --repo . --message "Use the existing fallback"
+pdh-flow provider ask --repo . --message "Need clarification"
+pdh-flow prompt --repo .
+pdh-flow metadata --repo .
+pdh-flow flow --variant full
+pdh-flow flow-graph --repo . --variant full
+pdh-flow serve --repo . --host 0.0.0.0 --port 8765
+pdh-flow smoke-calc
 npm run check
 npm run test:runtime
 ```
+
+Use `npx @masuidrive/pdh-flow ...` when you do not want to install the package. For a persistent install, run `npm install -g @masuidrive/pdh-flow` and then use `pdh-flow ...`. Runtime and provider prompts also emit `pdh-flow ...`, so the installed binary is the normal path.
 
 ## Typical Flow
 
 ### 1. Start a ticket
 
 ```sh
-node src/cli.mjs run --repo . --ticket calc-cli --variant full
+pdh-flow start --repo . --ticket calc-cli --variant full
 ```
 
 Output:
@@ -67,7 +80,7 @@ Output:
 ```text
 run-20260424022333-726697
 Current step: PD-C-2 調査
-Next: node src/cli.mjs run-next --repo /path/to/repo
+Next: pdh-flow run-next --repo /path/to/repo
 ```
 
 The first line still prints the transient artifact run id, but normal operation after that is repo-centric.
@@ -75,7 +88,7 @@ The first line still prints the transient artifact run id, but normal operation 
 ### 2. Let the runtime advance
 
 ```sh
-node src/cli.mjs run-next --repo .
+pdh-flow run-next --repo .
 ```
 
 This auto-runs provider steps until one of these happens:
@@ -94,9 +107,8 @@ When a gate opens:
 {
   "status": "needs_human",
   "stepId": "PD-C-5",
-  "summary": "/path/to/repo/.pdh-flow/runs/.../steps/PD-C-5/human-gate-summary.md",
   "nextCommands": [
-    "node src/cli.mjs approve --repo /path/to/repo --step PD-C-5 --reason ok"
+    "pdh-flow approve --repo /path/to/repo --step PD-C-5 --reason ok"
   ]
 }
 ```
@@ -104,10 +116,10 @@ When a gate opens:
 Review the summary, then decide in the terminal:
 
 ```sh
-node src/cli.mjs show-gate --repo .
-node src/cli.mjs assist-open --repo .
-./.pdh-flow/bin/assist-signal --step PD-C-5 --signal recommend-approve --reason "ready to implement"
-node src/cli.mjs accept-recommendation --repo . --step PD-C-5
+pdh-flow show-gate --repo .
+pdh-flow assist-open --repo .
+./.pdh-flow/bin/assist-signal --step PD-C-5 --signal propose-approve --reason "ready to implement"
+pdh-flow accept-proposal --repo . --step PD-C-5
 ```
 
 If you want a fresh Claude session to discuss code or run tests before deciding, use `assist-open`. It prepares repo-local wrappers:
@@ -115,14 +127,14 @@ If you want a fresh Claude session to discuss code or run tests before deciding,
 - `./.pdh-flow/bin/assist-signal`
 - `./.pdh-flow/bin/assist-test`
 
-The assist session stays in the same repo checkout, but the runtime still owns progression. At human gates the assist should hand control back with a single recommendation signal, and the user then confirms it with `accept-recommendation` or sends it back with `decline-recommendation`.
+The assist session stays in the same repo checkout, but the runtime still owns progression. At human gates the assist should hand control back with a single proposal signal, and the user then confirms it with `accept-proposal` or sends it back with `decline-proposal`.
 
 ### 4. Exactly one completed step
 
 If you want a demo that stops before the next provider starts:
 
 ```sh
-node src/cli.mjs run-next --repo . --stop-after-step
+pdh-flow run-next --repo . --stop-after-step
 ```
 
 Output:
@@ -130,7 +142,7 @@ Output:
 ```text
 Stopped After Step: PD-C-5 -> PD-C-6
 Current step: PD-C-6 実装
-Next: node src/cli.mjs run-next --repo /path/to/repo
+Next: pdh-flow run-next --repo /path/to/repo
 ```
 
 ### 5. Provider debugging
@@ -138,9 +150,9 @@ Next: node src/cli.mjs run-next --repo /path/to/repo
 Normally you should keep using `run-next`. For step-level debugging:
 
 ```sh
-node src/cli.mjs run-provider --repo .
-node src/cli.mjs resume --repo .
-node src/cli.mjs prompt --repo .
+pdh-flow provider run --repo .
+pdh-flow resume --repo .
+pdh-flow prompt --repo .
 ```
 
 Provider retries now reuse the latest saved session automatically when a retry happens after a failed or timed-out attempt. The runtime also saves the provider session id as soon as the CLI emits it, so `resume` can work even when a provider stalled before clean exit. Use `--idle-timeout-ms` to shorten or disable the no-output stall detector for debugging.
@@ -150,13 +162,13 @@ Provider retries now reuse the latest saved session automatically when a retry h
 When a step is in `needs_human`, `interrupted`, or `blocked`, you can open a fresh Claude assist session:
 
 ```sh
-node src/cli.mjs assist-open --repo .
+pdh-flow assist-open --repo .
 ```
 
 For non-interactive use, prepare the prompt and wrapper scripts without launching Claude:
 
 ```sh
-node src/cli.mjs assist-open --repo . --prepare-only
+pdh-flow assist-open --repo . --prepare-only
 ```
 
 The assist session is hardened for this use case:
@@ -172,14 +184,14 @@ At human gates, the expected pattern is:
 2. assist emits one recommendation signal such as:
 
 ```sh
-./.pdh-flow/bin/assist-signal --step PD-C-5 --signal recommend-rerun-from --target-step PD-C-4 --reason "plan changed after app review"
+./.pdh-flow/bin/assist-signal --step PD-C-5 --signal propose-rerun-from --target-step PD-C-4 --reason "plan changed after app review"
 ```
 
 3. the user answers Yes or No by running:
 
 ```sh
-node src/cli.mjs accept-recommendation --repo . --step PD-C-5
-node src/cli.mjs decline-recommendation --repo . --step PD-C-5 --reason "keep working"
+pdh-flow accept-proposal --repo . --step PD-C-5
+pdh-flow decline-proposal --repo . --step PD-C-5 --reason "keep working"
 ```
 
 ## Prompt Model
@@ -191,8 +203,8 @@ Provider prompts now include:
 - compiled semantic rules from `flows/pdh-ticket-core.yaml`
 - required guards
 - canonical file paths for `current-ticket.md` and `current-note.md`
-- a YAML contract for step-local UI output written to `.pdh-flow/.../ui-output.yaml`
-- a review-step judgement block in `ui-output.yaml` when the step guard requires one
+- a JSON contract for step-local UI output written to `.pdh-flow/.../ui-output.json`
+- a review-step judgement block in `ui-output.json` when the step guard requires one
 
 They do not inline the full contents of `current-ticket.md` or `current-note.md`.
 
@@ -244,7 +256,6 @@ pdh:
       progress.jsonl
       steps/
         PD-C-5/
-          human-gate-summary.md
           human-gate.json
           assist/
             manifest.yaml
@@ -254,8 +265,8 @@ pdh:
             signals.jsonl
         PD-C-6/
           prompt.md
-          ui-output.yaml
-          ui-runtime.yaml
+          ui-output.json
+          ui-runtime.json
           attempt-1/
             codex.raw.jsonl
             result.json
@@ -278,7 +289,7 @@ It should not retain transient provider logs or prompts.
 ## Web UI
 
 ```sh
-node src/cli.mjs web --repo . --host 0.0.0.0 --port 8765
+pdh-flow serve --repo . --host 0.0.0.0 --port 8765
 ```
 
 The UI shows:
@@ -287,8 +298,8 @@ The UI shows:
 - the active flow variant for the current run
 - per-step progress
 - step-specific viewer / decision contract from flow YAML
-- provider-written semantic UI output from `ui-output.yaml`
-- runtime-written fact summary from `ui-runtime.yaml`
+- provider-written semantic UI output from `ui-output.json`
+- runtime-written fact summary from `ui-runtime.json`
 - clickable detail rows for `mustShow` items backed by note, ticket, gate, or runtime evidence
 - gate or interruption state
 - recent events
@@ -312,7 +323,7 @@ See [examples/sample1/README.md](examples/sample1/README.md) for a complete repo
 - Human gates and interruptions are explicit blocking states.
 - `current-note.md` frontmatter replaces the old SQLite / metadata-block state model.
 - The Web UI stays viewer-first and follows the repo-centric CLI. Its only direct action is launching a stop-state assist terminal.
-- Providers should not drive runtime progression directly. When a provider needs one precise user answer, it should call `node src/provider-cli.mjs ask --repo . --message "..."` and stop.
+- Providers should not drive runtime progression directly. When a provider needs one precise user answer, it should call `pdh-flow provider ask --repo . --message "..."` and stop.
 
 ## Deferred
 
