@@ -167,6 +167,35 @@ pre {
   overflow-x: auto;
 }
 
+.evidence-md img {
+  max-width: 100%;
+  max-height: 360px;
+  height: auto;
+  margin: 0.5em 0;
+  border-radius: 0.4em;
+  border: 1px solid var(--color-base-300);
+  cursor: zoom-in;
+  display: block;
+}
+
+.evidence-md img:hover {
+  filter: brightness(1.05);
+}
+
+.evidence-mermaid {
+  margin: 0.6em 0;
+  padding: 0.6em;
+  border-radius: 0.5em;
+  border: 1px solid var(--color-base-300);
+  background: oklch(from var(--color-base-100) l c h / 0.6);
+  overflow-x: auto;
+}
+
+.evidence-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
 .evidence-md pre code {
   padding: 0;
   background: transparent;

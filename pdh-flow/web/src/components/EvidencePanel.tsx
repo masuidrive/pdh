@@ -1,26 +1,13 @@
 import type { ArtifactEntry, NextAction, StepView, HistoryEntry, JudgementEntry, ReviewFinding } from "../lib/types";
 import { resolveStepEvidence, type EvidenceItem, type EvidenceKind } from "../lib/evidence-resolver";
-import { useMarkdown } from "../lib/markdown";
-
-declare global {
-  interface Window {
-    markdownit?: (options?: Record<string, unknown>) => { render: (input: string) => string };
-  }
-}
+import { MarkdownContent } from "./MarkdownContent";
 
 function MarkdownBody({ text }: { text: string }) {
-  const html = useMarkdown(text);
-  if (html === null) {
-    return (
-      <pre className="mt-2 w-full whitespace-pre-wrap break-words text-sm leading-6 text-base-content/60">
-        {text}
-      </pre>
-    );
-  }
   return (
-    <div
+    <MarkdownContent
+      text={text}
       className="evidence-md mt-2 w-full break-words text-sm leading-6 text-base-content/85"
-      dangerouslySetInnerHTML={{ __html: html }}
+      fallbackClassName="mt-2 w-full whitespace-pre-wrap break-words text-sm leading-6 text-base-content/60"
     />
   );
 }

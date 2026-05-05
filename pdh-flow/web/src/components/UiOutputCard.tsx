@@ -1,5 +1,5 @@
 import type { StepView } from "../lib/types";
-import { useMarkdown } from "../lib/markdown";
+import { MarkdownContent } from "./MarkdownContent";
 import { normalizeRisks } from "../lib/evidence-resolver";
 
 type UiOutput = {
@@ -112,11 +112,13 @@ export function UiOutputCard({ step }: Props) {
 }
 
 function NotesMarkdown({ text }: { text: string }) {
-  const html = useMarkdown(text);
-  if (html) {
-    return <div className="evidence-md text-sm leading-6 text-base-content/85" dangerouslySetInnerHTML={{ __html: html }} />;
-  }
-  return <pre className="whitespace-pre-wrap text-xs leading-5 text-base-content/80">{text}</pre>;
+  return (
+    <MarkdownContent
+      text={text}
+      className="evidence-md text-sm leading-6 text-base-content/85"
+      fallbackClassName="whitespace-pre-wrap text-xs leading-5 text-base-content/80"
+    />
+  );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

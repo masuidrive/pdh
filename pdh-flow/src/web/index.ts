@@ -2688,9 +2688,15 @@ function serveRunFile({ response, repo, rawPath }) {
     return;
   }
   const body = readFileSync(candidate);
+  // Run-scoped artifacts are effectively immutable: the path embeds the
+  // run id, and agents save into a freshly-created `screenshots/` dir per
+  // step attempt. Letting the browser cache them avoids re-fetching the
+  // image every time React re-renders the surrounding ui-output card
+  // (which happens on each SSE state update). Without caching, large
+  // screenshots flicker / appear to "reload" on every state tick.
   response.writeHead(200, {
     "content-type": mime,
-    "cache-control": "no-store",
+    "cache-control": "private, max-age=3600",
     "content-length": String(body.length)
   });
   response.end(body);

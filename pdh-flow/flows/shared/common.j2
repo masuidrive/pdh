@@ -58,6 +58,13 @@ runtime が遷移を決めるために読む構造化出力には種類があり
 
 AC に書いてよいのはプロダクトの観察可能な振る舞いのみ。「レビュー済み」「テストパス」「PM が直接コードを書いていない」等のプロセス要件は note のプロセスチェックリストに書く。
 
+## 散文での図と画像 (markdown 拡張)
+
+`current-note.md` の散文セクション、および `ui-output.json` の散文フィールド (`notes` / `summary[]` / `risks[].description` 等) では、必要に応じて以下の markdown 拡張を使ってよい。web UI が描画する:
+
+- **mermaid 図**: ` ```mermaid ` の fenced code block で書けば `beautiful-mermaid` で SVG に描画される。フローチャート / 状態遷移 / シーケンスを散文より図のほうが伝わる場面で使う。長さは 10KB 以内に収める
+- **inline 画像**: agent-browser 等のスクショは `![caption](.pdh-flow/runs/<run-id>/steps/<step>/screenshots/<name>.png)` で散文に差し込める。詳細は PD-C-9 の Surface Observer ガイダンス参照。クリックで lightbox 拡大表示される
+
 {% include "shared/_honest_rules.j2" %}
 ## 矛盾を見つけた時
 
