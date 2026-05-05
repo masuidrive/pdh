@@ -539,6 +539,10 @@ function handleRequest({ request, response, repo: mainRepo, assistTerminalManage
     sendJson(response, 200, payload);
     return;
   }
+  if (url.pathname === "/api/run-file") {
+    serveRunFile({ response, repo, rawPath: url.searchParams.get("path") });
+    return;
+  }
   // SPA fallback: any non-/api, non-/assets path that isn't a static
   // asset gets the React index.html so client-side routes like
   // /tickets/<NAME> resolve without 404.
@@ -2648,6 +2652,66 @@ function sendText(response, statusCode, body) {
     "cache-control": "no-store"
   });
   response.end(body);
+}
+
+// Serve a transient run-scoped artifact (image, etc.) under .pdh-flow/runs/.
+//
+// Scope: only paths that resolve into <repo>/.pdh-flow/runs/ are allowed.
+// This is the single mechanism that the web UI uses to render markdown
+// `![](path)` image links pointing at provider-produced screenshots
+// (PD-C-9 Surface Observer / PD-D-3 UCS QA / etc.).
+//
+// Why scoped: agents write absolute or repo-relative paths into
+// ui-output.json `notes` markdown; the web UI rewrites them through
+// /api/run-file?path=<...>. Limiting to .pdh-flow/runs/ blocks path
+// traversal and accidental serving of source / secrets.
+function serveRunFile({ response, repo, rawPath }) {
+  if (!rawPath || typeof rawPath !== "string") {
+    sendJson(response, 400, { error: "missing_path" });
+    return;
+  }
+  const stripped = rawPath.replace(/^\/+/, "");
+  const candidate = resolve(repo, stripped);
+  const allowedRoot = resolve(repo, ".pdh-flow", "runs");
+  if (candidate !== allowedRoot && !candidate.startsWith(allowedRoot + "/")) {
+    sendJson(response, 403, { error: "out_of_scope" });
+    return;
+  }
+  if (!existsSync(candidate)) {
+    sendJson(response, 404, { error: "not_found" });
+    return;
+  }
+  const ext = extname(candidate).toLowerCase();
+  const mime = artifactMimeType(ext);
+  if (!mime) {
+    sendJson(response, 415, { error: "unsupported_type", ext });
+    return;
+  }
+  const body = readFileSync(candidate);
+  response.writeHead(200, {
+    "content-type": mime,
+    "cache-control": "no-store",
+    "content-length": String(body.length)
+  });
+  response.end(body);
+}
+
+function artifactMimeType(ext) {
+  switch (ext) {
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".gif":
+      return "image/gif";
+    case ".webp":
+      return "image/webp";
+    case ".svg":
+      return "image/svg+xml";
+    default:
+      return null;
+  }
 }
 
 function sendSvg(response, statusCode, body) {

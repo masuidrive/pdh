@@ -67,6 +67,17 @@ focus:
 
 Surface Observer の blocker 指摘があれば、修正は実装責務に戻す (現状 step では note に記録し、修正そのものは Coding Engineer 経由)。
 
+### スクショの扱い (UI / 視覚観察時)
+
+agent-browser 等で **画面の動作確認** をした場合のスクショは、`current-note.md` や AC 裏取り表に書かない (durable な裏取りは test path / コマンド出力 / ログ path 側に書く。スクショは中間生成物の transient な視覚補助で、run cleanup と一緒に消えてよい)。
+
+代わりに ui-output.json の `notes` / `summary[]` 散文フィールドに **markdown image link** で差し込む。web UI が ui-output.json を表示するときに inline で render される:
+
+- 保存先: `.pdh-flow/runs/<run-id>/steps/PD-C-9/screenshots/<descriptive-name>.png` (`<run-id>` はこのプロンプトの `# 実行コンテキスト` の「実行ID」)
+- 埋め込み: `notes` 等の散文に `![caption](.pdh-flow/runs/<run-id>/steps/PD-C-9/screenshots/<descriptive-name>.png)` を書く
+- caption は短い説明文 (例: `ログイン後ホーム画面遷移`)
+- `attachments[]` 等の別フィールドは作らない
+
 ## 成果物
 
 - `current-note.md`:

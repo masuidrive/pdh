@@ -23,6 +23,7 @@ PD-C-10 では、PD-C-9 までに揃った成果物 (実装・AC 裏取り表・
 - `deferred` があれば、follow-up ticket が実作成済かつユーザ承認済か確認する。未承認なら `{{ runtimeCli }} provider ask` で承認を取りに行く
 - PD-C-9 の `final_verification` judgement (`Ready` 以外なら理由) を summary に引用する
 - **各 step section の `### 未解消事項` を全部読む** (`PD-C-2` から `PD-C-9` まで)。`flows/shared/common_c.j2` で説明されている `defer / followup / accept / info` の慣習に従って書かれている。これらが close summary の「残リスク・チケット化候補」の一次資料になる
+- **過去 step の ui-output.json を走査してスクショを再掲する**。PD-C-9 等の上流 step が `notes` / `summary` に `![caption](.pdh-flow/runs/<run-id>/steps/<step>/screenshots/<name>.png)` の markdown image link を埋め込んでいる場合、close 承認時に human が見て判断材料にできるよう、関連するものを本 step の `ui-output.json.notes` に再掲する。再掲は path をそのままコピーすれば web UI が画像を render する (path 書き換え不要)
 
 ## 成果物
 
@@ -37,7 +38,7 @@ PD-C-10 では、PD-C-9 までに揃った成果物 (実装・AC 裏取り表・
 - `ui-output.json`:
     - `summary`: クローズ可否を判断するための要点 (作業サマリ・AC 状況)
     - `risks`: 残課題・懸念 + `unverified` AC が 1 件でもあれば critical で計上 + 既存の defer 先がここ (PD-C-10) になっている risk を再評価して棚卸し。フォーマット: `flows/shared/common_c.j2`
-    - `notes`: AC 裏取り表全件・確認手順・チケット化候補等の詳細
+    - `notes`: AC 裏取り表全件・確認手順・チケット化候補等の詳細。**上流 step (特に PD-C-9) の ui-output.json に markdown image link で埋め込まれたスクショがあれば、本 step の `notes` に再掲する** (`![caption](.pdh-flow/runs/<run-id>/steps/<step>/screenshots/<name>.png)` を verbatim でコピー)。close 判断する human がここで一覧して見られるようにする目的
     - `judgement.kind`: `close-gate`
     - `judgement.status`: `Ready` (close 可能と判断した場合) または 具体的な Block 理由
     - `judgement.summary`: 結論の理由

@@ -43,11 +43,33 @@ export function useMarkdown(text: string): string | null {
       await loadMarkdownIt();
       if (cancelled) return;
       const md = window.markdownit?.({ html: false, linkify: true });
-      if (md) setHtml(md.render(text));
+      if (md) setHtml(rewriteRunArtifactImages(md.render(text)));
     })();
     return () => {
       cancelled = true;
     };
   }, [text]);
   return html;
+}
+
+// Rewrite <img src="..."> for image paths under .pdh-flow/runs/ so the
+// browser fetches them via the scoped run-file endpoint instead of
+// hitting the dev server with a relative path that would 404.
+//
+// Agents save provider screenshots to
+// `.pdh-flow/runs/<run>/steps/<step>/screenshots/<name>.png` and embed
+// them in ui-output.json `notes` markdown as `![caption](<that path>)`.
+// The runtime serves them through GET /api/run-file?path=<...>.
+function rewriteRunArtifactImages(html: string): string {
+  return html.replace(/<img\b([^>]*?)\bsrc="([^"]+)"([^>]*)>/g, (match, before, rawSrc, after) => {
+    if (/^(?:[a-z]+:)?\/\//i.test(rawSrc) || rawSrc.startsWith("data:") || rawSrc.startsWith("/api/")) {
+      return match;
+    }
+    const stripped = rawSrc.replace(/^(?:\.\/)+/, "");
+    if (!stripped.startsWith(".pdh-flow/runs/")) {
+      return match;
+    }
+    const rewritten = `/api/run-file?path=${encodeURIComponent(stripped)}`;
+    return `<img${before}src="${rewritten}"${after}>`;
+  });
 }
