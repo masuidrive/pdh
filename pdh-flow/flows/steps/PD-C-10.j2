@@ -30,6 +30,7 @@ PD-C-10 では、PD-C-9 までに揃った成果物 (実装・AC 裏取り表・
 - `current-note.md` に `## PD-C-10. クローズ準備` セクションを追加 / 更新し、以下を含める:
     - 作業サマリ (主な変更を 3〜5 行)
     - AC 裏取りの最終状態 (PD-C-9 の表を引用してよい)
+    - **DB 追加・変更の説明** (該当する場合のみ必須): 本 ticket で実際に行った DB 変更 (新規 / 変更されたテーブル・カラム・index・migration・seed data 等) を列挙し、forward / rollback の手順、既存データへの影響を明記する。`git diff` / migration ファイルから事実ベースで書く。DB 変更が無い場合は「DB 変更なし」と一言書く
     - 確認手順 (ユーザが自分で動作確認する方法)
     - **未解消事項の棚卸し**: 各 step の `### 未解消事項` を集約して `defer / followup / accept / info` 別に並べる。`defer` のうち target step が PD-C-10 だったものはここで結論を出す (解消済 / `accept` に降格 / `followup` に切替 のいずれか)。`followup` は ticket id (または `tbd:<slug>`) と一緒に列挙
     - チケット化候補 (将来別チケットに切るべき改善案。上の followup と重複する場合は ref を再掲)
