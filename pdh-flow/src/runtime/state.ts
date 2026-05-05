@@ -363,38 +363,6 @@ export function readProgressEvents({ repoPath, runId, limit = 50 }) {
     .slice(-limit);
 }
 
-// Find the most recent step (different from currentStepId) that emitted a
-// successful `step_finished` event before the current step's latest attempt
-// began. Used by the prompt renderer to auto-embed the immediate
-// predecessor's ui-output.json carryover fields.
-//
-// Why progress-events-derived: handles light/full variants, rerun-from,
-// repair, human-gate-blocked overrides naturally — the runtime already
-// records actual completion order in progress.jsonl. We don't need a
-// separate `previous_step_id` field on runtime.json or to invert flow.yaml
-// transitions.
-//
-// Returns the step id, or null if there's no usable predecessor (e.g. we
-// are on PD-C-1 itself, or no prior steps have completed).
-export function previousCompletedStep({ repoPath, runId, currentStepId }) {
-  if (!runId || !currentStepId) return null;
-  const events = readProgressEvents({ repoPath, runId, limit: 500 });
-  if (!events.length) return null;
-  // Walk backward; skip events for the current step (those are us, including
-  // our own prior repair/round attempts) and skip non-step_finished events.
-  // Also require the message to indicate `completed` (not failed/blocked) —
-  // a failed PD-C-7 round 1 is not a "successful predecessor".
-  for (let i = events.length - 1; i >= 0; i -= 1) {
-    const event = events[i];
-    if (event?.type !== "step_finished") continue;
-    if (!event.stepId || event.stepId === currentStepId) continue;
-    const message = typeof event.message === "string" ? event.message : "";
-    if (!/\scompleted$/.test(message)) continue;
-    return event.stepId;
-  }
-  return null;
-}
-
 export function nextStepAttempt({ stateDir, runId, stepId }) {
   const stepPath = stepDir(stateDir, runId, stepId);
   if (!existsSync(stepPath)) {

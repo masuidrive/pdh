@@ -3,10 +3,6 @@ role: planner
 mode: edit
 noteSection: PD-C-3. 計画
 commitSummary: Plan
-ui_output:
-  carryover_fields:
-    - plan_tasks
-    - per_file_context
 display:
   label: 計画
   summary: 実装方針、変更ファイル、テスト計画、リスク対応を決める。

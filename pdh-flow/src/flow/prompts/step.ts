@@ -1,10 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { stringify as yamlStringify } from "yaml";
 import { buildFlowView, getStep, nextStep, resolveSkillBodies } from "../load.ts";
 import { loadStepInterruptions, renderInterruptionsForPrompt } from "../../runtime/interruptions.ts";
-import { previousCompletedStep } from "../../runtime/state.ts";
-import { loadStepUiOutput, renderUiOutputPromptSection } from "./ui-output.ts";
+import { renderUiOutputPromptSection } from "./ui-output.ts";
 import { hasStepPrompt, renderStepPromptBody } from "./step-bodies.ts";
 import { renderTemplate } from "./template-engine.ts";
 
@@ -28,7 +26,6 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
   const reviewPlan = flowStep?.review ?? null;
   const stepBody = hasStepPrompt(step.id) ? renderStepPromptBody(step.id) : null;
   const skillBodies = resolveSkillBodies(step.role);
-  const carryover = renderCarryoverFromPredecessor({ repoPath, run, flow, step });
 
   return renderTemplate("shared/step_prompt.j2", {
     run,
@@ -38,93 +35,11 @@ export function renderStepPrompt({ repoPath, run, flow, step, interruptions = []
     interruptionLines: renderInterruptionsForPrompt(interruptions),
     stepBody,
     reviewerOutputs: reviewerOutputs ?? [],
-    carryoverBlock: carryover,
     guardLines: formatGuards(step),
     reviewSemanticsLines: renderReviewSemantics(step, reviewPlan),
     hasReviewers: Boolean(reviewPlan?.reviewers?.length),
     uiOutputLines: renderUiOutputPromptSection({ run, step })
   });
-}
-
-// Auto-embed the immediate predecessor step's `ui_output.carryover_fields`.
-//
-// Producer-side declaration only: the predecessor step yaml lists which of
-// its ui-output.json fields are clean for handoff. The current step does
-// NOT declare what it consumes — this keeps cross-step coupling out of step
-// yaml and preserves add/remove flexibility (no consumer needs touching
-// when a step is added, removed, or reordered).
-//
-// Returns null when:
-//   - no predecessor (e.g. PD-C-1 itself)
-//   - predecessor declared no carryover_fields
-//   - predecessor's ui-output.json is missing or empty
-//
-// Returns a markdown block (string) ready to inject into the prompt.
-function renderCarryoverFromPredecessor({ repoPath, run, flow, step }) {
-  if (!run?.id) return null;
-  const previousStepId = previousCompletedStep({
-    repoPath,
-    runId: run.id,
-    currentStepId: step.id
-  });
-  if (!previousStepId) return null;
-
-  let prevStep;
-  try {
-    prevStep = getStep(flow, previousStepId);
-  } catch {
-    return null;
-  }
-  const carryoverFields = prevStep?.ui_output?.carryover_fields
-    ?? prevStep?.uiOutput?.carryover_fields
-    ?? prevStep?.display?.carryover_fields
-    ?? [];
-  if (!Array.isArray(carryoverFields) || carryoverFields.length === 0) {
-    return null;
-  }
-
-  const stateDir = `${repoPath}/.pdh-flow`;
-  const prevUi = loadStepUiOutput({ stateDir, runId: run.id, stepId: previousStepId });
-  if (!prevUi) return null;
-
-  // ui-output normalization renames snake_case to camelCase for some fields.
-  // Try both shapes when extracting.
-  const slim: Record<string, unknown> = {};
-  const missing: string[] = [];
-  for (const fieldName of carryoverFields) {
-    const value = prevUi[fieldName] ?? prevUi[snakeToCamel(fieldName)];
-    if (value === undefined || value === null) {
-      missing.push(fieldName);
-      continue;
-    }
-    if (Array.isArray(value) && value.length === 0) {
-      missing.push(fieldName);
-      continue;
-    }
-    slim[fieldName] = value;
-  }
-  if (Object.keys(slim).length === 0) return null;
-
-  const dump = yamlStringify(slim, { lineWidth: 0, blockQuote: "literal", indent: 2 });
-  const lines = [
-    `## 直前ステップの引き継ぎ (${previousStepId})`,
-    "",
-    `${previousStepId} の \`ui-output.json\` から producer が指定した引き継ぎフィールドだけを抜粋しています。`,
-    "正本は `.pdh-flow/runs/<run>/steps/" + previousStepId + "/ui-output.json` です。",
-    "",
-    "```yaml",
-    dump.trimEnd(),
-    "```"
-  ];
-  if (missing.length > 0) {
-    lines.push("");
-    lines.push(`(producer が \`carryover_fields\` で宣言したが ui-output.json に書かなかった field: ${missing.join(", ")})`);
-  }
-  return lines.join("\n");
-}
-
-function snakeToCamel(name: string): string {
-  return name.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 }
 
 function formatGuards(step) {
