@@ -33,6 +33,8 @@ type Props = {
   onOpenRepoTerminal?: () => void;
   onCreate?: (slug: string) => Promise<{ slug: string }>;
   onEdit?: (ticketId: string) => void;
+  onEpicStart?: (slug: string, variant: "full" | "light") => void;
+  hasActiveRun?: boolean;
 };
 
 const STATUS_TONE: Record<string, string> = {
@@ -44,7 +46,7 @@ const STATUS_TONE: Record<string, string> = {
 
 const SLUG_RE = /^[a-z][a-z0-9-]{0,63}$/;
 
-export function TicketChooser({ tickets, pendingRequests, dirty, statusLines, currentBranch, epics: epicsProp, repoPath, tab: tabProp, onTabChange, onStart, onForceStart, onOpenTerminal, onOpenRepoTerminal, onCreate, onEdit }: Props) {
+export function TicketChooser({ tickets, pendingRequests, dirty, statusLines, currentBranch, epics: epicsProp, repoPath, tab: tabProp, onTabChange, onStart, onForceStart, onOpenTerminal, onOpenRepoTerminal, onCreate, onEdit, onEpicStart, hasActiveRun }: Props) {
   const sorted = [...tickets].sort((a, b) => statusOrder(a.status) - statusOrder(b.status) || (a.priority ?? 99) - (b.priority ?? 99));
   const todos = sorted.filter((t) => t.status === "todo" || t.status === "doing");
   const done = sorted.filter((t) => t.status === "done" || t.status === "canceled");
@@ -178,7 +180,7 @@ export function TicketChooser({ tickets, pendingRequests, dirty, statusLines, cu
       ) : null}
 
       {tab === "epics" ? (
-        <EpicList epics={epics} currentBranch={currentBranch} repoPath={repoPath} />
+        <EpicList epics={epics} currentBranch={currentBranch} repoPath={repoPath} onEpicStart={onEpicStart} hasActiveRun={hasActiveRun} />
       ) : null}
 
       {createOpen ? (
@@ -292,7 +294,7 @@ function Section({
   );
 }
 
-function EpicList({ epics, currentBranch, repoPath }: { epics: Epic[]; currentBranch?: string; repoPath?: string }) {
+function EpicList({ epics, currentBranch, repoPath, onEpicStart, hasActiveRun }: { epics: Epic[]; currentBranch?: string; repoPath?: string; onEpicStart?: (slug: string, variant: "full" | "light") => void; hasActiveRun?: boolean }) {
   if (!epics.length) {
     return (
       <section className="space-y-2">
@@ -339,11 +341,47 @@ function EpicList({ epics, currentBranch, repoPath }: { epics: Epic[]; currentBr
                     </p>
                   ) : null}
                 </div>
-                {!onMain && !isCurrent ? (
-                  <pre className="rounded-box border border-base-300 bg-base-200 px-2 py-1 text-xs leading-5">
-                    git -C {repoPath ?? "."} switch {epic.branch}
-                  </pre>
-                ) : null}
+                <div className="flex flex-col items-end gap-2">
+                  {!epic.closedAt && onEpicStart ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={hasActiveRun || branchMissing}
+                        title={
+                          hasActiveRun
+                            ? "別の run が active のため開始できません (まず stop / discard)"
+                            : branchMissing
+                              ? `ブランチ ${epic.branch} が存在しません`
+                              : "PD-D-1〜4 の Epic close cycle を light variant で開始"
+                        }
+                        onClick={() => onEpicStart(epic.slug, "light")}
+                      >
+                        Close (light)
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        disabled={hasActiveRun || branchMissing}
+                        title={
+                          hasActiveRun
+                            ? "別の run が active のため開始できません"
+                            : branchMissing
+                              ? `ブランチ ${epic.branch} が存在しません`
+                              : "ゼロベースレビュー (PD-D-2) を含む full variant で開始"
+                        }
+                        onClick={() => onEpicStart(epic.slug, "full")}
+                      >
+                        Close (full)
+                      </button>
+                    </div>
+                  ) : null}
+                  {!onMain && !isCurrent ? (
+                    <pre className="rounded-box border border-base-300 bg-base-200 px-2 py-1 text-xs leading-5">
+                      git -C {repoPath ?? "."} switch {epic.branch}
+                    </pre>
+                  ) : null}
+                </div>
               </div>
             </li>
           );

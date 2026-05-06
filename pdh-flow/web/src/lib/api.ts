@@ -92,6 +92,14 @@ export const actions = {
     });
     return postAction(`/api/ticket/start?${params}`);
   },
+  startEpic(slug: string, opts: { variant?: "full" | "light"; force?: boolean } = {}) {
+    const params = new URLSearchParams({
+      epic: slug,
+      variant: opts.variant ?? "light",
+      force: opts.force ? "1" : "0",
+    });
+    return postAction(`/api/epic/start?${params}`);
+  },
   openTicketTerminal(ticketId: string) {
     return postAction(`/api/ticket/terminal?ticket=${encodeURIComponent(ticketId)}`);
   },

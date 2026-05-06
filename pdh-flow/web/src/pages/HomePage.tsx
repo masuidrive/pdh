@@ -37,6 +37,23 @@ export function HomePage() {
     });
   }
 
+  function startEpic(slug: string, variant: "full" | "light") {
+    setConfirm({
+      title: `Epic ${slug} を close`,
+      body:
+        variant === "light"
+          ? "PD-D-1 (Exit Criteria 確認) → PD-D-3 (UCS) → PD-D-4 (Close gate) を回します。承認後 finalize-epic で squash merge + branch 削除が走ります。"
+          : "PD-D-1 (Exit Criteria 確認) → PD-D-2 (ゼロベースレビュー) → PD-D-3 (UCS) → PD-D-4 (Close gate) を回します。承認後 finalize-epic で squash merge + branch 削除が走ります。",
+      confirmLabel: variant === "light" ? "Start (light)" : "Start (full)",
+      confirmTone: "approve",
+      onConfirm: async () => {
+        await actions.startEpic(slug, { variant });
+        const ticketLabel = `epic-${slug}`;
+        navigate(`/tickets/${encodeURIComponent(ticketLabel)}`);
+      },
+    });
+  }
+
   async function openTicketTerminal(ticketId: string) {
     try {
       const session = await flights.run(
@@ -152,6 +169,8 @@ export function HomePage() {
           onOpenRepoTerminal={openRepoTerminal}
           onCreate={async (slug) => (await actions.createTicket(slug)) as { slug: string }}
           onEdit={(id) => setTicketEditing(id)}
+          onEpicStart={startEpic}
+          hasActiveRun={Boolean(slot.state.runtime?.run?.id)}
         />
       </main>
       <ConfirmModal request={confirm} onClose={() => setConfirm(null)} />

@@ -151,7 +151,7 @@ export function startWebServer({ repoPath = process.cwd(), host = "127.0.0.1", p
 
 function handleRequest({ request, response, repo: mainRepo, assistTerminalManager }) {
   const method = request.method ?? "GET";
-  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/proposal/accept") || request.url?.startsWith("/api/gate/approve") || request.url?.startsWith("/api/ticket/start") || request.url?.startsWith("/api/ticket/terminal") || request.url?.startsWith("/api/ticket/create") || request.url?.startsWith("/api/ticket/update") || request.url?.startsWith("/api/note/frontmatter") || request.url?.startsWith("/api/run-next") || request.url?.startsWith("/api/diagnose") || request.url?.startsWith("/api/runtime/resume") || request.url?.startsWith("/api/runtime/stop") || request.url?.startsWith("/api/runtime/discard") || request.url?.startsWith("/api/repo/terminal")))) {
+  if (method !== "GET" && method !== "HEAD" && !(method === "POST" && (request.url?.startsWith("/api/assist/open") || request.url?.startsWith("/api/assist/apply") || request.url?.startsWith("/api/proposal/accept") || request.url?.startsWith("/api/gate/approve") || request.url?.startsWith("/api/ticket/start") || request.url?.startsWith("/api/ticket/terminal") || request.url?.startsWith("/api/ticket/create") || request.url?.startsWith("/api/ticket/update") || request.url?.startsWith("/api/note/frontmatter") || request.url?.startsWith("/api/run-next") || request.url?.startsWith("/api/diagnose") || request.url?.startsWith("/api/runtime/resume") || request.url?.startsWith("/api/runtime/stop") || request.url?.startsWith("/api/runtime/discard") || request.url?.startsWith("/api/repo/terminal") || request.url?.startsWith("/api/epic/start")))) {
     sendJson(response, 405, { error: "read_only_web_ui" });
     return;
   }
@@ -247,6 +247,25 @@ function handleRequest({ request, response, repo: mainRepo, assistTerminalManage
       sendJson(response, 200, approveGateFromWeb({ repo, stepId }));
     } catch (error) {
       sendApiError(response, "gate_approve_failed", error);
+    }
+    return;
+  }
+  if (url.pathname === "/api/epic/start") {
+    if (method !== "POST") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    const slug = url.searchParams.get("epic");
+    const variant = url.searchParams.get("variant") || "light";
+    const force = url.searchParams.get("force") === "1";
+    if (!slug) {
+      sendJson(response, 400, { error: "missing_epic" });
+      return;
+    }
+    try {
+      sendJson(response, 200, startEpicFromWeb({ repo, slug, variant, force }));
+    } catch (error) {
+      sendApiError(response, "epic_start_failed", error);
     }
     return;
   }
@@ -630,6 +649,28 @@ function approveGateFromWeb({ repo, stepId }) {
   return {
     status: "ok",
     approved,
+    runNextStarted: Boolean(launched.pid),
+    runNextPid: launched.pid,
+    runNextSkipped: launched.lockHolder
+  };
+}
+
+function startEpicFromWeb({ repo, slug, variant = "light", force = false }) {
+  // Parallel to startTicketFromWeb but for the Epic close cycle
+  // (flow=pdh-epic-core, started via `pdh-flow start-epic`). No
+  // worktree handling — Epic close runs on the epic branch in-place.
+  const cliArgs = ["start-epic", "--repo", repo, "--epic", slug, "--variant", variant];
+  if (force) {
+    cliArgs.push("--force-reset");
+  }
+  const started = runCliText({
+    repo,
+    args: cliArgs
+  });
+  const launched = spawnRunNextIfClear({ repo });
+  return {
+    status: "ok",
+    started,
     runNextStarted: Boolean(launched.pid),
     runNextPid: launched.pid,
     runNextSkipped: launched.lockHolder
