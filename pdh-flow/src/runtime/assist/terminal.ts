@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { spawn as spawnPty } from "node-pty";
+import { spawn as spawnPty } from "@lydell/node-pty";
 import { WebSocket, WebSocketServer } from "ws";
 
 const CLI_EXT = import.meta.url.endsWith(".js") ? ".js" : ".ts";
