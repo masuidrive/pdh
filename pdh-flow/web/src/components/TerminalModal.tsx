@@ -114,12 +114,19 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
   }, [open]);
 
   // Track visualViewport so the modal hugs the visible area when the soft keyboard appears.
+  // We expose two CSS vars:
+  //   --vvh = visible viewport height (drives modal-box height shrink)
+  //   --vvy = visible viewport offset top (drives modal-box top offset so it
+  //           stays anchored to the visible area when the browser scrolls
+  //           the layout viewport up to keep the focused input above the keyboard).
   useEffect(() => {
     if (!open) return;
     const vv = window.visualViewport;
     function update() {
       const h = vv?.height ?? window.innerHeight;
+      const y = vv?.offsetTop ?? 0;
       document.documentElement.style.setProperty("--vvh", `${h}px`);
+      document.documentElement.style.setProperty("--vvy", `${y}px`);
       fitRef.current?.fit();
     }
     update();
@@ -137,6 +144,7 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
         window.removeEventListener("resize", update);
       }
       document.documentElement.style.removeProperty("--vvh");
+      document.documentElement.style.removeProperty("--vvy");
     };
   }, [open]);
 
@@ -314,7 +322,7 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
   }
 
   return (
-    <dialog ref={dialogRef} className="modal items-center" onClose={onClose}>
+    <dialog ref={dialogRef} className="modal !items-start sm:!items-center" onClose={onClose}>
       <div
         className="modal-box w-11/12 max-w-6xl flex flex-col p-3 sm:p-4"
         style={{
@@ -322,6 +330,11 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
           maxHeight: "min(96vh, var(--vvh, 100dvh))",
           width: "min(96vw, 1280px)",
           maxWidth: "min(96vw, 1280px)",
+          // On mobile, when the soft keyboard pushes the layout viewport up,
+          // visualViewport.offsetTop becomes positive. We add that as a
+          // top margin so the modal stays anchored to the visible area's
+          // top edge instead of sliding off-screen.
+          marginTop: "var(--vvy, 0px)",
         }}
       >
         <div className="flex items-center justify-between gap-3 pb-2">
