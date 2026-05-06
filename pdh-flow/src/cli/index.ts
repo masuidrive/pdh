@@ -4001,8 +4001,8 @@ function inferHumanGateRerunRequirement({ stepId, changedFiles, noteSections, ti
       return rerunRequirement("PD-C-7", "gate edits changed implementation or tests after review", files, ticket, note);
     }
     if (ticket.some((section) => ["Why", "What", "Product AC", "Acceptance Criteria", "Implementation Notes"].includes(section))
-      || note.some((section) => ["PD-C-7. 品質検証結果", "PD-C-8. 目的妥当性確認"].includes(section))) {
-      return rerunRequirement("PD-C-7", "gate edits changed review or product-validity evidence", files, ticket, note);
+      || note.includes("PD-C-7. 品質検証結果")) {
+      return rerunRequirement("PD-C-7", "gate edits changed review evidence", files, ticket, note);
     }
     if (note.some((section) => ["PD-C-9. プロセスチェックリスト", "AC 裏取り結果"].includes(section))) {
       return rerunRequirement("PD-C-9", "gate edits changed final verification evidence", files, ticket, note);

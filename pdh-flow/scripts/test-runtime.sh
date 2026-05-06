@@ -313,8 +313,8 @@ SH
   printf '%s\n' "$path"
 }
 
-write_fake_claude_purpose_validation() {
-  local path="$TMP_ROOT/fake-claude-purpose-validation-$$.sh"
+write_fake_claude_ac_verification() {
+  local path="$TMP_ROOT/fake-claude-ac-verification-$$.sh"
   cat >"$path" <<'SH'
 #!/usr/bin/env bash
 prompt=""
@@ -332,10 +332,10 @@ if [ -n "$review_path" ]; then
   mkdir -p "$(dirname "$review_path")"
   cat >"$review_path" <<'JSON'
 {
-  "status": "No Unverified",
+  "status": "No Critical/Major",
   "summary": "every Product AC has concrete evidence and no close blocker remains",
   "findings": [],
-  "notes": "purpose validation passed"
+  "notes": "AC verification + PdM purpose check passed"
 }
 JSON
 fi
@@ -346,18 +346,18 @@ if [ -n "$ui_path" ]; then
   "summary": ["aggregator confirmed all Product ACs are verified"],
   "risks": [],
   "ready_when": ["aggregator concurs with reviewers"],
-  "notes": "aggregator purpose validation passed",
+  "notes": "aggregator AC verification passed",
   "judgement": {
-    "kind": "purpose_validation",
-    "status": "No Unverified",
-    "summary": "aggregator confirms No Unverified"
+    "kind": "ac_verification",
+    "status": "Ready",
+    "summary": "aggregator confirms Ready"
   }
 }
 JSON
 fi
 printf '%s\n' '{"type":"system","subtype":"init","session_id":"fake-session"}'
-printf '%s\n' '{"type":"assistant","message":{"content":"fake PD-C-8 review success"}}'
-printf '%s\n' '{"type":"result","subtype":"success","result":"fake PD-C-8 review success"}'
+printf '%s\n' '{"type":"assistant","message":{"content":"fake PD-C-9 review success"}}'
+printf '%s\n' '{"type":"result","subtype":"success","result":"fake PD-C-9 review success"}'
 SH
   chmod +x "$path"
   printf '%s\n' "$path"
@@ -728,7 +728,7 @@ JSON
 test_replace_note_section_with_nested_headings() {
   local repo
   repo="$(seed_repo replace-note-section-nested)"
-  node --input-type=module -e "import { replaceNoteSection, extractSection } from '$ROOT/src/repo/note.ts'; import { readFileSync } from 'node:fs'; replaceNoteSection('$repo', 'PD-C-7. 品質検証結果', 'Updated: now\\n\\n### Findings\\n\\n- clean finding\\n\\n### Review Rounds\\n\\n#### Round 1\\n\\n- ok'); const text = readFileSync('$repo/current-note.md', 'utf8'); const section = extractSection(text, 'PD-C-7. 品質検証結果'); if (!section.includes('### Findings')) throw new Error('nested heading missing'); if (!section.includes('#### Round 1')) throw new Error('nested child heading missing'); if (!text.includes('## PD-C-8. 目的妥当性確認')) throw new Error('next top-level section removed');"
+  node --input-type=module -e "import { replaceNoteSection, extractSection } from '$ROOT/src/repo/note.ts'; import { readFileSync } from 'node:fs'; replaceNoteSection('$repo', 'PD-C-7. 品質検証結果', 'Updated: now\\n\\n### Findings\\n\\n- clean finding\\n\\n### Review Rounds\\n\\n#### Round 1\\n\\n- ok'); const text = readFileSync('$repo/current-note.md', 'utf8'); const section = extractSection(text, 'PD-C-7. 品質検証結果'); if (!section.includes('### Findings')) throw new Error('nested heading missing'); if (!section.includes('#### Round 1')) throw new Error('nested child heading missing'); if (!text.includes('## PD-C-9. プロセスチェックリスト')) throw new Error('next top-level section removed');"
 }
 
 test_prompt_context() {
@@ -1066,7 +1066,7 @@ test_review_guard_auto_repair() {
   local repo run_id fake_claude fake_codex
   repo="$(seed_repo review-guard-auto-repair)"
   run_id="$(node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-9 | sed -n '1p')"
-  fake_claude="$(write_fake_claude_purpose_validation)"
+  fake_claude="$(write_fake_claude_ac_verification)"
   fake_codex="$(write_fake_codex_guard_repair)"
   CLAUDE_BIN="$fake_claude" CODEX_BIN="$fake_codex" \
     node "$ROOT/src/cli/index.ts" run-next --repo "$repo" --max-attempts 1 --retry-backoff-ms 0 --timeout-ms 5000 >"$TMP_ROOT/$run_id.review-guard-repair.txt"
@@ -1114,8 +1114,8 @@ test_auto_resume_after_idle_timeout() {
 test_stale_normalization_respects_step_finished() {
   local repo run_id
   repo="$(seed_repo stale-normalization-finished)"
-  run_id="$(node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-8 | sed -n '1p')"
-  node --input-type=module -e "import { appendProgressEvent, defaultStateDir, loadRuntime, updateRun, writeAttemptResult, latestAttemptResult } from '$ROOT/src/runtime/state.ts'; const repo = '$repo'; const runId = '$run_id'; const stateDir = defaultStateDir(repo); writeAttemptResult({ stateDir, runId, stepId: 'PD-C-8', attempt: 1, result: { provider: 'claude', status: 'running', pid: null, exitCode: null, finalMessage: null, stderr: '', timedOut: false, timeoutKind: null, signal: null, sessionId: null, resumeToken: null, rawLogPath: 'raw', startedAt: '2026-04-27T00:00:00.000Z', lastEventAt: '2026-04-27T00:00:00.000Z' } }); appendProgressEvent({ repoPath: repo, runId, stepId: 'PD-C-8', attempt: 1, type: 'step_finished', provider: 'runtime', message: 'PD-C-8 completed', payload: { finalMessage: 'done' } }); updateRun(repo, { status: 'running', current_step_id: 'PD-C-8' }); loadRuntime(repo, { normalizeStaleRunning: true, staleAfterMs: 0 }); const runtime = loadRuntime(repo); const latest = latestAttemptResult({ stateDir, runId, stepId: 'PD-C-8', provider: null }); if (runtime.run.status !== 'running') throw new Error('run status should stay running'); if (latest.status !== 'completed') throw new Error('attempt should be normalized to completed');"
+  run_id="$(node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-9 | sed -n '1p')"
+  node --input-type=module -e "import { appendProgressEvent, defaultStateDir, loadRuntime, updateRun, writeAttemptResult, latestAttemptResult } from '$ROOT/src/runtime/state.ts'; const repo = '$repo'; const runId = '$run_id'; const stateDir = defaultStateDir(repo); writeAttemptResult({ stateDir, runId, stepId: 'PD-C-9', attempt: 1, result: { provider: 'claude', status: 'running', pid: null, exitCode: null, finalMessage: null, stderr: '', timedOut: false, timeoutKind: null, signal: null, sessionId: null, resumeToken: null, rawLogPath: 'raw', startedAt: '2026-04-27T00:00:00.000Z', lastEventAt: '2026-04-27T00:00:00.000Z' } }); appendProgressEvent({ repoPath: repo, runId, stepId: 'PD-C-9', attempt: 1, type: 'step_finished', provider: 'runtime', message: 'PD-C-9 completed', payload: { finalMessage: 'done' } }); updateRun(repo, { status: 'running', current_step_id: 'PD-C-9' }); loadRuntime(repo, { normalizeStaleRunning: true, staleAfterMs: 0 }); const runtime = loadRuntime(repo); const latest = latestAttemptResult({ stateDir, runId, stepId: 'PD-C-9', provider: null }); if (runtime.run.status !== 'running') throw new Error('run status should stay running'); if (latest.status !== 'completed') throw new Error('attempt should be normalized to completed');"
 }
 
 test_supervisor_running_blocks_stale_normalization() {

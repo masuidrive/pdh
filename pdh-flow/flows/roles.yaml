@@ -62,10 +62,10 @@ roles:
     label: Aggregator
     responsibility: 並行起動した reviewer 群の review.json を dedupe・consensus 把握・blocker 抽出して step の集約 judgement を出す。reviewer の severity を集約段階で下げない。
 
-  purpose_validation:
-    kind: assist-escalation
-    label: Purpose Validation
-    responsibility: PdM 視点で「書くべきだったのに書いていないもの」「目的ずれ」を反証要求型で探す。AC 裏取り表は最終検証 step の責務として扱う。
+  pdm:
+    kind: reviewer
+    label: PdM
+    responsibility: PdM 視点で「書くべきだったのに書いていないもの」「目的ずれ」を反証要求型で探す reviewer。PD-C-9 (full) の reviewer の 1 つとして runtime が起動する。
 
   close_gate:
     kind: assist-escalation

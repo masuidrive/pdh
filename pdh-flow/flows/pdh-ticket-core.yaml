@@ -27,7 +27,6 @@ variants:
       - PD-C-5
       - PD-C-6
       - PD-C-7
-      - PD-C-8
       - PD-C-9
       - PD-C-10
 
@@ -50,8 +49,6 @@ providers:
   PD-C-6:
     full: codex
     light: codex
-  PD-C-8:
-    full: claude
   PD-C-10:
     full: claude
     light: claude
@@ -144,6 +141,14 @@ reviewers:
         focus:
           - UI / HTTP API / SDK / CLI の consumer 視点の違和感
           - エラー文言や情報ヒエラルキーの破綻
+      - role: pdm
+        provider: claude
+        count: 1
+        focus:
+          - 反証要求型: close してはいけない理由を product 視点で探す
+          - 書くべきだったのに書いていないもの (missing_implementation)
+          - 目的ずれ・AC 解釈の取り違え・product-brief 不整合 (plan_misalignment)
+          - ユーザ判断が要る論点 (needs_user_decision)
     light:
       - role: ac_verifier
         provider: claude

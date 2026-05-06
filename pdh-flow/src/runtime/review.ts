@@ -435,9 +435,6 @@ function renderReviewSection(stepId, aggregate, rounds = []) {
       lines.push("");
     }
   }
-  if (stepId === "PD-C-8") {
-    lines.push("", "### Close Check", "", "- This step is counterexample-driven. Any unverified AC or unresolved purpose gap blocks close.");
-  }
   return lines.join("\n");
 }
 
@@ -446,9 +443,6 @@ function renderReviewNotes(stepId, aggregate) {
   const parts = [];
   if (findings.length > 0) {
     parts.push(findings.map((finding) => `[${finding.severity}] ${finding.reviewerLabel}: ${finding.title}`).join("\n"));
-  }
-  if (stepId === "PD-C-8") {
-    parts.push("Counterexample-driven review. Missing AC verification or purpose fit should block close.");
   }
   return parts.join("\n\n");
 }

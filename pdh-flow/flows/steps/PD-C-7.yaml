@@ -54,5 +54,5 @@ guards:
       - No Critical/Major
       - user_accepted
 transitions:
-  on_success: PD-C-8
+  on_success: PD-C-9
   on_failure: PD-C-6

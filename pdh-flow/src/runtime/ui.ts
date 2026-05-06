@@ -23,7 +23,6 @@ const STEP_HIGHLIGHT_FALLBACKS = {
     ],
     "PD-C-6": [{ anyOf: ["step:PD-C-6", "step:PD-C-3"], limit: 4 }],
     "PD-C-7": [{ anyOf: ["step:PD-C-7", "step:PD-C-6"], limit: 4 }],
-    "PD-C-8": [{ anyOf: ["step:PD-C-8", "ac_table"], limit: 4 }],
     "PD-C-9": [{ anyOf: ["step:PD-C-9", "ac_table"], limit: 4 }],
     "PD-C-10": [{ anyOf: ["ac_table", "step:PD-C-9"], limit: 4 }],
   },
@@ -33,7 +32,7 @@ const STEP_HIGHLIGHT_FALLBACKS = {
     "PD-C-5": [{ anyOf: ["step:PD-C-3", "step:PD-C-4"], limit: 3 }],
     "PD-C-6": [{ anyOf: ["step:PD-C-6", "step:PD-C-3"], limit: 3 }],
     "PD-C-7": [{ anyOf: ["step:PD-C-7", "judgement:PD-C-7"], limit: 3 }],
-    "PD-C-8": [{ anyOf: ["step:PD-C-8", "judgement:PD-C-8", "step:PD-C-7"], limit: 3 }],
+    "PD-C-9": [{ anyOf: ["step:PD-C-9", "judgement:PD-C-9", "step:PD-C-7"], limit: 3 }],
     "PD-C-10": [{ anyOf: ["step:PD-C-10", "judgement:PD-C-10", "step:PD-C-7"], limit: 3 }],
   },
 } as const;

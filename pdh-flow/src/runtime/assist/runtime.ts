@@ -763,13 +763,10 @@ function assistCheckpoints(stepId) {
       "critical / major finding はコード修正か検証証跡で解消し、その後で同じ品質 step を再実行する。",
       "notes に直したと書いてあるだけで重大 finding を閉じず、最新の repo 状態で確認する。"
     ],
-    "PD-C-8": [
-      "足りていない outcome、足りていない coverage、まだ ticket を close すべきでない理由を探す。",
-      "実装や scope を変える必要があるなら、PD-C-6 かそれ以前の review へ戻る前提で考える。"
-    ],
     "PD-C-9": [
       "`Acceptance Criteria` の各項目には `AC 裏取り結果` で明示的な証拠が必要。",
-      "変わった user-facing surface は、unit-style の証拠だけでなく consumer 視点でも確認する。"
+      "変わった user-facing surface は、unit-style の証拠だけでなく consumer 視点でも確認する。",
+      "Full では PdM が「書くべきだったのに書いていないもの」を反証要求型で探す。Block 指摘があれば judgement を Ready にしない。"
     ],
     "PD-C-10": [
       "AC 証跡、ユーザ向け確認案内、残リスクがすべて明示できる時だけ close を提案する。",

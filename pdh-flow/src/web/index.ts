@@ -1395,7 +1395,7 @@ function buildOverview({ runtime, variant, steps }) {
     { id: "start", label: "Start", title: "開始", stepIds: [] },
     { id: "plan", label: "Plan", title: "計画", stepIds: variant === "full" ? ["PD-C-3", "PD-C-4", "PD-C-5"] : ["PD-C-3", "PD-C-5"] },
     { id: "implement", label: "Build", title: "実装", stepIds: ["PD-C-6"] },
-    { id: "review", label: "Review", title: "検証", stepIds: variant === "full" ? ["PD-C-7", "PD-C-8", "PD-C-9"] : ["PD-C-7", "PD-C-9"] },
+    { id: "review", label: "Review", title: "検証", stepIds: ["PD-C-7", "PD-C-9"] },
     { id: "close", label: "Close", title: "完了承認", stepIds: ["PD-C-10"] },
     { id: "done", label: "End", title: "完了", stepIds: [] }
   ];
@@ -2177,7 +2177,7 @@ function collectPromptPayload({ repo, stepId }) {
   const variant = run.flow_variant ?? "full";
   const redactor = createRedactor({ repoPath: repo });
   const interruptions = loadStepInterruptions({ stateDir: runtime.stateDir, runId: run.id, stepId });
-  // Steps outside the active variant (e.g. PD-C-4 / PD-C-8 during a
+  // Steps outside the active variant (e.g. PD-C-4 during a
   // `light` run) won't resolve in the current view; fall back to `full`
   // so we can still preview their prompts.
   const reviewPlan = resolveStepReviewPlan(flow, variant, stepId)
@@ -2742,7 +2742,7 @@ function rerunLabelFromStepId(stepId) {
   if (stepId === "PD-C-4") {
     return "レビューやり直し";
   }
-  if (stepId === "PD-C-7" || stepId === "PD-C-8" || stepId === "PD-C-9") {
+  if (stepId === "PD-C-7" || stepId === "PD-C-9") {
     return "検証やり直し";
   }
   return `${stepId || "前の step"} からやり直し`;

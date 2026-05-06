@@ -13,15 +13,16 @@ review:
   defaultRerunStep: PD-C-6
 display:
   label: 最終検証
-  summary: テストと AC 裏取り表で、完了判断に必要な証跡を揃える。
-  userAction: deferred / unverified の扱いを確認する。
+  summary: テストと AC 裏取り表で、完了判断に必要な証跡を揃える。Full では PdM が反証要求型で目的妥当性も確認する。
+  userAction: deferred / unverified の扱いと、PdM が出した目的ずれ / 抜け漏れ指摘 (full のみ) を確認する。
   viewer: 完了確認者
-  decision: AC 裏取りと最終検証の証跡が揃っているかを判断する。
+  decision: AC 裏取り・最終検証の証跡 + 目的妥当性 (full) が揃っているかを判断する。
   mustShow:
     - AC table
     - verify 結果
     - 外部 surface の確認結果
     - deferred / unverified の扱い
+    - PdM の目的妥当性所見 (full のみ; missing_implementation / plan_misalignment / needs_user_decision)
   omit:
     - 古い review round の全履歴
 prompt:

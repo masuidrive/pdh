@@ -18,7 +18,6 @@ display:
   readTicketHeading: "## Product AC"
   readNoteHeadings:
     - "## PD-C-9. AC 裏取り結果"
-    - "## PD-C-8. 目的妥当性確認"
     - "## PD-C-7. 品質検証結果"
   mustShow:
     - 作業サマリ (agent 集約)
