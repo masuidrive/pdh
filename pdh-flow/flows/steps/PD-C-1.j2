@@ -62,9 +62,9 @@ ticket と上位 docs / 関連ドキュメントの整合をレビューする:
 - **product_brief**:
     - `status`: `aligned` / `conflict` / `not_referenced`
     - `note`: conflict / not_referenced ならその内容を一行 (例: `product-brief.md` の `2**10` 未対応記述と AC が矛盾)
-- **current_epic** (リポジトリに `current-epic.md` がある場合のみ):
+- **current_epic** (ticket frontmatter `epic:` フィールドが指す Epic file がある場合のみ。`epics/<slug>.md` または `epics/done/<slug>/index.md` を参照):
     - `status`: `aligned` / `conflict` / `none`
-    - `note`: conflict / none の理由
+    - `note`: conflict なら ticket AC と Epic Outcome / Scope の食い違いを一行で / none なら ticket frontmatter に `epic:` が無い旨
 - **related_past_tickets**: `tickets/done/` から **参照すべき** 過去チケットを列挙
     - `id`: 過去 ticket のスラグ (例: `260430-100728-calc-divide`)
     - `relevance`: なぜ参照価値があるか (踏襲すべきパターン / 既知の罠 / API 互換性等)

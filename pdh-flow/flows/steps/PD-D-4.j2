@@ -5,7 +5,15 @@
 
 ## 役割
 
-PD-D-4 は明示的な human gate です。あなたの仕事は「ユーザが Epic を close して良いか判断するための材料」を `ui-output.json` に揃え、Epic ファイルの Close Summary を整えることだけ。frontmatter 更新 / `epics/done/` への移動 / Epic ブランチの main マージは runtime の仕事です。
+PD-D-4 は明示的な human gate です。あなたの仕事は「ユーザが Epic を close して良いか判断するための材料」を `ui-output.json` に揃え、Epic ファイルの Close Summary を整えることだけ。
+
+承認後の以下は **runtime の専管 (`pdh-flow finalize-epic` が実行)** で、agent はこれらに触らない:
+
+- frontmatter に `closed_at` / `zero_base_reviewed` を書き込み
+- `epics/<slug>.md` を `epics/done/<slug>/index.md` へ移動 (PD-D-3 の verification.md / screenshots と同じディレクトリに集約)
+- `epics/done/<slug>/screenshots/` 配下の PNG/JPG を WebP q80 へ自動圧縮 (長辺 1280px に resize、原本削除)
+- Epic ブランチ系 (`branch: epic/<slug>`): epic branch で commit → main へ `git merge --squash` → `git branch -d epic/<slug>` (local) → `git push origin --delete epic/<slug>` (remote、`--no-delete-remote` で skip 可)
+- main 直系 (`branch: main`): main で commit + push (branch 操作なし)
 
 ## Close Summary に含める内容
 
@@ -31,7 +39,6 @@ PD-D-4 は明示的な human gate です。あなたの仕事は「ユーザが 
 
 ## やらないこと
 
-- Epic frontmatter に `closed_at` や `zero_base_reviewed` を自分で追加しない (runtime が更新)
-- Epic ファイルを `epics/done/` に移動しない (runtime が移動)
-- `git checkout main && git merge epic/<name>` を実行しない (runtime が実行)
+- Epic frontmatter / done 移動 / squash merge / branch 削除はすべて runtime (`pdh-flow finalize-epic`) が行う。agent は触らない (上記「役割」セクションの runtime 専管リストを参照)
+- `pdh-flow finalize-epic` / `cancel-epic` を agent が直接実行しない (PD-D-4 approve で runtime が起動する)
 - `approved` / `OK` と勝手に書いて gate を既成事実化しない

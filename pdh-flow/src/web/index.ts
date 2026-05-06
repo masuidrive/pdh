@@ -1047,7 +1047,7 @@ function collectState({ repo }: { repo: string }) {
   const redactor = createRedactor({ repoPath: repo });
   const note = runtime.note;
   const ticketText = existsSync(join(repo, "current-ticket.md")) ? readFileSync(join(repo, "current-ticket.md"), "utf8") : "";
-  const optionalDocs: AnyRecord = loadOptionalRepoDocuments(repo, redactor);
+  const optionalDocs: AnyRecord = loadOptionalRepoDocuments(repo, redactor, runtime);
   const tickets = collectTickets({ repo, redactor });
   const run = runtime.run;
   const currentStep = run?.current_step_id ? getStep(runtime.flow, run.current_step_id) : null;
@@ -1194,7 +1194,7 @@ function ticketStatus({ path, meta }) {
   return "todo";
 }
 
-function loadOptionalRepoDocuments(repo: string, redactor: (value: unknown) => string) {
+function loadOptionalRepoDocuments(repo: string, redactor: (value: unknown) => string, runtime?: AnyRecord) {
   const result: AnyRecord = {};
   const productBriefPath = join(repo, "product-brief.md");
   if (existsSync(productBriefPath)) {
@@ -1203,16 +1203,52 @@ function loadOptionalRepoDocuments(repo: string, redactor: (value: unknown) => s
       text: redactor(readFileSync(productBriefPath, "utf8"))
     };
   }
-  const epicCandidates = ["current-epic.md", "epic.md", "epic.yaml", "epic.yml"]
-    .map((name) => join(repo, name));
-  const epicPath = epicCandidates.find((candidate) => existsSync(candidate));
-  if (epicPath) {
-    result.epic = {
-      path: epicPath,
-      text: redactor(readFileSync(epicPath, "utf8"))
-    };
+  // Resolve the current epic via the active run's context:
+  //   - pdh-epic-core: ticket_id = "epic-<slug>" → use that slug directly
+  //   - pdh-ticket-core: read tickets/<id>.md frontmatter for `epic:`
+  // Then look for epics/<slug>.md (active) or epics/done/<slug>/index.md
+  // (closed). The legacy root-level current-epic.md / epic.md / epic.yaml
+  // candidates are no longer consulted — Epic data is canonical via the
+  // epics/ directory.
+  const epicSlug = resolveCurrentEpicSlug(repo, runtime);
+  if (epicSlug) {
+    const candidates = [
+      join(repo, "epics", `${epicSlug}.md`),
+      join(repo, "epics", "done", epicSlug, "index.md"),
+      join(repo, "epics", "done", `${epicSlug}.md`)
+    ];
+    const epicPath = candidates.find((candidate) => existsSync(candidate));
+    if (epicPath) {
+      result.epic = {
+        path: epicPath,
+        text: redactor(readFileSync(epicPath, "utf8"))
+      };
+    }
   }
   return result;
+}
+
+function resolveCurrentEpicSlug(repo: string, runtime?: AnyRecord): string | null {
+  const ticketLabel = runtime?.run?.ticket_id;
+  if (typeof ticketLabel !== "string" || !ticketLabel) return null;
+  // pdh-epic-core run: ticket_id is `epic-<slug>`
+  if (ticketLabel.startsWith("epic-")) {
+    return ticketLabel.slice("epic-".length) || null;
+  }
+  // pdh-ticket-core run: ticket_id is the ticket file slug. Read its
+  // frontmatter for the `epic:` field.
+  const ticketPath = join(repo, "tickets", `${ticketLabel}.md`);
+  if (!existsSync(ticketPath)) return null;
+  try {
+    const text = readFileSync(ticketPath, "utf8");
+    const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/u.exec(text);
+    if (!match) return null;
+    const meta = parseYaml(match[1]) ?? {};
+    const slug = typeof meta.epic === "string" ? meta.epic.trim().replace(/\.md$/u, "") : "";
+    return slug || null;
+  } catch {
+    return null;
+  }
 }
 
 function buildVariantState({ repo, runtime, variant, history, events, redactor, noteBody, ticketText, ac }) {

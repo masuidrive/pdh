@@ -14,7 +14,7 @@ display:
     - チケット解釈 (reading / in_scope / out_of_scope / success_definition)
     - 未決事項とその仮定 (need_user_decision の有無)
     - 不足情報 (blocker / nice-to-have)
-    - docs 整合性 (product-brief / current-epic / related past tickets)
+    - docs 整合性 (product-brief / 紐付け Epic / related past tickets)
     - flow variant 推奨と理由
     - team composition (default / per-step)
     - blocker risks

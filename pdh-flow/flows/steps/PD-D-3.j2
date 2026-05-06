@@ -29,6 +29,11 @@ UCS では「各 Ticket がバラバラに正しく動く」ではなく「Epic 
 - エッジケース: 空データ / 不正入力 / 長文 / 権限境界 / race condition 再現を意図的に試す
 - 検証用の一時的コード / seed 改変は許可 (認証バイパス、特殊 seed、一時 log 挿入)。検証後は revert
 - 記録は note として `epics/done/<slug>/verification.md` に残す (試した内容・見えた挙動・気になった点 + screenshot)
+- スクショ規範:
+    - 配置: `epics/done/<slug>/screenshots/<name>.png` (PNG / JPG どちらでもよい。runtime が close 時に WebP q80 へ自動圧縮し原本を削除する)
+    - 枚数: Epic Outcome 達成の証跡として最低限。**3〜5 枚目安**
+    - サイズ: agent-browser で取った原寸でよい (runtime 側で長辺 1280px に resize される)
+    - verification.md からは markdown image link で参照: `![caption](screenshots/<name>.png)` (close 後は webp に拡張子置換される)
 
 ### 問題が見つかった場合の判定フロー
 
