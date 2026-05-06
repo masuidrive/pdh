@@ -40,5 +40,8 @@ guards:
       - verified
       - user_accepted
 transitions:
-  on_success: PD-D-2
+  on_success:
+    light: PD-D-3
+    full: PD-D-2
+    default: PD-D-2
   on_failure: PD-D-1

@@ -1552,6 +1552,155 @@ test_note_frontmatter_lock_violation() {
   "
 }
 
+seed_repo_with_epic() {
+  local name="$1"
+  local repo="$TMP_ROOT/$name"
+  cp -R "$ROOT/examples/sample1" "$repo"
+  cd "$repo"
+  git init -q -b main
+  git -c user.name="pdh runtime test" -c user.email="pdh-runtime@example.invalid" add .
+  git -c user.name="pdh runtime test" -c user.email="pdh-runtime@example.invalid" commit -qm "Seed runtime fixture"
+  mkdir -p epics
+  cat >epics/test-epic.md <<'EPIC'
+---
+title: Test Epic for runtime close-flow test
+created_at: 2026-05-06T00:00:00Z
+branch: main
+---
+
+### Outcome
+
+Runtime fixture for PD-D-* + finalize-epic close-flow.
+
+### Exit Criteria
+
+- All linked tickets are closed.
+EPIC
+  git -c user.name="pdh runtime test" -c user.email="pdh-runtime@example.invalid" add epics/
+  git -c user.name="pdh runtime test" -c user.email="pdh-runtime@example.invalid" commit -qm "Add test-epic"
+  printf '%s\n' "$repo"
+}
+
+write_fake_claude_pd_d() {
+  # Generic PD-D-* fake claude. Detects step from prompt and emits
+  # the matching note section + ui-output.json. judgement.kind /
+  # status hardcoded to the success path of each step.
+  local path="$TMP_ROOT/fake-claude-pd-d-$$.sh"
+  cat >"$path" <<'SH'
+#!/usr/bin/env bash
+prompt=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-p" ]; then
+    prompt="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+ui_path="$(printf '%s\n' "$prompt" | sed -n 's/^Write valid JSON to `\([^`]*ui-output.json\)`\.$/\1/p; s/^`\([^`]*ui-output.json\)` に妥当な JSON を書く。$/\1/p' | head -1)"
+step=""
+case "$ui_path" in
+  *"/PD-D-1/"*) step="PD-D-1" ;;
+  *"/PD-D-3/"*) step="PD-D-3" ;;
+  *"/PD-D-4/"*) step="PD-D-4" ;;
+esac
+case "$step" in
+  PD-D-1)
+    section="PD-D-1. Exit Criteria 裏取り"
+    judgement_kind="exit-criteria-verification"
+    judgement_status="verified"
+    summary="1 / 1 verified"
+    ;;
+  PD-D-3)
+    section="PD-D-3. UCS テスト結果"
+    judgement_kind="ucs-test"
+    judgement_status="pass"
+    summary="UCS pass"
+    ;;
+  PD-D-4)
+    section="PD-D-4. Epic クローズ準備"
+    judgement_kind="epic-close-gate"
+    judgement_status="Ready"
+    summary="Epic Close Summary ready"
+    ;;
+  *)
+    echo "fake-claude-pd-d: unknown step (ui_path=$ui_path)" >&2
+    exit 2
+    ;;
+esac
+if [ -n "$ui_path" ]; then
+  mkdir -p "$(dirname "$ui_path")"
+  cat >"$ui_path" <<JSON
+{
+  "summary": ["$summary"],
+  "risks": [],
+  "notes": "fake $step result",
+  "judgement": {
+    "kind": "$judgement_kind",
+    "status": "$judgement_status",
+    "summary": "fake $step pass"
+  }
+}
+JSON
+fi
+if [ -f current-note.md ]; then
+  cat >>current-note.md <<NOTE
+
+## $section
+
+- fake $step note section (test fixture)
+NOTE
+fi
+printf '%s\n' '{"type":"system","subtype":"init","session_id":"fake-session"}'
+printf '%s\n' '{"type":"assistant","message":{"content":"fake '"$step"' done"}}'
+printf '%s\n' '{"type":"result","subtype":"success","result":"fake '"$step"' done"}'
+SH
+  chmod +x "$path"
+  printf '%s\n' "$path"
+}
+
+test_epic_close_full_flow() {
+  # End-to-end: start-epic → PD-D-1 → PD-D-3 → PD-D-4 (human approve)
+  # → finalizeEpicCompletedRun → finalize-epic auto-fires → epic file
+  # moved to epics/done/<slug>/index.md, main has squash commit.
+  local repo
+  repo="$(seed_repo_with_epic epic-close-full-flow)"
+  local fake
+  fake="$(write_fake_claude_pd_d)"
+
+  node "$ROOT/src/cli/index.ts" start-epic --epic test-epic --repo "$repo" --variant light >"$TMP_ROOT/epic-close.start.txt"
+  grep -q "^run-" "$TMP_ROOT/epic-close.start.txt"
+
+  # PD-D-1 (epic_verifier)
+  CLAUDE_BIN="$fake" node "$ROOT/src/cli/index.ts" run-next --repo "$repo" >"$TMP_ROOT/epic-close.pd-d-1.txt"
+  grep -q '"current_step": "PD-D-3"' "$repo/.pdh-flow/runtime.json"
+
+  # PD-D-3 (ucs_tester)
+  CLAUDE_BIN="$fake" node "$ROOT/src/cli/index.ts" run-next --repo "$repo" >"$TMP_ROOT/epic-close.pd-d-3.txt"
+  grep -q '"current_step": "PD-D-4"' "$repo/.pdh-flow/runtime.json"
+
+  # PD-D-4 (human gate): fake claude writes the gate-prep artifacts
+  CLAUDE_BIN="$fake" node "$ROOT/src/cli/index.ts" run-next --repo "$repo" >"$TMP_ROOT/epic-close.pd-d-4.txt"
+  # The run is now blocked on human approval at PD-D-4
+  grep -q '"current_step": "PD-D-4"' "$repo/.pdh-flow/runtime.json"
+
+  # Approve → run-next fires finalizeEpicCompletedRun → finalize-epic
+  node "$ROOT/src/cli/index.ts" approve --repo "$repo" --step PD-D-4 --reason ok >/dev/null
+  node "$ROOT/src/cli/index.ts" run-next --repo "$repo" >"$TMP_ROOT/epic-close.finalize.txt"
+
+  # Verify finalize-epic side effects
+  test -f "$repo/epics/done/test-epic/index.md" || {
+    echo "epics/done/test-epic/index.md not created" >&2
+    cat "$TMP_ROOT/epic-close.finalize.txt" >&2
+    return 1
+  }
+  if [ -f "$repo/epics/test-epic.md" ]; then
+    echo "epics/test-epic.md was not removed" >&2
+    return 1
+  fi
+  git -C "$repo" log --oneline | grep -q "Close epic test-epic"
+}
+
 TESTS=(
   test_frontmatter_run
   test_note_frontmatter_variant_override
@@ -1599,6 +1748,7 @@ TESTS=(
   test_assist_answer_flow
   test_assist_failed_continue
   test_web_readonly
+  test_epic_close_full_flow
 )
 
 # Worker mode: run a single test in isolation. Invoked by the orchestrator
