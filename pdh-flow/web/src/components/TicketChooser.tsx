@@ -1,9 +1,21 @@
 import { useState } from "react";
 import { useNotifications } from "../lib/notifications";
 import { useSingleFlight } from "../lib/use-single-flight";
-import type { EpicBranch, TicketEntry, TicketRequest } from "../lib/types";
+import type { Epic, TicketEntry, TicketRequest } from "../lib/types";
 
-type Tab = "active" | "archive" | "epics";
+export type Tab = "active" | "archive" | "epics";
+
+export function pathToTab(pathname: string): Tab {
+  if (pathname.startsWith("/archive")) return "archive";
+  if (pathname.startsWith("/epics")) return "epics";
+  return "active";
+}
+
+export function tabToPath(tab: Tab): string {
+  if (tab === "archive") return "/archive";
+  if (tab === "epics") return "/epics";
+  return "/";
+}
 
 type Props = {
   tickets: TicketEntry[];
@@ -11,8 +23,10 @@ type Props = {
   dirty?: boolean;
   statusLines?: string[];
   currentBranch?: string;
-  epicBranches?: EpicBranch[];
+  epics?: Epic[];
   repoPath?: string;
+  tab?: Tab;
+  onTabChange?: (tab: Tab) => void;
   onStart: (ticketId: string) => void;
   onForceStart: (ticketId: string) => void;
   onOpenTerminal: (ticketId: string) => void;
@@ -30,12 +44,17 @@ const STATUS_TONE: Record<string, string> = {
 
 const SLUG_RE = /^[a-z][a-z0-9-]{0,63}$/;
 
-export function TicketChooser({ tickets, pendingRequests, dirty, statusLines, currentBranch, epicBranches, repoPath, onStart, onForceStart, onOpenTerminal, onOpenRepoTerminal, onCreate, onEdit }: Props) {
+export function TicketChooser({ tickets, pendingRequests, dirty, statusLines, currentBranch, epics: epicsProp, repoPath, tab: tabProp, onTabChange, onStart, onForceStart, onOpenTerminal, onOpenRepoTerminal, onCreate, onEdit }: Props) {
   const sorted = [...tickets].sort((a, b) => statusOrder(a.status) - statusOrder(b.status) || (a.priority ?? 99) - (b.priority ?? 99));
   const todos = sorted.filter((t) => t.status === "todo" || t.status === "doing");
   const done = sorted.filter((t) => t.status === "done" || t.status === "canceled");
 
-  const [tab, setTab] = useState<Tab>("active");
+  const [tabFallback, setTabFallback] = useState<Tab>("active");
+  const tab = tabProp ?? tabFallback;
+  const setTab = (next: Tab) => {
+    if (onTabChange) onTabChange(next);
+    else setTabFallback(next);
+  };
   const [createOpen, setCreateOpen] = useState(false);
   const [slug, setSlug] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +62,7 @@ export function TicketChooser({ tickets, pendingRequests, dirty, statusLines, cu
   const { notify, notifyError } = useNotifications();
   const submitting = flights.isPending("ticket-create");
   const slugValid = SLUG_RE.test(slug);
-  const epics = epicBranches ?? [];
+  const epics = epicsProp ?? [];
 
   async function handleCreate() {
     if (!onCreate || !slugValid || submitting) return;
@@ -82,9 +101,9 @@ export function TicketChooser({ tickets, pendingRequests, dirty, statusLines, cu
             現在 active な flow はありません。新しい ticket を選んで開始するか、過去の done / canceled を確認できます。
           </p>
         </div>
-        {onCreate ? (
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => { setError(null); setCreateOpen(true); }}>
-            + 新規チケット
+        {onOpenRepoTerminal ? (
+          <button type="button" className="btn btn-primary btn-sm" onClick={onOpenRepoTerminal}>
+            Open Terminal
           </button>
         ) : null}
       </header>
@@ -147,7 +166,7 @@ export function TicketChooser({ tickets, pendingRequests, dirty, statusLines, cu
       {tab === "active" ? (
         <>
           <Section title="todo / doing" tickets={todos} onStart={onStart} onForceStart={onForceStart} onOpenTerminal={onOpenTerminal} onEdit={onEdit} active />
-          {!todos.length ? <p className="text-sm text-base-content/50">アクティブな ticket はありません。「+ 新規チケット」または <code>./ticket.sh new &lt;slug&gt;</code> で作成してください。</p> : null}
+          {!todos.length ? <p className="text-sm text-base-content/50">アクティブな ticket はありません。Terminal で <code>./ticket.sh new &lt;slug&gt;</code> を実行して作成してください。</p> : null}
         </>
       ) : null}
 
@@ -273,13 +292,12 @@ function Section({
   );
 }
 
-function EpicList({ epics, currentBranch, repoPath }: { epics: EpicBranch[]; currentBranch?: string; repoPath?: string }) {
+function EpicList({ epics, currentBranch, repoPath }: { epics: Epic[]; currentBranch?: string; repoPath?: string }) {
   if (!epics.length) {
     return (
       <section className="space-y-2">
         <p className="text-sm text-base-content/60">
-          Epic ブランチ (<code>epic/&lt;slug&gt;</code>) はありません。
-          terminal で <code>git checkout -b epic/&lt;slug&gt;</code> 等で作成すると、ここに並びます。
+          Epic はありません。Open Terminal から <code>epics/&lt;slug&gt;.md</code> を作成すると、ここに並びます。
         </p>
       </section>
     );
@@ -287,28 +305,41 @@ function EpicList({ epics, currentBranch, repoPath }: { epics: EpicBranch[]; cur
   return (
     <section className="space-y-3">
       <p className="text-sm text-base-content/60">
-        Epic 切り替えは現状 terminal から: <code>git switch &lt;epic-branch&gt;</code> (uncommitted があると失敗する点に注意)。
+        Epic は <code>main</code> branch の <code>epics/*.md</code> ファイルから収集しています。<code>branch:</code> frontmatter で開発ブランチ戦略 (<code>main</code> 直接 / <code>epic/&lt;slug&gt;</code> 経由) を指定します。
       </p>
       <ul className="grid gap-3">
         {epics.map((epic) => {
-          const isCurrent = currentBranch === epic.name;
+          const isCurrent = currentBranch === epic.branch;
+          const onMain = epic.branch === "main";
+          const branchMissing = !onMain && !epic.hasBranch;
           return (
-            <li key={epic.name} className="rounded-box border border-base-300 bg-base-100 p-4 shadow-sm">
+            <li key={epic.filename} className="rounded-box border border-base-300 bg-base-100 p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm">{epic.name}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold">{epic.title}</span>
+                    {epic.closedAt ? <span className="badge badge-success badge-sm">closed</span> : null}
                     {isCurrent ? <span className="badge badge-info badge-sm">current</span> : null}
+                    {branchMissing ? <span className="badge badge-warning badge-sm">branch missing</span> : null}
                   </div>
-                  {epic.lastSubject ? <p className="mt-1 text-sm text-base-content/70 break-all">{epic.lastSubject}</p> : null}
-                  <p className="mt-1 font-mono text-xs text-base-content/50">
-                    {epic.lastCommit ?? "—"}
-                    {epic.lastCommittedAt ? ` · ${epic.lastCommittedAt}` : ""}
+                  <p className="mt-1 font-mono text-xs text-base-content/50 break-all">epics/{epic.filename}</p>
+                  <p className="mt-1 text-xs text-base-content/60">
+                    branch: <code>{epic.branch}</code>
+                    {epic.createdAt ? ` · created ${epic.createdAt}` : ""}
                   </p>
+                  {epic.lastSubject ? (
+                    <p className="mt-1 text-sm text-base-content/70 break-all">{epic.lastSubject}</p>
+                  ) : null}
+                  {epic.lastCommit ? (
+                    <p className="mt-1 font-mono text-xs text-base-content/50">
+                      {epic.lastCommit}
+                      {epic.lastCommittedAt ? ` · ${epic.lastCommittedAt}` : ""}
+                    </p>
+                  ) : null}
                 </div>
-                {!isCurrent ? (
+                {!onMain && !isCurrent ? (
                   <pre className="rounded-box border border-base-300 bg-base-200 px-2 py-1 text-xs leading-5">
-                    git -C {repoPath ?? "."} switch {epic.name}
+                    git -C {repoPath ?? "."} switch {epic.branch}
                   </pre>
                 ) : null}
               </div>

@@ -2350,27 +2350,77 @@ function gitState(repo, redactor) {
     branch: firstLine(branch.stdout || branch.stderr || "unknown"),
     clean: !(status.stdout ?? "").trim(),
     statusLines: redactLines(status.stdout, redactor, 20),
-    epicBranches: listEpicBranches(repo)
+    epics: listEpics(repo)
   };
 }
 
-function listEpicBranches(repo) {
-  // We treat any local branch whose name starts with `epic/` as an epic.
-  // git for-each-ref keeps ordering stable and avoids the leading "* " /
-  // whitespace noise that `git branch` produces.
+function listEpics(repo) {
+  // The epic list is sourced from `epics/*.md` files on the main repo's
+  // working tree (which always tracks `main` in pdh-flow's setup; ticket
+  // worktrees check out feature branches and are excluded). A bare
+  // `epic/*` git branch without a corresponding file is intentionally
+  // ignored — the file is canonical.
+  const epicsDir = join(repo, "epics");
+  if (!existsSync(epicsDir)) return [];
+  let names: string[] = [];
+  try {
+    names = readdirSync(epicsDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md")
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
+  const branchInfo = collectEpicBranchInfo(repo);
+  return names.map((filename) => buildEpicFromFile({ repo, filename, branchInfo }));
+}
+
+function buildEpicFromFile({ repo, filename, branchInfo }) {
+  const fullPath = join(repo, "epics", filename);
+  let content = "";
+  try {
+    content = readFileSync(fullPath, "utf8");
+  } catch {
+    return null;
+  }
+  const frontmatter = parseEpicFrontmatter(content);
+  const branch = typeof frontmatter.branch === "string" && frontmatter.branch.trim() ? frontmatter.branch.trim() : "main";
+  const slug = filename.replace(/\.md$/, "");
+  const branchEntry = branch.startsWith("epic/") ? branchInfo.get(branch) : null;
+  return {
+    slug,
+    filename,
+    title: typeof frontmatter.title === "string" && frontmatter.title.trim() ? frontmatter.title.trim() : slug,
+    branch,
+    createdAt: typeof frontmatter.created_at === "string" ? frontmatter.created_at : null,
+    closedAt: typeof frontmatter.closed_at === "string" ? frontmatter.closed_at : null,
+    hasBranch: Boolean(branchEntry),
+    lastCommit: branchEntry?.lastCommit ?? null,
+    lastCommittedAt: branchEntry?.lastCommittedAt ?? null,
+    lastSubject: branchEntry?.lastSubject ?? ""
+  };
+}
+
+function parseEpicFrontmatter(content) {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content);
+  if (!match) return {};
+  try {
+    return parseYaml(match[1]) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function collectEpicBranchInfo(repo): Map<string, { lastCommit: string; lastCommittedAt: string; lastSubject: string }> {
   const result = runGit(repo, ["for-each-ref", "--format=%(refname:short)\t%(objectname:short)\t%(committerdate:iso-strict)\t%(subject)", "refs/heads/epic/*"]);
-  if (result.status !== 0) return [];
-  const lines = String(result.stdout || "").split(/\r?\n/).filter(Boolean);
-  return lines.map((line) => {
+  const map = new Map();
+  if (result.status !== 0) return map;
+  for (const line of String(result.stdout || "").split(/\r?\n/).filter(Boolean)) {
     const [name, sha, committedAt, subject] = line.split("\t");
-    return {
-      name: name ?? "",
-      slug: name ? name.replace(/^epic\//, "") : "",
-      lastCommit: sha ?? null,
-      lastCommittedAt: committedAt ?? null,
-      lastSubject: subject ?? ""
-    };
-  }).filter((entry) => entry.name);
+    if (!name) continue;
+    map.set(name, { lastCommit: sha ?? "", lastCommittedAt: committedAt ?? "", lastSubject: subject ?? "" });
+  }
+  return map;
 }
 
 function runGit(repo, args) {

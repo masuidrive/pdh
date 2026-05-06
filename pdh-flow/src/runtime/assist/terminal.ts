@@ -134,13 +134,13 @@ export function createAssistTerminalManager({ repoPath }) {
   }
 
   function openRepoSession() {
-    const shell = process.env.SHELL || "/bin/bash";
     return openManagedSession({
-      key: "repo:shell",
+      key: "repo:assist",
       kind: "repo",
-      title: "Repo shell",
-      command: shell,
-      args: ["-l"]
+      title: "Repo assist",
+      command: process.execPath,
+      args: [CLI_PATH, "repo-assist-open", "--repo", repoPath],
+      cwd: repoPath
     });
   }
 

@@ -11,7 +11,9 @@ import {
   markAssistSessionFinished,
   markAssistSessionStarted,
   prepareAssistSession,
+  prepareRepoAssistSession,
   prepareTicketAssistSession,
+  repoAssistSessionPath,
   ticketAssistSessionPath,
   updateLatestAssistSignal
 } from "../runtime/assist/runtime.ts";
@@ -235,6 +237,63 @@ export async function cmdTicketAssistOpen(argv) {
   markTicketAssistSessionFinished({
     repoPath: repo,
     ticketId,
+    sessionId: prepared.sessionId,
+    exitCode: exit.exitCode,
+    signal: exit.signal
+  });
+  if (exit.exitCode !== 0) {
+    process.exitCode = exit.exitCode ?? 1;
+  }
+}
+
+export async function cmdRepoAssistOpen(argv) {
+  const options = parseOptions(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  loadDotEnv();
+  const prepared = prepareRepoAssistSession({
+    repoPath: repo,
+    bare: options.bare === "true",
+    model: options.model ?? null
+  });
+  const args = buildAssistClaudeArgs({
+    prepared,
+    model: options.model ?? null,
+    bare: options.bare === "true"
+  });
+
+  if (options["prepare-only"] === "true") {
+    console.log(JSON.stringify({
+      sessionId: prepared.sessionId,
+      manifestPath: prepared.manifestPath,
+      promptPath: prepared.promptPath,
+      systemPromptPath: prepared.systemPromptPath,
+      command: [process.env.CLAUDE_BIN || "claude", ...args]
+    }, null, 2));
+    return;
+  }
+
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error("repo-assist-open needs a TTY. Use --prepare-only for non-interactive use.");
+  }
+
+  markRepoAssistSessionStarted({
+    repoPath: repo,
+    sessionId: prepared.sessionId,
+    command: [process.env.CLAUDE_BIN || "claude", ...args]
+  });
+
+  console.log(`Repo assist session: ${prepared.sessionId}`);
+  console.log(`Manifest: ${prepared.manifestPath}`);
+  console.log(`Prompt: ${prepared.promptPath}`);
+
+  const exit = await spawnAssistClaude({
+    repo,
+    args,
+    command: process.env.CLAUDE_BIN || "claude"
+  });
+
+  markRepoAssistSessionFinished({
+    repoPath: repo,
     sessionId: prepared.sessionId,
     exitCode: exit.exitCode,
     signal: exit.signal
@@ -671,6 +730,51 @@ function markTicketAssistSessionFinished({ repoPath, ticketId, sessionId, exitCo
       };
     }
   });
+}
+
+function markRepoAssistSessionStarted({ repoPath, sessionId, command }) {
+  updateRepoAssistSession({
+    repoPath,
+    sessionId,
+    mutator(session) {
+      return {
+        ...session,
+        status: "running",
+        started_at: new Date().toISOString(),
+        command
+      };
+    }
+  });
+}
+
+function markRepoAssistSessionFinished({ repoPath, sessionId, exitCode, signal = null }) {
+  updateRepoAssistSession({
+    repoPath,
+    sessionId,
+    mutator(session) {
+      return {
+        ...session,
+        status: exitCode === 0 ? "exited" : "failed",
+        finished_at: new Date().toISOString(),
+        exit_code: exitCode,
+        signal
+      };
+    }
+  });
+}
+
+function updateRepoAssistSession({ repoPath, sessionId, mutator }) {
+  const path = repoAssistSessionPath({ repoPath });
+  if (!existsSync(path)) {
+    return null;
+  }
+  const session = JSON.parse(readFileSync(path, "utf8"));
+  if (session.id !== sessionId) {
+    return session;
+  }
+  const updated = mutator(session) ?? session;
+  writeFileSync(path, JSON.stringify(updated, null, 2) + "\n");
+  return updated;
 }
 
 function updateTicketAssistSession({ repoPath, ticketId, sessionId, mutator }) {

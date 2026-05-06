@@ -8,6 +8,7 @@ import {
   cmdAssistOpen,
   cmdAssistSignal,
   cmdDeclineProposal,
+  cmdRepoAssistOpen,
   cmdTicketAssistOpen,
   cmdTicketStartRequest,
   formatProposal
@@ -228,6 +229,8 @@ try {
     await cmdAssistOpen(args);
   } else if (command === "ticket-assist-open") {
     await cmdTicketAssistOpen(args);
+  } else if (command === "repo-assist-open") {
+    await cmdRepoAssistOpen(args);
   } else if (command === "assist-signal") {
     await cmdAssistSignal(args);
   } else if (command === "diagnose") {
@@ -295,6 +298,7 @@ Usage:
   pdh-flow answer [--repo DIR] (--message TEXT | --file FILE) [--step PD-C-6]
   pdh-flow assist-open [--repo DIR] [--step PD-C-5] [--prepare-only] [--model MODEL] [--bare]
   pdh-flow ticket-assist-open [--repo DIR] --ticket TICKET [--prepare-only] [--model MODEL] [--bare] [--variant full|light]
+  pdh-flow repo-assist-open [--repo DIR] [--prepare-only] [--model MODEL] [--bare]
   pdh-flow assist-signal [--repo DIR] [--step PD-C-5] --signal propose-approve|propose-request-changes|propose-reject|propose-rerun-from|answer|continue [--reason TEXT] [--target-step PD-C-4] [--message TEXT] [--file FILE] [--no-run-next]
   pdh-flow diagnose [--repo DIR] [--step PD-C-5] [--model MODEL] [--timeout-ms MS]
   pdh-flow ticket-start-request [--repo DIR] --ticket TICKET [--variant full|light] [--reason TEXT]

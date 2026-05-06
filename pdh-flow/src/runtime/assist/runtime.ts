@@ -60,6 +60,26 @@ export function ticketAssistSessionPath({ repoPath, ticketId }) {
   return join(ticketAssistDir({ repoPath, ticketId }), "session.json");
 }
 
+export function repoAssistDir({ repoPath }) {
+  return join(repoPath, ".pdh-flow", "repo-assist");
+}
+
+export function repoAssistManifestPath({ repoPath }) {
+  return join(repoAssistDir({ repoPath }), "manifest.json");
+}
+
+export function repoAssistPromptPath({ repoPath }) {
+  return join(repoAssistDir({ repoPath }), "prompt.md");
+}
+
+export function repoAssistSystemPromptPath({ repoPath }) {
+  return join(repoAssistDir({ repoPath }), "system-prompt.txt");
+}
+
+export function repoAssistSessionPath({ repoPath }) {
+  return join(repoAssistDir({ repoPath }), "session.json");
+}
+
 export function ticketStartRequestsDir({ repoPath }) {
   return join(repoPath, ".pdh-flow", "ticket-assist", "requests");
 }
@@ -293,6 +313,109 @@ export function prepareTicketAssistSession({ repoPath, ticketId, bare = false, m
     wrappers,
     allowedSignals: []
   };
+}
+
+export function prepareRepoAssistSession({ repoPath, bare = false, model = null }) {
+  const dir = repoAssistDir({ repoPath });
+  mkdirSync(dir, { recursive: true });
+
+  const sessionId = createAssistSessionId();
+  const readFirst = [
+    existsSync(join(repoPath, "product-brief.md")) ? "./product-brief.md" : null,
+    existsSync(join(repoPath, "AGENTS.md")) ? "./AGENTS.md" : null,
+    existsSync(join(repoPath, "docs/product-delivery-hierarchy.md")) ? "./docs/product-delivery-hierarchy.md" : null
+  ].filter(Boolean);
+  const ticketUsage = captureTicketScriptUsage(repoPath);
+  const epicsList = listEpics(repoPath);
+  const ticketsList = listActiveTickets(repoPath);
+
+  const systemPrompt = renderTemplate("shared/repo_assist_system.j2").replace(/\n+$/, "");
+  const prompt = renderTemplate("shared/repo_assist_body.j2", {
+    repoPath,
+    readFirst,
+    ticketUsage,
+    epicsList,
+    ticketsList
+  });
+
+  const manifest = {
+    generated_at: new Date().toISOString(),
+    session_id: sessionId,
+    kind: "repo",
+    repo_path: repoPath,
+    read_first: readFirst,
+    launch: {
+      provider: "claude",
+      bare,
+      model: model || null
+    }
+  };
+
+  const manifestPath = repoAssistManifestPath({ repoPath });
+  const promptPath = repoAssistPromptPath({ repoPath });
+  const systemPromptPath = repoAssistSystemPromptPath({ repoPath });
+  const sessionPath = repoAssistSessionPath({ repoPath });
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  writeFileSync(promptPath, prompt);
+  writeFileSync(systemPromptPath, `${systemPrompt.trimEnd()}\n`);
+  writeFileSync(sessionPath, JSON.stringify({
+    id: sessionId,
+    kind: "repo",
+    provider: "claude",
+    status: "prepared",
+    repo_path: repoPath,
+    bare,
+    model: model || null,
+    manifest_path: manifestPath,
+    prompt_path: promptPath,
+    system_prompt_path: systemPromptPath,
+    created_at: new Date().toISOString(),
+    started_at: null,
+    finished_at: null,
+    exit_code: null,
+    signal: null
+  }, null, 2) + "\n");
+
+  return {
+    sessionId,
+    manifest,
+    manifestPath,
+    prompt,
+    promptPath,
+    systemPrompt,
+    systemPromptPath,
+    sessionPath,
+    wrappers: {},
+    allowedSignals: []
+  };
+}
+
+function listEpics(repoPath) {
+  const dir = join(repoPath, "epics");
+  if (!existsSync(dir)) return "";
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith(".md"))
+      .map((e) => `  - epics/${e.name}`)
+      .sort();
+    return entries.join("\n");
+  } catch {
+    return "";
+  }
+}
+
+function listActiveTickets(repoPath) {
+  const dir = join(repoPath, "tickets");
+  if (!existsSync(dir)) return "";
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith(".md") && !e.name.endsWith("-note.md"))
+      .map((e) => `  - tickets/${e.name}`)
+      .sort();
+    return entries.join("\n");
+  } catch {
+    return "";
+  }
 }
 
 export function markAssistSessionStarted({ stateDir, runId, stepId, sessionId, command }) {

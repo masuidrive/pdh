@@ -314,12 +314,12 @@ export function TerminalModal({ open, stepId, ticketId, sessionId: providedSessi
   }
 
   return (
-    <dialog ref={dialogRef} className="modal items-start" onClose={onClose}>
+    <dialog ref={dialogRef} className="modal items-center" onClose={onClose}>
       <div
         className="modal-box w-11/12 max-w-6xl flex flex-col p-3 sm:p-4"
         style={{
-          height: "var(--vvh, 100dvh)",
-          maxHeight: "var(--vvh, 100dvh)",
+          height: "min(96vh, var(--vvh, 100dvh))",
+          maxHeight: "min(96vh, var(--vvh, 100dvh))",
           width: "min(96vw, 1280px)",
           maxWidth: "min(96vw, 1280px)",
         }}

@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAppState } from "../lib/use-app-state";
 import { Navbar } from "../components/Navbar";
-import { TicketChooser } from "../components/TicketChooser";
+import { TicketChooser, pathToTab, tabToPath } from "../components/TicketChooser";
 import { TicketEditModal } from "../components/TicketEditModal";
 import { TerminalModal } from "../components/TerminalModal";
 import { ConfirmModal, type ConfirmRequest } from "../components/ConfirmModal";
@@ -13,6 +13,8 @@ import { useSingleFlight } from "../lib/use-single-flight";
 export function HomePage() {
   const slot = useAppState(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const tab = pathToTab(location.pathname);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [ticketEditing, setTicketEditing] = useState<string | null>(null);
   const [terminalTicket, setTerminalTicket] = useState<{ ticketId: string; sessionId: string } | null>(null);
@@ -140,8 +142,10 @@ export function HomePage() {
           dirty={slot.state.git?.clean === false}
           statusLines={slot.state.git?.statusLines}
           currentBranch={slot.state.git?.branch}
-          epicBranches={slot.state.git?.epicBranches}
+          epics={slot.state.git?.epics}
           repoPath={slot.state.repo}
+          tab={tab}
+          onTabChange={(next) => navigate(tabToPath(next))}
           onStart={(id) => startTicket(id, false)}
           onForceStart={(id) => startTicket(id, true)}
           onOpenTerminal={openTicketTerminal}

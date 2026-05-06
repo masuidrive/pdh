@@ -241,12 +241,17 @@ export type GitInfo = {
   branch?: string;
   clean?: boolean;
   statusLines?: string[];
-  epicBranches?: EpicBranch[];
+  epics?: Epic[];
 };
 
-export type EpicBranch = {
-  name: string;
+export type Epic = {
   slug: string;
+  filename: string;
+  title: string;
+  branch: string;
+  createdAt?: string | null;
+  closedAt?: string | null;
+  hasBranch: boolean;
   lastCommit?: string | null;
   lastCommittedAt?: string | null;
   lastSubject?: string;

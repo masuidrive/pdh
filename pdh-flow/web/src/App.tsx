@@ -9,6 +9,8 @@ export function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/archive" element={<HomePage />} />
+          <Route path="/epics" element={<HomePage />} />
           <Route path="/tickets/:name" element={<TicketPage />} />
           <Route path="*" element={<HomePage />} />
         </Routes>
