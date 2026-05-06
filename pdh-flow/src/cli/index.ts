@@ -3986,12 +3986,10 @@ function inferHumanGateRerunRequirement({ stepId, changedFiles, noteSections, ti
     return null;
   }
   if (stepId === "PD-C-5") {
-    if (note.some((section) => ["PD-C-2. 調査結果", "Discoveries"].includes(section))) {
-      return rerunRequirement("PD-C-2", "gate edits changed investigation evidence", files, ticket, note);
-    }
     if (ticket.some((section) => ["Why", "What", "Product AC", "Acceptance Criteria", "Implementation Notes"].includes(section))
-      || note.includes("PD-C-3. 計画")) {
-      return rerunRequirement("PD-C-3", "gate edits changed ticket intent or implementation plan", files, ticket, note);
+      || note.includes("PD-C-3. 調査と計画")
+      || note.includes("Discoveries")) {
+      return rerunRequirement("PD-C-3", "gate edits changed ticket intent, investigation, or implementation plan", files, ticket, note);
     }
     if (signalFiles.length > 0 || note.includes("PD-C-4. 計画レビュー結果")) {
       return rerunRequirement("PD-C-4", "gate edits changed reviewable material before implementation starts", files, ticket, note);

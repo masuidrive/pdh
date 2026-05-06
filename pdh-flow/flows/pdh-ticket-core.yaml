@@ -22,7 +22,6 @@ variants:
     initial: PD-C-1
     sequence:
       - PD-C-1
-      - PD-C-2
       - PD-C-3
       - PD-C-4
       - PD-C-5
@@ -42,8 +41,6 @@ providers:
   PD-C-1:
     full: claude
     light: claude
-  PD-C-2:
-    full: codex
   PD-C-3:
     full: codex
     light: codex

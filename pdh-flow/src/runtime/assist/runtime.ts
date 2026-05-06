@@ -742,13 +742,10 @@ function assistStatusGuidance({ status, stepId, hasBlockedGuards }) {
 
 function assistCheckpoints(stepId) {
   const checkpoints = {
-    "PD-C-2": [
-      "調査を閉じる前に、コード、テスト、外部 surface、docs、example をまたいだ blast radius を確認する。",
-      "PD-C-3 が同じ repository walk を繰り返さずに計画できるよう、具体的な finding と risk を記録する。"
-    ],
     "PD-C-3": [
+      "計画前にコード、テスト、外部 surface、docs、example をまたいだ blast radius を確認する。",
       "計画に具体的なファイル、ファイル別コンテキスト、設計判断、テスト、実環境検証手順が書かれているか確認する。",
-      "PD-C-2 の懸念が曖昧な注意書きのまま残らず、明示的に扱われていることを確認する。"
+      "調査で見つけた懸念が曖昧な注意書きのまま残らず、計画で明示的に扱われていることを確認する。"
     ],
     "PD-C-4": [
       "その計画が ticket の目的を満たし、ローカルパターンに従い、信頼できる検証経路を持つか確認する。",

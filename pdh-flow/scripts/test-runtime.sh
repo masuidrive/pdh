@@ -666,8 +666,8 @@ test_nested_section_guard() {
   local repo
   repo="$(seed_repo nested-section-guard)"
   node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-3 >/dev/null
-  node --input-type=module -e "import { replaceNoteSection } from '$ROOT/src/repo/note.ts'; replaceNoteSection('$repo', 'PD-C-3. 計画', '### 実装方針\\n\\n- nested plan detail\\n\\n### テスト計画\\n\\n- nested verification detail');"
-  node --input-type=module -e "import { evaluateGuard } from '$ROOT/src/flow/guards/index.ts'; const result = evaluateGuard({ id: 'plan-recorded', type: 'note_section_updated', path: 'current-note.md', section: 'PD-C-3. 計画' }, { repoPath: '$repo' }); console.log(JSON.stringify(result));" >"$TMP_ROOT/nested-section-guard.json"
+  node --input-type=module -e "import { replaceNoteSection } from '$ROOT/src/repo/note.ts'; replaceNoteSection('$repo', 'PD-C-3. 調査と計画', '### 実装方針\\n\\n- nested plan detail\\n\\n### テスト計画\\n\\n- nested verification detail');"
+  node --input-type=module -e "import { evaluateGuard } from '$ROOT/src/flow/guards/index.ts'; const result = evaluateGuard({ id: 'plan-recorded', type: 'note_section_updated', path: 'current-note.md', section: 'PD-C-3. 調査と計画' }, { repoPath: '$repo' }); console.log(JSON.stringify(result));" >"$TMP_ROOT/nested-section-guard.json"
   grep -q '"status":"passed"' "$TMP_ROOT/nested-section-guard.json"
 }
 
@@ -678,15 +678,15 @@ test_recorded_step_commit_guard() {
   printf '\nrecorded commit test\n' >>"$repo/current-note.md"
   git -C "$repo" add current-note.md
   git -C "$repo" -c user.name="pdh runtime test" -c user.email="pdh-runtime@example.invalid" commit -m "Unrelated commit subject" >/dev/null
-  node --input-type=module -e "import { writeStepCommitRecord, loadStepCommitRecord } from '$ROOT/src/runtime/step-commit.ts'; const record = writeStepCommitRecord({ repoPath: '$repo', stateDir: '$repo/.pdh-flow', runId: 'run-test', stepId: 'PD-C-2', beforeCommit: '$before' }); if (!record?.commit) throw new Error('step commit record missing'); const loaded = loadStepCommitRecord({ stateDir: '$repo/.pdh-flow', runId: 'run-test', stepId: 'PD-C-2' }); if (!loaded?.commit) throw new Error('step commit record not reloadable');"
-  node --input-type=module -e "import { evaluateGuard } from '$ROOT/src/flow/guards/index.ts'; import { loadStepCommitRecord } from '$ROOT/src/runtime/step-commit.ts'; const stepCommit = loadStepCommitRecord({ stateDir: '$repo/.pdh-flow', runId: 'run-test', stepId: 'PD-C-2' }); const result = evaluateGuard({ id: 'step-commit', type: 'step_commit_recorded', stepCommit }, { repoPath: '$repo' }); console.log(JSON.stringify(result));" >"$TMP_ROOT/recorded-step-commit.json"
+  node --input-type=module -e "import { writeStepCommitRecord, loadStepCommitRecord } from '$ROOT/src/runtime/step-commit.ts'; const record = writeStepCommitRecord({ repoPath: '$repo', stateDir: '$repo/.pdh-flow', runId: 'run-test', stepId: 'PD-C-3', beforeCommit: '$before' }); if (!record?.commit) throw new Error('step commit record missing'); const loaded = loadStepCommitRecord({ stateDir: '$repo/.pdh-flow', runId: 'run-test', stepId: 'PD-C-3' }); if (!loaded?.commit) throw new Error('step commit record not reloadable');"
+  node --input-type=module -e "import { evaluateGuard } from '$ROOT/src/flow/guards/index.ts'; import { loadStepCommitRecord } from '$ROOT/src/runtime/step-commit.ts'; const stepCommit = loadStepCommitRecord({ stateDir: '$repo/.pdh-flow', runId: 'run-test', stepId: 'PD-C-3' }); const result = evaluateGuard({ id: 'step-commit', type: 'step_commit_recorded', stepCommit }, { repoPath: '$repo' }); console.log(JSON.stringify(result));" >"$TMP_ROOT/recorded-step-commit.json"
   grep -q '"status":"passed"' "$TMP_ROOT/recorded-step-commit.json"
 }
 
 test_step_commit_guard_fails_without_record() {
   local repo
   repo="$(seed_repo step-commit-no-record)"
-  git -C "$repo" -c user.name="pdh runtime test" -c user.email="pdh-runtime@example.invalid" commit --allow-empty -m "[PD-C-2] looks legit but no record" >/dev/null
+  git -C "$repo" -c user.name="pdh runtime test" -c user.email="pdh-runtime@example.invalid" commit --allow-empty -m "[PD-C-3] looks legit but no record" >/dev/null
   node --input-type=module -e "import { evaluateGuard } from '$ROOT/src/flow/guards/index.ts'; const result = evaluateGuard({ id: 'step-commit', type: 'step_commit_recorded' }, { repoPath: '$repo' }); console.log(JSON.stringify(result));" >"$TMP_ROOT/step-commit-no-record.json"
   grep -q '"status":"failed"' "$TMP_ROOT/step-commit-no-record.json"
   grep -q 'step-commit.json missing' "$TMP_ROOT/step-commit-no-record.json"
@@ -743,7 +743,7 @@ test_prompt_context() {
   grep -q "^# 用語" "$prompt_path"
   grep -q "ui-output.json" "$prompt_path"
   grep -q "provider ask --repo . --message" "$prompt_path"
-  grep -q "^# PD-C-3. 計画" "$prompt_path"
+  grep -q "^# PD-C-3. 調査と計画" "$prompt_path"
   if grep -q "^## current-ticket.md" "$prompt_path"; then
     echo "prompt should not inline current-ticket.md" >&2
     exit 1
@@ -1121,8 +1121,8 @@ test_stale_normalization_respects_step_finished() {
 test_supervisor_running_blocks_stale_normalization() {
   local repo run_id
   repo="$(seed_repo supervisor-running)"
-  run_id="$(node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-2 | sed -n '1p')"
-  node --input-type=module -e "import { defaultStateDir, loadRuntime, startRunSupervisor } from '$ROOT/src/runtime/state.ts'; const repo = '$repo'; const stateDir = defaultStateDir(repo); startRunSupervisor({ stateDir, repoPath: repo, runId: '$run_id', stepId: 'PD-C-2', command: 'run-next', pid: process.pid }); const runtime = loadRuntime(repo, { normalizeStaleRunning: true, staleAfterMs: 0 }); if (runtime.run.status !== 'running') throw new Error('supervisor-backed run should stay running'); if (runtime.supervisor?.status !== 'running') throw new Error('supervisor should stay running');"
+  run_id="$(node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-3 | sed -n '1p')"
+  node --input-type=module -e "import { defaultStateDir, loadRuntime, startRunSupervisor } from '$ROOT/src/runtime/state.ts'; const repo = '$repo'; const stateDir = defaultStateDir(repo); startRunSupervisor({ stateDir, repoPath: repo, runId: '$run_id', stepId: 'PD-C-3', command: 'run-next', pid: process.pid }); const runtime = loadRuntime(repo, { normalizeStaleRunning: true, staleAfterMs: 0 }); if (runtime.run.status !== 'running') throw new Error('supervisor-backed run should stay running'); if (runtime.supervisor?.status !== 'running') throw new Error('supervisor should stay running');"
 }
 
 test_supervisor_stale_without_attempt_keeps_run_running() {
@@ -1133,8 +1133,8 @@ test_supervisor_stale_without_attempt_keeps_run_running() {
   # the run stays running.
   local repo run_id
   repo="$(seed_repo supervisor-stale)"
-  run_id="$(node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-2 | sed -n '1p')"
-  node --input-type=module -e "import { defaultStateDir, loadRuntime, startRunSupervisor } from '$ROOT/src/runtime/state.ts'; const repo = '$repo'; const stateDir = defaultStateDir(repo); startRunSupervisor({ stateDir, repoPath: repo, runId: '$run_id', stepId: 'PD-C-2', command: 'run-next', pid: 999999 }); const runtime = loadRuntime(repo, { normalizeStaleRunning: true, staleAfterMs: 0 }); if (runtime.run.status !== 'running') throw new Error('stale supervisor should keep run running, not fail it (got ' + runtime.run.status + ')'); if (runtime.supervisor?.status !== 'stale') throw new Error('supervisor should be marked stale');"
+  run_id="$(node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-3 | sed -n '1p')"
+  node --input-type=module -e "import { defaultStateDir, loadRuntime, startRunSupervisor } from '$ROOT/src/runtime/state.ts'; const repo = '$repo'; const stateDir = defaultStateDir(repo); startRunSupervisor({ stateDir, repoPath: repo, runId: '$run_id', stepId: 'PD-C-3', command: 'run-next', pid: 999999 }); const runtime = loadRuntime(repo, { normalizeStaleRunning: true, staleAfterMs: 0 }); if (runtime.run.status !== 'running') throw new Error('stale supervisor should keep run running, not fail it (got ' + runtime.run.status + ')'); if (runtime.supervisor?.status !== 'stale') throw new Error('supervisor should be marked stale');"
 }
 
 test_supervisor_stale_with_running_attempt_abandons_attempt() {
@@ -1143,8 +1143,8 @@ test_supervisor_stale_with_running_attempt_abandons_attempt() {
   # run stays running so the next run-next call spawns attempt N+1.
   local repo run_id
   repo="$(seed_repo supervisor-stale-running-attempt)"
-  run_id="$(node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-2 | sed -n '1p')"
-  node --input-type=module -e "import { defaultStateDir, latestAttemptResult, loadRuntime, startRunSupervisor, updateRun, writeAttemptResult } from '$ROOT/src/runtime/state.ts'; const repo = '$repo'; const runId = '$run_id'; const stateDir = defaultStateDir(repo); writeAttemptResult({ stateDir, runId, stepId: 'PD-C-2', attempt: 1, result: { provider: 'codex', status: 'running', pid: null, exitCode: null, finalMessage: null, stderr: '', timedOut: false, timeoutKind: null, signal: null, sessionId: null, resumeToken: null, rawLogPath: 'raw', startedAt: '2026-04-27T00:00:00.000Z', lastEventAt: '2026-04-27T00:00:00.000Z' } }); updateRun(repo, { status: 'running', current_step_id: 'PD-C-2' }); startRunSupervisor({ stateDir, repoPath: repo, runId, stepId: 'PD-C-2', command: 'run-next', pid: 999999 }); const runtime = loadRuntime(repo, { normalizeStaleRunning: true, staleAfterMs: 0 }); if (runtime.run.status !== 'running') throw new Error('run should stay running so the next run-next can re-spawn (got ' + runtime.run.status + ')'); const attempt = latestAttemptResult({ stateDir, runId, stepId: 'PD-C-2', provider: 'codex' }); if (attempt.status !== 'abandoned') throw new Error('in-flight attempt should be marked abandoned (got ' + attempt.status + ')');"
+  run_id="$(node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-3 | sed -n '1p')"
+  node --input-type=module -e "import { defaultStateDir, latestAttemptResult, loadRuntime, startRunSupervisor, updateRun, writeAttemptResult } from '$ROOT/src/runtime/state.ts'; const repo = '$repo'; const runId = '$run_id'; const stateDir = defaultStateDir(repo); writeAttemptResult({ stateDir, runId, stepId: 'PD-C-3', attempt: 1, result: { provider: 'codex', status: 'running', pid: null, exitCode: null, finalMessage: null, stderr: '', timedOut: false, timeoutKind: null, signal: null, sessionId: null, resumeToken: null, rawLogPath: 'raw', startedAt: '2026-04-27T00:00:00.000Z', lastEventAt: '2026-04-27T00:00:00.000Z' } }); updateRun(repo, { status: 'running', current_step_id: 'PD-C-3' }); startRunSupervisor({ stateDir, repoPath: repo, runId, stepId: 'PD-C-3', command: 'run-next', pid: 999999 }); const runtime = loadRuntime(repo, { normalizeStaleRunning: true, staleAfterMs: 0 }); if (runtime.run.status !== 'running') throw new Error('run should stay running so the next run-next can re-spawn (got ' + runtime.run.status + ')'); const attempt = latestAttemptResult({ stateDir, runId, stepId: 'PD-C-3', provider: 'codex' }); if (attempt.status !== 'abandoned') throw new Error('in-flight attempt should be marked abandoned (got ' + attempt.status + ')');"
 }
 
 test_supervisor_stale_after_completed_attempt_keeps_running() {
@@ -1183,7 +1183,7 @@ test_force_reset_creates_archive_tag() {
   local repo
   repo="$(seed_repo force-reset-archive)"
   node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-3 >/dev/null
-  node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-2 --force-reset >"$TMP_ROOT/force-reset.out"
+  node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-3 --force-reset >"$TMP_ROOT/force-reset.out"
   grep -q "Archived prior run state under git tag" "$TMP_ROOT/force-reset.out"
   git -C "$repo" tag --list | grep -q "^pdh-flow-archive/runtime-test/.*-PD-C-3$"
 }
@@ -1204,8 +1204,8 @@ test_step_recovery_tag() {
 test_pdh_stop_marks_user_stopped() {
   local repo
   repo="$(seed_repo pdh-stop)"
-  node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-2 >/dev/null
-  node --input-type=module -e "import { defaultStateDir, startRunSupervisor } from '$ROOT/src/runtime/state.ts'; startRunSupervisor({ stateDir: defaultStateDir('$repo'), repoPath: '$repo', runId: 'placeholder', stepId: 'PD-C-2', command: 'run-next', pid: process.pid });"
+  node "$ROOT/src/cli/index.ts" run --repo "$repo" --ticket runtime-test --no-ticket-start --variant full --start-step PD-C-3 >/dev/null
+  node --input-type=module -e "import { defaultStateDir, startRunSupervisor } from '$ROOT/src/runtime/state.ts'; startRunSupervisor({ stateDir: defaultStateDir('$repo'), repoPath: '$repo', runId: 'placeholder', stepId: 'PD-C-3', command: 'run-next', pid: process.pid });"
   node "$ROOT/src/cli/index.ts" stop --repo "$repo" --reason "user requested" >"$TMP_ROOT/pdh-stop.json"
   grep -q '"status": "stopped"' "$TMP_ROOT/pdh-stop.json"
   grep -q '"staleReason": "user_stopped"' "$repo/.pdh-flow/runtime-supervisor.json"
@@ -1671,20 +1671,13 @@ test_epic_close_full_flow() {
   node "$ROOT/src/cli/index.ts" start-epic --epic test-epic --repo "$repo" --variant light >"$TMP_ROOT/epic-close.start.txt"
   grep -q "^run-" "$TMP_ROOT/epic-close.start.txt"
 
-  # PD-D-1 (epic_verifier)
-  CLAUDE_BIN="$fake" node "$ROOT/src/cli/index.ts" run-next --repo "$repo" >"$TMP_ROOT/epic-close.pd-d-1.txt"
-  grep -q '"current_step": "PD-D-3"' "$repo/.pdh-flow/runtime.json"
-
-  # PD-D-3 (ucs_tester)
-  CLAUDE_BIN="$fake" node "$ROOT/src/cli/index.ts" run-next --repo "$repo" >"$TMP_ROOT/epic-close.pd-d-3.txt"
+  # run-next cascades through PD-D-1 → PD-D-3 → PD-D-4 in one invocation
+  # because none of those steps have a non-human gate that pauses the
+  # runtime; PD-D-4 is the first humanGate that stops cascade.
+  CLAUDE_BIN="$fake" node "$ROOT/src/cli/index.ts" run-next --repo "$repo" >"$TMP_ROOT/epic-close.cascade.txt"
   grep -q '"current_step": "PD-D-4"' "$repo/.pdh-flow/runtime.json"
 
-  # PD-D-4 (human gate): fake claude writes the gate-prep artifacts
-  CLAUDE_BIN="$fake" node "$ROOT/src/cli/index.ts" run-next --repo "$repo" >"$TMP_ROOT/epic-close.pd-d-4.txt"
-  # The run is now blocked on human approval at PD-D-4
-  grep -q '"current_step": "PD-D-4"' "$repo/.pdh-flow/runtime.json"
-
-  # Approve → run-next fires finalizeEpicCompletedRun → finalize-epic
+  # Approve → next run-next fires finalizeEpicCompletedRun → finalize-epic
   node "$ROOT/src/cli/index.ts" approve --repo "$repo" --step PD-D-4 --reason ok >/dev/null
   node "$ROOT/src/cli/index.ts" run-next --repo "$repo" >"$TMP_ROOT/epic-close.finalize.txt"
 
@@ -1698,7 +1691,10 @@ test_epic_close_full_flow() {
     echo "epics/test-epic.md was not removed" >&2
     return 1
   fi
-  git -C "$repo" log --oneline | grep -q "Close epic test-epic"
+  # `git log | grep -q` exits 141 under set -o pipefail because grep -q
+  # closes the pipe early — capture the log and grep separately.
+  log_oneline="$(git -C "$repo" log --oneline)"
+  printf '%s\n' "$log_oneline" | grep -q "Close epic test-epic"
 }
 
 TESTS=(

@@ -24,7 +24,7 @@ display:
   skipDefaultSchema: true
   approve:
     label: 着手承認
-    description: 解釈と前提に同意して flow を確定し、full なら PD-C-2 (調査) / light なら PD-C-3 (計画) に進めます。実装そのものは PD-C-6 で行います。
+    description: 解釈と前提に同意して flow を確定し、PD-C-3 (調査と計画) に進めます。実装そのものは PD-C-6 で行います。
 prompt:
   assistCheckpoints:
     - interpretation / unknowns / context_gaps / alignment / variant / team を前面に出し、人間が 30 秒で承認判断できるようにする。
@@ -39,7 +39,7 @@ guards:
 transitions:
   on_human_approved:
     light: PD-C-3
-    full: PD-C-2
-    default: PD-C-2
+    full: PD-C-3
+    default: PD-C-3
   on_human_rejected: PD-C-1
   on_human_changes_requested: PD-C-1

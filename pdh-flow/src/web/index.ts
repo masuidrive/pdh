@@ -1393,7 +1393,7 @@ function buildVariantState({ repo, runtime, variant, history, events, redactor, 
 function buildOverview({ runtime, variant, steps }) {
   const groups = [
     { id: "start", label: "Start", title: "開始", stepIds: [] },
-    { id: "plan", label: "Plan", title: "計画", stepIds: variant === "full" ? ["PD-C-2", "PD-C-3", "PD-C-4", "PD-C-5"] : ["PD-C-3", "PD-C-5"] },
+    { id: "plan", label: "Plan", title: "計画", stepIds: variant === "full" ? ["PD-C-3", "PD-C-4", "PD-C-5"] : ["PD-C-3", "PD-C-5"] },
     { id: "implement", label: "Build", title: "実装", stepIds: ["PD-C-6"] },
     { id: "review", label: "Review", title: "検証", stepIds: variant === "full" ? ["PD-C-7", "PD-C-8", "PD-C-9"] : ["PD-C-7", "PD-C-9"] },
     { id: "close", label: "Close", title: "完了承認", stepIds: ["PD-C-10"] },
@@ -2678,7 +2678,7 @@ function approveActionDescriptionForStep(stepId) {
     return "計画を承認して PD-C-6 (実装) に進めます。";
   }
   if (stepId === "PD-C-1") {
-    return "開始前チェックを承認して flow を確定し、推奨 variant の最初のステップ (full→PD-C-2 調査 / light→PD-C-3 計画) に進めます。";
+    return "開始前チェックを承認して flow を確定し、PD-C-3 (調査と計画) に進めます。";
   }
   return "この gate をそのまま通して次へ進めます。";
 }
@@ -2736,11 +2736,8 @@ function proposalAcceptText(proposal, stepId = null) {
 }
 
 function rerunLabelFromStepId(stepId) {
-  if (stepId === "PD-C-2") {
-    return "調査からやり直し";
-  }
   if (stepId === "PD-C-3") {
-    return "計画からやり直し";
+    return "調査と計画からやり直し";
   }
   if (stepId === "PD-C-4") {
     return "レビューやり直し";

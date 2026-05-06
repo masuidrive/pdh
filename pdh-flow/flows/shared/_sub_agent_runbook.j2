@@ -3,7 +3,7 @@
 {% include "shared/_concurrent_review_principle.j2" %}
 ## sub-agent の briefing は `{{ runtimeCli }} sub-agent-context` 経由で
 
-**前提**: PD-C-4 / PD-C-7 / PD-D-2 の reviewer / DA は **runtime が起動**します (lead は spawn せず aggregator として `review.json` を読むだけ)。lead が自分で spawn するのは **実装系・検証系** の sub-agent — 具体的には PD-C-2 の調査 sub-agent / PD-C-6 の Coding Engineer・QA Engineer / PD-C-8 の PdM / PD-C-9 の Review Agent (Full)・Surface Observer / PD-D-3 の QA Engineer (UCS) です。renderer はこの lead-spawn 系の briefing を統一するためのものです。
+**前提**: PD-C-4 / PD-C-7 / PD-D-2 の reviewer / DA は **runtime が起動**します (lead は spawn せず aggregator として `review.json` を読むだけ)。lead が自分で spawn するのは **実装系・検証系** の sub-agent — 具体的には PD-C-3 の調査 sub-agent (full variant の重い blast radius 走査時) / PD-C-6 の Coding Engineer・QA Engineer / PD-C-8 の PdM / PD-C-9 の Review Agent (Full)・Surface Observer / PD-D-3 の QA Engineer (UCS) です。renderer はこの lead-spawn 系の briefing を統一するためのものです。
 
 これらを spawn する時は、spawn プロンプトに **renderer のコマンドラインだけ** 書く。lead 側で context を pre-render してテキスト連結する必要はない。sub-agent が起動直後に Bash で renderer を叩き、stdout の bundle を読んでから本タスクに入る。
 
