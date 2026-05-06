@@ -391,12 +391,34 @@ export function prepareRepoAssistSession({ repoPath, bare = false, model = null 
 }
 
 function listEpics(repoPath) {
+  // Render each active Epic as one line with its slug, title, and branch
+  // policy so the assist agent can match a user request like
+  // "<epic-name> 配下に ticket 切って" against the Epic list and pick the
+  // right `epic:` slug + `base_branch:` value at the moment of ticket
+  // creation, instead of having to grep the epics/ directory afterwards.
   const dir = join(repoPath, "epics");
   if (!existsSync(dir)) return "";
   try {
     const entries = readdirSync(dir, { withFileTypes: true })
       .filter((e) => e.isFile() && e.name.endsWith(".md"))
-      .map((e) => `  - epics/${e.name}`)
+      .map((e) => {
+        const slug = e.name.replace(/\.md$/u, "");
+        let title = slug;
+        let branch = "main";
+        try {
+          const text = readFileSync(join(dir, e.name), "utf8");
+          const fm = /^---\r?\n([\s\S]*?)\r?\n---/u.exec(text);
+          if (fm) {
+            const tm = /^title:\s*(.+)$/mu.exec(fm[1]);
+            if (tm) title = tm[1].trim().replace(/^["']|["']$/gu, "");
+            const bm = /^branch:\s*(.+)$/mu.exec(fm[1]);
+            if (bm) branch = bm[1].trim().replace(/^["']|["']$/gu, "");
+          }
+        } catch {
+          // best-effort; fall back to slug + main
+        }
+        return `  - \`${slug}\` — ${title} (branch: \`${branch}\`)`;
+      })
       .sort();
     return entries.join("\n");
   } catch {

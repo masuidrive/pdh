@@ -34,6 +34,18 @@
 5. 編集後はユーザに確認、OK なら git commit (実装コードには触らない)
 6. 次のアクション (例: web UI で start) を 1〜2 行で示す
 
+## ユーザが「<Epic 名> 配下に ticket 切って」と言った時 (絶対)
+
+**必ず**以下を埋める。埋め忘れたまま commit したら検証で abort する:
+
+1. 上の Epic 一覧から該当 slug と `branch:` 値を特定する (一覧に title と branch policy を併記してある)
+2. `./ticket.sh new <slug>` で雛形作成 (slug は ticket の slug、Epic の slug ではない)
+3. 生成された `tickets/<id>.md` の frontmatter に **必ず** 以下 2 行を追加:
+   - `epic: <epic-slug>` (Epic ファイル名から `.md` を取った形。例: `260506-061500-demo-epic`)
+   - `base_branch: <epic の branch 値>` (Epic frontmatter の `branch:` を**そのままコピー**)
+4. 既存の `base_branch: default` 行は上記 (3) で上書きする (ticket.sh new が default を入れている)
+5. commit する前にユーザに最終 frontmatter を見せて、`epic` と `base_branch` の 2 行が正しいか確認する
+
 ## やらないこと
 
 - `./ticket.sh start` / `close` / `cancel` を実行しない (runtime / web UI 経由で行う)
