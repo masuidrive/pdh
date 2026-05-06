@@ -1,0 +1,53 @@
+id: PD-D-2
+role: epic_zero_base_reviewer
+mode: review
+noteSection: PD-D-2. ゼロベースレビュー
+commitSummary: Zero-base review
+judgement:
+  kind: zero-base-review
+  acceptedStatuses:
+    - no_critical_major
+    - user_accepted
+review:
+  maxRounds: 3
+  defaultRerunStep: PD-D-1
+display:
+  label: ゼロベースレビュー
+  summary: Epic 配下で実装された変更を一括して、product-brief / Epic 目的 / 既存システムとの整合性をゼロベースで再評価する。
+  userAction: Critical / Major 指摘の対応方針 (修正 / accept / future-list) を確認する。
+  viewer: 確認者
+  decision: 残課題 / リスクが close 後の運用で問題にならないかを判断する。
+  mustShow:
+    - レビュアー指摘とトリアージ結果
+    - future-list に逃がした項目の根拠
+  omit:
+    - 個別 ticket の PD-C 履歴 (各 ticket の PD-C-7 で見てる)
+prompt:
+  intent: Epic 単位で、product-brief 整合・設計の一貫性・将来 Epic への波及を再評価する。
+  passWhen:
+    - Critical / Major の指摘が無い (または明示的に user_accepted で残す)
+  onFindings:
+    - Critical → PD-D-1 (or 個別 ticket への新 follow-up) に戻して修正
+    - Major → 対応方針を note に記録して accept か defer
+    - Minor → future-list に記録
+  reviewerRules:
+    - product-brief.md / 関連 Epic / 既存実装パターンから外れた箇所を critical で指摘する。
+    - 個別 ticket レベルで既に解消済の指摘は重複させない (PD-C-7 のレビューと subjugate しない)。
+  repairRules:
+    - 修正範囲が大きい場合は、新規 ticket として切り出す提案にとどめ、ここでコードを書き換えない。
+  assistCheckpoints:
+    - レビュアーごとに最終ステータスを記録し、全員 PASS まで loop する (epic-creator skill のレビューパターン参照)。
+guards:
+  - id: zero-base-review-section
+    type: note_section_updated
+    path: current-note.md
+    section: PD-D-2. ゼロベースレビュー
+  - id: zero-base-review-accepted
+    type: judgement_status
+    artifactKind: zero-base-review
+    accepted:
+      - no_critical_major
+      - user_accepted
+transitions:
+  on_success: PD-D-3
+  on_failure: PD-D-2

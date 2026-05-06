@@ -1,0 +1,62 @@
+flow: pdh-epic-core
+version: 1
+defaults:
+  timeoutMinutes: 60
+  idleTimeoutMinutes: 5
+  maxAttempts: 2
+  reviewMaxRounds: 3
+  reviewRepairProvider: codex
+
+# Epic close cycle. Runs after all linked tickets reach tickets/done/.
+# Variants:
+#   full  — verify Exit Criteria → zero-base review → UCS → human gate
+#   light — Exit Criteria + UCS + gate (skip zero-base review)
+variants:
+  light:
+    initial: PD-D-1
+    sequence:
+      - PD-D-1
+      - PD-D-3
+      - PD-D-4
+  full:
+    initial: PD-D-1
+    sequence:
+      - PD-D-1
+      - PD-D-2
+      - PD-D-3
+      - PD-D-4
+
+providers:
+  PD-D-1:
+    full: claude
+    light: claude
+  PD-D-3:
+    full: claude
+    light: claude
+  PD-D-4:
+    full: claude
+    light: claude
+
+# PD-D-2 is the zero-base review step (full variant only). It uses the
+# review machinery (aggregator + reviewers + optional repair). For now
+# we ship a minimal team — one devil's-advocate, one critical reviewer
+# — to validate the runtime path; expand later as the workflow matures.
+reviewers:
+  PD-D-2:
+    aggregator:
+      full: claude
+    repair:
+      full: codex
+    maxInPlaceRepairs: 1
+    full:
+      - role: devils_advocate
+        provider: claude
+        count: 1
+        focus:
+          - product-brief 整合と Epic 目的への寄与
+          - 設計の一貫性 / 既存パターンとの整合
+      - role: critical_reviewer
+        provider: codex
+        count: 1
+        focus:
+          - 致命的な問題だけを短く指摘する

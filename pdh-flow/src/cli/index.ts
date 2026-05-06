@@ -15,7 +15,7 @@ import {
   formatProposal
 } from "./assist.ts";
 import { cmdDiagnose } from "./diagnose.ts";
-import { cmdCancelEpic, cmdFinalizeEpic } from "./epic.ts";
+import { cmdCancelEpic, cmdFinalizeEpic, cmdStartEpic } from "./epic.ts";
 import { cmdSubAgentContext } from "./sub-agent-context.ts";
 import {
   cmdGateSummary,
@@ -237,6 +237,8 @@ try {
     await cmdFinalizeEpic(args);
   } else if (command === "cancel-epic") {
     await cmdCancelEpic(args);
+  } else if (command === "start-epic") {
+    await cmdStartEpic(args);
   } else if (command === "assist-signal") {
     await cmdAssistSignal(args);
   } else if (command === "diagnose") {
@@ -305,6 +307,7 @@ Usage:
   pdh-flow assist-open [--repo DIR] [--step PD-C-5] [--prepare-only] [--model MODEL] [--bare]
   pdh-flow ticket-assist-open [--repo DIR] --ticket TICKET [--prepare-only] [--model MODEL] [--bare] [--variant full|light]
   pdh-flow repo-assist-open [--repo DIR] [--prepare-only] [--model MODEL] [--bare]
+  pdh-flow start-epic --epic SLUG [--repo DIR] [--variant full|light] [--start-step PD-D-2] [--force-reset]
   pdh-flow finalize-epic --epic SLUG [--repo DIR] [--dry-run] [--no-push] [--no-delete-remote] [--force]
   pdh-flow cancel-epic --epic SLUG --reason TEXT [--repo DIR] [--dry-run] [--no-push] [--no-delete-remote] [--force]
   pdh-flow assist-signal [--repo DIR] [--step PD-C-5] --signal propose-approve|propose-request-changes|propose-reject|propose-rerun-from|answer|continue [--reason TEXT] [--target-step PD-C-4] [--message TEXT] [--file FILE] [--no-run-next]

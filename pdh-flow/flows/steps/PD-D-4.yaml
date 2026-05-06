@@ -1,0 +1,54 @@
+id: PD-D-4
+role: epic_close_gate
+mode: edit
+humanGate: true
+noteSection: PD-D-4. Epic クローズ準備
+commitSummary: Epic close gate
+judgement:
+  kind: epic-close-gate
+  acceptedStatuses:
+    - Ready
+    - user_accepted
+display:
+  label: Epic クローズ承認
+  summary: Epic Close Summary を読んで close 可否を判断する human gate。承認すると runtime が pdh-flow finalize-epic を実行する。
+  userAction: Close Summary・残課題・未達 Exit Criterion・スクショを確認して Yes / No。
+  viewer: 承認者
+  decision: Epic を close してよいか。
+  mustShow:
+    - 達成 Outcome
+    - 完了 Ticket 一覧
+    - 未完了 Ticket と理由
+    - 未達 Exit Criteria (あれば)
+    - DB 追加・変更の総まとめ (該当する場合のみ必須)
+    - 残課題・リスク
+    - finalize-epic --dry-run の出力 (preflight)
+  omit:
+    - 各 ticket 個別の PD-C 履歴
+  approve:
+    label: Epic 完了
+    description: Epic Close Summary をそのまま受け入れ、runtime が finalize-epic を実行 (squash merge to main + branch 削除)。
+prompt:
+  assistCheckpoints:
+    - Epic ファイル本文の Close Summary セクションを完成させる。
+    - finalize-epic --dry-run の出力を gate-summary に貼ること (preflight)。
+    - 未達 Exit Criterion / 未閉じ ticket がある場合は Block 判定にし、対応方針を notes に記録する。
+guards:
+  - id: close-summary-recorded
+    type: note_section_updated
+    path: current-note.md
+    section: PD-D-4. Epic クローズ準備
+  - id: epic-close-gate-accepted
+    type: judgement_status
+    artifactKind: epic-close-gate
+    accepted:
+      - Ready
+      - user_accepted
+  - id: explicit-approval
+    type: human_approved
+transitions:
+  on_success: COMPLETE
+  on_failure: PD-D-3
+  on_human_approved: COMPLETE
+  on_human_rejected: PD-D-3
+  on_human_changes_requested: PD-D-3

@@ -36,6 +36,9 @@ import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { optimizeScreenshotsInDir } from "../runtime/screenshot.ts";
+import { startRun, loadRuntime } from "../runtime/state.ts";
+import { loadFlow, getInitialStep, getStep } from "../flow/load.ts";
+import { assertStepInVariant } from "./utils.ts";
 
 type EpicSource = {
   slug: string;
@@ -56,6 +59,78 @@ type LifecycleOptions = {
   noDeleteRemote: boolean;
   force: boolean;
 };
+
+// pdh-flow start-epic --epic <slug> [--variant full|light] [--repo DIR]
+//
+// Initiates a runtime-managed Epic close cycle (flow=pdh-epic-core).
+// Resolves the epic file, switches the working tree to the epic's
+// branch when the epic frontmatter says `branch: epic/<slug>`, and
+// records a fresh run in .pdh-flow/runtime.json. The first
+// `pdh-flow run-next` after this then drives PD-D-1 → … → PD-D-4.
+//
+// Limitations (intentional, can lift later):
+//   - One active run per repo: aborts if a ticket / epic run is
+//     already in progress (use --force-reset to overwrite).
+//   - The "ticket_id" field in pdh-meta is set to `epic-<slug>` so
+//     the existing ticket-shaped runtime UI/code keeps working; this
+//     value is opaque to the close machinery.
+//   - The epic branch must exist locally (we don't auto-create it).
+export async function cmdStartEpic(argv: string[]) {
+  const options = parseArgv(argv);
+  const repo = resolve(options.repo ?? process.cwd());
+  const slug = requireOption(options, "epic").trim().replace(/\.md$/u, "");
+  const variant = options.variant ?? "full";
+  const flowId = "pdh-epic-core";
+  const flow = loadFlow(flowId);
+  const startStep = options["start-step"] ?? getInitialStep(flow, variant);
+  assertStepInVariant(flow, variant, startStep);
+
+  const epic = resolveEpic(repo, slug);
+
+  // Refuse to start if a run already exists, mirroring cmdRun.
+  const runtimeBefore = loadRuntime(repo, { normalizeStaleRunning: true });
+  if (runtimeBefore.run?.id && options["force-reset"] !== "true") {
+    const activeTicket = runtimeBefore.run.ticket_id || "<unknown>";
+    const activeStep = runtimeBefore.run.current_step_id || "<unknown>";
+    const activeStatus = runtimeBefore.run.status || "<unknown>";
+    throw new Error(
+      `Active run already exists (ticket=${activeTicket}, step=${activeStep}, status=${activeStatus}). ` +
+      `Stop or complete it before starting an epic run, or pass --force-reset.`
+    );
+  }
+
+  // For epic-branch case, switch to the epic branch so the runtime
+  // operates on the right working tree. Caller is expected to have
+  // committed any pending changes (the runtime preflight rejects a
+  // dirty tree later anyway).
+  if (epic.branch !== "main") {
+    const status = runGit(repo, ["status", "--short"]);
+    if (status.stdout.trim().length > 0) {
+      throw new Error(
+        `Working tree is dirty; cannot switch to ${epic.branch}.\n${status.stdout.trim()}`
+      );
+    }
+    if (!gitBranchExists(repo, epic.branch)) {
+      throw new Error(`Epic frontmatter says branch=${epic.branch} but that branch does not exist locally.`);
+    }
+    runGitOrThrow(repo, ["switch", epic.branch], `switch to ${epic.branch}`);
+  }
+
+  const ticketLabel = `epic-${slug}`;
+  const started = startRun({
+    repoPath: repo,
+    ticket: ticketLabel,
+    variant,
+    flowId,
+    startStep
+  });
+
+  console.log(started.run.id);
+  console.log(`Epic: ${slug} (branch: ${epic.branch})`);
+  const stepObj = getStep(started.flow, started.run.current_step_id);
+  console.log(`Current step: ${stepObj.id}${stepObj.label ? ` — ${stepObj.label}` : ""}`);
+  console.log(`Next: pdh-flow run-next --repo ${repo}`);
+}
 
 export async function cmdFinalizeEpic(argv: string[]) {
   const options = parseArgv(argv);
@@ -125,29 +200,39 @@ async function runEpicLifecycle(opts: LifecycleOptions) {
 function resolveEpic(repo: string, slug: string): EpicSource {
   const slugClean = slug.trim().replace(/\.md$/u, "");
   const mainPath = join(repo, "epics", `${slugClean}.md`);
+
+  // 1. Main working tree (canonical for branch:main epics or already-merged ones)
   if (existsSync(mainPath)) {
     const text = readFileSync(mainPath, "utf8");
     const { meta, body } = splitFrontmatter(text);
     const branch = stringField(meta.branch) || "main";
     return { slug: slugClean, branch, meta, body, origin: "main", pathOnMain: mainPath };
   }
-  // Fallback: epic/<slug> branch
-  const branchName = `epic/${slugClean}`;
-  if (!gitBranchExists(repo, branchName)) {
-    throw new Error(
-      `Epic ${slugClean} not found: epics/${slugClean}.md is missing on main and ${branchName} branch does not exist.`
-    );
+
+  // 2. Scan all epic/* branches for `epics/<slug>.md`. The branch name
+  // doesn't have to match the slug (e.g. file
+  // 260506-025311-calc-web.md may live on epic/calc-web branch); the
+  // canonical link is the file slug, not the branch name.
+  const branches = listEpicBranches(repo);
+  for (const branchName of branches) {
+    const showResult = runGit(repo, ["show", `${branchName}:epics/${slugClean}.md`]);
+    if (showResult.status === 0) {
+      const { meta, body } = splitFrontmatter(showResult.stdout);
+      const branch = stringField(meta.branch) || branchName;
+      return { slug: slugClean, branch, meta, body, origin: "branch", pathOnMain: mainPath };
+    }
   }
-  const showResult = runGit(repo, ["show", `${branchName}:epics/${slugClean}.md`]);
-  if (showResult.status !== 0) {
-    throw new Error(
-      `Epic ${slugClean}: ${branchName} exists but epics/${slugClean}.md is missing on it. ` +
-      `git show stderr: ${showResult.stderr.trim()}`
-    );
-  }
-  const { meta, body } = splitFrontmatter(showResult.stdout);
-  const branch = stringField(meta.branch) || branchName;
-  return { slug: slugClean, branch, meta, body, origin: "branch", pathOnMain: mainPath };
+
+  throw new Error(
+    `Epic ${slugClean} not found: epics/${slugClean}.md is missing on main and on every epic/* branch. ` +
+    `Looked at: main, ${branches.length ? branches.join(", ") : "(no epic/* branches)"}.`
+  );
+}
+
+function listEpicBranches(repo: string): string[] {
+  const r = runGit(repo, ["for-each-ref", "--format=%(refname:short)", "refs/heads/epic/*"]);
+  if (r.status !== 0) return [];
+  return String(r.stdout || "").split(/\r?\n/).filter(Boolean);
 }
 
 // ---------------- preflight ----------------
