@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import {
   cmdAcceptProposal,
@@ -3015,6 +3016,14 @@ function resetTransitionArtifacts({ runtime, currentStepId, targetStepId, preser
 }
 
 function finalizeCompletedRun({ repo, runtime, step }) {
+  // Epic close runs go through pdh-flow finalize-epic (squash merge,
+  // branch deletion, frontmatter update). Ticket close runs go through
+  // ticket.sh close. We branch on the flow id so each path stays
+  // self-contained.
+  if (runtime.run?.flow_id === "pdh-epic-core") {
+    finalizeEpicCompletedRun({ repo, runtime, step });
+    return;
+  }
   const runId = runtime.run.id;
   const ticketId = runtime.run?.ticket_id ?? null;
   const closeCommit = commitStep({
@@ -3094,6 +3103,74 @@ function finalizeCompletedRun({ repo, runtime, step }) {
   if (closeResult.status === "ok") {
     console.log(`ticket.sh close: ${firstLine(closeResult.stdout || closeResult.stderr || "ok")}`);
   }
+  if (closeCommit.status === "committed") {
+    console.log(`close prep commit: ${closeCommit.commit}`);
+  }
+}
+
+function finalizeEpicCompletedRun({ repo, runtime, step }) {
+  const runId = runtime.run.id;
+  const ticketLabel = runtime.run?.ticket_id ?? "";
+  const epicSlug = ticketLabel.replace(/^epic-/u, "");
+  if (!epicSlug) {
+    throw new Error(
+      `pdh-epic-core run ${runId} has no resolvable epic slug (ticket_id=${ticketLabel})`
+    );
+  }
+
+  // Capture the gate-approval commit before the close mutates state.
+  const closeCommit = commitStep({
+    repoPath: repo,
+    stepId: step.id,
+    message: "Record final gate approval before epic close",
+    ticket: ticketLabel
+  });
+
+  // Spawn `pdh-flow finalize-epic --epic <slug>` so the close mechanics
+  // (squash merge / branch delete / file move / WebP optimisation) live
+  // in one place. We forward stdout/stderr to the runtime log via a
+  // progress event for traceability.
+  const cliExt = import.meta.url.endsWith(".js") ? ".js" : ".ts";
+  const cliPath = fileURLToPath(new URL(`./index${cliExt}`, import.meta.url));
+  const finalizeRes = spawnSync(
+    process.execPath,
+    [cliPath, "finalize-epic", "--epic", epicSlug, "--repo", repo],
+    { encoding: "utf8" }
+  );
+  appendProgressEvent({
+    repoPath: repo,
+    runId,
+    stepId: step.id,
+    type: finalizeRes.status === 0 ? "tool_finished" : "run_failed",
+    provider: "runtime",
+    message: finalizeRes.status === 0
+      ? `pdh-flow finalize-epic ${epicSlug}`
+      : `pdh-flow finalize-epic ${epicSlug} failed (exit ${finalizeRes.status ?? "n/a"})`,
+    payload: {
+      epicSlug,
+      exitCode: finalizeRes.status,
+      stdout: finalizeRes.stdout,
+      stderr: finalizeRes.stderr
+    }
+  });
+  if (finalizeRes.status !== 0) {
+    if (closeCommit.status === "committed") {
+      console.log(`close prep commit: ${closeCommit.commit}`);
+    }
+    throw new Error(
+      `pdh-flow finalize-epic failed for ${epicSlug}: ${(finalizeRes.stderr || finalizeRes.stdout || "unknown").trim()}`
+    );
+  }
+
+  cleanupRunArtifacts({ repoPath: repo, runId });
+  const pdh = loadPdhMeta(repo);
+  savePdhMeta(repo, {
+    ...pdh,
+    status: "completed",
+    current_step: null,
+    completed_at: new Date().toISOString()
+  });
+  console.log((finalizeRes.stdout || "").trim());
   if (closeCommit.status === "committed") {
     console.log(`close prep commit: ${closeCommit.commit}`);
   }
