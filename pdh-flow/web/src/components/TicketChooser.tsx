@@ -305,13 +305,14 @@ function EpicList({ epics, currentBranch, repoPath }: { epics: Epic[]; currentBr
   return (
     <section className="space-y-3">
       <p className="text-sm text-base-content/60">
-        Epic は <code>main</code> branch の <code>epics/*.md</code> ファイルから収集しています。<code>branch:</code> frontmatter で開発ブランチ戦略 (<code>main</code> 直接 / <code>epic/&lt;slug&gt;</code> 経由) を指定します。
+        Epic は <code>main</code> の <code>epics/*.md</code> と各 <code>epic/&lt;slug&gt;</code> branch 上の <code>epics/*.md</code> から収集しています。<code>branch:</code> frontmatter で開発ブランチ戦略 (<code>main</code> 直接 / <code>epic/&lt;slug&gt;</code> 経由) を指定します。
       </p>
       <ul className="grid gap-3">
         {epics.map((epic) => {
           const isCurrent = currentBranch === epic.branch;
           const onMain = epic.branch === "main";
           const branchMissing = !onMain && !epic.hasBranch;
+          const onlyOnBranch = epic.origin === "branch";
           return (
             <li key={epic.filename} className="rounded-box border border-base-300 bg-base-100 p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -321,6 +322,7 @@ function EpicList({ epics, currentBranch, repoPath }: { epics: Epic[]; currentBr
                     {epic.closedAt ? <span className="badge badge-success badge-sm">closed</span> : null}
                     {isCurrent ? <span className="badge badge-info badge-sm">current</span> : null}
                     {branchMissing ? <span className="badge badge-warning badge-sm">branch missing</span> : null}
+                    {onlyOnBranch ? <span className="badge badge-ghost badge-sm" title="Epic file lives on its branch, not yet on main">on branch</span> : null}
                   </div>
                   <p className="mt-1 font-mono text-xs text-base-content/50 break-all">epics/{epic.filename}</p>
                   <p className="mt-1 text-xs text-base-content/60">

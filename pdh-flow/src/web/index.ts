@@ -2355,43 +2355,71 @@ function gitState(repo, redactor) {
 }
 
 function listEpics(repo) {
-  // The epic list is sourced from `epics/*.md` files on the main repo's
-  // working tree (which always tracks `main` in pdh-flow's setup; ticket
-  // worktrees check out feature branches and are excluded). A bare
-  // `epic/*` git branch without a corresponding file is intentionally
-  // ignored — the file is canonical.
-  const epicsDir = join(repo, "epics");
-  if (!existsSync(epicsDir)) return [];
-  let names: string[] = [];
-  try {
-    names = readdirSync(epicsDir, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md")
-      .map((entry) => entry.name)
-      .sort();
-  } catch {
-    return [];
-  }
+  // Epics are sourced from `epics/*.md` files on:
+  //   1. main's working tree (canonical for branch:main epics and any
+  //      already-merged epics)
+  //   2. each `epic/*` git branch (so in-progress branch-policy epics
+  //      are visible before they merge to main)
+  // De-duped by slug — main wins when an epic file exists in both.
   const branchInfo = collectEpicBranchInfo(repo);
-  return names.map((filename) => buildEpicFromFile({ repo, filename, branchInfo }));
+  const epicsBySlug = new Map<string, ReturnType<typeof buildEpicFromText>>();
+
+  // 1. main working tree
+  const epicsDir = join(repo, "epics");
+  if (existsSync(epicsDir)) {
+    let names: string[] = [];
+    try {
+      names = readdirSync(epicsDir, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md")
+        .map((entry) => entry.name);
+    } catch { /* empty */ }
+    for (const filename of names) {
+      const fullPath = join(epicsDir, filename);
+      let content = "";
+      try { content = readFileSync(fullPath, "utf8"); } catch { continue; }
+      const epic = buildEpicFromText({ filename, content, branchInfo, origin: "main" });
+      if (epic) epicsBySlug.set(epic.slug, epic);
+    }
+  }
+
+  // 2. each epic/* branch
+  for (const branchName of branchInfo.keys()) {
+    const ls = runGit(repo, ["ls-tree", "-r", "--name-only", branchName, "--", "epics/"]);
+    if (ls.status !== 0) continue;
+    for (const path of String(ls.stdout || "").split(/\r?\n/)) {
+      if (!path) continue;
+      // Only top-level epics/<slug>.md (skip done/, README, *-note.md)
+      if (!/^epics\/[^/]+\.md$/.test(path)) continue;
+      if (path === "epics/README.md") continue;
+      const filename = path.slice("epics/".length);
+      const slug = filename.replace(/\.md$/u, "");
+      if (epicsBySlug.has(slug)) continue; // main wins
+      const show = runGit(repo, ["show", `${branchName}:${path}`]);
+      if (show.status !== 0) continue;
+      const epic = buildEpicFromText({ filename, content: show.stdout, branchInfo, origin: "branch" });
+      if (epic) epicsBySlug.set(epic.slug, epic);
+    }
+  }
+
+  return [...epicsBySlug.values()].sort((a, b) => a.filename.localeCompare(b.filename));
 }
 
-function buildEpicFromFile({ repo, filename, branchInfo }) {
-  const fullPath = join(repo, "epics", filename);
-  let content = "";
-  try {
-    content = readFileSync(fullPath, "utf8");
-  } catch {
-    return null;
-  }
+function buildEpicFromText({ filename, content, branchInfo, origin }: {
+  filename: string;
+  content: string;
+  branchInfo: Map<string, { lastCommit: string; lastCommittedAt: string; lastSubject: string }>;
+  origin: "main" | "branch";
+}) {
   const frontmatter = parseEpicFrontmatter(content);
   const branch = typeof frontmatter.branch === "string" && frontmatter.branch.trim() ? frontmatter.branch.trim() : "main";
-  const slug = filename.replace(/\.md$/, "");
+  const slug = filename.replace(/\.md$/u, "");
   const branchEntry = branch.startsWith("epic/") ? branchInfo.get(branch) : null;
   return {
     slug,
     filename,
     title: typeof frontmatter.title === "string" && frontmatter.title.trim() ? frontmatter.title.trim() : slug,
     branch,
+    origin,
     createdAt: typeof frontmatter.created_at === "string" ? frontmatter.created_at : null,
     closedAt: typeof frontmatter.closed_at === "string" ? frontmatter.closed_at : null,
     hasBranch: Boolean(branchEntry),

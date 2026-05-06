@@ -249,6 +249,7 @@ export type Epic = {
   filename: string;
   title: string;
   branch: string;
+  origin?: "main" | "branch";
   createdAt?: string | null;
   closedAt?: string | null;
   hasBranch: boolean;
