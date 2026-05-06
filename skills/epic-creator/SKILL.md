@@ -161,6 +161,21 @@ Epic の Scope から Ticket を切り出す:
 
 切り出した Ticket 一覧を AskUserQuestion でユーザに提示し、確認を得てから `./ticket.sh new <slug>` で作成する。
 
+#### Ticket frontmatter の Epic 紐付けルール (機械検証あり)
+
+`./ticket.sh new` で生成された ticket frontmatter に必ず次の 2 フィールドを設定する:
+
+- `epic: <epic-filename-without-ext>` — 該当 Epic ファイル名 (例: `260506-025311-calc-web`)
+- `base_branch:` — Epic の `branch:` 値をそのままコピー
+  - Epic frontmatter `branch: main` → ticket `base_branch: default` (または `main`)
+  - Epic frontmatter `branch: epic/<slug>` → ticket `base_branch: epic/<slug>`
+
+これにより `./ticket.sh close` 時の squash merge 先が Epic の branch field と矛盾しなくなる (Epic を中止する際は branch ごと放棄でき、Epic close 時に main へ Epic 単位で 1 commit としてマージされる)。
+
+`pdh-flow start` の preflight でこの整合をチェックし、不一致なら abort する。
+
+**Standalone ticket** (どの Epic にも属さない / バグ修正・hotfix 等) は `epic` フィールドを書かない。`base_branch` は `default` のままでよい。検証はスキップされる。
+
 **並行実行のための依存関係明記**: チケット間に依存がある場合は Dependencies に記載する。依存のないチケットは git worktree で別ディレクトリに分離し並行実行できる。
 
 **Epic ファイルの更新**: チケット作成後、Epic ファイルの `Tickets` セクションに作成したチケットを追記する。形式:

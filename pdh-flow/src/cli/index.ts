@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { join, relative, resolve } from "node:path";
+import { parse as parseYaml } from "yaml";
 import {
   cmdAcceptProposal,
   cmdApplyAssistSignal,
@@ -349,6 +350,12 @@ async function cmdRun(argv) {
   const startStep = options["start-step"] ?? getInitialStep(flow, variant);
   assertStepInVariant(flow, variant, startStep);
 
+  // Preflight: if the ticket declares an `epic:` link, its base_branch
+  // must match the epic's branch (so ticket.sh close merges into the
+  // right place — the epic branch, not main, when the epic owns one).
+  // Standalone tickets (no `epic:` field) bypass this check.
+  validateTicketEpicLink({ mainRepo, ticketId: ticket });
+
   // Worktree default: true. Skip with --worktree=false (or --no-ticket-start
   // which bypasses ticket.sh entirely). Tests pass --no-ticket-start.
   const worktreeRequested = options["no-ticket-start"] !== "true"
@@ -419,6 +426,51 @@ async function cmdRun(argv) {
   } });
 }
 
+
+function validateTicketEpicLink({ mainRepo, ticketId }) {
+  const ticketPath = join(mainRepo, "tickets", `${ticketId}.md`);
+  if (!existsSync(ticketPath)) return;
+  const ticketMeta = parseFrontmatterMeta(readFileSync(ticketPath, "utf8"));
+  const epicSlugRaw = ticketMeta.epic;
+  if (!epicSlugRaw || typeof epicSlugRaw !== "string") return;
+  const epicSlug = epicSlugRaw.trim().replace(/\.md$/u, "");
+  if (!epicSlug) return;
+
+  const epicPath = join(mainRepo, "epics", `${epicSlug}.md`);
+  if (!existsSync(epicPath)) {
+    throw new Error(
+      `Ticket ${ticketId} declares epic="${epicSlug}" but epics/${epicSlug}.md does not exist on main. ` +
+      `Either remove the epic field from the ticket, or create the epic file first.`
+    );
+  }
+  const epicMeta = parseFrontmatterMeta(readFileSync(epicPath, "utf8"));
+  const epicBranch = (typeof epicMeta.branch === "string" ? epicMeta.branch.trim() : "") || "main";
+  const ticketBaseBranch = (typeof ticketMeta.base_branch === "string" ? ticketMeta.base_branch.trim() : "") || "default";
+
+  // "default" / "main" are interchangeable; epics with branch=main accept
+  // either. Epic branches must match exactly.
+  const accepted = epicBranch === "main"
+    ? new Set(["default", "main"])
+    : new Set([epicBranch]);
+  if (!accepted.has(ticketBaseBranch)) {
+    const expected = epicBranch === "main" ? "default (or main)" : epicBranch;
+    throw new Error(
+      `Ticket/Epic branch mismatch: tickets/${ticketId}.md has base_branch="${ticketBaseBranch}" ` +
+      `but its epic (epics/${epicSlug}.md, branch="${epicBranch}") expects base_branch="${expected}". ` +
+      `Fix tickets/${ticketId}.md frontmatter or the epic's branch field, then retry.`
+    );
+  }
+}
+
+function parseFrontmatterMeta(text) {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/u.exec(String(text ?? ""));
+  if (!match) return {};
+  try {
+    return parseYaml(match[1]) ?? {};
+  } catch {
+    return {};
+  }
+}
 
 async function cmdGuards(argv) {
   const options = parseOptions(argv);
