@@ -125,11 +125,44 @@ export async function cmdStartEpic(argv: string[]) {
     startStep
   });
 
+  writeEpicCurrentTicket({ repo, slug, epic });
+
   console.log(started.run.id);
   console.log(`Epic: ${slug} (branch: ${epic.branch})`);
   const stepObj = getStep(started.flow, started.run.current_step_id);
   console.log(`Current step: ${stepObj.id}${stepObj.label ? ` — ${stepObj.label}` : ""}`);
   console.log(`Next: pdh-flow run-next --repo ${repo}`);
+}
+
+// startRun creates a placeholder current-ticket.md (Why/What/Product AC TODO).
+// For Epic close runs the durable subject is the Epic file itself, so we
+// overwrite the placeholder with a pointer + the Epic body so PD-D-1〜4
+// agents see Outcome / Exit Criteria without having to grep first.
+function writeEpicCurrentTicket(args: { repo: string; slug: string; epic: EpicSource }) {
+  const { repo, slug, epic } = args;
+  const path = join(repo, "current-ticket.md");
+  const title = stringField(epic.meta.title) || slug;
+  const branch = epic.branch;
+  const sourcePath = epic.origin === "main" ? `epics/${slug}.md` : `${branch}:epics/${slug}.md`;
+  const lines = [
+    `# Epic: ${title}`,
+    "",
+    `この run は Epic close cycle (PD-D-1〜4) です。**durable subject は Epic ファイル本体** (\`epics/${slug}.md\`) です。`,
+    "",
+    `- slug: \`${slug}\``,
+    `- branch: \`${branch}\``,
+    `- file: \`${sourcePath}\``,
+    "",
+    "## Epic 本文 (参照用スナップショット)",
+    "",
+    epic.body.trimEnd(),
+    "",
+    "## 補足",
+    "",
+    "- Outcome / Scope / Non-goals / Exit Criteria は上の Epic 本文を読む。`current-ticket.md` ではなく `epics/<slug>.md` を最新参照する。",
+    "- 配下 ticket 一覧は `tickets/<id>.md` の frontmatter `epic: <slug>` で grep する。"
+  ];
+  writeFileSync(path, lines.join("\n") + "\n");
 }
 
 export async function cmdFinalizeEpic(argv: string[]) {
@@ -201,10 +234,11 @@ function resolveEpic(repo: string, slug: string): EpicSource {
   const slugClean = slug.trim().replace(/\.md$/u, "");
   const mainPath = join(repo, "epics", `${slugClean}.md`);
 
-  // 1. Main working tree (canonical for branch:main epics or already-merged ones)
-  if (existsSync(mainPath)) {
-    const text = readFileSync(mainPath, "utf8");
-    const { meta, body } = splitFrontmatter(text);
+  // 1. Main branch (via git show, not working tree — the working tree
+  // may be checked out to an epic branch and not reflect main's state).
+  const onMain = runGit(repo, ["show", `main:epics/${slugClean}.md`]);
+  if (onMain.status === 0) {
+    const { meta, body } = splitFrontmatter(onMain.stdout);
     const branch = stringField(meta.branch) || "main";
     return { slug: slugClean, branch, meta, body, origin: "main", pathOnMain: mainPath };
   }
@@ -352,9 +386,17 @@ async function executeCloseEpicBranch(opts: LifecycleOptions, epic: EpicSource) 
   runGitOrThrow(opts.repo, ["add", "-A", "epics/"], "stage epic close changes");
   runGitOrThrow(opts.repo, ["commit", "-m", `[PD-D-4] Close epic ${epic.slug}`], "commit epic close");
 
-  // 5. Switch to main, merge --squash + commit
+  // 5. Switch to main, merge --squash + commit. `-X theirs` resolves
+  // content-modify conflicts in favor of the epic branch (authoritative
+  // source for the close). Structural conflicts (modify/delete,
+  // rename/delete) aren't auto-resolved by `-X theirs`, so we run a
+  // post-merge pass that takes the epic branch's version for any
+  // remaining unmerged path. The dry-run preflight runs the same merge
+  // and reports residual conflicts as informational, but does not run
+  // the resolution pass.
   runGitOrThrow(opts.repo, ["switch", "main"], "switch to main");
-  runGitOrThrow(opts.repo, ["merge", "--squash", epic.branch], `squash merge ${epic.branch}`);
+  runGit(opts.repo, ["merge", "--squash", "-X", "theirs", epic.branch]);
+  resolveEpicMergeConflicts(opts.repo, epic.branch);
   runGitOrThrow(opts.repo, ["commit", "-m", `Close epic ${epic.slug}`], "commit squash merge");
 
   // 6. Push main
@@ -553,27 +595,88 @@ function findOpenLinkedTickets(repo: string, epicSlug: string, epicBranch: strin
   return open;
 }
 
+// Resolves any unmerged paths after `git merge --squash -X theirs <branch>`
+// by taking the epic branch's version: if the file exists on the epic
+// branch we check it out and stage it; if not (file was deleted on epic
+// branch but kept on main) we `git rm` it. This handles modify/delete and
+// rename/delete which `-X theirs` does not auto-resolve.
+function resolveEpicMergeConflicts(repo: string, epicBranch: string) {
+  const status = runGit(repo, ["diff", "--name-only", "--diff-filter=U"]);
+  if (status.status !== 0) return;
+  const paths = status.stdout
+    .split(/\r?\n/u)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (paths.length === 0) return;
+  for (const path of paths) {
+    const onEpic = runGit(repo, ["cat-file", "-e", `${epicBranch}:${path}`]);
+    if (onEpic.status === 0) {
+      // File exists on epic branch — take its version.
+      runGitOrThrow(repo, ["checkout", "--theirs", "--", path], `take theirs for ${path}`);
+      runGitOrThrow(repo, ["add", path], `stage resolved ${path}`);
+    } else {
+      // File deleted on epic branch — remove from main.
+      runGitOrThrow(repo, ["rm", "-f", path], `remove ${path} (not on ${epicBranch})`);
+    }
+  }
+}
+
 function simulateMerge(repo: string, branch: string): { conflict: boolean; detail: string } {
-  // Use a try-then-abort approach: `git merge --no-commit --no-ff <branch>`
-  // followed by `git merge --abort`. This is on the working tree, so we
-  // assume the caller has confirmed the tree is clean.
-  const before = runGit(repo, ["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (before.status !== 0) return { conflict: false, detail: "" };
-  // Make sure we're on main first
-  if (before.stdout.trim() !== "main") {
+  // Mirror the real close: `git merge --squash -X theirs <branch>`. The
+  // epic branch is the authoritative source for the close; main may have
+  // diverged (e.g. epic file deleted on main when relocated to the epic
+  // branch) and we want the epic branch's state to win, not flag a
+  // modify/delete conflict.
+  //
+  // We snapshot the original ref AND main's sha before the dry-run, so
+  // we can `git reset --hard` main back to its pre-dry-run state and
+  // restore the user's branch checkout. `git merge --squash` stages
+  // changes into the index without entering a merge state, so a hard
+  // reset is sufficient (no `merge --abort` needed).
+  const headRef = runGit(repo, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  if (headRef.status !== 0) return { conflict: false, detail: "" };
+  const originalRef = headRef.stdout.trim();
+  const mainShaBefore = runGit(repo, ["rev-parse", "main"]);
+  if (mainShaBefore.status !== 0) {
+    return { conflict: true, detail: `Could not resolve main sha: ${mainShaBefore.stderr.trim()}` };
+  }
+  const mainSha = mainShaBefore.stdout.trim();
+  const switched = originalRef !== "main";
+  if (switched) {
     const sw = runGit(repo, ["switch", "main"]);
     if (sw.status !== 0) {
       return { conflict: true, detail: `Could not switch to main for merge dry-run: ${sw.stderr.trim()}` };
     }
   }
-  const merge = runGit(repo, ["merge", "--no-commit", "--no-ff", branch]);
-  // Abort regardless — we don't want to leave the merge in progress
-  const abort = runGit(repo, ["merge", "--abort"]);
-  void abort;
-  return {
-    conflict: merge.status !== 0,
-    detail: merge.status !== 0 ? merge.stdout.trim() + "\n" + merge.stderr.trim() : ""
-  };
+  const merge = runGit(repo, ["merge", "--squash", "-X", "theirs", branch]);
+  // After merge --squash, attempt the same modify/delete + rename/delete
+  // resolution that the real close does. If everything resolves, the
+  // dry-run is clean. We swallow errors from the resolver because
+  // dry-run shouldn't throw on resolution attempts.
+  try {
+    resolveEpicMergeConflicts(repo, branch);
+  } catch {
+    // ignore — the residualConflict check below catches actual leftovers
+  }
+  const residual = runGit(repo, ["diff", "--name-only", "--diff-filter=U"]);
+  const residualConflict = residual.status === 0 && residual.stdout.trim().length > 0;
+  const conflict = residualConflict;
+  let detail = "";
+  if (conflict) {
+    const stderr = `${merge.stdout.trim()}\n${merge.stderr.trim()}`.trim();
+    detail = `Unresolvable paths after auto-resolve:\n  ${residual.stdout.trim().split(/\r?\n/u).join("\n  ")}\n\n--- raw merge output ---\n${stderr}`;
+  } else if (merge.status !== 0) {
+    detail = `Merge had conflicts but auto-resolve handled them: ${merge.stdout.trim().split(/\r?\n/u).slice(0, 3).join(" / ")}`;
+  }
+  // Reset main back to its original sha to undo any staged squash changes.
+  runGit(repo, ["reset", "--hard", mainSha]);
+  if (switched) {
+    const back = runGit(repo, ["switch", originalRef]);
+    if (back.status !== 0) {
+      return { conflict, detail: `${detail}\n(warning: failed to switch back to ${originalRef}: ${back.stderr.trim()})`.trim() };
+    }
+  }
+  return { conflict, detail };
 }
 
 // ---------------- frontmatter ----------------
