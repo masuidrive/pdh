@@ -12,5 +12,5 @@
     "strict": false
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "scripts/**/*.ts"],
-  "exclude": ["node_modules", "dist", "web"]
+  "exclude": ["node_modules", "dist", "v1"]
 }

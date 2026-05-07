@@ -1,0 +1,110 @@
+{
+  "scenario": "code_quality_review_repair_then_pass",
+  "description": "Round 1 fails (1 critical finding), repair runs, round 2 passes. Engine should produce: 5 reviewer + 1 aggregate (round 1 repair_needed) + 1 repair + 5 reviewer + 1 aggregate (round 2 pass) = 13 commits, then advance to final_verification.",
+  "starting_node": "code_quality_review",
+  "flow_id": "pdh-c-v2",
+  "variant": "full",
+  "expected_decisions": [
+    { "node": "code_quality_review.aggregate", "round": 1, "decision": "repair_needed" },
+    { "node": "code_quality_review.aggregate", "round": 2, "decision": "pass" }
+  ],
+  "expected_terminal_node": "final_verification",
+  "expected_commits": [
+    { "subject_pattern": "^\\[code_quality_review\\.devils_advocate_1/round-1\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.devils_advocate_2/round-1\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.code_reviewer_1/round-1\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.code_reviewer_2/round-1\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.critical_1/round-1\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.aggregate/round-1\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.repair/round-1\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.devils_advocate_1/round-2\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.devils_advocate_2/round-2\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.code_reviewer_1/round-2\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.code_reviewer_2/round-2\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.critical_1/round-2\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.aggregate/round-2\\] " }
+  ],
+  "node_outputs": {
+    "code_quality_review.devils_advocate_1": {
+      "round-1": {
+        "summary": "DA-1 round 1: ZeroDivisionError handling missing",
+        "note_section": "## code_quality_review.devils_advocate_1 (round 1)\n\n- [x] Security: input validation present\n- [ ] Logic: ZeroDivisionError NOT caught — `1/0` crashes\n\n**Verdict**: Critical finding."
+      },
+      "round-2": {
+        "summary": "DA-1 round 2: ZeroDivisionError handled",
+        "note_section": "## code_quality_review.devils_advocate_1 (round 2)\n\n- [x] Security: input validation present\n- [x] Logic: ZeroDivisionError caught, returns exit 1\n\n**Verdict**: No Critical/Major concerns."
+      }
+    },
+    "code_quality_review.devils_advocate_2": {
+      "round-1": { "summary": "DA-2 round 1: OK", "note_section": "## DA-2 r1\n- [x] Plan adherence\n" },
+      "round-2": { "summary": "DA-2 round 2: OK", "note_section": "## DA-2 r2\n- [x] Plan adherence\n" }
+    },
+    "code_quality_review.code_reviewer_1": {
+      "round-1": { "summary": "CR-1 round 1: OK", "note_section": "## CR-1 r1\n- [x] Style\n" },
+      "round-2": { "summary": "CR-1 round 2: OK", "note_section": "## CR-1 r2\n- [x] Style\n" }
+    },
+    "code_quality_review.code_reviewer_2": {
+      "round-1": { "summary": "CR-2 round 1: OK", "note_section": "## CR-2 r1\n- [x] Tests\n" },
+      "round-2": { "summary": "CR-2 round 2: OK", "note_section": "## CR-2 r2\n- [x] Tests\n" }
+    },
+    "code_quality_review.critical_1": {
+      "round-1": { "summary": "Critical r1: division by zero crashes", "note_section": "## Critical r1\n- ZeroDivisionError not caught\n" },
+      "round-2": { "summary": "Critical r2: nothing critical", "note_section": "## Critical r2\nNothing critical.\n" }
+    },
+    "code_quality_review.aggregate": {
+      "round-1": {
+        "summary": "Aggregate r1: 1 critical from DA-1 + Critical-1",
+        "note_section": "## aggregate r1\n**Decision**: repair_needed\n\nDA-1 and Critical-1 both flagged ZeroDivisionError handling.\n",
+        "guardian_output": {
+          "decision": "repair_needed",
+          "summary": "1 critical finding: ZeroDivisionError not caught",
+          "reasoning": "DA-1 and Critical-1 both reported the same critical issue: division by zero crashes the program with an uncaught Python exception. Need to wrap evaluate() in try/except ZeroDivisionError and exit non-zero with a clear message. Other reviewers passed.",
+          "round": 1,
+          "evidence_consumed": [
+            "code_quality_review.devils_advocate_1",
+            "code_quality_review.devils_advocate_2",
+            "code_quality_review.code_reviewer_1",
+            "code_quality_review.code_reviewer_2",
+            "code_quality_review.critical_1"
+          ],
+          "blocking_findings": [
+            {
+              "severity": "critical",
+              "title": "ZeroDivisionError not handled",
+              "evidence_ref": "src/calc_demo/eval.py:18",
+              "raised_by": "code_quality_review.devils_advocate_1",
+              "recommended_action": "fix_now",
+              "detail": "Calling `calc 1/0` produces an uncaught Python traceback; AC-2 requires non-zero exit with clean message."
+            }
+          ]
+        }
+      },
+      "round-2": {
+        "summary": "Aggregate r2: all 5 reviewers OK",
+        "note_section": "## aggregate r2\n**Decision**: pass\n\nRepair fixed ZeroDivisionError. All 5 reviewers OK.\n",
+        "guardian_output": {
+          "decision": "pass",
+          "summary": "Repair fixed ZeroDivisionError; all reviewers now OK",
+          "reasoning": "Round 2 reviewers re-ran after repair added try/except ZeroDivisionError. DA-1 confirmed fix, Critical-1 reports nothing critical, others unchanged from round 1. Ready for final_verification.",
+          "round": 2,
+          "evidence_consumed": [
+            "code_quality_review.devils_advocate_1",
+            "code_quality_review.devils_advocate_2",
+            "code_quality_review.code_reviewer_1",
+            "code_quality_review.code_reviewer_2",
+            "code_quality_review.critical_1"
+          ]
+        }
+      }
+    },
+    "code_quality_review.repair": {
+      "round-1": {
+        "summary": "Repair r1: wrapped eval in ZeroDivisionError handler",
+        "note_section": "## repair r1\nFixed `src/calc_demo/eval.py`: wrapped evaluate() call in try/except ZeroDivisionError; exit 1 with `error: division by zero`.\n",
+        "files": {
+          "src/calc_demo/eval.py": "\"\"\"Minimal AST-based expression evaluator for the calc demo. Repaired: ZeroDivisionError handled.\"\"\"\nimport ast\nimport operator\nimport sys\n\nOPS = {\n    ast.Add: operator.add,\n    ast.Sub: operator.sub,\n    ast.Mult: operator.mul,\n    ast.Div: operator.truediv,\n}\n\n\ndef evaluate(node):\n    if isinstance(node, ast.Expression):\n        return evaluate(node.body)\n    if isinstance(node, ast.Constant):\n        return node.value\n    if isinstance(node, ast.BinOp):\n        op = OPS.get(type(node.op))\n        if op is None:\n            raise ValueError(f\"unsupported op: {type(node.op).__name__}\")\n        return op(evaluate(node.left), evaluate(node.right))\n    raise ValueError(f\"unsupported node: {type(node).__name__}\")\n\n\ndef main(argv=None):\n    argv = argv or sys.argv[1:]\n    if len(argv) != 1:\n        print(\"usage: calc <expression>\", file=sys.stderr)\n        return 2\n    try:\n        tree = ast.parse(argv[0], mode=\"eval\")\n        result = evaluate(tree)\n    except ZeroDivisionError:\n        print(\"error: division by zero\", file=sys.stderr)\n        return 1\n    except Exception as e:  # noqa: BLE001\n        print(f\"error: {e}\", file=sys.stderr)\n        return 1\n    print(result)\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+        }
+      }
+    }
+  }
+}

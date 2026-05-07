@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdh-flow.dev/schemas/progress-event.schema.json",
+  "title": "Progress event",
+  "description": "Observability event emitted by the engine on every state change. Append-only stream at .pdh-flow/runs/<run>/events.jsonl. Consumed by Web UI live view, CLI watchers, and post-mortem inspection. Authority: zero — events are derivable from durable state.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "kind", "at", "run_id", "seq"],
+  "properties": {
+    "v":     { "const": 1 },
+    "seq":   { "type": "integer", "minimum": 0, "description": "Monotonic per-run sequence number." },
+    "kind":  { "$ref": "#/$defs/Kind" },
+    "at":    { "$ref": "common.schema.json#/$defs/IsoDateTime" },
+
+    "run_id":    { "$ref": "common.schema.json#/$defs/RunId" },
+    "ticket_id": { "$ref": "common.schema.json#/$defs/TicketId" },
+    "node_id":   { "$ref": "common.schema.json#/$defs/NodeId" },
+    "round":     { "type": "integer", "minimum": 1 },
+
+    "summary": {
+      "type": "string",
+      "maxLength": 280,
+      "description": "Human-readable 1-line. UI uses this verbatim in feeds."
+    },
+
+    "level": {
+      "enum": ["info", "warning", "error"],
+      "default": "info"
+    },
+
+    "payload": {
+      "type": "object",
+      "description": "Kind-specific data. Loose schema; consumers ignore unknown fields. Examples: { provider, evidence_path }, { decision, blocking_findings_count }, { released_leases }."
+    }
+  },
+
+  "$defs": {
+    "Kind": {
+      "enum": [
+        "run_started",
+        "run_completed",
+        "run_aborted",
+        "run_cancelled",
+        "run_paused",
+        "run_resumed",
+        "node_started",
+        "node_completed",
+        "node_failed",
+        "round_advanced",
+        "guardian_decided",
+        "gate_pending",
+        "gate_decided",
+        "lease_acquired",
+        "lease_released",
+        "interrupt_raised",
+        "interrupt_resolved",
+        "snapshot_saved",
+        "snapshot_restored",
+        "schema_violation",
+        "warning",
+        "error"
+      ]
+    }
+  }
+}

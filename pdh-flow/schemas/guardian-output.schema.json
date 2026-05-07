@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdh-flow.dev/schemas/guardian-output.schema.json",
+  "title": "Guardian (LLM-as-judge) output",
+  "description": "Structured output of a guardian_step. Tool-use schema enforced at LLM call site (Anthropic tool use / OpenAI structured outputs). Engine performs additional semantic validation against context (round echo, evidence coverage, target whitelist).",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision", "summary", "reasoning", "round", "evidence_consumed"],
+  "properties": {
+    "decision": {
+      "enum": ["pass", "repair_needed", "abort", "escalate_human"],
+      "description": "The single binding choice. Engine maps this to a transition via the guardian_step's outputs map."
+    },
+
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 280,
+      "description": "1-line summary used as commit subject and progress event message."
+    },
+
+    "reasoning": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 8000,
+      "description": "Free-form rationale. Audited but never consumed by transitions."
+    },
+
+    "round": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Echo of the round counter passed in. Engine asserts equality with its own context.round."
+    },
+
+    "blocking_findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Finding" },
+      "description": "Required (and non-empty) iff decision == repair_needed. Consumed verbatim by repair node."
+    },
+
+    "non_blocking_findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Finding" },
+      "description": "Optional. Logged for the record but does not gate transitions."
+    },
+
+    "evidence_consumed": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/NodeId" },
+      "description": "Node ids whose output the guardian read. Engine asserts this matches the spawned reviewer set; missing reviewer ids → GuardianViolation."
+    },
+
+    "next_target_override": {
+      "$ref": "common.schema.json#/$defs/NodeId",
+      "description": "Optional override of the default decision→target mapping. Engine validates against the guardian_step's allowed_targets (= union of all output target node ids)."
+    }
+  },
+
+  "$defs": {
+    "Finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["severity", "title", "evidence_ref"],
+      "properties": {
+        "severity":     { "$ref": "common.schema.json#/$defs/Severity" },
+        "title":        { "type": "string", "minLength": 1, "maxLength": 120 },
+        "detail":       { "type": "string", "maxLength": 2000 },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Pointer to the supporting evidence: 'node_id', 'path:line', or '<file>#<section>'. Free string by design (no parsing burden on the LLM)."
+        },
+        "raised_by": {
+          "$ref": "common.schema.json#/$defs/NodeId",
+          "description": "Reviewer node id that originally surfaced this finding. Aggregator preserves attribution."
+        },
+        "recommended_action": {
+          "enum": ["fix_now", "defer_to_followup_ticket", "ignore"],
+          "description": "How the finding should be handled. fix_now is the default for blocking findings; the others are valid when the guardian explicitly supplies them."
+        }
+      }
+    }
+  },
+
+  "allOf": [
+    {
+      "if":   { "properties": { "decision": { "const": "repair_needed" } } },
+      "then": {
+        "required": ["blocking_findings"],
+        "properties": { "blocking_findings": { "minItems": 1 } }
+      }
+    },
+    {
+      "if":   { "properties": { "decision": { "const": "pass" } } },
+      "then": {
+        "properties": { "blocking_findings": { "maxItems": 0 } }
+      }
+    }
+  ]
+}

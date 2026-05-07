@@ -1,0 +1,196 @@
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { parse, stringify } from "yaml";
+const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
+const STEP_HISTORY_HEADING = "## Step History";
+export function loadCurrentNote(repoPath) {
+    const path = join(repoPath, "current-note.md");
+    const text = existsSync(path) ? readFileSync(path, "utf8") : "# current-note.md\n";
+    const frontmatter = parseFrontmatter(text);
+    return {
+        path,
+        text,
+        extraFrontmatter: { ...(frontmatter.data ?? {}) },
+        body: frontmatter.body.trimStart()
+    };
+}
+export function saveCurrentNote(repoPath, { body, extraFrontmatter = {} }) {
+    const path = join(repoPath, "current-note.md");
+    const nextBody = normalizeBody(body);
+    const hasExtra = extraFrontmatter && Object.keys(extraFrontmatter).length > 0;
+    if (!hasExtra) {
+        writeFileSync(path, nextBody);
+        return path;
+    }
+    const document = stringify({ ...extraFrontmatter }).trimEnd();
+    const rendered = `---\n${document}\n---\n\n${nextBody}`;
+    writeFileSync(path, rendered);
+    return path;
+}
+export function updateCurrentNote(repoPath, updater) {
+    const note = loadCurrentNote(repoPath);
+    const next = updater({
+        ...note,
+        extraFrontmatter: { ...note.extraFrontmatter }
+    }) ?? note;
+    saveCurrentNote(repoPath, next);
+    return loadCurrentNote(repoPath);
+}
+export function replaceNoteSection(repoPath, heading, content) {
+    return updateCurrentNote(repoPath, (note) => ({
+        ...note,
+        body: replaceSection(note.body, heading, content)
+    }));
+}
+export function appendStepHistoryEntry(repoPath, entry) {
+    return updateCurrentNote(repoPath, (note) => {
+        const history = parseStepHistory(note.body);
+        const line = renderStepHistoryEntry(entry);
+        if (!history.lines.includes(line)) {
+            history.lines.push(line);
+        }
+        return {
+            ...note,
+            body: replaceSection(note.body, STEP_HISTORY_HEADING, history.lines.join("\n"))
+        };
+    });
+}
+export function parseStepHistory(text) {
+    const section = extractSection(text, STEP_HISTORY_HEADING);
+    const lines = section
+        ? section.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.startsWith("- "))
+        : [];
+    const entries = lines.map(parseStepHistoryLine).filter(Boolean);
+    return { lines, entries };
+}
+export function extractSection(text, heading) {
+    const resolvedHeading = normalizeHeading(heading);
+    const bounds = findSectionBounds(text, resolvedHeading);
+    if (!bounds) {
+        return null;
+    }
+    return text.slice(bounds.bodyStart, bounds.end).trim();
+}
+export function replaceSection(text, heading, content) {
+    const resolvedHeading = normalizeHeading(heading);
+    const trimmedContent = String(content ?? "").trim();
+    const block = `${resolvedHeading}\n\n${trimmedContent}`.trimEnd();
+    const bounds = findSectionBounds(text, resolvedHeading);
+    if (!bounds) {
+        return `${text.trimEnd()}\n\n${block}\n`;
+    }
+    return `${text.slice(0, bounds.start).trimEnd()}\n\n${block}${text.slice(bounds.end)}`
+        .replace(/\n{3,}/g, "\n\n")
+        .trimEnd() + "\n";
+}
+function parseFrontmatter(text) {
+    const match = FRONTMATTER.exec(text);
+    if (!match) {
+        return { data: {}, body: text };
+    }
+    let data = {};
+    try {
+        data = parse(match[1]) ?? {};
+    }
+    catch {
+        data = {};
+    }
+    return {
+        data,
+        body: text.slice(match[0].length)
+    };
+}
+export function normalizePdh(pdh) {
+    return {
+        ticket: normalizeScalar(pdh.ticket),
+        flow: normalizeScalar(pdh.flow) ?? "pdh-ticket-core",
+        variant: normalizeScalar(pdh.variant) ?? "full",
+        status: normalizeScalar(pdh.status) ?? "idle",
+        current_step: normalizeScalar(pdh.current_step),
+        run_id: normalizeScalar(pdh.run_id),
+        started_at: normalizeScalar(pdh.started_at),
+        updated_at: normalizeScalar(pdh.updated_at),
+        completed_at: normalizeScalar(pdh.completed_at)
+    };
+}
+export function serializePdh(pdh) {
+    const result = {};
+    for (const [key, value] of Object.entries(normalizePdh(pdh))) {
+        if (value !== null && value !== undefined && value !== "") {
+            result[key] = value;
+        }
+    }
+    return result;
+}
+function normalizeScalar(value) {
+    if (value === undefined || value === null) {
+        return null;
+    }
+    const string = String(value).trim();
+    if (!string || string === "(none)" || string === "null") {
+        return null;
+    }
+    return string;
+}
+function normalizeBody(body) {
+    const text = String(body ?? "").trim();
+    return text ? `${text}\n` : "";
+}
+function normalizeHeading(heading) {
+    return heading.startsWith("#") ? heading : `## ${heading}`;
+}
+function findSectionBounds(text, resolvedHeading) {
+    const pattern = new RegExp(`^${escapeRegExp(resolvedHeading)}\\s*$`, "m");
+    const match = pattern.exec(text);
+    if (!match) {
+        return null;
+    }
+    const headingLevel = headingLevelOf(resolvedHeading);
+    const bodyStart = match.index + match[0].length;
+    const after = text.slice(bodyStart);
+    const headingPattern = /\n(#{1,6})\s+/g;
+    let nextHeadingMatch = null;
+    while ((nextHeadingMatch = headingPattern.exec(after)) !== null) {
+        if (nextHeadingMatch[1].length <= headingLevel) {
+            return {
+                start: match.index,
+                bodyStart,
+                end: bodyStart + nextHeadingMatch.index
+            };
+        }
+    }
+    return {
+        start: match.index,
+        bodyStart,
+        end: text.length
+    };
+}
+function headingLevelOf(heading) {
+    const match = /^(#{1,6})\s+/.exec(heading);
+    return match ? match[1].length : 2;
+}
+function renderStepHistoryEntry(entry) {
+    const updatedAt = String(entry.updatedAt ?? new Date().toISOString()).trim();
+    const stepId = String(entry.stepId ?? "-").trim();
+    const status = String(entry.status ?? "-").trim();
+    const commit = String(entry.commit ?? "-").trim() || "-";
+    const summary = String(entry.summary ?? "-").trim() || "-";
+    return `- ${updatedAt} | ${stepId} | ${status} | ${commit} | ${summary}`;
+}
+function parseStepHistoryLine(line) {
+    const body = line.replace(/^- /, "");
+    const parts = body.split("|").map((part) => part.trim());
+    if (parts.length < 5) {
+        return null;
+    }
+    return {
+        updatedAt: parts[0],
+        stepId: parts[1],
+        status: parts[2],
+        commit: parts[3],
+        summary: parts.slice(4).join(" | ")
+    };
+}
+function escapeRegExp(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

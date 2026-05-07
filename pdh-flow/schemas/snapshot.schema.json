@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdh-flow.dev/schemas/snapshot.schema.json",
+  "title": "Engine snapshot",
+  "description": "Wraps XState v5 actor.getPersistedSnapshot() with engine identity / metadata. Bookkeeping artifact for fast resume; not canonical. If missing or invalid, the engine rebuilds the machine from canonical state (note-frontmatter + judgements + git).",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "engine", "saved_at", "run_id", "ticket_id", "flow", "variant", "xstate_snapshot"],
+  "properties": {
+    "version": { "const": 1 },
+
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name":           { "const": "pdh-flow" },
+        "version":        { "type": "string", "minLength": 1, "maxLength": 32 },
+        "xstate_version": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "machine_hash":   {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8,64}$",
+          "description": "Hash of the compiled flat-flow used to construct the machine. Engine refuses to restore if the hash differs from the current compiled flow (= flow definition changed under us)."
+        }
+      }
+    },
+
+    "saved_at":  { "$ref": "common.schema.json#/$defs/IsoDateTime" },
+    "run_id":    { "$ref": "common.schema.json#/$defs/RunId" },
+    "ticket_id": { "$ref": "common.schema.json#/$defs/TicketId" },
+    "flow":      { "$ref": "common.schema.json#/$defs/FlowId" },
+    "variant":   { "$ref": "common.schema.json#/$defs/VariantId" },
+
+    "xstate_snapshot": {
+      "type": "object",
+      "description": "Opaque payload from XState v5 actor.getPersistedSnapshot(). Engine does not interpret structure — passes through to createActor(machine, { snapshot })."
+    }
+  }
+}

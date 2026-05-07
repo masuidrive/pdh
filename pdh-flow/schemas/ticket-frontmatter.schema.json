@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdh-flow.dev/schemas/ticket-frontmatter.schema.json",
+  "title": "current-ticket.md frontmatter",
+  "description": "Durable ticket intent. Authored by the reporter; runtime metadata does NOT belong here (that goes in note-frontmatter). This file lives in tickets/active/<id>.md while in progress and tickets/done/<id>.md after close.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "ticket_id", "title", "status", "created_at"],
+  "properties": {
+    "version":   { "const": 1 },
+    "ticket_id": { "$ref": "common.schema.json#/$defs/TicketId" },
+    "title":     { "type": "string", "minLength": 1, "maxLength": 200 },
+    "status":    { "enum": ["open", "in_progress", "blocked", "done", "cancelled"] },
+
+    "flow":    { "$ref": "common.schema.json#/$defs/FlowId" },
+    "variant": { "$ref": "common.schema.json#/$defs/VariantId" },
+
+    "created_at":   { "$ref": "common.schema.json#/$defs/IsoDateTime" },
+    "started_at":   { "$ref": "common.schema.json#/$defs/IsoDateTime" },
+    "closed_at":    { "$ref": "common.schema.json#/$defs/IsoDateTime" },
+    "cancelled_at": { "$ref": "common.schema.json#/$defs/IsoDateTime" },
+
+    "epic_id": {
+      "$ref": "common.schema.json#/$defs/TicketId",
+      "description": "Optional. When the ticket belongs to an Epic."
+    },
+
+    "related_tickets": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/TicketId" }
+    },
+
+    "labels": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 64 }
+    },
+
+    "ac": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/AcceptanceCriterion" }
+    }
+  },
+  "allOf": [
+    {
+      "if":   { "properties": { "status": { "const": "done" } } },
+      "then": { "required": ["closed_at"] }
+    },
+    {
+      "if":   { "properties": { "status": { "const": "cancelled" } } },
+      "then": { "required": ["cancelled_at"] }
+    }
+  ],
+
+  "$defs": {
+    "AcceptanceCriterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description"],
+      "properties": {
+        "id":          { "type": "string", "pattern": "^AC-[0-9]+$" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "classification": {
+          "enum": ["functional", "behavioral", "non_functional", "security", "performance"]
+        }
+      }
+    }
+  }
+}

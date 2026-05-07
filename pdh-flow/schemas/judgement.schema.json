@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdh-flow.dev/schemas/judgement.schema.json",
+  "title": "Frozen judgement",
+  "description": "Persisted at .pdh-flow/runs/<run>/judgements/<node_id>__round-<n>.json. Wraps a guardian-output with freeze metadata so re-spawn reads the cached decision rather than re-invoking the LLM (idempotency).",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "guardian_output",
+    "frozen_at",
+    "frozen_by_run_id",
+    "frozen_by_node_id",
+    "round"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "guardian_output": {
+      "$ref": "guardian-output.schema.json",
+      "description": "Verbatim guardian output that was accepted (passed schema + semantic validation). Frozen — never edited after first write."
+    },
+    "frozen_at":         { "$ref": "common.schema.json#/$defs/IsoDateTime" },
+    "frozen_by_run_id":  { "$ref": "common.schema.json#/$defs/RunId" },
+    "frozen_by_node_id": { "$ref": "common.schema.json#/$defs/NodeId" },
+    "round":             { "type": "integer", "minimum": 1 },
+    "provider":          { "$ref": "common.schema.json#/$defs/Provider" },
+    "commit_sha":        { "$ref": "common.schema.json#/$defs/GitCommitSha" }
+  }
+}

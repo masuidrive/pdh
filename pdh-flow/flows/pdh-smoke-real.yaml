@@ -1,0 +1,39 @@
+# Minimal flow for smoke-testing the real provider invocation path.
+# 1 reviewer + 1 aggregator + 0 repair (single round) = 2 LLM calls.
+# Used by scripts/smoke-real-claude.sh — NOT part of npm run test:all.
+
+flow: pdh-smoke-real
+version: 1
+
+variants:
+  full:
+    initial: smoke_review
+
+nodes:
+  smoke_review:
+    macro: review_loop
+    reviewers:
+      - role: smoke_reviewer
+        provider: claude
+        count: 1
+        focus:
+          - 明確なバグ (off-by-one, division by zero, etc.)
+          - エッジケースの処理漏れ
+          - エラーハンドリングの妥当性
+    aggregator:
+      provider: claude
+      role: smoke_aggregator
+    repair: null
+    max_rounds: 1
+    on_pass: success
+    on_aborted: needs_human
+
+  success:
+    type: terminal
+    outcome: success
+    reason: smoke review passed
+
+  needs_human:
+    type: terminal
+    outcome: needs_human
+    reason: smoke review found blockers

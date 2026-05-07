@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdh-flow.dev/schemas/flat-flow.schema.json",
+  "title": "Compiled flat flow",
+  "description": "Loader output. All macros are expanded; engine consumes only this. Identical structure to flow.json minus macro nodes plus parallel_group. Used as the single source of truth at engine compile time (XState machine generation).",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["flow", "version", "compiled_at", "variants", "nodes"],
+  "properties": {
+    "flow":         { "$ref": "common.schema.json#/$defs/FlowId" },
+    "version":      { "const": 1 },
+    "compiled_at":  { "$ref": "common.schema.json#/$defs/IsoDateTime" },
+    "source_path":  { "type": "string", "description": "Original flow.yaml path; for diagnostics only." },
+    "defaults":     { "$ref": "flow.schema.json#/$defs/Defaults" },
+
+    "variants": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z][a-z0-9_]*$": { "$ref": "flow.schema.json#/$defs/Variant" }
+      },
+      "additionalProperties": false
+    },
+
+    "nodes": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$": { "$ref": "#/$defs/FlatNode" }
+      },
+      "additionalProperties": false
+    },
+
+    "macro_origins": {
+      "type": "object",
+      "description": "Optional map: expanded_node_id → originating_macro_node_id. For diagnostics, audit, and 'inspect-flow' rendering. Engine ignores.",
+      "patternProperties": {
+        "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$": { "$ref": "common.schema.json#/$defs/NodeId" }
+      },
+      "additionalProperties": false
+    }
+  },
+
+  "$defs": {
+
+    "FlatNode": {
+      "oneOf": [
+        { "$ref": "flow.schema.json#/$defs/ProviderStepNode" },
+        { "$ref": "flow.schema.json#/$defs/GuardianStepNode" },
+        { "$ref": "flow.schema.json#/$defs/GateStepNode" },
+        { "$ref": "flow.schema.json#/$defs/SystemStepNode" },
+        { "$ref": "flow.schema.json#/$defs/TerminalNode" },
+        { "$ref": "#/$defs/ParallelGroup" }
+      ]
+    },
+
+    "ParallelGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "members", "on_all_done"],
+      "properties": {
+        "type": { "const": "parallel_group" },
+        "members": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "common.schema.json#/$defs/NodeId" },
+          "description": "Node ids of parallel children. Each must exist as a separate node in the flow's nodes map (typically provider_step). Members must NOT define their own on_done; the group's on_all_done is implicit for them."
+        },
+        "on_all_done": { "$ref": "flow.schema.json#/$defs/Transition" },
+        "label":       { "type": "string", "maxLength": 80 }
+      }
+    }
+  }
+}

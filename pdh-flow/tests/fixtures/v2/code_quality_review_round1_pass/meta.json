@@ -1,0 +1,70 @@
+{
+  "scenario": "code_quality_review_round1_pass",
+  "description": "Implementation passes code_quality_review on the first round (5 reviewers all OK, aggregator decision=pass). Engine should advance to final_verification with 6 commits in this stage (5 reviewer + 1 aggregate).",
+  "starting_node": "code_quality_review",
+  "flow_id": "pdh-c-v2",
+  "variant": "full",
+  "expected_decisions": [
+    { "node": "code_quality_review.aggregate", "round": 1, "decision": "pass" }
+  ],
+  "expected_terminal_node": "final_verification",
+  "expected_commits": [
+    { "subject_pattern": "^\\[code_quality_review\\.devils_advocate_1/round-1\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.devils_advocate_2/round-1\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.code_reviewer_1/round-1\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.code_reviewer_2/round-1\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.critical_1/round-1\\] " },
+    { "subject_pattern": "^\\[code_quality_review\\.aggregate/round-1\\] " }
+  ],
+  "node_outputs": {
+    "code_quality_review.devils_advocate_1": {
+      "round-1": {
+        "summary": "DA-1: no security or design holes spotted",
+        "note_section": "## code_quality_review.devils_advocate_1 (round 1)\n\n- [x] Security: input validation present\n- [x] Logic: edge cases covered (zero, negative, overflow)\n- [x] Authorization: N/A for this calc tool\n\n**Verdict**: No Critical/Major concerns.\n"
+      }
+    },
+    "code_quality_review.devils_advocate_2": {
+      "round-1": {
+        "summary": "DA-2: implementation matches plan, no surprises",
+        "note_section": "## code_quality_review.devils_advocate_2 (round 1)\n\n- [x] Plan adherence: implementation matches plan\n- [x] Scope: no scope creep\n- [x] Risk: no new risks introduced\n\n**Verdict**: No Critical/Major concerns.\n"
+      }
+    },
+    "code_quality_review.code_reviewer_1": {
+      "round-1": {
+        "summary": "CR-1: clean code, tests adequate",
+        "note_section": "## code_quality_review.code_reviewer_1 (round 1)\n\n- [x] Code quality: idiomatic, readable\n- [x] Tests: AC items covered\n- [x] Error handling: complete\n\n**Verdict**: No Critical/Major concerns.\n"
+      }
+    },
+    "code_quality_review.code_reviewer_2": {
+      "round-1": {
+        "summary": "CR-2: regression check OK",
+        "note_section": "## code_quality_review.code_reviewer_2 (round 1)\n\n- [x] Regression: existing tests still pass\n- [x] Authorization: no exposure changes\n- [x] Integrity: data flow intact\n\n**Verdict**: No Critical/Major concerns.\n"
+      }
+    },
+    "code_quality_review.critical_1": {
+      "round-1": {
+        "summary": "Critical: nothing critical detected",
+        "note_section": "## code_quality_review.critical_1 (round 1)\n\nNo critical issues identified.\n"
+      }
+    },
+    "code_quality_review.aggregate": {
+      "round-1": {
+        "summary": "Aggregate: all 5 reviewers OK",
+        "note_section": "## code_quality_review.aggregate (round 1)\n\n**Decision**: pass\n\nAll 5 reviewers reported No Critical/Major. Advancing to final_verification.\n",
+        "guardian_output": {
+          "decision": "pass",
+          "summary": "All 5 reviewers passed with no Critical/Major findings",
+          "reasoning": "DA-1 + DA-2 + CR-1 + CR-2 + Critical-1 all returned No Critical/Major in round 1. Implementation matches plan, AC items are covered with evidence, no regressions, no security or authorization concerns. Ready to advance to final_verification.",
+          "round": 1,
+          "evidence_consumed": [
+            "code_quality_review.devils_advocate_1",
+            "code_quality_review.devils_advocate_2",
+            "code_quality_review.code_reviewer_1",
+            "code_quality_review.code_reviewer_2",
+            "code_quality_review.critical_1"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdh-flow.dev/schemas/engine-event.schema.json",
+  "title": "Engine input event",
+  "description": "Events sent into the XState actor via actor.send(). Each oneOf branch corresponds to a single event type. Surfaces (CLI, Web UI, watchdogs) construct these and drop them onto the engine queue.",
+
+  "oneOf": [
+    { "$ref": "#/$defs/StepCompleted" },
+    { "$ref": "#/$defs/StepFailed" },
+    { "$ref": "#/$defs/HumanResponded" },
+    { "$ref": "#/$defs/CancelRun" },
+    { "$ref": "#/$defs/PauseRun" },
+    { "$ref": "#/$defs/ResumeRun" },
+    { "$ref": "#/$defs/Timeout" },
+    { "$ref": "#/$defs/InterruptRaised" },
+    { "$ref": "#/$defs/InterruptResolved" }
+  ],
+
+  "$defs": {
+
+    "StepCompleted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "node_id", "round", "output_path"],
+      "properties": {
+        "type":        { "const": "STEP_COMPLETED" },
+        "node_id":     { "$ref": "common.schema.json#/$defs/NodeId" },
+        "round":       { "type": "integer", "minimum": 1 },
+        "output_path": { "type": "string", "minLength": 1 },
+        "commit_sha":  { "$ref": "common.schema.json#/$defs/GitCommitSha" },
+        "summary":     { "type": "string", "maxLength": 280 }
+      }
+    },
+
+    "StepFailed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "node_id", "round", "error"],
+      "properties": {
+        "type":    { "const": "STEP_FAILED" },
+        "node_id": { "$ref": "common.schema.json#/$defs/NodeId" },
+        "round":   { "type": "integer", "minimum": 1 },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["message"],
+          "properties": {
+            "kind":    { "type": "string", "maxLength": 64 },
+            "message": { "type": "string", "minLength": 1, "maxLength": 4000 }
+          }
+        }
+      }
+    },
+
+    "HumanResponded": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "node_id", "decision", "approver", "decided_at"],
+      "properties": {
+        "type":       { "const": "HUMAN_RESPONDED" },
+        "node_id":    { "$ref": "common.schema.json#/$defs/NodeId" },
+        "decision":   { "enum": ["approved", "rejected", "cancelled"] },
+        "approver":   { "type": "string", "minLength": 1, "maxLength": 128 },
+        "decided_at": { "$ref": "common.schema.json#/$defs/IsoDateTime" },
+        "comment":    { "type": "string", "maxLength": 4000 },
+        "form_data":  { "type": "object" },
+        "via":        { "enum": ["cli", "web_ui", "api"] }
+      }
+    },
+
+    "CancelRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type":   { "const": "CANCEL_RUN" },
+        "reason": { "type": "string", "maxLength": 280 }
+      }
+    },
+
+    "PauseRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type":   { "const": "PAUSE_RUN" },
+        "reason": { "type": "string", "maxLength": 280 }
+      }
+    },
+
+    "ResumeRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "RESUME_RUN" }
+      }
+    },
+
+    "Timeout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "node_id", "kind"],
+      "properties": {
+        "type":    { "const": "TIMEOUT" },
+        "node_id": { "$ref": "common.schema.json#/$defs/NodeId" },
+        "kind":    { "enum": ["wall_clock", "idle"] }
+      }
+    },
+
+    "InterruptRaised": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "interrupt_id", "kind", "raised_at", "message"],
+      "properties": {
+        "type":         { "const": "INTERRUPT_RAISED" },
+        "interrupt_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "kind":         { "enum": ["question", "blocker", "info"] },
+        "raised_at":    { "$ref": "common.schema.json#/$defs/IsoDateTime" },
+        "node_id":      { "$ref": "common.schema.json#/$defs/NodeId" },
+        "message":      { "type": "string", "minLength": 1, "maxLength": 4000 }
+      }
+    },
+
+    "InterruptResolved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "interrupt_id", "resolved_at", "answer"],
+      "properties": {
+        "type":         { "const": "INTERRUPT_RESOLVED" },
+        "interrupt_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "resolved_at":  { "$ref": "common.schema.json#/$defs/IsoDateTime" },
+        "answer":       { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "answered_by":  { "type": "string", "maxLength": 128 }
+      }
+    }
+  }
+}
