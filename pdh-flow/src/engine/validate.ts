@@ -85,10 +85,12 @@ export class Validator {
     this.ajv = new Ajv2020({
       allErrors: true,
       strict: true,
-      // strictTypes false: our schemas use if/then to constrain a property
-      // (e.g. FormField.options minItems when kind=select) without restating
-      // the parent type, which is correct JSON Schema but trips strictTypes.
+      // strictTypes/strictRequired false: our schemas use if/then to add
+      // requirements based on a discriminating field (e.g. status==completed
+      // implies `approver` required), which is correct JSON Schema but trips
+      // these stricter checks.
       strictTypes: false,
+      strictRequired: false,
       strictTuples: true,
     });
     addFormats(this.ajv);

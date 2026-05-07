@@ -26,11 +26,13 @@ import type {
 import { runProvider, type FixtureMeta } from "./actors/run-provider.ts";
 import { runGuardian } from "./actors/run-guardian.ts";
 import { runSystem } from "./actors/run-system.ts";
+import { awaitGate } from "./actors/await-gate.ts";
 
 export interface CompileOptions {
   variant: string;
   worktreePath: string;
   runId: string;
+  ticketId?: string;
   /** Optional fixture replay payload. When omitted, actors invoke real providers. */
   fixtureMeta?: FixtureMeta;
   /** For test purposes: stop the engine when entering this node. */
@@ -42,6 +44,7 @@ export interface EngineContext {
   round: number;
   worktreePath: string;
   runId: string;
+  ticketId?: string;
   fixtureMeta?: FixtureMeta;
   /** Track ParallelGroup membership so aggregator actors know what to read. */
   groupMembers: Record<string, string[]>;
@@ -91,6 +94,7 @@ export function compileFlow(
       round: 1,
       worktreePath: opts.worktreePath,
       runId: opts.runId,
+      ticketId: opts.ticketId,
       fixtureMeta: opts.fixtureMeta,
       groupMembers,
     },
@@ -98,7 +102,7 @@ export function compileFlow(
   };
   return setup({
     types: {} as { context: EngineContext; events: AnyEventObject; input: undefined },
-    actors: { runProvider, runGuardian, runSystem },
+    actors: { runProvider, runGuardian, runSystem, awaitGate },
   }).createMachine(config) as AnyStateMachine;
 }
 
@@ -333,6 +337,8 @@ function compileSystem(
         nodeId,
         action: node.action,
         worktreePath: context.worktreePath,
+        runId: context.runId,
+        ticketId: context.ticketId,
         params: node.params,
       }),
       onDone:
@@ -352,15 +358,44 @@ function compileGate(
   node: GateStepNode,
   opts: CompileOptions,
 ): unknown {
-  const transitions: Record<string, unknown> = {};
+  // Build guarded onDone branches: actor returns { decision: 'approved' |
+  // 'rejected' | 'cancelled' }; map each to the configured target node.
+  type Branch = { guard: (...a: unknown[]) => boolean; target: string; actions?: unknown };
+  const branches: Branch[] = [];
   for (const [key, target] of Object.entries(node.outputs)) {
     const resolved = resolveTransition(target as Transition, opts.variant);
     if (!resolved) continue;
-    transitions[`HUMAN_RESPONDED_${key.toUpperCase()}`] = {
-      target: resolved === opts.stopAtNodeId ? "#__stopped__" : abs(resolved),
-    };
+    branches.push({
+      guard: ({ event }: any) => event.output?.decision === key,
+      target: resolved === opts.stopAtNodeId ? "#__stopped__" : abs(resolved)!,
+      actions: assign({
+        lastGuardianDecision: () => `gate_${key}`,
+        ...(resolved === opts.stopAtNodeId
+          ? { stoppedAt: () => resolved }
+          : {}),
+      }) as unknown,
+    });
   }
-  return { on: transitions };
+
+  return {
+    invoke: {
+      src: "awaitGate",
+      input: ({ context }: { context: EngineContext }) => ({
+        nodeId,
+        worktreePath: context.worktreePath,
+        runId: context.runId,
+        fixtureMeta: context.fixtureMeta,
+      }),
+      onDone: branches,
+      onError: {
+        target: "#__failed__",
+        actions: assign({
+          __lastError: ({ event }: any) =>
+            `at ${nodeId}: ${event?.error?.message ?? "(no message)"}`,
+        }),
+      } as any,
+    },
+  };
 }
 
 function compileTerminal(node: TerminalNode): unknown {

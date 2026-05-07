@@ -69,6 +69,15 @@
         }
       },
       "additionalProperties": false
+    },
+
+    "gate_decisions": {
+      "type": "object",
+      "description": "Per-gate fixture decisions. Keyed by gate node_id. Each value matches gate-output.schema.json.",
+      "patternProperties": {
+        "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$": { "type": "object" }
+      },
+      "additionalProperties": false
     }
   }
 }

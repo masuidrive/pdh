@@ -91,7 +91,7 @@ export const runProvider = fromPromise<
         `provider actor: no fixture for ${nodeId} ${roundKey} and no real provider configured`,
       );
     }
-    const prompt = buildReviewerPrompt({
+    const prompt = buildPromptForProvider({
       nodeId,
       round,
       role: input.role ?? "reviewer",
@@ -157,12 +157,136 @@ export const runProvider = fromPromise<
   };
 });
 
-function buildReviewerPrompt(p: {
+interface PromptBuilderInput {
   nodeId: string;
   round: number;
   role: string;
-  promptSpec: { intent?: string; checkpoints?: string[] };
-}): string {
+  promptSpec: { intent?: string; checkpoints?: string[]; note_section?: string };
+}
+
+/**
+ * Role-driven prompt selection.
+ *
+ * Roles map to authoring patterns:
+ *   - assist: pick up the ticket, write Status section. No code edits.
+ *   - planner / investigate_plan: investigate + plan, write to note. No code edits.
+ *   - implementer / repair: edit source + tests. Heavy tool use.
+ *   - reviewer-style (devils_advocate / code_reviewer / critical / etc.): read + review,
+ *     end with VERDICT line. No edits.
+ *   - aggregator / final_verifier: handled by guardian actor (separate file).
+ */
+function buildPromptForProvider(p: PromptBuilderInput): string {
+  const role = p.role.toLowerCase();
+  if (role === "assist") return buildAssistPrompt(p);
+  if (role === "planner" || role === "investigate" || role === "investigator") {
+    return buildPlannerPrompt(p);
+  }
+  if (
+    role === "implementer" ||
+    role === "implement" ||
+    role === "repair" ||
+    role.endsWith("_repair")
+  ) {
+    return buildImplementerPrompt(p);
+  }
+  // Default: reviewer pattern (works for any review-shaped role).
+  return buildReviewerPrompt(p);
+}
+
+function buildAssistPrompt(p: PromptBuilderInput): string {
+  const lines: string[] = [];
+  lines.push(
+    `You are picking up a ticket. Node: ${p.nodeId}, role=assist.`,
+  );
+  lines.push("");
+  lines.push(
+    "Read current-ticket.md to understand the ticket. Then write a concise Status section describing:",
+  );
+  lines.push("  - What this ticket is asking for");
+  lines.push("  - Initial assumptions about scope");
+  lines.push("  - What you'll investigate next");
+  lines.push("");
+  lines.push(
+    "Do not edit source code. Use Read tools to inspect the repo. Your output will be appended to current-note.md as a section by the engine.",
+  );
+  lines.push("");
+  if (p.promptSpec.intent) {
+    lines.push(`Author intent: ${p.promptSpec.intent}`);
+  }
+  return lines.join("\n");
+}
+
+function buildPlannerPrompt(p: PromptBuilderInput): string {
+  const lines: string[] = [];
+  lines.push(
+    `You are the planner for this ticket. Node: ${p.nodeId} (round ${p.round}).`,
+  );
+  lines.push("");
+  lines.push(
+    "Read current-ticket.md, current-note.md (especially the assist section), and the source tree to understand:",
+  );
+  lines.push("  - Existing implementation");
+  lines.push("  - Blast radius of the requested change");
+  lines.push("  - Dependencies and constraints");
+  lines.push("");
+  lines.push("Then produce a concrete implementation plan covering:");
+  lines.push("  - Files to be modified (path + summary)");
+  lines.push("  - Test strategy (which tests to add or update)");
+  lines.push("  - Risks + mitigations");
+  lines.push("");
+  if (p.promptSpec.checkpoints && p.promptSpec.checkpoints.length > 0) {
+    lines.push("Required checkpoints:");
+    for (const c of p.promptSpec.checkpoints) lines.push(`  - ${c}`);
+    lines.push("");
+  }
+  lines.push(
+    "Do not edit source code. Use Read tools. Your output will be appended to current-note.md as a plan section.",
+  );
+  return lines.join("\n");
+}
+
+function buildImplementerPrompt(p: PromptBuilderInput): string {
+  const isRepair =
+    p.role.toLowerCase().includes("repair") ||
+    p.nodeId.toLowerCase().includes("repair");
+  const lines: string[] = [];
+  if (isRepair) {
+    lines.push(
+      `You are repairing the implementation. Node: ${p.nodeId} (round ${p.round}).`,
+    );
+    lines.push("");
+    lines.push(
+      "Read current-note.md to understand: (1) the prior implementation, (2) the blocking findings raised by the most recent aggregate. Apply minimal, focused edits to address those findings.",
+    );
+  } else {
+    lines.push(
+      `You are the implementer. Node: ${p.nodeId} (round ${p.round}).`,
+    );
+    lines.push("");
+    lines.push(
+      "Read current-ticket.md (acceptance criteria), current-note.md (the plan), and the source tree. Implement the change according to the plan.",
+    );
+  }
+  lines.push("");
+  lines.push("Required behaviour:");
+  lines.push("  - Use Edit / Write / Bash tools to modify files.");
+  lines.push("  - Add or update tests so the AC is verified by automation.");
+  lines.push(
+    "  - When done, summarise what you changed in 5-10 lines (will be committed as the node's evidence section).",
+  );
+  if (p.promptSpec.checkpoints && p.promptSpec.checkpoints.length > 0) {
+    lines.push("");
+    lines.push("Checkpoints:");
+    for (const c of p.promptSpec.checkpoints) lines.push(`  - ${c}`);
+  }
+  lines.push("");
+  lines.push(
+    "Do NOT run `git commit` or any git history-mutating command. The runtime owns commits — leave changes in the working tree.",
+  );
+  return lines.join("\n");
+}
+
+function buildReviewerPrompt(p: PromptBuilderInput): string {
   const lines: string[] = [];
   lines.push(`You are a ${p.role} reviewer. Node: ${p.nodeId} (round ${p.round}).`);
   lines.push("");
@@ -182,22 +306,14 @@ function buildReviewerPrompt(p: {
   }
   lines.push("");
   lines.push("Output requirements:");
-  lines.push(
-    "  1. Produce a concise review (markdown is fine, ~10-30 lines).",
-  );
-  lines.push(
-    "  2. Cite file:line where relevant.",
-  );
-  lines.push(
-    "  3. End with one of these verdict lines exactly:",
-  );
+  lines.push("  1. Produce a concise review (markdown is fine, ~10-30 lines).");
+  lines.push("  2. Cite file:line where relevant.");
+  lines.push("  3. End with one of these verdict lines exactly:");
   lines.push("       VERDICT: No Critical/Major");
   lines.push("       VERDICT: Critical");
   lines.push("       VERDICT: Major");
   lines.push("");
-  lines.push(
-    "Do not edit or create any files. Use only Read tools.",
-  );
+  lines.push("Do not edit or create any files. Use only Read tools.");
   return lines.join("\n");
 }
 

@@ -30,6 +30,9 @@ import {
   formatErrors,
 } from "../src/engine/validate.ts";
 
+// `existsSync` and `readFileSync` are already imported above; re-import not
+// needed.
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO = join(__dirname, "..");
@@ -197,6 +200,25 @@ section("scenario: code_quality_review_round1_pass");
   const jv = checkJudgementValidity(worktree, `run-test-code_quality_review_round1_pass-1`);
   assert(`judgement files validate (${jv.details.join(", ")})`, jv.ok);
 
+  // Snapshot persistence check
+  const snapPath = join(
+    worktree,
+    ".pdh-flow",
+    "runs",
+    "run-test-code_quality_review_round1_pass-1",
+    "snapshot.json",
+  );
+  assert("snapshot.json saved during run", existsSync(snapPath));
+  if (existsSync(snapPath)) {
+    const snap = JSON.parse(readFileSync(snapPath, "utf8"));
+    const snapValid = getValidator().validate(SCHEMA_IDS.snapshot, snap);
+    assert(
+      "snapshot.json validates against schema",
+      snapValid.ok === true,
+      snapValid.ok === false ? formatErrors(snapValid.errors) : undefined,
+    );
+  }
+
   // Idempotency: re-running engine with same fixture → reads frozen judgement,
   // doesn't re-decide. We can't easily prove "no LLM call" in the fake actor,
   // but we can confirm second run's lastGuardianDecision still == pass and
@@ -215,6 +237,10 @@ section("scenario: code_quality_review_round1_pass");
   assert(
     "second run with same runId reaches same stop point",
     second.stoppedAt === meta.expected_terminal_node,
+  );
+  assert(
+    "second run reports restoredFromSnapshot=true",
+    second.restoredFromSnapshot === true,
   );
 }
 
@@ -261,6 +287,139 @@ section("scenario: code_quality_review_repair_then_pass");
     `2 frozen judgements (got ${judgementFiles.length}: ${judgementFiles.join(", ")})`,
     judgementFiles.length === 2,
   );
+}
+
+// ─── Scenario 3: gate_system_happy ───────────────────────────────────────
+section("scenario: gate_system_happy");
+{
+  const { worktree, meta, result } = await runScenario(
+    "gate_system_happy",
+    "1",
+  );
+
+  assert(
+    `engine reaches expected_terminal_node=${meta.expected_terminal_node}`,
+    result.finalState.includes(meta.expected_terminal_node) ||
+      result.context.lastGuardianDecision === "gate_approved",
+    `finalState=${result.finalState}, lastGuardianDecision=${result.context.lastGuardianDecision}`,
+  );
+
+  // Gate decision file should be persisted (audit symmetry).
+  const gateFile = join(
+    worktree,
+    ".pdh-flow",
+    "runs",
+    "run-test-gate_system_happy-1",
+    "gates",
+    "review_gate.json",
+  );
+  assert("gate decision file persisted", existsSync(gateFile));
+  if (existsSync(gateFile)) {
+    const decision = JSON.parse(readFileSync(gateFile, "utf8"));
+    assert(
+      `gate decision=approved (got ${decision.decision})`,
+      decision.decision === "approved",
+    );
+  }
+
+  // close_ticket marker file.
+  const closedMarker = join(
+    worktree,
+    ".pdh-flow",
+    "runs",
+    "run-test-gate_system_happy-1",
+    "closed.json",
+  );
+  assert("close_ticket marker written", existsSync(closedMarker));
+}
+
+// ─── Lease integration (unit-style, exercises the system_step actor's
+//     dependencies without spinning up the full engine) ────────────────────
+section("lease integration (acquire / release)");
+{
+  const { acquireForTicket, releaseForTicket } = await import(
+    "../src/engine/leases/leases.ts"
+  );
+  const { writeEnvLease, removeEnvLease, envLeasePath } = await import(
+    "../src/engine/leases/env-lease.ts"
+  );
+  const { writeFileSync, existsSync, readFileSync } = await import("node:fs");
+
+  const repo = mkdtempSync(join(tmpdir(), "pdh-lease-test-"));
+  cleanup.push(repo);
+
+  spawnSync("git", ["init", "-q"], { cwd: repo });
+  // Write a minimal lease config.
+  writeFileSync(
+    join(repo, "pdh-flow.config.yaml"),
+    `version: 1
+leases:
+  pools:
+    port:
+      kind: port
+      range: [5170, 5172]
+      env: PORT
+    db-name:
+      kind: name
+      template: "pdh_{slug-hash}"
+      env: DB_NAME
+`,
+  );
+
+  const ticketId = "260508-001234-test-lease";
+  const acquired = await acquireForTicket({
+    mainRepo: repo,
+    ticketId,
+    worktree: repo,
+  });
+  assert(
+    `acquired 2 leases (got ${acquired.leases.length})`,
+    acquired.leases.length === 2,
+  );
+  const port = acquired.leases.find((l: any) => l.pool === "port");
+  assert(
+    `port allocated in range (${port?.value})`,
+    typeof port?.value === "number" && port.value >= 5170 && port.value <= 5172,
+  );
+  const dbName = acquired.leases.find((l: any) => l.pool === "db-name");
+  assert(
+    `db-name allocated as pdh_<hash> (${dbName?.value})`,
+    typeof dbName?.value === "string" && /^pdh_[0-9a-f]{8}$/.test(dbName.value),
+  );
+
+  // .env.lease write
+  writeEnvLease(repo, acquired.leases);
+  const envPath = envLeasePath(repo);
+  assert(".env.lease written", existsSync(envPath));
+  if (existsSync(envPath)) {
+    const text = readFileSync(envPath, "utf8");
+    assert(".env.lease has PORT=", /^PORT=\d+$/m.test(text));
+    assert(".env.lease has DB_NAME=", /^DB_NAME=pdh_[0-9a-f]{8}$/m.test(text));
+  }
+
+  // Release
+  const released = await releaseForTicket({ mainRepo: repo, ticketId });
+  assert(
+    `released 2 leases (got ${released.released.length})`,
+    released.released.length === 2,
+  );
+  removeEnvLease(repo);
+  assert(".env.lease removed", !existsSync(envPath));
+
+  // Re-acquire should succeed (port reusable after release)
+  const reacquired = await acquireForTicket({
+    mainRepo: repo,
+    ticketId: "260508-001235-test-lease-2",
+    worktree: repo,
+  });
+  assert(
+    `reacquire 2 leases (got ${reacquired.leases.length})`,
+    reacquired.leases.length === 2,
+  );
+  await releaseForTicket({
+    mainRepo: repo,
+    ticketId: "260508-001235-test-lease-2",
+  });
 }
 
 // ─── Cleanup ─────────────────────────────────────────────────────────────

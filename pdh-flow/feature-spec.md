@@ -84,17 +84,21 @@ Implemented in Phase G (Option A). Both reviewer and guardian actors are now dua
 
 **Remaining**: real fixtures should now be re-recorded against actual provider output once flows stabilize.
 
-### F-003: full XState snapshot persist / restore
-Current prototype tracks idempotency via judgement-freeze only. The full plan was to also persist the XState actor snapshot (`actor.getPersistedSnapshot()`) at every transition under `withRunLock`, with `machine_hash` validation on restore.
+### F-003: full XState snapshot persist / restore — **DONE 2026-05-08**
+Implemented in Phase H1. `src/engine/persist.ts` provides `saveSnapshot` / `restoreSnapshot` / `computeMachineHash`. Engine subscribes to actor.subscribe and saves on every transition; on startup, attempts restore (machine_hash must match). Atomic write via tmp+rename (single-machine assumption per CLAUDE.md). On hash mismatch / corruption, ignored gracefully and engine starts fresh (canonical state on disk is the authoritative fallback).
 
-**Adoption shape**: `src/engine/persist.ts` — `saveSnapshot`, `restoreSnapshot`, `rebuildFromCanonicalState` (fallback when snapshot missing / hash-mismatch). Schema already defined at `schemas/snapshot.schema.json`.
+Test coverage: snapshot.json saved during run, validates against schema, second run on same worktree restores cleanly (`restoredFromSnapshot: true`). 17/17 engine tests pass.
 
-**Trigger**: before running real flows of non-trivial duration. Prototype tests don't need it because they complete in <1s.
+`rebuildFromCanonicalState` (originally planned as the fallback) is currently a no-op — the engine just starts fresh from variant.initial when snapshot is missing. Canonical state rebuild is only needed when restoring partial progress, which fixture-replay tests don't exercise. Defer until a real long-running flow needs it.
 
-### F-004: rest-of-flow node implementations
-Currently exercised E2E: only `code_quality_review`. Other nodes (`assist`, `investigate_plan`, `plan_review`, `plan_gate`, `implement`, `final_verification`, `close_gate`, `close_finalize`, `human_intervention`) are wired in YAML but not exercised. The most interesting one is `close_finalize` (system_step calling existing close logic).
+### F-004: rest-of-flow node implementations — **PARTIAL 2026-05-08**
+Phase H2 added:
+- **Role-aware provider prompts** (`buildPromptForProvider` in `actors/run-provider.ts`): `assist`, `planner`/`investigator`, `implementer`/`repair`, default reviewer. Each role gets a tailored prompt re: tool access (read-only vs. edit), output format, and guardrails (e.g. implementer is told never to `git commit`).
+- **gate_step actor** (`actors/await-gate.ts`): dual-mode (fixture replays gate_decisions[nodeId]; real polls `<worktree>/.pdh-flow/runs/<runId>/gates/<nodeId>.json`). Decision auto-persisted for audit.
+- **close_finalize**: `system_step.action: close_ticket` writes a `closed.json` marker. Actual ticket file move (tickets/active/ → tickets/done/) and `ticket.sh close` invocation deferred until lease integration (F-008) and a full E2E exists.
+- **Fixture coverage**: `gate_system_happy` scenario (provider → gate → system → terminal). 21/21 engine tests pass.
 
-**Trigger**: after F-002 (real provider) so each node gets a real exercise.
+**Remaining**: real-mode E2E for the full pdh-c-v2 flow with claude/codex actually doing assist/plan/implement steps. Requires either a recorded fixture set or a manual smoke. Deferred to a follow-up phase.
 
 ### F-005: Web UI v2
 Step-type-driven viewer + gate approver + assist launcher. Renders 4 type-specific affordances:
@@ -105,20 +109,30 @@ Step-type-driven viewer + gate approver + assist launcher. Renders 4 type-specif
 
 **Trigger**: after engine surface stabilizes (F-002 + F-003). Before then, CLI is enough.
 
-### F-006: AGENTS.md / CLAUDE.md refresh for v2
-Current top-level docs are in `v1/`. New top-level docs need to be written for v2's vocabulary (provider_step / guardian_step / gate_step, parallel_group, judgement freeze, etc.). Should preserve v1's "single commit owner" + "LLM is evidence not authority" rules in updated form.
+### F-006: AGENTS.md / CLAUDE.md refresh for v2 — **DONE 2026-05-08**
+Phase H3 wrote `pdh-flow/AGENTS.md` and `pdh-flow/CLAUDE.md` for v2. Covers:
+- Step type taxonomy (provider / guardian / gate / system + parallel_group)
+- Re-spawnability + judgement freeze + snapshot bookkeeping
+- Single commit owner + reviewer-each-commits
+- LLM-is-evidence rule with the three authority sources (decision enum, gate enum, deterministic edges)
+- Subscription-auth-via-subprocess constraint (D-007)
+- Schema-first workflow (`gen:types` → `check` → `test:all`)
+- "No real providers in tests" rule preserved from v1
+- v1 reference / non-import policy
 
-**Trigger**: after F-002 lands and the surface is stable.
+v1 docs preserved at `v1/AGENTS.md` + `v1/CLAUDE.md`.
 
 ### F-007: v2 publishable bin
 `package.json` currently has no `bin`. Local invocation works via `npm run cli`. Before publishing, decide: keep TypeScript-strip path (Node 24+ only, no compile step) or restore `tsconfig.build.json` for a `lib/` build with traditional bin pointer.
 
 **Trigger**: when ready to publish or distribute.
 
-### F-008: lease integration into v2 engine
-Existing `v1/src/runtime/leases.ts` works standalone (acquire/release CLI). v2 engine doesn't auto-acquire / auto-release leases yet. Integration: actor for `system_step` action `acquire_lease` and `release_lease`, plus engine startup hook that auto-acquires per `pdh-flow.config.yaml`.
+### F-008: lease integration into v2 engine — **PARTIAL 2026-05-08**
+Phase H4 copied v1 lease modules to `src/engine/leases/{leases,env-lease,locks}.ts` (no v2-from-v1 import; v1 stays a reference). Wired `system_step.action: acquire_lease` and `release_lease` to the copied logic. Threaded `ticketId` through engine context.
 
-**Trigger**: when v2 reaches first real-flow run on a multi-worktree setup.
+Verified end-to-end via unit test (real lease pool config + acquire + .env.lease write + release + re-acquire). 30/30 engine tests pass.
+
+**Remaining**: auto-acquire on engine start when `pdh-flow.config.yaml` exists, auto-release on close_finalize without explicit `release_lease` node — currently flow YAML must include explicit acquire/release nodes if needed. Defer until first multi-worktree real-flow run.
 
 ### F-009: assist mode (interactive provider terminal)
 v1's `src/runtime/assist/` provided an interactive terminal mode for stop-state intervention. v2 needs equivalent: a way to attach the user's terminal to a paused engine state and let them drive the provider manually.

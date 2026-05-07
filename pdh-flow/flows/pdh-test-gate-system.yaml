@@ -1,0 +1,47 @@
+# Minimal flow exercising gate_step and system_step actors.
+# Used by scripts/test-engine-prototype.ts only — not user-facing.
+
+flow: pdh-test-gate-system
+version: 1
+
+variants:
+  full:
+    initial: do_work
+
+nodes:
+  do_work:
+    type: provider_step
+    provider: claude
+    role: implementer
+    prompt:
+      intent: do the work
+    on_done: review_gate
+
+  review_gate:
+    type: gate_step
+    approver_role: pdm
+    show: [diff, evidence]
+    outputs:
+      approved: close_finalize
+      rejected: rejected_terminal
+      cancelled: cancelled_terminal
+
+  close_finalize:
+    type: system_step
+    action: close_ticket
+    on_done: success
+
+  success:
+    type: terminal
+    outcome: success
+    reason: gate approved + close finalised
+
+  rejected_terminal:
+    type: terminal
+    outcome: needs_human
+    reason: gate rejected
+
+  cancelled_terminal:
+    type: terminal
+    outcome: aborted
+    reason: gate cancelled
