@@ -17,6 +17,7 @@ import {
 } from "./assist.ts";
 import { cmdDiagnose } from "./diagnose.ts";
 import { cmdCancelEpic, cmdFinalizeEpic, cmdStartEpic } from "./epic.ts";
+import { cmdLeaseAcquire, cmdLeaseGc, cmdLeaseList, cmdLeaseRelease } from "./lease.ts";
 import { cmdSubAgentContext } from "./sub-agent-context.ts";
 import {
   cmdGateSummary,
@@ -86,6 +87,8 @@ import { defaultAcceptedJudgementStatus, defaultJudgementKind, loadJudgements, w
 import { runFinalVerification } from "../flow/guards/final-verification.ts";
 import { formatDoctor, runDoctor } from "../runtime/doctor.ts";
 import { withRunLock } from "../runtime/locks.ts";
+import { acquireForTicket, releaseForTicket, LeaseConfigError, LeaseExhaustedError } from "../runtime/leases.ts";
+import { writeEnvLease, removeEnvLease } from "../runtime/env-lease.ts";
 import { answerLatestInterruption, createInterruption, latestOpenInterruption, loadStepInterruptions, renderInterruptionMarkdown } from "../runtime/interruptions.ts";
 import { writeFailureSummary } from "../runtime/failure-summary.ts";
 import { appendStepHistoryEntry, loadCurrentNote, replaceNoteSection, saveCurrentNote } from "../repo/note.ts";
@@ -274,6 +277,20 @@ try {
     cmdFlowGraph(args);
   } else if (command === "sub-agent-context") {
     cmdSubAgentContext(args);
+  } else if (command === "lease") {
+    const leaseSub = args[0];
+    const leaseArgs = args.slice(1);
+    if (leaseSub === "acquire") {
+      await cmdLeaseAcquire(leaseArgs);
+    } else if (leaseSub === "release") {
+      await cmdLeaseRelease(leaseArgs);
+    } else if (leaseSub === "list") {
+      await cmdLeaseList(leaseArgs);
+    } else if (leaseSub === "gc") {
+      await cmdLeaseGc(leaseArgs);
+    } else {
+      throw new Error(`Unknown lease subcommand: ${leaseSub ?? "(missing)"} (expected: acquire | release | list | gc)`);
+    }
   } else {
     throw new Error(`Unknown command: ${command}`);
   }
@@ -326,6 +343,10 @@ Usage:
   pdh-flow flow [--variant full|light]
   pdh-flow flow-graph [--variant full|light] [--format mermaid|json] [--repo DIR]
   pdh-flow sub-agent-context [--repo DIR] --step PD-C-N (--role LABEL --scope TEXT | --reviewer-id ID) [--files a,b] [--output-schema reviewer|repair|freeform] [--prior-step PD-C-N] [--stdout]
+  pdh-flow lease acquire --ticket ID [--repo DIR] [--worktree DIR] [--pool NAME]...
+  pdh-flow lease release --ticket ID [--repo DIR] [--worktree DIR] [--pool NAME]...
+  pdh-flow lease list [--ticket ID] [--repo DIR]
+  pdh-flow lease gc [--repo DIR]
   pdh-flow doctor [--repo DIR] [--json]
   pdh-flow serve [--repo DIR] [--host 127.0.0.1] [--port 8765]
   pdh-flow smoke-calc [--workdir DIR]
@@ -402,6 +423,26 @@ async function cmdRun(argv) {
       if (archiveTag) {
         console.log(`Archived prior run state under git tag ${archiveTag} (run ${runtime.run.id}).`);
       }
+    }
+    // Auto-acquire resource leases (port / db name / etc.) configured in
+    // mainRepo's pdh-flow.config.yaml. Done BEFORE startRun so config or
+    // pool-exhaustion errors abort cleanly without leaving an orphan
+    // runtime.json. No config → no-op (no .env.lease, no error).
+    let leaseAcquireResult = null;
+    try {
+      leaseAcquireResult = await acquireForTicket({
+        mainRepo,
+        ticketId: ticket,
+        worktree: repo
+      });
+    } catch (error) {
+      if (error instanceof LeaseExhaustedError || error instanceof LeaseConfigError) {
+        throw new Error(`Lease acquire failed: ${error.message}`);
+      }
+      throw error;
+    }
+    if (leaseAcquireResult.leases.length > 0) {
+      writeEnvLease(repo, leaseAcquireResult.leases);
     }
     const started = startRun({ repoPath: repo, ticket, variant, flowId, startStep });
     if (ticketStartResult) {
@@ -747,7 +788,7 @@ export async function cmdRunNext(argv) {
           return;
         }
 
-        const advanced = advanceRun({ repo, runtime, step, outcome });
+        const advanced = await advanceRun({ repo, runtime, step, outcome });
         supervisor.sync();
         trace.push(advanced);
         if (advanced.status === "completed") {
@@ -2494,7 +2535,7 @@ function syncFlowVariantFromNote({ repo, runtime, step }) {
   });
 }
 
-export function advanceRun({ repo, runtime, step, outcome }) {
+export async function advanceRun({ repo, runtime, step, outcome }) {
   const target = nextStep(runtime.flow, runtime.run.flow_variant, step.id, outcome);
   if (!target) {
     throw new Error(`No transition from ${step.id} for ${outcome}`);
@@ -2517,7 +2558,7 @@ export function advanceRun({ repo, runtime, step, outcome }) {
   if (target === "COMPLETE") {
     syncStepUiRuntime({ repo, stepId: step.id, nextCommands: [] });
     try {
-      finalizeCompletedRun({ repo, runtime, step });
+      await finalizeCompletedRun({ repo, runtime, step });
       return { status: "completed", from: step.id, to: target, outcome };
     } catch (error) {
       updateRun(repo, { status: "needs_human", current_step_id: step.id });
@@ -3015,7 +3056,7 @@ function resetTransitionArtifacts({ runtime, currentStepId, targetStepId, preser
   });
 }
 
-function finalizeCompletedRun({ repo, runtime, step }) {
+async function finalizeCompletedRun({ repo, runtime, step }) {
   // Epic close runs go through pdh-flow finalize-epic (squash merge,
   // branch deletion, frontmatter update). Ticket close runs go through
   // ticket.sh close. We branch on the flow id so each path stays
@@ -3100,6 +3141,37 @@ function finalizeCompletedRun({ repo, runtime, step }) {
     current_step: null,
     completed_at: new Date().toISOString()
   });
+  // Release any resource leases held for this ticket. acquireForTicket
+  // wrote them at start; mirror that here so the next ticket can reuse
+  // the freed values. Best-effort: a release failure must not unwind a
+  // successful close — log via progress event and continue.
+  if (ticketId) {
+    try {
+      const releaseResult = await releaseForTicket({ mainRepo: repo, ticketId });
+      removeEnvLease(repo);
+      if (releaseResult.released.length > 0) {
+        appendProgressEvent({
+          repoPath: repo,
+          runId,
+          stepId: step.id,
+          type: "status",
+          provider: "runtime",
+          message: `released ${releaseResult.released.length} lease(s) for ${ticketId}`,
+          payload: { released: releaseResult.released }
+        });
+      }
+    } catch (error) {
+      appendProgressEvent({
+        repoPath: repo,
+        runId,
+        stepId: step.id,
+        type: "status",
+        provider: "runtime",
+        message: `lease release after close failed: ${error?.message ?? String(error)}`,
+        payload: { ticketId }
+      });
+    }
+  }
   if (closeResult.status === "ok") {
     console.log(`ticket.sh close: ${firstLine(closeResult.stdout || closeResult.stderr || "ok")}`);
   }

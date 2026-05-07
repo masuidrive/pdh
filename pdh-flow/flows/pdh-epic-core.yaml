@@ -60,3 +60,83 @@ reviewers:
         count: 1
         focus:
           - 致命的な問題だけを短く指摘する
+
+# Action button labels and descriptions for the Web UI's "Next" panel.
+# Same key set as pdh-ticket-core.yaml — the dashboard reads these
+# regardless of which flow is active. Without this block, missing keys
+# fall through to raw identifiers like "openTerminalGate" in the UI.
+labels:
+  start:
+    label: Start
+    description: 新しい flow を開始して .pdh-flow/runtime.json の runtime state を初期化します。
+  runNext:
+    label: Run Next
+    description: 通常進行です。次の gate / interruption / failure / complete まで自動で進めます。
+  runNextAdvance:
+    label: Run Next
+    description: 完了済み step の guard 評価と flow transition を進めます。
+  runNextStuck:
+    label: Run Next
+    description: この repo で run-next を spawn し直して provider 実行を始めます。
+  runNextBlocked:
+    label: Run Next
+    description: 不足している guard-facing artifact を補完したうえで、この step を再評価します。
+  resume:
+    label: Resume
+    description: 同じ step を再実行します。
+  openTerminal:
+    label: Open Terminal
+    description: current step の repo state を terminal で確認したり、会話しながら調査します。
+  openTerminalAdvance:
+    label: Open Terminal
+    description: 次に進める前に current repo state を terminal で確認します。
+  openTerminalFailed:
+    label: Open Terminal
+    description: failure-summary と artifacts を assist で確認し、原因に応じて手で修正します。修正後は assist から `assist-signal --signal continue` を送って runtime に再評価させます。
+  openTerminalStale:
+    label: Open Terminal
+    description: stale running になる直前の変更や reviewer 指摘を確認します。
+  openTerminalBlocked:
+    label: Open Terminal
+    description: 止まった理由を assist と一緒に確認し、必要な変更や検証をその場で詰めます。
+  openTerminalStuck:
+    label: Open Terminal
+    description: 復旧前に repo の状態を terminal で確認します。
+  openTerminalGate:
+    label: Open Terminal
+    description: 判断に迷う場合は assist と一緒に Epic ファイル / verification.md / 配下 ticket を確認できます。必要なら assist の中で追記・検証も実施可能です。
+  openTerminalInterrupt:
+    label: Open Terminal
+    description: 質問に答える前に assist で Epic / 配下 ticket / verification.md を確認し、そのまま回答します。
+
+# Card-level title/body for the Web UI's "Next" panel. {stepId} is
+# interpolated from the current step. Same keys as pdh-ticket-core.
+actionCards:
+  initial:
+    title: 最初にすること
+    body: "repo root で start-epic を実行して .pdh-flow/runtime.json を初期化します。"
+  needsHuman:
+    title: "{stepId} の判断"
+    body: ""
+  interrupt:
+    title: "{stepId} の割り込み回答"
+    body: "質問内容を確認して回答します。必要なら assist で Epic ファイル / verification.md を見てから `answer` を返します。"
+  failed:
+    title: "{stepId} の失敗を解析"
+  advance:
+    title: "{stepId} の遷移を進める"
+    body: "この step の provider/review は完了しています。`run-next` で guard 評価と次 step への遷移を進めます。必要なら先に Open Terminal で差分や Epic ファイルを確認します。"
+  stale:
+    title: "{stepId} の再実行"
+    bodyFallback: "provider process は終了していますが、runtime state は running のままです。summary を確認してから再実行します。"
+  blocked:
+    title: "{stepId} の不足を解消"
+  default:
+    title: "{stepId} を進める"
+    body: ""
+  inFlight:
+    title: "{stepId} 実行中"
+    body: "{command} (pid={pid}) が {stepId} を実行しています。完了すると次の gate / interruption / failure に切り替わります。"
+  stuck:
+    title: "{stepId} 再開"
+    body: "runtime.json は running ですが supervisor が居ません ({supervisorStatus})。古い session の取りこぼしか、background run-next が早期終了した可能性があります。Run Next で repo に対して再 spawn して再開できます。"

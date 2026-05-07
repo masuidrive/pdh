@@ -15,6 +15,14 @@ type Props = {
 export function Navbar({ ticketId, ticketTitle, branch, onOpenFlow, onOpenTickets, pendingTicketCount, runtime, generatedAt }: Props) {
   const elapsed = useRelativeTime(generatedAt);
   const run = runtime?.run ?? null;
+  // The ticket id often appears in the branch name (`features/<id>`,
+  // `epic/<slug>`) and `ticketTitle` falls back to the id when no real
+  // title was set. Suppress duplicate mentions so the top bar shows the
+  // id at most once.
+  const branchContainsId = !!ticketId && !!branch && branch.includes(ticketId);
+  const titleIsId = !!ticketTitle && !!ticketId && ticketTitle === ticketId;
+  const showBreadcrumbId = !!ticketId && !branchContainsId;
+  const showTitle = !!ticketTitle && !titleIsId;
   return (
     <div className="sticky top-0 z-30 border-b border-base-300 bg-base-100">
       <div className="flex flex-col gap-2 px-3 py-2 lg:flex-row lg:items-center lg:gap-3 lg:px-4 lg:py-1.5 lg:min-h-12">
@@ -24,14 +32,18 @@ export function Navbar({ ticketId, ticketTitle, branch, onOpenFlow, onOpenTicket
             <div className="breadcrumbs hidden p-0 text-xs sm:block max-w-full">
               <ul>
                 {branch ? <li className="truncate">{branch}</li> : null}
-                {ticketId ? <li className="truncate">{ticketId}</li> : null}
+                {showBreadcrumbId ? <li className="truncate">{ticketId}</li> : null}
               </ul>
             </div>
           </div>
-          {ticketTitle ? (
+          {showTitle ? (
             <div className="hidden min-w-0 flex-col items-start leading-tight lg:flex">
               <span className="text-sm font-semibold text-base-content/80 truncate max-w-xs">{ticketTitle}</span>
               {run?.status ? <span className="text-xs text-base-content/50">{run.status}</span> : null}
+            </div>
+          ) : run?.status ? (
+            <div className="hidden min-w-0 flex-col items-start leading-tight lg:flex">
+              <span className="text-xs text-base-content/50">{run.status}</span>
             </div>
           ) : null}
         </div>

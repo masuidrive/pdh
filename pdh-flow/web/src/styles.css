@@ -54,6 +54,12 @@ body {
   overflow-x: hidden;
 }
 
+@media (max-width: 639px) {
+  dialog.modal[open] > .modal-box.term-modal-box-anchor-top {
+    align-self: start;
+  }
+}
+
 /* daisyUI 5's alert uses grid-template-columns: auto minmax(auto, 1fr) when
    it has 2+ children, where `auto` resolves to the column's min-content.
    For long Japanese / mixed text without easy break opportunities that

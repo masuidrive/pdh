@@ -378,7 +378,11 @@ async function executeCloseEpicBranch(opts: LifecycleOptions, epic: EpicSource) 
     writeFileSync(newAbs, newText);
   }
 
-  // 3. Optimise screenshots
+  // 3. Optimise any pre-existing screenshots that landed in the durable
+  // tree. PD-D-3 itself saves to the gitignored transient run dir
+  // (`.pdh-flow/runs/<run-id>/steps/PD-D-3/screenshots/`), so this dir
+  // is normally empty. Kept for legacy epics whose verification.md was
+  // staged with screenshots before the transient-only convention.
   const shotsDir = join(opts.repo, "epics", "done", epic.slug, "screenshots");
   await tryOptimiseScreenshots(opts.repo, shotsDir);
 
@@ -434,6 +438,8 @@ async function executeCloseMainDirect(opts: LifecycleOptions, epic: EpicSource) 
   }
   writeFileSync(newAbs, serializeFrontmatter(closedMeta, epic.body));
 
+  // PD-D-3 screenshots are transient (see PD-D-3.j2). The durable dir
+  // is normally empty; this is here for legacy/manual screenshots.
   const shotsDir = join(opts.repo, "epics", "done", epic.slug, "screenshots");
   await tryOptimiseScreenshots(opts.repo, shotsDir);
 
@@ -466,7 +472,8 @@ async function executeCancelEpicBranch(opts: LifecycleOptions, epic: EpicSource)
   // (verification.md, screenshots/, etc.) over to main.
   transplantArtefacts(opts.repo, epic.branch, epic.slug);
 
-  // Optimise screenshots that landed on main
+  // Optimise screenshots that landed on main via transplant (legacy).
+  // New runs keep PD-D-3 screenshots transient under .pdh-flow/.
   const shotsDir = join(opts.repo, "epics", "done", epic.slug, "screenshots");
   await tryOptimiseScreenshots(opts.repo, shotsDir);
 
@@ -552,6 +559,7 @@ async function tryOptimiseScreenshots(repo: string, shotsDir: string) {
     console.warn(`screenshot optimisation skipped: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
+
 
 function findOpenLinkedTickets(repo: string, epicSlug: string, epicBranch: string | null): string[] {
   const open: string[] = [];

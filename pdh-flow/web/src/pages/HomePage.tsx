@@ -48,8 +48,7 @@ export function HomePage() {
       confirmTone: "approve",
       onConfirm: async () => {
         await actions.startEpic(slug, { variant });
-        const ticketLabel = `epic-${slug}`;
-        navigate(`/tickets/${encodeURIComponent(ticketLabel)}`);
+        navigate(`/epics/${encodeURIComponent(slug)}`);
       },
     });
   }
@@ -86,6 +85,10 @@ export function HomePage() {
     navigate(`/tickets/${encodeURIComponent(ticketId)}`);
   }
 
+  function openExistingEpic(slug: string) {
+    navigate(`/epics/${encodeURIComponent(slug)}`);
+  }
+
   if (slot.status === "loading") {
     return (
       <div className="flex h-full items-center justify-center">
@@ -105,6 +108,16 @@ export function HomePage() {
 
   const tickets = slot.state.tickets ?? [];
   const workspaces = (slot.state as { workspaces?: Record<string, { runId?: string; currentStepId?: string; status?: string; updatedAt?: string } | null> }).workspaces ?? {};
+  // PD-D Epic flow active? runtime keys runs by ticket label `epic-<slug>`,
+  // but `state.tickets` only carries PD-C tickets so the workspace-driven
+  // "進行中の ticket" pill never surfaces an Epic flow. Detect it directly
+  // from the runtime block.
+  const activeRunTicket = slot.state.runtime?.run?.ticket_id ?? "";
+  const activeEpicSlug = activeRunTicket.startsWith("epic-")
+    ? activeRunTicket.slice("epic-".length)
+    : null;
+  const activeEpicCurrentStep = activeEpicSlug ? slot.state.runtime?.run?.current_step_id ?? null : null;
+  const activeEpicStatus = activeEpicSlug ? slot.state.runtime?.run?.status ?? null : null;
   // tickets[] can carry the same id twice when a freshly-created ticket
   // shares an id with one already moved to tickets/done/. The workspace
   // map is keyed by id alone, so the active filter would match both
@@ -131,6 +144,22 @@ export function HomePage() {
         generatedAt={slot.state.generatedAt}
       />
       <main className="min-h-[calc(100vh-4rem)]">
+        {activeEpicSlug ? (
+          <div className="px-5 pt-4 lg:px-8">
+            <section className="rounded-box border border-secondary/40 bg-secondary/10 px-4 py-3 shadow-sm">
+              <p className="mb-2 text-sm font-semibold text-secondary">進行中の Epic close フロー</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => openExistingEpic(activeEpicSlug)}
+                >
+                  {activeEpicSlug} ({activeEpicCurrentStep ?? "?"} / {activeEpicStatus ?? "?"})
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
         {activeTickets.length > 0 ? (
           <div className="px-5 pt-4 lg:px-8">
             <section className="rounded-box border border-info/40 bg-info/10 px-4 py-3 shadow-sm">
@@ -170,7 +199,9 @@ export function HomePage() {
           onCreate={async (slug) => (await actions.createTicket(slug)) as { slug: string }}
           onEdit={(id) => setTicketEditing(id)}
           onEpicStart={startEpic}
+          onEpicOpen={openExistingEpic}
           hasActiveRun={Boolean(slot.state.runtime?.run?.id)}
+          activeEpicSlug={activeEpicSlug}
         />
       </main>
       <ConfirmModal request={confirm} onClose={() => setConfirm(null)} />

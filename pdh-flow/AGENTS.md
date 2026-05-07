@@ -44,6 +44,7 @@ Do not run provider smoke checks as part of normal unit-style verification. Use 
 - Before close, append durable step-history entries to `current-note.md` and remove transient `.pdh-flow/runs/<run-id>/` artifacts.
 - LLM output is evidence, not authority. Guards decide transitions.
 - `.env`, `.codex`, `.pdh-flow/`, generated smoke repos, and provider logs must not be committed.
+- Concurrent ticket execution: when a `pdh-flow.config.yaml` exists at the main repo root with `leases.pools` declared, `pdh-flow start` auto-acquires one value per pool (e.g. a free TCP port from `[5170, 5200]`, a deterministic db-name like `pdh_<slug-hash>`) and writes them to `${worktree}/.env.lease` for the dev tooling to source. Leases are released on ticket close; orphans are reclaimed by gc-on-acquire (dead pid + missing worktree, or `closed_at`/`cancelled_at` in ticket frontmatter). Manual control: `pdh-flow lease list` / `release` / `gc`. Without the config file the auto-acquire is a no-op and behavior is unchanged.
 
 ## Test Rules
 

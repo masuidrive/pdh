@@ -34,7 +34,9 @@ type Props = {
   onCreate?: (slug: string) => Promise<{ slug: string }>;
   onEdit?: (ticketId: string) => void;
   onEpicStart?: (slug: string, variant: "full" | "light") => void;
+  onEpicOpen?: (slug: string) => void;
   hasActiveRun?: boolean;
+  activeEpicSlug?: string | null;
 };
 
 const STATUS_TONE: Record<string, string> = {
@@ -46,7 +48,7 @@ const STATUS_TONE: Record<string, string> = {
 
 const SLUG_RE = /^[a-z][a-z0-9-]{0,63}$/;
 
-export function TicketChooser({ tickets, pendingRequests, dirty, statusLines, currentBranch, epics: epicsProp, repoPath, tab: tabProp, onTabChange, onStart, onForceStart, onOpenTerminal, onOpenRepoTerminal, onCreate, onEdit, onEpicStart, hasActiveRun }: Props) {
+export function TicketChooser({ tickets, pendingRequests, dirty, statusLines, currentBranch, epics: epicsProp, repoPath, tab: tabProp, onTabChange, onStart, onForceStart, onOpenTerminal, onOpenRepoTerminal, onCreate, onEdit, onEpicStart, onEpicOpen, hasActiveRun, activeEpicSlug }: Props) {
   const sorted = [...tickets].sort((a, b) => statusOrder(a.status) - statusOrder(b.status) || (a.priority ?? 99) - (b.priority ?? 99));
   const todos = sorted.filter((t) => t.status === "todo" || t.status === "doing");
   const done = sorted.filter((t) => t.status === "done" || t.status === "canceled");
@@ -180,7 +182,7 @@ export function TicketChooser({ tickets, pendingRequests, dirty, statusLines, cu
       ) : null}
 
       {tab === "epics" ? (
-        <EpicList epics={epics} currentBranch={currentBranch} repoPath={repoPath} onEpicStart={onEpicStart} hasActiveRun={hasActiveRun} />
+        <EpicList epics={epics} currentBranch={currentBranch} repoPath={repoPath} onEpicStart={onEpicStart} onEpicOpen={onEpicOpen} hasActiveRun={hasActiveRun} activeEpicSlug={activeEpicSlug} />
       ) : null}
 
       {createOpen ? (
@@ -294,7 +296,7 @@ function Section({
   );
 }
 
-function EpicList({ epics, currentBranch, repoPath, onEpicStart, hasActiveRun }: { epics: Epic[]; currentBranch?: string; repoPath?: string; onEpicStart?: (slug: string, variant: "full" | "light") => void; hasActiveRun?: boolean }) {
+function EpicList({ epics, currentBranch, repoPath, onEpicStart, onEpicOpen, hasActiveRun, activeEpicSlug }: { epics: Epic[]; currentBranch?: string; repoPath?: string; onEpicStart?: (slug: string, variant: "full" | "light") => void; onEpicOpen?: (slug: string) => void; hasActiveRun?: boolean; activeEpicSlug?: string | null }) {
   if (!epics.length) {
     return (
       <section className="space-y-2">
@@ -315,6 +317,7 @@ function EpicList({ epics, currentBranch, repoPath, onEpicStart, hasActiveRun }:
           const onMain = epic.branch === "main";
           const branchMissing = !onMain && !epic.hasBranch;
           const onlyOnBranch = epic.origin === "branch";
+          const isActiveRun = !!activeEpicSlug && activeEpicSlug === epic.slug;
           return (
             <li key={epic.filename} className="rounded-box border border-base-300 bg-base-100 p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -323,6 +326,7 @@ function EpicList({ epics, currentBranch, repoPath, onEpicStart, hasActiveRun }:
                     <span className="font-bold">{epic.title}</span>
                     {epic.closedAt ? <span className="badge badge-success badge-sm">closed</span> : null}
                     {isCurrent ? <span className="badge badge-info badge-sm">current</span> : null}
+                    {isActiveRun ? <span className="badge badge-secondary badge-sm">進行中 (PD-D)</span> : null}
                     {branchMissing ? <span className="badge badge-warning badge-sm">branch missing</span> : null}
                     {onlyOnBranch ? <span className="badge badge-ghost badge-sm" title="Epic file lives on its branch, not yet on main">on branch</span> : null}
                   </div>
@@ -342,7 +346,16 @@ function EpicList({ epics, currentBranch, repoPath, onEpicStart, hasActiveRun }:
                   ) : null}
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  {!epic.closedAt && onEpicStart ? (
+                  {isActiveRun && onEpicOpen ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onEpicOpen(epic.slug)}
+                    >
+                      進行を見る
+                    </button>
+                  ) : null}
+                  {!epic.closedAt && !isActiveRun && onEpicStart ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"

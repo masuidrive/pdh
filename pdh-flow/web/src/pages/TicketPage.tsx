@@ -22,8 +22,26 @@ import { useSingleFlight } from "../lib/use-single-flight";
 import { useUrlState } from "../lib/use-url-state";
 
 export function TicketPage() {
-  const { name: routeTicket = null } = useParams<{ name: string }>();
-  const ticket = routeTicket ? decodeURIComponent(routeTicket) : null;
+  // Two routes converge here:
+  //   /tickets/:name   — `:name` is the runtime ticket label verbatim.
+  //                      For Epic flows (`epic-<slug>`) we redirect to
+  //                      the canonical /epics/:slug form below.
+  //   /epics/:slug     — Epic flow URL canonical form. Internally the
+  //                      runtime still keys runs by ticket label
+  //                      `epic-<slug>`, so we synthesise that here.
+  const { name: routeTicket = null, slug: routeSlug = null } = useParams<{ name?: string; slug?: string }>();
+  const navigateForRedirect = useNavigate();
+  useEffect(() => {
+    if (routeTicket && /^epic-/.test(decodeURIComponent(routeTicket))) {
+      const slug = decodeURIComponent(routeTicket).replace(/^epic-/, "");
+      navigateForRedirect(`/epics/${encodeURIComponent(slug)}${window.location.search}${window.location.hash}`, { replace: true });
+    }
+  }, [routeTicket, navigateForRedirect]);
+  const ticket = routeTicket
+    ? decodeURIComponent(routeTicket)
+    : routeSlug
+      ? `epic-${decodeURIComponent(routeSlug)}`
+      : null;
   const slot = useAppState(ticket);
   const navigate = useNavigate();
   const [urlState, updateUrl] = useUrlState();
@@ -191,6 +209,39 @@ export function TicketPage() {
 
   const hasActiveRun = Boolean(slot.state.runtime?.run?.id && slot.state.runtime?.run?.current_step_id);
   if (!hasActiveRun) {
+    // Special-case: just-closed Epic. After PD-D-4 approve →
+    // finalize-epic, the runtime clears `current_step_id` and the
+    // active branch is gone. Without this branch the user lands on a
+    // generic "未開始" warning that misrepresents what happened. We
+    // detect close by looking at the listEpics response: a closed
+    // Epic carries `closedAt` and lives under `epics/done/<slug>/`.
+    if (routeSlug && ticket?.startsWith("epic-")) {
+      const slug = decodeURIComponent(routeSlug);
+      const epicEntry = (slot.state.git?.epics ?? []).find((e) => e.slug === slug);
+      if (epicEntry && epicEntry.closedAt) {
+        return (
+          <div className="p-8">
+            <div className="alert alert-success">
+              <div>
+                <h3 className="font-bold">Epic「{epicEntry.title || slug}」がクローズされました</h3>
+                <p className="text-sm mt-1">
+                  squash merge で main に取り込まれ、<code>epic/{slug}</code> branch は削除されました。Epic ファイルは <code>epics/done/{slug}/index.md</code> に移動しています。
+                  {epicEntry.closedAt ? <> closed_at: <code>{epicEntry.closedAt}</code>。</> : null}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate("/")}>
+                ← トップへ
+              </button>
+              <button type="button" className="btn btn-sm" onClick={() => navigate("/epics")}>
+                Epic 一覧へ
+              </button>
+            </div>
+          </div>
+        );
+      }
+    }
     return (
       <div className="p-8">
         <div className="alert alert-warning">

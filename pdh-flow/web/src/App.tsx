@@ -12,6 +12,7 @@ export function App() {
           <Route path="/archive" element={<HomePage />} />
           <Route path="/epics" element={<HomePage />} />
           <Route path="/tickets/:name" element={<TicketPage />} />
+          <Route path="/epics/:slug" element={<TicketPage />} />
           <Route path="*" element={<HomePage />} />
         </Routes>
       </BrowserRouter>

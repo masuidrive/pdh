@@ -28,12 +28,13 @@ UCS では「各 Ticket がバラバラに正しく動く」ではなく「Epic 
 - Epic Outcome 全体を通す: 複数 Ticket の成果物を跨ぐユーザジャーニーを 1 本通す (作成 → 編集 → 実行 → 観測 等の end-to-end)
 - エッジケース: 空データ / 不正入力 / 長文 / 権限境界 / race condition 再現を意図的に試す
 - 検証用の一時的コード / seed 改変は許可 (認証バイパス、特殊 seed、一時 log 挿入)。検証後は revert
-- 記録は note として `epics/done/<slug>/verification.md` に残す (試した内容・見えた挙動・気になった点 + screenshot)
+- 記録は note として `epics/done/<slug>/verification.md` に残す (試した内容・見えた挙動・気になった点)。verification.md からは **screenshot は参照しない** (transient で run cleanup と一緒に消えるため、durable record として残らない)。durable な裏取りは test path / コマンド出力 / ログ path 側に書く。スクショは「dashboard 上で agent / user が今回の run の動作を視覚確認するための補助」と割り切る (PD-C-9 Surface Observer のスクショ扱いと統一)
 - スクショ規範:
-    - 配置: `epics/done/<slug>/screenshots/<name>.png` (PNG / JPG どちらでもよい。runtime が close 時に WebP q80 へ自動圧縮し原本を削除する)
-    - 枚数: Epic Outcome 達成の証跡として最低限。**3〜5 枚目安**
-    - サイズ: agent-browser で取った原寸でよい (runtime 側で長辺 1280px に resize される)
-    - verification.md からは markdown image link で参照: `![caption](screenshots/<name>.png)` (close 後は webp に拡張子置換される)
+    - 配置: **`.pdh-flow/runs/<run-id>/steps/PD-D-3/screenshots/<name>.png`** のみ。`<run-id>` はプロンプト冒頭の「実行 ID」。`.pdh-flow/` は **gitignore 対象なので commit されない** — これは意図通りで、スクショはコミットしない方針 (PD-C-9 と統一)。dashboard はこの transient path を `web/src/lib/markdown.ts` の image rewriter 経由で `/api/run-file` から inline 表示する
+    - **`epics/...` 等の git 追跡対象 path に直接保存しない**。tracked path に書くと runtime の single-commit-owner が PD-D-3 step commit に巻き込んで commit してしまう。意図しないコミット混入の元
+    - 枚数: Epic Outcome 達成の確認用として最低限。**3〜5 枚目安**
+    - サイズ: agent-browser で取った原寸でよい (dashboard レンダリング側で適宜縮小される)
+    - `ui-output.json` の `notes` / `summary[]` 散文では markdown image link で `![caption](.pdh-flow/runs/<run-id>/steps/PD-D-3/screenshots/<name>.png)` の形で差し込む (run cleanup 後はリンク切れになるが、durable な裏取りは test path / ログ path 側に残しているので問題ない想定)
 
 ### 問題が見つかった場合の判定フロー
 

@@ -1,5 +1,6 @@
 .pdh-flow/
 .env
+.env.lease
 .venv/
 __pycache__/
 .pytest_cache/

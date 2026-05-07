@@ -1982,7 +1982,12 @@ function describeNextAction({ repo, runtime, currentStep, currentGate, interrupt
     currentStep,
     currentGate,
     interruptions,
-    labels: runtime.flow?.actionLabels ?? {},
+    // Flow yamls today use the key `labels:` for action button text;
+    // the historical `actionLabels:` form is kept as an accepted fallback
+    // for backwards compatibility. Without this fallback the dashboard
+    // rendered raw identifiers ("openTerminalGate" etc.) because the
+    // read site and yaml key did not agree.
+    labels: runtime.flow?.labels ?? runtime.flow?.actionLabels ?? {},
     cards: runtime.flow?.actionCards ?? {}
   };
   for (const rule of NEXT_ACTION_RULES) {
@@ -2435,9 +2440,14 @@ function listEpics(repo) {
   // Epics are sourced from `epics/*.md` files on:
   //   1. main's working tree (canonical for branch:main epics and any
   //      already-merged epics)
-  //   2. each `epic/*` git branch (so in-progress branch-policy epics
+  //   2. main's `epics/done/<slug>/index.md` (closed Epics — finalize-epic
+  //      moves the file here on close. Without this branch the closed
+  //      Epic disappears from /api/state immediately after Epic close,
+  //      and `/epics/<slug>` shows a generic "未開始" warning instead of
+  //      a "クローズ済み" success card)
+  //   3. each `epic/*` git branch (so in-progress branch-policy epics
   //      are visible before they merge to main)
-  // De-duped by slug — main wins when an epic file exists in both.
+  // De-duped by slug — main working tree wins, then done/, then branch.
   const branchInfo = collectEpicBranchInfo(repo);
   const epicsBySlug = new Map<string, ReturnType<typeof buildEpicFromText>>();
 
@@ -2455,6 +2465,27 @@ function listEpics(repo) {
       let content = "";
       try { content = readFileSync(fullPath, "utf8"); } catch { continue; }
       const epic = buildEpicFromText({ filename, content, branchInfo, origin: "main" });
+      if (epic) epicsBySlug.set(epic.slug, epic);
+    }
+  }
+
+  // 2. epics/done/<slug>/index.md (closed Epics)
+  const doneDir = join(repo, "epics", "done");
+  if (existsSync(doneDir)) {
+    let entries: { name: string; isDir: boolean }[] = [];
+    try {
+      entries = readdirSync(doneDir, { withFileTypes: true })
+        .map((entry) => ({ name: entry.name, isDir: entry.isDirectory() }));
+    } catch { /* empty */ }
+    for (const entry of entries) {
+      if (!entry.isDir) continue;
+      const slug = entry.name;
+      if (epicsBySlug.has(slug)) continue; // a stray active file wins
+      const indexPath = join(doneDir, slug, "index.md");
+      if (!existsSync(indexPath)) continue;
+      let content = "";
+      try { content = readFileSync(indexPath, "utf8"); } catch { continue; }
+      const epic = buildEpicFromText({ filename: `${slug}.md`, content, branchInfo, origin: "main" });
       if (epic) epicsBySlug.set(epic.slug, epic);
     }
   }

@@ -41,13 +41,30 @@ export function judgementFromUiOutput(stepId, uiOutput) {
 export function renderUiOutputPromptSection({ run, step }) {
   const relativePath = `.pdh-flow/runs/${run.id}/steps/${step.id}/ui-output.json`;
   const contract = stepUiContract(step);
-  const judgementKind = defaultJudgementKind(step.id);
+  // Prefer step.yaml's judgement.kind over the legacy DEFAULT_KIND_BY_STEP
+  // map. The map only carries PD-C-4 / PD-C-7 / PD-C-9, so without this
+  // fallback PD-D-* steps (and any future step using only step yaml's
+  // `judgement.kind`) never get the judgement field in the auto-injected
+  // template — agents then forget to emit it and the run sits blocked at
+  // `judgement_status` guard.
+  const judgementKind = (step?.judgement?.kind ? String(step.judgement.kind).trim() : "")
+    || defaultJudgementKind(step.id);
+  const acceptedStatuses: string[] = Array.isArray(step?.judgement?.acceptedStatuses)
+    ? step.judgement.acceptedStatuses.map((s) => String(s).trim()).filter(Boolean)
+    : [];
 
   const header = [
     "## UI 出力成果物",
     "",
     `\`${relativePath}\` に妥当な JSON を書く。`,
     "markdown fence は使わない。トップレベルキーを勝手に増やさない。",
+    ...(judgementKind
+      ? [
+          "",
+          `**重要**: このステップは \`judgement\` ブロック必須。\`kind: ${judgementKind}\` で 1 件、欠落・kind ミスマッチ・status 空のいずれかで runtime guard が step を blocked にする。`,
+          "summary / risks / notes だけ書いて judgement を書き忘れる事故が頻発しているので、JSON を書き始める前に必ず judgement の枠を作っておくこと。"
+        ]
+      : []),
     "",
     "このステップ固有の契約:",
     `- viewer: ${contract.viewer || "(未指定)"}`,
@@ -65,6 +82,10 @@ export function renderUiOutputPromptSection({ run, step }) {
     return [...header, "JSON スキーマ・各フィールドのルールはステップ本文 `## 成果物` を正本として参照してください。", ""];
   }
 
+  const statusHint = acceptedStatuses.length > 0
+    ? `runtime guard が pass と認める status は ${acceptedStatuses.map((s) => `\`${s}\``).join(" / ")} のいずれか (条件未達ならこれ以外の status を書く)`
+    : "guard 向けの正確な status を書く";
+
   const templateObject: AnyRecord = {
     summary: [
       "このステップで何を変えたか、何が分かったかを示す具体的な箇条書き 2-4 件"
@@ -72,12 +93,18 @@ export function renderUiOutputPromptSection({ run, step }) {
     risks: [
       "未解消のリスクだけを書く。無ければ [] を使う。"
     ],
-    notes: "任意の自由記述。複数行にしたい場合は JSON 文字列内で \\n を使う。"
+    // Embed an actual newline in the example string so JSON.stringify
+    // emits `\n` (one-char escape) in the rendered template, modelling
+    // the correct way for agents to write multi-line notes. Earlier
+    // iterations had the literal text "\\n を使う" here; agents copied
+    // that literally and produced double-escaped sources whose parsed
+    // value contained the characters `\n` instead of an actual newline.
+    notes: "1 行目: 任意の自由記述。\n2 行目: 改行は JSON の \\n 1 文字エスケープ (上のテンプレートで実際に動く形)。"
   };
   if (judgementKind) {
     templateObject.judgement = {
       kind: judgementKind,
-      status: "この review step 用の guard 向け status を正確に書く",
+      status: acceptedStatuses[0] ? `${acceptedStatuses[0]} (条件未達なら別 status)` : "guard 向けの正確な status",
       summary: "その judgement の短い理由"
     };
   }
@@ -88,11 +115,14 @@ export function renderUiOutputPromptSection({ run, step }) {
     "各フィールドのルール:",
     "- `summary`: このステップで何を変えたか、何が分かったかを示す具体的な箇条書きを 2-4 件書く。",
     "- `risks`: 未解消のリスクだけを書く。無ければ `[]` を使う。",
-    "- `notes`: 任意の自由記述。複数行にしたい場合は JSON 文字列内で `\\n` を使う。",
+    "- `notes`: 任意の自由記述。複数行にしたい場合は JSON の 1 文字 newline エスケープを使う (= JSON ソース上は backslash 1 つ + `n` の 2 文字)。**`\\n` のような 2 文字 backslash で書かない** — それは parse 後に literal `\\n` になって markdown 上に `\\n-` のような文字列が露出する。下のテンプレートの `notes` の値はこの正しい形のリテラル例なので、そこの 1 文字 newline 表記をそのままコピーすればよい。",
     "- このファイル内の人間向け文面は、`current-ticket.md` の主言語に合わせる。",
-    "- すべてのキーと文字列はダブルクォートで囲む。内部のダブルクォートは `\\\"`、バックスラッシュは `\\\\` にエスケープする。",
+    "- すべてのキーと文字列はダブルクォートで囲む。テキスト中に **literal な** ダブルクォートを置きたいときは `\\\"`、literal な backslash は `\\\\`。逆にいえば newline / tab 等の **JSON 標準エスケープを使うとき** はそのまま 1 文字 backslash + 文字 (`\\n`, `\\t`) を書く — 二重に backslash しない。",
     ...(judgementKind
-      ? [`- \`judgement\`: この review step では必須。 \`kind: ${judgementKind}\`、guard 向けの正確な \`status\`、短い \`summary\` を使う。`]
+      ? [
+          `- \`judgement\`: 必須。\`kind: ${judgementKind}\` 固定、${statusHint}、短い \`summary\` を必ず書く。`,
+          `- \`judgement\` を書き忘れた / kind を変えた / status を空にした場合 runtime guard が step を blocked にする。下のテンプレートの judgement ブロックは省略しない。`
+        ]
       : []),
     "",
     "JSON 形は次を使う:",
