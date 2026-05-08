@@ -24,6 +24,7 @@ export async function cmdGateRespond(argv: string[]): Promise<void> {
     approver:  { type: "string" },
     comment:   { type: "string" },
     via:       { type: "string" },
+    draft:     { type: "boolean" },
   });
 
   const runId = values["run-id"] as string | undefined;
@@ -63,13 +64,17 @@ export async function cmdGateRespond(argv: string[]): Promise<void> {
     throw new SchemaViolation(SCHEMA_IDS.gateOutput, r.errors);
   }
 
+  const draft = !!values.draft;
   const dir = join(worktreePath, ".pdh-flow", "runs", runId, "gates");
   mkdirSync(dir, { recursive: true });
-  const path = join(dir, `${nodeId}.json`);
-  if (existsSync(path)) {
-    const existing = JSON.parse(readFileSync(path, "utf8"));
+  const finalPath = join(dir, `${nodeId}.json`);
+  const path = draft
+    ? join(dir, `${nodeId}.draft.json`)
+    : finalPath;
+  if (!draft && existsSync(finalPath)) {
+    const existing = JSON.parse(readFileSync(finalPath, "utf8"));
     process.stderr.write(
-      `gate already decided at ${path} — refusing to overwrite\n`,
+      `gate already decided at ${finalPath} — refusing to overwrite\n`,
     );
     process.stdout.write(
       JSON.stringify({ ok: false, error: "already_decided", existing }, null, 2) + "\n",
@@ -77,6 +82,7 @@ export async function cmdGateRespond(argv: string[]): Promise<void> {
     process.exitCode = 2;
     return;
   }
+  // For draft writes, we always overwrite (the user may revise).
   writeFileSync(path, JSON.stringify(decided, null, 2) + "\n");
   process.stdout.write(
     JSON.stringify(
@@ -85,13 +91,11 @@ export async function cmdGateRespond(argv: string[]): Promise<void> {
         run_id: runId,
         node_id: nodeId,
         decision,
+        draft,
         wrote: path,
       },
       null,
       2,
     ) + "\n",
   );
-  // Sentinel: lets the assist-terminal backend trigger a "close modal?"
-  // prompt on the attached browser tab.
-  process.stdout.write("[pdh-flow:submitted:gate]\n");
 }

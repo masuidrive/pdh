@@ -23,6 +23,7 @@ export async function cmdTurnRespond(argv: string[]): Promise<void> {
     via:        { type: "string" },
     responder:  { type: "string" },
     list:       { type: "boolean" },
+    draft:      { type: "boolean" },
   });
 
   const runId = values["run-id"] as string | undefined;
@@ -96,7 +97,8 @@ export async function cmdTurnRespond(argv: string[]): Promise<void> {
     ...(values.responder ? { responder: values.responder as string } : {}),
   };
 
-  const path = writeTurnAnswer({ worktreePath, runId, answer });
+  const draft = !!values.draft;
+  const path = writeTurnAnswer({ worktreePath, runId, answer, draft });
   process.stdout.write(
     JSON.stringify(
       {
@@ -104,17 +106,13 @@ export async function cmdTurnRespond(argv: string[]): Promise<void> {
         run_id: runId,
         node_id: nodeId,
         turn: turnNum,
+        draft,
         wrote: path,
       },
       null,
       2,
     ) + "\n",
   );
-  // Sentinel line that the assist-terminal backend scans for to fire a
-  // {type:"submitted",kind:"turn"} WebSocket event to attached browsers.
-  // Visible in the terminal output, harmless when running outside an
-  // assist context.
-  process.stdout.write("[pdh-flow:submitted:turn]\n");
 }
 
 function listPending(turnsDir: string): void {

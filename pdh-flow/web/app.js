@@ -722,11 +722,15 @@ async function openTerminalForNode(runId, nodeId, options) {
   const opts = options || {};
   const mode = opts.mode === "fresh" ? "fresh" : "resume";
   const dlg = ensureTermModal();
+  dlg.dataset.runId = runId;
+  dlg.dataset.nodeId = nodeId;
   const titleEl = dlg.querySelector("#term-title");
   const statusEl = dlg.querySelector("#term-status");
   const hostEl = dlg.querySelector("#term-host");
   const banner = dlg.querySelector("#term-submitted-banner");
+  const bannerMsg = dlg.querySelector("#term-submitted-msg");
   if (banner) banner.style.display = "none";
+  if (bannerMsg) bannerMsg.classList.remove("text-error");
   hostEl.innerHTML = "";
   titleEl.textContent = `${nodeId} · ${runId}`;
   setTermStatus(statusEl, "connecting");
@@ -834,7 +838,7 @@ async function openTerminalForNode(runId, nodeId, options) {
       } else if (payload.type === "output" && typeof payload.data === "string") {
         term.write(payload.data);
       } else if (payload.type === "submitted") {
-        showSubmittedBanner(dlg, payload.kind);
+        showSubmittedBanner(dlg, payload.kind, payload);
       } else if (payload.type === "exit") {
         setTermStatus(statusEl, "exited");
         term.writeln("");
@@ -881,20 +885,45 @@ async function openTerminalForNode(runId, nodeId, options) {
   }, { once: true });
 }
 
-function showSubmittedBanner(dlg, kind) {
+function showSubmittedBanner(dlg, kind, payload) {
   const banner = dlg.querySelector("#term-submitted-banner");
   const msg = dlg.querySelector("#term-submitted-msg");
   if (!banner || !msg) return;
   msg.textContent = kind === "gate"
-    ? "Gate decision submitted. Close terminal and continue?"
-    : "Answer submitted. Close terminal and continue?";
+    ? "Gate decision drafted. Confirm and close?"
+    : "Answer drafted. Confirm and close?";
   banner.style.display = "";
+  // Stash the kind + turn for the Yes handler.
+  banner.dataset.kind = kind;
+  if (typeof payload?.turn === "number") {
+    banner.dataset.turn = String(payload.turn);
+  } else {
+    delete banner.dataset.turn;
+  }
   const yes = dlg.querySelector("#term-close-yes");
   const no = dlg.querySelector("#term-close-no");
   if (yes && !yes._wired) {
     yes._wired = true;
-    yes.addEventListener("click", () => {
-      try { dlg.close(); } catch {}
+    yes.addEventListener("click", async () => {
+      // Reach into the active term state for runId / nodeId. The
+      // dialog itself is reused so we keep these on the dataset.
+      const runId = dlg.dataset.runId;
+      const nodeId = dlg.dataset.nodeId;
+      const turnIdx = banner.dataset.turn;
+      const k = banner.dataset.kind;
+      msg.textContent = "Confirming…";
+      try {
+        const url = k === "gate"
+          ? `/api/runs/${encodeURIComponent(runId)}/gates/${encodeURIComponent(nodeId)}/confirm`
+          : `/api/runs/${encodeURIComponent(runId)}/turns/${encodeURIComponent(nodeId)}/${encodeURIComponent(turnIdx)}/confirm`;
+        const r = await fetch(url, { method: "POST" });
+        const eb = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(eb.error ?? `HTTP ${r.status}`);
+        try { dlg.close(); } catch {}
+      } catch (err) {
+        msg.textContent = `confirm failed: ${err.message ?? err}`;
+        msg.classList.add("text-error");
+      }
     });
   }
   if (no && !no._wired) {

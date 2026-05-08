@@ -19,6 +19,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync as fsRenameSync,
   statSync,
   watch,
   writeFileSync,
@@ -27,6 +28,7 @@ import {
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAssistManager, type AssistManager } from "./assist-terminal.ts";
+import { promoteTurnDraft } from "../engine/turn-store.ts";
 import { getValidator, SCHEMA_IDS, formatErrors } from "../engine/validate.ts";
 
 export interface ServeOptions {
@@ -132,6 +134,23 @@ async function handleRequest(
       m[2],
       parseInt(m[3], 10),
     );
+  }
+
+  m = path.match(/^\/api\/runs\/([^/]+)\/turns\/([^/]+)\/(\d+)\/confirm$/);
+  if (m && req.method === "POST") {
+    const result = promoteTurnDraft({
+      worktreePath: opts.worktreePath,
+      runId: m[1],
+      nodeId: m[2],
+      turn: parseInt(m[3], 10),
+    });
+    if (result.ok === true) return sendJson(res, 200, { ok: true, wrote: result.path });
+    return sendJson(res, result.status, { error: result.error });
+  }
+
+  m = path.match(/^\/api\/runs\/([^/]+)\/gates\/([^/]+)\/confirm$/);
+  if (m && req.method === "POST") {
+    return postGateConfirm(res, opts.worktreePath, m[1], m[2]);
   }
 
   m = path.match(/^\/api\/runs\/([^/]+)\/events$/);
@@ -714,6 +733,49 @@ async function postGate(
   }
   writeFileSync(path, JSON.stringify(decided, null, 2));
   return sendJson(res, 200, { ok: true, written: path, decision: decided });
+}
+
+// Confirm a gate draft written by the assist wrapper (gate-respond
+// --draft) by atomically renaming `<nodeId>.draft.json` → `<nodeId>.json`.
+function postGateConfirm(
+  res: ServerResponse,
+  worktreePath: string,
+  runId: string,
+  nodeId: string,
+): void {
+  const dir = join(worktreePath, ".pdh-flow", "runs", runId, "gates");
+  const final = join(dir, `${nodeId}.json`);
+  const draft = join(dir, `${nodeId}.draft.json`);
+  if (existsSync(final)) {
+    return sendJson(res, 409, {
+      error: "already_finalized",
+      existing: JSON.parse(readFileSync(final, "utf8")),
+    });
+  }
+  if (!existsSync(draft)) {
+    return sendJson(res, 404, { error: "no_draft" });
+  }
+  // Validate the draft before promoting.
+  let obj: unknown;
+  try {
+    obj = JSON.parse(readFileSync(draft, "utf8"));
+  } catch (e) {
+    return sendJson(res, 400, {
+      error: `invalid_draft_json: ${(e as Error).message}`,
+    });
+  }
+  const v = getValidator();
+  const r = v.validate(SCHEMA_IDS.gateOutput, obj);
+  if (r.ok === false) {
+    return sendJson(res, 400, {
+      error: "draft_schema_violation",
+      details: formatErrors(r.errors),
+    });
+  }
+  // fs.renameSync is atomic on the same filesystem (runs/ lives
+  // under the worktree). Imported as fsRenameSync at the top.
+  fsRenameSync(draft, final);
+  return sendJson(res, 200, { ok: true, written: final, decision: r.data });
 }
 
 // ─── SSE: per-run change stream ───────────────────────────────────────────

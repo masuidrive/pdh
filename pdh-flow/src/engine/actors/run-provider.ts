@@ -524,12 +524,17 @@ index when the question listed options), \`--comment\` (an optional
 free-form note from the user, surfaced to the engine alongside the
 answer).
 
+The wrapper writes a *draft* answer that the human user must confirm
+in the assist modal (a "Confirm and close?" banner appears, with Yes
+/ No buttons). If they pick No they may ask you to revise; just run
+the wrapper again with new args — the draft is overwritten and the
+banner re-shows. The engine only proceeds after the user clicks Yes.
+
 Important: choose **exactly one** of the two paths — wrapper exec OR
-envelope JSON, never both. Once the wrapper writes the answer file
-the engine resumes; emitting envelope JSON afterwards is wasted output
-and confuses the chat. If you ran the wrapper and it printed
-\`{"ok": true, ...}\`, you are done — the engine takes over from there.
-If the wrapper does not exist, fall back to the JSON envelope above.`;
+envelope JSON, never both. Once the wrapper exits with \`{"ok": true, ...}\`
+the answer is in the user's hands; emitting envelope JSON afterwards
+is wasted output and confuses the chat. If the wrapper does not exist,
+fall back to the JSON envelope above.`;
 
 function envelopeJsonSchema(): Record<string, unknown> {
   // Inline schema (no $refs) so the CLI's --json-schema / --output-schema

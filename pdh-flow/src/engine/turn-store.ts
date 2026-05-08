@@ -20,6 +20,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -52,6 +53,16 @@ function answerPath(
 ): string {
   const seq = String(turn).padStart(3, "0");
   return join(turnsDir(worktreePath, runId, nodeId), `turn-${seq}-answer.json`);
+}
+
+function answerDraftPath(
+  worktreePath: string,
+  runId: string,
+  nodeId: string,
+  turn: number,
+): string {
+  const seq = String(turn).padStart(3, "0");
+  return join(turnsDir(worktreePath, runId, nodeId), `turn-${seq}-answer.draft.json`);
 }
 
 /** Persist a question file, validated against turn-question.schema.json. */
@@ -103,24 +114,92 @@ export function readTurnAnswer(opts: {
   return r.data;
 }
 
-/** Persist an answer file (used by CLI / Web UI / fixture replay). */
+/** Persist an answer file (used by CLI / Web UI / fixture replay).
+ *  When draft=true, writes to `turn-NNN-answer.draft.json` instead of
+ *  the final filename. The draft file is invisible to the engine's
+ *  `awaitTurnAnswer` poller (which matches `turn-NNN-answer.json`
+ *  exactly); promote it via `promoteTurnDraft` after the human
+ *  user confirms.
+ */
 export function writeTurnAnswer(opts: {
   worktreePath: string;
   runId: string;
   answer: TurnAnswer;
+  draft?: boolean;
 }): string {
   const v = getValidator();
   const r = v.validate<TurnAnswer>(SCHEMA_IDS.turnAnswer, opts.answer);
   if (r.ok === false) throw new SchemaViolation(SCHEMA_IDS.turnAnswer, r.errors);
-  const path = answerPath(
-    opts.worktreePath,
-    opts.runId,
-    opts.answer.node_id,
-    opts.answer.turn,
-  );
+  const path = opts.draft
+    ? answerDraftPath(
+        opts.worktreePath,
+        opts.runId,
+        opts.answer.node_id,
+        opts.answer.turn,
+      )
+    : answerPath(
+        opts.worktreePath,
+        opts.runId,
+        opts.answer.node_id,
+        opts.answer.turn,
+      );
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(opts.answer, null, 2) + "\n");
   return path;
+}
+
+/**
+ * Atomically promote a draft answer to the final answer the engine
+ * reads. Validates the draft against the schema before renaming.
+ */
+export function promoteTurnDraft(opts: {
+  worktreePath: string;
+  runId: string;
+  nodeId: string;
+  turn: number;
+}):
+  | { ok: true; path: string; answer: TurnAnswer }
+  | { ok: false; status: number; error: string }
+{
+  const draft = answerDraftPath(
+    opts.worktreePath,
+    opts.runId,
+    opts.nodeId,
+    opts.turn,
+  );
+  const final = answerPath(
+    opts.worktreePath,
+    opts.runId,
+    opts.nodeId,
+    opts.turn,
+  );
+  if (existsSync(final)) {
+    return { ok: false, status: 409, error: "already_finalized" };
+  }
+  if (!existsSync(draft)) {
+    return { ok: false, status: 404, error: "no_draft" };
+  }
+  let obj: unknown;
+  try {
+    obj = JSON.parse(readFileSync(draft, "utf8"));
+  } catch (e) {
+    return { ok: false, status: 400, error: `invalid_draft_json: ${(e as Error).message}` };
+  }
+  const v = getValidator();
+  const r = v.validate<TurnAnswer>(SCHEMA_IDS.turnAnswer, obj);
+  if (r.ok === false) {
+    return {
+      ok: false,
+      status: 400,
+      error: `draft_schema_violation: ${JSON.stringify(r.errors)}`,
+    };
+  }
+  // Atomic rename. fs.renameSync is atomic on the same filesystem.
+  // No need to import separately — already in scope as fs methods.
+  // Use writeFileSync + rename pattern only if cross-fs; runs/ is
+  // always under the worktree.
+  renameSync(draft, final);
+  return { ok: true, path: final, answer: r.data };
 }
 
 export interface AwaitTurnAnswerOptions {
