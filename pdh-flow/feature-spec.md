@@ -262,6 +262,8 @@ Today the only way for a flow to request user judgement is a static `gate_step` 
 
 **K5 (`8828098`)**: Web UI in-step turn detection + answer form. `RunSummary.active_turn` lights up when an unanswered question file exists; the frontend renders a question card with options (radio buttons), context (collapsible), and an answer textarea. POST `/api/runs/:runId/turns/:nodeId/:turn` validates against `turn-answer.schema.json` and writes the answer. SSE watcher includes `turns/` so the card appears live.
 
+**K5 browser smoke (2026-05-08, agent-browser CDP)**: drove the full happy path through real Chrome — ticket appears on home, click Open lands on detail page, engine runs through to question, turn card renders with 3 radio options, fill textarea + responder + click "beret" + click Submit → answer file written with `via: web_ui`, `selected_option: 2`, `responder: browser-smoke`; engine resumes via `claude --resume`; final paragraph quotes the answer ("black wool beret", "no embellishments"); UI re-renders with `terminal` state and the turn card disappears. End-to-end UI cycle verified.
+
 **K6 (real-LLM smoke, 2026-05-08)**: `flows/pdh-turn-smoke.yaml` + `flows/prompts/turn-smoke.j2` + `scripts/smoke-real-turn-loop.sh`. End-to-end on real claude: provider emits `kind: ask` with 3 hat-type options after 12s; CLI delivers `--text "I'd like a fedora — gray felt, narrow brim"`; engine resumes via `claude --resume` (using the captured session_id); provider emits `kind: final` with a one-paragraph fedora description that explicitly used the answer text; engine reaches `terminal`. Note section captured the final paragraph + a "Turn 1 — asked / User answered" log.
 
 **What this run validated end-to-end**:
