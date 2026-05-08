@@ -21,6 +21,7 @@ export async function cmdRunEngine(argv: string[]): Promise<void> {
     "stop-at": { type: "string" },
     fixture: { type: "string" },
     "run-id": { type: "string" },
+    "timeout-ms": { type: "string" },
   });
 
   const ticket = values.ticket as string | undefined;
@@ -46,6 +47,12 @@ export async function cmdRunEngine(argv: string[]): Promise<void> {
     fixtureMeta = JSON.parse(readFileSync(path, "utf8"));
   }
 
+  const timeoutMsRaw = values["timeout-ms"] as string | undefined;
+  const timeoutMs = timeoutMsRaw ? Number(timeoutMsRaw) : undefined;
+  if (timeoutMsRaw !== undefined && (!Number.isFinite(timeoutMs!) || timeoutMs! <= 0)) {
+    throw new Error(`--timeout-ms must be a positive number; got ${timeoutMsRaw}`);
+  }
+
   const result = await runEngine({
     repoPath,
     flowId,
@@ -55,6 +62,7 @@ export async function cmdRunEngine(argv: string[]): Promise<void> {
     fixtureMeta,
     startAtNodeId: values["start-at"] as string | undefined,
     stopAtNodeId: values["stop-at"] as string | undefined,
+    timeoutMs,
   });
 
   process.stdout.write(

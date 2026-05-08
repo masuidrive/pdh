@@ -209,12 +209,23 @@ function compileGuardian(
   opts: CompileOptions,
   groupMembers: Record<string, string[]>,
 ): unknown {
-  // Find the parent parallel group (the one whose on_all_done points to this
-  // guardian) so the actor knows which evidence nodes to require.
-  const parentGroupId = findParentGroup(nodeId, flat);
-  const expectedEvidence = parentGroupId
-    ? groupMembers[parentGroupId] ?? []
-    : [];
+  // Determine which upstream node ids the guardian is supposed to consume.
+  // Two sources, in priority order:
+  //   1. node.inputs_from — explicit upstream link (e.g. final_verification
+  //      reads code_quality_review.aggregate). Single string or array.
+  //   2. Parent parallel_group membership — for aggregators emitted by the
+  //      review_loop macro, the reviewer ids are the group's members.
+  // If neither resolves, we fall through to []; the prompt + slim schema
+  // cannot constrain evidence_consumed in that case (rare; flag it).
+  let expectedEvidence: string[];
+  if (node.inputs_from) {
+    expectedEvidence = Array.isArray(node.inputs_from)
+      ? [...node.inputs_from]
+      : [node.inputs_from];
+  } else {
+    const parentGroupId = findParentGroup(nodeId, flat);
+    expectedEvidence = parentGroupId ? groupMembers[parentGroupId] ?? [] : [];
+  }
 
   const passTarget = resolveTransition(node.outputs.pass, opts.variant);
   const repairTarget = node.outputs.repair_needed?.next;

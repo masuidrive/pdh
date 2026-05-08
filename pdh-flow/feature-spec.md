@@ -2,7 +2,7 @@
 
 Working spec for the v2 rebuild. Captures **decisions made**, **deferred features** with adoption conditions, and **open questions**. Conversational design context is in chat history; this file is the durable summary that survives session boundaries.
 
-Last updated: 2026-05-07.
+Last updated: 2026-05-08.
 
 ---
 
@@ -36,8 +36,10 @@ Each reviewer / aggregator / repair invocation produces its own commit. Worst ca
 ### D-006: judgement freeze on first success
 Guardian re-invocation reads `runs/<run>/judgements/<node>__round-<n>.json` if present and skips the LLM call. This is the idempotency mechanism for non-deterministic LLM judges.
 
-### D-007: subscription-auth via subprocess only
-No SDK direct integration (Anthropic / OpenAI ToS for subscription tokens). The engine spawns the user's authenticated `claude` / `codex` CLI as a child process. No alternative path is acceptable for subscription users.
+### D-007: subscription-auth via subprocess only — for tool-using roles
+No SDK direct integration **with subscription tokens** (Anthropic / OpenAI ToS forbids third-party use of subscription OAuth tokens). For tool-heavy roles (assist / planner / reviewer / implementer / repair) the engine spawns the user's authenticated `claude` / `codex` CLI as a child process.
+
+**Addendum (2026-05-08, F-010)**: Judges (`guardian_step`) have an additional path that uses **API keys via @ai-sdk/{anthropic,openai}**. API keys are developer-paid credentials, not subscription tokens; they're explicitly allowed by ToS. The CLI subprocess + `--json-schema` is best-effort (observed to drop `structured_output`, emit YAML, or wrap JSON in fences in `-p` agentic mode), which breaks the engine's "decision is the routing key" contract. The API path uses `generateObject()` which leverages tool_use / response_format for hard schema enforcement. Auto-detected via `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`; falls back to CLI if neither is set. Override with `PDH_JUDGE_PROVIDER` / `PDH_JUDGE_MODEL`.
 
 ### D-008: canonical state vs snapshot
 `current-note.md` frontmatter + `judgements/` + git history are canonical. XState snapshot at `runs/<run>/snapshot.json` is bookkeeping for fast resume. On conflict, canonical wins; engine rebuilds machine from canonical when snapshot is missing or its `machine_hash` differs from the current compiled flow.
@@ -108,6 +110,26 @@ H5 validated the new role prompts with real LLMs via `scripts/smoke-real-roles.s
 Side fix: added `editable: boolean` to ProviderInvocation; claude gets `--permission-mode bypassPermissions` when true, codex gets `--sandbox workspace-write`. Defaults to false (read-only) for assist/planner/reviewer roles.
 
 **Remaining (out of F-004 scope)**: a real E2E run of the FULL pdh-c-v2 (assist → investigate_plan → plan_review → plan_gate → implement → code_quality_review → final_verification → close_gate → close_finalize). H5 covered the new roles in isolation; the full chain with multi-reviewer + repair loops is exercise of existing prototype work (Phase E + G), not new role validation. Defer to a future "v2 first real ticket" milestone.
+
+### F-010: full pdh-c-v2 real E2E + API-direct judge transport — **DONE 2026-05-08**
+Phase H6: drove pdh-c-v2 (full variant) end-to-end with real claude+codex on the divide-fn ticket. 7 runs surfaced 5 separable bugs, each fixed in place:
+
+1. **Slim CLI guardian schema didn't constrain `evidence_consumed` strings** → enum-locked to expected reviewer ids.
+2. **Slim guardian schema didn't constrain `Finding.raised_by`** (engine-side full schema rejects non-NodeId strings) → enum-locked findings' raised_by.
+3. **`buildGuardianPrompt` framed inputs as "reviewers"** → confused `final_verification` (whose input is an aggregate, not a reviewer) → reframed as "upstream input nodes".
+4. **CLI `--json-schema` is best-effort in `-p` agentic mode** — observed claude emit YAML, code-fence-wrapped JSON, or drop `structured_output` → introduced **API-direct judge transport** via `@ai-sdk/{anthropic,openai}` `generateObject()` for hard schema enforcement (see D-007 addendum).
+5. **`compile-machine.ts` ignored `node.inputs_from`** when building `expectedEvidenceNodes` → only parallel-group membership was wired → `final_verification` got `[]` → API rejected slim schema's empty `enum`. Fixed: prefer `inputs_from` when present.
+
+**Final passing run**: 7th attempt completed `terminal` state in ~12 min. 16 commits, 3 frozen judgements (plan_review.aggregate, code_quality_review.aggregate, final_verification). API judge cost ≈ 26K tokens (sonnet-4-6) / **~$0.09 per ticket**.
+
+**Side observation**: API judge (sonnet-4-6 reading inlined ticket+note) made noticeably better calls than the CLI judge — e.g. correctly absorbed `plan_review.critical_1`'s misapplied "Major" finding (about implementation status, not plan defects) as `pass` instead of triggering an unwarranted plan-repair loop.
+
+**Smoke runner**: `scripts/smoke-real-fullflow.sh` (excluded from `npm run test:all` per the no-real-providers rule).
+**Fixture**: `tests/fixtures/v2/smoke-fullflow-divide/`.
+
+**Remaining gaps captured** (deferred):
+- Plan-repair vs code-quality-repair semantics: `buildImplementerPrompt` doesn't distinguish them, so plan_repair edits source instead of refining the plan note. Tracked as a follow-up in chat task #100.
+- `--timeout-ms` CLI flag added (40 min cap) for full-flow runs; default 20 min stays for shorter flows.
 
 ### F-005: Web UI v2
 Step-type-driven viewer + gate approver + assist launcher. Renders 4 type-specific affordances:

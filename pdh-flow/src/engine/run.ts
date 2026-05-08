@@ -7,6 +7,7 @@
 // For the prototype, the input is a fixture meta blob; the real engine will
 // drive provider invocations directly.
 
+import "dotenv/config";
 import { createActor, type AnyActorRef, waitFor } from "xstate";
 import { compileFlow } from "./compile-machine.ts";
 import { loadFlow } from "./load-flow.ts";
@@ -17,6 +18,7 @@ import {
   saveSnapshot,
 } from "./persist.ts";
 import type { FixtureMeta } from "./actors/run-provider.ts";
+import { detectJudgeConfig } from "./judge/api-judge.ts";
 
 export interface RunEngineOptions {
   repoPath: string;     // pdh-flow repo (where flows/ lives)
@@ -42,6 +44,19 @@ export interface RunEngineResult {
 export async function runEngine(
   opts: RunEngineOptions,
 ): Promise<RunEngineResult> {
+  // Surface the judge transport so the user can confirm which path is live
+  // before running ~15 LLM calls.
+  const judgeCfg = detectJudgeConfig();
+  if (judgeCfg) {
+    process.stderr.write(
+      `[engine] judge transport = ${judgeCfg.provider} (${judgeCfg.model})\n`,
+    );
+  } else {
+    process.stderr.write(
+      `[engine] judge transport = claude-cli (no API key in env; consider setting ANTHROPIC_API_KEY for deterministic structured output)\n`,
+    );
+  }
+
   const flow = loadFlow({ repoPath: opts.repoPath, flowId: opts.flowId });
   if (opts.startAtNodeId) {
     // Mutate the variant's initial node for this run only — the engine reads

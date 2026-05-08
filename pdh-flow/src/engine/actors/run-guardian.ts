@@ -34,6 +34,11 @@ import type {
 } from "../../types/index.ts";
 import type { FixtureMeta } from "./run-provider.ts";
 import { invokeProvider, type ProviderName } from "../providers/index.ts";
+import {
+  detectJudgeConfig,
+  invokeApiJudge,
+  type JudgeProviderConfig,
+} from "../judge/api-judge.ts";
 
 export interface GuardianActorInput {
   nodeId: string;
@@ -217,6 +222,61 @@ async function invokeRealGuardian(p: {
   maxRounds: number;
   signal?: AbortSignal;
 }): Promise<GuardianOutput> {
+  // Prefer API direct (deterministic structured output via tool_use /
+  // response_format) over CLI subprocess for judges. CLI's --json-schema is
+  // best-effort in `-p` agentic mode and observed to drop structured_output,
+  // emit YAML, or wrap JSON in code fences. Empirically unusable for the
+  // engine's "decision is the routing key" contract.
+  const apiCfg = detectJudgeConfig();
+  if (apiCfg) {
+    return invokeApiGuardian(p, apiCfg);
+  }
+  return invokeCliGuardian(p);
+}
+
+async function invokeApiGuardian(
+  p: {
+    role: string;
+    nodeId: string;
+    round: number;
+    worktreePath: string;
+    expectedEvidenceNodes: string[];
+    maxRounds: number;
+    signal?: AbortSignal;
+  },
+  cfg: JudgeProviderConfig,
+): Promise<GuardianOutput> {
+  // API has no file tools — inline the artefacts into the prompt.
+  const ticketPath = join(p.worktreePath, "current-ticket.md");
+  const notePath = join(p.worktreePath, "current-note.md");
+  const ticket = existsSync(ticketPath) ? readFileSync(ticketPath, "utf8") : "(no ticket)";
+  const note = existsSync(notePath) ? readFileSync(notePath, "utf8") : "(no note)";
+
+  const prompt = buildApiGuardianPrompt(p, ticket, note);
+  const schema = guardianOutputSchema(p.expectedEvidenceNodes, p.round);
+
+  const res = await invokeApiJudge(cfg, {
+    prompt,
+    schema,
+    signal: p.signal,
+  });
+  process.stderr.write(
+    `[guardian] api ${cfg.provider}/${cfg.model} ${p.nodeId} round-${p.round} ok ` +
+      `(tokens=${res.usage?.totalTokens ?? "?"})\n`,
+  );
+  return res.object as GuardianOutput;
+}
+
+async function invokeCliGuardian(p: {
+  provider: ProviderName;
+  role: string;
+  nodeId: string;
+  round: number;
+  worktreePath: string;
+  expectedEvidenceNodes: string[];
+  maxRounds: number;
+  signal?: AbortSignal;
+}): Promise<GuardianOutput> {
   const prompt = buildGuardianPrompt(p);
   const schema = guardianOutputSchema(p.expectedEvidenceNodes, p.round);
   const result = await invokeProvider(p.provider, {
@@ -224,6 +284,11 @@ async function invokeRealGuardian(p: {
     cwd: p.worktreePath,
     jsonSchema: schema,
     signal: p.signal,
+    // Guardians are read-only by prompt contract, but they need to invoke
+    // Read/Grep/Glob tools without approval prompts. Without bypass, claude
+    // in headless `-p` mode can silently fail tool calls and return an
+    // envelope with no structured_output.
+    editable: true,
   });
   if (result.exitCode !== 0 || result.timedOut) {
     process.stderr.write(
@@ -244,6 +309,67 @@ async function invokeRealGuardian(p: {
   return result.jsonOutput as GuardianOutput;
 }
 
+function buildApiGuardianPrompt(
+  p: {
+    role: string;
+    nodeId: string;
+    round: number;
+    expectedEvidenceNodes: string[];
+    maxRounds: number;
+  },
+  ticket: string,
+  note: string,
+): string {
+  const lines: string[] = [];
+  lines.push(`You are the ${p.role} for ${p.nodeId} (round ${p.round} of ${p.maxRounds}).`);
+  lines.push("");
+  lines.push(
+    `${p.expectedEvidenceNodes.length} upstream node section(s) in current-note.md provide the evidence you must judge:`,
+  );
+  for (const id of p.expectedEvidenceNodes) {
+    lines.push(`  - ## ${id} (round <N>) — find this header in the note below.`);
+  }
+  lines.push("");
+  lines.push(
+    "Each upstream section is either a reviewer (ends with `VERDICT:` line: `No Critical/Major`, `Major`, or `Critical`) or an aggregate (carries `**Decision**: pass|repair_needed|...`).",
+  );
+  lines.push("");
+  lines.push("Decide:");
+  lines.push(
+    "  - decision = pass: every upstream section reports clean (No Critical/Major reviewers, or upstream aggregates report pass).",
+  );
+  lines.push(
+    "  - decision = repair_needed: at least one upstream finding is Critical or Major (Minor does NOT trigger repair).",
+  );
+  lines.push(
+    "  - decision = abort or escalate_human: only when judgment is impossible.",
+  );
+  lines.push("");
+  lines.push("Schema rules you MUST follow:");
+  lines.push(`  - round = ${p.round} (echo exactly).`);
+  lines.push(
+    `  - evidence_consumed = exactly this list (no more, no less): ${JSON.stringify(p.expectedEvidenceNodes)}.`,
+  );
+  lines.push(
+    "  - For decision=repair_needed: blocking_findings is non-empty. Each finding has severity (critical/major/minor), title, evidence_ref, and raised_by must be one id from evidence_consumed.",
+  );
+  lines.push(
+    "  - For decision=pass: blocking_findings is empty (or omitted).",
+  );
+  lines.push(
+    "  - summary: 1 line for git commit subject. reasoning: 2-5 sentences for audit.",
+  );
+  lines.push("");
+  lines.push("=== current-ticket.md ===");
+  lines.push(ticket);
+  lines.push("=== end current-ticket.md ===");
+  lines.push("");
+  lines.push("=== current-note.md ===");
+  lines.push(note);
+  lines.push("=== end current-note.md ===");
+  return lines.join("\n");
+}
+
 function buildGuardianPrompt(p: {
   role: string;
   nodeId: string;
@@ -255,23 +381,25 @@ function buildGuardianPrompt(p: {
   lines.push(`You are the ${p.role} for ${p.nodeId} (round ${p.round} of ${p.maxRounds}).`);
   lines.push("");
   lines.push(
-    `${p.expectedEvidenceNodes.length} reviewer(s) have written reviews into current-note.md.`,
+    `${p.expectedEvidenceNodes.length} upstream node(s) have written sections to current-note.md that you MUST read.`,
   );
-  lines.push("Their sections appear under headers like:");
+  lines.push("Their headers look like:");
   for (const id of p.expectedEvidenceNodes) {
-    lines.push(`  ## ${id} (round ${p.round})`);
+    lines.push(`  ## ${id} (round <N>)`);
   }
   lines.push("");
   lines.push(
-    "Read those sections (Read tool on current-note.md). Each ends with a `VERDICT:` line.",
+    "Each upstream section is either a reviewer (ends with a `VERDICT:` line, e.g. `VERDICT: No Critical/Major` / `VERDICT: Major` / `VERDICT: Critical`) or an aggregate (carries a `**Decision**: pass|repair_needed|...` line).",
   );
   lines.push("");
-  lines.push("Decide:");
   lines.push(
-    "  - decision = pass: every reviewer reported `No Critical/Major`.",
+    "Read those sections via the Read tool on current-note.md. Then decide:",
   );
   lines.push(
-    "  - decision = repair_needed: at least one reviewer flagged Critical or Major.",
+    "  - decision = pass: every upstream section reports clean (No Critical/Major reviewers, or upstream aggregates report pass).",
+  );
+  lines.push(
+    "  - decision = repair_needed: at least one upstream finding is Critical or Major (not Minor).",
   );
   lines.push(
     "  - decision = abort or escalate_human: only when judgment is impossible (rare).",
@@ -279,13 +407,13 @@ function buildGuardianPrompt(p: {
   lines.push("");
   lines.push("Output requirements:");
   lines.push(
-    "  - Echo `round` exactly: " + String(p.round),
+    `  - Echo round = ${p.round} exactly.`,
   );
   lines.push(
-    `  - List every reviewer id you read in evidence_consumed (must be all ${p.expectedEvidenceNodes.length}).`,
+    `  - evidence_consumed MUST be exactly this list (no more, no less): ${JSON.stringify(p.expectedEvidenceNodes)}.`,
   );
   lines.push(
-    "  - If decision=repair_needed, populate blocking_findings (severity in critical/major/minor, title, evidence_ref pointing to file:line or node_id, raised_by = reviewer node id).",
+    "  - If decision=repair_needed, populate blocking_findings. Each finding has: severity in critical/major/minor, title, evidence_ref pointing to file:line or node_id, raised_by must be one of the ids in evidence_consumed.",
   );
   lines.push(
     "  - summary: 1 line for git commit subject. reasoning: 2-5 sentences for audit.",
@@ -302,6 +430,27 @@ function guardianOutputSchema(
   // Slimmed-down version of guardian-output.schema.json embedded inline so
   // the provider CLI's --json-schema flag can enforce shape. We don't pass
   // the full $ref-chained schema (cross-file refs would fail in the CLI).
+  // Anywhere we expect a NodeId we constrain via `enum` to the known
+  // reviewer ids — otherwise the LLM produces strings (markdown headers,
+  // capitalised role names) that pass slim CLI validation but fail the full
+  // NodeId-pattern check on the engine side.
+  const findingSchema = {
+    type: "object",
+    additionalProperties: false,
+    required: ["severity", "title", "evidence_ref"],
+    properties: {
+      severity: { type: "string", enum: ["critical", "major", "minor"] },
+      title: { type: "string", minLength: 1, maxLength: 120 },
+      detail: { type: "string", maxLength: 2000 },
+      evidence_ref: { type: "string", minLength: 1, maxLength: 500 },
+      raised_by: { type: "string", enum: expectedEvidence },
+      recommended_action: {
+        type: "string",
+        enum: ["fix_now", "defer_to_followup_ticket", "ignore"],
+      },
+    },
+  } as const;
+
   return {
     type: "object",
     additionalProperties: false,
@@ -316,29 +465,18 @@ function guardianOutputSchema(
       round: { const: round },
       evidence_consumed: {
         type: "array",
-        items: { type: "string" },
+        uniqueItems: true,
         minItems: expectedEvidence.length,
+        items: { type: "string", enum: expectedEvidence },
       },
       blocking_findings: {
         type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          required: ["severity", "title", "evidence_ref"],
-          properties: {
-            severity: { type: "string", enum: ["critical", "major", "minor"] },
-            title: { type: "string", minLength: 1, maxLength: 120 },
-            detail: { type: "string", maxLength: 2000 },
-            evidence_ref: { type: "string", minLength: 1, maxLength: 500 },
-            raised_by: { type: "string" },
-            recommended_action: {
-              type: "string",
-              enum: ["fix_now", "defer_to_followup_ticket", "ignore"],
-            },
-          },
-        },
+        items: findingSchema,
       },
-      non_blocking_findings: { type: "array" },
+      non_blocking_findings: {
+        type: "array",
+        items: findingSchema,
+      },
       next_target_override: { type: "string" },
     },
   };

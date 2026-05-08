@@ -94,18 +94,50 @@ async function runProcess(
         // The actual schema-conforming object lives in `structured_output`.
         try {
           const envelope = JSON.parse(stdout);
-          if (
-            envelope &&
-            typeof envelope === "object" &&
-            "structured_output" in envelope &&
-            envelope.structured_output !== null
-          ) {
-            jsonOutput = envelope.structured_output;
-            text = typeof envelope.result === "string" ? envelope.result : "";
-          } else {
-            // Older / different shape: try the envelope itself if it matches.
-            jsonOutput = envelope;
-            text = "";
+          if (envelope && typeof envelope === "object") {
+            const env = envelope as Record<string, unknown>;
+            if (env.is_error === true) {
+              // Surface the real cause (API error, rate limit, permission
+              // denial, etc.) instead of letting the envelope flow through
+              // and trip downstream schema validation.
+              const cause =
+                typeof env.result === "string"
+                  ? env.result
+                  : `is_error=true (api_error_status=${String(env.api_error_status ?? "unknown")})`;
+              process.stderr.write(
+                `[claude] provider returned is_error=true. cause: ${cause}\n`,
+              );
+              return resolve({
+                text: "",
+                jsonOutput: undefined,
+                exitCode: code ?? -1,
+                stderrTail,
+                timedOut,
+              });
+            }
+            if (
+              "structured_output" in env &&
+              env.structured_output !== null &&
+              env.structured_output !== undefined
+            ) {
+              jsonOutput = env.structured_output;
+              text = typeof env.result === "string" ? env.result : "";
+            } else {
+              // Schema requested but no structured_output produced. Log a
+              // diagnostic — the caller will treat missing jsonOutput as a
+              // failure. Do NOT flow the bare envelope through; downstream
+              // Ajv would reject every meta field as additionalProperties.
+              const resultPreview =
+                typeof env.result === "string" ? env.result.slice(0, 1500) : "";
+              process.stderr.write(
+                `[claude] --json-schema requested but envelope has no structured_output. ` +
+                  `stop_reason=${String(env.stop_reason ?? "unknown")} ` +
+                  `terminal_reason=${String(env.terminal_reason ?? "unknown")}\n` +
+                  (resultPreview ? `[claude] result preview:\n${resultPreview}\n` : ""),
+              );
+              jsonOutput = undefined;
+              text = typeof env.result === "string" ? env.result : "";
+            }
           }
         } catch {
           // fall through; caller will treat as failure if jsonOutput required
