@@ -107,8 +107,24 @@ for (const scenario of scenarios) {
   if (existsSync(inputDir)) {
     const inputFiles = readdirSync(inputDir);
     assert(`input/ has files`, inputFiles.length > 0);
-    assert(`input/current-note.md exists`, existsSync(join(inputDir, "current-note.md")));
-    assert(`input/current-ticket.md exists`, existsSync(join(inputDir, "current-ticket.md")));
+    const ticketsDir = join(inputDir, "tickets");
+    assert(`input/tickets/ exists`, existsSync(ticketsDir));
+    if (existsSync(ticketsDir)) {
+      const ticketsContents = readdirSync(ticketsDir);
+      const tickets = ticketsContents.filter(
+        (f) => f.endsWith(".md") && !f.endsWith("-note.md"),
+      );
+      const notes = ticketsContents.filter((f) => f.endsWith("-note.md"));
+      assert(`input/tickets/ has exactly one ticket .md`, tickets.length === 1);
+      assert(`input/tickets/ has exactly one -note.md`, notes.length === 1);
+      if (tickets.length === 1 && notes.length === 1) {
+        const slug = tickets[0].replace(/\.md$/, "");
+        assert(
+          `tickets/${slug}.md and tickets/${slug}-note.md are paired`,
+          notes[0] === `${slug}-note.md`,
+        );
+      }
+    }
   }
 
   // Each guardian_output in node_outputs must validate against the schema.

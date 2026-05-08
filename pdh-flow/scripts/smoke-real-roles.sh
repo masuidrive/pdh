@@ -50,8 +50,16 @@ cleanup() {
 trap cleanup EXIT
 
 cp -r "$INPUT_FIXTURE/." "$WORKTREE/"
+TICKET_ID=$(awk '/^ticket_id:/ { print $2; exit }' "$WORKTREE/tickets/"*.md 2>/dev/null | head -1)
 (
   cd "$WORKTREE"
+  ln -s "tickets/$TICKET_ID.md" current-ticket.md
+  ln -s "tickets/$TICKET_ID-note.md" current-note.md
+  cat > .gitignore <<'GIT'
+current-ticket.md
+current-note.md
+.pdh-flow/
+GIT
   git init -q
   git -c user.email=t@t -c user.name=t add -A
   git -c user.email=t@t -c user.name=t commit -q -m "[setup] seed smoke-roles fixture"

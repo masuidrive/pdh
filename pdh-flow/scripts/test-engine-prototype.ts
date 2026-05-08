@@ -16,7 +16,10 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  readlinkSync,
   rmSync,
+  symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -67,8 +70,25 @@ function seedRepo(scenario: string): { worktree: string; meta: any } {
   const worktree = mkdtempSync(join(tmpdir(), `pdh-engine-${scenario}-`));
   cleanup.push(worktree);
 
-  // Copy input/ → worktree
+  // Copy input/ → worktree (fixture stores ticket+note under input/tickets/)
   cpSync(join(fixtureDir, "input"), worktree, { recursive: true });
+
+  // F-011 layout: discover ticket slug from tickets/*.md and create
+  // current-{ticket,note}.md symlinks + .gitignore.
+  const ticketsDir = join(worktree, "tickets");
+  if (existsSync(ticketsDir)) {
+    const slug = readdirSync(ticketsDir)
+      .filter((f) => f.endsWith(".md") && !f.endsWith("-note.md"))
+      .map((f) => f.replace(/\.md$/, ""))[0];
+    if (slug) {
+      symlinkSync(`tickets/${slug}.md`, join(worktree, "current-ticket.md"));
+      symlinkSync(`tickets/${slug}-note.md`, join(worktree, "current-note.md"));
+    }
+  }
+  writeFileSync(
+    join(worktree, ".gitignore"),
+    "current-ticket.md\ncurrent-note.md\n.pdh-flow/\n",
+  );
 
   // git init
   spawnSync("git", ["init", "-q"], { cwd: worktree });

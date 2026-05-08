@@ -64,23 +64,31 @@ cleanup() {
 trap cleanup EXIT
 
 cp -r "$INPUT_FIXTURE/." "$WORKTREE/"
-(
-  cd "$WORKTREE"
-  git init -q
-  git -c user.email=t@t -c user.name=t add -A
-  git -c user.email=t@t -c user.name=t commit -q -m "[setup] seed fullflow fixture"
-)
 
 RUN_ID="fullflow-$(date +%s)"
 
 # Pull the ticket_id from the fixture's frontmatter so a single runner can
 # drive any fixture without code edits.
-TICKET_ID=$(awk '/^ticket_id:/ { print $2; exit }' "$INPUT_FIXTURE/current-ticket.md")
+TICKET_ID=$(awk '/^ticket_id:/ { print $2; exit }' "$WORKTREE/tickets/"*.md 2>/dev/null | head -1)
 if [ -z "$TICKET_ID" ]; then
-  echo "could not parse ticket_id from $INPUT_FIXTURE/current-ticket.md" >&2
+  echo "could not parse ticket_id from $WORKTREE/tickets/*.md" >&2
   exit 1
 fi
 echo "[fullflow] ticket: $TICKET_ID"
+
+(
+  cd "$WORKTREE"
+  ln -s "tickets/$TICKET_ID.md" current-ticket.md
+  ln -s "tickets/$TICKET_ID-note.md" current-note.md
+  cat > .gitignore <<'GIT'
+current-ticket.md
+current-note.md
+.pdh-flow/
+GIT
+  git init -q
+  git -c user.email=t@t -c user.name=t add -A
+  git -c user.email=t@t -c user.name=t commit -q -m "[setup] seed fullflow fixture"
+)
 
 # Pre-create gate approval files so the gate poller resolves immediately when
 # the engine reaches plan_gate / close_gate. This stands in for the real CLI /

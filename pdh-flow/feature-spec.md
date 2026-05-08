@@ -193,6 +193,45 @@ v1's `src/runtime/assist/` provided an interactive terminal mode for stop-state 
 
 **Trigger**: when human-gate workflow needs a human-driven repair loop (e.g. fixing what the LLM keeps getting wrong).
 
+### F-011: ticket-centric data layout migration
+After H8 the v2 engine still mirrored v1's storage shape: `current-ticket.md` and `current-note.md` at worktree root, audit reasoning attached to the project repo via reviewer-each-commits (D-003), `.pdh-flow/runs/<runId>/closed.json` and friends as the only structured record of gate decisions. Long-running operation showed three problems: (a) only the latest ticket's note was directly readable from the worktree (older tickets buried inside `git log -p -- current-note.md`), (b) gate approver records and frozen judgements were trapped inside the ephemeral `.pdh-flow/` tree, and (c) project git accumulated per-reviewer audit churn that no one bisects against.
+
+**Three-layer model** (decided 2026-05-08):
+
+```
+Durable layer    tickets/<slug>.md           ← mutable contract (project git)
+                 tickets/<slug>-note.md      ← append-only journal (project git)
+Working layer    current-ticket.md → tickets/<slug>.md       (symlink, gitignored)
+                 current-note.md   → tickets/<slug>-note.md  (symlink, gitignored)
+Engine layer     .pdh-flow/runs/<runId>/                     (ephemeral, wipe-safe)
+                   snapshot.json / gates/ / judgements/
+```
+
+`tickets/<slug>.md` becomes the canonical single source for the ticket-level outcome (description / AC / constraints / Out of scope / Resolution). `tickets/<slug>-note.md` is the full process journal. Both are flat in `tickets/`, paired by filename prefix; retrieval uses `find tickets/ -name '*.md' -not -name '*-note.md'`. Cross-machine resume is explicitly out of scope (D-010 reaffirmed) — `.pdh-flow/` may be wiped at terminal.
+
+**Role split** (final):
+
+- **ticket** is a mutable contract. `# Description` / `# Acceptance Criteria` / `# Constraints` are written by the human at open and edited in place by `assist` / `PD-C-1` to refine scope. `# Out of scope` is appended by aggregator nodes when a Minor is accepted. `# Resolution` is appended by the close handler at terminal. Editing authority is enforced per-actor (post-commit diff check against a section whitelist).
+- **note** is append-only. Provider / guardian prose, gate decisions echoed by the engine (Gap B), and the terminal section all land here.
+
+**D-003 dropped** as part of this migration. Commit boundary moves from per-reviewer to per-meaningful-step (~8 commits / clean run instead of ~16). Reviewer-level audit lives in note section headers, not git commits.
+
+**Phasing (H10-1 .. H10-8)**:
+
+- H10-1: layout move (`tickets/`, symlinks, `.gitignore`, fixture/try-it.sh updates)
+- H10-2: `.pdh-flow/` ephemeral declaration — drop `closed.json`, status moves to note frontmatter
+- H10-3: drop D-003, condense commit boundaries
+- H10-4: Gap B — engine echoes gate decisions to note
+- H10-5: section enforce — actor → ticket section whitelist + post-commit diff verification
+- H10-6: Gap A — aggregator writes Out of scope to ticket directly
+- H10-7: Gap C — close handler writes Resolution to ticket
+- H10-8: Web UI switches to `/api/tickets` (list from `tickets/` + frontmatter parse); gate POST stays on `.pdh-flow/runs/.../gates/<node>.json` as the engine I/O channel
+
+**Open sub-questions**:
+
+- Whether to wipe `.pdh-flow/runs/<runId>/` automatically at terminal or keep it for one-run-window inspection (lean: keep, with a `--gc` flag).
+- Whether `assist` and `PD-C-1` write to ticket via raw edit (current) or via a `system_step`-mediated proposal (safer but adds indirection). Decided: **raw edit** — format is not fixed enough to mediate.
+
 ---
 
 ## Open questions

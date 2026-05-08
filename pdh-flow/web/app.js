@@ -124,7 +124,7 @@ async function initRunPage(runId) {
   try {
     note = await fetchText(`/api/runs/${encodeURIComponent(runId)}/note`);
   } catch {
-    note = "(current-note.md not found)";
+    note = "(note not found)";
   }
   lastSummary = summary;
   lastNote = note;
@@ -167,7 +167,7 @@ function renderRunPageShell(runId, s, note) {
 
     <section class="card bg-base-100 shadow">
       <div class="card-body">
-        <h2 class="card-title text-lg">current-note.md</h2>
+        <h2 class="card-title text-lg">note</h2>
         <pre id="note-pre" class="pre-wrap text-xs bg-base-200 p-3 rounded max-h-[600px] overflow-auto">${escapeHtml(note)}</pre>
       </div>
     </section>
