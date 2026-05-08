@@ -237,7 +237,7 @@ Engine layer     .pdh-flow/runs/<runId>/                     (ephemeral, wipe-sa
 - Whether to wipe `.pdh-flow/runs/<runId>/` automatically at terminal or keep it for one-run-window inspection (lean: keep, with a `--gc` flag).
 - Whether `assist` and `PD-C-1` write to ticket via raw edit (current) or via a `system_step`-mediated proposal (safer but adds indirection). Decided: **raw edit** — format is not fixed enough to mediate.
 
-### F-012: dynamic in-step user-input (request_human_input as a turn primitive) — **K1..K3-mini LANDED 2026-05-08, K4..K6 pending**
+### F-012: dynamic in-step user-input (request_human_input as a turn primitive) — **K1..K6 LANDED 2026-05-08, real-LLM smoke green**
 Today the only way for a flow to request user judgement is a static `gate_step` declared in the flow YAML. That covers approval gates the flow author predicted, but not the case where a provider mid-task realises it needs a scoped decision from the human (e.g. "should the breaking change be silent-drop or 422?", "is reasoning_effort in scope?"). Currently the provider has to either guess and document the assumption, or fail and let the close_gate be the catch-all — both lossy.
 
 **Progress (commit chain `9d2adae` → `354f48a`)**:
@@ -245,10 +245,19 @@ Today the only way for a flow to request user judgement is a static `gate_step` 
 - **K2** (`dccf5a7`): turn loop in `run-provider.ts`. When `enable_user_input` is true, the actor invokes the provider with the envelope schema + an instruction prompt; on `kind: 'ask'` it persists the question, polls for the answer, and resumes the provider session via `--resume` (claude) / `codex exec resume` (codex) using the F-001/J2 plumbing. Codex's resume can't take `--output-schema`, so the schema is enforced only on the initial call and `parseEnvelope` falls back to fenced-JSON / raw-text-as-final on resume turns. Cap `TURN_LOOP_MAX_TURNS=10`. New `turn-store.ts` module mirrors `await-gate.ts` polling shape.
 - **K3-mini** (`354f48a`): replay-mode test that spawns `runProvider` with `fixtureMeta.turns: [{question, answer}]` and verifies both files land + validate + the note section is still applied.
 
-**Still TODO**:
-- **K4**: `pdh-flow turn respond <runId> <nodeId> [--text "..."]` CLI for delivering the answer.
-- **K5**: Web UI extension — turn-aware view, symmetric with the gate card.
-- **K6**: real-LLM smoke. Needs a fixture + prompt that nudges the provider into actually emitting `kind: ask`. Likely shape: a planner-role node with deliberately ambiguous AC where the right answer requires a clarifying question.
+**K4 (`a18b95e`)**: `pdh-flow turn-respond` CLI. `--list` lists pending question files; without `--turn`, auto-picks the lowest unanswered. Auto-reads round from the question file and writes a schema-validated `turn-NNN-answer.json`.
+
+**K5 (`8828098`)**: Web UI in-step turn detection + answer form. `RunSummary.active_turn` lights up when an unanswered question file exists; the frontend renders a question card with options (radio buttons), context (collapsible), and an answer textarea. POST `/api/runs/:runId/turns/:nodeId/:turn` validates against `turn-answer.schema.json` and writes the answer. SSE watcher includes `turns/` so the card appears live.
+
+**K6 (real-LLM smoke, 2026-05-08)**: `flows/pdh-turn-smoke.yaml` + `flows/prompts/turn-smoke.j2` + `scripts/smoke-real-turn-loop.sh`. End-to-end on real claude: provider emits `kind: ask` with 3 hat-type options after 12s; CLI delivers `--text "I'd like a fedora — gray felt, narrow brim"`; engine resumes via `claude --resume` (using the captured session_id); provider emits `kind: final` with a one-paragraph fedora description that explicitly used the answer text; engine reaches `terminal`. Note section captured the final paragraph + a "Turn 1 — asked / User answered" log.
+
+**What this run validated end-to-end**:
+- F-001/J1 (claude session_id capture from JSON envelope) — the question file's `session_id` matched the resume target.
+- F-001/J2 (claude --resume invocation) — second turn used the captured session.
+- F-012/K2 (envelope parsing + polling + resume) — `kind: ask` and `kind: final` both round-tripped, the answer text reached the LLM, and `final.details` quoted the answer back.
+- F-012/K4 (CLI answer delivery) — the response file written by `pdh-flow turn-respond` was picked up by the engine within the polling interval.
+
+The unverified F-001 path (codex `exec resume` inside `code_quality_review.repair`) uses the same provider-resume machinery K6 just exercised for claude — judged sufficient until a future deliberately-flawed fixture forces `repair_needed`.
 
 **Idea**: extend `provider_step` and `guardian_step` so the actor can return a `request_human_input` tool call mid-execution. The engine catches it, persists the question + context, suspends the step, accepts a structured answer (web UI button, `pdh-flow gate respond`, or — eventually — an assist session), and resumes the **same step** with the answer threaded into the LLM's session.
 

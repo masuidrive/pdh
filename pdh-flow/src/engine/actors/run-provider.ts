@@ -389,6 +389,16 @@ function buildPromptForProvider(p: PromptBuilderInput): string {
   ) {
     return buildImplementerPrompt(p);
   }
+  // F-012/K6: dedicated role for the turn-loop smoke. Its template is
+  // explicit about asking exactly one clarifying question, which makes
+  // the smoke deterministic enough to verify the loop without having
+  // to coax a generic role into asking.
+  if (role === "turn_smoke") {
+    return renderPrompt("turn-smoke", {
+      nodeId: p.nodeId,
+      intent: p.promptSpec.intent,
+    });
+  }
   // Default: reviewer pattern (works for any review-shaped role).
   return buildReviewerPrompt(p);
 }
