@@ -19,6 +19,16 @@ import {
 } from "./persist.ts";
 import type { FixtureMeta } from "./actors/run-provider.ts";
 import { detectJudgeConfig } from "./judge/api-judge.ts";
+import {
+  acquireForTicket,
+  loadLeasesConfig,
+  releaseForTicket,
+  resolveLeaseRepo,
+} from "./leases/leases.ts";
+import {
+  removeEnvLease,
+  writeEnvLease,
+} from "./leases/env-lease.ts";
 
 export interface RunEngineOptions {
   repoPath: string;     // pdh-flow repo (where flows/ lives)
@@ -68,6 +78,40 @@ export async function runEngine(
   }
   const flat = expandFlow(flow);
   const ticketIdForContext = deriveTicketId(opts);
+
+  // ── Auto lease acquire (F-008) ───────────────────────────────────────
+  // If pdh-flow.config.yaml declares pools, acquire them at engine start so
+  // flow YAMLs don't need to wire explicit acquire_lease nodes. Idempotent
+  // with system_step.acquire_lease nodes (acquireForTicket reuses an
+  // existing lease keyed by ticketId+pool). Released in `finally` below.
+  const leaseRepo = resolveLeaseRepo(opts.worktreePath);
+  const leaseConfig = loadLeasesConfig(leaseRepo);
+  const leasePoolNames = Object.keys(leaseConfig.pools);
+  let autoLeaseAcquired = false;
+  if (leasePoolNames.length > 0) {
+    try {
+      const result = await acquireForTicket({
+        mainRepo: leaseRepo,
+        ticketId: ticketIdForContext,
+        worktree: opts.worktreePath,
+      });
+      if (result.leases.length > 0) {
+        writeEnvLease(opts.worktreePath, result.leases);
+        autoLeaseAcquired = true;
+        process.stderr.write(
+          `[engine] auto-acquired ${result.leases.length} lease(s) ` +
+            `(pools: ${result.leases.map((l) => l.pool).join(", ")}) ` +
+            `for ticket ${ticketIdForContext}\n`,
+        );
+      }
+    } catch (e) {
+      // Hard fail: if config is broken or pool exhausted, the run can't
+      // proceed safely. Surface the cause and abort before spawning LLMs.
+      throw new Error(
+        `[engine] auto-acquire lease failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
   const machine = compileFlow(flat, {
     variant: opts.variant,
     worktreePath: opts.worktreePath,
@@ -158,24 +202,48 @@ export async function runEngine(
 
   const timeoutMs =
     opts.timeoutMs ?? (opts.fixtureMeta ? 30_000 : 20 * 60_000);
-  await waitFor(actor, (state: any) => state.status === "done", {
-    timeout: timeoutMs,
-  });
 
-  const snapshot: any = actor.getSnapshot();
-  actor.stop();
+  try {
+    await waitFor(actor, (state: any) => state.status === "done", {
+      timeout: timeoutMs,
+    });
 
-  return {
-    finalState: typeof snapshot.value === "string"
-      ? snapshot.value
-      : JSON.stringify(snapshot.value),
-    stoppedAt: snapshot.context?.stoppedAt,
-    context: {
-      round: snapshot.context?.round ?? 0,
-      lastGuardianDecision: snapshot.context?.lastGuardianDecision,
-    },
-    restoredFromSnapshot,
-  };
+    const snapshot: any = actor.getSnapshot();
+    actor.stop();
+
+    return {
+      finalState: typeof snapshot.value === "string"
+        ? snapshot.value
+        : JSON.stringify(snapshot.value),
+      stoppedAt: snapshot.context?.stoppedAt,
+      context: {
+        round: snapshot.context?.round ?? 0,
+        lastGuardianDecision: snapshot.context?.lastGuardianDecision,
+      },
+      restoredFromSnapshot,
+    };
+  } finally {
+    // Auto-release if we auto-acquired. Runs on success, failure, and
+    // timeout — leases must always come back to the pool. If the user
+    // wired explicit release_lease nodes, those already returned the
+    // leases; releaseForTicket here becomes a no-op (idempotent).
+    if (autoLeaseAcquired) {
+      try {
+        const { released } = await releaseForTicket({
+          mainRepo: leaseRepo,
+          ticketId: ticketIdForContext,
+        });
+        removeEnvLease(opts.worktreePath);
+        process.stderr.write(
+          `[engine] auto-released ${released.length} lease(s) for ticket ${ticketIdForContext}\n`,
+        );
+      } catch (e) {
+        process.stderr.write(
+          `[engine] auto-release failed (lease may need manual reclaim): ${e instanceof Error ? e.message : String(e)}\n`,
+        );
+      }
+    }
+  }
 }
 
 function deriveTicketId(opts: RunEngineOptions): string {

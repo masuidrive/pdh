@@ -422,6 +422,98 @@ leases:
   });
 }
 
+// ─── F-008: engine-level auto-acquire / auto-release ────────────────────
+section("F-008 auto-acquire on engine boundaries");
+{
+  const { acquireForTicket, listLeases } = await import(
+    "../src/engine/leases/leases.ts"
+  );
+  const { envLeasePath } = await import("../src/engine/leases/env-lease.ts");
+  const { writeFileSync, existsSync } = await import("node:fs");
+
+  const { worktree, meta } = seedRepo("gate_system_happy");
+
+  // Seed the worktree with a lease config so the engine has pools to
+  // acquire from. Picks a port range distinct from the unit-style test
+  // above to avoid colliding state if both run on the same repo.
+  writeFileSync(
+    join(worktree, "pdh-flow.config.yaml"),
+    `version: 1
+leases:
+  pools:
+    smoke-port:
+      kind: port
+      range: [5180, 5182]
+      env: SMOKE_PORT
+`,
+  );
+
+  // sweep() inside acquireForTicket reclaims any ticket whose ticket file
+  // can't be found (treats absence as "closed"). The seed worktree has no
+  // tickets/ tree, so we create dummy active ticket files for both ours
+  // and the unrelated lease holder; otherwise both would be reclaimed
+  // before we can observe survival.
+  const ourTicketId = meta.fixture_meta?.ticket_id ?? "260508-001234-engine-run";
+  const otherTicket = "260508-009999-other-ticket";
+  const { mkdirSync: mk } = await import("node:fs");
+  mk(join(worktree, "tickets"), { recursive: true });
+  for (const tid of [ourTicketId, otherTicket]) {
+    writeFileSync(
+      join(worktree, "tickets", `${tid}.md`),
+      `---\nticket_id: ${tid}\nstatus: in_progress\n---\n`,
+    );
+  }
+
+  // Pre-acquire a lease for a DIFFERENT ticket; this entry must survive
+  // the engine run (auto-release should only touch our run's ticket).
+  await acquireForTicket({
+    mainRepo: worktree,
+    ticketId: otherTicket,
+    worktree,
+  });
+  const beforeOther = listLeases({ mainRepo: worktree, ticketId: otherTicket });
+  assert(
+    `pre-existing lease for unrelated ticket survives setup (got ${beforeOther.length})`,
+    beforeOther.length === 1,
+  );
+
+  // Drive the engine (uses fixture meta so no real LLM calls).
+  const result = await runEngine({
+    repoPath: REPO,
+    flowId: meta.flow_id ?? "pdh-c-v2",
+    variant: meta.variant ?? "full",
+    worktreePath: worktree,
+    runId: "run-test-f008-1",
+    fixtureMeta: meta,
+    startAtNodeId: meta.starting_node,
+    stopAtNodeId: meta.expected_terminal_node,
+    timeoutMs: 30_000,
+  });
+
+  assert(
+    `engine completed (finalState=${result.finalState})`,
+    result.finalState !== "__failed__",
+  );
+
+  // After the engine run: auto-release must have returned the ticket's
+  // lease, and .env.lease must be cleaned up.
+  const ourLeases = listLeases({ mainRepo: worktree, ticketId: ourTicketId });
+  assert(
+    `ticket has 0 leases after auto-release (got ${ourLeases.length})`,
+    ourLeases.length === 0,
+  );
+  assert(
+    ".env.lease cleaned up after auto-release",
+    !existsSync(envLeasePath(worktree)),
+  );
+  // Unrelated ticket's lease must NOT be touched by auto-release.
+  const afterOther = listLeases({ mainRepo: worktree, ticketId: otherTicket });
+  assert(
+    `unrelated ticket's lease survives engine run (got ${afterOther.length})`,
+    afterOther.length === 1,
+  );
+}
+
 // ─── Cleanup ─────────────────────────────────────────────────────────────
 for (const dir of cleanup) {
   try { rmSync(dir, { recursive: true, force: true }); } catch {}
