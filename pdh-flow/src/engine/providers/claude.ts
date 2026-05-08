@@ -24,6 +24,11 @@ export async function invokeClaude(
     "--output-format",
     "json",
   ];
+  if (inv.resumeSessionId) {
+    // Continue an existing conversation. -p still supplies the new user
+    // message; --resume points at the prior session by id.
+    args.push("--resume", inv.resumeSessionId);
+  }
   if (inv.editable) {
     args.push("--permission-mode", "bypassPermissions");
   }

@@ -23,23 +23,31 @@ export async function invokeCodex(
 ): Promise<ProviderResult> {
   let schemaTempDir: string | null = null;
   try {
-    const args: string[] = [
-      "exec",
-      "--cd",
-      inv.cwd,
-      "--skip-git-repo-check",
-      "--json",
-    ];
-    if (inv.editable) {
-      // Default codex sandbox is read-only; raise to workspace-write so
-      // implementer / repair roles can apply patches.
-      args.push("--sandbox", "workspace-write");
-    }
-    if (inv.jsonSchema) {
-      schemaTempDir = mkdtempSync(join(tmpdir(), "pdh-codex-schema-"));
-      const schemaPath = join(schemaTempDir, "schema.json");
-      writeFileSync(schemaPath, JSON.stringify(inv.jsonSchema));
-      args.push("--output-schema", schemaPath);
+    const args: string[] = inv.resumeSessionId
+      ? // `codex exec resume <id> [args] [prompt]` continues a recorded
+        // session. The resume subcommand inherits cwd / sandbox /
+        // output-schema from the recorded session, so we don't pass
+        // --cd / --sandbox / --output-schema here.
+        [
+          "exec",
+          "resume",
+          inv.resumeSessionId,
+          "--skip-git-repo-check",
+          "--json",
+        ]
+      : ["exec", "--cd", inv.cwd, "--skip-git-repo-check", "--json"];
+    if (!inv.resumeSessionId) {
+      if (inv.editable) {
+        // Default codex sandbox is read-only; raise to workspace-write so
+        // implementer / repair roles can apply patches.
+        args.push("--sandbox", "workspace-write");
+      }
+      if (inv.jsonSchema) {
+        schemaTempDir = mkdtempSync(join(tmpdir(), "pdh-codex-schema-"));
+        const schemaPath = join(schemaTempDir, "schema.json");
+        writeFileSync(schemaPath, JSON.stringify(inv.jsonSchema));
+        args.push("--output-schema", schemaPath);
+      }
     }
     args.push(inv.prompt);
 

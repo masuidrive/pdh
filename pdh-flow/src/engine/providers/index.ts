@@ -29,6 +29,22 @@ export interface ProviderInvocation {
    *   - codex:  --sandbox workspace-write
    */
   editable?: boolean;
+  /**
+   * Resume a prior provider session by id. When set:
+   *   - claude: invoke `claude --resume <id> -p <prompt>`. The session id
+   *     comes from a previous ProviderResult.sessionId.
+   *   - codex:  invoke `codex exec resume <id> [prompt]`. Note that
+   *     `codex exec resume` inherits cwd/sandbox from the recorded session
+   *     and does not accept --cd / --sandbox / --output-schema flags, so
+   *     passing those is a no-op when this is set.
+   *
+   * Used by F-001 (engineer-resume for repair) and F-012 (in-step
+   * user-input turn loop). When the underlying CLI rejects the resume
+   * (e.g. session expired, file deleted), the provider returns a non-zero
+   * exit; callers should fall back to a fresh invocation with the original
+   * prompt + accumulated turn history.
+   */
+  resumeSessionId?: string;
 }
 
 export interface ProviderResult {
