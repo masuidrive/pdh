@@ -198,6 +198,9 @@ function compileProvider(
         ...(node.resume_session_from
           ? { resumeSessionFrom: node.resume_session_from }
           : {}),
+        ...(node.enable_user_input
+          ? { enableUserInput: true }
+          : {}),
       }),
       onDone: stopGuard
         ? {
@@ -468,6 +471,15 @@ function compileParallelGroup(
               provider: (memberNode as ProviderStepNode).provider,
               role: (memberNode as ProviderStepNode).role,
               promptSpec: (memberNode as ProviderStepNode).prompt,
+              ...((memberNode as ProviderStepNode).resume_session_from
+                ? {
+                    resumeSessionFrom: (memberNode as ProviderStepNode)
+                      .resume_session_from,
+                  }
+                : {}),
+              ...((memberNode as ProviderStepNode).enable_user_input
+                ? { enableUserInput: true }
+                : {}),
             }),
             onDone: { target: "completed" },
             onError: { target: "failed" },

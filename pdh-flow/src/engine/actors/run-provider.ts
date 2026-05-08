@@ -18,6 +18,18 @@ import {
   saveProviderSession,
 } from "../session-store.ts";
 import { assertTicketUnmodified, hashTicket } from "../ticket-guard.ts";
+import {
+  awaitTurnAnswer,
+  clearTurnsDir,
+  writeTurnAnswer,
+  writeTurnQuestion,
+} from "../turn-store.ts";
+import { getValidator, SCHEMA_IDS } from "../validate.ts";
+import type {
+  ProviderStepOutputEnvelope,
+  TurnAsk,
+  TurnFinal,
+} from "../../types/index.ts";
 
 export interface ProviderActorInput {
   nodeId: string;
@@ -45,6 +57,14 @@ export interface ProviderActorInput {
    * Populated by the macro expander when review_loop.repair.via=resume.
    */
   resumeSessionFrom?: string;
+  /**
+   * F-012: opt-in to the in-step turn loop. When true, the actor runs
+   * a turn loop where the provider may emit a `request_human_input`
+   * envelope instead of a final answer; the engine writes a
+   * `turn-NNN-question.json`, polls for the matching answer file, and
+   * resumes the provider session with the answer text.
+   */
+  enableUserInput?: boolean;
 }
 
 export interface ProviderActorOutput {
@@ -68,6 +88,15 @@ export interface FixtureMeta {
         summary?: string;
         guardian_output?: unknown;
         files?: Record<string, string>;
+        /**
+         * F-012/K3-mini: pre-recorded in-step turns. When present, the
+         * fixture replay writes turn-NNN-question.json and
+         * turn-NNN-answer.json under runs/<runId>/turns/<nodeId>/ in
+         * lockstep, then proceeds to apply note_section / files /
+         * summary as the final outcome. Lets a fixture exercise the
+         * F-012 turn-file machinery without invoking a real provider.
+         */
+        turns?: Array<{ question: string; answer: string }>;
       }
     >
   >;
@@ -93,6 +122,43 @@ export const runProvider = fromPromise<
 
   if (nodeFixture) {
     // ── Fixture replay ─────────────────────────────────────────────────
+    // F-012/K3-mini: when the fixture declares `turns`, the replay
+    // mimics the in-step Q/A loop by writing question + answer files in
+    // lockstep. The note-section / files / summary then carry the
+    // *final* outcome as a normal fixture entry.
+    if (nodeFixture.turns && nodeFixture.turns.length > 0 && input.runId) {
+      const now = new Date().toISOString();
+      let turnIdx = 0;
+      for (const t of nodeFixture.turns) {
+        turnIdx += 1;
+        writeTurnQuestion({
+          worktreePath,
+          runId: input.runId,
+          question: {
+            status: "pending",
+            node_id: nodeId,
+            round,
+            turn: turnIdx,
+            asked_at: now,
+            ask: { question: t.question },
+          },
+        });
+        writeTurnAnswer({
+          worktreePath,
+          runId: input.runId,
+          answer: {
+            status: "completed",
+            node_id: nodeId,
+            round,
+            turn: turnIdx,
+            answered_at: now,
+            answer: { text: t.answer },
+            via: "cli",
+          },
+        });
+      }
+    }
+
     summary = nodeFixture.summary ?? `${nodeId} ${roundKey}`;
     noteSection = nodeFixture.note_section ?? "";
 
@@ -104,6 +170,26 @@ export const runProvider = fromPromise<
         writeFileSync(full, content);
       }
     }
+  } else if (input.enableUserInput) {
+    // ── F-012/K2: real-mode in-step turn loop ─────────────────────────
+    if (!input.provider) {
+      throw new Error(
+        `provider actor: enable_user_input requires real provider (no fixture for ${nodeId} ${roundKey})`,
+      );
+    }
+    if (!input.runId) {
+      throw new Error(
+        `provider actor: enable_user_input requires runId (cannot persist turn files without it)`,
+      );
+    }
+    const result = await runTurnLoop({
+      input,
+      signal,
+      worktreePath,
+      ticketPreHash,
+    });
+    summary = result.summary;
+    noteSection = result.noteSection;
   } else {
     // ── Real provider invocation ───────────────────────────────────────
     if (!input.provider) {
@@ -387,4 +473,277 @@ function ensureGit(worktreePath: string): void {
   if (!existsSync(join(worktreePath, ".git"))) {
     throw new Error(`worktree is not a git repo: ${worktreePath}`);
   }
+}
+
+// ─── F-012/K2: in-step turn loop helpers ─────────────────────────────────
+
+const TURN_LOOP_MAX_TURNS = 10;
+
+const ENVELOPE_INSTRUCTION = `
+
+## Output format
+
+Respond with a single JSON object matching this envelope:
+
+\`\`\`
+{ "kind": "final" | "ask",
+  "final": { "summary": string, "details"?: string },
+  "ask":   { "question": string, "options"?: [{ "label": string, "description"?: string }], "context"?: string } }
+\`\`\`
+
+- Use \`kind: "final"\` when you have everything you need. \`final.summary\` is one line; \`final.details\` is the full markdown body that goes into the note (no Q/A — that's logged separately).
+- Use \`kind: "ask"\` only when a specific decision genuinely requires a human. The question must be answerable in one turn. Provide \`options\` when there's a small enumerable set of answers; otherwise omit and accept free-form text.
+- Do NOT mix prose and JSON; the entire response is the JSON object.`;
+
+function envelopeJsonSchema(): Record<string, unknown> {
+  // Inline schema (no $refs) so the CLI's --json-schema / --output-schema
+  // flag can accept it as a single payload. Mirrors
+  // schemas/provider-step-output.schema.json but with $defs flattened.
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind"],
+    properties: {
+      kind: { type: "string", enum: ["final", "ask"] },
+      final: {
+        type: "object",
+        additionalProperties: false,
+        required: ["summary"],
+        properties: {
+          summary: { type: "string", minLength: 1, maxLength: 280 },
+          details: { type: "string", maxLength: 16000 },
+        },
+      },
+      ask: {
+        type: "object",
+        additionalProperties: false,
+        required: ["question"],
+        properties: {
+          question: { type: "string", minLength: 1, maxLength: 2000 },
+          options: {
+            type: "array",
+            maxItems: 10,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["label"],
+              properties: {
+                label: { type: "string", minLength: 1, maxLength: 200 },
+                description: { type: "string", maxLength: 2000 },
+              },
+            },
+          },
+          context: { type: "string", maxLength: 4000 },
+        },
+      },
+    },
+  };
+}
+
+function parseEnvelope(
+  text: string,
+  jsonOutput: unknown,
+): ProviderStepOutputEnvelope | null {
+  // Schema-constrained CLI runs surface the parsed object directly; we
+  // validate it with Ajv (defense in depth) and accept on hit.
+  const v = getValidator();
+  const tryAccept = (candidate: unknown) => {
+    if (candidate === undefined || candidate === null) return null;
+    const r = v.validate<ProviderStepOutputEnvelope>(
+      SCHEMA_IDS.providerStepOutput,
+      candidate,
+    );
+    return r.ok === true ? r.data : null;
+  };
+  const fromJson = tryAccept(jsonOutput);
+  if (fromJson) return fromJson;
+  // Fallback for resumed turns where the CLI couldn't enforce a schema:
+  // try to parse the assistant text as JSON, optionally pulling out the
+  // first {...} block when there's stray prose.
+  if (!text) return null;
+  const trimmed = text.trim();
+  const candidates: unknown[] = [];
+  try { candidates.push(JSON.parse(trimmed)); } catch { /* fall through */ }
+  // Match a fenced block: ```json ... ``` or just first {...}.
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) {
+    try { candidates.push(JSON.parse(fenced[1].trim())); } catch { /* */ }
+  }
+  const brace = trimmed.match(/\{[\s\S]*\}/);
+  if (brace) {
+    try { candidates.push(JSON.parse(brace[0])); } catch { /* */ }
+  }
+  for (const c of candidates) {
+    const accepted = tryAccept(c);
+    if (accepted) return accepted;
+  }
+  return null;
+}
+
+interface TurnLoopArgs {
+  input: ProviderActorInput;
+  signal: AbortSignal | undefined;
+  worktreePath: string;
+  ticketPreHash: string | null;
+}
+
+interface TurnLoopResult {
+  summary: string;
+  noteSection: string;
+}
+
+async function runTurnLoop(args: TurnLoopArgs): Promise<TurnLoopResult> {
+  const { input, signal, worktreePath } = args;
+  const { nodeId, round } = input;
+  const runId = input.runId!;
+  const provider = input.provider!;
+  const role = input.role ?? "implementer";
+  const editable = roleNeedsEdit(role, nodeId);
+  const schema = envelopeJsonSchema();
+
+  // Initial prompt = role prompt + envelope instruction.
+  const basePrompt = buildPromptForProvider({
+    nodeId,
+    round,
+    role,
+    promptSpec: input.promptSpec ?? {},
+  });
+  let prompt = basePrompt + ENVELOPE_INSTRUCTION;
+  let resumeSessionId: string | undefined;
+
+  // Optional cross-step resume (F-001): when this node also has
+  // resume_session_from set, start by resuming that node's session.
+  if (input.resumeSessionFrom) {
+    const rec = readProviderSession({
+      worktreePath,
+      runId,
+      nodeId: input.resumeSessionFrom,
+    });
+    if (rec && rec.provider === provider) {
+      resumeSessionId = rec.sessionId;
+    }
+  }
+
+  let final: TurnFinal | null = null;
+  const turnsLog: Array<{ ask: TurnAsk; answer: string }> = [];
+
+  for (let turnIdx = 1; turnIdx <= TURN_LOOP_MAX_TURNS; turnIdx++) {
+    if (signal?.aborted) {
+      throw new Error(
+        `[run-provider] aborted in turn loop for ${nodeId} round-${round} turn=${turnIdx}`,
+      );
+    }
+    const isInitial = turnIdx === 1 && resumeSessionId === undefined;
+    const result = await invokeProvider(provider, {
+      prompt,
+      cwd: worktreePath,
+      signal,
+      editable,
+      // codex `exec resume` doesn't accept --output-schema, so only
+      // attach the schema on the first un-resumed call. Subsequent
+      // turns rely on the LLM remembering the envelope (with
+      // graceful-fallback parsing if it doesn't).
+      ...(isInitial ? { jsonSchema: schema } : {}),
+      ...(resumeSessionId ? { resumeSessionId } : {}),
+    });
+    if (result.exitCode !== 0 || result.timedOut) {
+      throw new Error(
+        `${provider} ${nodeId} round-${round} turn=${turnIdx} failed (exit=${result.exitCode}, timedOut=${result.timedOut}): ${result.stderrTail.slice(-500)}`,
+      );
+    }
+
+    // Update session id for this node (claude returns a new id per call;
+    // codex returns a stable id — both are handled by overwrite).
+    if (result.sessionId) {
+      saveProviderSession({
+        worktreePath,
+        runId,
+        nodeId,
+        round,
+        provider,
+        sessionId: result.sessionId,
+      });
+      resumeSessionId = result.sessionId;
+    }
+
+    const envelope = parseEnvelope(result.text, result.jsonOutput);
+    if (!envelope) {
+      // Graceful degradation: treat the raw text as a final answer.
+      const text = result.text.trim() || `(empty response from ${provider})`;
+      final = {
+        summary: extractSummary(text, `${nodeId} round-${round}`),
+        details: text,
+      };
+      process.stderr.write(
+        `[run-provider] turn=${turnIdx} ${provider} did not return envelope; treating raw output as final\n`,
+      );
+      break;
+    }
+    if (envelope.kind === "final" && envelope.final) {
+      final = envelope.final;
+      break;
+    }
+    if (envelope.kind === "ask" && envelope.ask) {
+      writeTurnQuestion({
+        worktreePath,
+        runId,
+        question: {
+          status: "pending",
+          node_id: nodeId,
+          round,
+          turn: turnIdx,
+          asked_at: new Date().toISOString(),
+          ...(resumeSessionId ? { session_id: resumeSessionId } : {}),
+          ask: envelope.ask,
+        },
+      });
+      const answer = await awaitTurnAnswer({
+        worktreePath,
+        runId,
+        nodeId,
+        turn: turnIdx,
+        signal,
+      });
+      turnsLog.push({ ask: envelope.ask, answer: answer.answer.text });
+      // Next loop: prompt is just the user answer; resumeSessionId is
+      // already set so the provider continues the same conversation.
+      prompt = answer.answer.text;
+      continue;
+    }
+    // Envelope parsed but the kind/body combination is malformed.
+    throw new Error(
+      `${provider} ${nodeId} round-${round} turn=${turnIdx}: envelope parsed but missing matching body for kind=${envelope.kind}`,
+    );
+  }
+
+  if (!final) {
+    throw new Error(
+      `[run-provider] ${nodeId} round-${round}: turn loop exceeded ${TURN_LOOP_MAX_TURNS} turns without a final answer`,
+    );
+  }
+
+  // Build the note section: final body + any Q/A logs underneath. Keeps
+  // the audit visible without bloating the commit (questions+answers
+  // also persist under runs/.../turns/ during the step).
+  const lines: string[] = [];
+  lines.push(`## ${nodeId} (round ${round})`, "");
+  if (final.details) {
+    lines.push(final.details, "");
+  } else {
+    lines.push(final.summary, "");
+  }
+  for (let i = 0; i < turnsLog.length; i++) {
+    const t = turnsLog[i];
+    lines.push(`### Turn ${i + 1} — asked`, "", t.ask.question, "");
+    lines.push(`**User answered:** ${t.answer}`, "");
+  }
+
+  // Cleanup turn files now that the step's outcome is durable in note.
+  // Best-effort; the .pdh-flow/ tree is ephemeral anyway.
+  clearTurnsDir({ worktreePath, runId, nodeId });
+
+  return {
+    summary: final.summary,
+    noteSection: lines.join("\n"),
+  };
 }

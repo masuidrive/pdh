@@ -92,3 +92,12 @@ export type {
 
 // XState snapshot wrapper.
 export type { EngineSnapshot } from "./generated/snapshot.schema.d.ts";
+
+// F-012 in-step turn loop.
+export type {
+  ProviderStepOutputEnvelope,
+  Final as TurnFinal,
+  Ask as TurnAsk,
+} from "./generated/provider-step-output.schema.d.ts";
+export type { InStepTurnQuestion as TurnQuestion } from "./generated/turn-question.schema.d.ts";
+export type { InStepTurnAnswer as TurnAnswer } from "./generated/turn-answer.schema.d.ts";
