@@ -10,11 +10,13 @@ import { parseArgs } from "node:util";
 import { cmdCheckFlow } from "./check-flow.ts";
 import { cmdCompileFlow } from "./compile-flow.ts";
 import { cmdRunEngine } from "./run-engine.ts";
+import { cmdServe } from "./serve.ts";
 
 const SUBCOMMANDS = {
   "check-flow": cmdCheckFlow,
   "compile-flow": cmdCompileFlow,
   "run-engine": cmdRunEngine,
+  serve: cmdServe,
   help: cmdHelp,
 } as const;
 
@@ -72,6 +74,12 @@ Subcommands:
                 Run the v2 engine. With --fixture, replays node outputs from
                 the given fixture dir (for testing); without --fixture, real
                 provider invocation is required (not yet wired in v0.2.0-pre).
+
+  serve         [--worktree <dir>] [--port <n>] [--static-dir <dir>]
+                Launch the Web UI HTTP server against the worktree's
+                .pdh-flow/runs state (default port 5170). Approves gates by
+                writing into the same files the engine's await-gate actor
+                polls.
 
   help          Show this message.
 

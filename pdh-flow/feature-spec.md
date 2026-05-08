@@ -140,14 +140,26 @@ Externalised actor prompts to `flows/prompts/*.j2` (nunjucks, follow-up commit `
 **Smoke fixtures** (all under `tests/fixtures/v2/smoke-*` and excluded from `npm run test:all`):
 `smoke-fullflow-divide`, `smoke-fullflow-power`, `smoke-fullflow-modulo`, `smoke-fullflow-clamp`, `smoke-fullflow-percentage`, `smoke-fullflow-cartbug`.
 
-### F-005: Web UI v2
-Step-type-driven viewer + gate approver + assist launcher. Renders 4 type-specific affordances:
+### F-005: Web UI v2 — **MVP-B DONE 2026-05-08** (Phase H8)
+Step-type-driven viewer + gate approver + assist launcher. Long-term shape (deferred):
 - `provider_step` → tail logs + diff + cancel
 - `guardian_step` → spinner / decision + reasoning
 - `gate_step` → diff + reasoning + form fields + approve/reject buttons
 - `system_step` → progress bar
 
-**Trigger**: after engine surface stabilizes (F-002 + F-003). Before then, CLI is enough.
+**MVP-B (shipped)**: minimal viewer + gate approver, zero build step. Backend `src/web/server.ts` is a `node:http` HTTP server with no dependencies; reads run state directly from `<worktree>/.pdh-flow/runs/<runId>/`. Frontend `web/index.html` + `web/app.js` is plain JS + Tailwind via CDN, polls every 2 s. Launched via `pdh-flow serve --worktree <dir> [--port 5170]`.
+
+API surface:
+- `GET /api/runs` — list runs (run-id, ticket, current state, saved_at).
+- `GET /api/runs/:runId` — snapshot summary + frozen judgements + gate decisions + active-gate hint.
+- `GET /api/runs/:runId/note` — current-note.md raw text.
+- `POST /api/runs/:runId/gates/:nodeId` — write a gate decision (validated against `gate-output.schema.json`); engine's `await-gate` actor picks it up within ~1 s.
+
+Frontend renders run summary, judgement table, gate decision history, and an approve / reject / cancel form when `active_gate` is non-null. `via: web_ui` field tags decisions for audit. Duplicate POST returns 409 (cannot re-decide a decided gate).
+
+**Smoke** (manual; not in `npm run test:all`): seed a worktree from a fixture, run engine to a gate stop point, `pdh-flow serve`, curl the API. Verified `/api/runs`, summary, gate POST, duplicate-POST 409, static-file fallback all work.
+
+**Deferred (post-MVP)**: live event stream (SSE), diff modal, assist mode launcher, ticket index page, multi-session support, history view, React/Vite re-platform if visual polish becomes a constraint. The current vanilla-JS path was chosen to ship a usable Web UI quickly; nothing here blocks a later React/Vite swap that reads the same JSON API.
 
 ### F-006: AGENTS.md / CLAUDE.md refresh for v2 — **DONE 2026-05-08**
 Phase H3 wrote `pdh-flow/AGENTS.md` and `pdh-flow/CLAUDE.md` for v2. Covers:
