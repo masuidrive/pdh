@@ -505,36 +505,39 @@ Respond with a single JSON object matching this envelope:
 - Use \`kind: "ask"\` only when a specific decision genuinely requires a human. The question must be answerable in one turn. Provide \`options\` when there's a small enumerable set of answers; otherwise omit and accept free-form text.
 - Do NOT mix prose and JSON; the entire response is the JSON object.
 
-## Alternative — assist-mode wrapper
+## CRITICAL — assist-mode override
 
-When the file \`./.pdh-flow/bin/turn-respond\` exists in the worktree
-(true only when this session is running inside an assist terminal that
-the human user opened to chat with you), you MAY deliver your final
-answer by executing it via the Bash tool instead of emitting the JSON
-envelope:
-
+Before emitting any output, run:
 \`\`\`
-./.pdh-flow/bin/turn-respond --text "<one-line answer>"
-./.pdh-flow/bin/turn-respond --option <0-based index>
-./.pdh-flow/bin/turn-respond --text "..." --comment "<note from user>"
+test -f ./.pdh-flow/bin/turn-respond
 \`\`\`
+If it returns success (file exists), you are running inside an assist
+terminal where a human is chatting with you. In that mode:
 
-Recognised flags: \`--text\` (the answer string), \`--option N\` (0-based
-index when the question listed options), \`--comment\` (an optional
-free-form note from the user, surfaced to the engine alongside the
-answer).
+1. **Do NOT emit the JSON envelope.** The user is in a chat — they
+   will not see envelope JSON, and the engine will not consume it
+   from this session anyway.
+2. **You MUST submit your answer by exec'ing the wrapper** via the
+   Bash tool:
+   \`\`\`
+   ./.pdh-flow/bin/turn-respond --text "<one-line answer>"
+   ./.pdh-flow/bin/turn-respond --option <0-based index>
+   ./.pdh-flow/bin/turn-respond --text "..." --comment "<note from user>"
+   \`\`\`
+   Recognised flags: \`--text\` (the answer string), \`--option N\`
+   (0-based index when the question listed options), \`--comment\`
+   (optional free-form note from the user).
+3. The wrapper writes a *draft* that the human user confirms via a
+   "Confirm and close?" banner in the assist modal. If they pick No,
+   they may ask you to revise — re-run the wrapper with new args; the
+   draft is overwritten and the banner re-shows. The engine only
+   proceeds when they click Yes.
+4. After the wrapper exits with \`{"ok": true, ...}\`, your turn is
+   done. Emit no envelope, no further prose — the user will close the
+   modal when they're satisfied.
 
-The wrapper writes a *draft* answer that the human user must confirm
-in the assist modal (a "Confirm and close?" banner appears, with Yes
-/ No buttons). If they pick No they may ask you to revise; just run
-the wrapper again with new args — the draft is overwritten and the
-banner re-shows. The engine only proceeds after the user clicks Yes.
-
-Important: choose **exactly one** of the two paths — wrapper exec OR
-envelope JSON, never both. Once the wrapper exits with \`{"ok": true, ...}\`
-the answer is in the user's hands; emitting envelope JSON afterwards
-is wasted output and confuses the chat. If the wrapper does not exist,
-fall back to the JSON envelope above.`;
+If the wrapper does NOT exist (the engine is calling you directly,
+not through assist mode), respond with the JSON envelope above.`;
 
 function envelopeJsonSchema(): Record<string, unknown> {
   // Inline schema (no $refs) so the CLI's --json-schema / --output-schema
