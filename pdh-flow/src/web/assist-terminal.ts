@@ -18,11 +18,21 @@
 import { spawn as spawnPty } from "@lydell/node-pty";
 import type { IPty } from "@lydell/node-pty";
 import { WebSocket, WebSocketServer } from "ws";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
+
+// Path to this file's directory; used to resolve the CLI entry point so
+// the dropped wrapper scripts can re-invoke `pdh-flow turn-respond` /
+// `pdh-flow gate-respond` against the same checkout.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const CLI_EXT = __filename.endsWith(".js") ? ".js" : ".ts";
+const CLI_PATH = join(__dirname, "..", "cli", `index${CLI_EXT}`);
+const NODE_PATH = process.execPath;
 
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 32;
@@ -147,6 +157,15 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
     if (p.mode === "fresh") {
       // Plain claude in the worktree, no --resume. For gate cards
       // (no provider session captured) or general worktree exploration.
+      // Drop the gate-respond wrapper so claude can submit a decision
+      // (approve/reject/cancel) by exec'ing a worktree-scoped script.
+      ensureWrapperScript({
+        worktreePath: opts.worktreePath,
+        name: "gate-respond",
+        runId: p.runId,
+        nodeId: p.nodeId,
+      });
+      const hint = buildWrapperHint("gate", p.nodeId);
       return openManagedSession({
         key: `${p.runId}:${p.nodeId}:fresh`,
         title: `claude (fresh) — ${p.nodeId}`,
@@ -154,6 +173,7 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
         args: [],
         cwd: opts.worktreePath,
         force: p.force,
+        initialHint: hint,
       });
     }
     const sessionPath = join(
@@ -181,6 +201,15 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
       ? ["--resume", rec.sessionId]
       : ["resume", rec.sessionId];
     const title = `${command} — ${p.nodeId}`;
+    // Drop the turn-respond wrapper so the resumed provider can submit
+    // an answer back to the engine via a worktree-scoped script.
+    ensureWrapperScript({
+      worktreePath: opts.worktreePath,
+      name: "turn-respond",
+      runId: p.runId,
+      nodeId: p.nodeId,
+    });
+    const hint = buildWrapperHint("turn", p.nodeId);
     return openManagedSession({
       key: `${p.runId}:${p.nodeId}`,
       title,
@@ -188,6 +217,7 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
       args,
       cwd: opts.worktreePath,
       force: p.force,
+      initialHint: hint,
     });
   }
 
@@ -198,6 +228,10 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
     args: string[];
     cwd: string;
     force?: boolean;
+    /** Optional ANSI-formatted hint to seed the rolling buffer + broadcast
+     *  before any PTY output arrives. Used to surface the wrapper-script
+     *  command to the human user. */
+    initialHint?: string;
   }): OpenResult {
     pruneSessions();
     const existingId = activeByKey.get(p.key);
@@ -252,6 +286,12 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
     };
     sessions.set(id, session);
     activeByKey.set(p.key, id);
+
+    if (p.initialHint) {
+      session.buffer = p.initialHint;
+      // No clients yet at this point; the first WS attach will replay
+      // the buffer via the snapshot message.
+    }
 
     pty.onData((data) => {
       session.buffer = trimBuffer(session.buffer + data);
@@ -311,4 +351,76 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
   }
 
   return { openForNode, handleUpgrade, closeAll };
+}
+
+// ─── Wrapper script helpers ──────────────────────────────────────────────
+//
+// On every assist-terminal session open, drop a worktree-scoped shell
+// wrapper that exec's `pdh-flow turn-respond` (resume mode) or
+// `pdh-flow gate-respond` (fresh mode). Run id / node id / worktree are
+// pre-filled so the provider running inside the assist session can call
+// it like:
+//
+//   ./.pdh-flow/bin/turn-respond --text "fedora"
+//   ./.pdh-flow/bin/turn-respond --option 2
+//   ./.pdh-flow/bin/gate-respond --decision approved
+//   ./.pdh-flow/bin/gate-respond --decision rejected --comment "..."
+//
+// The script lives in `.pdh-flow/bin/` (gitignored). Multiple concurrent
+// runs against the same worktree would race on this file — but the
+// single-machine / single-ticket-at-a-time assumption (D-010, CLAUDE.md)
+// makes that a non-issue in practice.
+
+function ensureWrapperScript(p: {
+  worktreePath: string;
+  name: "turn-respond" | "gate-respond";
+  runId: string;
+  nodeId: string;
+}): string {
+  const binDir = join(p.worktreePath, ".pdh-flow", "bin");
+  mkdirSync(binDir, { recursive: true });
+  const scriptPath = join(binDir, p.name);
+  const stripFlag = CLI_EXT === ".ts" ? " --experimental-strip-types" : "";
+  const body =
+    `#!/usr/bin/env bash\n` +
+    `set -euo pipefail\n` +
+    `# Auto-generated by pdh-flow assist-terminal at session open.\n` +
+    `# Pre-fills --run-id / --node-id / --worktree for ${p.name}; pass\n` +
+    `# the remaining args (e.g. --text "..." or --decision approved).\n` +
+    `exec ${shellQuote(NODE_PATH)}${stripFlag} ${shellQuote(CLI_PATH)} ${p.name} \\\n` +
+    `  --run-id ${shellQuote(p.runId)} \\\n` +
+    `  --node-id ${shellQuote(p.nodeId)} \\\n` +
+    `  --worktree ${shellQuote(p.worktreePath)} \\\n` +
+    `  --via assist \\\n` +
+    `  "$@"\n`;
+  writeFileSync(scriptPath, body);
+  try { chmodSync(scriptPath, 0o755); } catch {}
+  return scriptPath;
+}
+
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+function buildWrapperHint(kind: "turn" | "gate", nodeId: string): string {
+  const cyan = "\x1b[36m";
+  const dim = "\x1b[2m";
+  const reset = "\x1b[0m";
+  if (kind === "turn") {
+    return (
+      `${cyan}[pdh-flow] in-step turn at ${nodeId}: ` +
+      `submit your answer back to the engine with one of:${reset}\r\n` +
+      `${dim}  ./.pdh-flow/bin/turn-respond --text "<your answer>"${reset}\r\n` +
+      `${dim}  ./.pdh-flow/bin/turn-respond --option <0-based-index>${reset}\r\n` +
+      `\r\n`
+    );
+  }
+  return (
+    `${cyan}[pdh-flow] gate at ${nodeId}: ` +
+    `record your decision back to the engine with:${reset}\r\n` +
+    `${dim}  ./.pdh-flow/bin/gate-respond --decision approved${reset}\r\n` +
+    `${dim}  ./.pdh-flow/bin/gate-respond --decision rejected --comment "<reason>"${reset}\r\n` +
+    `${dim}  ./.pdh-flow/bin/gate-respond --decision cancelled${reset}\r\n` +
+    `\r\n`
+  );
 }

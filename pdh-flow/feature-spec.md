@@ -214,6 +214,19 @@ Reads `runs/<runId>/sessions/<nodeId>.json` (the F-001/J3 record) and execs the 
 - integration: turn card on the run detail page gains an "Open in terminal" button next to "Submit answer". Click → `openTerminalForNode(runId, nodeId)`. Gate card NOT wired (gate nodes don't spawn providers; opening "fresh assist for an arbitrary worktree" is a separate feature).
 - real-LLM browser smoke (agent-browser, 2026-05-08): clicking the button opens the modal, xterm renders, claude shows its trust prompt + API-key prompt, the Enter quick-key sends `\r` and the LLM advances to the next prompt. Closing the modal cleanly tears down the WS but leaves the PTY for 30 min in case of reconnect. Submitting the regular answer form afterwards still resumes engine-side cleanly (the engine spawns its own short-lived `claude --resume` process; the assist PTY is parallel and doesn't block).
 
+**Wrapper scripts inside the assist terminal (2026-05-08)** — port of v1's `assist-signal` wrapper pattern:
+- On every `POST /api/assist/open`, the backend drops a worktree-scoped shell wrapper at `.pdh-flow/bin/turn-respond` (resume mode) or `.pdh-flow/bin/gate-respond` (fresh mode). Each wrapper pre-fills `--run-id` / `--node-id` / `--worktree` / `--via assist` and exec's the matching `pdh-flow` CLI subcommand. The provider running inside the assist terminal can submit the answer / decision by simply executing the script:
+  ```
+  ./.pdh-flow/bin/turn-respond --text "fedora"
+  ./.pdh-flow/bin/turn-respond --option 2
+  ./.pdh-flow/bin/gate-respond --decision approved
+  ./.pdh-flow/bin/gate-respond --decision rejected --comment "AC-2 missing"
+  ```
+- New CLI subcommand `pdh-flow gate-respond` mirrors `turn-respond`. Validates against `gate-output.schema.json`, writes to `runs/<runId>/gates/<nodeId>.json`, refuses to overwrite an already-decided gate.
+- `gate-output.schema.json` `via` enum gains `"assist"` so wrapper-driven gate decisions are tagged distinctly from web_ui / cli / api.
+- A one-line cyan hint is seeded into the rolling buffer at session creation, so the human user sees the wrapper command on first WS attach (xterm replays the snapshot before any PTY output).
+- Why this matters: the assist terminal isn't just a chat window — it's a worktree-scoped REPL where claude can both read the codebase AND submit a structured answer back to the engine, all from inside one session. Mirrors v1's beautiful `assist-signal` flow.
+
 **`--turn` shortcut + gate card terminal (2026-05-08)**:
 - `pdh-flow assist --turn` scans `<worktree>/.pdh-flow/runs/*/turns/*/turn-NNN-question.json` for the unique unanswered question and auto-targets it (no need to type `--run-id`/`--node-id`). Errors out on 0 or 2+ unanswered questions; prints the auto-detected triple to stderr.
 - `POST /api/assist/open` accepts `mode: "fresh"` which spawns a plain `claude` (no `--resume`) in the worktree, bypassing the `sessions/<nodeId>.json` requirement. Used by the gate card's "Open in terminal" button — gates don't capture provider sessions, but having a worktree-scoped claude session is useful for inspecting diffs / asking the LLM "is this safe to approve?" before clicking Approve/Reject.

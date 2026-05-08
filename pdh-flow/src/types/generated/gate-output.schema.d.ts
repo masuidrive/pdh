@@ -34,5 +34,5 @@ export type GateStepOutput = {
    * Values submitted via the gate's form fields, keyed by field.name. Strings (text/textarea/select) or booleans (checkbox).
    */
   form_data?: {};
-  via?: "cli" | "web_ui" | "api";
+  via?: "cli" | "web_ui" | "api" | "assist";
 };

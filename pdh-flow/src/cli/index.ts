@@ -10,6 +10,7 @@ import { parseArgs } from "node:util";
 import { cmdAssist } from "./assist.ts";
 import { cmdCheckFlow } from "./check-flow.ts";
 import { cmdCompileFlow } from "./compile-flow.ts";
+import { cmdGateRespond } from "./gate-respond.ts";
 import { cmdRunEngine } from "./run-engine.ts";
 import { cmdServe } from "./serve.ts";
 import { cmdTurnRespond } from "./turn-respond.ts";
@@ -18,6 +19,7 @@ const SUBCOMMANDS = {
   assist: cmdAssist,
   "check-flow": cmdCheckFlow,
   "compile-flow": cmdCompileFlow,
+  "gate-respond": cmdGateRespond,
   "run-engine": cmdRunEngine,
   serve: cmdServe,
   "turn-respond": cmdTurnRespond,
@@ -94,6 +96,13 @@ Subcommands:
                 used as the answer text). --list dumps the pending question
                 files. Without --turn, the lowest unanswered turn number is
                 auto-selected.
+
+  gate-respond  --run-id <id> --node-id <node> [--worktree <dir>]
+                --decision approved|rejected|cancelled [--approver <name>]
+                [--comment "..."] [--via cli|web_ui|api]
+                Write a gate decision file. Validated against
+                gate-output.schema.json. Default approver is "cli-user". The
+                engine's await-gate poller picks it up within ~1 s.
 
   assist        [--turn] [--run-id <id> --node-id <node>] [--worktree <dir>]
                 [--dry-run]

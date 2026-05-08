@@ -28,7 +28,7 @@
       "type": "object",
       "description": "Values submitted via the gate's form fields, keyed by field.name. Strings (text/textarea/select) or booleans (checkbox)."
     },
-    "via": { "enum": ["cli", "web_ui", "api"] }
+    "via": { "enum": ["cli", "web_ui", "api", "assist"] }
   },
   "allOf": [
     {
