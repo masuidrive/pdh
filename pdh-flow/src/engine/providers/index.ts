@@ -40,6 +40,15 @@ export interface ProviderResult {
   stderrTail: string;
   /** True if process exceeded timeoutMs. */
   timedOut: boolean;
+  /**
+   * Provider-side session id, when the CLI exposes one. Used by F-001
+   * (engineer-resume) and F-012 (in-step user-input turn loop) to re-invoke
+   * the same conversation via `claude --resume <id>` or
+   * `codex exec resume <id>`. May be undefined when the CLI didn't surface
+   * one (e.g. claude without --output-format json, or a probe that errored
+   * before thread.started).
+   */
+  sessionId?: string;
 }
 
 export type ProviderName = "claude" | "codex";

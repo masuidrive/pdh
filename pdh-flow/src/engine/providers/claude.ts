@@ -12,25 +12,23 @@ const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 export async function invokeClaude(
   inv: ProviderInvocation,
 ): Promise<ProviderResult> {
+  // Always request --output-format json so we can capture session_id from
+  // the result envelope, even for plain provider_step runs (no schema).
+  // The envelope's `result` field is what previous "text" mode emitted, so
+  // callers see the same text either way.
   const args: string[] = [
     "-p",
     inv.prompt,
     "--add-dir",
     inv.cwd,
+    "--output-format",
+    "json",
   ];
   if (inv.editable) {
     args.push("--permission-mode", "bypassPermissions");
   }
   if (inv.jsonSchema) {
-    // --json-schema only constrains structured output; without
-    // --output-format json claude still prints its prose. Pair them so
-    // stdout becomes a single JSON object matching the schema.
-    args.push(
-      "--json-schema",
-      JSON.stringify(inv.jsonSchema),
-      "--output-format",
-      "json",
-    );
+    args.push("--json-schema", JSON.stringify(inv.jsonSchema));
   }
 
   const timeoutMs = inv.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -86,42 +84,53 @@ async function runProcess(
       const stderr = Buffer.concat(stderrChunks).toString("utf8");
       const stderrTail = stderr.slice(-2000);
 
+      // claude --output-format json always emits a result envelope:
+      //   { type: "result", result: "...", session_id: "...",
+      //     structured_output?: {...}, is_error?: bool, stop_reason?: ... }
+      // We always parse it so session_id is captured for F-001
+      // (engineer-resume) / F-012 (in-step turn loop), and the schema-
+      // constrained `structured_output` is surfaced to the caller as
+      // `jsonOutput`.
       let jsonOutput: unknown;
       let text = stdout;
-      if (jsonSchema) {
-        // claude --json-schema --output-format json emits a result envelope
-        // like { type: "result", result: "...", structured_output: {...} }.
-        // The actual schema-conforming object lives in `structured_output`.
-        try {
-          const envelope = JSON.parse(stdout);
-          if (envelope && typeof envelope === "object") {
-            const env = envelope as Record<string, unknown>;
-            if (env.is_error === true) {
-              // Surface the real cause (API error, rate limit, permission
-              // denial, etc.) instead of letting the envelope flow through
-              // and trip downstream schema validation.
-              const cause =
-                typeof env.result === "string"
-                  ? env.result
-                  : `is_error=true (api_error_status=${String(env.api_error_status ?? "unknown")})`;
-              process.stderr.write(
-                `[claude] provider returned is_error=true. cause: ${cause}\n`,
-              );
-              return resolve({
-                text: "",
-                jsonOutput: undefined,
-                exitCode: code ?? -1,
-                stderrTail,
-                timedOut,
-              });
-            }
+      let sessionId: string | undefined;
+      try {
+        const envelope = JSON.parse(stdout);
+        if (envelope && typeof envelope === "object") {
+          const env = envelope as Record<string, unknown>;
+          if (typeof env.session_id === "string" && env.session_id.length > 0) {
+            sessionId = env.session_id;
+          }
+          if (env.is_error === true) {
+            // Surface the real cause (API error, rate limit, permission
+            // denial, etc.) instead of letting the envelope flow through
+            // and trip downstream schema validation.
+            const cause =
+              typeof env.result === "string"
+                ? env.result
+                : `is_error=true (api_error_status=${String(env.api_error_status ?? "unknown")})`;
+            process.stderr.write(
+              `[claude] provider returned is_error=true. cause: ${cause}\n`,
+            );
+            return resolve({
+              text: "",
+              jsonOutput: undefined,
+              exitCode: code ?? -1,
+              stderrTail,
+              timedOut,
+              sessionId,
+            });
+          }
+          // Always replace text with envelope.result so callers get the
+          // assistant prose, not the JSON envelope as a string.
+          text = typeof env.result === "string" ? env.result : "";
+          if (jsonSchema) {
             if (
               "structured_output" in env &&
               env.structured_output !== null &&
               env.structured_output !== undefined
             ) {
               jsonOutput = env.structured_output;
-              text = typeof env.result === "string" ? env.result : "";
             } else {
               // Schema requested but no structured_output produced. Log a
               // diagnostic — the caller will treat missing jsonOutput as a
@@ -135,13 +144,13 @@ async function runProcess(
                   `terminal_reason=${String(env.terminal_reason ?? "unknown")}\n` +
                   (resultPreview ? `[claude] result preview:\n${resultPreview}\n` : ""),
               );
-              jsonOutput = undefined;
-              text = typeof env.result === "string" ? env.result : "";
             }
           }
-        } catch {
-          // fall through; caller will treat as failure if jsonOutput required
         }
+      } catch {
+        // Envelope parse failed (e.g. CLI error before producing JSON);
+        // fall through with raw stdout in `text`. Caller will treat
+        // missing jsonOutput as a failure when a schema was requested.
       }
 
       resolve({
@@ -150,6 +159,7 @@ async function runProcess(
         exitCode: code ?? -1,
         stderrTail,
         timedOut,
+        sessionId,
       });
     });
   });

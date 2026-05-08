@@ -1,8 +1,14 @@
 // codex CLI subprocess wrapper.
 //
-// Spawns `codex exec` with optional `--output-schema <file>` for structured
-// output. The schema must be written to a temp file (codex doesn't take it
-// inline). Subscription auth flows through the user's existing codex session.
+// Spawns `codex exec --json` (always JSONL event stream) with optional
+// `--output-schema <file>` for structured output. The schema must be
+// written to a temp file (codex doesn't take it inline). Subscription
+// auth flows through the user's existing codex session.
+//
+// We always run in --json mode so we can capture `thread.started.thread_id`
+// (the codex session id) for F-001 (engineer-resume) / F-012 (in-step turn
+// loop). The final assistant text comes from the last `item.completed`
+// event whose `item.type === "agent_message"`.
 
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -17,7 +23,13 @@ export async function invokeCodex(
 ): Promise<ProviderResult> {
   let schemaTempDir: string | null = null;
   try {
-    const args: string[] = ["exec", "--cd", inv.cwd, "--skip-git-repo-check"];
+    const args: string[] = [
+      "exec",
+      "--cd",
+      inv.cwd,
+      "--skip-git-repo-check",
+      "--json",
+    ];
     if (inv.editable) {
       // Default codex sandbox is read-only; raise to workspace-write so
       // implementer / repair roles can apply patches.
@@ -94,24 +106,52 @@ async function runProcess(
       const stderr = Buffer.concat(stderrChunks).toString("utf8");
       const stderrTail = stderr.slice(-2000);
 
-      let jsonOutput: unknown;
-      let text = stdout;
-      if (jsonSchema) {
-        // codex with --output-schema emits the structured object as the
-        // final stdout payload. codex may also print non-JSON status before
-        // the object; for prototype simplicity we try JSON.parse on the
-        // whole stdout, then fall back to extracting the last {...} block.
+      // Parse JSONL event stream. Skip non-JSON lines (codex sometimes
+      // prints banners or status text outside the event stream). Capture:
+      //   - thread.started.thread_id  → sessionId
+      //   - last item.completed where item.type==="agent_message" → text
+      let sessionId: string | undefined;
+      let agentMessageText = "";
+      for (const line of stdout.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        let evt: unknown;
         try {
-          jsonOutput = JSON.parse(stdout);
-          text = "";
+          evt = JSON.parse(trimmed);
         } catch {
-          const match = stdout.match(/\{[\s\S]*\}\s*$/);
-          if (match) {
-            try {
-              jsonOutput = JSON.parse(match[0]);
-              text = stdout.slice(0, match.index ?? 0);
-            } catch {
-              // fall through; caller will treat as failure
+          continue;
+        }
+        if (!evt || typeof evt !== "object") continue;
+        const e = evt as Record<string, unknown>;
+        if (e.type === "thread.started" && typeof e.thread_id === "string") {
+          sessionId = e.thread_id;
+        } else if (e.type === "item.completed" && e.item && typeof e.item === "object") {
+          const item = e.item as Record<string, unknown>;
+          if (item.type === "agent_message" && typeof item.text === "string") {
+            agentMessageText = item.text;
+          }
+        }
+      }
+
+      let text = agentMessageText || stdout;
+      let jsonOutput: unknown;
+      if (jsonSchema) {
+        // With --output-schema, codex writes the schema-conforming object
+        // as the final agent_message text. Parse it as JSON.
+        const candidate = agentMessageText.trim();
+        if (candidate) {
+          try {
+            jsonOutput = JSON.parse(candidate);
+            text = "";
+          } catch {
+            const match = candidate.match(/\{[\s\S]*\}\s*$/);
+            if (match) {
+              try {
+                jsonOutput = JSON.parse(match[0]);
+                text = candidate.slice(0, match.index ?? 0);
+              } catch {
+                // caller treats missing jsonOutput as failure
+              }
             }
           }
         }
@@ -123,6 +163,7 @@ async function runProcess(
         exitCode: code ?? -1,
         stderrTail,
         timedOut,
+        sessionId,
       });
     });
   });
