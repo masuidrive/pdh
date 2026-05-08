@@ -217,6 +217,7 @@ Reads `runs/<runId>/sessions/<nodeId>.json` (the F-001/J3 record) and execs the 
 **`--turn` shortcut + gate card terminal (2026-05-08)**:
 - `pdh-flow assist --turn` scans `<worktree>/.pdh-flow/runs/*/turns/*/turn-NNN-question.json` for the unique unanswered question and auto-targets it (no need to type `--run-id`/`--node-id`). Errors out on 0 or 2+ unanswered questions; prints the auto-detected triple to stderr.
 - `POST /api/assist/open` accepts `mode: "fresh"` which spawns a plain `claude` (no `--resume`) in the worktree, bypassing the `sessions/<nodeId>.json` requirement. Used by the gate card's "Open in terminal" button — gates don't capture provider sessions, but having a worktree-scoped claude session is useful for inspecting diffs / asking the LLM "is this safe to approve?" before clicking Approve/Reject.
+- Browser smoke (agent-browser CDP, 2026-05-08): stubbed a worktree at `current_state=plan_gate`, opened the run detail page, gate card rendered with Approve/Reject/Cancel run + the new "Open in terminal" button, click → modal opens with title `claude (fresh) — plan_gate`, claude shows its trust prompt in the xterm host, quick-keys bar present. Confirms backend mode switch + frontend wiring + visual rendering.
 
 **Still possible (not built)**:
 - assist sub-commands like `:answer "..."` that auto-run `turn-respond` on exit (would require parsing the transcript or wrapping the provider's stdin — fragile due to claude's own slash-command UX)
