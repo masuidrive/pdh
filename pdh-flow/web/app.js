@@ -72,29 +72,75 @@ async function initHomePage() {
 }
 
 async function renderHomePage() {
-  const runs = await fetchJson("/api/runs");
+  // F-011/H10-8: ticket-centric primary view. Falls back to runs listing
+  // when no tickets exist (e.g. legacy worktree mid-migration).
+  const tickets = await fetchJson("/api/tickets");
+  if (tickets.length === 0) {
+    const runs = await fetchJson("/api/runs");
+    app.innerHTML = `
+      <header class="mb-6 flex items-center gap-3">
+        <h1 class="text-2xl font-semibold">pdh-flow v2</h1>
+      </header>
+      <div class="card bg-base-100 shadow">
+        <div class="card-body">
+          <h2 class="card-title text-lg">Runs</h2>
+          ${
+            runs.length === 0
+              ? '<p class="text-sm opacity-70">No tickets yet. Start the engine on a worktree, then come back.</p>'
+              : `<div class="overflow-x-auto"><table class="table table-zebra table-sm">
+                  <thead><tr><th>Run ID</th><th>Ticket</th><th>State</th><th>Saved</th><th></th></tr></thead>
+                  <tbody>${runs.map(renderRunRow).join("")}</tbody>
+                </table></div>`
+          }
+        </div>
+      </div>
+    `;
+    return;
+  }
   app.innerHTML = `
     <header class="mb-6 flex items-center gap-3">
       <h1 class="text-2xl font-semibold">pdh-flow v2</h1>
-      <span class="badge badge-ghost">Web UI MVP</span>
+      <span class="badge badge-ghost">tickets/</span>
     </header>
     <div class="card bg-base-100 shadow">
       <div class="card-body">
-        <h2 class="card-title text-lg">Runs</h2>
-        ${
-          runs.length === 0
-            ? '<p class="text-sm opacity-70">No runs yet. Start the engine on a worktree, then come back.</p>'
-            : `<div class="overflow-x-auto">
-                <table class="table table-zebra table-sm">
-                  <thead><tr><th>Run ID</th><th>Ticket</th><th>State</th><th>Saved</th><th></th></tr></thead>
-                  <tbody>
-                    ${runs.map(renderRunRow).join("")}
-                  </tbody>
-                </table>
-              </div>`
-        }
+        <h2 class="card-title text-lg">Tickets</h2>
+        <div class="overflow-x-auto">
+          <table class="table table-zebra table-sm">
+            <thead><tr><th>Slug</th><th>Title</th><th>Status</th><th>Run state</th><th>Opened</th><th></th></tr></thead>
+            <tbody>
+              ${tickets.map(renderTicketRow).join("")}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
+  `;
+}
+
+function renderTicketRow(t) {
+  const slug = encodeURIComponent(t.slug);
+  const linkTarget = t.latest_run_id
+    ? `#/runs/${encodeURIComponent(t.latest_run_id)}`
+    : `#/tickets/${slug}`;
+  const statusBadge = t.status
+    ? `<span class="badge badge-sm ${
+        t.status === "done"
+          ? "badge-success"
+          : t.status === "in_progress"
+            ? "badge-info"
+            : "badge-ghost"
+      }">${escapeHtml(t.status)}</span>`
+    : "";
+  return `
+    <tr>
+      <td class="font-mono text-xs">${escapeHtml(t.slug)}</td>
+      <td class="text-xs">${escapeHtml(t.title ?? "-")}</td>
+      <td class="text-xs">${statusBadge}</td>
+      <td class="text-xs">${stateBadge(t.latest_run_state ?? null)}</td>
+      <td class="text-xs opacity-70">${escapeHtml(t.opened_at ?? "-")}</td>
+      <td><a href="${linkTarget}" class="btn btn-xs">Open</a></td>
+    </tr>
   `;
 }
 

@@ -63,11 +63,25 @@ async function handleRequest(
   const path = (req.url ?? "/").split("?")[0];
 
   // ── API ───────────────────────────────────────────────────────────────
+  // F-011/H10-8: ticket-centric primary view. /api/tickets lists from
+  // tickets/<slug>.md (durable). /api/runs is kept for engine-internal
+  // debugging but the UI defaults to tickets.
+  if (path === "/api/tickets" && req.method === "GET") {
+    return sendJson(res, 200, listTickets(opts.worktreePath));
+  }
+
+  let m = path.match(/^\/api\/tickets\/([^/]+)$/);
+  if (m && req.method === "GET") {
+    const detail = getTicketDetail(opts.worktreePath, m[1]);
+    if (!detail) return sendJson(res, 404, { error: "ticket not found" });
+    return sendJson(res, 200, detail);
+  }
+
   if (path === "/api/runs" && req.method === "GET") {
     return sendJson(res, 200, listRuns(opts.worktreePath));
   }
 
-  let m = path.match(/^\/api\/runs\/([^/]+)$/);
+  m = path.match(/^\/api\/runs\/([^/]+)$/);
   if (m && req.method === "GET") {
     const summary = getRunSummary(opts.worktreePath, m[1]);
     if (!summary) return sendJson(res, 404, { error: "run not found" });
@@ -100,6 +114,113 @@ async function handleRequest(
 
   // ── Static ────────────────────────────────────────────────────────────
   return serveStatic(res, opts.staticDir, path);
+}
+
+// ─── Ticket discovery (F-011/H10-8) ──────────────────────────────────────
+
+interface TicketListItem {
+  slug: string;
+  title: string | null;
+  status: string | null;
+  opened_at: string | null;
+  closed_at: string | null;
+  /** Latest run for this ticket, when one exists. */
+  latest_run_id: string | null;
+  latest_run_state: string | null;
+}
+
+interface TicketDetail {
+  slug: string;
+  ticket_frontmatter: Record<string, unknown>;
+  ticket_body: string;
+  note_body: string | null;
+  latest_run: RunSummary | null;
+}
+
+function listTickets(worktreePath: string): TicketListItem[] {
+  const ticketsDir = join(worktreePath, "tickets");
+  if (!existsSync(ticketsDir)) return [];
+  const entries = readdirSync(ticketsDir).filter(
+    (f) => f.endsWith(".md") && !f.endsWith("-note.md"),
+  );
+  // For each ticket, also look up the latest run (if any) sharing this ticket_id.
+  const runs = listRuns(worktreePath);
+  const out: TicketListItem[] = entries.map((file) => {
+    const slug = file.replace(/\.md$/, "");
+    const fm = readFrontmatter(join(ticketsDir, file));
+    const matchingRun = runs.find((r) => r.ticket_id === slug);
+    return {
+      slug,
+      title: typeof fm.title === "string" ? fm.title : null,
+      status: typeof fm.status === "string" ? fm.status : null,
+      opened_at:
+        typeof fm.created_at === "string"
+          ? fm.created_at
+          : typeof fm.opened_at === "string"
+            ? fm.opened_at
+            : null,
+      closed_at: typeof fm.closed_at === "string" ? fm.closed_at : null,
+      latest_run_id: matchingRun?.run_id ?? null,
+      latest_run_state: matchingRun?.current_state ?? null,
+    };
+  });
+  // Sort: open tickets first, then by opened_at desc.
+  out.sort((a, b) => {
+    const aOpen = a.status !== "done" && a.status !== "cancelled";
+    const bOpen = b.status !== "done" && b.status !== "cancelled";
+    if (aOpen !== bOpen) return aOpen ? -1 : 1;
+    return (b.opened_at ?? "").localeCompare(a.opened_at ?? "");
+  });
+  return out;
+}
+
+function getTicketDetail(
+  worktreePath: string,
+  slug: string,
+): TicketDetail | null {
+  const ticketPath = join(worktreePath, "tickets", `${slug}.md`);
+  const notePath = join(worktreePath, "tickets", `${slug}-note.md`);
+  if (!existsSync(ticketPath)) return null;
+  const ticketFull = readFileSync(ticketPath, "utf8");
+  const fm = readFrontmatter(ticketPath);
+  const ticketBody = stripFrontmatter(ticketFull);
+  const noteBody = existsSync(notePath)
+    ? readFileSync(notePath, "utf8")
+    : null;
+  const runs = listRuns(worktreePath);
+  const matching = runs.find((r) => r.ticket_id === slug);
+  const latestRun = matching ? getRunSummary(worktreePath, matching.run_id) : null;
+  return {
+    slug,
+    ticket_frontmatter: fm,
+    ticket_body: ticketBody,
+    note_body: noteBody,
+    latest_run: latestRun,
+  };
+}
+
+function readFrontmatter(path: string): Record<string, unknown> {
+  if (!existsSync(path)) return {};
+  const text = readFileSync(path, "utf8");
+  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!m) return {};
+  // Minimal YAML parse: scalar key: value lines only. Sufficient for the
+  // top-level frontmatter fields the UI needs.
+  const out: Record<string, unknown> = {};
+  for (const line of m[1].split(/\r?\n/)) {
+    const lm = line.match(/^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/);
+    if (!lm) continue;
+    const key = lm[1];
+    const raw = lm[2].trim();
+    if (raw === "" || raw.startsWith("-")) continue;
+    out[key] = raw.replace(/^['"]|['"]$/g, "");
+  }
+  return out;
+}
+
+function stripFrontmatter(text: string): string {
+  const m = text.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+  return m ? text.slice(m[0].length) : text;
 }
 
 // ─── Run discovery ────────────────────────────────────────────────────────
