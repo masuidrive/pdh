@@ -3,10 +3,19 @@
 //
 // Executed by Node 24's built-in TS stripping. Exits 1 on first failure.
 
-import { readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
+import { createActor } from "xstate";
 import {
   getValidator,
   SCHEMA_IDS,
@@ -14,6 +23,7 @@ import {
 } from "../src/engine/validate.ts";
 import { loadFlow, parseFlow } from "../src/engine/load-flow.ts";
 import { expandFlow } from "../src/engine/expand-macro.ts";
+import { runProvider } from "../src/engine/actors/run-provider.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -428,6 +438,91 @@ section("F-012 turn schemas");
       via: "cli",
     });
     assert("turn-answer empty text → invalid", r.ok === false);
+  }
+}
+
+// ─── 9d. F-012 turn replay — runProvider writes question/answer files ───
+section("F-012 turn replay (fixture)");
+{
+  const work = mkdtempSync(join(tmpdir(), "pdh-turn-replay-"));
+  try {
+    // Minimal git repo so run-provider's ensureGit + git add/commit succeed.
+    spawnSync("git", ["init", "-q"], { cwd: work });
+    writeFileSync(join(work, "current-note.md"), "---\nstatus: in_progress\n---\n");
+    writeFileSync(join(work, "current-ticket.md"), "---\nstatus: open\n---\n");
+    spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "add", "-A"], { cwd: work });
+    spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "seed"], { cwd: work });
+
+    const runId = "run-test-turn-replay";
+    const actor = createActor(runProvider, {
+      input: {
+        nodeId: "implement",
+        round: 1,
+        worktreePath: work,
+        runId,
+        // Real-mode fields are ignored when fixture is present.
+        provider: "claude",
+        role: "implementer",
+        promptSpec: { intent: "test" },
+        fixtureMeta: {
+          scenario: "turn_replay_one_ask",
+          node_outputs: {
+            implement: {
+              "round-1": {
+                summary: "implemented feature with one clarification",
+                note_section: "## implement (round 1)\n\nDone.\n",
+                turns: [
+                  {
+                    question: "Should I add input validation?",
+                    answer: "Yes, add it.",
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const done = new Promise<unknown>((resolve, reject) => {
+      actor.subscribe({
+        next: (snap: { status: string; output?: unknown; error?: unknown }) => {
+          if (snap.status === "done") resolve(snap.output);
+          if (snap.status === "error") reject(snap.error);
+        },
+      });
+    });
+    actor.start();
+    await done;
+
+    const qPath = join(work, ".pdh-flow", "runs", runId, "turns", "implement", "turn-001-question.json");
+    const aPath = join(work, ".pdh-flow", "runs", runId, "turns", "implement", "turn-001-answer.json");
+    assert("turn-001-question.json written", existsSync(qPath));
+    assert("turn-001-answer.json written", existsSync(aPath));
+    if (existsSync(qPath)) {
+      const q = JSON.parse(readFileSync(qPath, "utf8"));
+      assert(
+        `question.ask.question matches (got: ${q?.ask?.question})`,
+        q?.ask?.question === "Should I add input validation?",
+      );
+      assert("question validates against turn-question schema",
+        v.validate(SCHEMA_IDS.turnQuestion, q).ok === true);
+    }
+    if (existsSync(aPath)) {
+      const a = JSON.parse(readFileSync(aPath, "utf8"));
+      assert(
+        `answer.answer.text matches (got: ${a?.answer?.text})`,
+        a?.answer?.text === "Yes, add it.",
+      );
+      assert("answer validates against turn-answer schema",
+        v.validate(SCHEMA_IDS.turnAnswer, a).ok === true);
+    }
+
+    // The note section should still be the fixture's note_section.
+    const note = readFileSync(join(work, "current-note.md"), "utf8");
+    assert("note section appended", note.includes("## implement (round 1)"));
+  } finally {
+    rmSync(work, { recursive: true, force: true });
   }
 }
 
