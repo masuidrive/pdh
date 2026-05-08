@@ -79,11 +79,12 @@ Subcommands:
                 the given fixture dir (for testing); without --fixture, real
                 provider invocation is required (not yet wired in v0.2.0-pre).
 
-  serve         [--worktree <dir>] [--port <n>] [--static-dir <dir>]
+  serve         [--worktree <dir>] [--port <n>] [--host <addr>] [--static-dir <dir>]
                 Launch the Web UI HTTP server against the worktree's
-                .pdh-flow/runs state (default port 5170). Approves gates by
-                writing into the same files the engine's await-gate actor
-                polls.
+                .pdh-flow/runs state (default port 5170, host 127.0.0.1).
+                Pass --host 0.0.0.0 to accept connections from the LAN.
+                Approves gates by writing into the same files the engine's
+                await-gate actor polls.
 
   turn-respond  --run-id <id> --node-id <node> [--worktree <dir>]
                 [--turn N] --text "..." [--option N] [--via cli|web_ui|assist]

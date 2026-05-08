@@ -11,6 +11,7 @@ export async function cmdServe(argv: string[]): Promise<void> {
   const { values } = parseSubcommandArgs(argv, {
     worktree: { type: "string" },
     port: { type: "string" },
+    host: { type: "string" },
     "static-dir": { type: "string" },
   });
 
@@ -24,9 +25,12 @@ export async function cmdServe(argv: string[]): Promise<void> {
     throw new Error(`--port must be a valid TCP port; got ${portRaw}`);
   }
 
+  const host = values.host as string | undefined;
+
   startWebServer({
     worktreePath,
     port,
+    ...(host ? { host } : {}),
     staticDir: values["static-dir"]
       ? resolve(values["static-dir"] as string)
       : undefined,

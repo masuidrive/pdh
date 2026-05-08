@@ -31,6 +31,11 @@ import { getValidator, SCHEMA_IDS, formatErrors } from "../engine/validate.ts";
 export interface ServeOptions {
   worktreePath: string;
   port: number;
+  /**
+   * Bind address. Default `127.0.0.1` (loopback only). Pass `0.0.0.0`
+   * (or `::`) to accept connections from other machines on the LAN.
+   */
+  host?: string;
   /** Path to static frontend assets. Defaults to ../../web relative to this file. */
   staticDir?: string;
 }
@@ -47,9 +52,13 @@ export function startWebServer(opts: ServeOptions): Server {
       sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
     });
   });
-  server.listen(opts.port, () => {
+  const host = opts.host ?? "127.0.0.1";
+  server.listen(opts.port, host, () => {
+    const display = host === "0.0.0.0" || host === "::"
+      ? `http://0.0.0.0:${opts.port} (reachable from any interface)`
+      : `http://${host}:${opts.port}`;
     process.stderr.write(
-      `[web] listening on http://localhost:${opts.port} (worktree=${opts.worktreePath})\n`,
+      `[web] listening on ${display} (worktree=${opts.worktreePath})\n`,
     );
   });
   return server;
