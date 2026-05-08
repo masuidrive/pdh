@@ -342,15 +342,32 @@ section("scenario: gate_system_happy");
     );
   }
 
-  // close_ticket marker file.
-  const closedMarker = join(
-    worktree,
-    ".pdh-flow",
-    "runs",
-    "run-test-gate_system_happy-1",
-    "closed.json",
-  );
-  assert("close_ticket marker written", existsSync(closedMarker));
+  // F-011/H10-2: close marker now lives in ticket + note frontmatter
+  // (status: done / completed) — `.pdh-flow/runs/.../closed.json` is gone.
+  const ticketId = "260508-000000-test-gate-system";
+  const ticketPath = join(worktree, "tickets", `${ticketId}.md`);
+  const notePath = join(worktree, "tickets", `${ticketId}-note.md`);
+  assert("ticket file exists", existsSync(ticketPath));
+  if (existsSync(ticketPath)) {
+    const fm = readFileSync(ticketPath, "utf8");
+    assert(
+      "ticket frontmatter status=done",
+      /^status:\s*done\s*$/m.test(fm),
+      `frontmatter excerpt:\n${fm.slice(0, 300)}`,
+    );
+    assert(
+      "ticket frontmatter has closed_at",
+      /^closed_at:\s*\S+/m.test(fm),
+    );
+  }
+  if (existsSync(notePath)) {
+    const fm = readFileSync(notePath, "utf8");
+    assert(
+      "note frontmatter status=completed",
+      /^status:\s*completed\s*$/m.test(fm),
+      `frontmatter excerpt:\n${fm.slice(0, 300)}`,
+    );
+  }
 }
 
 // ─── Lease integration (unit-style, exercises the system_step actor's

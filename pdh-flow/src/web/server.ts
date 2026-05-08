@@ -165,7 +165,9 @@ function getRunSummary(worktreePath: string, runId: string): RunSummary | null {
     currentState === "close_gate" ||
     currentState === "review_gate";
   const alreadyDecided = gateDecisions.some((g) => g.node_id === currentState);
-  const closed = existsSync(join(runDir, "closed.json"));
+  // F-011/H10-2: closed status lives in note frontmatter (durable), not in
+  // `.pdh-flow/runs/<runId>/closed.json` (ephemeral, may be wiped).
+  const closed = isTicketClosed(worktreePath, snap?.ticket_id ?? null);
   return {
     run_id: runId,
     ticket_id: snap?.ticket_id ?? null,
@@ -253,6 +255,26 @@ function readNote(worktreePath: string): string | null {
   const path = join(worktreePath, "current-note.md");
   if (!existsSync(path)) return null;
   return readFileSync(path, "utf8");
+}
+
+// True when the note frontmatter shows the run reached a terminal close
+// state. Source of truth is tickets/<id>-note.md frontmatter.status; falls
+// back to current-note.md when the ticketId is unknown (legacy path).
+function isTicketClosed(
+  worktreePath: string,
+  ticketId: string | null,
+): boolean {
+  const candidate = ticketId
+    ? join(worktreePath, "tickets", `${ticketId}-note.md`)
+    : join(worktreePath, "current-note.md");
+  if (!existsSync(candidate)) return false;
+  try {
+    const text = readFileSync(candidate, "utf8");
+    const m = text.match(/^---\s*[\s\S]*?status:\s*(\w+)/m);
+    return m?.[1] === "completed";
+  } catch {
+    return false;
+  }
 }
 
 // ─── Gate post ────────────────────────────────────────────────────────────

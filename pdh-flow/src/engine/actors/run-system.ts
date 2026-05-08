@@ -12,7 +12,7 @@
 //   noop              — no-op success
 
 import { fromPromise } from "xstate";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   acquireForTicket,
@@ -45,7 +45,12 @@ export const runSystem = fromPromise<SystemActorOutput, SystemActorInput>(
     const { nodeId, action, worktreePath } = input;
     switch (action) {
       case "close_ticket":
-        return closeTicket({ nodeId, worktreePath, runId: input.runId });
+        return closeTicket({
+          nodeId,
+          worktreePath,
+          runId: input.runId,
+          ticketId: input.ticketId,
+        });
       case "acquire_lease":
         return acquireLeaseAction({
           nodeId,
@@ -152,35 +157,72 @@ function closeTicket(p: {
   nodeId: string;
   worktreePath: string;
   runId?: string;
+  ticketId?: string;
 }): SystemActorOutput {
-  // Minimal: write a close-marker under .pdh-flow/runs/<runId>/closed.json.
-  // Real impl (deferred) would: invoke ticket.sh close (or v1 close path),
-  // move tickets/active/<id>.md → tickets/done/<id>.md, run preflight.
-  const dir = p.runId
-    ? join(p.worktreePath, ".pdh-flow", "runs", p.runId)
-    : join(p.worktreePath, ".pdh-flow");
-  mkdirSync(dir, { recursive: true });
-  const marker = join(dir, "closed.json");
-  if (!existsSync(marker)) {
-    writeFileSync(
-      marker,
-      JSON.stringify(
-        {
-          version: 1,
-          closed_at: new Date().toISOString(),
-          node_id: p.nodeId,
-          run_id: p.runId ?? null,
-        },
-        null,
-        2,
-      ),
+  // F-011/H10-2: durable close lives in ticket + note frontmatter, not
+  // in `.pdh-flow/runs/<runId>/closed.json`. The .pdh-flow tree is now
+  // ephemeral — wiping it must not lose the "this ticket is closed" fact.
+  const closedAt = new Date().toISOString();
+  const updated: string[] = [];
+
+  if (p.ticketId) {
+    const ticketPath = join(p.worktreePath, "tickets", `${p.ticketId}.md`);
+    if (
+      mergeFrontmatter(ticketPath, { status: "done", closed_at: closedAt })
+    ) {
+      updated.push(`tickets/${p.ticketId}.md`);
+    }
+    const notePath = join(
+      p.worktreePath,
+      "tickets",
+      `${p.ticketId}-note.md`,
     );
+    if (
+      mergeFrontmatter(notePath, {
+        status: "completed",
+        completed_at: closedAt,
+      })
+    ) {
+      updated.push(`tickets/${p.ticketId}-note.md`);
+    }
   }
+
   return {
     status: "completed",
     nodeId: p.nodeId,
     action: "close_ticket",
-    summary: "ticket marker written (full close logic deferred)",
-    details: { marker_path: marker },
+    summary: `ticket closed (${updated.length} frontmatter file(s) updated)`,
+    details: {
+      closed_at: closedAt,
+      ticket_id: p.ticketId ?? null,
+      updated,
+    },
   };
+}
+
+// Merge `updates` into the YAML frontmatter of `path`. Existing keys are
+// replaced in place; missing keys are appended at the end of the
+// frontmatter block. Returns true on success, false if the file does not
+// exist or has no frontmatter block.
+function mergeFrontmatter(
+  path: string,
+  updates: Record<string, string>,
+): boolean {
+  if (!existsSync(path)) return false;
+  const content = readFileSync(path, "utf8");
+  const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  if (!m) return false;
+  let fm = m[1];
+  for (const [key, value] of Object.entries(updates)) {
+    const re = new RegExp(`^${key}:.*$`, "m");
+    const line = `${key}: ${value}`;
+    if (re.test(fm)) {
+      fm = fm.replace(re, line);
+    } else {
+      fm = fm.replace(/\s*$/, "") + `\n${line}`;
+    }
+  }
+  const rest = content.slice(m[0].length);
+  writeFileSync(path, `---\n${fm}\n---\n${rest}`);
+  return true;
 }

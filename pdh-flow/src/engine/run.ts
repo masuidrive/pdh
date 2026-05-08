@@ -8,6 +8,8 @@
 // drive provider invocations directly.
 
 import "dotenv/config";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createActor, type AnyActorRef, waitFor } from "xstate";
 import { compileFlow } from "./compile-machine.ts";
 import { loadFlow } from "./load-flow.ts";
@@ -248,24 +250,24 @@ export async function runEngine(
 
 function deriveTicketId(opts: RunEngineOptions): string {
   // Best-effort: read current-note.md frontmatter ticket_id if present.
-  // Falls back to "unknown-<runId>" when the frontmatter is missing —
-  // snapshot validation will flag the schema violation if the value
-  // doesn't match TicketId pattern, in which case we sanitize.
+  // Falls back to a TicketId-shaped synthetic value only when the
+  // frontmatter is genuinely missing (brand-new worktree). Pre-F-011/H10-2
+  // this used a CommonJS-only `require()` that always threw under
+  // node --experimental-strip-types ESM mode and silently fell through
+  // to the synthetic id — which is why close_ticket's frontmatter writes
+  // were targeting tickets/<synthetic>.md instead of the real slug.
   try {
-    // Lazy import to avoid pulling fs at module top.
-    const { existsSync, readFileSync } = require("node:fs");
-    const { join } = require("node:path");
     const path = join(opts.worktreePath, "current-note.md");
     if (existsSync(path)) {
-      const text: string = readFileSync(path, "utf8");
-      const m = text.match(/^---\s*[\s\S]*?ticket_id:\s*([0-9]{6}-[0-9]{6}-[a-z0-9-]+)/m);
+      const text = readFileSync(path, "utf8");
+      const m = text.match(
+        /^---\s*[\s\S]*?ticket_id:\s*([0-9]{6}-[0-9]{6}-[a-z0-9-]+)/m,
+      );
       if (m) return m[1];
     }
   } catch {
     // ignore
   }
-  // Synthesize a TicketId-shaped fallback that satisfies the schema
-  // pattern. Used only when frontmatter is missing (e.g. brand-new run).
   const stamp = new Date()
     .toISOString()
     .replace(/[-T:Z.]/g, "")
