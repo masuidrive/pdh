@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { invokeProvider, type ProviderName } from "../providers/index.ts";
 import { renderPrompt } from "../prompts/render.ts";
+import { saveProviderSession } from "../session-store.ts";
 import { assertTicketUnmodified, hashTicket } from "../ticket-guard.ts";
 
 export interface ProviderActorInput {
@@ -31,6 +32,8 @@ export interface ProviderActorInput {
   };
   /** When set, fixture mode replays this. Otherwise real provider runs. */
   fixtureMeta?: FixtureMeta;
+  /** Engine run id; required for saving provider session ids (F-001). */
+  runId?: string;
 }
 
 export interface ProviderActorOutput {
@@ -123,6 +126,27 @@ export const runProvider = fromPromise<
     }
     summary = extractSummary(text, `${nodeId} ${roundKey}`);
     noteSection = `## ${nodeId} (round ${round})\n\n${text}\n`;
+
+    // F-001/J3: persist the provider session id (when the CLI surfaced
+    // one) so a later node can `--resume` this conversation. Best-effort:
+    // if runId is missing or the file write fails, the worst case is a
+    // resume-configured downstream falls back to a fresh invocation.
+    if (input.runId && result.sessionId) {
+      try {
+        saveProviderSession({
+          worktreePath,
+          runId: input.runId,
+          nodeId,
+          round,
+          provider: input.provider,
+          sessionId: result.sessionId,
+        });
+      } catch (e) {
+        process.stderr.write(
+          `[run-provider] failed to save session id for ${nodeId} ${roundKey}: ${(e as Error).message}\n`,
+        );
+      }
+    }
   }
 
   // F-011/H10-5: providers (reviewer / implement / repair / assist /
