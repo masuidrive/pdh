@@ -1,16 +1,23 @@
-// pdh-flow v2 Web UI MVP — vanilla JS, polls the engine's filesystem state
-// every 2 s, renders run summary + gate approval form. No build step.
+// pdh-flow v2 Web UI MVP — vanilla JS, SSE-driven.
+//
+// Updates flow:
+//   1. On page load, render the full page once from REST GET.
+//   2. Subscribe to /api/runs(-events|/<id>/events) — Server-Sent Events.
+//   3. On each `change` event, re-fetch summary + note.
+//   4. Replace per-card innerHTML only when its data changed.
+//   5. The gate-card is preserved verbatim while `active_gate` is unchanged
+//      so a half-typed approval doesn't get clobbered by a snapshot save.
 
-const POLL_MS = 2000;
 const app = document.getElementById("app");
 
 let currentRunId = readRunFromHash();
-let polling = false;
-let pollTimer = null;
+let currentSse = null;
+let lastSummary = null;
+let lastNote = null;
 
 window.addEventListener("hashchange", () => {
   currentRunId = readRunFromHash();
-  startPolling();
+  switchPage();
 });
 
 function readRunFromHash() {
@@ -35,29 +42,34 @@ async function fetchText(path) {
 
 // ─── Routing ──────────────────────────────────────────────────────────────
 
-function startPolling() {
-  if (pollTimer) clearTimeout(pollTimer);
-  pollOnce();
+function closeSse() {
+  if (currentSse) {
+    currentSse.close();
+    currentSse = null;
+  }
+  lastSummary = null;
+  lastNote = null;
 }
 
-async function pollOnce() {
-  if (polling) return;
-  polling = true;
-  try {
-    if (currentRunId) {
-      await renderRunPage(currentRunId);
-    } else {
-      await renderHomePage();
-    }
-  } catch (e) {
-    renderError(e);
-  } finally {
-    polling = false;
-    pollTimer = setTimeout(pollOnce, POLL_MS);
+async function switchPage() {
+  closeSse();
+  if (currentRunId) {
+    await initRunPage(currentRunId);
+  } else {
+    await initHomePage();
   }
 }
 
-// ─── Pages ────────────────────────────────────────────────────────────────
+// ─── Home page ────────────────────────────────────────────────────────────
+
+async function initHomePage() {
+  await renderHomePage();
+  // SSE: re-render the run list whenever a run dir is created/removed.
+  currentSse = new EventSource("/api/runs-events");
+  currentSse.addEventListener("change", () => {
+    renderHomePage().catch((e) => renderError(e));
+  });
+}
 
 async function renderHomePage() {
   const runs = await fetchJson("/api/runs");
@@ -99,117 +111,144 @@ function renderRunRow(r) {
   `;
 }
 
-async function renderRunPage(runId) {
-  let summary;
+// ─── Run detail page ──────────────────────────────────────────────────────
+
+async function initRunPage(runId) {
+  let summary, note;
   try {
     summary = await fetchJson(`/api/runs/${encodeURIComponent(runId)}`);
   } catch (e) {
-    return renderError(e);
+    renderError(e);
+    return;
   }
-
-  let note = "";
   try {
     note = await fetchText(`/api/runs/${encodeURIComponent(runId)}/note`);
   } catch {
     note = "(current-note.md not found)";
   }
+  lastSummary = summary;
+  lastNote = note;
+  renderRunPageShell(runId, summary, note);
 
+  currentSse = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
+  currentSse.addEventListener("change", async () => {
+    try {
+      const fresh = await fetchJson(`/api/runs/${encodeURIComponent(runId)}`);
+      let freshNote = lastNote;
+      try {
+        freshNote = await fetchText(`/api/runs/${encodeURIComponent(runId)}/note`);
+      } catch { /* keep last */ }
+      applyRunUpdate(fresh, freshNote);
+    } catch (e) {
+      // Surface but don't crash the SSE subscription.
+      const status = document.getElementById("update-status");
+      if (status) status.textContent = `(update error: ${String(e.message ?? e)})`;
+    }
+  });
+}
+
+function renderRunPageShell(runId, s, note) {
   app.innerHTML = `
     <header class="mb-6 flex items-center gap-3 flex-wrap">
       <a href="#/" class="btn btn-ghost btn-sm">← Runs</a>
       <h1 class="text-xl font-semibold font-mono">${escapeHtml(runId)}</h1>
-      ${summary.closed ? '<span class="badge badge-success">closed</span>' : ""}
+      <span id="closed-badge">${s.closed ? '<span class="badge badge-success">closed</span>' : ""}</span>
+      <span id="update-status" class="text-xs opacity-50 ml-auto"></span>
     </header>
 
     <section class="grid gap-4 md:grid-cols-2 mb-4">
-      ${renderSummaryCard(summary)}
-      ${renderGateCard(summary)}
+      <div id="state-card" class="card bg-base-100 shadow">${renderStateCardInner(s)}</div>
+      <div id="gate-card">${renderGateCardInner(runId, s)}</div>
     </section>
 
-    <section class="card bg-base-100 shadow mb-4">
-      <div class="card-body">
-        <h2 class="card-title text-lg">Judgements (${summary.judgements.length})</h2>
-        ${
-          summary.judgements.length === 0
-            ? '<p class="text-sm opacity-70">No frozen judgements yet.</p>'
-            : `<div class="overflow-x-auto">
-                <table class="table table-sm">
-                  <thead><tr><th>Node</th><th>Round</th><th>Decision</th></tr></thead>
-                  <tbody>
-                    ${summary.judgements
-                      .map(
-                        (j) => `<tr>
-                          <td class="font-mono text-xs">${escapeHtml(j.node_id)}</td>
-                          <td>${j.round}</td>
-                          <td>${decisionBadge(j.decision)}</td>
-                        </tr>`,
-                      )
-                      .join("")}
-                  </tbody>
-                </table>
-              </div>`
-        }
-      </div>
-    </section>
+    <section id="judgements-card" class="card bg-base-100 shadow mb-4">${renderJudgementsCardInner(s)}</section>
 
-    <section class="card bg-base-100 shadow mb-4">
-      <div class="card-body">
-        <h2 class="card-title text-lg">Gate decisions (${summary.gate_decisions.length})</h2>
-        ${
-          summary.gate_decisions.length === 0
-            ? '<p class="text-sm opacity-70">No gate decisions yet.</p>'
-            : `<ul class="text-sm space-y-1">
-                ${summary.gate_decisions
-                  .map(
-                    (g) => `<li class="flex gap-3 items-center">
-                      <span class="font-mono text-xs">${escapeHtml(g.node_id)}</span>
-                      ${decisionBadge(g.decision)}
-                      <span class="opacity-60 text-xs">${escapeHtml(g.decided_at)}</span>
-                    </li>`,
-                  )
-                  .join("")}
-              </ul>`
-        }
-      </div>
-    </section>
+    <section id="gate-decisions-card" class="card bg-base-100 shadow mb-4">${renderGateDecisionsCardInner(s)}</section>
 
     <section class="card bg-base-100 shadow">
       <div class="card-body">
         <h2 class="card-title text-lg">current-note.md</h2>
-        <pre class="pre-wrap text-xs bg-base-200 p-3 rounded max-h-[600px] overflow-auto">${escapeHtml(note)}</pre>
+        <pre id="note-pre" class="pre-wrap text-xs bg-base-200 p-3 rounded max-h-[600px] overflow-auto">${escapeHtml(note)}</pre>
       </div>
     </section>
   `;
-
-  // Wire gate form if present.
-  const form = document.getElementById("gate-form");
-  if (form) {
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      submitGate(runId, summary.active_gate, e.target);
-    });
-  }
+  wireGateForm(runId);
 }
 
-function renderSummaryCard(s) {
+function applyRunUpdate(fresh, freshNote) {
+  if (!lastSummary) return;
+  const runId = fresh.run_id;
+
+  // 1) Closed badge.
+  if (lastSummary.closed !== fresh.closed) {
+    const el = document.getElementById("closed-badge");
+    if (el) el.innerHTML = fresh.closed ? '<span class="badge badge-success">closed</span>' : "";
+  }
+
+  // 2) State card — always replace inner HTML; no stateful inputs here.
+  if (jsonChanged(lastSummary, fresh, ["current_state", "round", "last_guardian_decision", "saved_at", "ticket_id", "flow", "variant"])) {
+    const el = document.getElementById("state-card");
+    if (el) el.innerHTML = renderStateCardInner(fresh);
+  }
+
+  // 3) Gate card: only re-render if active_gate transitioned (open → close,
+  //    or different node id). Preserves any half-typed approval form input.
+  if (lastSummary.active_gate !== fresh.active_gate) {
+    const el = document.getElementById("gate-card");
+    if (el) {
+      el.innerHTML = renderGateCardInner(runId, fresh);
+      wireGateForm(runId);
+    }
+  }
+
+  // 4) Judgement list — replace if length/content changed.
+  if (JSON.stringify(lastSummary.judgements) !== JSON.stringify(fresh.judgements)) {
+    const el = document.getElementById("judgements-card");
+    if (el) el.innerHTML = renderJudgementsCardInner(fresh);
+  }
+
+  // 5) Gate decisions — replace on change.
+  if (JSON.stringify(lastSummary.gate_decisions) !== JSON.stringify(fresh.gate_decisions)) {
+    const el = document.getElementById("gate-decisions-card");
+    if (el) el.innerHTML = renderGateDecisionsCardInner(fresh);
+  }
+
+  // 6) Note — update textContent only (preserves scroll).
+  if (lastNote !== freshNote) {
+    const pre = document.getElementById("note-pre");
+    if (pre) pre.textContent = freshNote;
+  }
+
+  lastSummary = fresh;
+  lastNote = freshNote;
+}
+
+function jsonChanged(a, b, keys) {
+  for (const k of keys) {
+    if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) return true;
+  }
+  return false;
+}
+
+// ─── Card renderers (just inner content; container divs are stable) ───────
+
+function renderStateCardInner(s) {
   return `
-    <div class="card bg-base-100 shadow">
-      <div class="card-body">
-        <h2 class="card-title text-lg">State</h2>
-        <dl class="grid grid-cols-3 gap-y-1 text-sm">
-          <dt class="opacity-60">Ticket</dt><dd class="col-span-2 font-mono text-xs">${escapeHtml(s.ticket_id ?? "-")}</dd>
-          <dt class="opacity-60">Flow</dt><dd class="col-span-2 font-mono text-xs">${escapeHtml(s.flow ?? "-")} / ${escapeHtml(s.variant ?? "-")}</dd>
-          <dt class="opacity-60">Current</dt><dd class="col-span-2">${stateBadge(s.current_state)}</dd>
-          <dt class="opacity-60">Round</dt><dd class="col-span-2">${s.round}</dd>
-          <dt class="opacity-60">Last decision</dt><dd class="col-span-2 font-mono text-xs">${escapeHtml(s.last_guardian_decision ?? "-")}</dd>
-          <dt class="opacity-60">Saved at</dt><dd class="col-span-2 text-xs opacity-70">${escapeHtml(s.saved_at ?? "-")}</dd>
-        </dl>
-      </div>
+    <div class="card-body">
+      <h2 class="card-title text-lg">State</h2>
+      <dl class="grid grid-cols-3 gap-y-1 text-sm">
+        <dt class="opacity-60">Ticket</dt><dd class="col-span-2 font-mono text-xs">${escapeHtml(s.ticket_id ?? "-")}</dd>
+        <dt class="opacity-60">Flow</dt><dd class="col-span-2 font-mono text-xs">${escapeHtml(s.flow ?? "-")} / ${escapeHtml(s.variant ?? "-")}</dd>
+        <dt class="opacity-60">Current</dt><dd class="col-span-2">${stateBadge(s.current_state)}</dd>
+        <dt class="opacity-60">Round</dt><dd class="col-span-2">${s.round}</dd>
+        <dt class="opacity-60">Last decision</dt><dd class="col-span-2 font-mono text-xs">${escapeHtml(s.last_guardian_decision ?? "-")}</dd>
+        <dt class="opacity-60">Saved at</dt><dd class="col-span-2 text-xs opacity-70">${escapeHtml(s.saved_at ?? "-")}</dd>
+      </dl>
     </div>
   `;
 }
 
-function renderGateCard(s) {
+function renderGateCardInner(runId, s) {
   if (!s.active_gate) {
     return `
       <div class="card bg-base-100 shadow">
@@ -224,7 +263,7 @@ function renderGateCard(s) {
     <div class="card bg-warning/10 border border-warning shadow">
       <div class="card-body">
         <h2 class="card-title text-lg">Approval needed: <span class="font-mono">${escapeHtml(s.active_gate)}</span></h2>
-        <form id="gate-form" class="space-y-2">
+        <form id="gate-form" data-run-id="${escapeHtml(runId)}" data-node-id="${escapeHtml(s.active_gate)}" class="space-y-2">
           <label class="form-control">
             <span class="label-text text-xs">Approver</span>
             <input class="input input-bordered input-sm" name="approver" placeholder="your name" required />
@@ -245,45 +284,106 @@ function renderGateCard(s) {
   `;
 }
 
-async function submitGate(runId, nodeId, formEl) {
-  // Determine which submit button was clicked. document.activeElement is the
-  // element with focus when the form was submitted.
-  const submitter = formEl.lastSubmitter || document.activeElement;
-  const decision = submitter?.dataset?.decision ?? "approved";
-  const data = new FormData(formEl);
-  const status = document.getElementById("gate-form-status");
-  if (status) status.textContent = "Submitting…";
-  try {
-    const r = await fetch(
-      `/api/runs/${encodeURIComponent(runId)}/gates/${encodeURIComponent(nodeId)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          decision,
-          approver: String(data.get("approver") ?? "").trim(),
-          comment: String(data.get("comment") ?? "").trim() || undefined,
-        }),
-      },
-    );
-    if (!r.ok) {
-      const body = await r.json().catch(() => ({}));
-      throw new Error(body.error ?? `HTTP ${r.status}`);
-    }
-    if (status) {
-      status.textContent = `${decision} — engine should pick this up within a poll cycle (~1 s).`;
-      status.className = "text-xs text-success";
-    }
-  } catch (e) {
-    if (status) {
-      status.textContent = String(e.message ?? e);
-      status.className = "text-xs text-error";
-    }
-  }
+function renderJudgementsCardInner(s) {
+  return `
+    <div class="card-body">
+      <h2 class="card-title text-lg">Judgements (${s.judgements.length})</h2>
+      ${
+        s.judgements.length === 0
+          ? '<p class="text-sm opacity-70">No frozen judgements yet.</p>'
+          : `<div class="overflow-x-auto">
+              <table class="table table-sm">
+                <thead><tr><th>Node</th><th>Round</th><th>Decision</th></tr></thead>
+                <tbody>
+                  ${s.judgements
+                    .map(
+                      (j) => `<tr>
+                        <td class="font-mono text-xs">${escapeHtml(j.node_id)}</td>
+                        <td>${j.round}</td>
+                        <td>${decisionBadge(j.decision)}</td>
+                      </tr>`,
+                    )
+                    .join("")}
+                </tbody>
+              </table>
+            </div>`
+      }
+    </div>
+  `;
 }
 
-// ─── Capture submitter for FormData ──────────────────────────────────────
-// Form submit events don't expose the clicked button on .target. Track it.
+function renderGateDecisionsCardInner(s) {
+  return `
+    <div class="card-body">
+      <h2 class="card-title text-lg">Gate decisions (${s.gate_decisions.length})</h2>
+      ${
+        s.gate_decisions.length === 0
+          ? '<p class="text-sm opacity-70">No gate decisions yet.</p>'
+          : `<ul class="text-sm space-y-1">
+              ${s.gate_decisions
+                .map(
+                  (g) => `<li class="flex gap-3 items-center">
+                    <span class="font-mono text-xs">${escapeHtml(g.node_id)}</span>
+                    ${decisionBadge(g.decision)}
+                    <span class="opacity-60 text-xs">${escapeHtml(g.decided_at)}</span>
+                  </li>`,
+                )
+                .join("")}
+            </ul>`
+      }
+    </div>
+  `;
+}
+
+// ─── Form wiring ──────────────────────────────────────────────────────────
+
+function wireGateForm() {
+  const form = document.getElementById("gate-form");
+  if (!form) return;
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const submitter = e.submitter || form.lastSubmitter || document.activeElement;
+    const decision = submitter?.dataset?.decision ?? "approved";
+    const data = new FormData(form);
+    const status = document.getElementById("gate-form-status");
+    if (status) {
+      status.textContent = "Submitting…";
+      status.className = "text-xs opacity-70";
+    }
+    try {
+      const runId = form.dataset.runId;
+      const nodeId = form.dataset.nodeId;
+      const r = await fetch(
+        `/api/runs/${encodeURIComponent(runId)}/gates/${encodeURIComponent(nodeId)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            decision,
+            approver: String(data.get("approver") ?? "").trim(),
+            comment: String(data.get("comment") ?? "").trim() || undefined,
+          }),
+        },
+      );
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${r.status}`);
+      }
+      if (status) {
+        status.textContent = `${decision} — engine should pick this up within ~1 s.`;
+        status.className = "text-xs text-success";
+      }
+    } catch (err) {
+      if (status) {
+        status.textContent = String(err.message ?? err);
+        status.className = "text-xs text-error";
+      }
+    }
+  });
+}
+
+// Capture the actual submit button across user clicks (for browsers that
+// don't surface SubmitEvent.submitter — narrow case but cheap to handle).
 document.addEventListener("click", (e) => {
   const btn = e.target.closest("button[type=submit]");
   if (!btn) return;
@@ -338,4 +438,4 @@ function renderError(e) {
 
 // ─── Boot ─────────────────────────────────────────────────────────────────
 
-startPolling();
+switchPage();

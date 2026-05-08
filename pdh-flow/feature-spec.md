@@ -157,9 +157,11 @@ API surface:
 
 Frontend renders run summary, judgement table, gate decision history, and an approve / reject / cancel form when `active_gate` is non-null. `via: web_ui` field tags decisions for audit. Duplicate POST returns 409 (cannot re-decide a decided gate).
 
-**Smoke** (manual; not in `npm run test:all`): seed a worktree from a fixture, run engine to a gate stop point, `pdh-flow serve`, curl the API. Verified `/api/runs`, summary, gate POST, duplicate-POST 409, static-file fallback all work.
+**Smoke** (manual; not in `npm run test:all`): seed a worktree from a fixture, run engine to a gate stop point, `pdh-flow serve`, then drive a real Chromium via `agent-browser` (CDP). The smoke runs through the full happy path: open homepage → click Open on the run → land on detail page with `Approval needed: close_gate` → fill approver → click Approve → engine picks up the gate file and advances → UI shows `closed` badge + `terminal` state. Verified `/api/runs`, summary, gate POST, duplicate-POST 409, static-file fallback all work.
 
-**Deferred (post-MVP)**: live event stream (SSE), diff modal, assist mode launcher, ticket index page, multi-session support, history view, React/Vite re-platform if visual polish becomes a constraint. The current vanilla-JS path was chosen to ship a usable Web UI quickly; nothing here blocks a later React/Vite swap that reads the same JSON API.
+**Phase H8 follow-up (SSE)**: the initial 2 s polling clobbered any in-flight form input on every snapshot rewrite (the entire app DOM was replaced). Replaced with SSE: backend `GET /api/runs/:runId/events` and `GET /api/runs-events` use `fs.watch` on the relevant directories with a 100 ms coalescing debounce; frontend subscribes via `EventSource`, refetches summary + note on each `change`, and replaces only those card containers whose data changed. The `gate-card` is preserved verbatim while `active_gate` is unchanged so partially-typed approvals survive engine snapshot writes. Smoke re-verified via agent-browser: input values persist across 5 s of background activity, then submit + approve flow lands on terminal.
+
+**Deferred (post-MVP)**: diff modal, assist mode launcher, ticket index page with explicit history, multi-session support, React/Vite re-platform if visual polish becomes a constraint. The current vanilla-JS path was chosen to ship a usable Web UI quickly; nothing here blocks a later React/Vite swap that reads the same JSON API.
 
 ### F-006: AGENTS.md / CLAUDE.md refresh for v2 — **DONE 2026-05-08**
 Phase H3 wrote `pdh-flow/AGENTS.md` and `pdh-flow/CLAUDE.md` for v2. Covers:

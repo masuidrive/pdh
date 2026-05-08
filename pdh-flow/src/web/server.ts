@@ -20,7 +20,9 @@ import {
   readFileSync,
   readdirSync,
   statSync,
+  watch,
   writeFileSync,
+  type FSWatcher,
 } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -84,6 +86,16 @@ async function handleRequest(
   m = path.match(/^\/api\/runs\/([^/]+)\/gates\/([^/]+)$/);
   if (m && req.method === "POST") {
     return postGate(req, res, opts.worktreePath, m[1], m[2]);
+  }
+
+  m = path.match(/^\/api\/runs\/([^/]+)\/events$/);
+  if (m && req.method === "GET") {
+    return handleSSE(req, res, opts.worktreePath, m[1]);
+  }
+
+  m = path.match(/^\/api\/runs-events$/);
+  if (m && req.method === "GET") {
+    return handleRunsListSSE(req, res, opts.worktreePath);
   }
 
   // ── Static ────────────────────────────────────────────────────────────
@@ -303,6 +315,131 @@ async function postGate(
   }
   writeFileSync(path, JSON.stringify(decided, null, 2));
   return sendJson(res, 200, { ok: true, written: path, decision: decided });
+}
+
+// ─── SSE: per-run change stream ───────────────────────────────────────────
+
+function handleSSE(
+  req: IncomingMessage,
+  res: ServerResponse,
+  worktreePath: string,
+  runId: string,
+): void {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.write(`:connected ${runId}\n\n`);
+
+  const runDir = join(worktreePath, ".pdh-flow", "runs", runId);
+  const watchers: FSWatcher[] = [];
+  let closed = false;
+  let coalesce: NodeJS.Timeout | null = null;
+
+  const emitChange = (): void => {
+    if (closed || coalesce) return;
+    coalesce = setTimeout(() => {
+      coalesce = null;
+      if (!closed) res.write("event: change\ndata: {}\n\n");
+    }, 100);
+  };
+
+  const safeWatch = (dir: string): void => {
+    if (!existsSync(dir)) return;
+    try {
+      const w = watch(dir, () => emitChange());
+      watchers.push(w);
+    } catch (e) {
+      process.stderr.write(
+        `[web] watch failed on ${dir}: ${e instanceof Error ? e.message : String(e)}\n`,
+      );
+    }
+  };
+
+  // Watch run dir + sub-dirs that already exist.
+  safeWatch(runDir);
+  safeWatch(join(runDir, "judgements"));
+  safeWatch(join(runDir, "gates"));
+
+  // If sub-dirs are created later, the run-dir watcher fires and triggers a
+  // refetch on the client; the missed sub-dir watcher only matters once for
+  // the very first event in that sub-dir. Acceptable for MVP — the client
+  // refetches the full summary on any change anyway.
+
+  // Heartbeat keeps proxies / load balancers from killing idle conns.
+  const hb = setInterval(() => {
+    if (!closed) res.write(`:hb ${Date.now()}\n\n`);
+  }, 15_000);
+
+  const cleanup = (): void => {
+    if (closed) return;
+    closed = true;
+    clearInterval(hb);
+    if (coalesce) clearTimeout(coalesce);
+    for (const w of watchers) {
+      try { w.close(); } catch {}
+    }
+  };
+  req.on("close", cleanup);
+  req.on("error", cleanup);
+}
+
+// ─── SSE: home (runs list) change stream ──────────────────────────────────
+
+function handleRunsListSSE(
+  req: IncomingMessage,
+  res: ServerResponse,
+  worktreePath: string,
+): void {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.write(":connected runs\n\n");
+
+  const runsDir = join(worktreePath, ".pdh-flow", "runs");
+  const watchers: FSWatcher[] = [];
+  let closed = false;
+  let coalesce: NodeJS.Timeout | null = null;
+
+  const emitChange = (): void => {
+    if (closed || coalesce) return;
+    coalesce = setTimeout(() => {
+      coalesce = null;
+      if (!closed) res.write("event: change\ndata: {}\n\n");
+    }, 200);
+  };
+
+  if (existsSync(runsDir)) {
+    try {
+      // Watching the runs dir non-recursively catches new run dirs being
+      // created. Per-run snapshot updates would require recursive watch
+      // (Linux: not supported by fs.watch). For the home view, "a run
+      // appeared / disappeared" is enough; intra-run state changes only
+      // matter on the detail page (which uses /events).
+      watchers.push(watch(runsDir, () => emitChange()));
+    } catch {}
+  }
+
+  const hb = setInterval(() => {
+    if (!closed) res.write(`:hb ${Date.now()}\n\n`);
+  }, 15_000);
+
+  const cleanup = (): void => {
+    if (closed) return;
+    closed = true;
+    clearInterval(hb);
+    if (coalesce) clearTimeout(coalesce);
+    for (const w of watchers) {
+      try { w.close(); } catch {}
+    }
+  };
+  req.on("close", cleanup);
+  req.on("error", cleanup);
 }
 
 // ─── Static files ─────────────────────────────────────────────────────────
