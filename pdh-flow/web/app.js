@@ -333,10 +333,11 @@ function renderGateCardInner(runId, s) {
             <span class="label-text text-xs">Comment (optional)</span>
             <textarea class="textarea textarea-bordered textarea-sm" name="comment" rows="2" placeholder="reason / note"></textarea>
           </label>
-          <div class="flex gap-2">
+          <div class="flex gap-2 flex-wrap">
             <button type="submit" class="btn btn-success btn-sm" data-decision="approved">Approve</button>
             <button type="submit" class="btn btn-error btn-sm" data-decision="rejected">Reject</button>
             <button type="submit" class="btn btn-ghost btn-sm" data-decision="cancelled">Cancel run</button>
+            <button type="button" class="btn btn-outline btn-sm" id="gate-open-term">Open in terminal</button>
           </div>
           <p id="gate-form-status" class="text-xs opacity-70"></p>
         </form>
@@ -515,6 +516,14 @@ function renderGateDecisionsCardInner(s) {
 function wireGateForm() {
   const form = document.getElementById("gate-form");
   if (!form) return;
+  const termBtn = document.getElementById("gate-open-term");
+  if (termBtn) {
+    termBtn.addEventListener("click", () => {
+      const runId = form.dataset.runId;
+      const nodeId = form.dataset.nodeId;
+      if (runId && nodeId) openTerminalForNode(runId, nodeId, { mode: "fresh" });
+    });
+  }
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const submitter = e.submitter || form.lastSubmitter || document.activeElement;
@@ -704,7 +713,9 @@ function teardownTerm() {
   _termState = null;
 }
 
-async function openTerminalForNode(runId, nodeId) {
+async function openTerminalForNode(runId, nodeId, options) {
+  const opts = options || {};
+  const mode = opts.mode === "fresh" ? "fresh" : "resume";
   const dlg = ensureTermModal();
   const titleEl = dlg.querySelector("#term-title");
   const statusEl = dlg.querySelector("#term-status");
@@ -722,7 +733,7 @@ async function openTerminalForNode(runId, nodeId) {
     const r = await fetch("/api/assist/open", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ run_id: runId, node_id: nodeId }),
+      body: JSON.stringify({ run_id: runId, node_id: nodeId, mode }),
     });
     sessionInfo = await r.json();
     if (!r.ok) throw new Error(sessionInfo.error ?? `HTTP ${r.status}`);

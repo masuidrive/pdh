@@ -59,6 +59,10 @@ export interface AssistManager {
   openForNode(opts: {
     runId: string;
     nodeId: string;
+    /** "resume" (default) requires sessions/<nodeId>.json; "fresh" spawns
+     *  plain claude in the worktree (no resume), useful for gate cards
+     *  where no provider session was captured. */
+    mode?: "resume" | "fresh";
     force?: boolean;
   }): OpenResult | { error: string };
   /** WebSocket upgrade handler for /api/assist/ws?session=<id>. */
@@ -134,10 +138,24 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
     }
   }
 
-  function openForNode(p: { runId: string; nodeId: string; force?: boolean }):
-    | OpenResult
-    | { error: string }
-  {
+  function openForNode(p: {
+    runId: string;
+    nodeId: string;
+    mode?: "resume" | "fresh";
+    force?: boolean;
+  }): OpenResult | { error: string } {
+    if (p.mode === "fresh") {
+      // Plain claude in the worktree, no --resume. For gate cards
+      // (no provider session captured) or general worktree exploration.
+      return openManagedSession({
+        key: `${p.runId}:${p.nodeId}:fresh`,
+        title: `claude (fresh) — ${p.nodeId}`,
+        command: "claude",
+        args: [],
+        cwd: opts.worktreePath,
+        force: p.force,
+      });
+    }
     const sessionPath = join(
       opts.worktreePath,
       ".pdh-flow",

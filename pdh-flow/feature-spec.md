@@ -214,10 +214,13 @@ Reads `runs/<runId>/sessions/<nodeId>.json` (the F-001/J3 record) and execs the 
 - integration: turn card on the run detail page gains an "Open in terminal" button next to "Submit answer". Click → `openTerminalForNode(runId, nodeId)`. Gate card NOT wired (gate nodes don't spawn providers; opening "fresh assist for an arbitrary worktree" is a separate feature).
 - real-LLM browser smoke (agent-browser, 2026-05-08): clicking the button opens the modal, xterm renders, claude shows its trust prompt + API-key prompt, the Enter quick-key sends `\r` and the LLM advances to the next prompt. Closing the modal cleanly tears down the WS but leaves the PTY for 30 min in case of reconnect. Submitting the regular answer form afterwards still resumes engine-side cleanly (the engine spawns its own short-lived `claude --resume` process; the assist PTY is parallel and doesn't block).
 
-**Possible extensions (not built)**:
-- assist sub-commands like `:answer "..."` that auto-run `turn-respond` on exit (would require parsing the transcript or wrapping the provider's stdin)
-- a `pdh-flow assist --turn` shortcut that auto-targets the active turn
-- a "fresh assist (no resume)" mode for gate cards / arbitrary worktree exploration
+**`--turn` shortcut + gate card terminal (2026-05-08)**:
+- `pdh-flow assist --turn` scans `<worktree>/.pdh-flow/runs/*/turns/*/turn-NNN-question.json` for the unique unanswered question and auto-targets it (no need to type `--run-id`/`--node-id`). Errors out on 0 or 2+ unanswered questions; prints the auto-detected triple to stderr.
+- `POST /api/assist/open` accepts `mode: "fresh"` which spawns a plain `claude` (no `--resume`) in the worktree, bypassing the `sessions/<nodeId>.json` requirement. Used by the gate card's "Open in terminal" button — gates don't capture provider sessions, but having a worktree-scoped claude session is useful for inspecting diffs / asking the LLM "is this safe to approve?" before clicking Approve/Reject.
+
+**Still possible (not built)**:
+- assist sub-commands like `:answer "..."` that auto-run `turn-respond` on exit (would require parsing the transcript or wrapping the provider's stdin — fragile due to claude's own slash-command UX)
+- inline "Submit answer" form inside the terminal modal (unblocks one tab from chatting + answering, but the modal-close → form-submit two-step works fine for now)
 
 ### F-011: ticket-centric data layout migration
 After H8 the v2 engine still mirrored v1's storage shape: `current-ticket.md` and `current-note.md` at worktree root, audit reasoning attached to the project repo via reviewer-each-commits (D-003), `.pdh-flow/runs/<runId>/closed.json` and friends as the only structured record of gate decisions. Long-running operation showed three problems: (a) only the latest ticket's note was directly readable from the worktree (older tickets buried inside `git log -p -- current-note.md`), (b) gate approver records and frozen judgements were trapped inside the ephemeral `.pdh-flow/` tree, and (c) project git accumulated per-reviewer audit churn that no one bisects against.

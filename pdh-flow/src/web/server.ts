@@ -147,14 +147,15 @@ async function handleRequest(
   // ── Assist terminal session create (F-009 + term-webui) ──────────────
   if (path === "/api/assist/open" && req.method === "POST") {
     const body = await readBody(req);
-    let parsed: { run_id?: string; node_id?: string; force?: boolean } = {};
+    let parsed: { run_id?: string; node_id?: string; mode?: string; force?: boolean } = {};
     try { parsed = JSON.parse(body); } catch {}
     const runId = typeof parsed.run_id === "string" ? parsed.run_id : "";
     const nodeId = typeof parsed.node_id === "string" ? parsed.node_id : "";
     if (!runId || !nodeId) {
       return sendJson(res, 400, { error: "run_id and node_id are required" });
     }
-    const r = assist.openForNode({ runId, nodeId, force: !!parsed.force });
+    const mode = parsed.mode === "fresh" ? "fresh" : "resume";
+    const r = assist.openForNode({ runId, nodeId, mode, force: !!parsed.force });
     if ("error" in r) return sendJson(res, 404, r);
     return sendJson(res, 200, r);
   }

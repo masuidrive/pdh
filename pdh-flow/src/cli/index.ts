@@ -95,12 +95,14 @@ Subcommands:
                 files. Without --turn, the lowest unanswered turn number is
                 auto-selected.
 
-  assist        --run-id <id> --node-id <node> [--worktree <dir>] [--dry-run]
+  assist        [--turn] [--run-id <id> --node-id <node>] [--worktree <dir>]
+                [--dry-run]
                 F-009: drop into the provider's interactive session at a pause
                 point (claude --resume / codex resume the captured session).
-                After exiting, deliver any decision back to the engine via
-                pdh-flow turn-respond. --dry-run prints the would-exec command
-                without launching.
+                With --turn, auto-detects the unique unanswered turn question
+                under .pdh-flow/runs/. After exiting, deliver any decision back
+                to the engine via pdh-flow turn-respond. --dry-run prints the
+                would-exec command without launching.
 
   help          Show this message.
 

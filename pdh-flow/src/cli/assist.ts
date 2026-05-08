@@ -16,7 +16,7 @@
 // structured turn-answer file, never the assist transcript.
 
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { parseSubcommandArgs } from "./index.ts";
 
@@ -33,15 +33,33 @@ export async function cmdAssist(argv: string[]): Promise<void> {
     "run-id":  { type: "string" },
     "node-id": { type: "string" },
     worktree:  { type: "string" },
+    turn:      { type: "boolean" },
     "dry-run": { type: "boolean" },
   });
-  const runId = values["run-id"] as string | undefined;
-  const nodeId = values["node-id"] as string | undefined;
+  let runId = values["run-id"] as string | undefined;
+  let nodeId = values["node-id"] as string | undefined;
   const worktreePath = (values.worktree as string | undefined)
     ? resolve(values.worktree as string)
     : process.cwd();
-  if (!runId) throw new Error("--run-id <id> is required");
-  if (!nodeId) throw new Error("--node-id <node> is required");
+
+  // --turn: auto-target the unique unanswered turn question under
+  // <worktree>/.pdh-flow/runs/*/turns/*/turn-NNN-question.json. Useful
+  // when the engine paused on a turn and you don't want to look up the
+  // run id by hand.
+  if (values.turn) {
+    const found = findUniqueUnansweredTurn(worktreePath);
+    if ("error" in found) {
+      throw new Error(`--turn: ${found.error}`);
+    }
+    runId = runId ?? found.runId;
+    nodeId = nodeId ?? found.nodeId;
+    process.stderr.write(
+      `[assist] --turn auto-detected: run-id=${found.runId} node-id=${found.nodeId} turn=${found.turn}\n`,
+    );
+  }
+
+  if (!runId) throw new Error("--run-id <id> is required (or use --turn)");
+  if (!nodeId) throw new Error("--node-id <node> is required (or use --turn)");
 
   const sessionPath = join(
     worktreePath,
@@ -119,4 +137,60 @@ export async function cmdAssist(argv: string[]): Promise<void> {
       res();
     });
   });
+}
+
+interface FoundTurn { runId: string; nodeId: string; turn: number; }
+
+/**
+ * Scan <worktree>/.pdh-flow/runs/*\/turns/*\/turn-NNN-question.json for
+ * the unique unanswered turn (no matching turn-NNN-answer.json). Returns
+ * the (runId, nodeId, turn) triple, or an error when 0 / 2+ found.
+ */
+function findUniqueUnansweredTurn(
+  worktreePath: string,
+): FoundTurn | { error: string } {
+  const runsDir = join(worktreePath, ".pdh-flow", "runs");
+  if (!existsSync(runsDir)) {
+    return { error: `no .pdh-flow/runs/ at ${worktreePath} — is this an engine worktree?` };
+  }
+  const open: FoundTurn[] = [];
+  for (const runId of safeListDirs(runsDir)) {
+    const turnsRoot = join(runsDir, runId, "turns");
+    if (!existsSync(turnsRoot)) continue;
+    for (const nodeId of safeListDirs(turnsRoot)) {
+      const dir = join(turnsRoot, nodeId);
+      const seqs = new Set<number>();
+      const answered = new Set<number>();
+      for (const name of safeReaddir(dir)) {
+        const qm = name.match(/^turn-(\d{3})-question\.json$/);
+        const am = name.match(/^turn-(\d{3})-answer\.json$/);
+        if (qm) seqs.add(parseInt(qm[1], 10));
+        if (am) answered.add(parseInt(am[1], 10));
+      }
+      for (const t of [...seqs].filter((n) => !answered.has(n)).sort()) {
+        open.push({ runId, nodeId, turn: t });
+      }
+    }
+  }
+  if (open.length === 0) return { error: "no unanswered turn questions in this worktree" };
+  if (open.length > 1) {
+    const desc = open
+      .map((o) => `  run=${o.runId} node=${o.nodeId} turn=${o.turn}`)
+      .join("\n");
+    return {
+      error: `multiple unanswered turns (specify --run-id / --node-id explicitly):\n${desc}`,
+    };
+  }
+  return open[0];
+}
+
+function safeListDirs(parent: string): string[] {
+  try {
+    return readdirSync(parent).filter((n) => {
+      try { return statSync(join(parent, n)).isDirectory(); } catch { return false; }
+    });
+  } catch { return []; }
+}
+function safeReaddir(d: string): string[] {
+  try { return readdirSync(d); } catch { return []; }
 }
