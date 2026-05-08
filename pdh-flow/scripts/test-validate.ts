@@ -253,6 +253,96 @@ nodes:
   );
 }
 
+// ─── 9a. Macro repair via=resume → expander wires resume_session_from ───
+section("macro: repair via=resume");
+{
+  const text = `
+flow: resume-test
+version: 1
+variants:
+  full:
+    initial: implement
+nodes:
+  implement:
+    type: provider_step
+    provider: codex
+    role: implementer
+    on_done: review
+  review:
+    macro: review_loop
+    reviewers:
+      - { role: critical, provider: codex, count: 1 }
+    aggregator: { provider: claude }
+    repair:
+      provider: codex
+      via: resume
+      resume_node: implement
+    max_rounds: 3
+    on_pass: ok
+    on_aborted: ok
+  ok:
+    type: terminal
+    outcome: success
+`;
+  const flow = parseFlow(text);
+  const flat = expandFlow(flow);
+  const repair = flat.nodes["review.repair"];
+  assert("review.repair node exists", !!repair);
+  if (repair && (repair as { type?: string }).type === "provider_step") {
+    const rsf = (repair as { resume_session_from?: string }).resume_session_from;
+    assert(
+      `repair.resume_session_from == implement (got ${rsf ?? "undefined"})`,
+      rsf === "implement",
+    );
+  }
+}
+
+// ─── 9b. Macro repair via=resume without resume_node → SchemaViolation ──
+section("macro: via=resume requires resume_node");
+{
+  const text = `
+flow: resume-bad
+version: 1
+variants:
+  full:
+    initial: review
+nodes:
+  review:
+    macro: review_loop
+    reviewers:
+      - { role: critical, provider: codex, count: 1 }
+    aggregator: { provider: claude }
+    repair:
+      provider: codex
+      via: resume
+    max_rounds: 2
+    on_pass: ok
+  ok:
+    type: terminal
+    outcome: success
+`;
+  let caught: unknown = null;
+  try {
+    parseFlow(text);
+  } catch (e) {
+    caught = e;
+  }
+  assert(
+    "via=resume w/o resume_node → SchemaViolation",
+    caught instanceof SchemaViolation,
+  );
+  if (caught instanceof SchemaViolation) {
+    const messages = caught.errors
+      .map((e) => `${e.instancePath} ${e.keyword} ${JSON.stringify(e.params)}`)
+      .join(" | ");
+    assert(
+      "error mentions resume_node",
+      /resume_node/.test(messages),
+      `got: ${messages}`,
+    );
+  }
+}
+
 // ─── 10. Snapshot validation ─────────────────────────────────────────────
 section("snapshot validation");
 {
