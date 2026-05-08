@@ -14,14 +14,22 @@
 // reads it and resolves; XState branches on `decision`.
 
 import { fromPromise } from "xstate";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { getValidator, SCHEMA_IDS } from "../validate.ts";
 import type { GateStepOutput } from "../../types/index.ts";
 import type { FixtureMeta } from "./run-provider.ts";
 
 export interface GateActorInput {
   nodeId: string;
+  round: number;
   worktreePath: string;
   runId: string;
   fixtureMeta?: FixtureMeta;
@@ -40,7 +48,7 @@ export interface GateActorOutput {
 
 export const awaitGate = fromPromise<GateActorOutput, GateActorInput>(
   async ({ input, signal }) => {
-    const { nodeId, worktreePath, runId } = input;
+    const { nodeId, round, worktreePath, runId } = input;
     const fixture = (input.fixtureMeta as
       | (FixtureMeta & { gate_decisions?: Record<string, GateStepOutput> })
       | undefined)?.gate_decisions?.[nodeId];
@@ -80,6 +88,16 @@ export const awaitGate = fromPromise<GateActorOutput, GateActorInput>(
       );
     }
 
+    // F-011/H10-4 (Gap B): echo the decision to current-note.md so the
+    // approver / comment / decided_at survive `.pdh-flow/` being wiped.
+    // Single-commit-owner: this is the gate's commit.
+    echoGateToNote({
+      nodeId,
+      round,
+      worktreePath,
+      decision: validated,
+    });
+
     return {
       status: "completed",
       nodeId,
@@ -90,6 +108,54 @@ export const awaitGate = fromPromise<GateActorOutput, GateActorInput>(
     };
   },
 );
+
+function echoGateToNote(p: {
+  nodeId: string;
+  round: number;
+  worktreePath: string;
+  decision: GateStepOutput;
+}): void {
+  const notePath = join(p.worktreePath, "current-note.md");
+  if (!existsSync(notePath)) return;
+  const d = p.decision;
+  const lines = [
+    `## ${p.nodeId} (round ${p.round})`,
+    "",
+    `**Decision**: ${d.decision}`,
+    `**Approver**: ${d.approver ?? "(unknown)"}`,
+    `**Decided_at**: ${d.decided_at ?? ""}`,
+  ];
+  if (d.via) lines.push(`**Via**: ${d.via}`);
+  if (d.comment) {
+    lines.push("", "**Comment**:", "", d.comment);
+  }
+  appendFileSync(notePath, "\n" + lines.join("\n") + "\n");
+
+  // Stage and commit. Subject mirrors provider/guardian convention:
+  //   [<nodeId>/round-N] gate: <decision> by <approver>
+  spawnSync("git", ["add", "-A"], { cwd: p.worktreePath });
+  const subject = `[${p.nodeId}/round-${p.round}] gate: ${d.decision}` +
+    (d.approver ? ` by ${d.approver}` : "");
+  const r = spawnSync(
+    "git",
+    [
+      "-c",
+      "user.email=engine@pdh-flow.local",
+      "-c",
+      "user.name=pdh-flow-engine",
+      "commit",
+      "-m",
+      subject,
+      "--allow-empty",
+    ],
+    { cwd: p.worktreePath, encoding: "utf8" },
+  );
+  if (r.status !== 0) {
+    throw new Error(
+      `await-gate: git commit failed for ${p.nodeId} echo: ${r.stderr}`,
+    );
+  }
+}
 
 async function pollForGateFile(opts: {
   worktreePath: string;

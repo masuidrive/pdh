@@ -393,6 +393,7 @@ function compileGate(
       src: "awaitGate",
       input: ({ context }: { context: EngineContext }) => ({
         nodeId,
+        round: context.round,
         worktreePath: context.worktreePath,
         runId: context.runId,
         fixtureMeta: context.fixtureMeta,
