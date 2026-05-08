@@ -330,10 +330,6 @@ function renderGateCardInner(runId, s) {
         <h2 class="card-title text-lg">Approval needed: <span class="font-mono">${escapeHtml(s.active_gate)}</span></h2>
         <form id="gate-form" data-run-id="${escapeHtml(runId)}" data-node-id="${escapeHtml(s.active_gate)}" class="space-y-2">
           <label class="form-control">
-            <span class="label-text text-xs">Approver</span>
-            <input class="input input-bordered input-sm" name="approver" placeholder="your name" required />
-          </label>
-          <label class="form-control">
             <span class="label-text text-xs">Comment (optional)</span>
             <textarea class="textarea textarea-bordered textarea-sm" name="comment" rows="2" placeholder="reason / note"></textarea>
           </label>
@@ -361,11 +357,12 @@ function renderTurnCardWrap(runId, s) {
         : "";
       return `
         <label class="flex items-start gap-2 cursor-pointer">
-          <input type="radio" class="radio radio-sm mt-1" name="turn-option" value="${i}" />
+          <input type="radio" class="radio radio-sm mt-1" name="turn-option" value="${i}" data-label="${escapeHtml(o.label)}" />
           <span class="text-sm"><span class="font-medium">${escapeHtml(o.label)}</span> ${desc}</span>
         </label>`;
     })
     .join("");
+  const hasOptions = (t.options ?? []).length > 0;
   return `
     <div class="card bg-info/10 border border-info shadow">
       <div class="card-body">
@@ -383,12 +380,8 @@ function renderTurnCardWrap(runId, s) {
               class="space-y-2 mt-2">
           ${optionsHtml ? `<div class="space-y-1">${optionsHtml}</div>` : ""}
           <label class="form-control">
-            <span class="label-text text-xs">Answer (free text — required)</span>
-            <textarea class="textarea textarea-bordered textarea-sm" name="text" rows="3" placeholder="your answer; if you also picked an option above, this is the supplementary detail" required></textarea>
-          </label>
-          <label class="form-control">
-            <span class="label-text text-xs">Responder (optional)</span>
-            <input class="input input-bordered input-sm" name="responder" placeholder="your name" />
+            <span class="label-text text-xs">Answer ${hasOptions ? "(optional — defaults to the selected option's label)" : "(required)"}</span>
+            <textarea class="textarea textarea-bordered textarea-sm" name="text" rows="3" placeholder="${hasOptions ? "extra detail or override the option" : "your answer"}"${hasOptions ? "" : " required"}></textarea>
           </label>
           <div class="flex gap-2">
             <button type="submit" class="btn btn-info btn-sm">Submit answer</button>
@@ -414,16 +407,25 @@ function wireTurnForm(runId) {
     try {
       const nodeId = form.dataset.nodeId;
       const turn = form.dataset.turn;
-      const text = String(data.get("text") ?? "").trim();
-      if (!text) throw new Error("answer text is required");
-      const responder = String(data.get("responder") ?? "").trim();
+      let text = String(data.get("text") ?? "").trim();
       const optRaw = data.get("turn-option");
-      const body = { text };
-      if (responder) body.responder = responder;
+      const body = {};
+      let selected;
       if (optRaw !== null && optRaw !== "") {
         const n = Number(optRaw);
-        if (Number.isInteger(n) && n >= 0) body.selected_option = n;
+        if (Number.isInteger(n) && n >= 0) {
+          selected = n;
+          body.selected_option = n;
+        }
       }
+      // If no free-text but an option is picked, fall back to the
+      // option's label so the engine has something to send the LLM.
+      if (!text && selected !== undefined) {
+        const radio = form.querySelector(`input[name="turn-option"][value="${selected}"]`);
+        if (radio?.dataset?.label) text = radio.dataset.label;
+      }
+      if (!text) throw new Error("pick an option or supply an answer");
+      body.text = text;
       const r = await fetch(
         `/api/runs/${encodeURIComponent(runId)}/turns/${encodeURIComponent(nodeId)}/${encodeURIComponent(turn)}`,
         {
@@ -525,7 +527,6 @@ function wireGateForm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             decision,
-            approver: String(data.get("approver") ?? "").trim(),
             comment: String(data.get("comment") ?? "").trim() || undefined,
           }),
         },

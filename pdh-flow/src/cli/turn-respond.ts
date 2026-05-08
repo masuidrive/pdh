@@ -50,14 +50,6 @@ export async function cmdTurnRespond(argv: string[]): Promise<void> {
 
   const turnNum = pickTurnNumber(values.turn as string | undefined, turnsDir);
 
-  const text = values.text as string | undefined;
-  if (!text) {
-    throw new Error("--text \"...\" is required (free-form answer body)");
-  }
-  if (text.trim().length === 0) {
-    throw new Error("--text must be non-empty");
-  }
-
   const optionRaw = values.option as string | undefined;
   let selectedOption: number | undefined;
   if (optionRaw !== undefined) {
@@ -66,6 +58,20 @@ export async function cmdTurnRespond(argv: string[]): Promise<void> {
       throw new Error(`--option must be a non-negative integer; got ${optionRaw}`);
     }
     selectedOption = n;
+  }
+
+  let text = values.text as string | undefined;
+  if (text !== undefined) text = text.trim();
+  // When --option is set and --text isn't, default to the option label.
+  // Mirrors the Web UI form's behavior (option click without free text).
+  if ((!text || text.length === 0) && selectedOption !== undefined) {
+    const label = readQuestionOptionLabel(turnsDir, turnNum, selectedOption);
+    if (label) text = label;
+  }
+  if (!text) {
+    throw new Error(
+      "supply --text \"...\" or --option N (when the question has options)",
+    );
   }
 
   const viaRaw = (values.via as string | undefined) ?? "cli";
@@ -174,6 +180,25 @@ function readQuestionRound(turnsDir: string, turn: number): number | undefined {
     const obj = JSON.parse(readFileSync(qPath, "utf8")) as Record<string, unknown>;
     const r = obj.round;
     return typeof r === "number" && Number.isInteger(r) && r >= 1 ? r : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readQuestionOptionLabel(
+  turnsDir: string,
+  turn: number,
+  index: number,
+): string | undefined {
+  const seq = String(turn).padStart(3, "0");
+  const qPath = join(turnsDir, `turn-${seq}-question.json`);
+  if (!existsSync(qPath)) return undefined;
+  try {
+    const obj = JSON.parse(readFileSync(qPath, "utf8")) as {
+      ask?: { options?: Array<{ label?: string }> };
+    };
+    const opt = obj.ask?.options?.[index];
+    return typeof opt?.label === "string" ? opt.label : undefined;
   } catch {
     return undefined;
   }

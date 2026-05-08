@@ -87,11 +87,13 @@ Subcommands:
                 await-gate actor polls.
 
   turn-respond  --run-id <id> --node-id <node> [--worktree <dir>]
-                [--turn N] --text "..." [--option N] [--via cli|web_ui|assist]
+                [--turn N] [--text "..." | --option N] [--via cli|web_ui|assist]
                 [--responder <name>] [--list]
-                Deliver an answer to an in-step turn question (F-012). With
-                --list, dumps the pending question files. Without --turn, the
-                lowest unanswered turn number is auto-selected.
+                Deliver an answer to an in-step turn question (F-012). Supply
+                either --text (free-form) or --option N (the option label is
+                used as the answer text). --list dumps the pending question
+                files. Without --turn, the lowest unanswered turn number is
+                auto-selected.
 
   assist        --run-id <id> --node-id <node> [--worktree <dir>] [--dry-run]
                 F-009: drop into the provider's interactive session at a pause
