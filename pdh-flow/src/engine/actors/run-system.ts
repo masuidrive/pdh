@@ -12,7 +12,14 @@
 //   noop              — no-op success
 
 import { fromPromise } from "xstate";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import {
   acquireForTicket,
@@ -185,19 +192,81 @@ function closeTicket(p: {
     ) {
       updated.push(`tickets/${p.ticketId}-note.md`);
     }
+
+    // F-011/H10-7 (Gap C): append `# Resolution` to the ticket so a
+    // future reader gets the ticket-level outcome (status, who closed,
+    // when, and a pointer to known limitations) without diving into
+    // the note prose. Best-effort — gate decisions live in
+    // `.pdh-flow/runs/<runId>/gates/` while the run is in-flight.
+    if (existsSync(ticketPath)) {
+      const closeApprover = p.runId
+        ? readGateApprover(p.worktreePath, p.runId, "close_gate")
+        : null;
+      const hasOutOfScope = readFileSync(ticketPath, "utf8").includes(
+        "# Out of scope",
+      );
+      const lines: string[] = [];
+      if (!readFileSync(ticketPath, "utf8").includes("# Resolution")) {
+        lines.push("", "# Resolution", "");
+      } else {
+        lines.push("");
+      }
+      lines.push(`- **Status**: closed`);
+      lines.push(`- **Closed_at**: ${closedAt}`);
+      if (closeApprover) {
+        lines.push(`- **Approved_by**: ${closeApprover}`);
+      }
+      if (p.runId) {
+        lines.push(`- **Run_id**: ${p.runId}`);
+      }
+      if (hasOutOfScope) {
+        lines.push(
+          "- **Known limitations**: see `# Out of scope` section above.",
+        );
+      }
+      lines.push(
+        "- **Follow-ups**: see `tickets/` for any new tickets opened to address deferred items.",
+      );
+      appendFileSync(ticketPath, lines.join("\n") + "\n");
+      updated.push(`tickets/${p.ticketId}.md (Resolution)`);
+    }
   }
 
   return {
     status: "completed",
     nodeId: p.nodeId,
     action: "close_ticket",
-    summary: `ticket closed (${updated.length} frontmatter file(s) updated)`,
+    summary: `ticket closed (${updated.length} edit(s))`,
     details: {
       closed_at: closedAt,
       ticket_id: p.ticketId ?? null,
       updated,
     },
   };
+}
+
+function readGateApprover(
+  worktreePath: string,
+  runId: string,
+  gateNodeId: string,
+): string | null {
+  const path = join(
+    worktreePath,
+    ".pdh-flow",
+    "runs",
+    runId,
+    "gates",
+    `${gateNodeId}.json`,
+  );
+  if (!existsSync(path)) return null;
+  try {
+    const obj = JSON.parse(readFileSync(path, "utf8"));
+    return typeof obj.approver === "string" && obj.approver.trim().length > 0
+      ? obj.approver.trim()
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 // Merge `updates` into the YAML frontmatter of `path`. Existing keys are
