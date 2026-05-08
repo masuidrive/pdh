@@ -503,7 +503,26 @@ Respond with a single JSON object matching this envelope:
 
 - Use \`kind: "final"\` when you have everything you need. \`final.summary\` is one line; \`final.details\` is the full markdown body that goes into the note (no Q/A — that's logged separately).
 - Use \`kind: "ask"\` only when a specific decision genuinely requires a human. The question must be answerable in one turn. Provide \`options\` when there's a small enumerable set of answers; otherwise omit and accept free-form text.
-- Do NOT mix prose and JSON; the entire response is the JSON object.`;
+- Do NOT mix prose and JSON; the entire response is the JSON object.
+
+## Alternative — assist-mode wrapper
+
+When the file \`./.pdh-flow/bin/turn-respond\` exists in the worktree
+(true only when this session is running inside an assist terminal that
+the human user opened to chat with you), you MAY deliver your final
+answer by executing it via the Bash tool instead of emitting the JSON
+envelope:
+
+\`\`\`
+./.pdh-flow/bin/turn-respond --text "<one-line answer>"
+./.pdh-flow/bin/turn-respond --option <0-based index>
+\`\`\`
+
+Same effect — the engine receives your answer. Prefer this form when
+the human is conversing with you in chat (asking you to "submit" or
+"go with X"), so the result lands cleanly without forcing them to
+also click the Submit button on the Web UI form. If the wrapper does
+not exist, fall back to the JSON envelope above.`;
 
 function envelopeJsonSchema(): Record<string, unknown> {
   // Inline schema (no $refs) so the CLI's --json-schema / --output-schema
