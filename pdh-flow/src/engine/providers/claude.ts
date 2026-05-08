@@ -18,6 +18,9 @@ export async function invokeClaude(
     "--add-dir",
     inv.cwd,
   ];
+  if (inv.editable) {
+    args.push("--permission-mode", "bypassPermissions");
+  }
   if (inv.jsonSchema) {
     // --json-schema only constrains structured output; without
     // --output-format json claude still prints its prose. Pair them so

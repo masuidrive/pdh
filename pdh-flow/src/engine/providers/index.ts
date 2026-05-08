@@ -22,6 +22,13 @@ export interface ProviderInvocation {
   timeoutMs?: number;
   /** Abort signal from XState actor cancellation. */
   signal?: AbortSignal;
+  /**
+   * Allow the provider to edit files in `cwd`. Required for implementer /
+   * repair roles. Defaults to false (read-only). When true:
+   *   - claude: --permission-mode bypassPermissions
+   *   - codex:  --sandbox workspace-write
+   */
+  editable?: boolean;
 }
 
 export interface ProviderResult {

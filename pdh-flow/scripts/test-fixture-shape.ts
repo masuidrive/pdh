@@ -66,7 +66,12 @@ section("discover fixtures");
 assert("fixtures/v2 dir exists", existsSync(FIXTURES_ROOT));
 const scenarios = readdirSync(FIXTURES_ROOT).filter((name) => {
   const path = join(FIXTURES_ROOT, name);
-  return statSync(path).isDirectory();
+  if (!statSync(path).isDirectory()) return false;
+  // smoke-* dirs are real-LLM smoke fixtures (input only, no meta.json).
+  // They live alongside replay fixtures for filesystem convenience but
+  // do not conform to the fixture-meta contract.
+  if (name.startsWith("smoke-")) return false;
+  return true;
 });
 assert(`>= 2 scenarios discovered (got ${scenarios.length}: ${scenarios.join(", ")})`, scenarios.length >= 2);
 

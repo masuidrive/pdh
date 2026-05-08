@@ -18,6 +18,11 @@ export async function invokeCodex(
   let schemaTempDir: string | null = null;
   try {
     const args: string[] = ["exec", "--cd", inv.cwd, "--skip-git-repo-check"];
+    if (inv.editable) {
+      // Default codex sandbox is read-only; raise to workspace-write so
+      // implementer / repair roles can apply patches.
+      args.push("--sandbox", "workspace-write");
+    }
     if (inv.jsonSchema) {
       schemaTempDir = mkdtempSync(join(tmpdir(), "pdh-codex-schema-"));
       const schemaPath = join(schemaTempDir, "schema.json");

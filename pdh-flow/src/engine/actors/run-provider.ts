@@ -97,10 +97,12 @@ export const runProvider = fromPromise<
       role: input.role ?? "reviewer",
       promptSpec: input.promptSpec ?? {},
     });
+    const editable = roleNeedsEdit(input.role ?? "reviewer", nodeId);
     const result = await invokeProvider(input.provider, {
       prompt,
       cwd: worktreePath,
       signal,
+      editable,
     });
     if (result.exitCode !== 0 || result.timedOut) {
       throw new Error(
@@ -162,6 +164,20 @@ interface PromptBuilderInput {
   round: number;
   role: string;
   promptSpec: { intent?: string; checkpoints?: string[]; note_section?: string };
+}
+
+/** True when the role / node implies file edits (implementer + repair). */
+function roleNeedsEdit(role: string, nodeId: string): boolean {
+  const r = role.toLowerCase();
+  if (
+    r === "implementer" ||
+    r === "implement" ||
+    r === "repair" ||
+    r.endsWith("_repair")
+  ) return true;
+  // Naming convention: any node id ending in `.repair` is a repair node.
+  if (nodeId.toLowerCase().endsWith(".repair")) return true;
+  return false;
 }
 
 /**

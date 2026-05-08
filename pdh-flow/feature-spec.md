@@ -91,14 +91,23 @@ Test coverage: snapshot.json saved during run, validates against schema, second 
 
 `rebuildFromCanonicalState` (originally planned as the fallback) is currently a no-op — the engine just starts fresh from variant.initial when snapshot is missing. Canonical state rebuild is only needed when restoring partial progress, which fixture-replay tests don't exercise. Defer until a real long-running flow needs it.
 
-### F-004: rest-of-flow node implementations — **PARTIAL 2026-05-08**
-Phase H2 added:
-- **Role-aware provider prompts** (`buildPromptForProvider` in `actors/run-provider.ts`): `assist`, `planner`/`investigator`, `implementer`/`repair`, default reviewer. Each role gets a tailored prompt re: tool access (read-only vs. edit), output format, and guardrails (e.g. implementer is told never to `git commit`).
-- **gate_step actor** (`actors/await-gate.ts`): dual-mode (fixture replays gate_decisions[nodeId]; real polls `<worktree>/.pdh-flow/runs/<runId>/gates/<nodeId>.json`). Decision auto-persisted for audit.
-- **close_finalize**: `system_step.action: close_ticket` writes a `closed.json` marker. Actual ticket file move (tickets/active/ → tickets/done/) and `ticket.sh close` invocation deferred until lease integration (F-008) and a full E2E exists.
-- **Fixture coverage**: `gate_system_happy` scenario (provider → gate → system → terminal). 21/21 engine tests pass.
+### F-004: rest-of-flow node implementations — **DONE 2026-05-08**
+Phase H2 + H5.
 
-**Remaining**: real-mode E2E for the full pdh-c-v2 flow with claude/codex actually doing assist/plan/implement steps. Requires either a recorded fixture set or a manual smoke. Deferred to a follow-up phase.
+H2 added:
+- **Role-aware provider prompts** (`buildPromptForProvider` in `actors/run-provider.ts`): `assist`, `planner`/`investigator`, `implementer`/`repair`, default reviewer. Each role gets a tailored prompt re: tool access (read-only vs. edit), output format, and guardrails (e.g. implementer is told never to `git commit`).
+- **gate_step actor** (`actors/await-gate.ts`): dual-mode (fixture replays gate_decisions[nodeId]; real polls `<worktree>/.pdh-flow/runs/<runId>/gates/<nodeId>.json`).
+- **close_finalize**: `system_step.action: close_ticket` writes a closed marker.
+
+H5 validated the new role prompts with real LLMs via `scripts/smoke-real-roles.sh`:
+- assist (claude) → wrote a structured `## Status` section, even flagged `/` vs `//` as a concern for the implementer
+- planner (codex) → produced a detailed plan with files, test strategy, isinstance check, risks/mitigations
+- implementer (codex with `--sandbox workspace-write`) → actually edited `calc.py` (added `divide`) and `test_calc.py` (added 2 tests, switched to unittest because pytest wasn't installed), ran `python -m unittest -q` and verified 5 tests passed
+- 4 commits in chain, snapshot persisted at xstate value=done, full E2E ~3 min
+
+Side fix: added `editable: boolean` to ProviderInvocation; claude gets `--permission-mode bypassPermissions` when true, codex gets `--sandbox workspace-write`. Defaults to false (read-only) for assist/planner/reviewer roles.
+
+**Remaining (out of F-004 scope)**: a real E2E run of the FULL pdh-c-v2 (assist → investigate_plan → plan_review → plan_gate → implement → code_quality_review → final_verification → close_gate → close_finalize). H5 covered the new roles in isolation; the full chain with multi-reviewer + repair loops is exercise of existing prototype work (Phase E + G), not new role validation. Defer to a future "v2 first real ticket" milestone.
 
 ### F-005: Web UI v2
 Step-type-driven viewer + gate approver + assist launcher. Renders 4 type-specific affordances:
