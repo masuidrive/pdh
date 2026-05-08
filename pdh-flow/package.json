@@ -18,10 +18,12 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.76",
     "@ai-sdk/openai": "^3.0.63",
+    "@types/nunjucks": "^3.2.6",
     "ai": "^6.0.176",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "dotenv": "^17.4.2",
+    "nunjucks": "^3.2.4",
     "xstate": "^5.31.0",
     "yaml": "^2.8.3"
   },

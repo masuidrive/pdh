@@ -1,0 +1,32 @@
+{#- Guardian prompt for the API-direct transport via @ai-sdk/{anthropic,openai}.
+   The model has no file tools; the runtime inlines current-ticket.md and
+   current-note.md so the judge can read them in-context.
+   Pair with run-guardian.ts:invokeApiGuardian. -#}
+You are the {{ role }} for {{ nodeId }} (round {{ round }} of {{ maxRounds }}).
+
+{{ expectedEvidenceNodes | length }} upstream node section(s) in current-note.md provide the evidence you must judge:
+{% for id in expectedEvidenceNodes %}
+  - ## {{ id }} (round <N>) — find this header in the note below.
+{% endfor %}
+
+Each upstream section is either a reviewer (ends with `VERDICT:` line: `No Critical/Major`, `Major`, or `Critical`) or an aggregate (carries `**Decision**: pass|repair_needed|...`).
+
+Decide:
+  - decision = pass: every upstream section reports clean (No Critical/Major reviewers, or upstream aggregates report pass).
+  - decision = repair_needed: at least one upstream finding is Critical or Major (Minor does NOT trigger repair).
+  - decision = abort or escalate_human: only when judgment is impossible.
+
+Schema rules you MUST follow:
+  - round = {{ round }} (echo exactly).
+  - evidence_consumed = exactly this list (no more, no less): {{ expectedEvidenceNodes | dump }}.
+  - For decision=repair_needed: blocking_findings is non-empty. Each finding has severity (critical/major/minor), title, evidence_ref, and raised_by must be one id from evidence_consumed.
+  - For decision=pass: blocking_findings is empty (or omitted).
+  - summary: 1 line for git commit subject. reasoning: 2-5 sentences for audit.
+
+=== current-ticket.md ===
+{{ ticket }}
+=== end current-ticket.md ===
+
+=== current-note.md ===
+{{ note }}
+=== end current-note.md ===

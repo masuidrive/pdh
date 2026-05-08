@@ -12,6 +12,7 @@ import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { invokeProvider, type ProviderName } from "../providers/index.ts";
+import { renderPrompt } from "../prompts/render.ts";
 
 export interface ProviderActorInput {
   nodeId: string;
@@ -210,184 +211,56 @@ function buildPromptForProvider(p: PromptBuilderInput): string {
 }
 
 function buildAssistPrompt(p: PromptBuilderInput): string {
-  const lines: string[] = [];
-  lines.push(
-    `You are picking up a ticket. Node: ${p.nodeId}, role=assist.`,
-  );
-  lines.push("");
-  lines.push(
-    "Read current-ticket.md to understand the ticket. Then write a concise Status section describing:",
-  );
-  lines.push("  - What this ticket is asking for");
-  lines.push("  - Initial assumptions about scope");
-  lines.push("  - What you'll investigate next");
-  lines.push("");
-  lines.push(
-    "Do not edit source code. Use Read tools to inspect the repo. Your output will be appended to current-note.md as a section by the engine.",
-  );
-  lines.push("");
-  if (p.promptSpec.intent) {
-    lines.push(`Author intent: ${p.promptSpec.intent}`);
-  }
-  return lines.join("\n");
+  return renderPrompt("assist", {
+    nodeId: p.nodeId,
+    intent: p.promptSpec.intent,
+  });
 }
 
 function buildPlannerPrompt(p: PromptBuilderInput): string {
-  const lines: string[] = [];
-  lines.push(
-    `You are the planner for this ticket. Node: ${p.nodeId} (round ${p.round}).`,
-  );
-  lines.push("");
-  lines.push(
-    "Read current-ticket.md, current-note.md (especially the assist section), and the source tree to understand:",
-  );
-  lines.push("  - Existing implementation");
-  lines.push("  - Blast radius of the requested change");
-  lines.push("  - Dependencies and constraints");
-  lines.push("");
-  lines.push("Then produce a concrete implementation plan covering:");
-  lines.push("  - Files to be modified (path + summary)");
-  lines.push("  - Test strategy (which tests to add or update)");
-  lines.push("  - Risks + mitigations");
-  lines.push("");
-  if (p.promptSpec.checkpoints && p.promptSpec.checkpoints.length > 0) {
-    lines.push("Required checkpoints:");
-    for (const c of p.promptSpec.checkpoints) lines.push(`  - ${c}`);
-    lines.push("");
-  }
-  lines.push(
-    "Do not edit source code. Use Read tools. Your output will be appended to current-note.md as a plan section.",
-  );
-  return lines.join("\n");
+  return renderPrompt("planner", {
+    nodeId: p.nodeId,
+    round: p.round,
+    checkpoints: p.promptSpec.checkpoints ?? [],
+  });
 }
 
-function buildImplementerPrompt(p: PromptBuilderInput): string {
-  const lc = p.nodeId.toLowerCase();
+function implementerMode(role: string, nodeId: string): "plan_repair" | "code_repair" | "default" {
+  const r = role.toLowerCase();
+  const lc = nodeId.toLowerCase();
   // plan_review.repair: address findings against the PLAN artifact, not code.
   // The repair node loops back into plan_review, so source edits here would
   // jump ahead of the implement node and pollute the plan stage.
-  const isPlanRepair =
-    p.role.toLowerCase() === "plan_repair" ||
-    lc.startsWith("plan_review.") && lc.includes("repair");
-  const isCodeRepair =
-    !isPlanRepair &&
-    (p.role.toLowerCase().includes("repair") || lc.includes("repair"));
+  if (r === "plan_repair" || (lc.startsWith("plan_review.") && lc.includes("repair"))) {
+    return "plan_repair";
+  }
+  if (r.includes("repair") || lc.includes("repair")) return "code_repair";
+  return "default";
+}
 
-  const lines: string[] = [];
-  if (isPlanRepair) {
-    lines.push(
-      `You are repairing the PLAN. Node: ${p.nodeId} (round ${p.round}).`,
-    );
-    lines.push("");
-    lines.push(
-      "This node is part of the plan_review loop — the implement node has NOT yet run. " +
-        "Your job is to update the plan in current-note.md to address blocking findings, " +
-        "NOT to write source code.",
-    );
-    lines.push("");
-    lines.push("Read current-note.md to understand:");
-    lines.push("  - the prior plan (investigate_plan section + any earlier plan_repair sections)");
-    lines.push("  - the blocking findings raised by the most recent plan_review aggregate");
-    lines.push("");
-    lines.push("Then update / extend the plan section with concrete refinements (clearer file targets, additional risks, mitigations, test strategy adjustments).");
-    lines.push("");
-    lines.push("Required behaviour:");
-    lines.push("  - You MAY edit current-note.md.");
-    lines.push("  - You MAY use the Read tool on source files to inform the plan.");
-    lines.push("  - You MUST NOT edit any source / test files. Implementation is the implement node's job.");
-    lines.push("  - Note: if a finding misapplies code-state criteria to the plan (e.g. \"function not implemented yet\"), say so explicitly in the plan and explain why it is out of scope for plan review.");
-  } else if (isCodeRepair) {
-    lines.push(
-      `You are repairing the implementation. Node: ${p.nodeId} (round ${p.round}).`,
-    );
-    lines.push("");
-    lines.push(
-      "Read current-note.md to understand: (1) the prior implementation, (2) the blocking findings raised by the most recent aggregate. Apply minimal, focused edits to address those findings.",
-    );
-    lines.push("");
-    lines.push("Required behaviour:");
-    lines.push("  - Use Edit / Write / Bash tools to modify files.");
-    lines.push("  - Add or update tests so the AC is verified by automation.");
-    lines.push(
-      "  - When done, summarise what you changed in 5-10 lines (will be committed as the node's evidence section).",
-    );
-  } else {
-    lines.push(
-      `You are the implementer. Node: ${p.nodeId} (round ${p.round}).`,
-    );
-    lines.push("");
-    lines.push(
-      "Read current-ticket.md (acceptance criteria), current-note.md (the plan), and the source tree. Implement the change according to the plan.",
-    );
-    lines.push("");
-    lines.push("Required behaviour:");
-    lines.push("  - Use Edit / Write / Bash tools to modify files.");
-    lines.push("  - Add or update tests so the AC is verified by automation.");
-    lines.push(
-      "  - When done, summarise what you changed in 5-10 lines (will be committed as the node's evidence section).",
-    );
-  }
-  if (p.promptSpec.checkpoints && p.promptSpec.checkpoints.length > 0) {
-    lines.push("");
-    lines.push("Checkpoints:");
-    for (const c of p.promptSpec.checkpoints) lines.push(`  - ${c}`);
-  }
-  lines.push("");
-  lines.push(
-    "Do NOT run `git commit` or any git history-mutating command. The runtime owns commits — leave changes in the working tree.",
-  );
-  return lines.join("\n");
+function buildImplementerPrompt(p: PromptBuilderInput): string {
+  return renderPrompt("implementer", {
+    nodeId: p.nodeId,
+    round: p.round,
+    mode: implementerMode(p.role, p.nodeId),
+    checkpoints: p.promptSpec.checkpoints ?? [],
+  });
 }
 
 function buildReviewerPrompt(p: PromptBuilderInput): string {
-  // Distinguish "plan review" reviewers (review the plan artifact in
-  // current-note.md, no implementation expected yet) from
-  // "code quality" reviewers (review the actual source diff). Naming
-  // convention: any node id under `plan_review.*` is a plan reviewer.
-  const isPlanReviewer = p.nodeId.toLowerCase().startsWith("plan_review.");
-
-  const lines: string[] = [];
-  lines.push(`You are a ${p.role} reviewer. Node: ${p.nodeId} (round ${p.round}).`);
-  lines.push("");
-  if (p.promptSpec.intent) {
-    lines.push(`Goal: ${p.promptSpec.intent}`);
-  } else if (isPlanReviewer) {
-    lines.push(
-      "Goal: review the PLAN written into current-note.md by the investigate_plan + plan_repair sections. Do not review the source code state — that is the code_quality_review stage's job.",
-    );
-  } else {
-    lines.push("Goal: review the implementation in this repository.");
-  }
-  lines.push("");
-  if (isPlanReviewer) {
-    lines.push(
-      "The implement node has NOT run yet. Reviewing this plan means asking: is the plan internally consistent? does it cover the AC? does it identify the right files / tests / risks? You MAY use Read on source files to ground your review of the plan, but the source's current state is OUT OF SCOPE — flag it only if the plan misjudges what already exists.",
-    );
-    lines.push("");
-    lines.push(
-      "DO NOT raise Critical/Major findings of the form \"function X is not yet implemented\" or \"tests for X are missing\". Implementation absence at this stage is expected, not a defect of the plan.",
-    );
-  } else {
-    lines.push(
-      "Read the relevant files (current-ticket.md, current-note.md, and the source tree) to understand what was implemented in the most recent commits.",
-    );
-  }
-  if (p.promptSpec.checkpoints && p.promptSpec.checkpoints.length > 0) {
-    lines.push("");
-    lines.push("Focus areas:");
-    for (const c of p.promptSpec.checkpoints) lines.push(`  - ${c}`);
-  }
-  lines.push("");
-  lines.push("Output requirements:");
-  lines.push("  1. Produce a concise review (markdown is fine, ~10-30 lines).");
-  lines.push("  2. Cite file:line where relevant.");
-  lines.push("  3. End with one of these verdict lines exactly:");
-  lines.push("       VERDICT: No Critical/Major");
-  lines.push("       VERDICT: Critical");
-  lines.push("       VERDICT: Major");
-  lines.push("");
-  lines.push("Do not edit or create any files. Use only Read tools.");
-  return lines.join("\n");
+  // Naming convention: any node id under `plan_review.*` is a plan reviewer
+  // (reviews the plan artifact, not the source diff).
+  const mode = p.nodeId.toLowerCase().startsWith("plan_review.")
+    ? "plan"
+    : "default";
+  return renderPrompt("reviewer", {
+    nodeId: p.nodeId,
+    round: p.round,
+    role: p.role,
+    mode,
+    intent: p.promptSpec.intent,
+    checkpoints: p.promptSpec.checkpoints ?? [],
+  });
 }
 
 function extractSummary(text: string, fallback: string): string {

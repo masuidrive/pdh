@@ -39,6 +39,7 @@ import {
   invokeApiJudge,
   type JudgeProviderConfig,
 } from "../judge/api-judge.ts";
+import { renderPrompt } from "../prompts/render.ts";
 
 export interface GuardianActorInput {
   nodeId: string;
@@ -320,54 +321,15 @@ function buildApiGuardianPrompt(
   ticket: string,
   note: string,
 ): string {
-  const lines: string[] = [];
-  lines.push(`You are the ${p.role} for ${p.nodeId} (round ${p.round} of ${p.maxRounds}).`);
-  lines.push("");
-  lines.push(
-    `${p.expectedEvidenceNodes.length} upstream node section(s) in current-note.md provide the evidence you must judge:`,
-  );
-  for (const id of p.expectedEvidenceNodes) {
-    lines.push(`  - ## ${id} (round <N>) — find this header in the note below.`);
-  }
-  lines.push("");
-  lines.push(
-    "Each upstream section is either a reviewer (ends with `VERDICT:` line: `No Critical/Major`, `Major`, or `Critical`) or an aggregate (carries `**Decision**: pass|repair_needed|...`).",
-  );
-  lines.push("");
-  lines.push("Decide:");
-  lines.push(
-    "  - decision = pass: every upstream section reports clean (No Critical/Major reviewers, or upstream aggregates report pass).",
-  );
-  lines.push(
-    "  - decision = repair_needed: at least one upstream finding is Critical or Major (Minor does NOT trigger repair).",
-  );
-  lines.push(
-    "  - decision = abort or escalate_human: only when judgment is impossible.",
-  );
-  lines.push("");
-  lines.push("Schema rules you MUST follow:");
-  lines.push(`  - round = ${p.round} (echo exactly).`);
-  lines.push(
-    `  - evidence_consumed = exactly this list (no more, no less): ${JSON.stringify(p.expectedEvidenceNodes)}.`,
-  );
-  lines.push(
-    "  - For decision=repair_needed: blocking_findings is non-empty. Each finding has severity (critical/major/minor), title, evidence_ref, and raised_by must be one id from evidence_consumed.",
-  );
-  lines.push(
-    "  - For decision=pass: blocking_findings is empty (or omitted).",
-  );
-  lines.push(
-    "  - summary: 1 line for git commit subject. reasoning: 2-5 sentences for audit.",
-  );
-  lines.push("");
-  lines.push("=== current-ticket.md ===");
-  lines.push(ticket);
-  lines.push("=== end current-ticket.md ===");
-  lines.push("");
-  lines.push("=== current-note.md ===");
-  lines.push(note);
-  lines.push("=== end current-note.md ===");
-  return lines.join("\n");
+  return renderPrompt("guardian-api", {
+    role: p.role,
+    nodeId: p.nodeId,
+    round: p.round,
+    maxRounds: p.maxRounds,
+    expectedEvidenceNodes: p.expectedEvidenceNodes,
+    ticket,
+    note,
+  });
 }
 
 function buildGuardianPrompt(p: {
@@ -377,50 +339,13 @@ function buildGuardianPrompt(p: {
   expectedEvidenceNodes: string[];
   maxRounds: number;
 }): string {
-  const lines: string[] = [];
-  lines.push(`You are the ${p.role} for ${p.nodeId} (round ${p.round} of ${p.maxRounds}).`);
-  lines.push("");
-  lines.push(
-    `${p.expectedEvidenceNodes.length} upstream node(s) have written sections to current-note.md that you MUST read.`,
-  );
-  lines.push("Their headers look like:");
-  for (const id of p.expectedEvidenceNodes) {
-    lines.push(`  ## ${id} (round <N>)`);
-  }
-  lines.push("");
-  lines.push(
-    "Each upstream section is either a reviewer (ends with a `VERDICT:` line, e.g. `VERDICT: No Critical/Major` / `VERDICT: Major` / `VERDICT: Critical`) or an aggregate (carries a `**Decision**: pass|repair_needed|...` line).",
-  );
-  lines.push("");
-  lines.push(
-    "Read those sections via the Read tool on current-note.md. Then decide:",
-  );
-  lines.push(
-    "  - decision = pass: every upstream section reports clean (No Critical/Major reviewers, or upstream aggregates report pass).",
-  );
-  lines.push(
-    "  - decision = repair_needed: at least one upstream finding is Critical or Major (not Minor).",
-  );
-  lines.push(
-    "  - decision = abort or escalate_human: only when judgment is impossible (rare).",
-  );
-  lines.push("");
-  lines.push("Output requirements:");
-  lines.push(
-    `  - Echo round = ${p.round} exactly.`,
-  );
-  lines.push(
-    `  - evidence_consumed MUST be exactly this list (no more, no less): ${JSON.stringify(p.expectedEvidenceNodes)}.`,
-  );
-  lines.push(
-    "  - If decision=repair_needed, populate blocking_findings. Each finding has: severity in critical/major/minor, title, evidence_ref pointing to file:line or node_id, raised_by must be one of the ids in evidence_consumed.",
-  );
-  lines.push(
-    "  - summary: 1 line for git commit subject. reasoning: 2-5 sentences for audit.",
-  );
-  lines.push("");
-  lines.push("Do not edit any files. Use only Read tools.");
-  return lines.join("\n");
+  return renderPrompt("guardian-cli", {
+    role: p.role,
+    nodeId: p.nodeId,
+    round: p.round,
+    maxRounds: p.maxRounds,
+    expectedEvidenceNodes: p.expectedEvidenceNodes,
+  });
 }
 
 function guardianOutputSchema(

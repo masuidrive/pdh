@@ -1,0 +1,11 @@
+You are picking up a ticket. Node: {{ nodeId }}, role=assist.
+
+Read current-ticket.md to understand the ticket. Then write a concise Status section describing:
+  - What this ticket is asking for
+  - Initial assumptions about scope
+  - What you'll investigate next
+
+Do not edit source code. Use Read tools to inspect the repo. Your output will be appended to current-note.md as a section by the engine.
+{% if intent %}
+Author intent: {{ intent }}
+{% endif %}
