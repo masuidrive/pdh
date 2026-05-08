@@ -262,17 +262,54 @@ function buildPlannerPrompt(p: PromptBuilderInput): string {
 }
 
 function buildImplementerPrompt(p: PromptBuilderInput): string {
-  const isRepair =
-    p.role.toLowerCase().includes("repair") ||
-    p.nodeId.toLowerCase().includes("repair");
+  const lc = p.nodeId.toLowerCase();
+  // plan_review.repair: address findings against the PLAN artifact, not code.
+  // The repair node loops back into plan_review, so source edits here would
+  // jump ahead of the implement node and pollute the plan stage.
+  const isPlanRepair =
+    p.role.toLowerCase() === "plan_repair" ||
+    lc.startsWith("plan_review.") && lc.includes("repair");
+  const isCodeRepair =
+    !isPlanRepair &&
+    (p.role.toLowerCase().includes("repair") || lc.includes("repair"));
+
   const lines: string[] = [];
-  if (isRepair) {
+  if (isPlanRepair) {
+    lines.push(
+      `You are repairing the PLAN. Node: ${p.nodeId} (round ${p.round}).`,
+    );
+    lines.push("");
+    lines.push(
+      "This node is part of the plan_review loop — the implement node has NOT yet run. " +
+        "Your job is to update the plan in current-note.md to address blocking findings, " +
+        "NOT to write source code.",
+    );
+    lines.push("");
+    lines.push("Read current-note.md to understand:");
+    lines.push("  - the prior plan (investigate_plan section + any earlier plan_repair sections)");
+    lines.push("  - the blocking findings raised by the most recent plan_review aggregate");
+    lines.push("");
+    lines.push("Then update / extend the plan section with concrete refinements (clearer file targets, additional risks, mitigations, test strategy adjustments).");
+    lines.push("");
+    lines.push("Required behaviour:");
+    lines.push("  - You MAY edit current-note.md.");
+    lines.push("  - You MAY use the Read tool on source files to inform the plan.");
+    lines.push("  - You MUST NOT edit any source / test files. Implementation is the implement node's job.");
+    lines.push("  - Note: if a finding misapplies code-state criteria to the plan (e.g. \"function not implemented yet\"), say so explicitly in the plan and explain why it is out of scope for plan review.");
+  } else if (isCodeRepair) {
     lines.push(
       `You are repairing the implementation. Node: ${p.nodeId} (round ${p.round}).`,
     );
     lines.push("");
     lines.push(
       "Read current-note.md to understand: (1) the prior implementation, (2) the blocking findings raised by the most recent aggregate. Apply minimal, focused edits to address those findings.",
+    );
+    lines.push("");
+    lines.push("Required behaviour:");
+    lines.push("  - Use Edit / Write / Bash tools to modify files.");
+    lines.push("  - Add or update tests so the AC is verified by automation.");
+    lines.push(
+      "  - When done, summarise what you changed in 5-10 lines (will be committed as the node's evidence section).",
     );
   } else {
     lines.push(
@@ -282,14 +319,14 @@ function buildImplementerPrompt(p: PromptBuilderInput): string {
     lines.push(
       "Read current-ticket.md (acceptance criteria), current-note.md (the plan), and the source tree. Implement the change according to the plan.",
     );
+    lines.push("");
+    lines.push("Required behaviour:");
+    lines.push("  - Use Edit / Write / Bash tools to modify files.");
+    lines.push("  - Add or update tests so the AC is verified by automation.");
+    lines.push(
+      "  - When done, summarise what you changed in 5-10 lines (will be committed as the node's evidence section).",
+    );
   }
-  lines.push("");
-  lines.push("Required behaviour:");
-  lines.push("  - Use Edit / Write / Bash tools to modify files.");
-  lines.push("  - Add or update tests so the AC is verified by automation.");
-  lines.push(
-    "  - When done, summarise what you changed in 5-10 lines (will be committed as the node's evidence section).",
-  );
   if (p.promptSpec.checkpoints && p.promptSpec.checkpoints.length > 0) {
     lines.push("");
     lines.push("Checkpoints:");
@@ -303,18 +340,38 @@ function buildImplementerPrompt(p: PromptBuilderInput): string {
 }
 
 function buildReviewerPrompt(p: PromptBuilderInput): string {
+  // Distinguish "plan review" reviewers (review the plan artifact in
+  // current-note.md, no implementation expected yet) from
+  // "code quality" reviewers (review the actual source diff). Naming
+  // convention: any node id under `plan_review.*` is a plan reviewer.
+  const isPlanReviewer = p.nodeId.toLowerCase().startsWith("plan_review.");
+
   const lines: string[] = [];
   lines.push(`You are a ${p.role} reviewer. Node: ${p.nodeId} (round ${p.round}).`);
   lines.push("");
   if (p.promptSpec.intent) {
     lines.push(`Goal: ${p.promptSpec.intent}`);
+  } else if (isPlanReviewer) {
+    lines.push(
+      "Goal: review the PLAN written into current-note.md by the investigate_plan + plan_repair sections. Do not review the source code state — that is the code_quality_review stage's job.",
+    );
   } else {
     lines.push("Goal: review the implementation in this repository.");
   }
   lines.push("");
-  lines.push(
-    "Read the relevant files (current-ticket.md, current-note.md, and the source tree) to understand what was implemented in the most recent commits.",
-  );
+  if (isPlanReviewer) {
+    lines.push(
+      "The implement node has NOT run yet. Reviewing this plan means asking: is the plan internally consistent? does it cover the AC? does it identify the right files / tests / risks? You MAY use Read on source files to ground your review of the plan, but the source's current state is OUT OF SCOPE — flag it only if the plan misjudges what already exists.",
+    );
+    lines.push("");
+    lines.push(
+      "DO NOT raise Critical/Major findings of the form \"function X is not yet implemented\" or \"tests for X are missing\". Implementation absence at this stage is expected, not a defect of the plan.",
+    );
+  } else {
+    lines.push(
+      "Read the relevant files (current-ticket.md, current-note.md, and the source tree) to understand what was implemented in the most recent commits.",
+    );
+  }
   if (p.promptSpec.checkpoints && p.promptSpec.checkpoints.length > 0) {
     lines.push("");
     lines.push("Focus areas:");
