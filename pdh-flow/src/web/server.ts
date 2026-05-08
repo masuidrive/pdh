@@ -102,6 +102,18 @@ async function handleRequest(
     return postGate(req, res, opts.worktreePath, m[1], m[2]);
   }
 
+  m = path.match(/^\/api\/runs\/([^/]+)\/turns\/([^/]+)\/(\d+)$/);
+  if (m && req.method === "POST") {
+    return postTurn(
+      req,
+      res,
+      opts.worktreePath,
+      m[1],
+      m[2],
+      parseInt(m[3], 10),
+    );
+  }
+
   m = path.match(/^\/api\/runs\/([^/]+)\/events$/);
   if (m && req.method === "GET") {
     return handleSSE(req, res, opts.worktreePath, m[1]);
@@ -266,9 +278,21 @@ interface RunSummary {
   round: number;
   last_guardian_decision: string | null;
   active_gate: string | null;
+  /** F-012: pending in-step turn, when a provider_step is awaiting an answer. */
+  active_turn: ActiveTurn | null;
   judgements: { node_id: string; round: number; decision: string }[];
   gate_decisions: { node_id: string; decision: string; decided_at: string }[];
   closed: boolean;
+}
+
+interface ActiveTurn {
+  node_id: string;
+  turn: number;
+  round: number;
+  asked_at: string | null;
+  question: string;
+  options: { label: string; description?: string }[];
+  context: string | null;
 }
 
 function getRunSummary(worktreePath: string, runId: string): RunSummary | null {
@@ -289,6 +313,7 @@ function getRunSummary(worktreePath: string, runId: string): RunSummary | null {
   // F-011/H10-2: closed status lives in note frontmatter (durable), not in
   // `.pdh-flow/runs/<runId>/closed.json` (ephemeral, may be wiped).
   const closed = isTicketClosed(worktreePath, snap?.ticket_id ?? null);
+  const activeTurn = findActiveTurn(worktreePath, runId);
   return {
     run_id: runId,
     ticket_id: snap?.ticket_id ?? null,
@@ -301,6 +326,7 @@ function getRunSummary(worktreePath: string, runId: string): RunSummary | null {
       : 0,
     last_guardian_decision: snap?.xstate_snapshot?.context?.lastGuardianDecision ?? null,
     active_gate: isGate && !alreadyDecided ? currentState : null,
+    active_turn: activeTurn,
     judgements,
     gate_decisions: gateDecisions,
     closed,
@@ -412,6 +438,162 @@ function isTicketClosed(
   }
 }
 
+// ─── Active turn discovery (F-012) ───────────────────────────────────────
+
+function findActiveTurn(
+  worktreePath: string,
+  runId: string,
+): ActiveTurn | null {
+  const turnsRoot = join(
+    worktreePath,
+    ".pdh-flow",
+    "runs",
+    runId,
+    "turns",
+  );
+  if (!existsSync(turnsRoot)) return null;
+  // Scan node-id directories for an unanswered question. Prefer the
+  // lowest turn number in the most-recently-asked node (heuristic; in
+  // practice only one turn is ever pending at once).
+  const nodes = readdirSync(turnsRoot).filter((name) => {
+    try {
+      return statSync(join(turnsRoot, name)).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+  let best: { mtime: number; turn: ActiveTurn } | null = null;
+  for (const nodeId of nodes) {
+    const nodeDir = join(turnsRoot, nodeId);
+    const files = readdirSync(nodeDir);
+    const seqs = new Set<number>();
+    const answered = new Set<number>();
+    for (const f of files) {
+      const qm = f.match(/^turn-(\d{3})-question\.json$/);
+      const am = f.match(/^turn-(\d{3})-answer\.json$/);
+      if (qm) seqs.add(parseInt(qm[1], 10));
+      if (am) answered.add(parseInt(am[1], 10));
+    }
+    const open = [...seqs].filter((n) => !answered.has(n)).sort((a, b) => a - b);
+    if (open.length === 0) continue;
+    const turnNum = open[0];
+    const seq = String(turnNum).padStart(3, "0");
+    const qPath = join(nodeDir, `turn-${seq}-question.json`);
+    let q: any;
+    try {
+      q = JSON.parse(readFileSync(qPath, "utf8"));
+    } catch {
+      continue;
+    }
+    const mtime = statSync(qPath).mtimeMs;
+    const candidate: ActiveTurn = {
+      node_id: nodeId,
+      turn: turnNum,
+      round: typeof q.round === "number" ? q.round : 1,
+      asked_at: typeof q.asked_at === "string" ? q.asked_at : null,
+      question: typeof q.ask?.question === "string" ? q.ask.question : "(no question)",
+      options: Array.isArray(q.ask?.options)
+        ? q.ask.options
+            .filter((o: any) => o && typeof o.label === "string")
+            .map((o: any) => ({
+              label: o.label,
+              ...(typeof o.description === "string" ? { description: o.description } : {}),
+            }))
+        : [],
+      context: typeof q.ask?.context === "string" ? q.ask.context : null,
+    };
+    if (!best || mtime > best.mtime) {
+      best = { mtime, turn: candidate };
+    }
+  }
+  return best?.turn ?? null;
+}
+
+// ─── Turn answer post (F-012) ────────────────────────────────────────────
+
+async function postTurn(
+  req: IncomingMessage,
+  res: ServerResponse,
+  worktreePath: string,
+  runId: string,
+  nodeId: string,
+  turnNum: number,
+): Promise<void> {
+  const body = await readBody(req);
+  let parsed: any;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return sendJson(res, 400, { error: "invalid JSON body" });
+  }
+  const text = typeof parsed.text === "string" ? parsed.text.trim() : "";
+  if (!text) {
+    return sendJson(res, 400, { error: "text is required and must be non-empty" });
+  }
+  const responder = typeof parsed.responder === "string"
+    ? parsed.responder.slice(0, 128)
+    : "web-ui";
+  const selectedOption =
+    typeof parsed.selected_option === "number" && Number.isInteger(parsed.selected_option) && parsed.selected_option >= 0
+      ? parsed.selected_option
+      : undefined;
+
+  // Read the matching question file to copy round (and confirm question exists).
+  const seq = String(turnNum).padStart(3, "0");
+  const qPath = join(
+    worktreePath,
+    ".pdh-flow",
+    "runs",
+    runId,
+    "turns",
+    nodeId,
+    `turn-${seq}-question.json`,
+  );
+  if (!existsSync(qPath)) {
+    return sendJson(res, 404, {
+      error: "question file not found",
+      path: qPath,
+    });
+  }
+  const aPath = qPath.replace("-question.", "-answer.");
+  if (existsSync(aPath)) {
+    return sendJson(res, 409, {
+      error: "turn already answered",
+      existing: JSON.parse(readFileSync(aPath, "utf8")),
+    });
+  }
+  let round = 1;
+  try {
+    const q = JSON.parse(readFileSync(qPath, "utf8"));
+    if (typeof q.round === "number") round = q.round;
+  } catch { /* ignore */ }
+
+  const answer: Record<string, unknown> = {
+    status: "completed",
+    node_id: nodeId,
+    round,
+    turn: turnNum,
+    answered_at: new Date().toISOString(),
+    answer: {
+      text,
+      ...(selectedOption !== undefined ? { selected_option: selectedOption } : {}),
+    },
+    via: "web_ui",
+    responder,
+  };
+
+  const v = getValidator();
+  const result = v.validate(SCHEMA_IDS.turnAnswer, answer);
+  if (result.ok === false) {
+    return sendJson(res, 400, {
+      error: "turn answer failed schema validation",
+      details: formatErrors(result.errors),
+    });
+  }
+  writeFileSync(aPath, JSON.stringify(answer, null, 2) + "\n");
+  return sendJson(res, 200, { ok: true, written: aPath, answer });
+}
+
 // ─── Gate post ────────────────────────────────────────────────────────────
 
 async function postGate(
@@ -519,6 +701,19 @@ function handleSSE(
   safeWatch(runDir);
   safeWatch(join(runDir, "judgements"));
   safeWatch(join(runDir, "gates"));
+  // F-012: turn question/answer files come and go inside per-node
+  // dirs. Watch the parent so creation of those dirs surfaces, plus
+  // each child dir if it already exists.
+  safeWatch(join(runDir, "turns"));
+  const turnsRoot = join(runDir, "turns");
+  if (existsSync(turnsRoot)) {
+    for (const name of readdirSync(turnsRoot)) {
+      const sub = join(turnsRoot, name);
+      try {
+        if (statSync(sub).isDirectory()) safeWatch(sub);
+      } catch { /* skip */ }
+    }
+  }
 
   // If sub-dirs are created later, the run-dir watcher fires and triggers a
   // refetch on the client; the missed sub-dir watcher only matters once for

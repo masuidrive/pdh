@@ -207,6 +207,8 @@ function renderRunPageShell(runId, s, note) {
       <div id="gate-card">${renderGateCardInner(runId, s)}</div>
     </section>
 
+    <section id="turn-card-wrap" class="mb-4">${renderTurnCardWrap(runId, s)}</section>
+
     <section id="judgements-card" class="card bg-base-100 shadow mb-4">${renderJudgementsCardInner(s)}</section>
 
     <section id="gate-decisions-card" class="card bg-base-100 shadow mb-4">${renderGateDecisionsCardInner(s)}</section>
@@ -219,6 +221,7 @@ function renderRunPageShell(runId, s, note) {
     </section>
   `;
   wireGateForm(runId);
+  wireTurnForm(runId);
 }
 
 function applyRunUpdate(fresh, freshNote) {
@@ -244,6 +247,22 @@ function applyRunUpdate(fresh, freshNote) {
     if (el) {
       el.innerHTML = renderGateCardInner(runId, fresh);
       wireGateForm(runId);
+    }
+  }
+
+  // 3b) Turn card (F-012): re-render only when active_turn identity changes
+  //    (different node/turn) so half-typed answers survive snapshot writes.
+  const lastTurnKey = lastSummary.active_turn
+    ? `${lastSummary.active_turn.node_id}|${lastSummary.active_turn.turn}`
+    : "";
+  const freshTurnKey = fresh.active_turn
+    ? `${fresh.active_turn.node_id}|${fresh.active_turn.turn}`
+    : "";
+  if (lastTurnKey !== freshTurnKey) {
+    const wrap = document.getElementById("turn-card-wrap");
+    if (wrap) {
+      wrap.innerHTML = renderTurnCardWrap(runId, fresh);
+      wireTurnForm(runId);
     }
   }
 
@@ -328,6 +347,106 @@ function renderGateCardInner(runId, s) {
       </div>
     </div>
   `;
+}
+
+// ─── F-012 turn card ──────────────────────────────────────────────────────
+
+function renderTurnCardWrap(runId, s) {
+  if (!s.active_turn) return "";
+  const t = s.active_turn;
+  const optionsHtml = (t.options ?? [])
+    .map((o, i) => {
+      const desc = o.description
+        ? `<span class="opacity-70 text-xs">— ${escapeHtml(o.description)}</span>`
+        : "";
+      return `
+        <label class="flex items-start gap-2 cursor-pointer">
+          <input type="radio" class="radio radio-sm mt-1" name="turn-option" value="${i}" />
+          <span class="text-sm"><span class="font-medium">${escapeHtml(o.label)}</span> ${desc}</span>
+        </label>`;
+    })
+    .join("");
+  return `
+    <div class="card bg-info/10 border border-info shadow">
+      <div class="card-body">
+        <h2 class="card-title text-lg">In-step question — <span class="font-mono text-sm">${escapeHtml(t.node_id)}</span> turn ${t.turn}</h2>
+        <p class="text-sm whitespace-pre-wrap">${escapeHtml(t.question)}</p>
+        ${
+          t.context
+            ? `<details class="text-xs opacity-70"><summary>Context</summary><pre class="pre-wrap mt-1">${escapeHtml(t.context)}</pre></details>`
+            : ""
+        }
+        <form id="turn-form"
+              data-run-id="${escapeHtml(runId)}"
+              data-node-id="${escapeHtml(t.node_id)}"
+              data-turn="${t.turn}"
+              class="space-y-2 mt-2">
+          ${optionsHtml ? `<div class="space-y-1">${optionsHtml}</div>` : ""}
+          <label class="form-control">
+            <span class="label-text text-xs">Answer (free text — required)</span>
+            <textarea class="textarea textarea-bordered textarea-sm" name="text" rows="3" placeholder="your answer; if you also picked an option above, this is the supplementary detail" required></textarea>
+          </label>
+          <label class="form-control">
+            <span class="label-text text-xs">Responder (optional)</span>
+            <input class="input input-bordered input-sm" name="responder" placeholder="your name" />
+          </label>
+          <div class="flex gap-2">
+            <button type="submit" class="btn btn-info btn-sm">Submit answer</button>
+          </div>
+          <p id="turn-form-status" class="text-xs opacity-70"></p>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+function wireTurnForm(runId) {
+  const form = document.getElementById("turn-form");
+  if (!form) return;
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = new FormData(form);
+    const status = document.getElementById("turn-form-status");
+    if (status) {
+      status.textContent = "Submitting…";
+      status.className = "text-xs opacity-70";
+    }
+    try {
+      const nodeId = form.dataset.nodeId;
+      const turn = form.dataset.turn;
+      const text = String(data.get("text") ?? "").trim();
+      if (!text) throw new Error("answer text is required");
+      const responder = String(data.get("responder") ?? "").trim();
+      const optRaw = data.get("turn-option");
+      const body = { text };
+      if (responder) body.responder = responder;
+      if (optRaw !== null && optRaw !== "") {
+        const n = Number(optRaw);
+        if (Number.isInteger(n) && n >= 0) body.selected_option = n;
+      }
+      const r = await fetch(
+        `/api/runs/${encodeURIComponent(runId)}/turns/${encodeURIComponent(nodeId)}/${encodeURIComponent(turn)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      if (!r.ok) {
+        const eb = await r.json().catch(() => ({}));
+        throw new Error(eb.error ?? `HTTP ${r.status}`);
+      }
+      if (status) {
+        status.textContent = "answer submitted — engine will resume the provider within ~1 s.";
+        status.className = "text-xs text-success";
+      }
+    } catch (err) {
+      if (status) {
+        status.textContent = String(err.message ?? err);
+        status.className = "text-xs text-error";
+      }
+    }
+  });
 }
 
 function renderJudgementsCardInner(s) {
