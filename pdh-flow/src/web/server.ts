@@ -320,7 +320,21 @@ function readSnapshot(worktreePath: string, runId: string): any | null {
 function extractState(snap: any): string {
   const v = snap?.xstate_snapshot?.value;
   if (typeof v === "string") return v;
-  if (v && typeof v === "object") return JSON.stringify(v);
+  if (v && typeof v === "object") {
+    // parallel_group: XState value is `{ <group_id>: { region1: state1, ... } }`.
+    // Collapse to "<group> (n active)" so the UI doesn't render a wall of JSON.
+    const keys = Object.keys(v);
+    if (keys.length === 1) {
+      const group = keys[0];
+      const inner = (v as Record<string, unknown>)[group];
+      if (inner && typeof inner === "object") {
+        const regions = Object.keys(inner as Record<string, unknown>);
+        return `${group} (${regions.length} parallel)`;
+      }
+      return group;
+    }
+    return JSON.stringify(v);
+  }
   return "<unknown>";
 }
 

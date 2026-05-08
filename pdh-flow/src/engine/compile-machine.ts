@@ -165,10 +165,22 @@ function compileProvider(
   }
   const stopGuard = onDoneTarget === opts.stopAtNodeId;
   const targetNode = flat.nodes[onDoneTarget];
-  const incrementRound = targetNode && isParallelGroup(targetNode);
+  const enteringParallel = !!(targetNode && isParallelGroup(targetNode));
 
-  const actions = incrementRound
-    ? assign({ round: ({ context }: any) => (context as EngineContext).round + 1 })
+  // F-011/H10-9: per-loop round counter.
+  //   - First entry to a parallel_group from upstream: reset round to 1.
+  //   - Repair loop-back (source is `<group>.repair`): increment.
+  // Result: every node in a clean run reports round 1; only repair-driven
+  // re-iteration of a review_loop bumps the number. Far less confusing
+  // than the previous global stage counter.
+  const isRepairLoopback =
+    enteringParallel && nodeId === `${onDoneTarget}.repair`;
+
+  const actions = enteringParallel
+    ? assign({
+        round: ({ context }: any) =>
+          isRepairLoopback ? (context as EngineContext).round + 1 : 1,
+      })
     : undefined;
 
   return {
