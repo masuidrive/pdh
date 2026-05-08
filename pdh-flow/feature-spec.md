@@ -128,8 +128,17 @@ Phase H6: drove pdh-c-v2 (full variant) end-to-end with real claude+codex on the
 **Fixture**: `tests/fixtures/v2/smoke-fullflow-divide/`.
 
 **Remaining gaps captured** (deferred):
-- Plan-repair vs code-quality-repair semantics: `buildImplementerPrompt` doesn't distinguish them, so plan_repair edits source instead of refining the plan note. Tracked as a follow-up in chat task #100.
+- ~~Plan-repair vs code-quality-repair semantics~~ — **fixed in follow-up commit `1f77a26`**: `buildReviewerPrompt` gained a `mode="plan"` branch (forbids "X is not yet implemented" findings), and `buildImplementerPrompt` gained `mode="plan_repair"` (refine the plan in current-note.md, do not edit source). Verified by re-running the power ticket: critical_1 returned No Critical/Major and plan_repair did not fire, vs. the previous run that fired plan_repair and let it write source code.
 - `--timeout-ms` CLI flag added (40 min cap) for full-flow runs; default 20 min stays for shorter flows.
+
+**n=6 reproducibility** (Phase H7): drove pdh-c-v2 against six different tickets — divide, power, modulo, clamp, percentage, cartbug. All six completed `terminal` cleanly; `plan_review.critical_1` returned `No Critical/Major` 6/6 (the b-fix holds across ticket shapes); `code_quality_review.repair` never fired (every implementation reached pass on first review). Per-ticket judge cost was 26-31K tokens (~$0.08-0.10).
+
+The cartbug fixture deliberately seeded an `eval()`-based `parse_amount` helper that the new `cart_total` consumes, hoping to trigger code_quality_review.repair via a security finding. Reviewers correctly recognized the RCE risk but scoped it as Minor: the eval was preexisting and the ticket explicitly required reusing `parse_amount`, so it was not a blocking finding for this commit. This is correct behavior under the engine's contract — reviewers were intelligent enough to scope-correctly, not an oversight. Triggering code_quality_review.repair will require either a genuine new defect introduced by the implementer or a ticket whose AC the implementer can plausibly miss.
+
+Externalised actor prompts to `flows/prompts/*.j2` (nunjucks, follow-up commit `1a399aa`) — six templates: assist, planner, implementer (modes: default/plan_repair/code_quality_repair), reviewer (modes: default/plan), guardian-cli, guardian-api. Behaviour-equivalent to the inline prompts; verified by smoke-rerun.
+
+**Smoke fixtures** (all under `tests/fixtures/v2/smoke-*` and excluded from `npm run test:all`):
+`smoke-fullflow-divide`, `smoke-fullflow-power`, `smoke-fullflow-modulo`, `smoke-fullflow-clamp`, `smoke-fullflow-percentage`, `smoke-fullflow-cartbug`.
 
 ### F-005: Web UI v2
 Step-type-driven viewer + gate approver + assist launcher. Renders 4 type-specific affordances:
@@ -158,12 +167,12 @@ v1 docs preserved at `v1/AGENTS.md` + `v1/CLAUDE.md`.
 
 **Trigger**: when ready to publish or distribute.
 
-### F-008: lease integration into v2 engine — **PARTIAL 2026-05-08**
+### F-008: lease integration into v2 engine — **DONE 2026-05-08**
 Phase H4 copied v1 lease modules to `src/engine/leases/{leases,env-lease,locks}.ts` (no v2-from-v1 import; v1 stays a reference). Wired `system_step.action: acquire_lease` and `release_lease` to the copied logic. Threaded `ticketId` through engine context.
 
-Verified end-to-end via unit test (real lease pool config + acquire + .env.lease write + release + re-acquire). 30/30 engine tests pass.
+Phase H7 finished the auto-boundary case: `runEngine` now reads `pdh-flow.config.yaml` at startup; if pools are declared, it acquires the ticket's leases before `machine.start` and releases them in a `finally` block (covers success, failure, and timeout paths). Idempotent with explicit `system_step.acquire_lease` nodes — `acquireForTicket` returns the existing lease for a `ticket_id+pool` pair, so wired-in nodes still work.
 
-**Remaining**: auto-acquire on engine start when `pdh-flow.config.yaml` exists, auto-release on close_finalize without explicit `release_lease` node — currently flow YAML must include explicit acquire/release nodes if needed. Defer until first multi-worktree real-flow run.
+Test coverage extended: `scripts/test-engine-prototype.ts` now seeds a config.yaml into a `gate_system_happy` worktree, pre-acquires a lease for an unrelated ticket, runs the engine, and asserts the ticket's lease was released, `.env.lease` was cleaned up, and the unrelated ticket's lease survives. 35/35 engine tests pass.
 
 ### F-009: assist mode (interactive provider terminal)
 v1's `src/runtime/assist/` provided an interactive terminal mode for stop-state intervention. v2 needs equivalent: a way to attach the user's terminal to a paused engine state and let them drive the provider manually.
