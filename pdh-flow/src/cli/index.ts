@@ -11,12 +11,14 @@ import { cmdCheckFlow } from "./check-flow.ts";
 import { cmdCompileFlow } from "./compile-flow.ts";
 import { cmdRunEngine } from "./run-engine.ts";
 import { cmdServe } from "./serve.ts";
+import { cmdTurnRespond } from "./turn-respond.ts";
 
 const SUBCOMMANDS = {
   "check-flow": cmdCheckFlow,
   "compile-flow": cmdCompileFlow,
   "run-engine": cmdRunEngine,
   serve: cmdServe,
+  "turn-respond": cmdTurnRespond,
   help: cmdHelp,
 } as const;
 
@@ -80,6 +82,13 @@ Subcommands:
                 .pdh-flow/runs state (default port 5170). Approves gates by
                 writing into the same files the engine's await-gate actor
                 polls.
+
+  turn-respond  --run-id <id> --node-id <node> [--worktree <dir>]
+                [--turn N] --text "..." [--option N] [--via cli|web_ui|assist]
+                [--responder <name>] [--list]
+                Deliver an answer to an in-step turn question (F-012). With
+                --list, dumps the pending question files. Without --turn, the
+                lowest unanswered turn number is auto-selected.
 
   help          Show this message.
 
