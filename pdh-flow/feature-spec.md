@@ -69,11 +69,18 @@ No migration helper. v2 starts on a clean slate; existing in-flight v1 tickets a
 - `flows/pdh-c-v2-resume.yaml`: variant of pdh-c-v2 where `code_quality_review.repair` uses `via: resume, resume_node: implement`.
 - `scripts/smoke-real-resume.sh`: runs that flow on a chosen smoke fixture; expects `sessions/implement.json` to be written and the `.repair` commit (when reviewers escalate) to come from a resumed codex session.
 
-**End-to-end smoke not yet run**. Caveats:
-- The cartbug / divide / clamp fixtures rarely trigger `code_quality_review.repair` on their own (per F-010 n=6 reproducibility), so a single smoke run may not actually exercise the resume path. A fixture explicitly designed to make reviewers flag a Critical / Major issue is the right next step before claiming F-001 done. claude `--resume` was verified manually at the CLI level (probe in scratch dir).
+**End-to-end smoke (cartbug, 2026-05-08)**: pdh-c-v2-resume completed `terminal` cleanly, ~10 commits, ~10 min wall clock. All 11 provider sessions (claude assist + 5 plan reviewers + plan_aggregator; codex investigate_plan / implement / 1 critical reviewer / code_quality_aggregator) were captured in `sessions/<nodeId>.json`. Confirmed:
+- claude session_id flows through `--output-format json` envelope on every call (not just guardian).
+- codex thread_id flows through `--json` JSONL `thread.started` event.
+- Engine compiles `via=resume` flat nodes without error.
+
+**Resume invocation itself remains unexercised** because cartbug's reviewers (correctly) returned `pass` on round 1, so `code_quality_review.repair` never fired. claude `--resume` and `codex exec resume` were verified manually at the CLI level (probes in scratch dirs); inside the engine we only know the read+write bookkeeping is correct.
+
+**Caveats not closed by this smoke**:
+- A fixture explicitly designed to make reviewers flag a Critical / Major issue is needed to confirm `--resume` actually fires inside the engine and the resumed codex session lands a useful patch.
 - Three F-001 design concerns from the original deferral remain: re-spawnability after session loss (fallback to fresh covers it), audit ambiguity for resumed rounds (git subject still says `[node/round-N]`; resume is invisible without inspecting `sessions/`), and engine responsibility creep (now owns ephemeral session bookkeeping). All three judged acceptable, but worth tracking if they bite.
 
-**Trigger to flip default**: a fixture-or-real smoke that demonstrates resume produces measurably better repair output than fresh.
+**Trigger to flip default**: a smoke against a deliberately-flawed fixture that exercises the resume invocation, plus a head-to-head comparison vs separate_node showing measurably better repair output.
 
 ### F-002: real provider invocation (drop fixture-only) — **DONE 2026-05-07**
 ~~Current `run-provider.ts` reads fixture meta...~~
