@@ -385,6 +385,7 @@ function renderTurnCardWrap(runId, s) {
           </label>
           <div class="flex gap-2">
             <button type="submit" class="btn btn-info btn-sm">Submit answer</button>
+            <button type="button" class="btn btn-outline btn-sm" id="turn-open-term">Open in terminal</button>
           </div>
           <p id="turn-form-status" class="text-xs opacity-70"></p>
         </form>
@@ -396,6 +397,13 @@ function renderTurnCardWrap(runId, s) {
 function wireTurnForm(runId) {
   const form = document.getElementById("turn-form");
   if (!form) return;
+  const termBtn = document.getElementById("turn-open-term");
+  if (termBtn) {
+    termBtn.addEventListener("click", () => {
+      const nodeId = form.dataset.nodeId;
+      if (nodeId) openTerminalForNode(runId, nodeId);
+    });
+  }
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = new FormData(form);
@@ -601,6 +609,271 @@ function renderError(e) {
     </p>
   `;
 }
+
+// ─── Term-webui modal (xterm.js + WebSocket against /api/assist/ws) ──────
+//
+// Lazy-loads xterm at first open (script tags from /assets/, served by
+// the backend out of node_modules). Mirrors v1's TerminalModal but
+// without React. One modal element is appended to <body> on demand; we
+// reuse it across opens.
+
+let _xtermLoaded = null;
+async function loadXterm() {
+  if (_xtermLoaded) return _xtermLoaded;
+  _xtermLoaded = (async () => {
+    if (window.Terminal && window.FitAddon) return;
+    const load = (src) => new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[data-src="${src}"]`);
+      if (existing) return resolve();
+      const el = document.createElement("script");
+      el.src = src;
+      el.dataset.src = src;
+      el.onload = () => resolve();
+      el.onerror = () => reject(new Error(`failed to load ${src}`));
+      document.head.appendChild(el);
+    });
+    await load("/assets/xterm.js");
+    await load("/assets/xterm-addon-fit.js");
+    await load("/assets/xterm-addon-web-links.js");
+  })();
+  return _xtermLoaded;
+}
+
+const TERM_QUICK_KEYS = [
+  { label: "Enter", seq: "\r", tone: "primary" },
+  { label: "Esc",   seq: "\u001b" },
+  { label: "Tab",   seq: "\t" },
+  { label: "↑",     seq: "\u001b[A" },
+  { label: "↓",     seq: "\u001b[B" },
+  { label: "←",     seq: "\u001b[D" },
+  { label: "→",     seq: "\u001b[C" },
+  { label: "y",     seq: "y" },
+  { label: "n",     seq: "n" },
+  { label: "^C",    seq: "\u0003", title: "send SIGINT" },
+  { label: "^D",    seq: "\u0004", title: "EOF" },
+];
+
+function ensureTermModal() {
+  let dlg = document.getElementById("term-modal");
+  if (dlg) return dlg;
+  dlg = document.createElement("dialog");
+  dlg.id = "term-modal";
+  dlg.className = "modal";
+  dlg.innerHTML = `
+    <div class="modal-box max-w-5xl w-11/12 p-3 sm:p-4 flex flex-col" style="height:min(90vh,720px)">
+      <div class="flex items-center justify-between gap-3 pb-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <h3 id="term-title" class="font-bold truncate">Terminal</h3>
+          <span id="term-status" class="badge badge-ghost badge-sm">connecting</span>
+        </div>
+        <form method="dialog">
+          <button class="btn btn-sm btn-ghost" type="submit">Close</button>
+        </form>
+      </div>
+      <div id="term-host" class="term-host flex-1"></div>
+      <div id="term-quickkeys" class="flex flex-wrap items-center gap-1 pt-2"></div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  `;
+  // Build quick-key buttons in DOM so the control sequences live as
+  // JS data, not encoded in HTML attributes (where escape characters
+  // are awkward and easy to mangle).
+  const bar = dlg.querySelector("#term-quickkeys");
+  for (let i = 0; i < TERM_QUICK_KEYS.length; i++) {
+    const k = TERM_QUICK_KEYS[i];
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-xs " + (k.tone === "primary" ? "btn-primary" : "btn-outline");
+    btn.textContent = k.label;
+    if (k.title) btn.title = k.title;
+    btn.dataset.seqIndex = String(i);
+    bar.appendChild(btn);
+  }
+  document.body.appendChild(dlg);
+  return dlg;
+}
+
+let _termState = null;
+function teardownTerm() {
+  if (!_termState) return;
+  _termState.cancelled = true;
+  if (_termState.reconnectTimer) clearTimeout(_termState.reconnectTimer);
+  try { _termState.ws?.close(); } catch {}
+  try { _termState.term?.dispose(); } catch {}
+  try { _termState.resizeObserver?.disconnect(); } catch {}
+  _termState = null;
+}
+
+async function openTerminalForNode(runId, nodeId) {
+  const dlg = ensureTermModal();
+  const titleEl = dlg.querySelector("#term-title");
+  const statusEl = dlg.querySelector("#term-status");
+  const hostEl = dlg.querySelector("#term-host");
+  hostEl.innerHTML = "";
+  titleEl.textContent = `${nodeId} · ${runId}`;
+  setTermStatus(statusEl, "connecting");
+  if (!dlg.open) dlg.showModal();
+  // Reset prior state.
+  teardownTerm();
+
+  // 1. Ask backend to spawn (or reuse) a session.
+  let sessionInfo;
+  try {
+    const r = await fetch("/api/assist/open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ run_id: runId, node_id: nodeId }),
+    });
+    sessionInfo = await r.json();
+    if (!r.ok) throw new Error(sessionInfo.error ?? `HTTP ${r.status}`);
+  } catch (e) {
+    setTermStatus(statusEl, "failed");
+    hostEl.innerHTML = `<div class="alert alert-error m-2">open failed: ${escapeHtml(e.message ?? String(e))}</div>`;
+    return;
+  }
+  if (sessionInfo.title) titleEl.textContent = `${sessionInfo.title} · ${runId}`;
+
+  // 2. Load xterm and create the terminal.
+  try {
+    await loadXterm();
+  } catch (e) {
+    setTermStatus(statusEl, "failed");
+    hostEl.innerHTML = `<div class="alert alert-error m-2">xterm load failed: ${escapeHtml(e.message ?? String(e))}</div>`;
+    return;
+  }
+  const Terminal = window.Terminal;
+  const FitAddon = window.FitAddon?.FitAddon ?? window.FitAddon;
+  const WebLinksAddon = window.WebLinksAddon?.WebLinksAddon ?? window.WebLinksAddon;
+  if (!Terminal || !FitAddon) {
+    setTermStatus(statusEl, "failed");
+    hostEl.textContent = "xterm globals not found after script load";
+    return;
+  }
+  const term = new Terminal({
+    convertEol: true,
+    theme: { background: "#1f1d18", foreground: "#f5e6c8" },
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+    fontSize: 13,
+    cursorBlink: true,
+  });
+  const fit = new FitAddon();
+  term.loadAddon(fit);
+  if (WebLinksAddon) try { term.loadAddon(new WebLinksAddon()); } catch {}
+  term.open(hostEl);
+  try { fit.fit(); } catch {}
+
+  // 3. Connect WS with reconnect.
+  const state = {
+    cancelled: false,
+    term,
+    fit,
+    ws: null,
+    reconnectTimer: null,
+    attempt: 0,
+    sessionId: sessionInfo.sessionId,
+    resizeObserver: null,
+  };
+  _termState = state;
+
+  const ro = new ResizeObserver(() => {
+    if (!state.term) return;
+    try { state.fit.fit(); } catch {}
+    if (state.ws?.readyState === WebSocket.OPEN) {
+      state.ws.send(JSON.stringify({ type: "resize", cols: state.term.cols, rows: state.term.rows }));
+    }
+  });
+  ro.observe(hostEl);
+  state.resizeObserver = ro;
+
+  term.onData((data) => {
+    if (state.ws?.readyState === WebSocket.OPEN) {
+      state.ws.send(JSON.stringify({ type: "input", data }));
+    }
+  });
+
+  function connect() {
+    if (state.cancelled) return;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const url = `${protocol}//${window.location.host}/api/assist/ws?session=${encodeURIComponent(state.sessionId)}`;
+    const ws = new WebSocket(url);
+    state.ws = ws;
+    ws.addEventListener("open", () => {
+      state.attempt = 0;
+      setTermStatus(statusEl, "running");
+      if (term.cols && term.rows) {
+        ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+      }
+      term.focus();
+    });
+    ws.addEventListener("message", (event) => {
+      let payload;
+      try { payload = JSON.parse(event.data); } catch { return; }
+      if (!payload) return;
+      if (payload.type === "snapshot") {
+        if (payload.title) titleEl.textContent = payload.title;
+        if (payload.status) setTermStatus(statusEl, payload.status);
+        if (payload.data) term.write(payload.data);
+      } else if (payload.type === "output" && typeof payload.data === "string") {
+        term.write(payload.data);
+      } else if (payload.type === "exit") {
+        setTermStatus(statusEl, "exited");
+        term.writeln("");
+        term.writeln(`[assist session exited code=${payload.exitCode ?? "?"}]`);
+      } else if (payload.type === "error") {
+        term.writeln("");
+        term.writeln(`[assist error] ${payload.message ?? "unknown"}`);
+      }
+    });
+    ws.addEventListener("close", () => {
+      if (state.cancelled) return;
+      const cur = statusEl.textContent;
+      if (cur !== "exited") setTermStatus(statusEl, "reconnecting");
+      const delay = Math.min(10_000, 500 * 2 ** Math.min(state.attempt, 5));
+      state.attempt += 1;
+      if (state.attempt === 1) {
+        term.writeln("");
+        term.writeln("[connection lost — reconnecting...]");
+      }
+      state.reconnectTimer = setTimeout(() => { if (!state.cancelled) connect(); }, delay);
+    });
+    ws.addEventListener("error", () => { /* close handler runs reconnect */ });
+  }
+  connect();
+
+  // 4. Quick keys: map click → control sequence from TERM_QUICK_KEYS.
+  const quickHandler = (e) => {
+    const btn = e.target.closest("button[data-seq-index]");
+    if (!btn) return;
+    const idx = Number(btn.dataset.seqIndex);
+    const k = TERM_QUICK_KEYS[idx];
+    if (!k) return;
+    if (state.ws?.readyState === WebSocket.OPEN && k.seq) {
+      state.ws.send(JSON.stringify({ type: "input", data: k.seq }));
+      term.focus();
+    }
+  };
+  dlg.addEventListener("click", quickHandler, { passive: true });
+  state.quickHandler = quickHandler;
+
+  // 5. On close, tear everything down.
+  dlg.addEventListener("close", () => {
+    teardownTerm();
+  }, { once: true });
+}
+
+function setTermStatus(el, s) {
+  if (!el) return;
+  el.textContent = s;
+  el.className = "badge badge-sm " + (
+    s === "running" ? "badge-info" :
+    s === "exited" ? "badge-neutral" :
+    s === "failed" ? "badge-error" :
+    s === "reconnecting" ? "badge-warning" :
+    "badge-ghost"
+  );
+}
+
+window.openTerminalForNode = openTerminalForNode;
 
 // ─── Boot ─────────────────────────────────────────────────────────────────
 

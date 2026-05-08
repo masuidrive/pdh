@@ -26,6 +26,7 @@ import {
 } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createAssistManager, type AssistManager } from "./assist-terminal.ts";
 import { getValidator, SCHEMA_IDS, formatErrors } from "../engine/validate.ts";
 
 export interface ServeOptions {
@@ -46,12 +47,21 @@ const DEFAULT_STATIC_DIR = resolve(__dirname, "..", "..", "web");
 
 export function startWebServer(opts: ServeOptions): Server {
   const staticDir = opts.staticDir ?? DEFAULT_STATIC_DIR;
+  const assist = createAssistManager({ worktreePath: opts.worktreePath });
   const server = createServer((req, res) => {
-    handleRequest(req, res, { ...opts, staticDir }).catch((err) => {
+    handleRequest(req, res, { ...opts, staticDir }, assist).catch((err) => {
       process.stderr.write(`[web] handler error: ${err instanceof Error ? err.message : String(err)}\n`);
       sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
     });
   });
+  // Wire WS upgrade for /api/assist/ws.
+  server.on("upgrade", (req, socket, head) => {
+    if (!assist.handleUpgrade(req, socket, head)) {
+      socket.destroy();
+    }
+  });
+  // Best-effort cleanup on server close.
+  server.on("close", () => assist.closeAll());
   const host = opts.host ?? "127.0.0.1";
   server.listen(opts.port, host, () => {
     const display = host === "0.0.0.0" || host === "::"
@@ -68,6 +78,7 @@ async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
   opts: Required<Pick<ServeOptions, "worktreePath" | "port" | "staticDir">>,
+  assist: AssistManager,
 ): Promise<void> {
   const path = (req.url ?? "/").split("?")[0];
 
@@ -133,8 +144,47 @@ async function handleRequest(
     return handleRunsListSSE(req, res, opts.worktreePath);
   }
 
+  // ── Assist terminal session create (F-009 + term-webui) ──────────────
+  if (path === "/api/assist/open" && req.method === "POST") {
+    const body = await readBody(req);
+    let parsed: { run_id?: string; node_id?: string; force?: boolean } = {};
+    try { parsed = JSON.parse(body); } catch {}
+    const runId = typeof parsed.run_id === "string" ? parsed.run_id : "";
+    const nodeId = typeof parsed.node_id === "string" ? parsed.node_id : "";
+    if (!runId || !nodeId) {
+      return sendJson(res, 400, { error: "run_id and node_id are required" });
+    }
+    const r = assist.openForNode({ runId, nodeId, force: !!parsed.force });
+    if ("error" in r) return sendJson(res, 404, r);
+    return sendJson(res, 200, r);
+  }
+
+  // ── xterm assets (served from node_modules at runtime; v1 pattern) ────
+  if (path === "/assets/xterm.js" && req.method === "GET") {
+    return serveNodeModuleAsset(res, "@xterm/xterm/lib/xterm.js", "application/javascript; charset=utf-8");
+  }
+  if (path === "/assets/xterm.css" && req.method === "GET") {
+    return serveNodeModuleAsset(res, "@xterm/xterm/css/xterm.css", "text/css; charset=utf-8");
+  }
+  if (path === "/assets/xterm-addon-fit.js" && req.method === "GET") {
+    return serveNodeModuleAsset(res, "@xterm/addon-fit/lib/addon-fit.js", "application/javascript; charset=utf-8");
+  }
+  if (path === "/assets/xterm-addon-web-links.js" && req.method === "GET") {
+    return serveNodeModuleAsset(res, "@xterm/addon-web-links/lib/addon-web-links.js", "application/javascript; charset=utf-8");
+  }
+
   // ── Static ────────────────────────────────────────────────────────────
   return serveStatic(res, opts.staticDir, path);
+}
+
+const REPO_ROOT = resolve(__dirname, "..", "..");
+function serveNodeModuleAsset(res: ServerResponse, rel: string, mime: string): void {
+  const target = join(REPO_ROOT, "node_modules", rel);
+  if (!existsSync(target)) {
+    return sendJson(res, 404, { error: "asset not found", rel });
+  }
+  res.writeHead(200, { "Content-Type": mime, "Cache-Control": "public, max-age=3600" });
+  res.end(readFileSync(target));
 }
 
 // ─── Ticket discovery (F-011/H10-8) ──────────────────────────────────────
