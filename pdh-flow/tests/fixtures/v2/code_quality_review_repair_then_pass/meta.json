@@ -1,6 +1,6 @@
 {
   "scenario": "code_quality_review_repair_then_pass",
-  "description": "Round 1 fails (1 critical finding), repair runs, round 2 passes. Engine should produce: 5 reviewer + 1 aggregate (round 1 repair_needed) + 1 repair + 5 reviewer + 1 aggregate (round 2 pass) = 13 commits, then advance to final_verification.",
+  "description": "Round 1 fails (1 critical finding), repair runs, round 2 passes. Post-F-011/H10-3 (D-003 dropped), reviewers stage their note diffs and aggregator commits fold them in. Engine adds: aggregate(round 1 repair_needed) + repair + aggregate(round 2 pass) = 3 commits on top of the seeded init+setup pair.",
   "starting_node": "code_quality_review",
   "flow_id": "pdh-c-v2",
   "variant": "full",
@@ -10,18 +10,8 @@
   ],
   "expected_terminal_node": "final_verification",
   "expected_commits": [
-    { "subject_pattern": "^\\[code_quality_review\\.devils_advocate_1/round-1\\] " },
-    { "subject_pattern": "^\\[code_quality_review\\.devils_advocate_2/round-1\\] " },
-    { "subject_pattern": "^\\[code_quality_review\\.code_reviewer_1/round-1\\] " },
-    { "subject_pattern": "^\\[code_quality_review\\.code_reviewer_2/round-1\\] " },
-    { "subject_pattern": "^\\[code_quality_review\\.critical_1/round-1\\] " },
     { "subject_pattern": "^\\[code_quality_review\\.aggregate/round-1\\] " },
     { "subject_pattern": "^\\[code_quality_review\\.repair/round-1\\] " },
-    { "subject_pattern": "^\\[code_quality_review\\.devils_advocate_1/round-2\\] " },
-    { "subject_pattern": "^\\[code_quality_review\\.devils_advocate_2/round-2\\] " },
-    { "subject_pattern": "^\\[code_quality_review\\.code_reviewer_1/round-2\\] " },
-    { "subject_pattern": "^\\[code_quality_review\\.code_reviewer_2/round-2\\] " },
-    { "subject_pattern": "^\\[code_quality_review\\.critical_1/round-2\\] " },
     { "subject_pattern": "^\\[code_quality_review\\.aggregate/round-2\\] " }
   ],
   "node_outputs": {

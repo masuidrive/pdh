@@ -1,6 +1,6 @@
 {
   "scenario": "code_quality_review_round1_pass",
-  "description": "Implementation passes code_quality_review on the first round (5 reviewers all OK, aggregator decision=pass). Engine should advance to final_verification with 6 commits in this stage (5 reviewer + 1 aggregate).",
+  "description": "Implementation passes code_quality_review on the first round (5 reviewers all OK, aggregator decision=pass). Engine should advance to final_verification. Post-F-011/H10-3 (D-003 dropped), reviewers stage their note diffs and the aggregate commit folds them in — so this scenario adds exactly 1 commit on top of the seeded init+setup pair.",
   "starting_node": "code_quality_review",
   "flow_id": "pdh-c-v2",
   "variant": "full",
@@ -9,11 +9,6 @@
   ],
   "expected_terminal_node": "final_verification",
   "expected_commits": [
-    { "subject_pattern": "^\\[code_quality_review\\.devils_advocate_1/round-1\\] " },
-    { "subject_pattern": "^\\[code_quality_review\\.devils_advocate_2/round-1\\] " },
-    { "subject_pattern": "^\\[code_quality_review\\.code_reviewer_1/round-1\\] " },
-    { "subject_pattern": "^\\[code_quality_review\\.code_reviewer_2/round-1\\] " },
-    { "subject_pattern": "^\\[code_quality_review\\.critical_1/round-1\\] " },
     { "subject_pattern": "^\\[code_quality_review\\.aggregate/round-1\\] " }
   ],
   "node_outputs": {

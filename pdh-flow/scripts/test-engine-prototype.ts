@@ -210,10 +210,11 @@ section("scenario: code_quality_review_round1_pass");
     cp.missing.length > 0 ? "missing patterns: " + cp.missing.join("; ") : undefined,
   );
 
-  // Should be 6 review-related commits (5 reviewer + 1 aggregate) plus 1 init seed.
+  // Post-H10-3: 1 aggregate commit (folds 5 staged reviewer note diffs)
+  // plus init + setup. Total >= 3.
   assert(
-    `total commits >= 6 (got ${cp.total})`,
-    cp.total >= 6,
+    `total commits >= 3 (got ${cp.total})`,
+    cp.total >= 3,
   );
 
   // Judgement file exists + validates
@@ -290,10 +291,11 @@ section("scenario: code_quality_review_repair_then_pass");
     cp.ok,
     cp.missing.length > 0 ? "missing patterns: " + cp.missing.join("; ") : undefined,
   );
-  // 13 expected commits + 1 init seed
+  // Post-H10-3: aggregate(round 1) + repair + aggregate(round 2) = 3
+  // engine commits, plus init + setup. Total >= 5.
   assert(
-    `total commits >= 13 (got ${cp.total})`,
-    cp.total >= 13,
+    `total commits >= 5 (got ${cp.total})`,
+    cp.total >= 5,
   );
 
   const jv = checkJudgementValidity(worktree, `run-test-code_quality_review_repair_then_pass-1`);

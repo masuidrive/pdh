@@ -120,7 +120,7 @@ export const runProvider = fromPromise<
     noteSection = `## ${nodeId} (round ${round})\n\n${text}\n`;
   }
 
-  // ── Append note + commit (common to both modes) ────────────────────────
+  // ── Append note + (maybe) commit ──────────────────────────────────────
   if (noteSection) {
     appendFileSync(
       join(worktreePath, "current-note.md"),
@@ -128,27 +128,42 @@ export const runProvider = fromPromise<
     );
   }
   run("git", ["add", "-A"], worktreePath);
-  const subject = `[${nodeId}/${roundKey}] ${summary}`;
-  const commitResult = run(
-    "git",
-    [
-      "-c",
-      "user.email=engine@pdh-flow.local",
-      "-c",
-      "user.name=pdh-flow-engine",
-      "commit",
-      "-m",
-      subject,
-      "--allow-empty",
-    ],
-    worktreePath,
-  );
-  if (commitResult.status !== 0) {
-    throw new Error(
-      `provider actor: git commit failed for ${nodeId} ${roundKey}: ${commitResult.stderr}`,
+
+  // F-011/H10-3: drop D-003. Reviewer nodes inside a review_loop
+  // parallel_group only stage their note diff; the next aggregator
+  // (or repair) commit picks them up. Net effect: a clean run produces
+  // ~8 commits instead of ~16 — bisect granularity is preserved at
+  // the meaningful-step level (assist / investigate_plan / plan_review
+  // aggregate / plan_gate / implement / code_quality_review aggregate /
+  // final_verification + close), and reviewer audit lives in the note's
+  // section headers (which the aggregator commit folds in).
+  const skipCommit = isReviewerInLoop(nodeId);
+  let sha: string;
+  if (skipCommit) {
+    sha = run("git", ["rev-parse", "HEAD"], worktreePath).stdout.trim();
+  } else {
+    const subject = `[${nodeId}/${roundKey}] ${summary}`;
+    const commitResult = run(
+      "git",
+      [
+        "-c",
+        "user.email=engine@pdh-flow.local",
+        "-c",
+        "user.name=pdh-flow-engine",
+        "commit",
+        "-m",
+        subject,
+        "--allow-empty",
+      ],
+      worktreePath,
     );
+    if (commitResult.status !== 0) {
+      throw new Error(
+        `provider actor: git commit failed for ${nodeId} ${roundKey}: ${commitResult.stderr}`,
+      );
+    }
+    sha = run("git", ["rev-parse", "HEAD"], worktreePath).stdout.trim();
   }
-  const sha = run("git", ["rev-parse", "HEAD"], worktreePath).stdout.trim();
 
   return {
     status: "completed",
@@ -165,6 +180,19 @@ interface PromptBuilderInput {
   round: number;
   role: string;
   promptSpec: { intent?: string; checkpoints?: string[]; note_section?: string };
+}
+
+/**
+ * True when this provider_step is a reviewer member of a review_loop's
+ * parallel_group. F-011/H10-3: such nodes stage their note diff instead
+ * of producing their own commit; the aggregator's commit folds them in.
+ *
+ * Reviewer ids follow the macro-expanded pattern `<parent>.<role>_<i>`,
+ * e.g. `plan_review.devils_advocate_1`. Aggregator (`.aggregate`) and
+ * repair (`.repair`) deliberately don't match — they keep committing.
+ */
+function isReviewerInLoop(nodeId: string): boolean {
+  return /\.[a-z][a-z0-9_]*_\d+$/.test(nodeId);
 }
 
 /** True when the role / node implies file edits (implementer + repair). */
