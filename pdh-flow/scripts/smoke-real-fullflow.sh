@@ -11,12 +11,15 @@
 # returns immediately. INTENTIONALLY excluded from `npm run test:all` per the
 # "no real providers in tests" rule.
 #
-# Cost: ~12-20 LLM calls (claude subscription + codex subscription).
-# Time: ~15-30 min wall clock.
+# Cost: ~12-20 LLM calls (claude subscription + codex subscription) plus
+# a handful of Anthropic API calls for the judge (~$0.10 / ticket).
+# Time: ~12-30 min wall clock.
 #
 # Usage:
-#   bash scripts/smoke-real-fullflow.sh
-#   KEEP_WORKTREE=1 bash scripts/smoke-real-fullflow.sh   # leave artifacts
+#   bash scripts/smoke-real-fullflow.sh                              # default fixture (smoke-fullflow-divide)
+#   bash scripts/smoke-real-fullflow.sh smoke-fullflow-power         # named fixture
+#   FIXTURE=smoke-fullflow-power bash scripts/smoke-real-fullflow.sh # via env
+#   KEEP_WORKTREE=1 bash scripts/smoke-real-fullflow.sh              # leave artifacts
 
 set -euo pipefail
 
@@ -37,11 +40,16 @@ if ! command -v codex >/dev/null 2>&1; then
   exit 1
 fi
 
-INPUT_FIXTURE="$REPO/tests/fixtures/v2/smoke-fullflow-divide/input"
+FIXTURE_NAME="${1:-${FIXTURE:-smoke-fullflow-divide}}"
+INPUT_FIXTURE="$REPO/tests/fixtures/v2/$FIXTURE_NAME/input"
 if [ ! -d "$INPUT_FIXTURE" ]; then
   echo "fixture input dir missing: $INPUT_FIXTURE" >&2
+  echo "(available fixtures with smoke- prefix:" >&2
+  ls "$REPO/tests/fixtures/v2/" 2>/dev/null | grep '^smoke-' >&2 || true
+  echo ")" >&2
   exit 1
 fi
+echo "[fullflow] fixture: $FIXTURE_NAME"
 
 WORKTREE=$(mktemp -d -t pdh-fullflow-XXXXXX)
 echo "[fullflow] worktree: $WORKTREE"
@@ -64,6 +72,15 @@ cp -r "$INPUT_FIXTURE/." "$WORKTREE/"
 )
 
 RUN_ID="fullflow-$(date +%s)"
+
+# Pull the ticket_id from the fixture's frontmatter so a single runner can
+# drive any fixture without code edits.
+TICKET_ID=$(awk '/^ticket_id:/ { print $2; exit }' "$INPUT_FIXTURE/current-ticket.md")
+if [ -z "$TICKET_ID" ]; then
+  echo "could not parse ticket_id from $INPUT_FIXTURE/current-ticket.md" >&2
+  exit 1
+fi
+echo "[fullflow] ticket: $TICKET_ID"
 
 # Pre-create gate approval files so the gate poller resolves immediately when
 # the engine reaches plan_gate / close_gate. This stands in for the real CLI /
@@ -100,7 +117,7 @@ echo "[fullflow] running engine (real claude+codex, ~15-30 min)..."
 # 40 min hard cap. The default in run.ts is 20 min; this flow is slower because
 # review_loop dispatches multiple reviewers per round.
 node src/cli/index.ts run-engine \
-  --ticket 260508-093000-divide-fn \
+  --ticket "$TICKET_ID" \
   --flow pdh-c-v2 \
   --variant full \
   --worktree "$WORKTREE" \
