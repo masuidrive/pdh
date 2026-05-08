@@ -40,6 +40,7 @@ import {
   type JudgeProviderConfig,
 } from "../judge/api-judge.ts";
 import { renderPrompt } from "../prompts/render.ts";
+import { assertTicketUnmodified, hashTicket } from "../ticket-guard.ts";
 
 export interface GuardianActorInput {
   nodeId: string;
@@ -99,6 +100,12 @@ export const runGuardian = fromPromise<
     };
   }
 
+  // F-011/H10-5: capture ticket file hash before any guardian work so
+  // we can detect unauthorized writes. Aggregators (.aggregate) ARE
+  // permitted to edit the ticket (Out of scope, H10-6); other guardians
+  // (e.g. final_verification) are NOT.
+  const ticketPreHash = hashTicket(worktreePath);
+
   // ── Source guardian output ───────────────────────────────────────────
   const fixtureEntry = input.fixtureMeta?.node_outputs?.[nodeId]?.[roundKey];
   const fixtureGuardian = fixtureEntry?.guardian_output as GuardianOutput | undefined;
@@ -154,6 +161,16 @@ export const runGuardian = fromPromise<
       `${nodeId}: guardian did not consume reviewer outputs: ${missing.join(", ")}`,
     );
   }
+
+  // F-011/H10-5: only aggregator guardian nodes (.aggregate) may have
+  // touched the ticket file (Out of scope writes). Non-aggregator
+  // guardians (e.g. final_verification) are read-only with respect to
+  // the ticket.
+  assertTicketUnmodified({
+    worktreePath,
+    preHash: ticketPreHash,
+    actor: { kind: "guardian", nodeId, role: input.role },
+  });
 
   // ── Append note + commit ────────────────────────────────────────────
   ensureGit(worktreePath);

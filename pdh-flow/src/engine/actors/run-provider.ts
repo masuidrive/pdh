@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { invokeProvider, type ProviderName } from "../providers/index.ts";
 import { renderPrompt } from "../prompts/render.ts";
+import { assertTicketUnmodified, hashTicket } from "../ticket-guard.ts";
 
 export interface ProviderActorInput {
   nodeId: string;
@@ -69,6 +70,10 @@ export const runProvider = fromPromise<
 
   ensureGit(worktreePath);
 
+  // F-011/H10-5: capture ticket file hash before provider/fixture work
+  // so we can reject any actor that tries to edit it without authorization.
+  const ticketPreHash = hashTicket(worktreePath);
+
   let summary: string;
   let noteSection: string;
 
@@ -119,6 +124,15 @@ export const runProvider = fromPromise<
     summary = extractSummary(text, `${nodeId} ${roundKey}`);
     noteSection = `## ${nodeId} (round ${round})\n\n${text}\n`;
   }
+
+  // F-011/H10-5: providers (reviewer / implement / repair / assist /
+  // planner) MUST NOT modify the ticket. Catch any LLM-tool-use slip
+  // before we stage / commit so the violation surfaces clearly.
+  assertTicketUnmodified({
+    worktreePath,
+    preHash: ticketPreHash,
+    actor: { kind: "provider", nodeId, role: input.role },
+  });
 
   // ── Append note + (maybe) commit ──────────────────────────────────────
   if (noteSection) {
