@@ -263,11 +263,27 @@ src/engine/run-provider.ts
 **Adoption shape (when implemented)**:
 - Add `request_human_input` to provider tool schemas; semantic validation (engine checks the question has a non-empty `question` and at least 0..N `options` of the declared shape).
 - New ephemeral path: `.pdh-flow/runs/<runId>/turns/<nodeId>/turn-NNN-{question,answer}.json`.
-- Provider abstraction grows `resumeSession(sessionId, userMessage)`; both claude and codex CLIs support resume.
+- Provider abstraction grows `resumeSession(sessionId, userMessage)`; both claude and codex CLIs support resume (verified 2026-05-08).
 - Web UI gains a turn-aware view (current `gate-card` generalises).
 - Replay fixture format gains `node_outputs[nodeId][round-N].turns: [{question, answer}]`.
 
-**Trigger to revisit**: first real flow where a provider hits a decision it cannot reasonably make alone *and* the static gate would be wrong (too late, too coarse, or in the wrong actor's hands).
+**K-phase plan (when work starts)**:
+
+1. **K1 — output envelope schema**: define a small `provider-step-output.schema.json` with `kind: "final" | "ask"`, plus `final` / `ask` bodies. Used as the `--json-schema` for claude and `--output-schema` for codex on the *initial* call. Define `turn-question.schema.json` and `turn-answer.schema.json` for the persisted turn files.
+2. **K2 — turn loop in `run-provider.ts`**: opt-in via a flow-node flag (e.g. `provider_step.enable_user_input: true`). Wrap the existing single-shot invocation in a loop that:
+   1. invokes provider (initial or `resumeSessionId` from prior turn),
+   2. parses output as envelope,
+   3. on `kind: "final"` → break, append to note, commit (single commit per step, unchanged),
+   4. on `kind: "ask"` → write `turns/<nodeId>/turn-NNN-question.json`, poll for `turn-NNN-answer.json` (reuse pattern from `await-gate.ts`), then loop with the answer text as the next user message.
+   The session id captured per turn is updated under `sessions/<nodeId>.json` each time (claude returns a new session id per call; codex's stays the same — both code paths handle this by always overwriting).
+3. **K3 — fixture + replay coverage**: extend `node_outputs[nodeId][round-N]` to optionally carry a `turns: [{question, answer}]` array. Replay mode walks the array, writing question/answer files in lockstep so the loop completes without real CLI calls.
+4. **K4 — answer delivery CLI**: `pdh-flow turn respond <runId> <nodeId> [--text "..."]` (and JSON via stdin for structured options). Symmetric with `gate respond`.
+5. **K5 — Web UI**: detect active turn question files in the run dir; render the current `gate-card` UI but with `turn`-aware fields. POST writes the answer file. Keep the SSE pattern from F-005.
+6. **K6 — real-LLM smoke**: a fixture that nudges the provider into asking at least once. Initial provider role is implementer (codex) since it has the most natural decision-points; eventual coverage extends to assist / planner.
+
+**Known constraint discovered while landing F-001 (2026-05-08)**: `codex exec resume` does not accept `--output-schema`, so a resumed turn cannot re-impose the envelope schema on codex; the LLM must remember the format from the initial system prompt. This is fragile if the answer is long / distracts the model. Two mitigations available without changing scope: (a) keep K2 claude-only initially (claude `--resume` accepts `--json-schema`); (b) post-parse codex's resume response and, on schema miss, send a sentinel "please re-emit your last response in the envelope format" follow-up turn. Both deferrable until K6 reveals which is needed.
+
+**Trigger to start**: first real flow where a provider hits a decision it cannot reasonably make alone *and* the static gate would be wrong (too late, too coarse, or in the wrong actor's hands).
 
 ---
 
