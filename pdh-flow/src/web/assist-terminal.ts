@@ -55,11 +55,8 @@ interface AssistSession {
   updatedAt: number;
   clients: Set<WebSocket>;
   /** Cleanup hook for the submission watcher (turn answer / gate decision
-   *  file appearance). Stopped on session exit / closeAll. */
+   *  file mtime > baseline). Stopped on session exit / closeAll. */
   submissionWatcher?: () => void;
-  /** True once the watcher has already broadcast a "submitted" event;
-   *  prevents repeat firing when the same file lingers across polls. */
-  submissionBroadcast?: boolean;
 }
 
 export interface OpenResult {
@@ -458,25 +455,20 @@ function startSubmissionWatcher(
   broadcastFn: (s: AssistSession, payload: unknown) => void,
 ): () => void {
   const intervalMs = 500;
-  // Snapshot what's already there at session open so we only fire on
-  // *new* files (e.g. previous turn's answer file shouldn't re-trigger).
-  const existing = new Set<string>();
-  if (kind === "turn") {
-    const dir = join(
-      worktreePath,
-      ".pdh-flow",
-      "runs",
-      runId,
-      "turns",
-      nodeId,
-    );
-    try {
-      for (const f of readdirSync(dir)) {
-        if (/^turn-\d{3}-answer\.json$/.test(f)) existing.add(f);
-      }
-    } catch { /* dir may not exist yet */ }
-  }
-  // Gate is a single file path; existing[set] == size 0 if no file.
+  // Track mtime, not just file existence: the user may dismiss the
+  // first banner ("No, stay") and then ask claude to revise via the
+  // wrapper. The second exec rewrites the same file (turn-NNN-answer
+  // for the active turn, or the single gate file). We need to fire
+  // again on every new write.
+  let baselineMtime = Date.now();
+  const turnsDir = join(
+    worktreePath,
+    ".pdh-flow",
+    "runs",
+    runId,
+    "turns",
+    nodeId,
+  );
   const gatePath = join(
     worktreePath,
     ".pdh-flow",
@@ -485,36 +477,48 @@ function startSubmissionWatcher(
     "gates",
     `${nodeId}.json`,
   );
-  let gateExisted = false;
-  if (kind === "gate") {
-    try { gateExisted = statSync(gatePath).isFile(); } catch { gateExisted = false; }
+
+  // Establish a baseline: the latest mtime of any pre-existing
+  // answer/gate file at session open. Anything newer counts as fresh.
+  if (kind === "turn") {
+    try {
+      for (const f of readdirSync(turnsDir)) {
+        if (!/^turn-\d{3}-answer\.json$/.test(f)) continue;
+        const t = statSync(join(turnsDir, f)).mtimeMs;
+        if (t > baselineMtime) baselineMtime = t;
+      }
+    } catch { /* dir may not exist yet */ }
+  } else {
+    try {
+      const t = statSync(gatePath).mtimeMs;
+      if (t > baselineMtime) baselineMtime = t;
+    } catch { /* file doesn't exist yet */ }
   }
 
   const tick = (): void => {
-    if (session.submissionBroadcast) return;
     if (kind === "turn") {
-      const dir = join(
-        worktreePath,
-        ".pdh-flow",
-        "runs",
-        runId,
-        "turns",
-        nodeId,
-      );
-      let listing: string[] = [];
-      try { listing = readdirSync(dir); } catch { listing = []; }
-      for (const f of listing) {
-        if (/^turn-\d{3}-answer\.json$/.test(f) && !existing.has(f)) {
-          session.submissionBroadcast = true;
-          broadcastFn(session, { type: "submitted", kind: "turn", filename: f });
-          return;
+      let latestMtime = 0;
+      let latestFile: string | null = null;
+      try {
+        for (const f of readdirSync(turnsDir)) {
+          if (!/^turn-\d{3}-answer\.json$/.test(f)) continue;
+          const t = statSync(join(turnsDir, f)).mtimeMs;
+          if (t > latestMtime) { latestMtime = t; latestFile = f; }
         }
+      } catch { /* ignore */ }
+      if (latestMtime > baselineMtime + 1) {
+        baselineMtime = latestMtime;
+        broadcastFn(session, {
+          type: "submitted",
+          kind: "turn",
+          filename: latestFile,
+        });
       }
     } else {
-      let nowExists = false;
-      try { nowExists = statSync(gatePath).isFile(); } catch { nowExists = false; }
-      if (nowExists && !gateExisted) {
-        session.submissionBroadcast = true;
+      let mt = 0;
+      try { mt = statSync(gatePath).mtimeMs; } catch { /* missing */ }
+      if (mt > baselineMtime + 1) {
+        baselineMtime = mt;
         broadcastFn(session, { type: "submitted", kind: "gate" });
       }
     }
