@@ -132,6 +132,10 @@ export interface ProviderStepNode {
    * Lower-case dotted path. Dots indicate parent.child relationship (e.g. parallel-group member). Underscores join words within a segment.
    */
   resume_session_from?: string;
+  /**
+   * F-012 (in-step turn loop): when true, this provider_step uses the provider-step-output envelope (kind: final | ask). On `ask`, the engine writes a turn-question.json and polls for turn-answer.json before resuming the provider session. Default false — provider output is unconstrained free text and the step is a single-shot.
+   */
+  enable_user_input?: boolean;
 }
 /**
  * Prompt-author hints. Engine extends this with system context (current state, evidence refs) when invoking the provider. Open shape on purpose: prompts are domain-specific.

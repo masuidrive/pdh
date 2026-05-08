@@ -29,6 +29,7 @@ export const SCHEMA_IDS = {
   flow: "https://pdh-flow.dev/schemas/flow.schema.json",
   flatFlow: "https://pdh-flow.dev/schemas/flat-flow.schema.json",
   providerOutput: "https://pdh-flow.dev/schemas/provider-output.schema.json",
+  providerStepOutput: "https://pdh-flow.dev/schemas/provider-step-output.schema.json",
   guardianOutput: "https://pdh-flow.dev/schemas/guardian-output.schema.json",
   gateOutput: "https://pdh-flow.dev/schemas/gate-output.schema.json",
   systemOutput: "https://pdh-flow.dev/schemas/system-output.schema.json",
@@ -38,6 +39,8 @@ export const SCHEMA_IDS = {
   engineEvent: "https://pdh-flow.dev/schemas/engine-event.schema.json",
   progressEvent: "https://pdh-flow.dev/schemas/progress-event.schema.json",
   snapshot: "https://pdh-flow.dev/schemas/snapshot.schema.json",
+  turnQuestion: "https://pdh-flow.dev/schemas/turn-question.schema.json",
+  turnAnswer: "https://pdh-flow.dev/schemas/turn-answer.schema.json",
 } as const;
 
 export type SchemaId = (typeof SCHEMA_IDS)[keyof typeof SCHEMA_IDS];

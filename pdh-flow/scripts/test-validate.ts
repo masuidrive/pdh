@@ -343,6 +343,94 @@ nodes:
   }
 }
 
+// ─── 9c. F-012 turn schemas (provider-step-output / turn-question / turn-answer) ─
+section("F-012 turn schemas");
+{
+  // provider-step-output: final shape valid
+  {
+    const r = v.validate(SCHEMA_IDS.providerStepOutput, {
+      kind: "final",
+      final: { summary: "done", details: "all good" },
+    });
+    assert("provider-step-output kind=final + final body → ok", r.ok === true);
+  }
+  // provider-step-output: ask shape valid (with options + context)
+  {
+    const r = v.validate(SCHEMA_IDS.providerStepOutput, {
+      kind: "ask",
+      ask: {
+        question: "Should I keep the eval-based parser?",
+        options: [
+          { label: "Keep", description: "stays as-is" },
+          { label: "Replace", description: "use ast.literal_eval" },
+        ],
+      },
+    });
+    assert("provider-step-output kind=ask + ask body → ok", r.ok === true);
+  }
+  // provider-step-output: kind=final without `final` body → invalid
+  {
+    const r = v.validate(SCHEMA_IDS.providerStepOutput, {
+      kind: "final",
+      ask: { question: "?" },
+    });
+    assert(
+      "kind=final w/o final body → invalid",
+      r.ok === false,
+      JSON.stringify(r),
+    );
+  }
+  // turn-question: minimal valid
+  {
+    const r = v.validate(SCHEMA_IDS.turnQuestion, {
+      status: "pending",
+      node_id: "implement",
+      round: 1,
+      turn: 1,
+      asked_at: new Date().toISOString(),
+      ask: { question: "Should I add validation?" },
+    });
+    assert("turn-question minimal → ok", r.ok === true);
+  }
+  // turn-question: missing turn → invalid
+  {
+    const r = v.validate(SCHEMA_IDS.turnQuestion, {
+      status: "pending",
+      node_id: "implement",
+      round: 1,
+      asked_at: new Date().toISOString(),
+      ask: { question: "?" },
+    });
+    assert("turn-question missing turn → invalid", r.ok === false);
+  }
+  // turn-answer: minimal valid
+  {
+    const r = v.validate(SCHEMA_IDS.turnAnswer, {
+      status: "completed",
+      node_id: "implement",
+      round: 1,
+      turn: 1,
+      answered_at: new Date().toISOString(),
+      answer: { text: "Yes" },
+      via: "cli",
+    });
+    assert("turn-answer minimal → ok", r.ok === true);
+  }
+  // turn-answer: empty text → invalid (minLength: 1)
+  {
+    const r = v.validate(SCHEMA_IDS.turnAnswer, {
+      status: "completed",
+      node_id: "implement",
+      round: 1,
+      turn: 1,
+      answered_at: new Date().toISOString(),
+      answer: { text: "" },
+      via: "cli",
+    });
+    assert("turn-answer empty text → invalid", r.ok === false);
+  }
+}
+
 // ─── 10. Snapshot validation ─────────────────────────────────────────────
 section("snapshot validation");
 {

@@ -104,6 +104,11 @@
         "resume_session_from": {
           "$ref": "common.schema.json#/$defs/NodeId",
           "description": "F-001 (engineer-resume): node id whose recorded provider session this step should resume. The engine looks up .pdh-flow/runs/<runId>/sessions/<resume_session_from>.json; on hit, the provider is invoked with --resume <id>. On miss or resume failure, falls back to a fresh invocation. Typically populated by the review_loop macro expander when repair.via=resume."
+        },
+        "enable_user_input": {
+          "type": "boolean",
+          "default": false,
+          "description": "F-012 (in-step turn loop): when true, this provider_step uses the provider-step-output envelope (kind: final | ask). On `ask`, the engine writes a turn-question.json and polls for turn-answer.json before resuming the provider session. Default false — provider output is unconstrained free text and the step is a single-shot."
         }
       },
       "$comment": "on_done is required for top-level nodes; nodes inside a parallel group inherit the group's on_all_done. Engine validates this consistency at load time."
