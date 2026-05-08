@@ -206,10 +206,18 @@ Reads `runs/<runId>/sessions/<nodeId>.json` (the F-001/J3 record) and execs the 
 
 **Verified**: --dry-run inspection for both claude and codex session records returns the right exec command. End-to-end interactive smoke is left to ad-hoc human use; the wrapper is small enough that adding an automated test would be testing `child_process.spawn` rather than anything we own.
 
-**Possible extensions (not built)**: 
+**Term-webui (browser-embedded terminal, 2026-05-08, commit `1224749`)** — port of v1's TerminalModal pattern:
+- backend: `src/web/assist-terminal.ts` spawns claude/codex via `@lydell/node-pty`, broadcasts I/O over a `ws` `WebSocketServer` upgraded on `/api/assist/ws`. Per-session state holds a rolling 300 KB output buffer (replayed on reconnect), a clients set (multi-tab broadcast), and 30-min retention after exit.
+- backend: `POST /api/assist/open { run_id, node_id }` reads `runs/<runId>/sessions/<nodeId>.json` (the F-001/J3 record) and spawns `claude --resume <id>` or `codex resume <id>` in a PTY. Returns `{ sessionId, status, reused, title, command }`.
+- assets: `/assets/xterm.js`, `/assets/xterm-addon-fit.js`, `/assets/xterm-addon-web-links.js`, `/assets/xterm.css` are served by the existing serve out of `node_modules/@xterm/...` at request time (v1 pattern; no separate build step for the vanilla Web UI).
+- frontend: vanilla-JS `web/app.js` modal — xterm + addon-fit + addon-web-links lazy-loaded via script tags on first open; `<dialog id="term-modal">` reused across opens; quick-key bar (Enter/Esc/Tab/arrow keys/y/n/^C/^D) attaches control sequences as JS data; reconnect with exponential backoff; ResizeObserver fires fit() + sends `{type:"resize", cols, rows}` to backend.
+- integration: turn card on the run detail page gains an "Open in terminal" button next to "Submit answer". Click → `openTerminalForNode(runId, nodeId)`. Gate card NOT wired (gate nodes don't spawn providers; opening "fresh assist for an arbitrary worktree" is a separate feature).
+- real-LLM browser smoke (agent-browser, 2026-05-08): clicking the button opens the modal, xterm renders, claude shows its trust prompt + API-key prompt, the Enter quick-key sends `\r` and the LLM advances to the next prompt. Closing the modal cleanly tears down the WS but leaves the PTY for 30 min in case of reconnect. Submitting the regular answer form afterwards still resumes engine-side cleanly (the engine spawns its own short-lived `claude --resume` process; the assist PTY is parallel and doesn't block).
+
+**Possible extensions (not built)**:
 - assist sub-commands like `:answer "..."` that auto-run `turn-respond` on exit (would require parsing the transcript or wrapping the provider's stdin)
 - a `pdh-flow assist --turn` shortcut that auto-targets the active turn
-- launching assist from the Web UI's turn card (server has the run, user picks "open in terminal")
+- a "fresh assist (no resume)" mode for gate cards / arbitrary worktree exploration
 
 ### F-011: ticket-centric data layout migration
 After H8 the v2 engine still mirrored v1's storage shape: `current-ticket.md` and `current-note.md` at worktree root, audit reasoning attached to the project repo via reviewer-each-commits (D-003), `.pdh-flow/runs/<runId>/closed.json` and friends as the only structured record of gate decisions. Long-running operation showed three problems: (a) only the latest ticket's note was directly readable from the worktree (older tickets buried inside `git log -p -- current-note.md`), (b) gate approver records and frozen judgements were trapped inside the ephemeral `.pdh-flow/` tree, and (c) project git accumulated per-reviewer audit churn that no one bisects against.
