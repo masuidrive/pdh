@@ -297,6 +297,13 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
       session.buffer = trimBuffer(session.buffer + data);
       session.updatedAt = Date.now();
       broadcast(session, { type: "output", data });
+      // Detect wrapper-script success sentinels and surface them as
+      // structured events so the browser can prompt the user to close
+      // the modal automatically.
+      const m = data.match(/\[pdh-flow:submitted:(turn|gate)\]/);
+      if (m) {
+        broadcast(session, { type: "submitted", kind: m[1] });
+      }
     });
     pty.onExit((event) => {
       session.status = "exited";

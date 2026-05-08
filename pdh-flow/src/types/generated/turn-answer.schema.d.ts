@@ -26,6 +26,10 @@ export interface InStepTurnAnswer {
      * 0-based index into the question's `options` array, when applicable.
      */
     selected_option?: number;
+    /**
+     * Optional free-form note from the responder. Surfaced to the resumed provider as `[user comment: ...]` and logged in the note section, but does not replace `text`.
+     */
+    comment?: string;
   };
   via?: "cli" | "web_ui" | "assist";
   /**

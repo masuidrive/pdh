@@ -516,13 +516,20 @@ envelope:
 \`\`\`
 ./.pdh-flow/bin/turn-respond --text "<one-line answer>"
 ./.pdh-flow/bin/turn-respond --option <0-based index>
+./.pdh-flow/bin/turn-respond --text "..." --comment "<note from user>"
 \`\`\`
 
-Same effect — the engine receives your answer. Prefer this form when
-the human is conversing with you in chat (asking you to "submit" or
-"go with X"), so the result lands cleanly without forcing them to
-also click the Submit button on the Web UI form. If the wrapper does
-not exist, fall back to the JSON envelope above.`;
+Recognised flags: \`--text\` (the answer string), \`--option N\` (0-based
+index when the question listed options), \`--comment\` (an optional
+free-form note from the user, surfaced to the engine alongside the
+answer).
+
+Important: choose **exactly one** of the two paths — wrapper exec OR
+envelope JSON, never both. Once the wrapper writes the answer file
+the engine resumes; emitting envelope JSON afterwards is wasted output
+and confuses the chat. If you ran the wrapper and it printed
+\`{"ok": true, ...}\`, you are done — the engine takes over from there.
+If the wrapper does not exist, fall back to the JSON envelope above.`;
 
 function envelopeJsonSchema(): Record<string, unknown> {
   // Inline schema (no $refs) so the CLI's --json-schema / --output-schema
@@ -733,10 +740,18 @@ async function runTurnLoop(args: TurnLoopArgs): Promise<TurnLoopResult> {
         turn: turnIdx,
         signal,
       });
-      turnsLog.push({ ask: envelope.ask, answer: answer.answer.text });
-      // Next loop: prompt is just the user answer; resumeSessionId is
-      // already set so the provider continues the same conversation.
-      prompt = answer.answer.text;
+      const answerText = answer.answer.text;
+      const answerComment = answer.answer.comment?.trim();
+      turnsLog.push({
+        ask: envelope.ask,
+        answer: answerComment ? `${answerText} (comment: ${answerComment})` : answerText,
+      });
+      // Next loop: prompt is the user answer (plus comment when present).
+      // resumeSessionId is already set so the provider continues the same
+      // conversation.
+      prompt = answerComment
+        ? `${answerText}\n\n[user comment: ${answerComment}]`
+        : answerText;
       continue;
     }
     // Envelope parsed but the kind/body combination is malformed.

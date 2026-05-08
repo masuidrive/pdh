@@ -91,4 +91,7 @@ export async function cmdGateRespond(argv: string[]): Promise<void> {
       2,
     ) + "\n",
   );
+  // Sentinel: lets the assist-terminal backend trigger a "close modal?"
+  // prompt on the attached browser tab.
+  process.stdout.write("[pdh-flow:submitted:gate]\n");
 }

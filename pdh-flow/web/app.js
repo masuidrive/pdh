@@ -679,6 +679,11 @@ function ensureTermModal() {
           <button class="btn btn-sm btn-ghost" type="submit">Close</button>
         </form>
       </div>
+      <div id="term-submitted-banner" class="alert alert-success py-2 mb-2" style="display:none">
+        <span id="term-submitted-msg" class="flex-1 text-sm">Answer submitted. Close terminal and continue?</span>
+        <button id="term-close-yes" type="button" class="btn btn-sm btn-success">Yes, close</button>
+        <button id="term-close-no" type="button" class="btn btn-sm btn-ghost">No, stay</button>
+      </div>
       <div id="term-host" class="term-host flex-1"></div>
       <div id="term-quickkeys" class="flex flex-wrap items-center gap-1 pt-2"></div>
     </div>
@@ -720,6 +725,8 @@ async function openTerminalForNode(runId, nodeId, options) {
   const titleEl = dlg.querySelector("#term-title");
   const statusEl = dlg.querySelector("#term-status");
   const hostEl = dlg.querySelector("#term-host");
+  const banner = dlg.querySelector("#term-submitted-banner");
+  if (banner) banner.style.display = "none";
   hostEl.innerHTML = "";
   titleEl.textContent = `${nodeId} · ${runId}`;
   setTermStatus(statusEl, "connecting");
@@ -826,6 +833,8 @@ async function openTerminalForNode(runId, nodeId, options) {
         if (payload.data) term.write(payload.data);
       } else if (payload.type === "output" && typeof payload.data === "string") {
         term.write(payload.data);
+      } else if (payload.type === "submitted") {
+        showSubmittedBanner(dlg, payload.kind);
       } else if (payload.type === "exit") {
         setTermStatus(statusEl, "exited");
         term.writeln("");
@@ -870,6 +879,30 @@ async function openTerminalForNode(runId, nodeId, options) {
   dlg.addEventListener("close", () => {
     teardownTerm();
   }, { once: true });
+}
+
+function showSubmittedBanner(dlg, kind) {
+  const banner = dlg.querySelector("#term-submitted-banner");
+  const msg = dlg.querySelector("#term-submitted-msg");
+  if (!banner || !msg) return;
+  msg.textContent = kind === "gate"
+    ? "Gate decision submitted. Close terminal and continue?"
+    : "Answer submitted. Close terminal and continue?";
+  banner.style.display = "";
+  const yes = dlg.querySelector("#term-close-yes");
+  const no = dlg.querySelector("#term-close-no");
+  if (yes && !yes._wired) {
+    yes._wired = true;
+    yes.addEventListener("click", () => {
+      try { dlg.close(); } catch {}
+    });
+  }
+  if (no && !no._wired) {
+    no._wired = true;
+    no.addEventListener("click", () => {
+      banner.style.display = "none";
+    });
+  }
 }
 
 function setTermStatus(el, s) {

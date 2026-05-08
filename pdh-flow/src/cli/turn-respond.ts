@@ -19,6 +19,7 @@ export async function cmdTurnRespond(argv: string[]): Promise<void> {
     turn:       { type: "string" },
     text:       { type: "string" },
     option:     { type: "string" },
+    comment:    { type: "string" },
     via:        { type: "string" },
     responder:  { type: "string" },
     list:       { type: "boolean" },
@@ -79,6 +80,7 @@ export async function cmdTurnRespond(argv: string[]): Promise<void> {
     throw new Error(`--via must be one of cli|web_ui|assist; got ${viaRaw}`);
   }
 
+  const comment = (values.comment as string | undefined)?.trim();
   const answer: TurnAnswer = {
     status: "completed",
     node_id: nodeId,
@@ -88,6 +90,7 @@ export async function cmdTurnRespond(argv: string[]): Promise<void> {
     answer: {
       text,
       ...(selectedOption !== undefined ? { selected_option: selectedOption } : {}),
+      ...(comment ? { comment } : {}),
     },
     via: viaRaw as TurnAnswer["via"],
     ...(values.responder ? { responder: values.responder as string } : {}),
@@ -107,6 +110,11 @@ export async function cmdTurnRespond(argv: string[]): Promise<void> {
       2,
     ) + "\n",
   );
+  // Sentinel line that the assist-terminal backend scans for to fire a
+  // {type:"submitted",kind:"turn"} WebSocket event to attached browsers.
+  // Visible in the terminal output, harmless when running outside an
+  // assist context.
+  process.stdout.write("[pdh-flow:submitted:turn]\n");
 }
 
 function listPending(turnsDir: string): void {
