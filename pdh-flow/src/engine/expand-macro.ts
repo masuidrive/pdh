@@ -165,13 +165,24 @@ function expandReviewLoop(
 
   // ── 3. Repair node (provider) ────────────────────────────────────────
   if (hasRepair) {
+    const repairSpec = macro.repair!;
+    const via = (repairSpec as { via?: string }).via ?? "separate_node";
     const repair: ProviderStepNode = {
       type: "provider_step",
-      provider: macro.repair!.provider,
-      role: macro.repair!.role ?? "repair",
+      provider: repairSpec.provider,
+      role: repairSpec.role ?? "repair",
       // Loop back to the parent parallel_group so XState re-enters all
       // reviewer regions for round N+1.
       on_done: parentId,
+      // F-001/J4: when repair is configured to resume an upstream node's
+      // session, surface that as a flat-flow attribute. The provider
+      // actor reads it at runtime (with fallback to fresh on miss).
+      ...(via === "resume" && (repairSpec as { resume_node?: string }).resume_node
+        ? {
+            resume_session_from:
+              (repairSpec as { resume_node?: string }).resume_node,
+          }
+        : {}),
     };
     out[repairId] = repair;
   }

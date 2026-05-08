@@ -195,6 +195,9 @@ function compileProvider(
         provider: node.provider,
         role: node.role,
         promptSpec: node.prompt,
+        ...(node.resume_session_from
+          ? { resumeSessionFrom: node.resume_session_from }
+          : {}),
       }),
       onDone: stopGuard
         ? {

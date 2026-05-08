@@ -58,6 +58,23 @@ export type ReviewLoopMacro = {
   label?: string;
   summary?: string;
 };
+export type RepairSpec = {
+  [k: string]: unknown;
+} & {
+  /**
+   * Subprocess CLI provider. New providers added here as the matrix grows.
+   */
+  provider: "claude" | "codex";
+  role?: string;
+  /**
+   * F-001 (engineer-resume): when 'separate_node', a fresh provider is spawned with the repair role on each repair_needed (current default behavior). When 'resume', the engine resumes the upstream node named in `resume_node` via --resume <session_id>; the repair role's prompt is delivered as the next user message in that session.
+   */
+  via?: "separate_node" | "resume";
+  /**
+   * Lower-case dotted path. Dots indicate parent.child relationship (e.g. parallel-group member). Underscores join words within a segment.
+   */
+  resume_node?: string;
+};
 
 /**
  * Author-facing flow definition. Macros (e.g. review_loop) are allowed here; loader expands them to flat-flow.json before the engine consumes them. This is the primary contract between flow authors and the engine.
@@ -111,6 +128,10 @@ export interface ProviderStepNode {
   label?: string;
   summary?: string;
   viewer_hint?: string;
+  /**
+   * Lower-case dotted path. Dots indicate parent.child relationship (e.g. parallel-group member). Underscores join words within a segment.
+   */
+  resume_session_from?: string;
 }
 /**
  * Prompt-author hints. Engine extends this with system context (current state, evidence refs) when invoking the provider. Open shape on purpose: prompts are domain-specific.
@@ -207,13 +228,6 @@ export interface ReviewerSpec {
   focus?: string[];
 }
 export interface AggregatorSpec {
-  /**
-   * Subprocess CLI provider. New providers added here as the matrix grows.
-   */
-  provider: "claude" | "codex";
-  role?: string;
-}
-export interface RepairSpec {
   /**
    * Subprocess CLI provider. New providers added here as the matrix grows.
    */

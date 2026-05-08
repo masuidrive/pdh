@@ -13,7 +13,10 @@ import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { invokeProvider, type ProviderName } from "../providers/index.ts";
 import { renderPrompt } from "../prompts/render.ts";
-import { saveProviderSession } from "../session-store.ts";
+import {
+  readProviderSession,
+  saveProviderSession,
+} from "../session-store.ts";
 import { assertTicketUnmodified, hashTicket } from "../ticket-guard.ts";
 
 export interface ProviderActorInput {
@@ -34,6 +37,14 @@ export interface ProviderActorInput {
   fixtureMeta?: FixtureMeta;
   /** Engine run id; required for saving provider session ids (F-001). */
   runId?: string;
+  /**
+   * F-001/J4: when set, the actor looks up
+   * `runs/<runId>/sessions/<resumeSessionFrom>.json` and, on hit, invokes
+   * the provider with --resume so it continues that prior session. On
+   * miss, falls back to a fresh invocation with the configured prompt.
+   * Populated by the macro expander when review_loop.repair.via=resume.
+   */
+  resumeSessionFrom?: string;
 }
 
 export interface ProviderActorOutput {
@@ -107,11 +118,31 @@ export const runProvider = fromPromise<
       promptSpec: input.promptSpec ?? {},
     });
     const editable = roleNeedsEdit(input.role ?? "reviewer", nodeId);
+    // F-001/J4: if this node is configured to resume an upstream node's
+    // session, look it up and pass --resume to the provider. On miss we
+    // silently fall back to a fresh invocation; on a CLI rejection we
+    // surface the error (caller can decide whether to retry).
+    let resumeSessionId: string | undefined;
+    if (input.resumeSessionFrom && input.runId) {
+      const rec = readProviderSession({
+        worktreePath,
+        runId: input.runId,
+        nodeId: input.resumeSessionFrom,
+      });
+      if (rec && rec.provider === input.provider) {
+        resumeSessionId = rec.sessionId;
+      } else if (rec && rec.provider !== input.provider) {
+        process.stderr.write(
+          `[run-provider] ${nodeId}: cannot resume — recorded session for ${input.resumeSessionFrom} is provider=${rec.provider}, but this node is provider=${input.provider}. Falling back to fresh.\n`,
+        );
+      }
+    }
     const result = await invokeProvider(input.provider, {
       prompt,
       cwd: worktreePath,
       signal,
       editable,
+      ...(resumeSessionId ? { resumeSessionId } : {}),
     });
     if (result.exitCode !== 0 || result.timedOut) {
       throw new Error(

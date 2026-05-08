@@ -136,6 +136,10 @@ export interface ProviderStepNode {
   label?: string;
   summary?: string;
   viewer_hint?: string;
+  /**
+   * Lower-case dotted path. Dots indicate parent.child relationship (e.g. parallel-group member). Underscores join words within a segment.
+   */
+  resume_session_from?: string;
 }
 /**
  * Prompt-author hints. Engine extends this with system context (current state, evidence refs) when invoking the provider. Open shape on purpose: prompts are domain-specific.

@@ -99,7 +99,12 @@
 
         "label":       { "type": "string", "maxLength": 80 },
         "summary":     { "type": "string", "maxLength": 280 },
-        "viewer_hint": { "type": "string", "maxLength": 200 }
+        "viewer_hint": { "type": "string", "maxLength": 200 },
+
+        "resume_session_from": {
+          "$ref": "common.schema.json#/$defs/NodeId",
+          "description": "F-001 (engineer-resume): node id whose recorded provider session this step should resume. The engine looks up .pdh-flow/runs/<runId>/sessions/<resume_session_from>.json; on hit, the provider is invoked with --resume <id>. On miss or resume failure, falls back to a fresh invocation. Typically populated by the review_loop macro expander when repair.via=resume."
+        }
       },
       "$comment": "on_done is required for top-level nodes; nodes inside a parallel group inherit the group's on_all_done. Engine validates this consistency at load time."
     },
@@ -329,8 +334,26 @@
       "required": ["provider"],
       "properties": {
         "provider": { "$ref": "common.schema.json#/$defs/Provider" },
-        "role":     { "type": "string", "default": "repair", "maxLength": 64 }
-      }
+        "role":     { "type": "string", "default": "repair", "maxLength": 64 },
+        "via": {
+          "enum": ["separate_node", "resume"],
+          "default": "separate_node",
+          "description": "F-001 (engineer-resume): when 'separate_node', a fresh provider is spawned with the repair role on each repair_needed (current default behavior). When 'resume', the engine resumes the upstream node named in `resume_node` via --resume <session_id>; the repair role's prompt is delivered as the next user message in that session."
+        },
+        "resume_node": {
+          "$ref": "common.schema.json#/$defs/NodeId",
+          "description": "Required when via=resume. Node id whose recorded provider session is resumed (typically the implement / planner node feeding this review_loop)."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["via"],
+            "properties": { "via": { "const": "resume" } }
+          },
+          "then": { "required": ["resume_node"] }
+        }
+      ]
     },
 
     "PromptSpec": {
