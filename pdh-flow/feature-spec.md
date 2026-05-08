@@ -54,28 +54,26 @@ No migration helper. v2 starts on a clean slate; existing in-flight v1 tickets a
 
 ## Deferred features
 
-### F-001: engineer-resume for repair (instead of separate repair node)
-**Idea**: when `aggregate.repair_needed`, re-invoke the original `implement` node with `claude --resume <session-id>` (or codex equivalent), passing the blocking findings as new input. The engineer keeps their reasoning context.
+### F-001: engineer-resume for repair — **INFRA LANDED 2026-05-08, smoke pending**
+**Idea**: when `aggregate.repair_needed`, re-invoke the original `implement` node with `claude --resume <session-id>` (or `codex exec resume <id>`), passing the blocking findings as new input. The engineer keeps their reasoning context.
 
-**Worth doing**: yes — quality improvement, not just efficiency (subscription users don't pay per token, but fixes are sharper when the LLM remembers its own reasoning).
+**J1 (provider session capture, commit `be97e63`)**: `ProviderResult.sessionId` populated for every claude / codex invocation. claude unconditionally uses `--output-format json` so the envelope's `session_id` is captured even when no schema is set; codex switches to `--json` so `thread.started.thread_id` is read off the JSONL event stream. No behavior change for callers.
 
-**Why deferred**: violates 3 design principles unless guarded:
-1. **Re-spawnability**: session state is transient (timeout / machine restart); re-spawn after session loss can't resume.
-2. **Audit**: repair-as-continuation makes round 2 commits indistinguishable from round 1 in git ancestry.
-3. **Engine purity**: engine becomes responsible for tracking session ids per node × round, expanding its responsibility beyond pure orchestration.
+**J2 (provider resume invocation, commit `f450b04`)**: `ProviderInvocation.resumeSessionId`. claude appends `--resume <id>`; codex switches to the `codex exec resume <id> ...` subcommand (which inherits cwd / sandbox / output-schema from the recorded session, so we don't pass those flags).
 
-**Adoption shape (when implemented)**: opt-in flag on the `review_loop` macro:
-```yaml
-- macro: review_loop
-  repair:
-    via: resume_implement       # default 'separate_node'
-    fallback_to_fresh: true     # session lost → fresh invocation
-```
-- `via: separate_node` (current behavior) stays the default.
-- Engine persists session id with the implement node's output. Repair node compiler swaps target back to `implement` and threads `--resume <id>` if available.
-- Fallback to fresh invocation on session loss preserves robustness.
+**J3 (engine-layer persistence, commit `d7bda57`)**: `src/engine/session-store.ts` writes `runs/<runId>/sessions/<nodeId>.json` after each successful real provider invocation that surfaced a session id. Files are ephemeral — wiping `.pdh-flow/` falls back to fresh on next resume.
 
-**Trigger to revisit**: after baseline v2 stabilizes and we have measurable quality data on multi-round repair scenarios with the current pure design.
+**J4 (macro flag + compile-machine wiring, commit `d7ec04a`)**: `review_loop.repair.via: separate_node | resume` macro field (default `separate_node`). When `resume`: `repair.resume_node` is required and the expander emits `resume_session_from: <node>` on the flat-flow `.repair` node. `run-provider.ts` reads the matching session record at runtime; on miss / provider mismatch, falls back to a fresh invocation with a stderr diagnostic.
+
+**J5 (validation + smoke harness, commit `24de42e`)**: positive (`via=resume` parses, expander wires `resume_session_from`) and negative (`via=resume` w/o `resume_node` → SchemaViolation) tests in `test-validate.ts`. Companion artefacts:
+- `flows/pdh-c-v2-resume.yaml`: variant of pdh-c-v2 where `code_quality_review.repair` uses `via: resume, resume_node: implement`.
+- `scripts/smoke-real-resume.sh`: runs that flow on a chosen smoke fixture; expects `sessions/implement.json` to be written and the `.repair` commit (when reviewers escalate) to come from a resumed codex session.
+
+**End-to-end smoke not yet run**. Caveats:
+- The cartbug / divide / clamp fixtures rarely trigger `code_quality_review.repair` on their own (per F-010 n=6 reproducibility), so a single smoke run may not actually exercise the resume path. A fixture explicitly designed to make reviewers flag a Critical / Major issue is the right next step before claiming F-001 done. claude `--resume` was verified manually at the CLI level (probe in scratch dir).
+- Three F-001 design concerns from the original deferral remain: re-spawnability after session loss (fallback to fresh covers it), audit ambiguity for resumed rounds (git subject still says `[node/round-N]`; resume is invisible without inspecting `sessions/`), and engine responsibility creep (now owns ephemeral session bookkeeping). All three judged acceptable, but worth tracking if they bite.
+
+**Trigger to flip default**: a fixture-or-real smoke that demonstrates resume produces measurably better repair output than fresh.
 
 ### F-002: real provider invocation (drop fixture-only) — **DONE 2026-05-07**
 ~~Current `run-provider.ts` reads fixture meta...~~
@@ -231,6 +229,45 @@ Engine layer     .pdh-flow/runs/<runId>/                     (ephemeral, wipe-sa
 
 - Whether to wipe `.pdh-flow/runs/<runId>/` automatically at terminal or keep it for one-run-window inspection (lean: keep, with a `--gc` flag).
 - Whether `assist` and `PD-C-1` write to ticket via raw edit (current) or via a `system_step`-mediated proposal (safer but adds indirection). Decided: **raw edit** — format is not fixed enough to mediate.
+
+### F-012: dynamic in-step user-input (request_human_input as a turn primitive)
+Today the only way for a flow to request user judgement is a static `gate_step` declared in the flow YAML. That covers approval gates the flow author predicted, but not the case where a provider mid-task realises it needs a scoped decision from the human (e.g. "should the breaking change be silent-drop or 422?", "is reasoning_effort in scope?"). Currently the provider has to either guess and document the assumption, or fail and let the close_gate be the catch-all — both lossy.
+
+**Idea**: extend `provider_step` and `guardian_step` so the actor can return a `request_human_input` tool call mid-execution. The engine catches it, persists the question + context, suspends the step, accepts a structured answer (web UI button, `pdh-flow gate respond`, or — eventually — an assist session), and resumes the **same step** with the answer threaded into the LLM's session.
+
+**Framing decision**: this is **a turn within a step**, not a new round. The step's git commit boundary is unchanged (one commit per step on completion). `round` counter is untouched (it's review-loop semantics, not user-interaction semantics). Multiple Q+A turns per step are allowed.
+
+**Architecture**:
+```
+src/engine/run-provider.ts
+  ├─ spawn provider with tool schema including request_human_input
+  ├─ on tool call → save .pdh-flow/runs/<runId>/turns/<nodeId>/turn-NNN-question.json
+  ├─ wait for .pdh-flow/runs/<runId>/turns/<nodeId>/turn-NNN-answer.json
+  ├─ resume provider session (claude --resume / codex equivalent) + inject answer
+  └─ on final structured output → step completes, single commit, turns/ wiped
+```
+
+`turns/<nodeId>/session.json` records the provider session id (best-effort optimisation). Crash recovery: re-read turns/, attempt session resume, on resume failure fall back to fresh spawn with all Q+A replayed in the prompt context.
+
+**Why deferred**:
+1. **F-001 dependency**: needs the same provider session-id plumbing as engineer-resume. Worth landing F-001 first (or together) so the provider abstraction grows the resume API once.
+2. **Tool schema design**: `request_human_input` shape (free-form question? structured options? attachments?) wants to be informed by 2-3 real provider runs that hit cases the static gate can't cover. Premature specification risks an awkward API.
+3. **No current pain**: F-010's n=6 reproducibility runs all completed without a single mid-step "I don't know what you want" failure. The flow + assist + close_gate combination has been sufficient. Demand-driven, not principle-driven.
+4. **Replay semantics**: fixture replay needs to record the Q+A pairs, not just the final output. Manageable but expands the fixture format.
+
+**Relationship to existing features**:
+- **F-001 (engineer-resume)**: shares the provider resume primitive. Implementing F-012 first would create the resume API; F-001 then becomes a flag flip on the repair node. Reverse order also works.
+- **F-009 (assist mode)**: assist is the *optional UX layer* on top of F-012, not a replacement. The engine I/O contract is the structured answer file under `turns/`; assist's job (when launched) is to converse with the user and emit that answer. Keeps determinism boundary intact.
+- **D-004 (gate as first-class node)**: `gate_step` stays for predictable approvals (plan_gate, close_gate). F-012 covers the unpredictable case. Both coexist.
+
+**Adoption shape (when implemented)**:
+- Add `request_human_input` to provider tool schemas; semantic validation (engine checks the question has a non-empty `question` and at least 0..N `options` of the declared shape).
+- New ephemeral path: `.pdh-flow/runs/<runId>/turns/<nodeId>/turn-NNN-{question,answer}.json`.
+- Provider abstraction grows `resumeSession(sessionId, userMessage)`; both claude and codex CLIs support resume.
+- Web UI gains a turn-aware view (current `gate-card` generalises).
+- Replay fixture format gains `node_outputs[nodeId][round-N].turns: [{question, answer}]`.
+
+**Trigger to revisit**: first real flow where a provider hits a decision it cannot reasonably make alone *and* the static gate would be wrong (too late, too coarse, or in the wrong actor's hands).
 
 ---
 
