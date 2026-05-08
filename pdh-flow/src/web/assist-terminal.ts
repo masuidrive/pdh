@@ -54,6 +54,12 @@ interface AssistSession {
   createdAt: number;
   updatedAt: number;
   clients: Set<WebSocket>;
+  /** Cleanup hook for the submission watcher (turn answer / gate decision
+   *  file appearance). Stopped on session exit / closeAll. */
+  submissionWatcher?: () => void;
+  /** True once the watcher has already broadcast a "submitted" event;
+   *  prevents repeat firing when the same file lingers across polls. */
+  submissionBroadcast?: boolean;
 }
 
 export interface OpenResult {
@@ -166,7 +172,7 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
         nodeId: p.nodeId,
       });
       const hint = buildWrapperHint("gate", p.nodeId);
-      return openManagedSession({
+      const result = openManagedSession({
         key: `${p.runId}:${p.nodeId}:fresh`,
         title: `claude (fresh) — ${p.nodeId}`,
         command: "claude",
@@ -175,6 +181,18 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
         force: p.force,
         initialHint: hint,
       });
+      const session = sessions.get(result.sessionId);
+      if (session && !session.submissionWatcher) {
+        session.submissionWatcher = startSubmissionWatcher(
+          session,
+          opts.worktreePath,
+          p.runId,
+          p.nodeId,
+          "gate",
+          broadcast,
+        );
+      }
+      return result;
     }
     const sessionPath = join(
       opts.worktreePath,
@@ -210,7 +228,7 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
       nodeId: p.nodeId,
     });
     const hint = buildWrapperHint("turn", p.nodeId);
-    return openManagedSession({
+    const result = openManagedSession({
       key: `${p.runId}:${p.nodeId}`,
       title,
       command,
@@ -219,6 +237,18 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
       force: p.force,
       initialHint: hint,
     });
+    const session = sessions.get(result.sessionId);
+    if (session && !session.submissionWatcher) {
+      session.submissionWatcher = startSubmissionWatcher(
+        session,
+        opts.worktreePath,
+        p.runId,
+        p.nodeId,
+        "turn",
+        broadcast,
+      );
+    }
+    return result;
   }
 
   function openManagedSession(p: {
@@ -297,13 +327,6 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
       session.buffer = trimBuffer(session.buffer + data);
       session.updatedAt = Date.now();
       broadcast(session, { type: "output", data });
-      // Detect wrapper-script success sentinels and surface them as
-      // structured events so the browser can prompt the user to close
-      // the modal automatically.
-      const m = data.match(/\[pdh-flow:submitted:(turn|gate)\]/);
-      if (m) {
-        broadcast(session, { type: "submitted", kind: m[1] });
-      }
     });
     pty.onExit((event) => {
       session.status = "exited";
@@ -311,6 +334,8 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
       session.signal = event.signal ?? null;
       session.updatedAt = Date.now();
       if (activeByKey.get(p.key) === id) activeByKey.delete(p.key);
+      try { session.submissionWatcher?.(); } catch {}
+      session.submissionWatcher = undefined;
       broadcast(session, {
         type: "exit",
         exitCode: session.exitCode,
@@ -348,6 +373,8 @@ export function createAssistManager(opts: { worktreePath: string }): AssistManag
       if (s.status === "running") {
         try { s.pty.kill(); } catch {}
       }
+      try { s.submissionWatcher?.(); } catch {}
+      s.submissionWatcher = undefined;
       for (const sock of s.clients) {
         try { sock.close(1001, "server_shutdown"); } catch {}
       }
@@ -407,6 +434,94 @@ function ensureWrapperScript(p: {
 
 function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+// ─── Submission watcher ──────────────────────────────────────────────────
+//
+// Watches the worktree filesystem for the answer / gate decision file
+// that the wrapper script writes on success. PTY-based detection
+// (scanning the assistant's output for a sentinel) is unreliable —
+// claude collapses long Bash tool output into "+N lines" placeholders
+// in the rendered chat, so the sentinel may never reach the WS stream.
+//
+// File appearance is the canonical signal of "command execution
+// succeeded", regardless of how it's surfaced in the chat UI.
+
+import { readdirSync, statSync } from "node:fs";
+
+function startSubmissionWatcher(
+  session: AssistSession,
+  worktreePath: string,
+  runId: string,
+  nodeId: string,
+  kind: "turn" | "gate",
+  broadcastFn: (s: AssistSession, payload: unknown) => void,
+): () => void {
+  const intervalMs = 500;
+  // Snapshot what's already there at session open so we only fire on
+  // *new* files (e.g. previous turn's answer file shouldn't re-trigger).
+  const existing = new Set<string>();
+  if (kind === "turn") {
+    const dir = join(
+      worktreePath,
+      ".pdh-flow",
+      "runs",
+      runId,
+      "turns",
+      nodeId,
+    );
+    try {
+      for (const f of readdirSync(dir)) {
+        if (/^turn-\d{3}-answer\.json$/.test(f)) existing.add(f);
+      }
+    } catch { /* dir may not exist yet */ }
+  }
+  // Gate is a single file path; existing[set] == size 0 if no file.
+  const gatePath = join(
+    worktreePath,
+    ".pdh-flow",
+    "runs",
+    runId,
+    "gates",
+    `${nodeId}.json`,
+  );
+  let gateExisted = false;
+  if (kind === "gate") {
+    try { gateExisted = statSync(gatePath).isFile(); } catch { gateExisted = false; }
+  }
+
+  const tick = (): void => {
+    if (session.submissionBroadcast) return;
+    if (kind === "turn") {
+      const dir = join(
+        worktreePath,
+        ".pdh-flow",
+        "runs",
+        runId,
+        "turns",
+        nodeId,
+      );
+      let listing: string[] = [];
+      try { listing = readdirSync(dir); } catch { listing = []; }
+      for (const f of listing) {
+        if (/^turn-\d{3}-answer\.json$/.test(f) && !existing.has(f)) {
+          session.submissionBroadcast = true;
+          broadcastFn(session, { type: "submitted", kind: "turn", filename: f });
+          return;
+        }
+      }
+    } else {
+      let nowExists = false;
+      try { nowExists = statSync(gatePath).isFile(); } catch { nowExists = false; }
+      if (nowExists && !gateExisted) {
+        session.submissionBroadcast = true;
+        broadcastFn(session, { type: "submitted", kind: "gate" });
+      }
+    }
+  };
+
+  const handle = setInterval(tick, intervalMs);
+  return () => clearInterval(handle);
 }
 
 function buildWrapperHint(kind: "turn" | "gate", nodeId: string): string {
