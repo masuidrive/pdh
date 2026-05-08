@@ -7,6 +7,7 @@
 
 import { parseArgs } from "node:util";
 
+import { cmdAssist } from "./assist.ts";
 import { cmdCheckFlow } from "./check-flow.ts";
 import { cmdCompileFlow } from "./compile-flow.ts";
 import { cmdRunEngine } from "./run-engine.ts";
@@ -14,6 +15,7 @@ import { cmdServe } from "./serve.ts";
 import { cmdTurnRespond } from "./turn-respond.ts";
 
 const SUBCOMMANDS = {
+  assist: cmdAssist,
   "check-flow": cmdCheckFlow,
   "compile-flow": cmdCompileFlow,
   "run-engine": cmdRunEngine,
@@ -89,6 +91,13 @@ Subcommands:
                 Deliver an answer to an in-step turn question (F-012). With
                 --list, dumps the pending question files. Without --turn, the
                 lowest unanswered turn number is auto-selected.
+
+  assist        --run-id <id> --node-id <node> [--worktree <dir>] [--dry-run]
+                F-009: drop into the provider's interactive session at a pause
+                point (claude --resume / codex resume the captured session).
+                After exiting, deliver any decision back to the engine via
+                pdh-flow turn-respond. --dry-run prints the would-exec command
+                without launching.
 
   help          Show this message.
 

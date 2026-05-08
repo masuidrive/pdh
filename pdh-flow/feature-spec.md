@@ -193,10 +193,23 @@ Phase H7 finished the auto-boundary case: `runEngine` now reads `pdh-flow.config
 
 Test coverage extended: `scripts/test-engine-prototype.ts` now seeds a config.yaml into a `gate_system_happy` worktree, pre-acquires a lease for an unrelated ticket, runs the engine, and asserts the ticket's lease was released, `.env.lease` was cleaned up, and the unrelated ticket's lease survives. 35/35 engine tests pass.
 
-### F-009: assist mode (interactive provider terminal)
-v1's `src/runtime/assist/` provided an interactive terminal mode for stop-state intervention. v2 needs equivalent: a way to attach the user's terminal to a paused engine state and let them drive the provider manually.
+### F-009: assist mode (interactive provider terminal) — **v1 LANDED 2026-05-08**
+v1's `src/runtime/assist/` provided an interactive terminal mode for stop-state intervention. v2 lands a thin wrapper:
 
-**Trigger**: when human-gate workflow needs a human-driven repair loop (e.g. fixing what the LLM keeps getting wrong).
+```
+pdh-flow assist --run-id <runId> --node-id <nodeId> [--worktree <dir>] [--dry-run]
+```
+
+Reads `runs/<runId>/sessions/<nodeId>.json` (the F-001/J3 record) and execs the matching interactive resume — `claude --resume <session_id>` or `codex resume <session_id>` — with the worktree as cwd. The user lands inside the same conversation the engine was driving. When done, they exit normally and deliver any decision back via `pdh-flow turn-respond`.
+
+**Boundary kept intact**: assist's transcript stays in the provider CLI's own session storage; it never feeds back into the engine except via the structured `turn-answer.json`. The engine's determinism contract (replay, fixture-driven tests) is unaffected — assist is a UX layer on top of F-012's turn primitives, not a replacement for them.
+
+**Verified**: --dry-run inspection for both claude and codex session records returns the right exec command. End-to-end interactive smoke is left to ad-hoc human use; the wrapper is small enough that adding an automated test would be testing `child_process.spawn` rather than anything we own.
+
+**Possible extensions (not built)**: 
+- assist sub-commands like `:answer "..."` that auto-run `turn-respond` on exit (would require parsing the transcript or wrapping the provider's stdin)
+- a `pdh-flow assist --turn` shortcut that auto-targets the active turn
+- launching assist from the Web UI's turn card (server has the run, user picks "open in terminal")
 
 ### F-011: ticket-centric data layout migration
 After H8 the v2 engine still mirrored v1's storage shape: `current-ticket.md` and `current-note.md` at worktree root, audit reasoning attached to the project repo via reviewer-each-commits (D-003), `.pdh-flow/runs/<runId>/closed.json` and friends as the only structured record of gate decisions. Long-running operation showed three problems: (a) only the latest ticket's note was directly readable from the worktree (older tickets buried inside `git log -p -- current-note.md`), (b) gate approver records and frozen judgements were trapped inside the ephemeral `.pdh-flow/` tree, and (c) project git accumulated per-reviewer audit churn that no one bisects against.
