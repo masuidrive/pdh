@@ -491,9 +491,57 @@ const TURN_LOOP_MAX_TURNS = 10;
 
 const ENVELOPE_INSTRUCTION = `
 
-## Output format
+## How to end your turn
 
-Respond with a single JSON object matching this envelope:
+How you end your turn depends on whether a human is chatting with you
+right now. Probe once, pick exactly one path — never combine.
+
+\`\`\`
+test -f ./.pdh-flow/bin/turn-respond
+\`\`\`
+
+### If the probe SUCCEEDS — relay the human's reply via the wrapper
+
+A human is chatting with you in an assist terminal. The engine
+suspended after your earlier \`kind:"ask"\` and is waiting for the
+human's reply to that question. Your job in this session is **just to
+relay what the human typed back to the engine** — not to produce any
+final analytical output yourself. (After you relay, the engine resumes
+the original session in a separate turn, and that's where the
+long-form \`kind:"final"\` output is generated.)
+
+Run the wrapper via the Bash tool with the human's reply, distilled
+into a short string. Do NOT put your own analysis, paragraph, or
+reasoning into \`--text\` — only the human's literal answer.
+
+\`\`\`
+./.pdh-flow/bin/turn-respond --option <0-based index>
+./.pdh-flow/bin/turn-respond --text "<short verbatim of what the human said>"
+./.pdh-flow/bin/turn-respond --text "..." --comment "<extra note the human added>"
+\`\`\`
+
+- Use \`--option N\` whenever the human picked one of the listed
+  options. \`N\` is the 0-based index into the question's \`options\`
+  array.
+- Use \`--text\` only for free-form answers; keep it as short as the
+  human's actual reply (e.g. one word, one phrase, one sentence). If
+  the human picked an option AND added an aside, use
+  \`--option N --comment "<aside>"\`.
+- \`--comment\` is for short side-notes the human attached to their
+  reply. It is not a place for your own commentary.
+
+The wrapper writes a draft; the human confirms via a banner. If they
+pick No and ask you to revise the relay, re-run the wrapper with new
+args (the draft is overwritten, the banner re-shows). When the
+wrapper exits with \`{"ok": true, ...}\` your turn is done — emit no
+envelope and no further prose; close out quietly. The engine takes
+over from here.
+
+### If the probe FAILS — emit the envelope
+
+The engine is calling you directly, no human in the loop. Reply with
+exactly one JSON object on stdout — the entire response is the JSON,
+no surrounding prose, no wrapper exec.
 
 \`\`\`
 { "kind": "final" | "ask",
@@ -501,43 +549,13 @@ Respond with a single JSON object matching this envelope:
   "ask":   { "question": string, "options"?: [{ "label": string, "description"?: string }], "context"?: string } }
 \`\`\`
 
-- Use \`kind: "final"\` when you have everything you need. \`final.summary\` is one line; \`final.details\` is the full markdown body that goes into the note (no Q/A — that's logged separately).
-- Use \`kind: "ask"\` only when a specific decision genuinely requires a human. The question must be answerable in one turn. Provide \`options\` when there's a small enumerable set of answers; otherwise omit and accept free-form text.
-- Do NOT mix prose and JSON; the entire response is the JSON object.
-
-## CRITICAL — assist-mode override
-
-Before emitting any output, run:
-\`\`\`
-test -f ./.pdh-flow/bin/turn-respond
-\`\`\`
-If it returns success (file exists), you are running inside an assist
-terminal where a human is chatting with you. In that mode:
-
-1. **Do NOT emit the JSON envelope.** The user is in a chat — they
-   will not see envelope JSON, and the engine will not consume it
-   from this session anyway.
-2. **You MUST submit your answer by exec'ing the wrapper** via the
-   Bash tool:
-   \`\`\`
-   ./.pdh-flow/bin/turn-respond --text "<one-line answer>"
-   ./.pdh-flow/bin/turn-respond --option <0-based index>
-   ./.pdh-flow/bin/turn-respond --text "..." --comment "<note from user>"
-   \`\`\`
-   Recognised flags: \`--text\` (the answer string), \`--option N\`
-   (0-based index when the question listed options), \`--comment\`
-   (optional free-form note from the user).
-3. The wrapper writes a *draft* that the human user confirms via a
-   "Confirm and close?" banner in the assist modal. If they pick No,
-   they may ask you to revise — re-run the wrapper with new args; the
-   draft is overwritten and the banner re-shows. The engine only
-   proceeds when they click Yes.
-4. After the wrapper exits with \`{"ok": true, ...}\`, your turn is
-   done. Emit no envelope, no further prose — the user will close the
-   modal when they're satisfied.
-
-If the wrapper does NOT exist (the engine is calling you directly,
-not through assist mode), respond with the JSON envelope above.`;
+- \`kind: "final"\` when you have everything you need. \`final.summary\`
+  is one line; \`final.details\` is the full markdown body that goes
+  into the note (no Q/A — that's logged separately).
+- \`kind: "ask"\` only when a specific decision genuinely requires a
+  human. The question must be answerable in one turn. Provide
+  \`options\` when there's a small enumerable set of answers;
+  otherwise omit and accept free-form text.`;
 
 function envelopeJsonSchema(): Record<string, unknown> {
   // Inline schema (no $refs) so the CLI's --json-schema / --output-schema
