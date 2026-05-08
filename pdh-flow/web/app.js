@@ -252,13 +252,15 @@ function applyRunUpdate(fresh, freshNote) {
 
   // 3b) Turn card (F-012): re-render only when active_turn identity changes
   //    (different node/turn) so half-typed answers survive snapshot writes.
+  //    Also re-render when processing_answer flips so the "engine working"
+  //    spinner appears/disappears across the answer→final window.
   const lastTurnKey = lastSummary.active_turn
     ? `${lastSummary.active_turn.node_id}|${lastSummary.active_turn.turn}`
     : "";
   const freshTurnKey = fresh.active_turn
     ? `${fresh.active_turn.node_id}|${fresh.active_turn.turn}`
     : "";
-  if (lastTurnKey !== freshTurnKey) {
+  if (lastTurnKey !== freshTurnKey || lastSummary.processing_answer !== fresh.processing_answer) {
     const wrap = document.getElementById("turn-card-wrap");
     if (wrap) {
       wrap.innerHTML = renderTurnCardWrap(runId, fresh);
@@ -349,7 +351,24 @@ function renderGateCardInner(runId, s) {
 // ─── F-012 turn card ──────────────────────────────────────────────────────
 
 function renderTurnCardWrap(runId, s) {
-  if (!s.active_turn) return "";
+  if (!s.active_turn) {
+    if (s.processing_answer) {
+      return `
+        <div class="card bg-warning/10 border border-warning shadow">
+          <div class="card-body py-3">
+            <div class="flex items-center gap-3">
+              <span class="loading loading-spinner loading-sm text-warning"></span>
+              <div class="text-sm">
+                <div class="font-medium">Engine is generating its response…</div>
+                <div class="text-xs opacity-70">Your answer was accepted. The provider is now resuming and writing the final output. This usually takes a few seconds.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    return "";
+  }
   const t = s.active_turn;
   const optionsHtml = (t.options ?? [])
     .map((o, i) => {

@@ -359,6 +359,11 @@ interface RunSummary {
   active_gate: string | null;
   /** F-012: pending in-step turn, when a provider_step is awaiting an answer. */
   active_turn: ActiveTurn | null;
+  /** True when an answer file exists with mtime newer than the snapshot's
+   *  saved_at and no question is currently pending — i.e. the user has
+   *  already submitted, the engine has not yet finished the resumed
+   *  provider call, and the run page would otherwise look frozen. */
+  processing_answer: boolean;
   judgements: { node_id: string; round: number; decision: string }[];
   gate_decisions: { node_id: string; decision: string; decided_at: string }[];
   closed: boolean;
@@ -393,6 +398,8 @@ function getRunSummary(worktreePath: string, runId: string): RunSummary | null {
   // `.pdh-flow/runs/<runId>/closed.json` (ephemeral, may be wiped).
   const closed = isTicketClosed(worktreePath, snap?.ticket_id ?? null);
   const activeTurn = findActiveTurn(worktreePath, runId);
+  const processingAnswer =
+    activeTurn === null && hasAnswerNewerThanSnapshot(worktreePath, runId, snap?.saved_at);
   return {
     run_id: runId,
     ticket_id: snap?.ticket_id ?? null,
@@ -406,10 +413,45 @@ function getRunSummary(worktreePath: string, runId: string): RunSummary | null {
     last_guardian_decision: snap?.xstate_snapshot?.context?.lastGuardianDecision ?? null,
     active_gate: isGate && !alreadyDecided ? currentState : null,
     active_turn: activeTurn,
+    processing_answer: processingAnswer,
     judgements,
     gate_decisions: gateDecisions,
     closed,
   };
+}
+
+function hasAnswerNewerThanSnapshot(
+  worktreePath: string,
+  runId: string,
+  savedAtIso: string | null | undefined,
+): boolean {
+  const turnsRoot = join(worktreePath, ".pdh-flow", "runs", runId, "turns");
+  if (!existsSync(turnsRoot)) return false;
+  const savedAtMs = savedAtIso ? Date.parse(savedAtIso) : 0;
+  let nodes: string[];
+  try {
+    nodes = readdirSync(turnsRoot);
+  } catch {
+    return false;
+  }
+  for (const nodeId of nodes) {
+    const nodeDir = join(turnsRoot, nodeId);
+    let files: string[];
+    try {
+      if (!statSync(nodeDir).isDirectory()) continue;
+      files = readdirSync(nodeDir);
+    } catch {
+      continue;
+    }
+    for (const f of files) {
+      if (!/^turn-\d{3}-answer\.json$/.test(f)) continue;
+      try {
+        const t = statSync(join(nodeDir, f)).mtimeMs;
+        if (t > savedAtMs) return true;
+      } catch { /* skip */ }
+    }
+  }
+  return false;
 }
 
 function readSnapshot(worktreePath: string, runId: string): any | null {
