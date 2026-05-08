@@ -23,6 +23,22 @@ Schema rules you MUST follow:
   - For decision=pass: blocking_findings is empty (or omitted).
   - summary: 1 line for git commit subject. reasoning: 2-5 sentences for audit.
 
+{% if isAggregator %}
+Accepted-Minor handling (non_blocking_findings):
+  When upstream reviewers raise Minor-severity observations that you
+  decide NOT to fix in this ticket (you still pass), surface them as
+  non_blocking_findings. Each entry has the same shape as a blocking
+  finding (severity, title, evidence_ref, raised_by). Pull from the
+  reviewers' "Minor" / "non-blocking" sub-bullets; set severity=minor
+  unless the source explicitly said otherwise.
+
+  The runtime will append each entry to the ticket's `# Out of scope`
+  section as the durable record of "noted but intentionally not fixed".
+  Future agents touching the same file rely on this list — be specific
+  and honest. If reviewers found nothing worth recording, leave
+  non_blocking_findings empty/omitted.
+{% endif %}
+
 === current-ticket.md ===
 {{ ticket }}
 === end current-ticket.md ===

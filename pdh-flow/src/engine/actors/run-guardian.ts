@@ -172,6 +172,24 @@ export const runGuardian = fromPromise<
     actor: { kind: "guardian", nodeId, role: input.role },
   });
 
+  // F-011/H10-6 (Gap A): aggregator nodes record "Out of scope / Accepted"
+  // findings in the ticket. Each non-blocking finding becomes one bullet
+  // under the `# Out of scope` heading. Future agents touching the same
+  // file can grep tickets/*.md for the entry and see what the team
+  // explicitly decided NOT to fix in this ticket.
+  if (
+    nodeId.endsWith(".aggregate") &&
+    Array.isArray(validated.data.non_blocking_findings) &&
+    validated.data.non_blocking_findings.length > 0
+  ) {
+    appendOutOfScope(
+      worktreePath,
+      nodeId,
+      round,
+      validated.data.non_blocking_findings,
+    );
+  }
+
   // ── Append note + commit ────────────────────────────────────────────
   ensureGit(worktreePath);
   const noteBody = noteSectionFromFixture
@@ -229,6 +247,42 @@ export const runGuardian = fromPromise<
     fromFixture,
   };
 });
+
+/**
+ * F-011/H10-6: append accepted-Minor findings as bullets under the
+ * `# Out of scope` heading of current-ticket.md. Creates the heading if
+ * it doesn't exist. Each entry attributes severity, the originating
+ * reviewer, the finding title, and (when present) detail/evidence.
+ *
+ * Format is intentionally prose-shaped (not a fixed schema): future
+ * readers grep tickets/*.md and skim. Aggregator nodeId + round form
+ * the audit anchor.
+ */
+function appendOutOfScope(
+  worktreePath: string,
+  nodeId: string,
+  round: number,
+  findings: NonNullable<GuardianOutput["non_blocking_findings"]>,
+): void {
+  const ticketPath = join(worktreePath, "current-ticket.md");
+  if (!existsSync(ticketPath)) return;
+  const lines: string[] = [];
+  const heading = "# Out of scope";
+  const existing = readFileSync(ticketPath, "utf8");
+  if (!existing.includes(heading)) {
+    lines.push("", heading, "");
+  }
+  for (const f of findings) {
+    const sev = f.severity ?? "minor";
+    const raised = f.raised_by ? ` _(raised by ${f.raised_by})_` : "";
+    const detail = f.detail ? ` — ${f.detail.replace(/\s+/g, " ").trim()}` : "";
+    const evidence = f.evidence_ref ? ` [evidence: ${f.evidence_ref}]` : "";
+    lines.push(
+      `- **${sev}**${raised}: ${f.title}${detail}${evidence} _(accepted by ${nodeId} round ${round})_`,
+    );
+  }
+  appendFileSync(ticketPath, lines.join("\n") + "\n");
+}
 
 async function invokeRealGuardian(p: {
   provider: ProviderName;
@@ -344,6 +398,7 @@ function buildApiGuardianPrompt(
     round: p.round,
     maxRounds: p.maxRounds,
     expectedEvidenceNodes: p.expectedEvidenceNodes,
+    isAggregator: p.nodeId.endsWith(".aggregate"),
     ticket,
     note,
   });
@@ -362,6 +417,7 @@ function buildGuardianPrompt(p: {
     round: p.round,
     maxRounds: p.maxRounds,
     expectedEvidenceNodes: p.expectedEvidenceNodes,
+    isAggregator: p.nodeId.endsWith(".aggregate"),
   });
 }
 

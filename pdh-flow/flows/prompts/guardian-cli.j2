@@ -23,4 +23,15 @@ Output requirements:
   - For decision=pass: blocking_findings is empty (or omitted).
   - summary: 1 line for git commit subject. reasoning: 2-5 sentences for audit.
 
+{% if isAggregator %}
+Accepted-Minor handling (non_blocking_findings):
+  When upstream reviewers raise Minor-severity observations that you
+  decide NOT to fix in this ticket (you still pass), surface them as
+  non_blocking_findings. Same shape as a blocking finding (severity,
+  title, evidence_ref, raised_by). The runtime appends each entry to
+  the ticket's `# Out of scope` section as the durable record. Future
+  agents rely on this list — be specific and honest. Empty/omitted
+  when reviewers found nothing worth recording.
+{% endif %}
+
 Do not edit any files. Use only Read tools.
