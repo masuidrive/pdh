@@ -1,9 +1,0 @@
-.env
-.codex
-.pdh-flow/
-node_modules/
-dist/
-coverage/
-smoke-output/
-tmp/
-/lib/

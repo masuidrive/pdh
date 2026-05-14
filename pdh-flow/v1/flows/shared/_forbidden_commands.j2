@@ -1,6 +1,0 @@
-- **step 遷移・ticket lifecycle・gate 確定のコマンドを自分で実行しない、推奨もしない、出力テキストにコマンド一覧として並べない。** 具体的に禁止:
-    - `./ticket.sh start | close | reopen | cancel`
-    - `{{ runtimeCli }} start | run | run-next | provider run | resume | stop | approve | reject | recover | accept-proposal`
-    - `git branch -m`, `git checkout -b ticket/...`, `tickets/<id>.md` の手動移動、`current-ticket.md` / `current-note.md` の削除や差し替え
-    - `.pdh-flow/runtime.json` / `.pdh-flow/runs/...` の手動編集
-  runtime と human gate がそれぞれの領域で発火する。あなたは観察と構造化 evidence の生成だけを行う

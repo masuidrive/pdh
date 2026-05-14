@@ -1,9 +1,0 @@
-## reviewer / DA の並行運用原則
-
-reviewer / DA / CR を複数体起動する時は、**並列 (parallel = ファイル / AC を分担)** ではなく **並行 (concurrent = 全員が同じ範囲・同じ AC・同じ context を読み、違うレンズを当てる)** で実行する。
-
-- ファイル所有権を分けない (`--files` を渡さない)。AC を分けない。
-- 役割の差は **lens の差** (DA / Code Reviewer / Engineer 等) と **観点 (`--scope`)** だけで表現する。
-- 複数体が同じ blocker に着地しても重複指摘でよい。overlap は **ヌケモレを潰す主目的**。
-- 「他の reviewer が見てくれているはずだから自分は見ない」と分担に逃げない。
-- ファイル所有権分離が必要なのは **編集系 (coding / repair) sub-agent** だけ。read-only 系 (reviewer / DA / CR / PdM 等) には適用しない。

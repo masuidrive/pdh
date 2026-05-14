@@ -4,3 +4,8 @@ tmp/
 *.tmp
 *.bak
 *.swp
+
+# pdh-flow is an independent repo at github.com/masuidrive/pdh-flow.
+# Do not let this outer pdh repo track its files (causes nested-repo
+# diff noise on every status). Treat it as an opaque sub-checkout.
+pdh-flow/
