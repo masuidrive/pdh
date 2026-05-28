@@ -306,6 +306,17 @@ flowchart TD
    - `integration-required` — DB / subprocess / internal service を含む統合テストが必要な項目
    - `real-env-required` — 実プロバイダ / 実外部サービス / 実環境前提の項目（API key・ネット・実モデル・ハードウェア等を要する）
    `real-env-required` の項目は、裏取り手段（実行コマンド・必要な環境変数・credential）を **この step で明示的に洗い出し、ユーザに確認する**。「API key が必要」「実モデルのダウンロードが必要」「特定 OS 拡張が必要」等、環境的に難しい前提は着手前に解決する（後述 PD-C-9 / PD-D-1 の deferral ルールも参照）
+
+   **AC が触る consumer surface の列挙（必須）**: AC が外部から観察される interface（= consumer surface）に影響する場合、影響範囲を以下のカテゴリで列挙し、note の `Consumer surface` セクションに記録する。列挙された surface は PD-C-9 の Surface Observer が網羅観察する対象になる:
+   - **UI**: 画面・コンポーネント・フォーム・モーダル・ダッシュボード・ナビゲーション
+   - **HTTP API**: endpoint path・request / response body schema・status code・error message
+   - **SDK**: class / method / type 定義・例外・docstring・README example（複数言語ある場合は全言語）
+   - **CLI**: command 名・option / flag・help text・exit code・出力フォーマット
+   - **Config**: 設定ファイルキー・環境変数・default 値・validation message
+   - **生成物**: OpenAPI / 自動生成 SDK モデル・wiki / docs ページ・migration script
+   - **観測 surface**: log フォーマット・metrics 名・events payload・trace span 属性
+
+   列挙が薄い ticket は close 後に「機能としては動くが consumer 体験が破綻している」周辺欠落の発見数が増える傾向がある（実証あり）。**Surface Observer はここに列挙された範囲を最低ラインとして観察し、それ以外で気づいた違和感も追加で報告する**（列挙は最小保証であり、上限ではない）。surface に該当しないチケット（純内部 refactor 等）では「該当なし」と 1 行記録する
 6. **自動進行モードでの前置確認**: ユーザから「自動で判断して進めて」等の一任指示を受けた場合でも、AC に `real-env-required` 項目や解釈の余地がある項目があれば、**着手前に必ずユーザに確認する**（必要な API key・credential・環境・解釈の明確化）。一任指示を理由に未解決のまま先に進んではならない
 7. Dependencies に未完了のブロッカーがあれば、着手せずユーザに報告する
 8. **flow 判定**:
@@ -442,6 +453,12 @@ QA Engineer の結果を受けて:
 テストが 1 件でも失敗、未実行、環境不備なら完了扱いにしない。
 
 ### PD-C-7. 品質検証
+
+**開始前条件（必須）**: ticket の base branch を作業ブランチに取り込み済みであること。
+
+- base branch は ticket frontmatter の `branch` フィールドが正（`./ticket.sh` がこの値を ticket 開始時の派生元・close 時の merge 先として使う）。`branch` が空 / 未指定の場合は repo の default branch にフォールバックする
+- 確認手順: ticket frontmatter から base 名を取得 → `git fetch origin <base>` → `git merge-base --is-ancestor origin/<base> HEAD` を確認。false なら `git merge origin/<base> --no-edit` で取り込んでから PD-C-7 に進む
+- **なぜ必須か**: 並行 ticket が base branch に merge された状態で本 ticket が PD-C-7 に入ると、`git diff <base>..HEAD` 上で他 ticket の変更が **revert として混入** し、reviewer の集中を奪う + 誤検知 Critical を生む原因になる（複数 ticket で実発生）。Conflict が出た場合は PM が解消してから review を開始する
 
 **Full** — 以下を並行実行する。各 reviewer には **チケットの目的と変更内容の概要** を伝える:
 
