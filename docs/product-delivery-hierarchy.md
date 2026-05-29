@@ -4,16 +4,6 @@ Product Brief / Ticket の 2 層で、**なぜ作るか**・**いま何をやる
 
 時間が空いた後の自分、初めて見る人、コンテキストを持たない agent が「何を・なぜ・どこまで」を最短で把握できることを重視する。
 
-## なぜ 2 層なのか
-
-旧設計では Product Brief / Epic / Ticket の **3 層** だったが、1 user + AI 体制では Epic の同期 / coordination 価値より overhead cost の方が高いと実証された。Epic に書くべき情報 (Outcome / Scope / Design Decisions / Non-goals) は **ticket に直接書く** ことで:
-
-- **cross-cutting changes を 1 ticket に集約** できる (layer 間整合性を 1 agent context で確認可能)
-- **計画 review と実装 review の二重 review が不要** (実装後 review のみで「動くコード vs AC / Invariants / spec」を実質検証)
-- **Epic の status / scope drift / 同期コストがゼロ** になる
-
-詳細は `skills/pdh-dev/SKILL.md` 「核となる設計選択」を参照。
-
 ## 構造
 
 Product Brief / Ticket の 2 層で開発を構造化する。各層は上位の「なぜそれをやるか」を受けて、自分の責任範囲だけを引き受ける。
