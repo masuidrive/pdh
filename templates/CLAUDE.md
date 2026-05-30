@@ -103,20 +103,24 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 
 ## チーム構成・モデル設定
 
-pdh-dev が spawn するチームメンバーの実行主体とモデル。pdh-dev はこのテーブルを参照して dispatch する。
+pdh-dev が spawn するチームメンバーの engine / モデル設定。
 
-**Codex モード**: デフォルト無効（Claude のみで動作する「通常モード」が既定）。セッション開始時に `which codex` で CLI の存在を確認し、存在する場合はユーザに「Codex モードを有効にするか、通常モードで進めるか」を確認する。ユーザの選択はそのセッション中は継続する（毎回確認しない）。
+**既定（指定が無いとき）= 全 worker は main（PM）と同じ engine**。main が claude なら worker も claude、codex なら worker も codex。特定 engine をフローにハードコードしない。spawn 機構は engine 中立な subprocess（`claude -p` / `codex exec`、結果はファイル）で、混在も可（詳細は pdh-dev `_execution-team.md`「エンジン割り当て」「spawn 機構」）。
 
-| 役割 | step | 通常モード | Codex モード | 備考 |
-|---|---|---|---|---|
-| PM（Director） | 全体 | Claude/Opus | Claude/Opus | 常に Claude。進行・dispatch・統合・判断・ユーザ報告 |
-| 開始前チェック | C-1 | Claude/Opus | Claude/Opus | PM が担当。AC 明確化 + Architectural Invariants check + Dependencies + AC 承認 gate |
-| Coding Engineer | C-6 | Claude/Sonnet | Codex | 1 agent が investigate + implement + tests を 1 session で完遂。pdh-coding SKILL 参照 |
-| QA Engineer | C-6, C-7, C-9 | Claude/Sonnet | Codex | テスト実行・E2E確認・ドキュメント再生成 |
-| 品質 Devil's Advocate | C-7 | Claude/Sonnet ×1 | Claude/Sonnet ×1 | DA は常に Claude (Codex モードでも)。ユーザ視点の厳しい指摘 / セキュリティ脆弱性 / 設計上の論理バグ / AC 達成の実質判定 |
-| 品質 codex | C-7 | Codex ×1 | Codex ×1 | 致命的な点のみ指摘 + Ticket 不可侵 check (implementor が AC / out-of-scope / Architectural Invariants を勝手に書き換えていないか) |
-| AC 裏取り | C-9 | Claude/Sonnet+Opus | Codex | 各 AC 項目が実際に達成されているかコード・テスト結果・ノートを読んで検証。形式的でなく Why を満たす実質達成を厳しく見る |
-| Surface Observer | C-9 | Claude/Sonnet | Claude/Sonnet | PD-C-10 直前に実機で UI / HTTP API / SDK / CLI を consumer 視点で観察。実ブラウザ / browser automation CLI / curl / 実 SDK 使用。純 backend 変更のみなら skip 可 |
+**main engine の選択**: 未指定で曖昧なときのみ `which codex` で確認し、ユーザに「claude / codex どちらで進めるか」を確認（既指定なら不要、セッション中は継続）。bot 文脈では `CODING_ROBOT_ENGINE` が main engine。
+
+**下表は「役割ごとに engine / model を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。
+
+| 役割 | step | 上書き例 | 備考 |
+|---|---|---|---|
+| PM（Director） | 全体 | （main） | 進行・dispatch・統合・判断・ユーザ報告。worker を spawn する側 |
+| 開始前チェック | C-1 | （main） | PM が担当。AC 明確化 + Architectural Invariants check + Dependencies + AC 承認 gate |
+| Coding Engineer | C-6 | （main） | 1 agent が investigate + implement + tests を 1 session で完遂。pdh-coding SKILL 参照 |
+| QA Engineer | C-6, C-7, C-9 | （main） | テスト実行・E2E確認・ドキュメント再生成 |
+| Devil's Advocate | C-7 | （main） | ユーザ視点の厳しい指摘 / セキュリティ脆弱性 / 設計上の論理バグ / AC 達成の実質判定 + Ticket 不可侵 check |
+| 追加 reviewer（任意） | C-7 | 例: codex を1人追加 | 独立視点を増やしたいとき、別 engine の reviewer を明示追加してよい（混在）|
+| AC 裏取り | C-9 | （main） | 各 AC 項目が実際に達成されているかコード・テスト結果・ノートを読んで検証。形式でなく Why を満たす実質達成を厳しく見る |
+| Surface Observer | C-9 | （main） | PD-C-10 直前に実機で UI / HTTP API / SDK / CLI を consumer 視点で観察。実ブラウザ / browser automation CLI / curl / 実 SDK 使用。純 backend 変更のみなら skip 可 |
 
 ### Codex の起動方法
 
