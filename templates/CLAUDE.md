@@ -107,7 +107,7 @@ pdh-dev が spawn するチームメンバーの engine / モデル設定。
 
 **既定（指定が無いとき）= 全 worker は main（PM）と同じ engine**。main が claude なら worker も claude、codex なら worker も codex。特定 engine をフローにハードコードしない。spawn 機構は engine 中立な subprocess（`claude -p` / `codex exec`、結果はファイル）で、混在も可（詳細は pdh-dev `_execution-team.md`「エンジン割り当て」「spawn 機構」）。
 
-**main engine の選択**: 未指定で曖昧なときのみ `which codex` で確認し、ユーザに「claude / codex どちらで進めるか」を確認（既指定なら不要、セッション中は継続）。bot 文脈では `CODING_ROBOT_ENGINE` が main engine。
+**main engine の選択**: 未指定で曖昧なときのみ `which codex` で確認し、ユーザに「claude / codex どちらで進めるか」を確認（既指定なら不要、セッション中は継続）。headless/CI 文脈では、その実行系が定義する環境変数を main engine とする（無ければ既定 claude）。
 
 **下表は「役割ごとに engine / model を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。
 

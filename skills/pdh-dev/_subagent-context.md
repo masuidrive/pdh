@@ -22,7 +22,7 @@ PM の使い方:
 - **Product Brief**: `product-brief.md`（全判断の基準）
 - **対象チケット本体**: `<TICKET_FILE>`（例 `tickets/<TICKET_NAME>.md`）— Why / Acceptance Criteria / Architectural Invariants check / 確定判断 / Out-of-scope が書かれている
 - **作業ノート**: `<NOTE_FILE>`（例 `tickets/<TICKET_NAME>-note.md`）— 実装ログ / レビュー結果 / Discoveries
-- **作業ブランチ**: `<BRANCH>`（例 `agent/issue-<N>`）。すでにこのブランチに居る。
+- **作業ブランチ**: `<BRANCH>`（プロジェクトのブランチ規約に従う）。すでにこのブランチに居る。
 
 ### 不可侵（厳守）
 - チケットの **Acceptance Criteria / Architectural Invariants / Out-of-scope は変更しない**。変更が必要と判断したら、自分で書き換えず、その旨を結果に明記して PM にエスカレーションする。
