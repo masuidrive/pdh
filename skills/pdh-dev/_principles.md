@@ -4,6 +4,8 @@
 
 **価値を届けるために workflow を選ぶ。workflow を当てはめるために workflow を回すのではない。**
 
+**user journey 動作 > engineering aesthetics**。「user が今何ができるようになるか」が常に第一基準。clean break migration / interface dataclass / DD invariant fidelity / registry value alignment / 後方互換削除 などの engineering 美学は、user journey が壊れないことを担保した上でのみ追求する。close gate で「downstream ticket で復旧予定」と引き換えに main の consumer surface を壊すことは、user journey を engineering aesthetics で犠牲にする典型例で禁止 (詳細は `_flow.md` PD-C-10)。
+
 階層:
 - **Product Brief** = 人間の意思。解きたい問題と目指す状態。常に最上位
 - **Ticket** = 実装単位。常に存在する

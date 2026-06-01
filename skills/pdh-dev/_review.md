@@ -59,6 +59,16 @@ flowchart TD
 - reviewer プロンプト偏り → 観点を見直す
 - 確定値を下流に投げる pattern → 意思決定者が決めるべき判断を確定値として書き込む、または scope を縮小
 
+**Round 2+ で reviewer 指摘が false positive と判明した場合の scope-expand 抑制**:
+
+Round 1 で reviewer / Surface Observer が挙げた指摘が、Round 2 の調査で「誤検出 / pre-existing / out-of-scope / user-value に直結しない」と判明した場合、**Round 2 内で追加 fix を実装してはならない**。以下を実行:
+
+- Round 1 の指摘を `current-note.md` Discoveries に「Round 1 報告は誤検出 / pre-existing と判明」と記録
+- 元の AC + user journey 動作確認に絞って PD-C-9 を再走、close へ
+- 「invariant test pin で将来 regression 防止」「registry value cosmetic alignment」「Epic Exit Criteria の体裁を整える」「engineering 美学の補完」などは **scope-expand 理由として禁止**。本当に必要なら別 ticket を切る (Director / 意思決定者 承認必須)
+
+根拠: Round 1 → Round 2 で「修正の正当化」が動機になり、user-value に寄与しない scope expansion を生む典型 anti-pattern。Round 2 では Round 1 と同じ ground truth (AC + user journey、`_principles.md` 「user journey > engineering aesthetics」) を判定基準として維持する。
+
 **3+ round の patch loop には絶対に入らない**。3+ round の同種再発は「scope か work の根本ミスマッチ」を示す signal。追加 patch ではなく以下のいずれかで対処:
 
 - **scope 切り直し**: ticket cancel (`./ticket.sh cancel`)、scope を縮小して新 ticket
