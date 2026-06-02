@@ -196,19 +196,31 @@ ls scripts/hookbus.js && jq '.hooks.Stop' .claude/settings.json
    # a) tmux socket hash を取得
    SOCK_HASH=$(scripts/hookbus.js whoami | cut -d: -f1)
 
-   # b) 対象 window / pane の pane_id を tmux list-panes から取得 (TD-1 で選んだもの)
-   #    例: w1=%10、w2=%11、w3=%12 の場合、key は "<SOCK_HASH>:%10" 等になる
+   # b) 監視対象 pane の key を決める (TD-1 で選んだ pane_id)
+   #    例: w1=%10、w2=%11、w3=%12 の場合、key は "<SOCK_HASH>:%10" 等
+
+   # c) ⚠ Monitor 専用の固有 cursor id を決める (Director の %0 と必ず別。理由は下記)
+   CURID="$SOCK_HASH:mon-$(tmux display-message -p '#{window_index}')"
+
+   # d) cursor を log 末尾に seed (一致 key 無しで一度読み切り、backlog を emit せず cursor だけ EOF へ進める)
+   scripts/hookbus.js pull --cursor "$CURID" --include __seed_no_match__
    ```
 
    ```
    Monitor({
-     command: "env -u CLAUDE_EVENT_DISABLE scripts/hookbus.js pull --include <w1-key> --include <w2-key> --include <w3-key> --follow",
+     command: "env -u CLAUDE_EVENT_DISABLE scripts/hookbus.js pull --cursor $CURID --include <w1-key> --include <w2-key> --include <w3-key> --follow",
      description: "tmux worker idle events",
      persistent: true
    })
    ```
 
-   `--include` 未指定なら **全 worker の event** が流れる (無関係な pane も含む)。監視対象を絞るには明示必須。Director 自身の key は include list にないので自然に yield されない (`--exclude` は廃止)。cursor identity は省略時は `whoami` (= Director の key)。
+   `--include` 未指定なら **全 worker の event** が流れる (無関係な pane も含む)。監視対象を絞るには明示必須。Director 自身の key は include list にないので自然に yield されない (`--exclude` は廃止)。
+
+   **⚠ cursor identity の落とし穴 — 必ず `--cursor` を明示する**: `pull` は `--cursor` 省略時、cursor identity を `whoami` (= Director の `<hash>:%0`) にフォールバックする (`scripts/hookbus.js` `pullCommand`)。cursor は「どこまで読んだか」を identity ごとに 1 ファイル (byte offset) で保持し、event を emit するたびに advance + 永続化する。**同じ identity を使う `pull` が複数あると (Monitor を 2 つ起動する / Director が診断で手動 `pull` を叩く 等)、片方が cursor を末尾まで進めてしまい、他方はイベントを consume 済み扱いで取り逃す**。実際これで worker の Stop イベントが一度も通知されない事故が起きた。鉄則:
+   - **各 Monitor に固有の `--cursor <id>`** を渡す (Director の `%0` と必ず別)。
+   - **新規 cursor は offset 0 から = log 全 backlog を replay** し通知洪水で Monitor が auto-stop するので、起動前に上記 d) で cursor を log 末尾へ seed して「以降の新規イベントだけ」にする。
+   - **複数 worker は「Monitor を N 個」ではなく「1 Monitor + `--include` 複数」**で監視し、cursor を 1 本に保つ。
+   - Director が診断目的で手動 `pull` を叩く時も `--cursor` を別 id にする (でないと Monitor の cursor を汚染する)。
 
    worker が Stop/Notification した瞬間、1 event = 1 通知として director の会話に push される。
 
