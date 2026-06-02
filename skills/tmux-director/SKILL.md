@@ -202,8 +202,11 @@ ls scripts/hookbus.js && jq '.hooks.Stop' .claude/settings.json
    # c) ⚠ Monitor 専用の固有 cursor id を決める (Director の %0 と必ず別。理由は下記)
    CURID="$SOCK_HASH:mon-$(tmux display-message -p '#{window_index}')"
 
-   # d) cursor を log 末尾に seed (一致 key 無しで一度読み切り、backlog を emit せず cursor だけ EOF へ進める)
-   scripts/hookbus.js pull --cursor "$CURID" --include __seed_no_match__
+   # d) cursor を log 末尾に seed して offset 0 からの全 backlog 再生を回避する。
+   #    ⚠ `pull --include <no-match>` 方式は cursor file を作らず seed されない (実測)。
+   #    cursor file (filename は CURID の ':' を %3A に URL-encode) に log size を直書きするのが確実:
+   ROOT=/tmp/claude-events-$SOCK_HASH
+   printf '%s\n' "$(stat -c%s "$ROOT/log.ndjson")" > "$ROOT/consumers/${CURID/:/%3A}.cursor"
    ```
 
    ```

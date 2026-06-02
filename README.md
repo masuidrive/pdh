@@ -378,7 +378,8 @@ Claude Code で `tmux-director` と入力すると起動する。
    ```bash
    SOCK_HASH=$(scripts/hookbus.js whoami | cut -d: -f1)
    CURID="$SOCK_HASH:mon-$(tmux display-message -p '#{window_index}')"    # Director の %0 と必ず別
-   scripts/hookbus.js pull --cursor "$CURID" --include __seed_no_match__  # cursor を log 末尾へ seed (backlog 再生回避)
+   ROOT=/tmp/claude-events-$SOCK_HASH
+   printf '%s\n' "$(stat -c%s "$ROOT/log.ndjson")" > "$ROOT/consumers/${CURID/:/%3A}.cursor"  # cursor を log 末尾へ直書き seed (__seed_no_match__ pull では seed されないため。backlog 再生回避)
    ```
    ```
    Monitor({
