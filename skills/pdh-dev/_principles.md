@@ -27,5 +27,5 @@
 | **1 ticket per work** | cross-cutting changes を複数 ticket に切ると layer 間整合性が完成時にしか取れず、複数の plan-vs-real-code 不整合が並列発生し review loop が収束しなくなる。1 ticket なら 1 作業文脈で全 layer を見ながら整合性を取れる |
 | **1 作業文脈が investigate + implement** | 「実コードを読み計画を書く」段と「再度実コードを読み実装する」段の 2 段階分離は、計画段で生じた盲点を計画と実装の両方に伝播させる anti-pattern。同一作業文脈が実コードを読みながら実装すれば計画と実コードは自動的に整合 |
 | **実装後 review のみ** | 実装前 (plan review) は「計画書 vs 計画書」の内部整合性しか検証できない。実装後 (code review) は「動くコード vs AC / Invariants / spec」の実質整合性を検証できる |
-| **commit cadence 5+ 必須** | 実装後 review で bisect / partial rollback / 段階追跡を可能にする。「全変更を 1 commit に押し込む」は事後分析不能 |
+| **commit cadence (mega-commit 禁止)** | 論理単位の境界ごとに commit + push し、bisect / partial rollback / 段階追跡と中断耐性を確保する。狙いは commit 数ではなく mega-commit 回避と state 遷移 (blocker 等) の durable 化。「全変更を 1 commit に押し込む」は事後分析不能 |
 | **Ticket immutable** | implementor が AC / out-of-scope / Architectural Invariants を勝手に書き換えると、ticket が "意思決定者の意思" を持たなくなり ticket 自体の価値が消失する。変更が必要なら implementation を止めてエスカレーション |

@@ -45,7 +45,7 @@ PM の使い方:
 ### Coding Engineer
 - **最初に `.claude/skills/pdh-coding/SKILL.md` を Read してから実装を始める**こと。
 - 1 つの作業文脈で **investigate + implement + tests** を完遂する。
-- **commit cadence**: incremental に 5+ commits（1 commit = 1 論理単位）。
+- **commit cadence**: 論理単位の境界ごとに incremental に commit + push（1 commit = 1 論理単位、mega-commit 禁止）。blocker / state 遷移は独立 commit。commit 数は gate ではない。
 - **テスト全件 PASS gate**: 関係する全スイートを完成時に通す。`scripts/test-all.sh` があれば使う。
 - **E2E gate**: 外部 provider / API を経由する path は実 API で 1 経路以上確認。credential 不在なら deferred として明記しエスカレーション。
 - **Open Questions protocol**: 迷い点は妥当な default を採用し `ASSUMPTION:` を commit message と note に記録して進める。即中断は「AC 破綻 / Invariant 抵触 / 不可侵変更が必要 / 破壊的不可逆操作 / 前提崩壊」の限定時のみ。

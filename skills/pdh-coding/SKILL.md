@@ -88,7 +88,7 @@ ticket の以下を implementor が **勝手に書き換えてはいけない**:
 
 ### 中断手順
 
-1. **直近の作業を 1 commit に切る** (中断時点までを保存。commit cadence 5+ の一部として記録)
+1. **直近の作業を 1 commit に切る** (中断時点までを保存。Commit cadence 契約の一部として記録)
 2. `current-note.md` の **`## Resume Point`** セクションに記録:
    - 最後の commit hash
    - 中断理由 (即中断 trigger のどれに該当するか)
@@ -101,7 +101,7 @@ ticket の以下を implementor が **勝手に書き換えてはいけない**:
 
 - **judgement lost を防ぐ**: 採用した default 値と理由を残すことで、上位（team: PM / solo: ユーザー）が「この判断を覆したい」と決めた時は該当 commit だけ revert / 修正で済む
 - **throughput 最大化**: 「迷ったら全部止まる」は inefficient。default で進めて batch escalate することで、Codex の単一 run で最大限の work を進める
-- **commit cadence 5+ と相乗**: 細切れ commit + ASSUMPTION marker により、上位（team: PM / solo: ユーザー）の事後 review で「どの判断を覆すべきか」が pinpoint できる
+- **commit cadence と相乗**: 細切れ commit + ASSUMPTION marker により、上位（team: PM / solo: ユーザー）の事後 review で「どの判断を覆すべきか」が pinpoint できる
 
 **ticket に書かれた signature 詳細 (関数 signature / 行番号 / 現状 snapshot) が実コードと一致しない場合**:
 
@@ -143,16 +143,26 @@ ticket の Acceptance Criteria を満たすコードを書く。out-of-scope は
   install できない環境 (Codex sandbox 等) では skip 可。skip した場合は note に「重複検出 skip: 環境制約 (理由)」と 1 行記録する
 - **PD-C-6 完了条件**: `CLAUDE.md` の「テスト」セクションを読み、記載されたテストコマンドを実行して all passed になること。結果をレスポンスに含める
 
-## Commit cadence 5+ 契約
+## Commit cadence 契約
 
-Direct flow では implementor が **incremental に 5+ commits に分けて切る**。1 commit = 1 論理単位。
+Direct flow では implementor が **論理単位の境界ごとに incremental に commit + push する**。1 commit = 1 論理単位。狙いは commit の *数* ではなく次の 3 点:
 
-- 「全変更を 1 commit に押し込む」は禁止 (事後分析 / bisect / partial rollback 不能)
+1. **mega-commit を作らない** — 事後の review / bisect / partial rollback を可能にする
+2. **作業中に push する** — 中断 / timeout / ephemeral runner で未 push の作業を失わない
+3. **state 遷移を durable に残す** — blocker・設計判断の確定・中断点を、後から history で追える形にする
+
+- **mega-commit 禁止**: 「全変更を 1 commit に押し込む」は事後分析不能。論理単位で割る
+- **commit early & push**: 最初の意味ある変更で先に commit + push してから長時間 gate (フルテスト等) を回す。push 前に環境が落ちれば作業は消える前提で動く
+- **state 遷移は独立 commit**: blocker / 重要な設計判断 / 中断点は、コード変更や無関係な chore に同梱せず *それ単独で* commit する。commit message も state 変更を表す文言にし、`chore: ...` 等に埋もれさせない
 - 各 commit はテストパス状態を維持 (progressing 中なら明示的 WIP marker)
 - commit メッセージは `[<ticket-name>] <type>(<scope>): <summary>` 形式
 - commit は **implementor 自身が直接行う**
 
-例外: pure docs / pure housekeeping (lockfile tracking / 設定ファイル 1 行更新 等) ticket では、意思決定者判断で 3+ に緩和してよい。緩和する場合は **実行指示（spawn prompt / bot 指示）に「本 ticket は X のため cadence 3+ に緩和」を明示** し、`current-note.md` の実装ログ (`PD-C-6.` セクション) に緩和理由を記録する。`current-ticket.md` の Implementation Notes には書かない (ticket は後世への永続記録、cadence 緩和は本セッション限定の運用判断であり、後で同じ ticket を読む人にとってノイズになるため)。
+> **粒度の目安 (合否 gate ではない)**: 典型的な feature ticket は自然に 5+ commits になる。2-3 commit で終わったら「粒度が粗すぎないか / state 遷移を 1 commit に埋もれさせていないか」を自問する。ただし **commit 数そのものを合否基準にしてはならない** — 数合わせのための retroactive split (引き継ぎ blob を無理に過去へ再分解する等) は偽の境界を生むだけで禁止。論理単位が少なければ少ないままでよい。
+
+**引き継ぎ (rescue / finish pass)**: 他 worker の未コミット blob を引き継ぐ場合、既存の塊を無理に過去へ分解しない。ただし *それを理由に「全変更を最後に 1 burst で commit」へ倒してはならない* — 残作業は論理単位で commit し、note / blocker は独立 commit で先に残す。
+
+pure docs / pure housekeeping (lockfile tracking / 設定ファイル 1 行更新 等) ticket は論理単位が元々少なく、1-2 commit でも自然。commit 数の少なさ自体は問題にしない (count gate ではないため、特別な緩和宣言も不要)。
 
 commit 分割の例 (画像入力機能の場合):
 1. `feat(providers): add ReferenceImage provider contract`
