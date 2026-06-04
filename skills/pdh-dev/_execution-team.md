@@ -80,10 +80,22 @@ launch() {  # launch <name> <engine> <promptfile>
 launch reviewer1 "$ENGINE" /tmp/p-rev1.txt
 launch reviewer2 "$ENGINE" /tmp/p-rev2.txt
 for pid in "${!PID2NAME[@]}"; do wait "$pid"; RC[${PID2NAME[$pid]}]=$?; done
-# 各 worker の result を読み、exit code 非ゼロ / 空 result は stderr.log で原因を掴む（silent fail にしない）
+# 各 worker の result を読み、exit code 非ゼロ / 空 result は rc と stderr tail で原因を掴む（silent fail にしない）
+for name in "${!RC[@]}"; do
+  d="/tmp/wk-$name"
+  {
+    echo "## worker: $name"
+    echo "rc=${RC[$name]}"
+    echo "### ls -l"
+    ls -l "$d/result.txt" "$d/stderr.log" 2>&1
+    echo "### tail -120 stderr.log"
+    tail -120 "$d/stderr.log" 2>&1
+  } >> /tmp/agent-result.md
+done
 ```
 
-- **失敗検知**: `RC[name]` が非ゼロ、または `result.txt` が空なら、その `stderr.log` を読んで原因を結果に含める。**spawn が失敗したら単独続行せず中止・報告**（solo フォールバックは持たない）。
+- **診断証跡**: worker 起動後は必ず `wait` 後に `rc=$?` を保存する。複数 worker の場合も各 worker ごとに rc、result/stderr の `ls -l`、`tail -120 stderr.log` を `/tmp/agent-result.md` の final report に残す。
+- **失敗検知**: `RC[name]` が非ゼロ、または `result.txt` が空/無い場合は、その worker の rc と `stderr.log` tail をセットで読んで原因を結果に含める。result が空/無いことだけで silent failure と誤判定しない。**spawn が失敗したら単独続行せず中止・報告**（solo フォールバックは持たない）。
 - 同時数が多いときは数体ずつに分けて起動上限を設ける（リソース保護）。
 
 main が claude で worker も claude の場合は in-process の Agent/Task ツールで並行 spawn してもよい（軽量）。ただし **cross-engine、および bot（headless CI）では上記 subprocess パターンが前提**。
