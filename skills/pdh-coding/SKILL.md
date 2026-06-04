@@ -144,10 +144,12 @@ ticket の Acceptance Criteria を満たすコードを書く。out-of-scope は
   ```bash
   similarity-ts ./frontend/src --threshold 0.7 --print
   similarity-py ./src --threshold 0.7 --print
-  similarity-generic --language ruby ./sdk/ruby/lib --threshold 0.7 --print
+  # similarity-generic は ts/py と仕様が異なり「単一ファイル指定」(dir/複数引数/--print 非対応、
+  # 関数比較は同一ファイル内)。プロジェクト全体は per-file ループで回す:
+  for f in $(find ./sdk/ruby/lib -name '*.rb'); do similarity-generic --language ruby -t 0.7 "$f"; done
   ```
 
-  対応言語マップ: `similarity-ts` = TS/JS、`similarity-py` = Python、`similarity-generic` = Go / Java / C / C++ / C# / **Ruby** (multi-language CLI、`--language <lang>` で言語を指定。Ruby は `--language ruby`)。
+  対応言語マップ: `similarity-ts` = TS/JS、`similarity-py` = Python、`similarity-generic` = Go / Java / C / C++ / C# / **Ruby** (`--language <lang>` 指定。**単一ファイル単位**で関数類似を比較、`--supported` で対応言語一覧)。`similarity-ts` / `similarity-py` は dir 再帰 + `--print` 可。
 
   install できない環境 (Codex sandbox 等) では skip 可。skip した場合は note に「重複検出 skip: 環境制約 (理由)」と 1 行記録する
 - **PD-C-6 完了条件**: `CLAUDE.md` の「テスト」セクションを読み、記載されたテストコマンドを実行して all passed になること。結果をレスポンスに含める
