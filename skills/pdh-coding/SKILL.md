@@ -127,18 +127,27 @@ ticket の Acceptance Criteria を満たすコードを書く。out-of-scope は
 - **実装→テストのループ**: 実装とテスト実行を自分自身が繰り返し、全件パスした状態で完了報告すること。テスト未実行のまま返さない
 - **重複検出 (テスト前)**: 実装完了後、テスト実行前に `similarity-ts` (TS/JS) / `similarity-py` (Python) / `similarity-generic` (Ruby ほか) で変更ファイル間の構造的重複を検出する。閾値を超える重複が見つかった場合は共通化を検討してからテストに進む。重複が意図的 (テスト setup 等) な場合はそのまま進めてよい。
 
-  **install** (Rust 製 CLI、npm/pip パッケージは存在しない):
-  - `cargo install similarity-ts similarity-py similarity-generic` (`cargo` が必要、通常 ~60-90 秒)
-  - `cargo` がない環境では https://github.com/mizchi/similarity/releases から prebuilt binary を取得
+  **install** (Rust 製 CLI 群。1 つの release archive に全 CLI 同梱: `similarity-ts` / `similarity-py` / `similarity-generic` ほか。npm/pip パッケージは無い):
+  - **prebuilt を優先** (ビルド不要・速い)。https://github.com/mizchi/similarity/releases から **自分の OS/arch に合う archive** を取り、PATH の通った dir に置く:
+    ```bash
+    # PLATFORM は自分の環境に合わせる (例: x86_64-unknown-linux-gnu / aarch64-apple-darwin)
+    gh release download --repo mizchi/similarity --pattern "*${PLATFORM}*.tar.gz" -D /tmp/sim --clobber
+    tar xzf /tmp/sim/*.tar.gz -C /tmp/sim
+    cp /tmp/sim/similarity-*/similarity-* "$HOME/.local/bin/"   # PATH の通った dir へ
+    ```
+  - **自分の OS/arch 用 prebuilt が無い場合のみ cargo でビルド** (`cargo` 必須、~60-90 秒):
+    ```bash
+    cargo install similarity-ts similarity-py similarity-generic
+    ```
 
-  **基本的な使い方**:
+  **基本的な使い方** (`-t/--threshold` 既定 0.85、`-p/--print` でコード出力):
   ```bash
   similarity-ts ./frontend/src --threshold 0.7 --print
   similarity-py ./src --threshold 0.7 --print
-  similarity-generic ./sdk/ruby/lib --threshold 0.7 --print
+  similarity-generic --language ruby ./sdk/ruby/lib --threshold 0.7 --print
   ```
 
-  対応言語マップ: `similarity-ts` = TS/JS、`similarity-py` = Python、`similarity-generic` = Go / Java / C / C++ / C# / Ruby (multi-language CLI、必要なら `--lang ruby` 等の指定が要るかは実行時に `--help` で確認)。
+  対応言語マップ: `similarity-ts` = TS/JS、`similarity-py` = Python、`similarity-generic` = Go / Java / C / C++ / C# / **Ruby** (multi-language CLI、`--language <lang>` で言語を指定。Ruby は `--language ruby`)。
 
   install できない環境 (Codex sandbox 等) では skip 可。skip した場合は note に「重複検出 skip: 環境制約 (理由)」と 1 行記録する
 - **PD-C-6 完了条件**: `CLAUDE.md` の「テスト」セクションを読み、記載されたテストコマンドを実行して all passed になること。結果をレスポンスに含める
