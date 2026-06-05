@@ -160,6 +160,8 @@ Critical / Major があれば:
 
 ## PD-C-9. 完了検証
 
+> **Report ↔ reality contract**: PD-C-10 の完了報告に `VERIFIED` / `PASS` / `[x] AC1` 等を書ける条件は「報告作成時点で対応する持続状態が ticket.md / note.md / git history に**実在し、commit 済み**」。報告は state の view であって state の作成ではない。下の step 1/2/8 を踏まずに完了宣言コメントを書くと違反になる。host に TODO ツール (`TaskCreate` / `update_plan` 等) があれば、step 1/2/8 を**個別 trackable item として乗せる**と「報告 task を completed にする前に他が completed か」の self-check に使えて drift しにくい。
+
 1. `current-ticket.md` の **AC** を一つずつ確認し、各項目に `[x]` を付ける
 2. `current-note.md` の **プロセスチェックリスト** を一つずつ確認し、各項目に `[x]` を付ける
 3. **AC 裏取り**: 実行モデル依存の手段で (`_execution-*.md` 参照) 各 AC 項目が実際に達成されているかコード・テスト結果・ノートを読んで検証する。**実装が AC を実質達成しているか** を厳しく見る (形式的に満たすだけでなく、Why を満たしているか)。NOT VERIFIED が返った項目は証拠を補完してから進む
