@@ -24,3 +24,5 @@ description: "Ticket-centric 開発ワークフロー (1 user + AI 体制 single
 | `_subagent-context.md` | **worker 共通プロンプト**: spawn する全 worker に渡す土台（PDH 前提・読む原則ファイル・チケット位置・不可侵・出力先 + 役割別追加） |
 
 > 実行モデルは team のみ。**spawn は必須**で、できない場合は単独続行せず中止・報告する（solo フォールバックは持たない）。bot（headless CI）も同じく worker を CLI subprocess で spawn する。
+
+> **gate の Task 化**: PM は着手時に PD-C の各 gate（特に **PD-C-6 / PD-C-9 の `scripts/test-all.sh` 全スイート確認**）を TaskCreate で積み、各 gate の**証拠が揃うまで completed にしない**。全テストは `scripts/test-all.sh` に固定（代替不可、README §6）。検証完了の主張には実コマンドと `Passed: N / N` の実出力を note に貼ること（証拠バインディングの詳細は `_reference.md`「必須ルール」、gate 本体は `_flow.md` PD-C-6/9）。
