@@ -35,6 +35,7 @@ flowchart TD
    - **存在する場合**: 内容を読んで作業を続行する
 2. **`current-note.md` の確認**
    - ノートの構造は `./ticket.sh start` が生成した初期テンプレートに従う
+   - **AC を note にコピーしない**。AC の source of truth は ticket.md のみ。note.md は調査メモ / 状態遷移ログ / Discoveries / プロセスチェックリスト用で、承認待ち AC や承認済み AC を再掲するセクション（例: `## PD-C-1. 承認待ち AC`）は作らない。snapshot を作ると、後で AC が更新された時に片方が腐る（drift する）。AC を読みたい reviewer / 裏取り agent / 後続フェーズは ticket.md を参照する
 3. **AC の明確化**
    - AC が曖昧な場合は確認して具体化する
    - AC にプロセス要件 (`レビュー済み` `テストパス` 等) が混入していたら、note のプロセスチェックリストに移し、AC にはプロダクトの観察可能な振る舞いのみを残す
