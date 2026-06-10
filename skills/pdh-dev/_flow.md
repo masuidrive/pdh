@@ -37,6 +37,7 @@ flowchart TD
    - ノートの構造は `./ticket.sh start` が生成した初期テンプレートに従う
    - **AC を note にコピーしない**。AC の source of truth は ticket.md のみ。note.md は調査メモ / 状態遷移ログ / Discoveries / プロセスチェックリスト用で、承認待ち AC や承認済み AC を再掲するセクション（例: `## PD-C-1. 承認待ち AC`）は作らない。snapshot を作ると、後で AC が更新された時に片方が腐る（drift する）。AC を読みたい reviewer / 裏取り agent / 後続フェーズは ticket.md を参照する
 3. **AC の明確化**
+   - **Why は症状ではなく `product-brief.md` の目的・利益に紐付ける** (詳細は `_principles.md`「症状ではなく目的から解く」)。Issue が症状ベース/要望ベースの場合、brief の該当目的に翻訳してから AC を派生させる。翻訳結果が brief の Invariants や目的と矛盾する場合は実装に進まず提起する
    - AC が曖昧な場合は確認して具体化する
    - AC にプロセス要件 (`レビュー済み` `テストパス` 等) が混入していたら、note のプロセスチェックリストに移し、AC にはプロダクトの観察可能な振る舞いのみを残す
    - runtime で UX/Security invariant を強制する ticket では、AC に **runtime enforce の保証メカニズム** を 1 行明記する。例: 「editor で警告される」だけでなく「runtime で 422 reject される」「render context から物理的に除外される」など、動作レベルの要求を書く

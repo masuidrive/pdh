@@ -12,6 +12,14 @@
 
 **Epic 概念は持たない。** 1 user + AI scale では Epic の同期 / coordination 価値より overhead cost の方が高い。Epic に書くべき情報 (Outcome / Scope / Design Decisions / Non-goals) は ticket に直接書く。
 
+## 症状ではなく目的から解く
+
+**バグ修正・機能追加の ticket は、症状や要望の文面をそのままなぞるのではなく、`product-brief.md` の目的・利益から逆算して Why と AC を組み立てる。**
+
+- Issue が「X が動かない」「X を追加して」と症状/要望ベースで来ても、ticket の Why は「product-brief のどの目的・どの利益が損なわれているか／前進するか」に翻訳してから書く。AC はその Why から派生させる。
+- 翻訳した結果、報告された症状の直接修正と product-brief の目的が乖離する場合 (例: 症状の直し方が brief の Invariants と衝突する、より根本の場所で直す方が brief の目的に合致する) は、**実装に進まず提起**する。場当たり修正で症状だけ消して目的を満たさない方向に進めない。
+- *理由*: 症状ベースの修正は、同じ根本原因の再発・brief との不整合・「直したつもりで価値が動いていない」を生む。Why が product-brief に接続されていれば、PD-C-7 review と PD-C-9 AC 裏取りで「目的を満たしたか」を判定でき、close の意味が定まる。
+
 ## YAGNI / 最小実装
 
 **AC を満たす最小の変更で止める。仮定の将来要件のために設計しない。**
