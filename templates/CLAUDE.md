@@ -2,6 +2,8 @@
 
 @product-brief.md を参照すること
 
+`CLAUDE.md` は repo で共有する PDH / project ルールを書く場所。端末・sandbox・個人アカウント・一時 URL・ローカル認証状態などの環境固有メモは、git 管理しない `CLAUDE.local.md` に書く。`CLAUDE.local.md` が存在する場合は本ファイルの後に読む。secret の値そのものは `CLAUDE.local.md` にも書かず、取得方法や保管場所だけを書く。
+
 **設計意図の探し方:** `git blame <file>` でコミットを特定 → コミットメッセージの ticket 名 → `tickets/done/` → `product-brief.md`
 
 ## ディレクトリ構造

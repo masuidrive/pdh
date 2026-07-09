@@ -100,6 +100,12 @@ bash ticket.sh init
 
 コピー時に、各ファイル末尾の `Based on` 行の `XXXXXXX` を `tmp/pdh` の HEAD commit ID（7 桁）に置換する。
 
+`CLAUDE.md` は repo で共有する PDH / project ルールとして commit する。端末・sandbox・個人アカウント・一時 URL・ローカル認証状態などの環境固有メモは `CLAUDE.local.md` に書き、`.gitignore` に入れて commit しない。secret の値そのものは `CLAUDE.local.md` にも書かず、取得方法や保管場所だけを書く。
+
+```bash
+grep -qxF 'CLAUDE.local.md' .gitignore || printf '\nCLAUDE.local.md\n' >> .gitignore
+```
+
 対象ファイル (4 つ):
 - `CLAUDE.md`
 - `product-brief.md`
@@ -457,6 +463,7 @@ scripts/hookbus.js whoami                         # 自分の key が出る
 project-root/
   product-brief.md          ← プロダクトの why + Architectural Invariants (1 つだけ)
   CLAUDE.md                 ← Agent 向けルール
+  CLAUDE.local.md           ← gitignore 済みの環境固有 agent メモ（存在する場合のみ）
   ticket.sh                 ← チケット管理ツール
   .ticket-config.yaml       ← ticket.sh 設定
   docs/

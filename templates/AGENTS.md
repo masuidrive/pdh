@@ -4,8 +4,9 @@ This repository's coding-agent instructions live in `CLAUDE.md`.
 
 Before making changes:
 1. Read and follow `CLAUDE.md`.
-2. If `docs-index.md` exists, use it only as a router to canonical documents.
-3. Do not duplicate project rules here. Update `CLAUDE.md` when rules change.
+2. If `CLAUDE.local.md` exists, read it after `CLAUDE.md`; it is gitignored environment-local context.
+3. If `docs-index.md` exists, use it only as a router to canonical documents.
+4. Do not duplicate project rules here. Update `CLAUDE.md` when rules change.
 
 If an agent platform reads only `AGENTS.md`, treat this file as a pointer to `CLAUDE.md`, not as a separate source of truth.
 
