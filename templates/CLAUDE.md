@@ -66,19 +66,24 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 
 - **段階的実行を推奨**: まず高速なテスト（例: `pytest -x -q`）で早期フィードバックを得る → 修正があれば対応 → 全スイートは `scripts/test-all.sh` で一括実行
 - **E2E 実環境テスト（必須）**: ビルド成功・テストパスだけで完了としない。サーバー起動 → UI 変更はブラウザ確認、API 変更は curl でレスポンス検証
-  - `agent-browser` は CLI ツール (npm global install 済なら `which agent-browser` で確認可)。`agent-browser open <url>` / `snapshot` / `find role|testid|text ... click` / `screenshot` / `eval <js>` 等。MCP サーバではなく直接 Bash から起動する。ブラウザ UI の実動確認に使う
+  - `agent-browser` は CLI ツール (npm global install 済なら `which agent-browser` で確認可)。バージョンや環境で細部が変わるため、使う直前に `agent-browser --help` を実行して、その場の正しい使い方を確認する。ブラウザ UI の実動確認に使う
+- **ticket-local check**: 特定 ticket の一時的な検証は `tests/tickets/<ticket-id>/test-ticket-local.sh` に置き、`./scripts/test-ticket-local.sh [ticket-id]` で実行する。これは `scripts/test-all.sh` / CI には入れない
 
 ### テスト設計ルール
 
 - **テストは「アプリがこう動くべき」（desired state）を記述する**。現在の仕様における正しい振る舞いを定義するもの
-- **変更の動作確認テストはコードに含めない**。変更が正しく適用されたかの検証は一時的な確認であり、テストスイートにコミットしない
-- テスト項目の判断基準: 「このテストはアプリの望ましい状態を記述しているか？」→ Yes ならコミット対象、No（変更の副作用確認など）なら一時確認のみ
+- **チケット固有テストを恒久テストへ混ぜない**。`scripts/test-all.sh` / `test/` / CI に残すのは、プロダクト契約・Architectural Invariants・再発すると困る一般化済みの regression だけにする。特定 ticket の一時的な移行確認（例: `/a` から `/b` への変更で旧 `/a` が 404 になること、特定 fixture 名が見えないこと）は `PDH-verify` の ticket-local check とする
+- テスト項目の判断基準: 「このテストは ticket 名や一時 fixture なしで今後も product contract として説明できるか？」→ Yes なら恒久テスト候補、No なら ticket-local check として `tests/tickets/<ticket-id>/test-ticket-local.sh` と note に残す
 
 # PDH (Ticket) 運用
 
 - **`product-brief.md` が全判断の基準。** チケット作成・実装・レビューのすべてはこのドキュメントを正として行う
 - チケットの作成・編集・実装など全ての作業は **`/pdh-dev` スキルのフローに従うこと**。フローの詳細・ステップ定義・レビュー構造はすべて `/pdh-dev` SKILL.md が正。CLAUDE.md では要約しない
 - **Acceptance Criteria の変更（追加・削除・修正）は必ずユーザの承認を得ること**
+- PDH の stage label は `PDH-open` / `PDH-ticket-review` / `PDH-ticket-human-review` / `PDH-implement` / `PDH-review` / `PDH-verify` / `PDH-human-review` / `PDH-close`
+- `PDH-ticket-human-review` は実装前の人間 gate。ticket review で修正した点、全体概要、達成するもの、AC、out-of-scope、判断ポイントを説明し、明示承認を得るまで実装しない
+- `PDH-human-review` は close 前の人間 gate。coding agent がやったこと・達成したことをユーザが見て、想定と合っているかをすり合わせる。レビュー可能な UI / API がある場合は開発サーバを起動し、ユーザ自身が触れる確認手順を提示する。明示承認なしに `PDH-close` へ進まない
+- UI / API surface の verify / human-review で再現データが必要な場合は `scripts/seed-pdh-verify.sh` を用意し、開発サーバが必要なら `./scripts/dev-server.sh --seed` で起動する。起動条件・seed・確認 URL が ticket に合わない場合は、一時コマンドで逃がさず script を更新する
 
 ## 影響範囲の明示（必須）
 
@@ -88,13 +93,13 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 <!-- 例: `backend` · `frontend` · `sdk` · `cli` · `e2e-test` · `docs` · `CLAUDE.md` -->
 
 - **チケット作成時**: What / Scope に影響レイヤーを明記する
-- **PD-C-6 実装時**: ファイル変更計画をレイヤーごとに整理する
+- **PDH-implement 実装時**: ファイル変更計画をレイヤーごとに整理する
 - **テスト計画時**: 各レイヤーのテスト手順を個別に記載する
-- **PD-C-7 品質検証時**: 全レイヤーがカバーされているかチェックする
+- **PDH-review 品質検証時**: 全レイヤーがカバーされているかチェックする
 
-## 頻出レビュー指摘 (PD-C-6 自己チェック用)
+## 頻出レビュー指摘 (PDH-implement 自己チェック用)
 
-過去のチケットレビューで繰り返し指摘されたカテゴリ。PD-C-6 (実装) 中に該当がないか確認すること。
+過去のチケットレビューで繰り返し指摘されたカテゴリ。PDH-implement 中に該当がないか確認すること。
 
 <!-- プロジェクトの実情に合わせて追加・削除すること -->
 
@@ -119,13 +124,13 @@ pdh-dev が spawn するチームメンバーの engine / モデル設定。
 | 役割 | step | 上書き例 | 備考 |
 |---|---|---|---|
 | PM（Director） | 全体 | （main） | 進行・dispatch・統合・判断・ユーザ報告。worker を spawn する側 |
-| 開始前チェック | C-1 | （main） | PM が担当。AC 明確化 + Architectural Invariants check + Dependencies + AC 承認 gate |
-| Coding Engineer | C-6 | （main） | 1 agent が investigate + implement + tests を 1 session で完遂。pdh-coding SKILL 参照 |
-| QA Engineer | C-6, C-7, C-9 | （main） | テスト実行・E2E確認・ドキュメント再生成 |
-| Devil's Advocate | C-7 | （main） | ユーザ視点の厳しい指摘 / セキュリティ脆弱性 / 設計上の論理バグ / AC 達成の実質判定 + Ticket 不可侵 check |
-| 追加 reviewer（任意） | C-7 | 例: codex を1人追加 | 独立視点を増やしたいとき、別 engine の reviewer を明示追加してよい（混在）|
-| AC 裏取り | C-9 | （main） | 各 AC 項目が実際に達成されているかコード・テスト結果・ノートを読んで検証。形式でなく Why を満たす実質達成を厳しく見る |
-| Surface Observer | C-9 | （main） | PD-C-10 直前に実機で UI / HTTP API / SDK / CLI を consumer 視点で観察。実ブラウザ / browser automation CLI / curl / 実 SDK 使用。純 backend 変更のみなら skip 可 |
+| Ticket contract | PDH-ticket-review / PDH-ticket-human-review | （main） | PM が担当。AC 明確化 + Architectural Invariants check + Dependencies + ticket-human-review 承認 gate |
+| Coding Engineer | PDH-implement | （main） | 1 agent が investigate + implement + tests を 1 session で完遂。pdh-coding SKILL 参照 |
+| QA Engineer | PDH-implement / PDH-review / PDH-verify | （main） | テスト実行・E2E確認・ドキュメント再生成 |
+| Devil's Advocate | PDH-review | （main） | ユーザ視点の厳しい指摘 / セキュリティ脆弱性 / 設計上の論理バグ / AC 達成の実質判定 + Ticket 不可侵 check |
+| 追加 reviewer（任意） | PDH-review | 例: codex を1人追加 | 独立視点を増やしたいとき、別 engine の reviewer を明示追加してよい（混在）|
+| AC 裏取り | PDH-verify | （main） | 各 AC 項目が実際に達成されているかコード・テスト結果・ノートを読んで検証。形式でなく Why を満たす実質達成を厳しく見る |
+| Surface Observer | PDH-verify | （main） | PDH-human-review 直前に実機で UI / HTTP API / SDK / CLI を consumer 視点で観察。実ブラウザ / browser automation CLI / curl / 実 SDK 使用。純 backend 変更のみなら skip 可 |
 
 ### Codex の起動方法
 
@@ -193,7 +198,7 @@ Bash(
 
 # コンテキスト管理
 
-- コンパクション時に以下を必ず保持すること: 現在のチケット名、現在の PD-C フェーズ、未解決の懸念事項、ユーザから得た判断・承認
+- コンパクション時に以下を必ず保持すること: 現在のチケット名、現在の PDH stage、未解決の懸念事項、ユーザから得た判断・承認
 - 関連のないタスク間では `/clear` でコンテキストをリセットする
 - 調査が大規模になる場合はサブエージェントに委譲し、メインのコンテキストを実装に集中させる
 

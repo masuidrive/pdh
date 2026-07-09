@@ -121,14 +121,41 @@ main ← features/250711-091538-fix-auth (Ticket ブランチ)
 ```
 
 - ticket.sh が Ticket ごとに `features/<ticket-name>` ブランチを作り、close 時にマージ先（ticket frontmatter の `branch` フィールド、default `main`）にマージする。
-- 並列で複数 ticket を進める場合は、worktree 分離 (`claude --worktree <slug>` or `EnterWorktree({name: "<slug>"})`) を使うと PM (Director) と worker が独立に動ける。詳細は `skills/tmux-director/SKILL.md` 「複数 window による並行チケット実行」参照。
+- 並列で複数 ticket を進める場合は、worktree 分離 (`claude --worktree <slug>` or `EnterWorktree({name: "<slug>"})`) を使うと PM (Director) と worker が独立に動ける。詳細は `.claude/skills/tmux-director/SKILL.md` 「複数 window による並行チケット実行」参照。
 
 ### Coding agent 向け
 
 - Agent は Ticket の **Why / Acceptance Criteria / Architectural Invariants check / 確定判断 / out-of-scope / Implementation Notes** を主な入力として使う。
 - 判断に迷ったら Product Brief の **Constraints / Architectural Invariants** を参照する。
-- Ticket に書かれていない仕様判断が必要な場合の対応は `skills/pdh-coding/SKILL.md` 「Open Questions protocol (batch escalate)」を参照する (デフォルト値で進め、ASSUMPTION commit + note 記録、PM に batch escalate)。
+- Ticket に書かれていない仕様判断が必要な場合の対応は `.claude/skills/pdh-coding/SKILL.md` 「Open Questions protocol (batch escalate)」を参照する (デフォルト値で進め、ASSUMPTION commit + note 記録、PM に batch escalate)。
 - Ticket の Dependencies に未完了のブロッカーがある場合は、着手せずに報告する。
+
+### Stage labels
+
+Stage label は checklist と引き継ぎ用の安定キーであり、重い工程番号ではない。
+
+| Label | 意味 |
+|---|---|
+| `PDH-open` | ticket を作成・開始・復元し、読む対象を確定する |
+| `PDH-ticket-review` | agent が ticket の Why / AC / Design Decisions / Out-of-scope / blocker を確認し、実装前に提示できる形へ整える |
+| `PDH-ticket-human-review` | 実装前に ticket review の修正点・全体概要・達成するもの・AC をユーザとすり合わせ、AC 承認を明示する |
+| `PDH-implement` | AC を満たす実装・必要なテスト・作業ログを残す |
+| `PDH-review` | risk に応じて独立レビューし、重要指摘を解消する |
+| `PDH-verify` | AC、`scripts/test-all.sh`、docs impact、実動確認を照合する |
+| `PDH-human-review` | coding agent がやったこと・達成したことがユーザの想定と合っているかをすり合わせ、差し戻しまたは close 承認を明示する |
+| `PDH-close` | ユーザ承認、merge/push/deploy 状態、残課題を記録して閉じる |
+
+`PDH-review-1` / `PDH-review-2` のような実行回数ラベルは top-level stage ではなく、`current-note.md` の `PDH-review` 配下に残す attempt log とする。
+
+`PDH-ticket-review` と `PDH-ticket-human-review` は分ける。前者は agent が ticket contract を整える工程、後者は実装前にユーザが全体像・達成するもの・ticket review で修正した点・AC を見て、想定と合っているかをすり合わせる人間 gate。AC 承認は `PDH-ticket-human-review` で得る。承認なしに `PDH-implement` へ進まない。
+
+Agent は `PDH-verify` までを自動で進め、そこで止まらず `PDH-human-review` として人間にレビューを依頼する。`PDH-human-review` の目的は、coding agent がやったこと・達成したことをユーザが見て、それがユーザの想定と合っているかをすり合わせること。UI / API surface がある場合、`PDH-verify` では `./scripts/dev-server.sh --seed` を使う。server 不要で seed だけ必要な場合は `scripts/seed-pdh-verify.sh` を使い、repo / ticket にこの seed hook が無ければ作り、seed 不要なら no-op として成功させる。UI / browser surface がある場合、`PDH-verify` の Surface Observer は seed 後に `agent-browser` 等で主要ユースケースを実行し、操作結果または実行不能理由を記録する。レビュー依頼は note に書くだけでなく、会話上で「やったこと」「判断ポイント」「次の選択肢」を説明する。レビュー可能な UI / API がある場合、`PDH-human-review` では `./scripts/dev-server.sh` で開発サーバを起動し、ユーザ自身が触って判断できる確認手順を提示する。UI はブラウザ URL と操作箇所、API は `curl` と期待レスポンス、手作業が難しい認証・cookie・fixture は `tmp/` の一時スクリプトで補助する。認証が必要な surface では dev mode で dummy login を用意し、localhost 以外へ出す場合は Basic Auth や一時 token 等で保護し、レビュー依頼前に、認証方式、必要な cookie / token / helper / cookie jar、秘密値を会話に貼らない方針、ユーザが実行する具体手順、確認後のサーバ停止や一時ファイルの扱いを説明する。`agent-browser` のコマンド列だけを人間向け確認手順にしない。判断が必要な選択肢は一番上におすすめを置く。`PDH-human-review` の承認があるまで `PDH-close` に進まず、チケット全体を完了と表現しない。途中で疑問・判断不能・blocker・完了見込みが立たない状態になった場合は、`PDH-human-review` を待たずにその時点でユーザに確認する。
+
+恒久テストと ticket-local check は分ける。`scripts/test-all.sh` / CI / `test/` に残すのは、Product Brief、Architectural Invariants、継続的な product contract、または一般化された regression だけとする。特定 ticket の一時的な移行確認（例: `/a` から `/b` への変更で旧 `/a` が 404 になること、特定 fixture 名がカタログに出ないこと）は `PDH-verify` の ticket-local check とする。実行可能なものは `tests/tickets/<ticket-id>/test-ticket-local.sh` に置き、`./scripts/test-ticket-local.sh [ticket-id]` で呼ぶ。seed / `tmp/` helper / `agent-browser` / `curl` の実行証跡は note に残す。恒久化するか迷う場合は、その期待が ticket 名や一時 fixture なしで今後も product contract として説明できるかを基準にする。
+
+`PDH-verify` / `PDH-human-review` で開発サーバが必要な場合は `./scripts/dev-server.sh` を使う。`--seed` は local 環境をリセットして PDH verify seed を投入し、`--port <port>` は固定 port、未指定なら空き port をランダム選択する。localhost 以外から見せる必要がある場合は共通オプション `--no-localhost` を使う。`--no-localhost` では外部 URL に port が出ないことが多いため、固定 port が必要な検証以外では `--port` を省略してよい。実装はアプリごとに異なり得る（例: Cloudflare Workers では `wrangler dev --tunnel`）。agent は app/script に実装された方法を使い、起動条件・seed・確認 URL が変わった場合は、一時コマンドで逃がさずこの script を更新する。Quick Tunnel は URL を知る人が到達できるため、露出内容を確認し、厳密な認可が必要なら named tunnel + Access 等の別設定を人間判断にする。
+
+PDH の実行は stage ごとに subagent / worker へ委譲し、Director が結果を検品して統合する。worker の PASS は入力であって承認ではない。Director は各 stage の完了前に、正典・ticket・diff・実コマンド出力・note の証跡を照合し、矛盾や未確認があれば差し戻す。subagent を起動できない環境では、単独で完了扱いにせずユーザに確認する。
 
 
 ## テンプレート

@@ -33,6 +33,7 @@ PM の使い方:
 
 ### 出力の返し方
 - **`<RESULT_FILE>` に最終結果を書く**（PM はこのファイルを読む）。結果は **要約・結論・根拠・次アクション**に絞る（冗長な作業ログは note か stderr へ）。
+- 判断が必要な事項を PM に返す場合は、**判断ポイント**と**選択肢**を書く。選択肢は一番上におすすめを置き、各選択肢に tradeoff / 影響を 1 行で添える。
 - 失敗・中断した場合も、**何が・なぜ失敗したかを `<RESULT_FILE>` に必ず書く**（無言終了しない）。
 
 ### 言語
@@ -45,7 +46,7 @@ PM の使い方:
 ### Coding Engineer
 - **最初に `.claude/skills/pdh-coding/SKILL.md` を Read してから実装を始める**こと。
 - 1 つの作業文脈で **investigate + implement + tests** を完遂する。
-- **commit cadence**: 論理単位の境界ごとに incremental に commit + push（1 commit = 1 論理単位、mega-commit 禁止）。blocker / state 遷移は独立 commit。commit 数は gate ではない。
+- **commit cadence**: 論理単位の境界ごとに incremental に commit（1 commit = 1 論理単位、mega-commit 禁止）。blocker / state 遷移は独立 commit。commit 数は gate ではない。push は `CLAUDE.md` の no-push-without-request ルールに従う。
 - **テスト全件 PASS gate**: 関係する全スイートを完成時に通す。`scripts/test-all.sh` があれば使う。
 - **E2E gate**: 外部 provider / API を経由する path は実 API で 1 経路以上確認。credential 不在なら deferred として明記しエスカレーション。
 - **Open Questions protocol**: 迷い点は妥当な default を採用し `ASSUMPTION:` を commit message と note に記録して進める。即中断は「AC 破綻 / Invariant 抵触 / 不可侵変更が必要 / 破壊的不可逆操作 / 前提崩壊」の限定時のみ。
@@ -68,5 +69,5 @@ PM の使い方:
 - 各 AC に VERIFIED / NOT VERIFIED と根拠を付ける。NOT VERIFIED は何が足りないかを書く。
 
 ### Surface Observer
-- consumer 視点で**実機**（browser automation CLI / `curl` / SDK / CLI 実行）で外部 surface を観察する。
+- consumer 視点で**実機**（browser automation CLI / `curl` / SDK / CLI 実行）で外部 surface を観察する。PM/Director が `scripts/seed-pdh-verify.sh` を実行済みであることを前提に、UI / browser surface がある場合は `agent-browser` 等で主要ユースケースを 1 本以上実行する。追加 fixture が必要なら committed seed hook の不足として報告する。`agent-browser` は使う直前に `agent-browser --help` を確認する。
 - 視覚崩れ・レスポンス/エラー文言の不自然さ・型/ヘルプの分かりにくさを報告。純内部変更で外部 surface が無ければ「該当なし」と書く。

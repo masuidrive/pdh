@@ -2,20 +2,23 @@
 
 ## 用語
 
-- **step** = `PD-C-*` の単位 (PD-A / PD-B / PD-D は持たない)
-- **review loop** = PD-C-7 で修正 → テスト → 再レビューを繰り返すこと
-- **gate** = 次の step に進むための完了条件
+- **stage label** = `PDH-open` / `PDH-ticket-review` / `PDH-ticket-human-review` / `PDH-implement` / `PDH-review` / `PDH-verify` / `PDH-human-review` / `PDH-close`。checklist と引き継ぎ用の安定キーであり、重い工程番号ではない
+- **review attempt label** = `PDH-review-1` / `PDH-review-2` など。top-level stage ではなく、`PDH-review` 配下の実行ログ
+- **gate** = 次の stage に進むための完了条件
 - **AC** = Acceptance Criteria。観察可能な振る舞い
 - **Architectural Invariants** = `product-brief.md` に明記された不変則
 
-## ステップ遷移の宣言
+## stage 遷移の宣言
 
-step を移動するたびに宣言する（実行モデル依存の宣言手段は `_execution-*.md` に従う）:
+stage を移動するたびに短く宣言する（実行モデル依存の宣言手段は `_execution-*.md` に従う）:
 
 ```text
-[PD-C-1] -> [PD-C-6] — AC 承認、実装開始
-[PD-C-7] -> [PD-C-7(2回目)] — Critical 修正後の再レビュー
-[PD-C-7(2回目)] -> [PD-C-9] — 全 reviewer PASS
+[PDH-open] -> [PDH-ticket-review] — ticket 確定
+[PDH-ticket-review] -> [PDH-ticket-human-review] — ticket contract を人間に提示可能
+[PDH-ticket-human-review] -> [PDH-implement] — AC 承認、実装開始
+[PDH-review] -> [PDH-verify] — 重要指摘なし、または対応済み
+[PDH-verify] -> [PDH-human-review] — 自動検証完了、人間レビュー依頼
+[PDH-human-review] -> [PDH-close] — ユーザが明示承認
 ```
 
 差し戻しも明示的に宣言する。省略や暗黙の遷移は禁止。
@@ -23,18 +26,18 @@ step を移動するたびに宣言する（実行モデル依存の宣言手段
 ## 進捗報告フォーマット
 
 ```text
-Current Step:
-Step Status: 未着手 / 進行中 / 完了
+Current Stage:
+Stage Status: 未着手 / 進行中 / 完了
 Gate Remaining:
 Evidence:
-Next Step:
+Next Stage:
 ```
 
-`Gate Remaining` が空でない限り、その step は完了ではない。
+`Gate Remaining` が空でない限り、その stage は完了ではない。
 
-## step 完了ルール
+## stage 完了ルール
 
-各 step 完了時にコミット。コミットメッセージは `[step 名] 概要` の形式 (例: `[PD-C-6] Implementation`)。セッション中断時の作業損失を防ぎ、step ごとの進捗を git 履歴で追跡する。
+各 stage 完了時に必要ならコミットする。コミットメッセージは `[stage label] 概要` の形式 (例: `[PDH-implement] Implementation`)。セッション中断時の作業損失を防ぎ、進捗を git 履歴で追跡する。
 
 ## ticket と note の役割分担
 
@@ -85,17 +88,21 @@ product-brief.md の Invariants と矛盾しないことを 1 行宣言
 
 | セクション | 記録タイミング | 内容 |
 |---|---|---|
-| **Status** (冒頭) | 常時 | 現在 step + タイムスタンプ (例: `## Status: PD-C-6 — 2026-05-27T03:45:00Z`) |
-| **PD-C-6. 実装ログ** | PD-C-6 中・完了時 | commit hash 一覧、実装中に発見した設計判断 / scope 拡張 / 縮小の判断 |
-| **PD-C-7. 品質検証結果** | PD-C-7 完了時 | reviewer 別ステータステーブル + 指摘と対応結果 |
-| **PD-C-9. プロセスチェックリスト** | PD-C-9 完了時 | プロセス要件のチェック (レビュー通過、テスト全件パス、実動確認等) |
+| **Status** (冒頭) | 常時 | 現在 stage + タイムスタンプ (例: `## Status: PDH-implement — 2026-05-27T03:45:00Z`) |
+| **PDH-ticket-review. Ticket contract check** | 実装前 | Why / AC / Design Decisions / Out-of-scope / Dependencies / Invariants の確認。AC 承認は得ない |
+| **PDH-ticket-human-review. Ticket human review** | 実装前 | ticket review の修正点、全体概要、達成するもの、AC、out-of-scope、判断ポイントの提示と AC 承認 |
+| **PDH-implement. 実装ログ** | PDH-implement 中・完了時 | commit hash 一覧、実装中に発見した設計判断 / scope 拡張 / 縮小の判断 |
+| **PDH-review. 品質検証結果** | PDH-review 完了時 | `PDH-review-1` / `PDH-review-2` など attempt ごとの reviewer 結果 + 指摘と対応結果 |
+| **PDH-verify. プロセスチェックリスト** | PDH-verify 完了時 | プロセス要件のチェック (レビュー通過、テスト全件パス、実動確認等) |
+| **PDH-human-review. 人間レビュー** | PDH-verify 完了後 | ユーザへのレビュー依頼、確認手順、承認または差し戻し結果 |
 | **Discoveries** | 随時 | 実装中に発見した想定外の事実 |
 
 必須ルール:
 - Status 行を冒頭に維持
 - タイムスタンプ必須
 - 空セクションを残さない (スキップ理由を 1 行書く)
-- gate 未達のまま次 step 名へ Status を更新してはならない
+- gate 未達のまま次 stage 名へ Status を更新してはならない
+- `PDH-human-review` の明示承認なしに `PDH-close` へ進まない。自動工程完了時は「PDH-human-review 待ち」と記録し、チケット全体を完了扱いにしない
 - セッション終了時、作業途中の場合は現在の状態と次にやるべきことを `current-note.md` に記録
 - **検証系チェック項目の証拠バインディング**: 「テスト全件パス」「`scripts/test-all.sh` 全スイート確認」「実 API 確認」「Surface 観察」等、検証完了を主張する項目は、対応する**実コマンドと実出力 (合否サマリ) を note に貼ってから `[x]` にする**。証拠を貼れない項目を `[x]` にしてはならない ("記憶・要約で完了マーク" の禁止)。部分実行 (backend のみ等) で全スイート項目を `[x]` にするのも禁止
 
@@ -107,7 +114,7 @@ product-brief.md の Invariants と矛盾しないことを 1 行宣言
 | Ticket | Why / AC (観察可能な振る舞い) / Architectural Invariants check / 確定判断 / out-of-scope / Implementation Notes (任意) | 実コード詳細 |
 | Subagent / 実行指示 | 目的 / 背景 / AC / 担当範囲 / 確定判断 | how-to / 実装手順 / コマンド指定 |
 
-書かない側に踏み込むと下流の自由度を奪い、review loop 肥大化 / 実装手戻り / drift の原因。
+書かない側に踏み込むと下流の自由度を奪い、レビュー肥大化 / 実装手戻り / drift の原因。
 
 ## 成果物セルフチェック（内容品質チェック）
 

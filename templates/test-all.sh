@@ -14,8 +14,8 @@
 #   scripts/test-all.sh --parallel # parallel execution
 #
 # PDH integration:
-# - PD-C-6 (implementation): Engineers run individual test commands for fast feedback
-# - PD-C-9 (completion verification): Run this script to confirm all suites pass
+# - PDH-implement: Engineers run individual test commands for fast feedback
+# - PDH-verify: Run this script to confirm all suites pass
 # - Referenced in CLAUDE.md and pdh-dev SKILL.md
 #
 # Customize the `run` calls below for your project's test suites.

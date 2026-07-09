@@ -44,7 +44,7 @@ ticket の以下を implementor が **勝手に書き換えてはいけない**:
 - AC に無い機能・オプション・抽象化・拡張点・設定・汎用化・防御コードを**先回りで足さない**。「ついで」の汎用化・リファクタは禁止。
 - **観測した問題は直す**（実際に踏んだバグ・既存問題 → ticket 内対応の判断は実行指示／レビューに従う）。**観測していない将来問題のための設計はしない**。この対比が境界線。
 - 拡張余地が要ると判断したら、自前で作り込まず **Open Questions / 完了報告に1行で記録**して意思決定者に委ねる（その場で実装しない）。
-- *理由*: 投機的拡張は未使用コードを負債化させ、実装が AC から乖離し、review loop を膨らませる。
+- *理由*: 投機的拡張は未使用コードを負債化させ、実装が AC から乖離し、レビューと修正を長引かせる。
 
 ## 曖昧な判断委譲の拒否
 
@@ -115,7 +115,7 @@ ticket の以下を implementor が **勝手に書き換えてはいけない**:
 
 - **チケット操作 (`./ticket.sh`) やチケットファイルの作成・編集は一切行わないこと。** チケット管理は意思決定者（team: PM / solo: ユーザー）の責務
 - チケット作成や仕様変更が必要だと判断した場合は、**レスポンスとして依頼する** (自分で実行しない)
-- **完了報告ファイル (`result.txt` 等) を repository root に書かないこと。** `codex exec -o <path>` で指定された出力先 (通常 `/tmp/codex-XXXXXX/result.txt`) のみに書く。repository root に `result.txt` を作ると `git status` に dirty file として残り、後続 PD-C-7 review の diff に巻き込まれて reviewer を混乱させる原因になる (複数 ticket で実発生)。`/tmp/codex-XXXXXX/` 外への成果物書き出しが必要な場合は上位（team: PM / solo: ユーザー）に依頼する
+- **完了報告ファイル (`result.txt` 等) を repository root に書かないこと。** `codex exec -o <path>` で指定された出力先 (通常 `/tmp/codex-XXXXXX/result.txt`) のみに書く。repository root に `result.txt` を作ると `git status` に dirty file として残り、後続 `PDH-review` の diff に巻き込まれて reviewer を混乱させる原因になる (複数 ticket で実発生)。`/tmp/codex-XXXXXX/` 外への成果物書き出しが必要な場合は上位（team: PM / solo: ユーザー）に依頼する
 
 ## 実装ルール
 
@@ -125,6 +125,7 @@ ticket の Acceptance Criteria を満たすコードを書く。out-of-scope は
 - **既存 abstraction の流用**: 新規 class / helper / utility を増やす前に、既存に同型 pattern がないか grep する。既存があれば流用、なければ新規導入の justification を Implementation 中に Discoveries / 実装ログに記録
 - **テスト**: 実装したコードに対するテストを書く。テストが通る状態を維持する
 - **実装→テストのループ**: 実装とテスト実行を自分自身が繰り返し、全件パスした状態で完了報告すること。テスト未実行のまま返さない
+- **完了報告の範囲**: 実装担当が報告できるのは `PDH-implement` の担当範囲まで。チケット全体の完了は `PDH-review` / `PDH-verify` / `PDH-human-review` 後に PM とユーザが判断するため、「ticket 完了」「close 可能」と断定しない
 - **重複検出 (テスト前)**: 実装完了後、テスト実行前に `similarity-ts` (TS/JS) / `similarity-py` (Python) / `similarity-generic` (Ruby ほか) で変更ファイル間の構造的重複を検出する。閾値を超える重複が見つかった場合は共通化を検討してからテストに進む。重複が意図的 (テスト setup 等) な場合はそのまま進めてよい。
 
   **install** (Rust 製 CLI 群。1 つの release archive に全 CLI 同梱: `similarity-ts` / `similarity-py` / `similarity-generic` ほか。npm/pip パッケージは無い):
@@ -152,18 +153,19 @@ ticket の Acceptance Criteria を満たすコードを書く。out-of-scope は
   対応言語マップ: `similarity-ts` = TS/JS、`similarity-py` = Python、`similarity-generic` = Go / Java / C / C++ / C# / **Ruby** (`--language <lang>` 指定。**単一ファイル単位**で関数類似を比較、`--supported` で対応言語一覧)。`similarity-ts` / `similarity-py` は dir 再帰 + `--print` 可。
 
   install できない環境 (Codex sandbox 等) では skip 可。skip した場合は note に「重複検出 skip: 環境制約 (理由)」と 1 行記録する
-- **PD-C-6 完了条件**: `CLAUDE.md` の「テスト」セクションを読み、記載されたテストコマンドを実行して all passed になること。結果をレスポンスに含める
+- **PDH-implement 完了条件**: `CLAUDE.md` の「テスト」セクションを読み、記載されたテストコマンドを実行して all passed になること。結果をレスポンスに含める
 
 ## Commit cadence 契約
 
-Direct flow では implementor が **論理単位の境界ごとに incremental に commit + push する**。1 commit = 1 論理単位。狙いは commit の *数* ではなく次の 3 点:
+PDH では implementor が **論理単位の境界ごとに incremental に commit する**。1 commit = 1 論理単位。狙いは commit の *数* ではなく次の 3 点:
 
 1. **mega-commit を作らない** — 事後の review / bisect / partial rollback を可能にする
-2. **作業中に push する** — 中断 / timeout / ephemeral runner で未 push の作業を失わない
+2. **作業状態を durable に残す** — 中断 / timeout / ephemeral runner で作業を失いにくくする
 3. **state 遷移を durable に残す** — blocker・設計判断の確定・中断点を、後から history で追える形にする
 
 - **mega-commit 禁止**: 「全変更を 1 commit に押し込む」は事後分析不能。論理単位で割る
-- **commit early & push**: 最初の意味ある変更で先に commit + push してから長時間 gate (フルテスト等) を回す。push 前に環境が落ちれば作業は消える前提で動く
+- **commit early**: 最初の意味ある変更で先に commit してから長時間 gate (フルテスト等) を回す。
+- **push は明示承認時のみ**: この repo ではユーザ / PM が明示した場合、または close 手順で承認済みの場合だけ push する。`CLAUDE.md` の no-push-without-request ルールを優先する。
 - **state 遷移は独立 commit**: blocker / 重要な設計判断 / 中断点は、コード変更や無関係な chore に同梱せず *それ単独で* commit する。commit message も state 変更を表す文言にし、`chore: ...` 等に埋もれさせない
 - 各 commit はテストパス状態を維持 (progressing 中なら明示的 WIP marker)
 - commit メッセージは `[<ticket-name>] <type>(<scope>): <summary>` 形式

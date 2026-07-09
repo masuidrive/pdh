@@ -1,25 +1,36 @@
-# AGENTS.md — Codex CLI 向け設定
+# AGENTS.md
 
-このファイルは Codex CLI が自動で読む。ルールの本体は CLAUDE.md と .claude/skills/ にあり、ここでは参照先を指定する。
+This repository's coding-agent instructions live in `CLAUDE.md`.
 
-## 必読ファイル
+Before making changes:
+1. Read and follow `CLAUDE.md`.
+2. If `docs-index.md` exists, use it only as a router to canonical documents.
+3. Do not duplicate project rules here. Update `CLAUDE.md` when rules change.
 
-作業開始前に以下を読むこと:
+If an agent platform reads only `AGENTS.md`, treat this file as a pointer to `CLAUDE.md`, not as a separate source of truth.
 
-1. **`.claude/skills/pdh-coding/SKILL.md`** — コーディングルール・テスト設計・コミット基準
-2. **`CLAUDE.md`** の以下のセクション:
-   - 「テスト」— テストコマンド・DB 使い分け・全スイート一括実行
-   - 「開発サーバー」— 起動方法・seed データ
-3. **`product-brief.md`** — プロダクト概要（全判断の基準）
-4. **`current-ticket.md`** / **`current-note.md`** — 作業対象の AC と計画
+For PDH / ticket-centric work, also read:
 
-## 基本方針
+1. `docs/product-delivery-hierarchy.md`
+2. `.claude/skills/pdh-dev/SKILL.md` for orchestration
+3. `.claude/skills/pdh-coding/SKILL.md` for implementation workers
+4. `current-ticket.md` and `current-note.md` when they exist
 
-- **時間がかかっても技術的正しさを優先する。** 後方互換のための余計なコードやハックは入れない
-- spawn プロンプトで指定されたファイル範囲外を変更しない
-- product-brief.md を編集しない
+Do not migrate legacy files in `tickets/` unless the user explicitly asks.
 
-## プロジェクト固有ルール
+## Tool Term Mapping
 
-テスト・ビルド・DB 設定などプロジェクト固有の情報は **CLAUDE.md が single source of truth**。
-このファイルに複製しない。CLAUDE.md を直接読むこと。
+`CLAUDE.md` may use Claude Code terms. Other coding agents should read them by role:
+
+| Claude Code term | Generic meaning |
+|---|---|
+| `CLAUDE.md` | Primary repository instruction file |
+| `subagent` | Delegated agent with its own context |
+| `teammate` / agent team | Independent agent session coordinated by an `orchestrator` |
+| `Skill` / `.claude/skills/` | Reusable task instruction package |
+| `model: opus` | Use the environment's `strong-judge` model/profile |
+| `advisor` | Second-opinion judge used at decision points |
+| `ultracode` / workflow | `multi-agent-coding` execution mode |
+| `effort` | Reasoning budget / thinking depth / agentic persistence setting |
+
+Model names change. Follow the role profiles in `CLAUDE.md`, not literal model names.

@@ -75,19 +75,19 @@ flowchart TD
 
 pdh-dev のステップ番号・ルールの **正式な定義** は常に `.claude/skills/pdh-dev/SKILL.md` にある。Director はフェーズ遷移を検知するたびに pdh-dev を Read して最新の定義に従うこと。以下は Director が頻繁に参照する情報のクイックリファレンスであり、pdh-dev と矛盾する場合は pdh-dev が正。
 
-**PD-C ステップ一覧 (Direct flow):**
-C-1 開始前 + AC 承認 → C-6 実装 → C-7 品質検証 (実装後 review) → C-9 完了検証 → **C-10 クローズ**
+**PDH ステージ一覧:**
+PDH-open → PDH-ticket-review → PDH-ticket-human-review → PDH-implement → PDH-review → PDH-verify → PDH-human-review → **PDH-close**
 
-**省略不可ステップ:** PD-C-1, PD-C-6, PD-C-7, PD-C-9, PD-C-10 (Direct flow は全 step 必須、省略 path なし)
+**省略不可ステージ:** PDH-open, PDH-ticket-review, PDH-ticket-human-review, PDH-implement, PDH-review, PDH-verify, PDH-human-review, PDH-close
 
 **ユーザ確認が必須の gate:**
 
 | Gate | タイミング | 報告内容 |
 |---|---|---|
-| **PD-C-1 AC 承認** | ticket 開始前、実装に入る唯一の実装前 gate | ticket の Why / AC / Architectural Invariants check / 確定判断 / out-of-scope を提示 |
-| **PD-C-10 クローズ** | PD-C-9 完了検証後 | テスト結果、AC 達成状況、実環境動作確認結果、残課題。**特に「既存問題」「対応検討」「スコープ外」と記載された項目は個別に列挙し、対応方針をユーザに確認する** |
+| **PDH-ticket-human-review 承認** | ticket contract check 後、実装に入る前 | ticket review で修正した点、全体概要、達成するもの、AC、Architectural Invariants check、確定判断、out-of-scope、判断ポイントを提示 |
+| **PDH-human-review 承認** | PDH-verify 完了後、close 前 | やったこと、達成したこと、テスト結果、AC 達成状況、実環境動作確認結果、ユーザ自身の確認手順、残課題。**特に「既存問題」「対応検討」「スコープ外」と記載された項目は個別に列挙し、対応方針をユーザに確認する** |
 
-**gate は毎回必ずユーザに確認すること（絶対原則）:** たとえユーザがそれまで全ての質問に「yes」「OK」「y」と答え続けていたとしても、gate（PD-C-1 / PD-C-10）では必ず立ち止まってユーザに確認する。「前回 OK だったから今回も OK だろう」という推測で gate をスキップしてはならない。window が AskUserQuestion を出さずに止まった場合でも、Director が代わりにクローズを指示するのではなく、まずユーザに状況を報告して承認を得ること。
+**gate は毎回必ずユーザに確認すること（絶対原則）:** たとえユーザがそれまで全ての質問に「yes」「OK」「y」と答え続けていたとしても、gate（PDH-ticket-human-review / PDH-human-review）では必ず立ち止まってユーザに確認する。「前回 OK だったから今回も OK だろう」という推測で gate をスキップしてはならない。window が AskUserQuestion を出さずに止まった場合でも、Director が代わりに承認・クローズを指示するのではなく、まずユーザに状況を報告して承認を得ること。
 
 **gate 報告時の必須アクション:** ユーザに承認を求める前に、Director は必ず `current-ticket.md` と `current-note.md` を Read し、**ユーザがこの報告だけで判断できる包括的サマリ**を作成すること。window の AskUserQuestion の選択肢をそのまま転送するだけでは不十分。サマリには以下を含める:
 - チケットの目的・背景（Why）
@@ -96,7 +96,7 @@ C-1 開始前 + AC 承認 → C-6 実装 → C-7 品質検証 (実装後 review)
 - AC の変更点（あれば）
 - 懸念事項・リスク
 
-**レビューフェーズ:** PD-C-7（品質検証、実装後 review）
+**レビューフェーズ:** PDH-review（品質検証、実装後 review。attempt は PDH-review-1 / PDH-review-2 として note に記録）
 
 ---
 
@@ -262,7 +262,7 @@ tmux send-keys -t WINDOW.PANE Enter
 
 **⚠ text と Enter を同じ send-keys 呼び出しに混ぜない。** `send-keys '...' Enter` を 1 回で実行すると、長文や slash 混在テキストで Enter が text の一部として buffer に吸収され、prompt に text が残ったまま submit されない race が頻発する (複数回実測)。必ず 2 段階 (text だけ → Enter 単独)。送信後は capture-pane で `❯ Press up to edit queued messages` or spinner が出ているか確認する。
 
-**重要: Window への指示は常に 1 フェーズ分のみ。** 「PD-C-6 をやって、その後 PD-C-7 も進めて」のように複数フェーズをまとめて指示しない。ユーザ確認 gate（PD-C-1, PD-C-10）を飛ばす原因になる。
+**重要: Window への指示は常に 1 フェーズ分のみ。** 「PDH-implement をやって、その後 PDH-review も進めて」のように複数フェーズをまとめて指示しない。ユーザ確認 gate（PDH-ticket-human-review, PDH-human-review）を飛ばす原因になる。
 
 ### TD-3.2. 入力待ち検知 — hookbus stream (hookbus 配線済の場合、推奨)
 
@@ -323,9 +323,9 @@ Director は Monitor を起動する際、以下のテンプレートの `{...}`
 
 ## 現在のコンテキスト
 - **チケット**: {TICKET_NAME}
-- **現在の PDH フェーズ**: {CURRENT_PHASE}（例: PD-C-7 品質検証 再レビュー中）
-- **直前に送った指示**: {LAST_INSTRUCTION}（例: 「再レビューを実施して issue 0 を確認してください」）
-- **期待する結果**: {EXPECTED_OUTCOME}（例: 「再レビュー完了し残存 Critical/Major が 0 になること」）
+- **現在の PDH フェーズ**: {CURRENT_PHASE}（例: PDH-review / PDH-review-1 品質検証中）
+- **直前に送った指示**: {LAST_INSTRUCTION}（例: 「PDH-review-1 を実施して issue 0 を確認してください」）
+- **期待する結果**: {EXPECTED_OUTCOME}（例: 「PDH-review attempt が完了し残存 Critical/Major が 0 になること」）
 - **チケット AC**:
 {TICKET_AC}
 
@@ -341,7 +341,7 @@ tmux window {WINDOW.PANE} の画面を定期的にキャプチャし、以下の
 3. **エラー**: エラーメッセージやスタックトレースが表示されている
 
 ## フェーズ追跡
-- 画面キャプチャ内の `[PD-C-X] -> [PD-C-Y]` 形式のステップ遷移宣言を探し、最後に検知した宣言を報告する
+- 画面キャプチャ内の `[PDH-open] -> [PDH-ticket-review]` のようなステージ遷移宣言を探し、最後に検知した宣言を報告する
 - **遷移宣言が見つからなければ、フェーズは {CURRENT_PHASE} のまま変わっていないと報告する。遷移宣言がない限り、フェーズが変わったと解釈しないこと**
 - 入力待ちを検知し、かつ遷移宣言が見つからない場合は `tmux send-keys -t {WINDOW.PANE} '今の作業フェーズを教えて' Enter` で window に確認し、その回答をキャプチャしてから報告する
 
@@ -353,7 +353,7 @@ tmux window {WINDOW.PANE} の画面を定期的にキャプチャし、以下の
 [入力待ち / AskUserQuestion / エラー / タイムアウト]
 
 ### 現在のフェーズ
-最後に検知した遷移宣言 `[PD-C-X] -> [PD-C-Y]`（なければ「遷移宣言なし、{CURRENT_PHASE} のまま」）
+最後に検知した遷移宣言 `[PDH-*] -> [PDH-*]`（なければ「遷移宣言なし、{CURRENT_PHASE} のまま」）
 
 ### 画面内容の要約
 [作業結果、選択肢、懸念事項など Director が意思決定に必要な情報をすべて含める]
@@ -402,7 +402,7 @@ flowchart TD
     R3 --> R4["Director: note / ticket を Read して裏取り"]
     R4 --> R5{"問題あり?"}
     R5 -- "あり" --> R6["window に是正指示 → Monitor 再起動"]
-    R5 -- "なし" --> R7{"ユーザ確認 gate?<br/>（PD-C-1 / PD-C-10）"}
+    R5 -- "なし" --> R7{"ユーザ確認 gate?<br/>（PDH-ticket-human-review / PDH-human-review）"}
     R7 -- "いいえ" --> R8["次フェーズの指示を送信 → Monitor 再起動"]
     R7 -- "はい" --> R9["ユーザに状況報告し承認を得る"]
     R9 --> R8
@@ -415,7 +415,7 @@ flowchart TD
 入力待ちを検知したら、**常に** window に以下を送信し、Monitor で結果を待つ:
 
 ```
-次のフェーズに進む前に、pdh-dev ワークフロー（.claude/skills/pdh-dev/SKILL.md）の現在のステップの完了条件を読み直し、current-note.md のログと照合して、全てのステップを正しく踏んだか確認してください。ステップ遷移宣言（[PD-C-X] -> [PD-C-Y] の形式）が抜けていれば補完してください。確認結果を報告してください。
+次のフェーズに進む前に、pdh-dev ワークフロー（.claude/skills/pdh-dev/SKILL.md）の現在のステージの完了条件を読み直し、current-note.md のログと照合して、全てのステージを正しく踏んだか確認してください。ステージ遷移宣言（[PDH-*] -> [PDH-*] の形式）が抜けていれば補完してください。確認結果を報告してください。
 ```
 
 **Step 2: Director が裏取りする**
@@ -425,7 +425,7 @@ flowchart TD
 
 | 検証観点 | 確認方法 |
 |---|---|
-| **レビューループ完了** | レビュー構成の **全員** が **修正後の最新版** をレビューし、Critical/Major = 0 を回答しているか |
+| **PDH-review 完了** | レビュー構成の **全員** が **修正後の最新版** をレビューし、Critical/Major = 0 を回答しているか |
 | **テスト完了** | CLAUDE.md に定義されたテスト種別が **全て** 実行され全件パスしているか |
 | **実環境確認** | サーバー起動 + curl/Playwright での動作確認が実施されているか |
 | **AC 達成** | 形式的な達成ではなく、AC の意図（Why）を満たす実質的な達成か |
@@ -433,7 +433,7 @@ flowchart TD
 
 **Step 3: ユーザ確認 gate の場合、ユーザに報告し承認を得る**
 
-PD-C-1 または PD-C-10 に該当する場合、セルフチェック結果 + Director の裏取り結果をまとめてユーザに報告する。承認はユーザの明示的な意思表示（「OK」「y」「yes」「進めて」等）のみ有効。
+PDH-ticket-human-review または PDH-human-review に該当する場合、セルフチェック結果 + Director の裏取り結果をまとめてユーザに報告する。承認はユーザの明示的な意思表示（「OK」「y」「yes」「進めて」等）のみ有効。
 
 ---
 
@@ -468,8 +468,8 @@ PD-C-1 または PD-C-10 に該当する場合、セルフチェック結果 + D
 
 | パターン | 是正指示 |
 |---|---|
-| レビュー指摘を修正したが再レビュー未実施で次フェーズへ進もうとする | 「修正後の再レビューを実施し、全レビュアーから issue 0 の確認を得てください」 |
-| レビュアーの一部が修正前の旧版をレビューした結果で「問題なし」としている | 「全レビュアーが修正後の最新版をレビューする再レビューを実施してください」 |
+| レビュー指摘を修正したが PDH-review の再確認未実施で次フェーズへ進もうとする | 「修正後のレビューを実施し、全レビュアーから issue 0 の確認を得てください」 |
+| レビュアーの一部が修正前の旧版をレビューした結果で「問題なし」としている | 「全レビュアーが修正後の最新版をレビューしてください」 |
 | テスト未実行で「完了」と報告する | テスト実行を指示 |
 | CLAUDE.md で定義されたテスト種別の一部だけで完了とする | 未実施のテストを指示（種別は CLAUDE.md 参照） |
 | E2E スモークテストを飛ばす | 実行を指示 |
@@ -478,7 +478,7 @@ PD-C-1 または PD-C-10 に該当する場合、セルフチェック結果 + D
 | AC を勝手に書き換える | ユーザに相談 |
 | AC の形式的達成のみで意図（Why）まで検証していない | 実質的達成の確認を指示 |
 | **レビューで既存問題が「対応検討」「スコープ外」「別チケット」と記載されている** | **Director がユーザに背景・選択肢を提示し、対応方針の判断を仰ぐ**（window に判断を任せない） |
-| **ユーザ確認なしに gate（PD-C-1, PD-C-10）を越えて進んでいる** | 即座に window を止め、ユーザに状況報告して承認を得る。ユーザが window に質問・会話しただけでは承認にならない。pdh-dev が定義する「明示的な意思表示（OK/y/yes/進めて）」のみ有効 |
+| **ユーザ確認なしに gate（PDH-ticket-human-review, PDH-human-review）を越えて進んでいる** | 即座に window を止め、ユーザに状況報告して承認を得る。ユーザが window に質問・会話しただけでは承認にならない。pdh-dev が定義する「明示的な意思表示（OK/y/yes/進めて）」のみ有効 |
 
 ---
 
@@ -501,7 +501,7 @@ window が是正指示を **2回送っても同じ問題を繰り返す** 場合
 1. 並行可能なチケットを特定する (互いに依存しない、同一ファイルを変更しない)
 2. 各 window に 1 チケットを割り当て、TD-2（`/clear` → `/pdh-dev`）で開始させる
 3. 各 window に Monitor Agent (or hookbus) を起動し、報告を待つ
-4. PD-C-1 / PD-C-10 の gate はチケットごとにユーザ承認を得る
+4. PDH-ticket-human-review / PDH-human-review の gate はチケットごとにユーザ承認を得る
 5. 完了した window には次の依存解消済みチケットを割り当てる
 
 **ブランチ分離:** 各 window が別ブランチで作業するため、`ticket.sh start` がブランチを自動作成する。同一ファイルを複数チケットが変更する場合はマージ時にコンフリクトが発生する可能性がある。
@@ -525,7 +525,7 @@ worker (別 window の Claude Code) の ctx が蓄積すると性能劣化 + aut
 resume kickoff には必ず以下を含める:
 - `EnterWorktree({path: "..."})` で worktree 再設定 (cwd は /clear で fallback する)
 - 現状 state (branch、commit hash、残 Ticket、bg task がある場合は出力先パス)
-- 次 phase の指示 (PD-C-X から続行 等)
+- 次 phase の指示 (PDH-implement から続行 等)
 
 ## Director の wakeup 間隔 (ScheduleWakeup / /loop 時)
 

@@ -2,7 +2,7 @@
 
 ## レビューパターン
 
-PD-C-7 は以下の構造で動く。ラウンドは `(N回目)` で表現する。実行モデル依存の reviewer 構成・起動手段は `_execution-*.md` に従う。
+PDH-review は以下の構造で動く。実行回数は `PDH-review-1` / `PDH-review-2` のように `current-note.md` の子ログへ記録する。実行モデル依存の reviewer 構成・起動手段は `_execution-*.md` に従う。
 
 ```mermaid
 flowchart TD
@@ -10,7 +10,7 @@ flowchart TD
     RB --> RC{"Critical/Major 指摘あり?"}
     RC -- "あり" --> RD["修正を反映"]
     RD --> RE["テストを再実行"]
-    RE --> RF["再レビュー実行<br/>（指摘を出した reviewer が再確認）"]
+    RE --> RF["PDH-review-N を追加<br/>（指摘を出した reviewer が再確認）"]
     RF --> RG["reviewer 別にステータスを記録"]
     RG --> RH{"全 reviewer の最新結果が<br/>No Critical/Major?"}
     RH -- "いいえ" --> RD
@@ -40,18 +40,18 @@ flowchart TD
 - **ドキュメント sweep**: 旧 identifier / 旧パス / 旧 enum 値が、ドキュメント・spec・README・コード内コメント・サンプルコード・チェンジログ等に残骸として残っていないか
 - **ドメイン固有対称性**: 状態遷移 / concurrency / locking / retry / idempotency / error path / cleanup / observability / 認可境界 などのドメイン固有観点
 
-指摘を出す時は、観点ラベル (例: `[同名 symbol sweep]`) を冒頭に付けると、統合作業と再レビュー時の追跡が容易になる。
+指摘を出す時は、観点ラベル (例: `[同名 symbol sweep]`) を冒頭に付けると、統合作業と次の `PDH-review-N` での追跡が容易になる。
 
-### レビューループの必須ルール
+### Review attempt の必須ルール
 
-1. **修正したら必ず再レビューする** — 修正内容を反映した後、同じ reviewer で再レビューして確認する
+1. **修正したら必ず review attempt を追加する** — 修正内容を反映した後、同じ reviewer で確認し、`PDH-review-N` として記録する
 2. **完了条件**: 全 reviewer の最新回答が `No Critical/Major` であること
-3. **指摘のクローズ権限はレビュアーにある** — 指摘を出した reviewer が再レビューで `解消済み` と判断して初めて閉じられる
-4. **Round N で PASS した reviewer は、Round N+1 で差分が影響しない限り再実行不要**
+3. **指摘のクローズ権限はレビュアーにある** — 指摘を出した reviewer が後続 attempt で `解消済み` と判断して初めて閉じられる
+4. **`PDH-review-N` で PASS した reviewer は、次 attempt で差分が影響しない限り再実行不要**
 
-### レビューループ収束性診断
+### Review attempt 収束性診断
 
-**2 round 同種 Critical 再発で root cause 診断 → escalation**。Direct flow は実装後 review のみで計画 review がないため、段階分けされた flow より厳しい threshold で介入する。
+**2 attempt 同種 Critical 再発で root cause 診断 → escalation**。ticket review は実装前に行うが、実装後に同種 Critical が繰り返す場合は scope か指示が壊れている可能性が高いため介入する。
 
 考えられる root cause:
 - 書きすぎ (ticket に実装詳細混入) → 抽象化
@@ -59,25 +59,25 @@ flowchart TD
 - reviewer プロンプト偏り → 観点を見直す
 - 確定値を下流に投げる pattern → 意思決定者が決めるべき判断を確定値として書き込む、または scope を縮小
 
-**Round 2+ で reviewer 指摘が false positive と判明した場合の scope-expand 抑制**:
+**`PDH-review-2+` で reviewer 指摘が false positive と判明した場合の scope-expand 抑制**:
 
-Round 1 で reviewer / Surface Observer が挙げた指摘が、Round 2 の調査で「誤検出 / pre-existing / out-of-scope / user-value に直結しない」と判明した場合、**Round 2 内で追加 fix を実装してはならない**。以下を実行:
+`PDH-review-1` で reviewer / Surface Observer が挙げた指摘が、`PDH-review-2` の調査で「誤検出 / pre-existing / out-of-scope / user-value に直結しない」と判明した場合、**その attempt 内で追加 fix を実装してはならない**。以下を実行:
 
-- Round 1 の指摘を `current-note.md` Discoveries に「Round 1 報告は誤検出 / pre-existing と判明」と記録
-- 元の AC + user journey 動作確認に絞って PD-C-9 を再走、close へ
-- 「invariant test pin で将来 regression 防止」「registry value cosmetic alignment」「Epic Exit Criteria の体裁を整える」「engineering 美学の補完」などは **scope-expand 理由として禁止**。本当に必要なら別 ticket を切る (Director / 意思決定者 承認必須)
+- `PDH-review-1` の指摘を `current-note.md` Discoveries に「`PDH-review-1` 報告は誤検出 / pre-existing と判明」と記録
+- 元の AC + user journey 動作確認に絞って PDH-verify を再走、PDH-human-review へ
+- 「invariant test pin で将来 regression 防止」「registry value cosmetic alignment」「上位 spec の体裁を整える」「engineering 美学の補完」などは **scope-expand 理由として禁止**。本当に必要なら別 ticket を切る (Director / 意思決定者 承認必須)
 
-根拠: Round 1 → Round 2 で「修正の正当化」が動機になり、user-value に寄与しない scope expansion を生む典型 anti-pattern。Round 2 では Round 1 と同じ ground truth (AC + user journey、`_principles.md` 「user journey > engineering aesthetics」) を判定基準として維持する。
+根拠: `PDH-review-1` → `PDH-review-2` で「修正の正当化」が動機になり、user-value に寄与しない scope expansion を生む典型 anti-pattern。後続 attempt でも同じ ground truth (AC + user journey、`_principles.md` 「user journey > engineering aesthetics」) を判定基準として維持する。
 
-**3+ round の patch loop には絶対に入らない**。3+ round の同種再発は「scope か work の根本ミスマッチ」を示す signal。追加 patch ではなく以下のいずれかで対処:
+**3+ attempt の patch loop には絶対に入らない**。3+ attempt の同種再発は「scope か work の根本ミスマッチ」を示す signal。追加 patch ではなく以下のいずれかで対処:
 
 - **scope 切り直し**: ticket cancel (`./ticket.sh cancel`)、scope を縮小して新 ticket
 - **エスカレーション**: ユーザに状況を報告し判断を仰ぐ (3 案以上の選択肢を実コード fact と共に提示)
 - **戦略転換 + 出口検査 (sentinel) 追加**: **「入口除外 → 通過遮断 → 出口検査」の 3 重 defense は、動的言語で security invariant を強制する一般的な設計パターンである。**
 
-  動的言語・template・plugin など、入口側の静的検出だけで security invariant を強制している場合、同種 Major の 3 round 再発は blocklist 戦略の限界を示す。入口除外 (validation / AST blocklist) で漏れ、通過遮断 (runtime allowlist / context exclusion) へ転換しても適用範囲漏れが出る場合は、最終生成物の直前で invariant violation を検査する出口 sentinel を追加する。
+  動的言語・template・plugin など、入口側の静的検出だけで security invariant を強制している場合、同種 Major の 3 attempt 再発は blocklist 戦略の限界を示す。入口除外 (validation / AST blocklist) で漏れ、通過遮断 (runtime allowlist / context exclusion) へ転換しても適用範囲漏れが出る場合は、最終生成物の直前で invariant violation を検査する出口 sentinel を追加する。
 
-  典型的な 3 段階再発パターン: Round 1 で「filter 経由 bypass」 → Round 2 で「dynamic key / method access bypass」 → Round 3 で「隠れた context 経由 bypass (例: 前段ステップが publish した internal data 経由)」。この pattern に対しては context exclusion + 該当 context の sanitize + 最終生成物 sentinel の組み合わせで provider / consumer 呼び出し前に違反を捕捉できる。
+  典型的な 3 段階再発パターン: `PDH-review-1` で「filter 経由 bypass」 → `PDH-review-2` で「dynamic key / method access bypass」 → `PDH-review-3` で「隠れた context 経由 bypass (例: 前段ステージが publish した internal data 経由)」。この pattern に対しては context exclusion + 該当 context の sanitize + 最終生成物 sentinel の組み合わせで provider / consumer 呼び出し前に違反を捕捉できる。
 
 ### 裏取りルール
 
@@ -137,7 +137,7 @@ reviewer 間・レンズ間で結論が割れたら（例: 一方「壊れてい
    - **実装ロジックの挙動変更** (テストではなく実装側を直す必要がある場合)
    - **AC 追加相当の修正** (ユーザに見せる振る舞いが変わる)
    - **セキュリティ上の重大な問題** (常に即相談)
-4. 同一チケット内で修正する場合は `current-note.md` の Discoveries / PD-C-7 結果欄に「pre-existing として検出 → 本 ticket 内で修正 → 修正 commit hash」の証跡を残す。ticket の AC は追加しない (pre-existing 修正は AC ではなく副次対応として扱う)
+4. 同一チケット内で修正する場合は `current-note.md` の Discoveries / PDH-review 結果欄に「pre-existing として検出 → 本 ticket 内で修正 → 修正 commit hash」の証跡を残す。ticket の AC は追加しない (pre-existing 修正は AC ではなく副次対応として扱う)
 
 **背景**: 別チケット化は切り出しコスト・文脈ロストが高く、1 user + AI 開発体制では「今ここで直せば 10 分」の問題を翌週まで放置する動機にしかならない。同一チケットで拾う方が全体速度が上がる。
 
