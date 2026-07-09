@@ -1,14 +1,15 @@
 # AGENTS.md
 
-This repository's coding-agent instructions live in `CLAUDE.md`.
+This repository's project-specific coding-agent instructions live in `CLAUDE.md`; shared PDH instructions live in `PDH-AGENTS.md`.
 
 Before making changes:
 1. Read and follow `CLAUDE.md`.
-2. If `CLAUDE.local.md` exists, read it after `CLAUDE.md`; it is gitignored environment-local context.
-3. If `docs-index.md` exists, use it only as a router to canonical documents.
-4. Do not duplicate project rules here. Update `CLAUDE.md` when rules change.
+2. Read `PDH-AGENTS.md` for PDH common rules.
+3. If `CLAUDE.local.md` exists, read it after `CLAUDE.md`; it is gitignored environment-local context.
+4. If `docs-index.md` exists, use it only as a router to canonical documents.
+5. Do not duplicate project rules here. Update `CLAUDE.md` for project rules and `PDH-AGENTS.md` for PDH common rules.
 
-If an agent platform reads only `AGENTS.md`, treat this file as a pointer to `CLAUDE.md`, not as a separate source of truth.
+If an agent platform reads only `AGENTS.md`, treat this file as a pointer to `CLAUDE.md` and `PDH-AGENTS.md`, not as a separate source of truth.
 
 For PDH / ticket-centric work, also read:
 
@@ -26,6 +27,7 @@ Do not migrate legacy files in `tickets/` unless the user explicitly asks.
 | Claude Code term | Generic meaning |
 |---|---|
 | `CLAUDE.md` | Primary repository instruction file |
+| `PDH-AGENTS.md` | Shared PDH agent rules |
 | `subagent` | Delegated agent with its own context |
 | `teammate` / agent team | Independent agent session coordinated by an `orchestrator` |
 | `Skill` / `.claude/skills/` | Reusable task instruction package |

@@ -1,0 +1,23 @@
+# CLAUDE.local.md.example
+
+Copy this file to `CLAUDE.local.md` when a working environment needs local-only
+agent context.
+
+Do not commit `CLAUDE.local.md`. Do not store secret values here. Store only
+how to obtain secrets, where local credential files live, or which command the
+user should run.
+
+Examples of appropriate local-only notes:
+
+- Available local tools and their paths
+- Preferred local ports or tunnel constraints
+- Dummy login accounts for local development
+- Local database or fixture reset commands
+- Sandbox limitations and approved workarounds
+- Temporary review URLs and cleanup steps
+
+Examples of inappropriate content:
+
+- API keys, OAuth client secrets, session cookies, JWTs, passwords
+- Production-only credentials
+- Project rules that should apply to everyone

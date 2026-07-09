@@ -1,8 +1,9 @@
 # プロジェクト概要
 
 @product-brief.md を参照すること
+@PDH-AGENTS.md
 
-`CLAUDE.md` は repo で共有する PDH / project ルールを書く場所。端末・sandbox・個人アカウント・一時 URL・ローカル認証状態などの環境固有メモは、git 管理しない `CLAUDE.local.md` に書く。`CLAUDE.local.md` が存在する場合は本ファイルの後に読む。secret の値そのものは `CLAUDE.local.md` にも書かず、取得方法や保管場所だけを書く。
+`CLAUDE.md` は repo で共有する project 固有ルールを書く場所。PDH の汎用ルールは `PDH-AGENTS.md` に置く。端末・sandbox・個人アカウント・一時 URL・ローカル認証状態などの環境固有メモは、git 管理しない `CLAUDE.local.md` に書く。`CLAUDE.local.md` が存在する場合は本ファイルの後に読む。secret の値そのものは `CLAUDE.local.md` にも書かず、取得方法や保管場所だけを書く。
 
 **設計意図の探し方:** `git blame <file>` でコミットを特定 → コミットメッセージの ticket 名 → `tickets/done/` → `product-brief.md`
 
@@ -68,24 +69,17 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 
 - **段階的実行を推奨**: まず高速なテスト（例: `pytest -x -q`）で早期フィードバックを得る → 修正があれば対応 → 全スイートは `scripts/test-all.sh` で一括実行
 - **E2E 実環境テスト（必須）**: ビルド成功・テストパスだけで完了としない。サーバー起動 → UI 変更はブラウザ確認、API 変更は curl でレスポンス検証
-  - `agent-browser` は CLI ツール (npm global install 済なら `which agent-browser` で確認可)。バージョンや環境で細部が変わるため、使う直前に `agent-browser --help` を実行して、その場の正しい使い方を確認する。ブラウザ UI の実動確認に使う
-- **`ticket-local-test`**: 特定 ticket の一時的な検証は `tests/tickets/<ticket-id>/test-ticket-local.sh` に置き、`./scripts/test-ticket-local.sh [ticket-id]` で実行する。これは `scripts/test-all.sh` / CI には入れない
 
 ### テスト設計ルール
 
 - **テストは「アプリがこう動くべき」（desired state）を記述する**。現在の仕様における正しい振る舞いを定義するもの
-- **チケット固有テストを恒久テストへ混ぜない**。`scripts/test-all.sh` / `test/` / CI に残すのは、プロダクト契約・Architectural Invariants・再発すると困る一般化済みの regression だけにする。特定 ticket の一時的な移行確認（例: `/a` から `/b` への変更で旧 `/a` が 404 になること、特定 fixture 名が見えないこと）は `PDH-verify` の `ticket-local-test` とする
-- テスト項目の判断基準: 「このテストは ticket 名や一時 fixture なしで今後も product contract として説明できるか？」→ Yes なら恒久テスト候補、No なら `ticket-local-test` として `tests/tickets/<ticket-id>/test-ticket-local.sh` と note に残す
+- チケット固有の一時確認は `PDH-AGENTS.md` の `ticket-local-test` ルールに従う
 
 # PDH (Ticket) 運用
 
 - **`product-brief.md` が全判断の基準。** チケット作成・実装・レビューのすべてはこのドキュメントを正として行う
-- チケットの作成・編集・実装など全ての作業は **`/pdh-dev` スキルのフローに従うこと**。フローの詳細・ステップ定義・レビュー構造はすべて `/pdh-dev` SKILL.md が正。CLAUDE.md では要約しない
+- PDH 汎用ルールは `PDH-AGENTS.md`、フローの詳細・ステップ定義・レビュー構造は `/pdh-dev` SKILL.md が正。`CLAUDE.md` では project 固有の差分だけを書く。
 - **Acceptance Criteria の変更（追加・削除・修正）は必ずユーザの承認を得ること**
-- PDH の stage label は `PDH-open` / `PDH-ticket-review` / `PDH-ticket-human-review` / `PDH-implement` / `PDH-review` / `PDH-verify` / `PDH-human-review` / `PDH-close`
-- `PDH-ticket-human-review` は実装前の人間 gate。ticket review で修正した点、全体概要、達成するもの、AC、out-of-scope、判断ポイントを説明し、明示承認を得るまで実装しない
-- `PDH-human-review` は close 前の人間 gate。coding agent がやったこと・達成したことをユーザが見て、想定と合っているかをすり合わせる。レビュー可能な UI / API がある場合は開発サーバを起動し、ユーザ自身が触れる確認手順を提示する。明示承認なしに `PDH-close` へ進まない
-- UI / API surface の verify / human-review で再現データが必要な場合は `scripts/seed-pdh-verify.sh` を用意し、開発サーバが必要なら `./scripts/dev-server.sh --seed` で起動する。起動条件・seed・確認 URL が ticket に合わない場合は、一時コマンドで逃がさず script を更新する
 
 ## 影響範囲の明示（必須）
 
@@ -121,18 +115,20 @@ pdh-dev が spawn するチームメンバーの engine / モデル設定。
 
 **main engine の選択**: 未指定で曖昧なときのみ `which codex` で確認し、ユーザに「claude / codex どちらで進めるか」を確認（既指定なら不要、セッション中は継続）。headless/CI 文脈では、その実行系が定義する環境変数を main engine とする（無ければ既定 claude）。
 
-**下表は「役割ごとに engine / model を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。
+**下表は「役割ごとに engine / model を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。PDH stage の定義と gate 条件は `PDH-AGENTS.md` と `/pdh-dev` を正とし、この表は project 固有の role / model override だけを書く。
 
 | 役割 | step | 上書き例 | 備考 |
 |---|---|---|---|
 | PM（Director） | 全体 | （main） | 進行・dispatch・統合・判断・ユーザ報告。worker を spawn する側 |
-| Ticket contract | PDH-ticket-review / PDH-ticket-human-review | （main） | PM が担当。AC 明確化 + Architectural Invariants check + Dependencies + ticket-human-review 承認 gate |
-| Coding Engineer | PDH-implement | （main） | 1 agent が investigate + implement + tests を 1 session で完遂。pdh-coding SKILL 参照 |
-| QA Engineer | PDH-implement / PDH-review / PDH-verify | （main） | テスト実行・E2E確認・ドキュメント再生成 |
-| Devil's Advocate | PDH-review | （main） | ユーザ視点の厳しい指摘 / セキュリティ脆弱性 / 設計上の論理バグ / AC 達成の実質判定 + Ticket 不可侵 check |
-| 追加 reviewer（任意） | PDH-review | 例: codex を1人追加 | 独立視点を増やしたいとき、別 engine の reviewer を明示追加してよい（混在）|
-| AC 裏取り | PDH-verify | （main） | 各 AC 項目が実際に達成されているかコード・テスト結果・ノートを読んで検証。形式でなく Why を満たす実質達成を厳しく見る |
-| Surface Observer | PDH-verify | （main） | PDH-human-review 直前に実機で UI / HTTP API / SDK / CLI を consumer 視点で観察。実ブラウザ / browser automation CLI / curl / 実 SDK 使用。純 backend 変更のみなら skip 可 |
+| Ticket contract | ticket contract / AC gate | （main） | PM が担当。project 固有の invariant / dependency / approval 補足を書く |
+| Coding Engineer | implementation | （main） | 実装 worker。project 固有の実装制約や required skill があれば書く |
+| QA Engineer | tests / verification | （main） | test command、E2E、doc regeneration など project 固有の確認観点を書く |
+| Devil's Advocate | review | （main） | セキュリティ、設計、AC 達成の実質判定など project 固有の重点観点を書く |
+| 追加 reviewer（任意） | review | 例: codex を1人追加 | 独立視点を増やしたいとき、別 engine の reviewer を明示追加してよい（混在）|
+| AC 裏取り | verification | （main） | project 固有の AC evidence や canonical docs 照合観点を書く |
+| Surface Observer | surface check | （main） | UI / HTTP API / SDK / CLI など、この project の consumer surface を書く |
+
+共通の worker / spawn / context ルールは `PDH-AGENTS.md` に置く。以下にはこの project / tool 固有の起動方法だけを書く。
 
 ### Codex の起動方法
 
@@ -168,40 +164,10 @@ Bash(
 - **worktree 中の ticket に対して実行する場合は必ず `cd <worktree> && codex exec ...` の形にする**（custom statusLine がある環境で cwd が毎回リセットされる既知バグ [anthropics/claude-code#31471](https://github.com/anthropics/claude-code/issues/31471) を回避するため）
 - **コンテキスト汚染対策**: 完了通知は `<task-notification>` として軽量メッセージで届く（出力本体は含まない）。result.txt だけ Read すれば ~2 KB で済む。stderr.log は失敗時のみ `tail -50` 程度で部分読みし、`cat` で全部流し込まない
 
-## 原則
-
-- 「読むだけ」のタスク (レビュー / 調査) は Review Agent を並行実行し、「書く」タスク (実装) は Coding Engineer (1 agent) を使う
-- **PM (Director) がソースコードを直接編集しないこと。実装は必ず Coding Engineer で行う**
-- **PM (Director) がテスト実行・ドキュメント再生成を直接行わないこと。QA Engineer に委譲する**
-
-## spawn のルール
-
-- チームメイトは PM の会話履歴を引き継がない。spawn プロンプトに以下を必ず含めること:
-  - タスクの目的と背景
-  - 対象ファイルパス
-  - 該当 Ticket の Why / AC + Architectural Invariants check + 確定判断 + out-of-scope
-  - 担当範囲 (他のチームメイトとの衝突を避けるため、ただし Coding Engineer は基本 1 agent)
-  - **`pdh-coding` skill を読んでから作業開始すること** (Coding Engineer 用)
-- 同一ファイルを複数のチームメイトが編集しないよう、ファイル所有権を分けること
-- チームが解散する時は不必要な pane は閉じること
-
-## 全チームメイト共通ルール
-
-- **最初に `product-brief.md` を読むこと。すべての判断・作業はこのドキュメントを基準にする**
-- 作業対象の Ticket (`current-ticket.md`、`current-note.md` または `tickets/`) を読み、Why / AC / Architectural Invariants check / 確定判断 / out-of-scope を確認すること
-- spawn プロンプトで指定されたファイル範囲外を変更しない。必要な場合は PM に相談すること
-- product-brief.md を編集する場合は内容を提示しユーザの許可を取ること
-
 ## tmux 環境
 
 - **Director (window 0) とワーカー window は異なる環境で動作する可能性がある**。典型例: Director がホスト上、ワーカーが Docker 内（またはその逆）
 - ファイルパス、DB 接続、ポートアクセスが環境間で異なることを前提にする。worktree の `.git` パスなど、環境依存の設定に注意
 - **tmux capture で worker の入力欄に灰色のテキストが見えても無視する**。それは Tab で確定する補完候補 (autocomplete ghost) であり、ユーザの書きかけ入力ではない
-
-# コンテキスト管理
-
-- コンパクション時に以下を必ず保持すること: 現在のチケット名、現在の PDH stage、未解決の懸念事項、ユーザから得た判断・承認
-- 関連のないタスク間では `/clear` でコンテキストをリセットする
-- 調査が大規模になる場合はサブエージェントに委譲し、メインのコンテキストを実装に集中させる
 
 # Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/CLAUDE.md
