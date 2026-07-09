@@ -67,13 +67,13 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 - **段階的実行を推奨**: まず高速なテスト（例: `pytest -x -q`）で早期フィードバックを得る → 修正があれば対応 → 全スイートは `scripts/test-all.sh` で一括実行
 - **E2E 実環境テスト（必須）**: ビルド成功・テストパスだけで完了としない。サーバー起動 → UI 変更はブラウザ確認、API 変更は curl でレスポンス検証
   - `agent-browser` は CLI ツール (npm global install 済なら `which agent-browser` で確認可)。バージョンや環境で細部が変わるため、使う直前に `agent-browser --help` を実行して、その場の正しい使い方を確認する。ブラウザ UI の実動確認に使う
-- **ticket-local check**: 特定 ticket の一時的な検証は `tests/tickets/<ticket-id>/test-ticket-local.sh` に置き、`./scripts/test-ticket-local.sh [ticket-id]` で実行する。これは `scripts/test-all.sh` / CI には入れない
+- **`ticket-local-test`**: 特定 ticket の一時的な検証は `tests/tickets/<ticket-id>/test-ticket-local.sh` に置き、`./scripts/test-ticket-local.sh [ticket-id]` で実行する。これは `scripts/test-all.sh` / CI には入れない
 
 ### テスト設計ルール
 
 - **テストは「アプリがこう動くべき」（desired state）を記述する**。現在の仕様における正しい振る舞いを定義するもの
-- **チケット固有テストを恒久テストへ混ぜない**。`scripts/test-all.sh` / `test/` / CI に残すのは、プロダクト契約・Architectural Invariants・再発すると困る一般化済みの regression だけにする。特定 ticket の一時的な移行確認（例: `/a` から `/b` への変更で旧 `/a` が 404 になること、特定 fixture 名が見えないこと）は `PDH-verify` の ticket-local check とする
-- テスト項目の判断基準: 「このテストは ticket 名や一時 fixture なしで今後も product contract として説明できるか？」→ Yes なら恒久テスト候補、No なら ticket-local check として `tests/tickets/<ticket-id>/test-ticket-local.sh` と note に残す
+- **チケット固有テストを恒久テストへ混ぜない**。`scripts/test-all.sh` / `test/` / CI に残すのは、プロダクト契約・Architectural Invariants・再発すると困る一般化済みの regression だけにする。特定 ticket の一時的な移行確認（例: `/a` から `/b` への変更で旧 `/a` が 404 になること、特定 fixture 名が見えないこと）は `PDH-verify` の `ticket-local-test` とする
+- テスト項目の判断基準: 「このテストは ticket 名や一時 fixture なしで今後も product contract として説明できるか？」→ Yes なら恒久テスト候補、No なら `ticket-local-test` として `tests/tickets/<ticket-id>/test-ticket-local.sh` と note に残す
 
 # PDH (Ticket) 運用
 

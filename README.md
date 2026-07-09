@@ -94,7 +94,7 @@ bash ticket.sh init
 | `tmp/pdh/templates/test-all.sh` | `scripts/test-all.sh` | テスト一括実行スクリプト |
 | `tmp/pdh/templates/dev-server.sh` | `scripts/dev-server.sh` | PDH verify / human-review 用の開発サーバ入口 |
 | `tmp/pdh/templates/seed-pdh-verify.sh` | `scripts/seed-pdh-verify.sh` | PDH verify / human-review 用のローカル seed hook |
-| `tmp/pdh/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | ticket-local check 実行スクリプト（CI には含めない） |
+| `tmp/pdh/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | `ticket-local-test` 実行スクリプト（CI には含めない） |
 | `tmp/pdh/templates/product-brief.md` | `product-brief.md` | Product Brief テンプレート |
 | `tmp/pdh/scripts/hookbus.js` | `scripts/hookbus.js` | tmux worker hook event bus (実行権限 `chmod +x` 要) — 下記 §tmux Director hookbus 参照 |
 
@@ -269,7 +269,7 @@ chmod +x scripts/test-ticket-local.sh
 ./scripts/test-ticket-local.sh <ticket-id>        # 明示指定
 ```
 
-ticket-local check は `PDH-verify` の証跡として `current-note.md` に実行コマンドと結果を残す。
+`ticket-local-test` は `PDH-verify` の証跡として `current-note.md` に実行コマンドと結果を残す。
 恒久テストへ昇格するか迷う場合は「ticket 名や一時 fixture なしで今後も product contract として説明できるか」を基準にする。
 
 #### 6.3. (hookbus 使用時のみ) vitest in-source testing を有効化
@@ -375,7 +375,7 @@ PDH-implement: 実装
     ↓
 PDH-review: 実装後 review と修正ループ
     ↓
-PDH-verify: AC 裏取り + Surface Observer + テスト全件 + ticket-local check
+PDH-verify: AC 裏取り + Surface Observer + テスト全件 + `ticket-local-test`
     ↓
 PDH-human-review: やったこと・達成したことをユーザが確認する (人間 gate)
     ↓
@@ -469,7 +469,7 @@ project-root/
     test-all.sh             ← テスト一括実行
     dev-server.sh           ← PDH verify / human-review 用の開発サーバ入口
     seed-pdh-verify.sh      ← PDH verify / human-review 用のローカル seed hook
-    test-ticket-local.sh    ← ticket-local check 実行
+    test-ticket-local.sh    ← `ticket-local-test` 実行
     hookbus.js              ← (任意) tmux Director hookbus event bus
   tests/
     tickets/
@@ -503,7 +503,7 @@ pdh/
     test-all.sh                      ← テスト一括実行テンプレート
     dev-server.sh                    ← PDH verify / human-review 用の開発サーバ入口テンプレート
     seed-pdh-verify.sh               ← PDH verify / human-review 用のローカル seed hook テンプレート
-    test-ticket-local.sh             ← ticket-local check 実行テンプレート
+    test-ticket-local.sh             ← `ticket-local-test` 実行テンプレート
     .ticket-config.yaml              ← ticket.sh 設定テンプレート
   scripts/
     hookbus.js                       ← tmux Director hookbus (CLI + library + in-source vitest、1 ファイル完結)

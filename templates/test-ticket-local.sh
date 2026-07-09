@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# test-ticket-local.sh — Run ticket-local checks for PDH projects.
+# test-ticket-local.sh — Run ticket-local tests for PDH projects.
 #
-# Ticket-local checks are executable verification artifacts for one ticket.
-# They are intentionally not part of scripts/test-all.sh or CI.
+# A ticket-local-test is an executable verification artifact for one ticket.
+# These artifacts are intentionally not part of scripts/test-all.sh or CI.
 #
 # Usage:
 #   scripts/test-ticket-local.sh                         # infer current ticket
@@ -20,7 +20,7 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/test-ticket-local.sh [ticket-id] [-- ticket-local-args...]
 
-Runs a ticket-local verification script without adding it to scripts/test-all.sh or CI.
+Runs a ticket-local-test script without adding it to scripts/test-all.sh or CI.
 
 Default ticket-id is inferred from current-ticket.md when it is a symlink to tickets/<ticket-id>.md.
 The script path is:
