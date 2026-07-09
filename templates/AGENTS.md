@@ -26,7 +26,7 @@ Do not migrate legacy files in `tickets/` unless the user explicitly asks.
 
 | Claude Code term | Generic meaning |
 |---|---|
-| `CLAUDE.md` | Primary repository instruction file |
+| `CLAUDE.md` | Project-specific agent rules |
 | `PDH-AGENTS.md` | Shared PDH agent rules |
 | `subagent` | Delegated agent with its own context |
 | `teammate` / agent team | Independent agent session coordinated by an `orchestrator` |

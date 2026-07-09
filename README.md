@@ -91,7 +91,7 @@ bash ticket.sh init
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
 | `tmp/pdh/templates/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH 汎用 agent ルール |
 | `tmp/pdh/templates/CLAUDE.local.md.example` | `CLAUDE.local.md.example` | 環境固有 agent メモのサンプル（実体は commit しない） |
-| `tmp/pdh/templates/AGENTS.md` | `AGENTS.md` | Codex CLI 向け設定（CLAUDE.md への thin pointer） |
+| `tmp/pdh/templates/AGENTS.md` | `AGENTS.md` | Codex CLI 向け設定（CLAUDE.md / PDH-AGENTS.md への thin pointer） |
 | `tmp/pdh/templates/.ticket-config.yaml` | `.ticket-config.yaml` | ticket.sh 設定 |
 | `tmp/pdh/templates/test-all.sh` | `scripts/test-all.sh` | テスト一括実行スクリプト |
 | `tmp/pdh/templates/dev-server.sh` | `scripts/dev-server.sh` | PDH verify / human-review 用の開発サーバ入口 |
@@ -477,7 +477,7 @@ project-root/
   tickets/
     YYMMDD-hhmmss-slug.md   ← Ticket ファイル (ticket.sh が管理)
     done/                   ← 完了した Ticket
-  AGENTS.md                 ← Codex CLI 向け設定 (CLAUDE.md への thin pointer)
+  AGENTS.md                 ← Codex CLI 向け設定 (CLAUDE.md / PDH-AGENTS.md への thin pointer)
   scripts/
     test-all.sh             ← テスト一括実行
     dev-server.sh           ← PDH verify / human-review 用の開発サーバ入口

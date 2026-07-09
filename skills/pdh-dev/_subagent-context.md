@@ -16,7 +16,10 @@ PM の使い方:
 ### 最初に読む（全 worker 必須 / レビュアーも）
 1. **`product-brief.md`** — 全判断の基準。チケットの AC・設計判断・スコープはすべてこれを正とする。
 2. **`docs/product-delivery-hierarchy.md`**（存在すれば）— PDH の運用原則の正本。特に **Ticket immutable（AC / Out-of-scope / Architectural Invariants は不可侵）**、ブランチ戦略、完了条件の考え方。**あなたの役割が実装でもレビューでも検証でも、この原則に従って判断する**（レビュアーはこの原則を基準に「逸脱していないか」を見る）。
-3. **`<TICKET_FILE>`** — このタスクの Why / AC / Invariants / 確定判断 / Out-of-scope。
+3. **`PDH-AGENTS.md`**（存在すれば）— PDH 汎用 agent ルール。stage / gate / worker / verify の共通ルール。
+4. **`CLAUDE.md`** — project 固有ルール、テストコマンド、approval policy、tool/model 上書き。
+5. **`CLAUDE.local.md`**（存在すれば）— gitignore 済みの環境固有メモ。secret 値は置かない。
+6. **`<TICKET_FILE>`** — このタスクの Why / AC / Invariants / 確定判断 / Out-of-scope。
 
 ### 作業対象ファイルの位置
 - **Product Brief**: `product-brief.md`（全判断の基準）

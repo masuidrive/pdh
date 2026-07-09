@@ -15,6 +15,9 @@ description: "Ticket-centric 開発ワークフロー (1 user + AI 体制 single
 
 | ファイル | 内容 |
 |---|---|
+| `PDH-AGENTS.md`（存在すれば） | PDH 汎用 agent 入口。stage / gate / worker / verify の共通ルール |
+| `CLAUDE.md` | project 固有ルール、テストコマンド、approval policy、tool/model 上書き |
+| `CLAUDE.local.md`（存在すれば） | gitignore 済みの環境固有メモ。secret 値は置かない |
 | `_principles.md` | 最重要原則・核となる設計選択。すべての判断の哲学的基盤 |
 | `_reference.md` | 用語・stage 遷移・進捗報告・stage 完了ルール・ticket/note 構造・AC ルール・責務境界・Self-check |
 | `_flow.md` | `PDH-open` / `PDH-ticket-review` / `PDH-ticket-human-review` / `PDH-implement` / `PDH-review` / `PDH-verify` / `PDH-human-review` / `PDH-close` の stage と checklist |
