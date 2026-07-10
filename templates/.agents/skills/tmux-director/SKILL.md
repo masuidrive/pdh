@@ -12,5 +12,6 @@ When this skill is selected:
 
 1. Read `.claude/skills/tmux-director/SKILL.md`.
 2. Follow it as the source of truth.
+3. Translate Claude-specific interactive / Monitor / Agent tooling to the available host tools; if unavailable, state the limitation before proceeding.
 
 Do not duplicate tmux Director rules here; update `.claude/skills/tmux-director/` instead.
