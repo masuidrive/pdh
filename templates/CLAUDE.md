@@ -5,6 +5,8 @@
 
 `CLAUDE.md` は repo で共有する project 固有ルールを書く場所。PDH の汎用ルールは `PDH-AGENTS.md` に置く。端末・sandbox・個人アカウント・一時 URL・ローカル認証状態などの環境固有メモは、git 管理しない `CLAUDE.local.md` に書く。`CLAUDE.local.md` が存在する場合は本ファイルの後に読む。secret の値そのものは `CLAUDE.local.md` にも書かず、取得方法や保管場所だけを書く。
 
+`.claude/skills/` は Claude Code skill の実体、`.agents/skills/` は Codex 用 wrapper とする。PDH 系 wrapper は `.claude/skills/` の実体を読むため、実体ルールは `.claude/skills/` 側で更新する。
+
 **設計意図の探し方:** `git blame <file>` でコミットを特定 → コミットメッセージの ticket 名 → `tickets/done/` → `product-brief.md`
 
 ## ディレクトリ構造

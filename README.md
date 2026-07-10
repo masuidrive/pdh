@@ -88,6 +88,10 @@ bash ticket.sh init
 | `tmp/pdh/skills/pdh-coding/SKILL.md` | `.claude/skills/pdh-coding/SKILL.md` | コーディング標準スキル |
 | `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
 | `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
+| `tmp/pdh/templates/.agents/skills/pdh-dev/SKILL.md` | `.agents/skills/pdh-dev/SKILL.md` | Codex 用 PDH stage flow wrapper |
+| `tmp/pdh/templates/.agents/skills/pdh-coding/SKILL.md` | `.agents/skills/pdh-coding/SKILL.md` | Codex 用コーディング標準 wrapper |
+| `tmp/pdh/templates/.agents/skills/pdh-update/SKILL.md` | `.agents/skills/pdh-update/SKILL.md` | Codex 用 PDH アップデート wrapper |
+| `tmp/pdh/templates/.agents/skills/tmux-director/SKILL.md` | `.agents/skills/tmux-director/SKILL.md` | Codex 用 tmux Director wrapper |
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
 | `tmp/pdh/templates/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH 汎用 agent ルール |
 | `tmp/pdh/templates/CLAUDE.local.md.example` | `CLAUDE.local.md.example` | 環境固有 agent メモのサンプル（実体は commit しない） |
@@ -102,7 +106,7 @@ bash ticket.sh init
 
 コピー時に、各ファイル末尾の `Based on` 行の `XXXXXXX` を `tmp/pdh` の HEAD commit ID（7 桁）に置換する。
 
-`PDH-AGENTS.md` は PDH 汎用 agent ルール、`CLAUDE.md` は project 固有ルールとして commit する。端末・sandbox・個人アカウント・一時 URL・ローカル認証状態などの環境固有メモは `CLAUDE.local.md` に書き、`.gitignore` に入れて commit しない。必要なら `CLAUDE.local.md.example` をコピーして作る。secret の値そのものは `CLAUDE.local.md` にも書かず、取得方法や保管場所だけを書く。
+`PDH-AGENTS.md` は PDH 汎用 agent ルール、`CLAUDE.md` は project 固有ルールとして commit する。`.claude/skills/` は Claude Code skill の実体、`.agents/skills/` は Codex 用 wrapper とし、PDH 系 wrapper は `.claude/skills/` の実体を読む。端末・sandbox・個人アカウント・一時 URL・ローカル認証状態などの環境固有メモは `CLAUDE.local.md` に書き、`.gitignore` に入れて commit しない。必要なら `CLAUDE.local.md.example` をコピーして作る。secret の値そのものは `CLAUDE.local.md` にも書かず、取得方法や保管場所だけを書く。
 
 ```bash
 grep -qxF 'CLAUDE.local.md' .gitignore || printf '\nCLAUDE.local.md\n' >> .gitignore
@@ -478,6 +482,8 @@ project-root/
     YYMMDD-hhmmss-slug.md   ← Ticket ファイル (ticket.sh が管理)
     done/                   ← 完了した Ticket
   AGENTS.md                 ← Codex CLI 向け設定 (CLAUDE.md / PDH-AGENTS.md への thin pointer)
+  .agents/
+    skills/                 ← Codex 用 skill wrappers（実体は .claude/skills）
   scripts/
     test-all.sh             ← テスト一括実行
     dev-server.sh           ← PDH verify / human-review 用の開発サーバ入口
@@ -515,6 +521,7 @@ pdh/
     PDH-AGENTS.md                    ← PDH 汎用 agent ルールテンプレート
     CLAUDE.local.md.example          ← 環境固有 agent メモのサンプル
     AGENTS.md                        ← AGENTS.md テンプレート (Codex CLI 向け thin pointer)
+    .agents/skills/                  ← Codex 用 skill wrapper テンプレート
     test-all.sh                      ← テスト一括実行テンプレート
     dev-server.sh                    ← PDH verify / human-review 用の開発サーバ入口テンプレート
     seed-pdh-verify.sh               ← PDH verify / human-review 用のローカル seed hook テンプレート

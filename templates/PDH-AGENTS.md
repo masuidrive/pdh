@@ -13,8 +13,8 @@ For PDH / ticket-centric work, read:
 3. `PDH-AGENTS.md`
 4. `CLAUDE.md`
 5. `CLAUDE.local.md` if it exists
-6. `.claude/skills/pdh-dev/SKILL.md`
-7. `.claude/skills/pdh-coding/SKILL.md`
+6. `.agents/skills/pdh-dev/SKILL.md` or `.claude/skills/pdh-dev/SKILL.md`
+7. `.agents/skills/pdh-coding/SKILL.md` or `.claude/skills/pdh-coding/SKILL.md`
 8. `current-ticket.md` and `current-note.md` when they exist
 
 `CLAUDE.md` may override project-specific commands, file layout, and operational constraints, but it should not restate the generic PDH process.
@@ -43,7 +43,7 @@ Workers/subagents do not inherit the Director's full conversation state. Every w
 - Target file paths or ownership boundaries
 - The ticket's Why, AC, Architectural Invariants check, fixed decisions, and out-of-scope items
 - The worker's exact responsibility and collision boundaries
-- For implementation workers, an instruction to read `.claude/skills/pdh-coding/SKILL.md`
+- For implementation workers, an instruction to read `.agents/skills/pdh-coding/SKILL.md` or `.claude/skills/pdh-coding/SKILL.md`
 
 Do not assign overlapping write ownership to multiple workers. Reading/review tasks may run in parallel; writing tasks should have clear ownership. Worker PASS is not approval; the Director must inspect the result.
 

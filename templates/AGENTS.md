@@ -14,8 +14,8 @@ If an agent platform reads only `AGENTS.md`, treat this file as a pointer to `CL
 For PDH / ticket-centric work, also read:
 
 1. `docs/product-delivery-hierarchy.md`
-2. `.claude/skills/pdh-dev/SKILL.md` for orchestration
-3. `.claude/skills/pdh-coding/SKILL.md` for implementation workers
+2. `.agents/skills/pdh-dev/SKILL.md` or `.claude/skills/pdh-dev/SKILL.md` for orchestration
+3. `.agents/skills/pdh-coding/SKILL.md` or `.claude/skills/pdh-coding/SKILL.md` for implementation workers
 4. `current-ticket.md` and `current-note.md` when they exist
 
 Do not migrate legacy files in `tickets/` unless the user explicitly asks.
@@ -31,6 +31,7 @@ Do not migrate legacy files in `tickets/` unless the user explicitly asks.
 | `subagent` | Delegated agent with its own context |
 | `teammate` / agent team | Independent agent session coordinated by an `orchestrator` |
 | `Skill` / `.claude/skills/` | Reusable task instruction package |
+| `.agents/skills/` | Codex-native skill wrappers that delegate to `.claude/skills/` |
 | `model: opus` | Use the environment's `strong-judge` model/profile |
 | `advisor` | Second-opinion judge used at decision points |
 | `ultracode` / workflow | `multi-agent-coding` execution mode |
