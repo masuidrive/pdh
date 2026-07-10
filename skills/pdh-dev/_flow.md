@@ -209,7 +209,7 @@ Critical / Major があれば:
    - **Reality Check (合成での pass 禁止)**: AC の Why が user-facing な結果 (リンクが開く・通知が届く・画面が変わる・外部副作用) なら、完了判定は次を全て満たす — (1) **実上流が出す実データ**で検証する (自作の合成入力を流し込まない)、(2) **終端のユーザ操作を実際に行う** (リンクは実際にクリックして着地まで・通知は実イベントを起こして受信まで。「描画 / 生成された」だけでは pass にしない)、(3) **反証を 1 回試す** (「実トリガでも本当に出るか」「上流に当該フィールドが無い場合どうなるか」をわざと確認してから `[x]`)。**user-facing な Why の AC を合成入力だけで `[x]` にしない。** 各 `[x]` には何を・どの実データ / 実操作で確認したか (合成か実データかを明記) を note に 1 行残す
 5. **ドキュメント sweep**: 変更内容に名前・パス・URL の rename / delete が含まれる場合、全ドキュメントを走査し、旧名称・旧パスの残骸がないか確認する
 6. **全スイート最終確認 (必須)**: PDH-implement と同じ **`scripts/test-all.sh`** を最終確認として再実行し、実出力 (`Passed: N / N` の合否サマリ) を note に貼る。PDH-implement で貼った証拠が**最終 HEAD のものでない** (その後 commit / main merge した) 場合は必ず再実行する (**証拠の鮮度 gate**)
-7. 必要なら `.claude/skills/pdh-update/SKILL.md` を読む
+7. 必要な ticket note / docs を直接更新する。`pdh-update` は上流 PDH 取り込み専用なので、PDH-verify の通常 doc sweep では使わない
 8. **Surface Observer の起動 (PDH-human-review 直前、必須)**: 外部 surface (UI / HTTP API / SDK / CLI 等) に変更があった場合、consumer 視点の違和感を観察する（実行モデル依存の手段は `_execution-*.md` 参照）
    - 観察 focus: UI 視覚崩れ・反応速度・情報ヒエラルキー、HTTP API レスポンスボディ / エラー文言 / ステータスコードの自然さ、SDK / CLI import 経路 / 型ヒント / 例外メッセージ / ヘルプテキストの consumer 体験
    - 観察手段はプロジェクト固有のツールに従う (実機ブラウザ / browser automation CLI / `curl` / `httpie` / 実 SDK 呼び出し / CLI 実行)
