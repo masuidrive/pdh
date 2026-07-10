@@ -172,7 +172,7 @@ spawn prompt に `_flow.md` の「実行指示の必須内容」を含める。
 **1 人以上の reviewer を並行起動**する（依存関係がないため「spawn 機構」の `&`+`wait` で並行）。各 reviewer の engine は「エンジン割り当て」に従う（既定 = main と同一、プロジェクト規約で上書き・混在可）:
 - **Devil's Advocate**: セキュリティ脆弱性、設計上の論理バグ、AC 達成の実質判定。
 - **Ticket 不可侵 check**: implementor が AC / out-of-scope / Architectural Invariants を勝手に書き換えていないか。
-- 各 reviewer は **同じ差分全体**を見る。複数回 / 複数観点で union を取る（`_review.md`）。
+- 各 reviewer は **同じ commit SHA の差分全体**を見る。最初の attempt は複数観点で union を取り、修正後は影響する reviewer だけ再確認する（`_review.md`）。
 
 修正は **Coding Engineer に委譲**（PM が直接コードを編集しない）。テスト再実行は **QA Engineer に委譲**。指摘 → 修正 → `PDH-review-N` attempt 追加で重要指摘が残らないことを確認する（`_review.md` の収束ルール）。
 
@@ -182,7 +182,7 @@ stage 遷移の宣言はユーザに行う。
 
 **AC 裏取り Agent ×1 を spawn**（engine は「エンジン割り当て」に従う）。各 AC 項目が実際に達成されているかコード・テスト結果・ノートを読んで検証させる。
 
-Surface Observer の前に、PM は UI / API surface 用の開発サーバを `./scripts/dev-server.sh --seed` で起動する。`--seed` は local 環境をリセットして `scripts/seed-pdh-verify.sh` を実行する。固定 port が必要なら `--port <port>` を使い、未指定なら script が空き port をランダム選択する。起動条件・seed・確認 URL が ticket に合わない場合は、一時コマンドで逃がさず `scripts/dev-server.sh` を更新する。repo / ticket に seed hook が無ければ作り、seed 不要なら no-op として成功させる。外部 surface 変更がある場合、**Surface Observer を spawn** し consumer 視点の違和感を観察させる。UI / browser surface がある場合は、human review 前に `agent-browser` 等で主要ユースケースを実行し、操作結果または実行不能理由を残す。
+Surface Observer の前に、PM は UI / API surface 用の開発サーバを `./scripts/dev-server.sh --seed` で起動する。`--seed` は local 環境をリセットして `scripts/seed-pdh-verify.sh` を実行する。固定 port が必要なら `--port <port>` を使い、未指定なら script が空き port をランダム選択する。ticket の再現可能な product 検証条件が不足する場合だけ `scripts/dev-server.sh` / seed hook を更新し、sandbox・端末・local login 等の環境固有制約は local 設定か一時コマンドで扱う。repo / ticket に seed hook が無ければ作り、seed 不要なら no-op として成功させる。外部 surface 変更がある場合、**Surface Observer を spawn** し consumer 視点の違和感を観察させる。UI / browser surface がある場合は、human review 前に実 dev-server の composed page を `agent-browser` 等で操作し、対象 commit SHA と結果または実行不能理由を残す。
 
 ### PDH-human-review: 人間レビュー
 

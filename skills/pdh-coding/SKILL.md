@@ -45,13 +45,13 @@ ticket の以下を implementor が **勝手に書き換えてはいけない**:
 **AC を満たす最小の変更で止める。仮定の将来要件のために設計しない。**
 
 - AC に無い機能・オプション・抽象化・拡張点・設定・汎用化・防御コードを**先回りで足さない**。「ついで」の汎用化・リファクタは禁止。
-- **観測した問題は直す**（実際に踏んだバグ・既存問題 → ticket 内対応の判断は実行指示／レビューに従う）。**観測していない将来問題のための設計はしない**。この対比が境界線。
+- **観測した問題は無視せず記録・分類する**（current ticket で直すか follow-up にするかは PM と `_review.md` の因果基準に従う）。**観測していない将来問題のための設計はしない**。この対比が境界線。
 - 拡張余地が要ると判断したら、自前で作り込まず **Open Questions / 完了報告に1行で記録**して意思決定者に委ねる（その場で実装しない）。
 - *理由*: 投機的拡張は未使用コードを負債化させ、実装が AC から乖離し、レビューと修正を長引かせる。
 
 ## 曖昧な判断委譲の拒否
 
-実行指示（spawn プロンプト / bot 指示）に「Coding Engineer 判断」「下流で決めて」「よしなに」等の判断委譲表現があった場合、**確定値を聞き返す**（team: PM に確認 / solo / bot: Open Questions に記録して default 値で進み、完了報告で確認を求める）。意思決定者が決めるべき判断を下流に投げる pattern は anti-pattern であり、許容しない。
+実行指示（spawn プロンプト / bot 指示）に「Coding Engineer 判断」「下流で決めて」「よしなに」等の判断委譲表現があった場合、**確定値を聞き返す**（team: PM に確認 / solo / bot: Open Questions に記録）。意思決定者が決めるべき判断を下流に投げる pattern は anti-pattern であり、許容しない。下記の default 続行は、ticket contract を変えない実装ローカルで可逆な選択だけに適用する。
 
 例:
 - ❌ "fallback の挙動は Coding Engineer 判断" → ✅ "fallback の挙動を具体的に教えてください (raise / silent fallback / default 値)"
@@ -63,7 +63,7 @@ ticket の以下を implementor が **勝手に書き換えてはいけない**:
 
 ### 通常時 (default action)
 
-迷い点に遭遇したら、**実装を止めず、デフォルト値を選んで進める**。同時に以下を記録:
+ticket contract を変えない **実装ローカルで可逆な迷い**に遭遇したら、実装を止めずデフォルト値を選んで進める。同時に以下を記録する。product / UX / security の判断、AC・Design Decisions・Out-of-scope、human gate、共有 repository 設定、base branch に関する判断には default を使わず、明示回答まで止める。
 
 1. `current-note.md` の **`## Open Questions`** セクションに append:
    - 質問内容 (なぜ迷ったか)

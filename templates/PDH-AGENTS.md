@@ -53,6 +53,24 @@ When context is compacted or work resumes, preserve the current ticket id, curre
 
 ## Verification
 
+Three rules govern evidence, scope, and decisions:
+
+- **Evidence freshness**: bind review, AC, test, and Surface evidence to the
+  exact commit SHA. A later change invalidates the evidence it can affect.
+  Browser verification must use the real runtime composition (dev server,
+  shared shell/styles, auth, and seed), not an isolated renderer substitute.
+- **Scope boundary**: keep a finding in the current ticket only when leaving it
+  unfixed would mean AC is unmet, the current diff caused a regression, the
+  same root cause can recreate an actually shipped defect, or a Critical/Major
+  finding makes this ticket's changed/required user journey unsafe to review.
+  Otherwise record it as a follow-up. An exception
+  requires one note line connecting the fix directly to the AC or current diff.
+- **Human authority**: a human gate or product decision requires an explicit
+  user response. A highlighted/default form option, silence, or worker output
+  is not approval. Environment-specific constraints must not be solved by
+  changing shared repository configuration or the base branch without explicit
+  approval; use local configuration or a temporary command instead.
+
 Permanent tests and `ticket-local-test` are different:
 
 - Permanent tests in `scripts/test-all.sh`, CI, or `test/` should cover product contracts, Architectural Invariants, and generalized regressions.
@@ -79,6 +97,10 @@ If the dev-server or seed behavior needed for a ticket differs from the script, 
 ## Browser And Surface Checks
 
 If a UI/browser surface exists, run a real user-case check after seed setup and before `PDH-human-review`. `agent-browser` is an acceptable browser automation CLI. Its CLI changes by version and environment, so run `agent-browser --help` immediately before using it and follow the help output from the current environment.
+
+The check must exercise the same composed page the user receives, including
+the shared page shell and CSS. Record the tested commit SHA. For visual UI,
+cover light and dark color schemes when the application supports them.
 
 Human-review instructions are for the user, not the agent. Provide browser URLs and concrete click/visual checks for UI, `curl` commands and expected status/body for API, and a `tmp/` helper only when manual auth/cookie/setup is too awkward. Do not present an `agent-browser` command list as the user's review procedure.
 

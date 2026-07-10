@@ -52,11 +52,12 @@ PM の使い方:
 - **commit cadence**: 論理単位の境界ごとに incremental に commit（1 commit = 1 論理単位、mega-commit 禁止）。blocker / state 遷移は独立 commit。commit 数は gate ではない。push は `CLAUDE.md` の no-push-without-request ルールに従う。
 - **テスト全件 PASS gate**: 関係する全スイートを完成時に通す。`scripts/test-all.sh` があれば使う。
 - **E2E gate**: 外部 provider / API を経由する path は実 API で 1 経路以上確認。credential 不在なら deferred として明記しエスカレーション。
-- **Open Questions protocol**: 迷い点は妥当な default を採用し `ASSUMPTION:` を commit message と note に記録して進める。即中断は「AC 破綻 / Invariant 抵触 / 不可侵変更が必要 / 破壊的不可逆操作 / 前提崩壊」の限定時のみ。
+- **Open Questions protocol**: ticket contract を変えない実装ローカルで可逆な迷いだけ、妥当な default を採用し `ASSUMPTION:` を commit message と note に記録して進める。product / UX / security、human gate、共有 repository 設定、base branch は default 決定しない。即中断は「AC 破綻 / Invariant 抵触 / 不可侵変更が必要 / 破壊的不可逆操作 / 前提崩壊」の限定時のみ。
 - 実装ログ / Discoveries を `<NOTE_FILE>` に追記する。
 
 ### reviewer（Devil's Advocate / Code Reviewer）
 - **変更の目的**と**差分スコープ**は上の prompt と `<TICKET_FILE>` を読んで把握する。
+- レビューした **commit SHA** を結果に明記する。結果提出後の commit はレビュー済みと扱わない。
 - **`.claude/skills/pdh-dev/_review.md` の「網羅探索チェックリスト」に従って系統的に**レビューする。
 - **Critical / Major を優先**。瑣末は後回し。各指摘は観点ラベル + 該当ファイル:箇所 + 問題 + 推奨対応。
 - **Ticket 不可侵 check**: implementor が AC / Out-of-scope / Architectural Invariants を勝手に書き換えていないか必ず確認。
