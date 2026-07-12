@@ -33,6 +33,10 @@ PM がやる:
 
 - **既定**: worker（Coding Engineer / reviewer / QA / AC 裏取り / Surface Observer）は **main（PM）と同じ engine** を使う。main が claude なら worker も claude、main が codex なら worker も codex。
 - **上書き**: プロジェクト規約（各 engine が自動ロードする規約ファイル等）で per-role の engine / model が指定されている場合のみ、それに従う（claude / codex の **混在も可**。例「DA は claude 固定」「PDH-review に別 engine の reviewer を1人加える」等は、**明示されたときだけ**有効）。
+- **cross-delegate 構成（対応する CLI が両方 install されている場合の任意構成）**: Coding Engineer（実装 worker）だけを **main と逆の engine へ委譲**する構成を取れる（main = claude → 実装 worker = codex / main = codex → 実装 worker = claude）。採用条件は次の 2 つ:
+  1. 逆 engine の CLI が install されていること（`which codex` / `which claude` で確認）
+  2. **セッションで最初に実装（PDH-implement）へ入る時に 1 回だけ**、ユーザへ「Coding Engineer を逆 engine へ委譲するか / main と同一のままにするか」を確認し、回答をそのセッションの既定として以後の全 ticket に適用する（ticket ごとに再確認しない）。tmux-director 構成では Director がユーザに確認し、決定を worker への kickoff に明記する
+  委譲時のモデル・reasoning 設定はプロジェクト規約で指定する（例は各プロジェクトの規約ファイル側に置く）。Coding Engineer 以外の worker（reviewer / QA / AC 裏取り / Surface Observer / PM）は main と同一 engine のまま。
 - 特定 engine をフローに**ハードコードしない**（engine 中立）。「常に codex」「常に claude」のような既定の決め打ちはしない。
 
 ## spawn 機構（engine 中立 = subprocess / 結果はファイル）
