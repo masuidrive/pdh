@@ -105,6 +105,7 @@ product-brief.md の Invariants と矛盾しないことを 1 行宣言
 - `PDH-human-review` の明示承認なしに `PDH-close` へ進まない。自動工程完了時は「PDH-human-review 待ち」と記録し、チケット全体を完了扱いにしない
 - セッション終了時、作業途中の場合は現在の状態と次にやるべきことを `current-note.md` に記録
 - **検証系チェック項目の証拠バインディング**: 「テスト全件パス」「`scripts/test-all.sh` 全スイート確認」「実 API 確認」「Surface 観察」等、検証完了を主張する項目は、対象 **commit SHA**、対応する**実コマンドと実出力 (合否サマリ)** を note に貼ってから `[x]` にする。後続 commit がその証拠へ影響し得る場合は無効として取り直す。証拠を貼れない項目を `[x]` にしてはならない ("記憶・要約で完了マーク" の禁止)。部分実行 (backend のみ等) で全スイート項目を `[x]` にするのも禁止
+- **worker 報告の検品ルール**: worker の「検証済み / PASS / 実機確認済み」主張は、対象 commit SHA と再現可能な証拠 (実コマンドと verbatim 出力、screenshot、操作ログ) への参照を伴わない限り **NOT VERIFIED** として扱う。PM は証拠を worker に要求するか、自ら同一経路を 1 回再実行して初めて `[x]` にできる。worker の主張と repo の実状態 (`git status` / diff / 実出力) が食い違う場合は、実状態を正として報告側を差し戻す
 
 ## 責務境界（artifact 観点）
 

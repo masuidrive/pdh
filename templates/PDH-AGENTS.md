@@ -73,7 +73,7 @@ Three rules govern evidence, scope, and decisions:
 
 Permanent tests and `ticket-local-test` are different:
 
-- Permanent tests in `scripts/test-all.sh`, CI, or `test/` should cover product contracts, Architectural Invariants, and generalized regressions.
+- Permanent tests in `scripts/test-all.sh`, CI, or `test/` should cover product contracts, Architectural Invariants, and generalized regressions. If the repository commits generated artifacts (bundled workers, compiled assets, generated SDK models), the permanent suite must rebuild them and fail when the rebuilt output differs from the committed files, so stale artifacts are caught deterministically instead of by reviewer attention.
 - Ticket-specific temporary checks, such as confirming an old route is now 404 or a specific fixture is hidden, are `ticket-local-test`.
 - Executable `ticket-local-test` scripts live at `tests/tickets/<ticket-id>/test-ticket-local.sh`.
 - Run them through `./scripts/test-ticket-local.sh [ticket-id]`.
@@ -101,6 +101,13 @@ If a UI/browser surface exists, run a real user-case check after seed setup and 
 The check must exercise the same composed page the user receives, including
 the shared page shell and CSS. Record the tested commit SHA. For visual UI,
 cover light and dark color schemes when the application supports them.
+
+HTTP-level tools (`curl`, API test scripts) verify server behavior only. They
+are never acceptable evidence for a browser surface: client-side logic (drag &
+drop, FormData construction, rendering, form submission) is exercised only by
+a real browser driving the composed page. If browser verification is
+impossible in the current environment, do not substitute `curl` and report the
+surface as verified; state the constraint and ask the user.
 
 Human-review instructions are for the user, not the agent. Provide browser URLs and concrete click/visual checks for UI, `curl` commands and expected status/body for API, and a `tmp/` helper only when manual auth/cookie/setup is too awkward. Do not present an `agent-browser` command list as the user's review procedure.
 
