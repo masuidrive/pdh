@@ -117,6 +117,13 @@ pdh-dev が spawn するチームメンバーの engine / モデル設定。
 
 **main engine の選択**: 未指定で曖昧なときのみ `which codex` で確認し、ユーザに「claude / codex どちらで進めるか」を確認（既指定なら不要、セッション中は継続）。headless/CI 文脈では、その実行系が定義する環境変数を main engine とする（無ければ既定 claude）。
 
+**cross-delegate（任意・推奨既定値）**: 両 CLI が install されている環境では、**Coding Engineer（実装 worker）だけを main と逆の engine へ委譲**できる（pdh-dev `_execution-team.md`「エンジン割り当て」の cross-delegate 構成）。セッションで最初に実装へ入る時に 1 回だけユーザへ委譲可否を確認し、回答をセッション既定とする。委譲時の推奨既定値:
+
+- main = claude → 実装 worker = `codex exec -m gpt-5.6-sol -c model_reasoning_effort="medium"`（機械的な実装は `medium`、統合・判断を含む難しい実装は `high`）
+- main = codex → 実装 worker = `claude -p --model opus`
+
+Coding Engineer 以外の worker は main と同一 engine のまま。モデル名は時間で古びるので、project 側で最新に読み替えて更新すること。
+
 **下表は「役割ごとに engine / model を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。PDH stage の定義と gate 条件は `PDH-AGENTS.md` と `/pdh-dev` を正とし、この表は project 固有の role / model override だけを書く。
 
 | 役割 | step | 上書き例 | 備考 |
