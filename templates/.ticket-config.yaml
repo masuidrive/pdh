@@ -59,7 +59,12 @@ note_content: |
   - [ ] PD-C-9: AC 裏取り Agent が各 AC の実質達成を verify 済み
   - [ ] PD-C-9: Surface Observer 観察済み (純 backend ticket では skip 可、判断を 1 行記録)
   - [ ] PD-C-9: ドキュメント更新済み (/update-docs)
+  - [ ] PD-C-9: technical-reference.md 突合済み（下の「Technical reference 更新」欄に記録）
   - [ ] PD-C-10: ユーザが確認手順を実施し、クローズを承認した
+
+  ## Technical reference 更新
+  <!-- この ticket の差分に因果がある追記・上書きの内容、または「該当なし」＋理由を 1 行以上必ず書く。
+       他 ticket 由来の記述を消したくなったら、消さずにここへ削除候補として記録する。 -->
 
   ## Discoveries
   <!-- 実装中に発見した想定外の事実を記録する。

@@ -208,15 +208,20 @@ Critical / Major があれば:
 4. **AC 裏取り**: 実行モデル依存の手段で (`_execution-*.md` 参照) 各 AC 項目が実際に達成されているかコード・テスト結果・ノートを読んで検証する。**実装が AC を実質達成しているか** を厳しく見る (形式的に満たすだけでなく、Why を満たしているか)。NOT VERIFIED が返った項目は証拠を補完してから進む
    - **Reality Check (合成での pass 禁止)**: AC の Why が user-facing な結果 (リンクが開く・通知が届く・画面が変わる・外部副作用) なら、完了判定は次を全て満たす — (1) **実上流が出す実データ**で検証する (自作の合成入力を流し込まない)、(2) **終端のユーザ操作を実際に行う** (リンクは実際にクリックして着地まで・通知は実イベントを起こして受信まで。「描画 / 生成された」だけでは pass にしない)、(3) **反証を 1 回試す** (「実トリガでも本当に出るか」「上流に当該フィールドが無い場合どうなるか」をわざと確認してから `[x]`)。**user-facing な Why の AC を合成入力だけで `[x]` にしない。** 各 `[x]` には何を・どの実データ / 実操作で確認したか (合成か実データかを明記) を note に 1 行残す
 5. **ドキュメント sweep**: 変更内容に名前・パス・URL の rename / delete が含まれる場合、全ドキュメントを走査し、旧名称・旧パスの残骸がないか確認する
-6. **全スイート最終確認 (必須)**: PDH-implement と同じ **`scripts/test-all.sh`** を最終確認として再実行し、実出力 (`Passed: N / N` の合否サマリ) を note に貼る。PDH-implement で貼った証拠が**最終 HEAD のものでない** (その後 commit / main merge した) 場合は必ず再実行する (**証拠の鮮度 gate**)
-7. 必要な ticket note / docs を直接更新する。`pdh-update` は上流 PDH 取り込み専用なので、PDH-verify の通常 doc sweep では使わない
-8. **Surface Observer の起動 (PDH-human-review 直前、必須)**: 外部 surface (UI / HTTP API / SDK / CLI 等) に変更があった場合、consumer 視点の違和感を観察する（実行モデル依存の手段は `_execution-*.md` 参照）
+6. **資産メンテナンス** — close 前に恒久資産を現在形に保つ。共通原理: この ticket の差分に因果がある範囲だけを触る。他 ticket 由来の記述・検査は消さず、削除候補として note に記録する
+   - technical-reference.md との突合: 因果がある記述を追記・上書きする。出荷済みの挙動は確定した事実としてその場で書く（承認待ちで先送りしない）。該当なしなら note に「該当なし」と 1 行記録
+   - 再発の恒久検査化: この ticket が出荷済み不具合の修正なら、プロジェクトの決定論検査（fast-check / lint / テスト）で再発を恒久検出できるか 1 回問う。追加できないなら理由を note に 1 行
+   - brief への事実追記: 達成した Done 項目・解消した Open Questions を反映する（方針の変更はしない）
+   - 刈り込み: 自分の差分が置き換えた記述・検査を削除する（より強いゲートで守れるようになった検査の削除もここ）
+7. **全スイート最終確認 (必須)**: PDH-implement と同じ **`scripts/test-all.sh`** を最終確認として再実行し、実出力 (`Passed: N / N` の合否サマリ) を note に貼る。PDH-implement で貼った証拠が**最終 HEAD のものでない** (その後 commit / main merge した) 場合は必ず再実行する (**証拠の鮮度 gate**)
+8. 必要な ticket note / docs を直接更新する。`pdh-update` は上流 PDH 取り込み専用なので、PDH-verify の通常 doc sweep では使わない
+9. **Surface Observer の起動 (PDH-human-review 直前、必須)**: 外部 surface (UI / HTTP API / SDK / CLI 等) に変更があった場合、consumer 視点の違和感を観察する（実行モデル依存の手段は `_execution-*.md` 参照）
    - 観察 focus: UI 視覚崩れ・反応速度・情報ヒエラルキー、HTTP API レスポンスボディ / エラー文言 / ステータスコードの自然さ、SDK / CLI import 経路 / 型ヒント / 例外メッセージ / ヘルプテキストの consumer 体験
    - 観察手段はプロジェクト固有のツールに従う (実機ブラウザ / browser automation CLI / `curl` / `httpie` / 実 SDK 呼び出し / CLI 実行)
    - UI / browser surface がある場合は、seed hook 実行後に **実 dev-server が返す composed page** (shared shell / CSS / auth を含む) で主要ユースケースを 1 本以上実行する。renderer 単体の HTML は代替証拠にしない。light / dark をサポートする UI は両方確認し、対象 commit SHA と snapshot / screenshot / 操作結果または実行不能理由を note と会話に記録する。`agent-browser` を使う場合は直前に `agent-browser --help` を実行する
    - 純 backend ロジックのみで外部 surface 変更がない場合は skip 可。skip する場合は note に判断を 1 行記録
    - blocker 指摘があれば PDH-implement / PDH-review に戻る
-9. AC チェック済みの ticket ファイルを含めてコミット
+10. AC チェック済みの ticket ファイルを含めてコミット
 
 ---
 
