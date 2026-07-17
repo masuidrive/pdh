@@ -20,10 +20,10 @@ new_success_message: |
   Ticket を作成しました。内容を編集してから `./ticket.sh start <ticket_name>` で作業を開始してください。
 
 start_success_message: |
-  @product-delivery-hierarchy.md のプロセスの一部として処理するチケットを開始しました。
+  `docs/product-delivery-hierarchy.md` のプロセスの一部として処理するチケットを開始しました。
   `current-ticket.md` の Why / Acceptance Criteria / Architectural Invariants check / 確定判断 / Out-of-scope を確認してから作業を開始してください。
   判断に迷ったら `product-brief.md` の Constraints / Architectural Invariants を確認。
-  PD-C ステップ (Direct flow): C-1 開始前+AC 承認 → C-6 実装 → C-7 品質検証 → C-9 完了検証 → C-10 クローズ
+  PDH labels: PDH-open → PDH-ticket-review → PDH-implement → PDH-review → PDH-verify → PDH-human-review → PDH-close
 
 restore_success_message: |
 
@@ -35,36 +35,51 @@ close_success_message: |
 note_content: |
   # Work Notes: $$TICKET_NAME$$
 
-  ## Status: PD-C-1 (Opening)
+  ## Status: PDH-open (Opening)
 
-  ## PD-C-6. 実装ログ
+  ## PDH-ticket-review. Ticket contract check
+  <!-- 実装前に ticket の契約を確認する。
+       Why が product-brief.md に接続しているか、AC が観察可能か、
+       Design Decisions / Out-of-scope / Dependencies が実装 agent に十分か、
+       Architectural Invariants と矛盾しないか、ユーザ承認が必要な未確定判断が残っていないかを記録する。 -->
+
+  ## PDH-implement. 実装ログ
   <!-- 1 agent が investigate + implement + tests を 1 session で完遂する。
        実コードを読みながら直接実装し、設計判断 / scope 拡張・縮小の判断 / 実コードで発見した事実をここに append する。
-       commit hash 一覧も記録する (commit cadence 5+)。 -->
+       論理単位ごとの commit hash 一覧も記録する (mega-commit 禁止。commit 数は gate ではない)。 -->
 
-  ## PD-C-7. 品質検証結果
-  <!-- Devil's Advocate ×1 + codex ×1 の実装後 review 結果を統合。
-       Critical/Major → 修正 → テスト → 再レビュー → 「No Critical/Major」まで繰り返す。
-       2 round 同種 Critical 再発で root cause 診断 → escalation。
-       実装後 review 特有 gate: Ticket 不可侵 / commit cadence 5+ / E2E real API / テスト全件 PASS -->
+  ## PDH-review. 品質検証結果
+  <!-- PDH-review-1 / PDH-review-2 のように attempt ごとに記録する。
+       Devil's Advocate + Code Reviewer の実装後 review 結果を統合。
+       実モデル / engine は CLAUDE.md の Agent 実行プロファイルに従う。
+       Critical/Major があれば、対応内容と再確認結果を記録する。
+       2 attempt 同種 Critical 再発で root cause 診断 → escalation。
+       実装後 review 特有 gate: Ticket 不可侵 / logical commit cadence / E2E real API / テスト全件 PASS -->
 
-  ## PD-C-9. プロセスチェックリスト
-  PD-C-9 完了検証時にチェックする。
-  - [ ] PD-C-7: 品質検証で全 reviewer が Critical/Major = 0 を回答
-  - [ ] PD-C-6: implementor が incremental に 5+ commit に分けて切った
-  - [ ] PD-C-6: 全テスト (backend / frontend / E2E / SDK) が通った
-  - [ ] PD-C-6: `scripts/test-all.sh` 全スイートパス確認済み
-  - [ ] PD-C-6: 外部 provider 経由 path は実 API 200 確認済み (deferred の場合は明示記録)
-  - [ ] PD-C-6: ticket の AC / Architectural Invariants / out-of-scope が implementor によって書き換えられていない
-  - [ ] PD-C-9: AC 裏取り Agent が各 AC の実質達成を verify 済み
-  - [ ] PD-C-9: Surface Observer 観察済み (純 backend ticket では skip 可、判断を 1 行記録)
-  - [ ] PD-C-9: ドキュメント更新済み (/update-docs)
-  - [ ] PD-C-9: technical-reference.md 突合済み（下の「Technical reference 更新」欄に記録）
-  - [ ] PD-C-10: ユーザが確認手順を実施し、クローズを承認した
+  ## PDH-verify. プロセスチェックリスト
+  PDH-verify 完了検証時にチェックする。
+  - [ ] PDH-ticket-review: Why が product-brief.md に接続し、AC が観察可能で、ユーザ承認済み
+  - [ ] PDH-ticket-review: Design Decisions / Out-of-scope / Dependencies / Architectural Invariants check が確認済み
+  - [ ] PDH-review: Directorが採用したCritical/Majorが解消し、非採用findingの分類根拠を記録
+  - [ ] PDH-implement: implementor が論理単位ごとに commit し、mega-commit にしていない
+  - [ ] PDH-implement: `scripts/test-all.sh` 全スイートパス確認済み
+  - [ ] PDH-implement: 外部 provider 経由 path は実 API 200 確認済み (deferred の場合は明示記録)
+  - [ ] PDH-implement: ticket の AC / Architectural Invariants / out-of-scope が implementor によって書き換えられていない
+  - [ ] PDH-verify: AC 裏取り Agent が各 AC の実質達成を verify 済み
+  - [ ] PDH-verify: Surface Observer 観察済み (純 backend ticket では skip 可、判断を 1 行記録)
+  - [ ] PDH-verify: ドキュメント更新の要否を確認済み（必要なら `.agents/skills/pdh-update/SKILL.md` or `.claude/skills/pdh-update/SKILL.md`）
+  - [ ] PDH-verify: technical-reference.md 突合済み（下の「Technical reference 更新」欄に記録）
+  - [ ] PDH-human-review: ユーザに差分・検証結果・確認手順を提示し、人間レビューを依頼済み
+  - [ ] PDH-human-review: ユーザが確認手順を実施し、クローズを明示承認した
 
   ## Technical reference 更新
   <!-- この ticket の差分に因果がある追記・上書きの内容、または「該当なし」＋理由を 1 行以上必ず書く。
        他 ticket 由来の記述を消したくなったら、消さずにここへ削除候補として記録する。 -->
+
+  ## PDH-human-review. 人間レビュー
+  <!-- agent は PDH-verify まで自動で進め、この stage で人間レビューを依頼する。
+       ユーザの明示承認なしに PDH-close へ進まない。
+       途中で疑問・判断不能・blocker・完了見込みなしが出た場合は、この stage まで待たずユーザに確認する。 -->
 
   ## Discoveries
   <!-- 実装中に発見した想定外の事実を記録する。
@@ -106,7 +121,7 @@ default_content: |
 
   ### 確定判断 (Design Decisions)
   <!-- 既知の設計判断と理由を箇条書きで明示。
-       例: - データ保存形式: data URI (Files API は将来 Epic、本 ticket では不要)
+       例: - データ保存形式: data URI (Files API は将来 ticket、本 ticket では不要)
        例: - 423 reject ではなく 422: validation error として扱う -->
   -
 
@@ -134,4 +149,4 @@ default_content: |
   ---
   Work notes: `$$NOTE_PATH$$`
 
-# Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/.ticket-config.yaml
+# Based on https://github.com/masuidrive/pdh/blob/134767b/templates/.ticket-config.yaml
