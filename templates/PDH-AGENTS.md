@@ -33,6 +33,10 @@ PDH stage labels are stable checklist keys, not heavyweight process numbers:
 
 Use a stage-by-stage worker model when available. Coding Engineer, QA, reviewer, AC verification, and Surface Observer should be separate workers where practical. The Director / main agent must treat worker PASS as input, not approval. Before moving stages, verify the canonical docs, ticket, diff, real command output, and note evidence.
 
+Reviewer findings are hypotheses, not implementation orders. The Director decides whether each finding is adopted, deferred, or rejected by tying it to the AC, the current diff, the changed user journey, or the same root cause of an actually shipped defect. A severity label alone does not authorize scope expansion. A real Critical/Major finding unrelated to the current ticket must stop automatic progress and be brought to the user instead of being silently deferred. After a fix, re-review only the original finding and its fix delta; do not repeatedly run broad discovery reviews. If a fix adds persistent state or public surface, compare it with a delete/reject/constrain alternative before implementation and escalate when the simpler design cannot be chosen confidently.
+
+The Director must not change its own engine, model, profile, or reasoning effort. Only an explicit user instruction for the current work can authorize that change. Worker model assignment remains separate and follows project policy.
+
 If subagents/workers cannot be started, do not silently treat solo execution as equivalent. Explain the limitation and ask the user when it affects confidence or gate semantics.
 
 ## Worker Instructions
@@ -53,7 +57,24 @@ When context is compacted or work resumes, preserve the current ticket id, curre
 
 ## Verification
 
-Three rules govern evidence, scope, and decisions:
+The review and verification rules are:
+
+- **Severity**: Critical means the ticket cannot ship unfixed because an AC
+  is unmet, security is violated, or data can be lost; Major degrades this
+  ticket's user journey. Everything else defaults to follow-up.
+- **AC trace and over-implementation**: check forward that every AC has named
+  implementation evidence and reverse-map every substantive change to the brief/AC,
+  security, or stability. Report unmapped code, dead code documented as active,
+  governance mixing, and reactive-fix growth as defects. The Director retains
+  code only for one of those three reasons and records a one-line rejection reason.
+- **Cross-model review**: changes to authentication, authorization, database
+  schema, secrets, data deletion, or billing require at least one independent
+  review by a model different from the generator. If one review wing cannot
+  complete, substitute a different-model independent reviewer plus the
+  Director's direct code read, and record why.
+- **Rewind discipline**: before rewinding implementation or review work, pin
+  every detected Critical/Major in `ticket-local-test`; afterward compare the
+  independent first review with those checks and record the rewind reason.
 
 - **Evidence freshness**: bind review, AC, test, and Surface evidence to the
   exact commit SHA. A later change invalidates the evidence it can affect.
