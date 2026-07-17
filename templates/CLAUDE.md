@@ -122,7 +122,7 @@ pdh-dev が spawn するチームメンバーの engine / モデル設定。
 - main = claude → 実装 worker = `codex exec -m gpt-5.6-sol -c model_reasoning_effort="medium"`（機械的な実装は `medium`、統合・判断を含む難しい実装は `high`）
 - main = codex → 実装 worker = `claude -p --model opus`
 
-Coding Engineer 以外の worker は main と同一 engine のまま。モデル名は時間で古びるので、project 側で最新に読み替えて更新すること。
+Coding Engineer 以外の worker は既定で main と同一 engine を使う。ただし、`PDH-AGENTS.md` の cross-model review 必須条件に該当する reviewer は、生成に使った model と異なる model を割り当てる。モデル名は時間で古びるので、project 側で最新に読み替えて更新すること。
 
 **下表は「役割ごとに engine / model を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。PDH stage の定義と gate 条件は `PDH-AGENTS.md` と `/pdh-dev` を正とし、この表は project 固有の role / model override だけを書く。
 
@@ -133,7 +133,7 @@ Coding Engineer 以外の worker は main と同一 engine のまま。モデル
 | Coding Engineer | implementation | （main） | 実装 worker。project 固有の実装制約や required skill があれば書く |
 | QA Engineer | tests / verification | （main） | test command、E2E、doc regeneration など project 固有の確認観点を書く |
 | Devil's Advocate | review | （main） | セキュリティ、設計、AC 達成の実質判定など project 固有の重点観点を書く |
-| 追加 reviewer（任意） | review | 例: codex を1人追加 | 独立視点を増やしたいとき、別 engine の reviewer を明示追加してよい（混在）|
+| 追加 reviewer | review | 例: codex を1人追加 | 独立視点を増やす場合と、cross-model review 必須条件を満たす場合に追加する |
 | AC 裏取り | verification | （main） | project 固有の AC evidence や canonical docs 照合観点を書く |
 | Surface Observer | surface check | （main） | UI / HTTP API / SDK / CLI など、この project の consumer surface を書く |
 

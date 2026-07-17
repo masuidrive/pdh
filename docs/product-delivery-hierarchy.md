@@ -141,12 +141,17 @@ Stage label は checklist と引き継ぎ用の安定キーであり、重い工
 | `PDH-ticket-review` | agent が ticket の Why / AC / Design Decisions / Out-of-scope / blocker を確認し、実装前に提示できる形へ整える |
 | `PDH-ticket-human-review` | 実装前に ticket review の修正点・全体概要・達成するもの・AC をユーザとすり合わせ、AC 承認を明示する |
 | `PDH-implement` | AC を満たす実装・必要なテスト・作業ログを残す |
-| `PDH-review` | risk に応じて独立レビューし、重要指摘を解消する |
+| `PDH-review` | AC trace と risk に応じた独立レビューを行い、重要指摘を finding 限定の修正確認で解消する |
 | `PDH-verify` | AC、`scripts/test-all.sh`、docs impact、実動確認を照合する |
 | `PDH-human-review` | coding agent がやったこと・達成したことがユーザの想定と合っているかをすり合わせ、差し戻しまたは close 承認を明示する |
 | `PDH-close` | ユーザ承認、merge/push/deploy 状態、残課題を記録して閉じる |
 
 `PDH-review-1` / `PDH-review-2` のような実行回数ラベルは top-level stage ではなく、`current-note.md` の `PDH-review` 配下に残す attempt log とする。
+
+`PDH-review` では、各 AC に実装証拠があるかを順方向に確認し、主要差分を Product Brief、AC、security、stability のいずれかへ逆方向に対応づける。
+Critical は AC 未達、security 違反、data loss などの出荷 blocker、Major は対象 user journey の劣化とし、それ以外は既定で follow-up にする。
+差分全体を探索するのは初回 attempt だけとし、修正後は採用 finding、再現条件、fix delta だけを同じ reviewer が確認する。
+認証、認可、database schema、secret、data deletion、billing に触れる差分は、生成に使った model と異なる model の独立 review を最低 1 本含める。
 
 `PDH-ticket-review` と `PDH-ticket-human-review` は分ける。前者は agent が ticket contract を整える工程、後者は実装前にユーザが全体像・達成するもの・ticket review で修正した点・AC を見て、想定と合っているかをすり合わせる人間 gate。AC 承認は `PDH-ticket-human-review` で得る。承認なしに `PDH-implement` へ進まない。
 
