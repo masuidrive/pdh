@@ -168,6 +168,7 @@ Why E2E無バイアスlensとAC conformanceおよび妥当性lensをpersona matr
 
 1. note Statusを`PDH-human-review`へ更新し、verifyまでの証拠がcommit済みであることを確認する
 2. 会話で達成内容、diff、主要file、AC、test、ユーザ操作手順、判断点、選択肢、残課題を示す
+   - **review findingのうちsame ticketで直さなかったものを、follow-upと棄却に分けて件数と1行理由つきで列挙する。noteへ記録するだけで会話から省かない。**「何を直したか」と同じだけ「何を直さなかったか」がユーザの判断材料であり、scope判断が妥当かはここでしか検証されない
    - UIは`./scripts/dev-server.sh`のURL、操作、期待表示を示す
    - APIは`curl`と期待statusおよびresponseを示す
    - authが必要なら方式、cookieやhelperの取得方法、secretを会話へ貼らない方針、cleanupを説明する
