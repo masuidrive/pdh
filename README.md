@@ -173,7 +173,7 @@ project-root/
   docs/
     product-delivery-hierarchy.md  ← PDH 運用ルール・テンプレート
   tickets/
-    YYMMDD-hhmmss-slug/     ← Ticket ディレクトリ (ticket.sh が管理: ticket.md / note.md / tests/)
+    YYMMDD-hhmmss-slug/     ← Ticket ディレクトリ (ticket.sh が管理: ticket.md / note.md / tests/ / tmp/)
     done/                   ← 完了した Ticket
   current-ticket/           ← 作業中 ticket への symlink (ticket.sh start/restore が作る。git 管理しない)
   AGENTS.md                 ← Codex CLI 向け設定 (CLAUDE.md / PDH-AGENTS.md への thin pointer)

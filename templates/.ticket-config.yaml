@@ -52,9 +52,20 @@ note_content: |
   <!-- PDH-review-1 / PDH-review-2 のように attempt ごとに記録する。
        Devil's Advocate + Code Reviewer の実装後 review 結果を統合。
        実モデル / engine は CLAUDE.md の Agent 実行プロファイルに従う。
-       Critical/Major があれば、対応内容と再確認結果を記録する。
        2 attempt 同種 Critical 再発で root cause 診断 → escalation。
        実装後 review 特有 gate: Ticket 不可侵 / logical commit cadence / E2E real API / テスト全件 PASS -->
+
+  ### Findings (PDH-review-1)
+  <!-- finding は「見つけた時点」で 1 行追加する。判定列は後で埋めてよい。
+       最後にまとめて書き起こさない（落ちるため）。
+       判定は 採用 / follow-up / 棄却 の 3 種。分類基準は pdh-dev `_review.md`
+       「スコープ外問題と過剰実装の扱い」が正。
+       PDH-human-review では、この表の 判定 が follow-up / 棄却 の行を
+       そのままユーザへ提示する。 -->
+
+  | # | 観点 | Sev | 要旨 | 判定 | 理由 |
+  |---|---|---|---|---|---|
+  |   |      |     |      |      |      |
 
   ## PDH-verify. プロセスチェックリスト
   PDH-verify 完了検証時にチェックする。

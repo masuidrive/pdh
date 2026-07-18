@@ -101,7 +101,7 @@ Permanent tests and `ticket-local-test` are different:
 - Ticket-specific temporary checks, such as confirming an old route is now 404 or a specific fixture is hidden, are `ticket-local-test`.
 - Executable `ticket-local-test` scripts live at the `tests_dir` path shown by `ticket.sh start`/`restore` output (compat: legacy flat layout keeps them at `tests/tickets/<ticket-id>/test-ticket-local.sh`).
 - Run them through `./scripts/test-ticket-local.sh [ticket-id]`.
-- Record seed, `tmp/` helpers, `agent-browser`, `curl`, and command evidence in the note file (the `note:` path from the same output; compat symlink: `current-note.md`).
+- Record seed, `tmp_dir` helpers, `agent-browser`, `curl`, and command evidence in the note file (the `note:` path from the same output; compat symlink: `current-note.md`).
 
 When deciding whether to promote a ticket-local test into permanent coverage, ask: can this behavior be described as an ongoing product contract without naming the ticket or temporary fixture?
 
@@ -133,7 +133,7 @@ a real browser driving the composed page. If browser verification is
 impossible in the current environment, do not substitute `curl` and report the
 surface as verified; state the constraint and ask the user.
 
-Human-review instructions are for the user, not the agent. Provide browser URLs and concrete click/visual checks for UI, `curl` commands and expected status/body for API, and a `tmp/` helper only when manual auth/cookie/setup is too awkward. Do not present an `agent-browser` command list as the user's review procedure.
+Human-review instructions are for the user, not the agent. Provide browser URLs and concrete click/visual checks for UI, `curl` commands and expected status/body for API, and a helper script under the ticket's `tmp_dir` (the `tmp_dir:` path from `ticket.sh start`/`restore`; per-ticket layout: `tickets/<name>/tmp/`) only when manual auth/cookie/setup is too awkward. Do not present an `agent-browser` command list as the user's review procedure.
 
 If auth is required, explain the auth method before human review. For non-localhost exposure, protect the surface with Basic Auth, a temporary token, Access, or another project-appropriate method. Do not paste secret values into the conversation; describe where the user can get or run them.
 

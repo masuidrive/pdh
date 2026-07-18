@@ -137,6 +137,7 @@ Directorは次のgateで分類する。
 1. diffへ残す、またはfinding対応で加えるcodeは、briefまたはACへの直接貢献、security、stabilityのいずれかに限る。無関係変更は除く
 2. same ticketで直すのは、ACまたはWhy未達、current diff regression、同root causeによる出荷済み不具合の再発、またはCriticalかMajorが変更対象user journeyを危険にする場合に限る
 3. 実在する範囲外問題はfollow-up、false positiveや前提誤りは棄却とし、理由をnoteへ1行残す
+   findingはnoteの`### Findings (PDH-review-N)`表へ、**検出した時点で1行追加する**。判定列は後で埋めてよいが、attempt終了後にまとめて書き起こさない
 4. 境界では、修正なしでもAC達成とregressionなしを説明できるかで判定する。例外はACまたはdiffとの因果をnoteへ1行残す
 
 severityだけでscopeを広げない。
