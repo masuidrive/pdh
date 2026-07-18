@@ -3,7 +3,7 @@
 ## レビューパターン
 
 reviewは、初回結果のunionと事実確認、scope gate、複雑度比較、採用findingの最小修正、影響test、finding限定確認の順で行う。
-attemptは`PDH-review-1`、`PDH-review-2`のように`current-note.md`の子ログへ記録する。
+attemptは`PDH-review-1`、`PDH-review-2`のようにnote file（`ticket.sh start`/`restore`出力の`note:`パス。互換symlink: `current-note.md`）の子ログへ記録する。
 
 ```mermaid
 flowchart TD
@@ -79,7 +79,7 @@ finding冒頭へ`[同名 symbol sweep]`等の観点labelを付ける。
 同種Criticalが2 attemptで再発したらroot causeを診断してescalateする。
 root causeはticketの実装詳細混入、scope肥大、reviewer prompt偏り、確定値の下流委譲を確認する。
 
-implementationまたはreviewをrewindする前に、既知CriticalとMajorを`tests/tickets/<id>/test-ticket-local.sh`へ固定する。
+implementationまたはreviewをrewindする前に、既知CriticalとMajorを実行可能なticket-local-testとして`ticket.sh start`/`restore`出力の`tests_dir`パスへ固定する（旧flat形式は`tests/tickets/<id>/`で後方互換）。
 rewind後の独立初回reviewをそのcheckと突合し、rewind理由をnoteへ残す。
 
 `PDH-review-2`以降で初回findingが誤検出、pre-existing、Out-of-scope、user価値非直結と判明したら、追加fixを行わない。

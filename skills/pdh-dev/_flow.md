@@ -5,7 +5,7 @@
 - 最初に`./ticket.sh help`を実行してticket操作を確認する
 - `product-brief.md`を最初に読み、project規約のcode mapとrepo ruleに従う
 - ticketの作成、開始、中止、closeは`./ticket.sh`を使う。ticket branchとmerge先はticket.shとfrontmatterに従う
-- 仕様変更時はcodeやreviewを続ける前に`current-ticket.md`のACと確定判断を最新化する
+- 仕様変更時はcodeやreviewを続ける前にticket file（`ticket.sh start`/`restore`出力の`ticket:`パス。互換symlink: `current-ticket.md`）のACと確定判断を最新化する
 - local contextで解ける論点を先に洗い出し、localでは解けないblockerだけを短く相談する
 
 ## 全体フロー
@@ -33,10 +33,10 @@ flowchart TD
 
 ## PDH-open. Ticket を開く
 
-1. `current-ticket.md`を確認する
-   - 無ければ`./ticket.sh list`を実行する。新規なら`./ticket.sh new <slug>`、標準構造の記入、`./ticket.sh start <ticket-name>`の順で開始する
+1. `./ticket.sh start`/`restore`出力の`ticket:`パス（互換symlink: `current-ticket.md`）を確認する
+   - 出力が無ければ`./ticket.sh list`を実行する。新規なら`./ticket.sh new <slug>`、標準構造の記入、`./ticket.sh start <ticket-name>`の順で開始する
    - あれば内容を読んで続行する
-2. `current-note.md`を確認する
+2. 同じ出力の`note:`パス（互換symlink: `current-note.md`）を確認する
    - `./ticket.sh start`が生成した構造に従う
    - ACをcopyしない。ACのsource of truthはticketだけとする
 
@@ -137,13 +137,13 @@ Why E2E無バイアスlensとAC conformanceおよび妥当性lensをpersona matr
 
 `VERIFIED`、`PASS`、AC check済みを報告する前に、対応stateがticket、note、git historyへ実在しcommit済みでなければならない。
 
-1. `current-ticket.md`の各ACを1項目ずつ確認してcheckする
-2. `current-note.md`のprocess checklistを1項目ずつ確認してcheckする
+1. ticket file（`ticket.sh start`/`restore`出力の`ticket:`パス。互換symlink: `current-ticket.md`）の各ACを1項目ずつ確認してcheckする
+2. note file（同出力の`note:`パス。互換symlink: `current-note.md`）のprocess checklistを1項目ずつ確認してcheckする
 3. UIまたはAPI verifyは`./scripts/dev-server.sh --seed`を使う
    - 再現可能なproduct検証条件が不足する場合だけshared scriptまたはseed hookを更新する
    - sandbox、端末path、local login等はlocal設定または一時commandで扱い、区別できなければ確認する
    - server不要なら`seed-pdh-verify.sh`を使い、seed不要ならno-opで成功させる
-   - ticket固有checkは`tests/tickets/<ticket-id>/test-ticket-local.sh`と`./scripts/test-ticket-local.sh`へ分離する
+   - ticket固有checkはticket-local testディレクトリ（`ticket.sh start`/`restore`出力の`tests_dir`パス。互換: 旧flatレイアウトは`tests/tickets/<ticket-id>/`）配下の`test-ticket-local.sh`と`./scripts/test-ticket-local.sh`へ分離する
    - 恒久testはBrief、Invariants、継続contract、一般regressionだけにする
 4. AC裏取りAgentが各ACの形式だけでなくWhyの実質達成を検証する。`NOT VERIFIED`の証拠を補完するまで進まない
    - user-facing Whyは、実上流data、終端user操作、反証1回の全てで確認する

@@ -15,7 +15,7 @@ For PDH / ticket-centric work, read:
 5. `CLAUDE.local.md` if it exists
 6. `.agents/skills/pdh-dev/SKILL.md` or `.claude/skills/pdh-dev/SKILL.md`
 7. `.agents/skills/pdh-coding/SKILL.md` or `.claude/skills/pdh-coding/SKILL.md`
-8. `current-ticket.md` and `current-note.md` when they exist
+8. The ticket and note files at the paths shown by `ticket.sh start`/`restore` output (`ticket:`/`note:`; compat symlinks: `current-ticket.md`/`current-note.md`) when they exist
 
 `CLAUDE.md` may override project-specific commands, file layout, and operational constraints, but it should not restate the generic PDH process.
 
@@ -73,8 +73,11 @@ The review and verification rules are:
   complete, substitute a different-model independent reviewer plus the
   Director's direct code read, and record why.
 - **Rewind discipline**: before rewinding implementation or review work, pin
-  every detected Critical/Major in `ticket-local-test`; afterward compare the
-  independent first review with those checks and record the rewind reason.
+  every detected Critical/Major as an executable `ticket-local-test` under the
+  `tests_dir` path shown by `ticket.sh start`/`restore` output (per-ticket
+  layout: `tickets/<name>/tests/`; legacy flat layout: `tests/tickets/<id>/`);
+  afterward compare the independent first review with those checks
+  and record the rewind reason.
 
 - **Evidence freshness**: bind review, AC, test, and Surface evidence to the
   exact commit SHA. A later change invalidates the evidence it can affect.
@@ -98,7 +101,7 @@ Permanent tests and `ticket-local-test` are different:
 - Ticket-specific temporary checks, such as confirming an old route is now 404 or a specific fixture is hidden, are `ticket-local-test`.
 - Executable `ticket-local-test` scripts live at the `tests_dir` path shown by `ticket.sh start`/`restore` output (compat: legacy flat layout keeps them at `tests/tickets/<ticket-id>/test-ticket-local.sh`).
 - Run them through `./scripts/test-ticket-local.sh [ticket-id]`.
-- Record seed, `tmp/` helpers, `agent-browser`, `curl`, and command evidence in `current-note.md`.
+- Record seed, `tmp/` helpers, `agent-browser`, `curl`, and command evidence in the note file (the `note:` path from the same output; compat symlink: `current-note.md`).
 
 When deciding whether to promote a ticket-local test into permanent coverage, ask: can this behavior be described as an ongoing product contract without naming the ticket or temporary fixture?
 
@@ -122,6 +125,13 @@ If a UI/browser surface exists, run a real user-case check after seed setup and 
 The check must exercise the same composed page the user receives, including
 the shared page shell and CSS. Record the tested commit SHA. For visual UI,
 cover light and dark color schemes when the application supports them.
+
+HTTP-level tools (`curl`, API test scripts) verify server behavior only. They
+are never acceptable evidence for a browser surface: client-side logic (drag &
+drop, FormData construction, rendering, form submission) is exercised only by
+a real browser driving the composed page. If browser verification is
+impossible in the current environment, do not substitute `curl` and report the
+surface as verified; state the constraint and ask the user.
 
 Human-review instructions are for the user, not the agent. Provide browser URLs and concrete click/visual checks for UI, `curl` commands and expected status/body for API, and a `tmp/` helper only when manual auth/cookie/setup is too awkward. Do not present an `agent-browser` command list as the user's review procedure.
 
