@@ -1,6 +1,0 @@
-# AI-2: templates/.agents/skills/ holds Codex wrappers that delegate to the
-# canonical .claude/skills/ definitions. A PDH stage label appearing in a wrapper
-# means the workflow is being duplicated there instead of delegated.
-reason=Codex wrapper に PDH stage 名が出るのはワークフロー複製の兆候（AI-2）。実体は .claude/skills/ 側に置く
-pattern=PDH-(open|ticket-review|ticket-human-review|implement|review|verify|human-review|close)
-glob=templates/.agents/**

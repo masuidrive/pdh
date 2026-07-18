@@ -6,7 +6,7 @@
 
 - PDH 汎用 agent ルールは **`templates/PDH-AGENTS.md`** を正として読む。配布先プロジェクトのように root へコピーしない（この repo が原本であり、コピーすると原本が 2 つになる）
 - Claude Code skill の実体は **`skills/`**。配布先の `.claude/skills/` に相当する
-- `templates/.agents/skills/` は Codex 用 wrapper。ワークフローを複製せず、実体を読ませるだけに保つ
+- Codex CLI は `.agents/skills/` から skill を読む。配布先ではそこを `.claude/skills/` への symlink にする（wrapper ファイルは廃止済み。実体を 1 つに保つため）
 
 **設計意図の探し方:** `git blame <file>` でコミットを特定 → コミットメッセージの ticket 名 → `product-brief.md`
 
@@ -24,7 +24,6 @@ templates/                           # 配布テンプレート
   PDH-AGENTS.md                      # PDH 汎用 agent ルール（この repo でもこれを正として読む）
   CLAUDE.md                          # 配布先 project 固有ルールの雛形
   AGENTS.md                          # 他 agent platform 向け thin pointer
-  .agents/skills/                    # Codex 用 skill wrapper
   checks/  *.sh                      # 配布 script 群
 scripts/
   hookbus.js                         # tmux worker hook event bus（配布物）
@@ -62,7 +61,7 @@ scripts/
 
 - **フローの記述に特定 engine を前提としない**（`AI-5`）。engine 固有の起動手順を書く場合は、セクション見出しかリード文で前提を明示して閉じ込める
 - **具体的なモデル名は「上書き例」としてのみ書く。** 役割プロファイル（`strong-judge` 等）を正とする
-- Claude Code 側に何かを追加したら、**Codex 側（`templates/AGENTS.md` / `templates/.agents/skills/`）に対応が要るか必ず確認する**
+- Claude Code 側に何かを追加したら、**Codex 側に対応が要るか必ず確認する**（`templates/AGENTS.md` の用語対応表、README §2 の symlink 手順に skill 名を足すか）
 
 # テスト・検証
 
@@ -70,7 +69,7 @@ scripts/
 
 `./scripts/test-all.sh` を実行する。中身は 3 つ:
 
-- `scripts/fast-checks.sh` — `scripts/checks/*.check` の宣言的 grep 不変条件（`Based on` 行の commit id 置換禁止、Codex wrapper へのワークフロー複製検出、merge-conflict marker）
+- `scripts/fast-checks.sh` — `scripts/checks/*.check` の宣言的 grep 不変条件（`Based on` 行の commit id 置換禁止、配布物からの `templates/` 参照禁止、merge-conflict marker）
 - `scripts/check-distribution.sh` — grep で書けない検査（`Based on` 行の存在とパス一致、README §2 配置表 ↔ 実ファイルの双方向一致、**配布物間の重複行検出**）
 - 配布 `*.sh` の構文検査
 
@@ -91,7 +90,7 @@ scripts/
 |---|---|---|---|
 | 1 | README 未同期 | 配布物を追加したが README の配置表に載せ忘れ | `./scripts/test-all.sh`（check-distribution が検出） |
 | 2 | 文言の二重化 | 同じルールを 2 箇所に書き、片方だけ更新されて食い違う | `./scripts/test-all.sh`（重複行検出）。意図的な重複は allowlist に理由付きで登録 |
-| 3 | Codex 側の取り残し | Claude 側 skill だけ更新し wrapper / AGENTS.md が古いまま | `templates/.agents/skills/` と `templates/AGENTS.md` を確認 |
+| 3 | Codex 側の取り残し | skill を増減したのに README の symlink 手順や `templates/AGENTS.md` が古いまま | README §2 の symlink ループと `templates/AGENTS.md` を確認 |
 | 4 | `Based on` 行 | 置換対象ファイルの行が無い / path が誤り / commit id が固定されている | `./scripts/test-all.sh`（fast-checks + check-distribution が検出） |
 
 # PDH (Ticket) 運用
@@ -104,4 +103,4 @@ scripts/
 
 チケット作成・実装計画・検証計画では、影響するレイヤーを必ず列挙する。
 
-`docs` · `skills` · `templates` · `templates/.agents` · `scripts` · `README` · `product-brief.md`
+`docs` · `skills` · `templates` · `scripts` · `README` · `product-brief.md`

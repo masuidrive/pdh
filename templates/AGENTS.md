@@ -31,7 +31,7 @@ Do not migrate legacy files in `tickets/` unless the user explicitly asks.
 | `subagent` | Delegated agent with its own context |
 | `teammate` / agent team | Independent agent session coordinated by an `orchestrator` |
 | `Skill` / `.claude/skills/` | Reusable task instruction package |
-| `.agents/skills/` | Codex-native skill wrappers that delegate to `.claude/skills/` |
+| `.agents/skills/` | Where Codex CLI discovers skills; symlinks to the canonical `.claude/skills/` |
 | `model: opus` | Use the environment's `strong-judge` model/profile |
 | `advisor` | Second-opinion judge used at decision points |
 | `ultracode` / workflow | `multi-agent-coding` execution mode |

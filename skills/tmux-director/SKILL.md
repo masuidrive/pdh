@@ -15,11 +15,11 @@ tmux で動いている別 window の Claude Code を管理・監督する。
 
 **重要: 監視ループは Monitor Agent に委任する。**
 
-## 実行モードの選択 (Claude / Codex)
+## engine の選択 (claude / codex)
 
-tmux-director skill を起動した直後、現在のモードが明確でない場合（ユーザが明示的に指定しておらず、会話履歴にも記録がない等）は、`which codex` を実行して codex CLI の存在を確認し、ユーザに「Claude モードで進めますか、Codex モードで進めますか」と選択を求める。ユーザが既に「codex モード」または「Claude モード」と指示済みの場合は確認不要。
+tmux-director skill を起動した直後、使用する engine が明確でない場合（ユーザが明示的に指定しておらず、会話履歴にも記録がない等）は、`which claude` / `which codex` で利用可能な CLI を確認し、複数ある場合だけユーザに「claude / codex どちらで進めるか」を尋ねる。1 つしか無ければそれを使い、指定済みなら確認不要。
 
-選択したモードは window 側 pdh-dev にも引き継がれる前提。TD-2 で window に `/pdh-dev` を送る際にユーザが同じモードを選ぶのが自然。director 側と window 側で異なるモードを使う意図がある場合のみ、ユーザに都度確認する。
+選択した engine は window 側 pdh-dev にも引き継がれる前提。TD-2 で window に `/pdh-dev` を送る際にユーザが同じ engine を選ぶのが自然。director 側と window 側で異なる engine を使う意図がある場合のみ、ユーザに都度確認する。
 
 ## 概要フロー
 

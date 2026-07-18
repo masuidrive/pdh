@@ -129,7 +129,7 @@ main ← features/250711-091538-fix-auth (Ticket ブランチ)
 - Ticket に書かれていない仕様判断が必要な場合の対応は `.claude/skills/pdh-coding/SKILL.md` 「Open Questions protocol (batch escalate)」を参照する (デフォルト値で進め、ASSUMPTION commit + note 記録、PM に batch escalate)。
 - Ticket の Dependencies に未完了のブロッカーがある場合は、着手せずに報告する。
 - `PDH-AGENTS.md` は PDH 汎用 agent ルール、`CLAUDE.md` は repo で共有する project 固有ルール、`CLAUDE.local.md` は gitignore された環境固有メモとする。端末・sandbox・個人アカウント・一時 URL・ローカル認証状態などは `CLAUDE.local.md` に書き、secret の値そのものは書かない（取得方法や保管場所だけを書く）。
-- `.claude/skills/` は skill の実体、`.agents/skills/` はそれを読む Codex 用 wrapper とする。skill のルールを変えるときは wrapper ではなく `.claude/skills/` 側の実体を更新する。
+- `.claude/skills/` は skill の実体、`.agents/skills/` はそこへの symlink とする（Codex CLI は `.agents/skills/` を読む）。実体は 1 つだけなので、skill のルールは `.claude/skills/` 側を更新すればよい。
 
 ### Stage labels
 
