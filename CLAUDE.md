@@ -15,7 +15,8 @@
 ```
 product-brief.md                     # プロダクト概要・方針【変更にはユーザーの明示的な承認が必要】
 CLAUDE.md                            # このファイル（PDH repo 固有ルール）
-README.md                            # 導入・更新手順。配布物の一覧はここが正
+README.md                            # PDH の説明（何を解決するか・ワークフロー）
+INSTALL.md                           # 導入・更新手順。配布物の配置表はここが正
 docs/
   product-delivery-hierarchy.md      # PDH 運用ルール（配布物）
 skills/                              # Claude Code skill の実体（配布物）
@@ -47,13 +48,13 @@ scripts/
 
 ## 配布物の一貫性
 
-- **配布ファイルを追加・改名・削除したら、README の配置表（§2 のコピー元/コピー先テーブル）とディレクトリ構造図を同じ commit で更新する。** README が配布物一覧の正
+- **配布ファイルを追加・改名・削除したら、`INSTALL.md` の配置表（§2 のコピー元/コピー先テーブル）と README のディレクトリ構造図を同じ commit で更新する。** 配布物一覧の正は `INSTALL.md`
 - **配布ファイル末尾の `Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/<path>` 行を壊さない。** `XXXXXXX` はプレースホルダのまま commit する（導入時に HEAD commit へ置換される）。path 部分は自身の配布先パスと一致させる
 - **`pdh-update` skill の更新手順が、追加した配布物をカバーしているか確認する**
 
 ## 重複の禁止
 
-- **同じルールを 2 箇所に書かない**（`product-brief.md` の `AI-1`）。PDH 汎用は `templates/PDH-AGENTS.md`、project 固有の書き方例は `templates/CLAUDE.md`、導入手順は README、運用ルールは `docs/product-delivery-hierarchy.md`
+- **同じルールを 2 箇所に書かない**（`product-brief.md` の `AI-1`）。PDH 汎用は `templates/PDH-AGENTS.md`、project 固有の書き方例は `templates/CLAUDE.md`、導入・更新手順は `INSTALL.md`、運用ルールは `docs/product-delivery-hierarchy.md`
 - **配布テンプレートに「このテンプレートの使い方」を書かない**（`AI-3`）。コピー先で読み手のいない説明文になる
 - 文言を移動したら、移動元に残骸がないか `rg '<特徴的な一文>'` で sweep する
 
@@ -61,7 +62,7 @@ scripts/
 
 - **フローの記述に特定 engine を前提としない**（`AI-5`）。engine 固有の起動手順を書く場合は、セクション見出しかリード文で前提を明示して閉じ込める
 - **具体的なモデル名は「上書き例」としてのみ書く。** 役割プロファイル（`strong-judge` 等）を正とする
-- Claude Code 側に何かを追加したら、**Codex 側に対応が要るか必ず確認する**（`templates/AGENTS.md` の用語対応表、README §2 の symlink 手順に skill 名を足すか）
+- Claude Code 側に何かを追加したら、**Codex 側に対応が要るか必ず確認する**（`templates/AGENTS.md` の用語対応表、`INSTALL.md` §2 の symlink 手順に skill 名を足すか）
 
 # テスト・検証
 
@@ -70,7 +71,7 @@ scripts/
 `./scripts/test-all.sh` を実行する。中身は 3 つ:
 
 - `scripts/fast-checks.sh` — `scripts/checks/*.check` の宣言的 grep 不変条件（`Based on` 行の commit id 置換禁止、配布物からの `templates/` 参照禁止、merge-conflict marker）
-- `scripts/check-distribution.sh` — grep で書けない検査（`Based on` 行の存在とパス一致、README §2 配置表 ↔ 実ファイルの双方向一致、**配布物間の重複行検出**）
+- `scripts/check-distribution.sh` — grep で書けない検査（`Based on` 行の存在とパス一致、`INSTALL.md` §2 配置表 ↔ 実ファイルの双方向一致、**配布物間の重複行検出**）
 - 配布 `*.sh` の構文検査
 
 **配布物を追加・改名・削除したら `./scripts/test-all.sh` が通ることを確認する。** README への追記漏れはここで落ちる。
@@ -81,16 +82,16 @@ scripts/
 
 - **script を変更したら実際に実行する。** `bash -n` の構文チェックだけで完了としない
 - **配布テンプレートを変更したら、実プロジェクトへの導入経路で確認する。** 最低でも、変更したファイルを実際にコピーして agent に読ませ、指示が破綻していないことを確認する
-- **README の手順を変更したら、その手順どおりにコマンドを実行して確認する**
+- **`INSTALL.md` の手順を変更したら、その手順どおりにコマンドを実行して確認する**
 - **「ドキュメントを直した」だけで「正常に動作しています」と報告しない**
 
 ## 頻出の漏れ
 
 | # | カテゴリ | よくある漏れ | 対策 |
 |---|---|---|---|
-| 1 | README 未同期 | 配布物を追加したが README の配置表に載せ忘れ | `./scripts/test-all.sh`（check-distribution が検出） |
+| 1 | 配置表 未同期 | 配布物を追加したが `INSTALL.md` の配置表に載せ忘れ | `./scripts/test-all.sh`（check-distribution が検出） |
 | 2 | 文言の二重化 | 同じルールを 2 箇所に書き、片方だけ更新されて食い違う | `./scripts/test-all.sh`（重複行検出）。意図的な重複は allowlist に理由付きで登録 |
-| 3 | Codex 側の取り残し | skill を増減したのに README の symlink 手順や `templates/AGENTS.md` が古いまま | README §2 の symlink ループと `templates/AGENTS.md` を確認 |
+| 3 | Codex 側の取り残し | skill を増減したのに `INSTALL.md` の symlink 手順や `templates/AGENTS.md` が古いまま | `INSTALL.md` §2 の symlink ループと `templates/AGENTS.md` を確認 |
 | 4 | `Based on` 行 | 置換対象ファイルの行が無い / path が誤り / commit id が固定されている | `./scripts/test-all.sh`（fast-checks + check-distribution が検出） |
 
 # PDH (Ticket) 運用
@@ -103,4 +104,4 @@ scripts/
 
 チケット作成・実装計画・検証計画では、影響するレイヤーを必ず列挙する。
 
-`docs` · `skills` · `templates` · `scripts` · `README` · `product-brief.md`
+`docs` · `skills` · `templates` · `scripts` · `README` · `INSTALL` · `product-brief.md`
