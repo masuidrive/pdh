@@ -99,7 +99,7 @@ Permanent tests and `ticket-local-test` are different:
 
 - Permanent tests in `scripts/test-all.sh`, CI, or `test/` should cover product contracts, Architectural Invariants, and generalized regressions. If the repository commits generated artifacts (bundled workers, compiled assets, generated SDK models), the permanent suite must rebuild them and fail when the rebuilt output differs from the committed files, so stale artifacts are caught deterministically instead of by reviewer attention.
 - Ticket-specific temporary checks, such as confirming an old route is now 404 or a specific fixture is hidden, are `ticket-local-test`.
-- Executable `ticket-local-test` scripts live at the `tests_dir` path shown by `ticket.sh start`/`restore` output (compat: legacy flat layout keeps them at `tests/tickets/<ticket-id>/test-ticket-local.sh`).
+- Executable `ticket-local-test` scripts live at the `tests_dir` path shown by `ticket.sh start`/`restore` output (compat: legacy flat layout keeps them at `tests/tickets/<ticket-id>/test-ticket-local.sh`). `start`/`restore` announce that path but do not create the directory, so `mkdir -p` it when writing the first test.
 - Run them through `./scripts/test-ticket-local.sh [ticket-id]`.
 - Record seed, `tmp_dir` helpers, `agent-browser`, `curl`, and command evidence in the note file (the `note:` path from the same output; compat symlink: `current-note.md`).
 
