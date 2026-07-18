@@ -1,0 +1,9 @@
+# Files under docs/, skills/, and templates/ are copied INTO a consuming project,
+# where no `templates/` directory exists — templates/CLAUDE.md lands as CLAUDE.md,
+# templates/technical-reference.md as technical-reference.md, and so on. A
+# `templates/...` path reference therefore points at nothing once distributed.
+# (The `Based on .../blob/XXXXXXX/templates/...` URLs are source-repo links, not
+# local paths, and are not backtick-quoted, so they do not match.)
+reason=配布される文書がローカルパスとして `templates/...` を参照している。導入先に templates/ は存在しない（配布先での実パスを書く）
+pattern=`templates/
+glob=docs/**,skills/**,templates/**

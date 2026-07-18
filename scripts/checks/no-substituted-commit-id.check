@@ -1,0 +1,6 @@
+# In the PDH source repo the `Based on .../blob/XXXXXXX/...` placeholder must stay
+# a placeholder. A real commit id here means someone copied a file back from a
+# consuming project, or ran the README's sed substitution inside this repo.
+reason=Based on 行の commit id はこの repo ではプレースホルダ XXXXXXX のままにする（置換は導入先で行う）
+pattern=masuidrive/pdh/blob/[0-9a-f]{7}
+glob=docs/**,skills/**,templates/**,scripts/**
