@@ -48,7 +48,7 @@ scripts/
 
 ## 配布物の一貫性
 
-- **配布ファイルを追加・改名・削除したら、`INSTALL.md` の配置表（§2 のコピー元/コピー先テーブル）と README のディレクトリ構造図を同じ commit で更新する。** 配布物一覧の正は `INSTALL.md`
+- **配布ファイルを追加・改名・削除したら、`INSTALL.md` の配置表（「ファイルを配置する」のコピー元/コピー先テーブル）と README のディレクトリ構造図を同じ commit で更新する。** 配布物一覧の正は `INSTALL.md`
 - **配布ファイル末尾の `Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/<path>` 行を壊さない。** `XXXXXXX` はプレースホルダのまま commit する（導入時に HEAD commit へ置換される）。path 部分は自身の配布先パスと一致させる
 - **`pdh-update` skill の更新手順が、追加した配布物をカバーしているか確認する**
 
@@ -62,7 +62,7 @@ scripts/
 
 - **フローの記述に特定 engine を前提としない**（`AI-5`）。engine 固有の起動手順を書く場合は、セクション見出しかリード文で前提を明示して閉じ込める
 - **具体的なモデル名は「上書き例」としてのみ書く。** 役割プロファイル（`strong-judge` 等）を正とする
-- Claude Code 側に何かを追加したら、**Codex 側に対応が要るか必ず確認する**（`templates/AGENTS.md` の用語対応表、`INSTALL.md` §2 の symlink 手順に skill 名を足すか）
+- Claude Code 側に何かを追加したら、**Codex 側に対応が要るか必ず確認する**（`templates/AGENTS.md` の用語対応表、`INSTALL.md`「ファイルを配置する」の symlink 手順に skill 名を足すか）
 
 # テスト・検証
 
@@ -71,7 +71,7 @@ scripts/
 `./scripts/test-all.sh` を実行する。中身は 3 つ:
 
 - `scripts/fast-checks.sh` — `scripts/checks/*.check` の宣言的 grep 不変条件（`Based on` 行の commit id 置換禁止、配布物からの `templates/` 参照禁止、merge-conflict marker）
-- `scripts/check-distribution.sh` — grep で書けない検査（`Based on` 行の存在とパス一致、`INSTALL.md` §2 配置表 ↔ 実ファイルの双方向一致、**配布物間の重複行検出**）
+- `scripts/check-distribution.sh` — grep で書けない検査（`Based on` 行の存在とパス一致、`INSTALL.md` 配置表 ↔ 実ファイルの双方向一致、**配布物間の重複行検出**）
 - 配布 `*.sh` の構文検査
 
 **配布物を追加・改名・削除したら `./scripts/test-all.sh` が通ることを確認する。** README への追記漏れはここで落ちる。
@@ -91,7 +91,7 @@ scripts/
 |---|---|---|---|
 | 1 | 配置表 未同期 | 配布物を追加したが `INSTALL.md` の配置表に載せ忘れ | `./scripts/test-all.sh`（check-distribution が検出） |
 | 2 | 文言の二重化 | 同じルールを 2 箇所に書き、片方だけ更新されて食い違う | `./scripts/test-all.sh`（重複行検出）。意図的な重複は allowlist に理由付きで登録 |
-| 3 | Codex 側の取り残し | skill を増減したのに `INSTALL.md` の symlink 手順や `templates/AGENTS.md` が古いまま | `INSTALL.md` §2 の symlink ループと `templates/AGENTS.md` を確認 |
+| 3 | Codex 側の取り残し | skill を増減したのに `INSTALL.md` の symlink 手順や `templates/AGENTS.md` が古いまま | `INSTALL.md` の symlink ループと `templates/AGENTS.md` を確認 |
 | 4 | `Based on` 行 | 置換対象ファイルの行が無い / path が誤り / commit id が固定されている | `./scripts/test-all.sh`（fast-checks + check-distribution が検出） |
 
 # PDH (Ticket) 運用

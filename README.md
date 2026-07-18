@@ -34,9 +34,9 @@ Product Brief / Ticket の 2 層で、**なぜ作るか**・**いま何をやる
 
 導入手順と更新手順は **[INSTALL.md](INSTALL.md)** にある。
 
-- **新規導入**: [INSTALL.md §方法 1](INSTALL.md#方法-1-claude-code-に設定させる)（coding agent に任せる）または [§方法 2](INSTALL.md#方法-2-手動でセットアップ)（手動）
-- **導入済みの更新**: [INSTALL.md §3 既存ファイルのアップデート](INSTALL.md#3-既存ファイルのアップデート)。`pdh-update` skill を使う場合も内部でこの手順を辿る
-- **バージョン間の移行**: [INSTALL.md §3.1 既知の移行手順](INSTALL.md#31-既知の移行手順)。差分だけでは移行できない変更はここに集約している
+- **新規導入**: [INSTALL.md「新規導入」](INSTALL.md#新規導入) — coding agent に任せる方法と手動手順の両方
+- **導入済みの更新**: [INSTALL.md「既存プロジェクトのアップデート」](INSTALL.md#既存プロジェクトのアップデート)。`pdh-update` skill を使う場合も内部でこの手順を辿る
+- **バージョン間の移行**: [INSTALL.md「既知の移行手順」](INSTALL.md#既知の移行手順)。差分だけでは移行できない変更はここに集約している
 
 最短の導入は、プロジェクトのルートで coding agent にこう指示する:
 
@@ -100,7 +100,7 @@ Claude Code で `tmux-director` と入力すると起動する。
 
 ### hookbus 起動手順
 
-**前提**: §2 で `scripts/hookbus.js` 配置済、§2.5.b で `.claude/settings.json` に hooks 配置済。
+**前提**: INSTALL.md「ファイルを配置する」で `scripts/hookbus.js` 配置済、「.claude/settings.json を設定する」の hookbus 版で hooks 配置済。
 
 **重要な仕様**: `.claude/settings.json` は **各 Claude Code セッション起動時に読まれて固まる**。mid-session で settings.json を編集しても、走っているセッションには反映されない。hooks を追加・変更した場合は **全 Claude セッション一旦終了 → 再起動** が必要。
 

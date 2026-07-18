@@ -6,7 +6,7 @@
 #
 #   1. every file declared in INSTALL.md's "Based on" list carries that line, with a
 #      path matching its own location in this repo
-#   2. every copy-source named in INSTALL.md's placement table (§2) exists
+#   2. every copy-source named in INSTALL.md's placement table exists
 #   3. every distributable file under templates/ and skills/ appears in that table
 #
 # Run from the repo root. Exit 0 = pass, 1 = at least one failure.
@@ -76,7 +76,7 @@ while IFS= read -r dist; do
       break
     fi
   done <<< "$install_sources"
-  [[ "$listed" -eq 1 ]] || fail "$dist is distributable but is not listed in INSTALL.md's placement table (§2)"
+  [[ "$listed" -eq 1 ]] || fail "$dist is distributable but is not listed in INSTALL.md's placement table"
 done < <(git ls-files -- 'templates/*' 'skills/*' 'docs/*' 'scripts/hookbus.js')
 
 # --- 4. no rule duplicated verbatim across distributed files ------------------
