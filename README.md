@@ -84,6 +84,22 @@ PDH のフローは engine 中立で、特定の engine を前提にしない。
 
 詳細は `skills/pdh-dev/_execution-team.md`「エンジン割り当て」「spawn 機構」を参照。
 
+### 対応している coding agent
+
+PDH が engine に要求するのは 2 つだけ。
+
+1. session 開始時に `AGENTS.md` または `CLAUDE.md` を自動でコンテキストに載せること
+2. `.claude/skills/` または `.agents/skills/` から skill を読むこと
+
+| engine | 状況 |
+|---|---|
+| **Claude Code** | first-class。PDH の開発自体がここで回っている |
+| **Codex CLI** | first-class。`AGENTS.md` の自動ロードと `.agents/skills/`（`.claude/skills/` への symlink）からの skill 探索を実測確認済み |
+| Grok Build | 動く。`AGENTS.md` / `CLAUDE.md` を両方読み、`.claude/skills/` と `.agents/skills/` の両方を走査する。ただし **gitignore した `CLAUDE.local.md` は読まれない**（[INSTALL.md](INSTALL.md#新規導入) の注記を参照） |
+| opencode ほか | 未検証だが、上の 2 条件を満たすなら動くはず |
+
+2 の skill 機構が無い agent でも、`AGENTS.md` から `.claude/skills/pdh-dev/SKILL.md` を明示的に読ませれば動作する。skill 機構は遅延ロードの最適化であって、PDH の前提ではない。
+
 ## tmux Director
 
 tmux 上で複数の Claude Code セッションを走らせている場合に、別 window の Claude Code を監督・指示するためのスキル。
