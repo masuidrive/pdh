@@ -93,7 +93,7 @@ Ticket の状態は YAML frontmatter で判定する。
 - Product Brief は背景や problem が変わらない限り変えない。Architectural Invariants の変更は破壊的影響が大きいため、ユーザ承認が必須。
 - Brief / Ticket の本文中で未決事項は `[NEEDS CLARIFICATION: 具体的な問い]` を埋め込む。coding agent はこのマーカーに触れる判断を推測で埋めず、確認してから進める。解消したらマーカーを決定内容へ置き換える。
 - Brief の変更は 2 種類に分ける。方針の変更（Problem / Solution / Appetite / Architectural Invariants / Non-goals）はユーザ承認が必須。事実の追記（Done への達成追記・Open Questions の追加）は agent が ticket close 時に行ってよい。
-- `technical-reference.md` は「現在の実装がどうなっているか」の常設文書（`templates/technical-reference.md`）。ticket close 時に、その ticket の差分に因果がある範囲だけを agent が追記・上書きする。他 ticket 由来の記述は消さない（削除候補は note に記録し、棚卸し ticket で別モデル検証つきで刈る）。
+- `technical-reference.md` は「現在の実装がどうなっているか」の常設文書（repo root に置く）。ticket close 時に、その ticket の差分に因果がある範囲だけを agent が追記・上書きする。他 ticket 由来の記述は消さない（削除候補は note に記録し、棚卸し ticket で別モデル検証つきで刈る）。
 - Ticket は Product Brief を参照する。commit は Ticket に紐づける。
 - ticket は **1 ticket = 1 work unit**。cross-cutting changes を複数 ticket に切ると layer 間整合性が完成時にしか取れないため、1 ticket で全 layer をカバーする。
 

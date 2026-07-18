@@ -84,7 +84,7 @@ bash ticket.sh init
 | コピー元 | コピー先 | 用途 |
 |---|---|---|
 | `tmp/pdh/docs/product-delivery-hierarchy.md` | `docs/product-delivery-hierarchy.md` | PDH 運用ルール・テンプレート |
-| `tmp/pdh/skills/pdh-dev/SKILL.md` | `.claude/skills/pdh-dev/SKILL.md` | PDH stage flow ワークフロースキル |
+| `tmp/pdh/skills/pdh-dev/` | `.claude/skills/pdh-dev/` | PDH stage flow ワークフロースキル（`SKILL.md` と、そこから参照される `_*.md` を**ディレクトリごと**コピーする） |
 | `tmp/pdh/skills/pdh-coding/SKILL.md` | `.claude/skills/pdh-coding/SKILL.md` | コーディング標準スキル |
 | `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
 | `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
@@ -115,11 +115,12 @@ bash ticket.sh init
 grep -qxF 'CLAUDE.local.md' .gitignore || printf '\nCLAUDE.local.md\n' >> .gitignore
 ```
 
-対象ファイル (5 つ):
+対象ファイル (6 つ):
 - `CLAUDE.md`
 - `product-brief.md`
 - `technical-reference.md`
 - `.ticket-config.yaml`
+- `docs/product-delivery-hierarchy.md`
 - `.claude/skills/tmux-director/SKILL.md`
 
 macOS / Linux 両対応のワンライナー:
@@ -143,6 +144,7 @@ sed_inplace \
   product-brief.md \
   technical-reference.md \
   .ticket-config.yaml \
+  docs/product-delivery-hierarchy.md \
   .claude/skills/tmux-director/SKILL.md
 ```
 
@@ -508,7 +510,7 @@ project-root/
   .claude/
     settings.json           ← Agent Teams 設定 + (任意) hookbus 用 hooks
     skills/
-      pdh-dev/SKILL.md      ← PDH stage flow ワークフロースキル
+      pdh-dev/              ← PDH stage flow ワークフロースキル (SKILL.md + _*.md)
       pdh-coding/SKILL.md   ← コーディング標準スキル
       tmux-director/SKILL.md ← tmux Director スキル
       pdh-update/SKILL.md    ← PDH アップデートスキル
@@ -522,7 +524,9 @@ pdh/
   docs/
     product-delivery-hierarchy.md    ← PDH 本体ドキュメント
   skills/
-    pdh-dev/SKILL.md                 ← PDH stage flow ワークフロースキル
+    pdh-dev/
+      SKILL.md                       ← PDH stage flow ワークフロースキル（入口）
+      _*.md                          ← SKILL.md から参照される分冊（flow / review / execution-team 等）
     pdh-coding/SKILL.md              ← コーディング標準スキル
     tmux-director/SKILL.md           ← tmux Director スキル
     pdh-update/SKILL.md              ← PDH アップデートスキル
@@ -542,8 +546,16 @@ pdh/
     test-ticket-local.sh             ← `ticket-local-test` 実行テンプレート
     .ticket-config.yaml              ← ticket.sh 設定テンプレート
   scripts/
-    hookbus.js                       ← tmux Director hookbus (CLI + library + in-source vitest、1 ファイル完結)
+    hookbus.js                       ← tmux Director hookbus (CLI + library + in-source vitest、1 ファイル完結)【配布物】
+    test-all.sh                      ← この repo 自身の検査入口【配布物ではない】
+    fast-checks.sh                   ← 同上（宣言的 grep 不変条件ランナー）
+    check-distribution.sh            ← 同上（配布セットの一貫性検査）
+    checks/                          ← 同上（この repo 用 fast-check レジストリ）
+  product-brief.md                   ← PDH 自身の Product Brief
+  CLAUDE.md                          ← PDH repo 固有の agent ルール
 ```
+
+`scripts/` 直下で配布されるのは `hookbus.js` のみ。他は PDH repo 自身の検査で、配布先へはコピーしない（配布用テンプレートは `templates/` 側にある）。
 
 ## 関連ツール
 

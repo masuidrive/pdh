@@ -95,6 +95,10 @@ fi
 # Customize: Add your project's test suites below
 # ============================================================
 
+# Deterministic fast-check registry. Cheap and language-agnostic, so it is enabled
+# by default as the first stage; everything below is a commented-out example.
+run "fast-checks" bash scripts/fast-checks.sh
+
 # Example: Backend (Python pytest)
 # run "backend (SQLite)" uv run pytest -x -q
 # run "backend (PostgreSQL)" env LLMHUB_DATABASE_URL=postgresql+asyncpg://user:pass@db/test uv run pytest -x -q
@@ -121,8 +125,14 @@ echo ""
 echo "========================================"
 echo "  Summary"
 echo "========================================"
-for p in "${PASSED[@]}"; do echo "  PASS: $p"; done
-for f in "${FAILED[@]}"; do echo "  FAIL: $f"; done
+# bash 3.2 (macOS default) errors on "${arr[@]}" for an empty array under `set -u`,
+# so guard every expansion with an element-count check.
+if (( ${#PASSED[@]} > 0 )); then
+  for p in "${PASSED[@]}"; do echo "  PASS: $p"; done
+fi
+if (( ${#FAILED[@]} > 0 )); then
+  for f in "${FAILED[@]}"; do echo "  FAIL: $f"; done
+fi
 if $PARALLEL && [ ${#FAILED[@]} -gt 0 ]; then
   for f in "${FAILED[@]}"; do
     logfile="$LOGDIR/$(echo "$f" | tr ' ()/' '____').log"

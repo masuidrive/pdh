@@ -544,3 +544,5 @@ active / idle の判断は Director が毎回行い、全 worker の状態が変
 
 - window の Claude は Docker 内で動いている可能性がある。プロセスやコマンドの実行時にはそれを留意する
 - PDH ワークフローから大きく外れる場合は、window への指示を止め、ユーザにその旨を伝えて判断を仰ぐ
+
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/tmux-director/SKILL.md
