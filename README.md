@@ -98,6 +98,8 @@ bash ticket.sh init
 | `tmp/pdh/templates/AGENTS.md` | `AGENTS.md` | Codex CLI 向け設定（CLAUDE.md / PDH-AGENTS.md への thin pointer） |
 | `tmp/pdh/templates/.ticket-config.yaml` | `.ticket-config.yaml` | ticket.sh 設定 |
 | `tmp/pdh/templates/test-all.sh` | `scripts/test-all.sh` | テスト一括実行スクリプト |
+| `tmp/pdh/templates/fast-checks.sh` | `scripts/fast-checks.sh` | 決定論的 fast-check ランナー（宣言形式の grep 不変条件。test-all の最初の軽量ステージ） |
+| `tmp/pdh/templates/checks/` | `scripts/checks/` | fast-check レジストリ（`*.check` と README。サンプルはプロジェクトに合わせて調整/削除） |
 | `tmp/pdh/templates/dev-server.sh` | `scripts/dev-server.sh` | PDH verify / human-review 用の開発サーバ入口 |
 | `tmp/pdh/templates/seed-pdh-verify.sh` | `scripts/seed-pdh-verify.sh` | PDH verify / human-review 用のローカル seed hook |
 | `tmp/pdh/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | `ticket-local-test` 実行スクリプト（CI には含めない） |
@@ -493,6 +495,8 @@ project-root/
     skills/                 ← Codex 用 skill wrappers（実体は .claude/skills）
   scripts/
     test-all.sh             ← テスト一括実行
+    fast-checks.sh          ← 決定論的 fast-check ランナー（宣言形式の grep 不変条件）
+    checks/                 ← fast-check レジストリ（*.check + README）
     dev-server.sh           ← PDH verify / human-review 用の開発サーバ入口
     seed-pdh-verify.sh      ← PDH verify / human-review 用のローカル seed hook
     test-ticket-local.sh    ← `ticket-local-test` 実行
@@ -531,6 +535,8 @@ pdh/
     AGENTS.md                        ← AGENTS.md テンプレート (Codex CLI 向け thin pointer)
     .agents/skills/                  ← Codex 用 skill wrapper テンプレート
     test-all.sh                      ← テスト一括実行テンプレート
+    fast-checks.sh                   ← 決定論的 fast-check ランナーテンプレート
+    checks/                          ← fast-check レジストリテンプレート（README + サンプル）
     dev-server.sh                    ← PDH verify / human-review 用の開発サーバ入口テンプレート
     seed-pdh-verify.sh               ← PDH verify / human-review 用のローカル seed hook テンプレート
     test-ticket-local.sh             ← `ticket-local-test` 実行テンプレート

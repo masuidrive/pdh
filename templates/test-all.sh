@@ -20,6 +20,11 @@
 #
 # Customize the `run` calls below for your project's test suites.
 # Each `run "label" command args...` entry defines one suite.
+#
+# Recommended first stage: the deterministic fast-check registry (super-light grep
+# invariants, run every change in the same gate as the type checker). See
+# scripts/fast-checks.sh and scripts/checks/README.md.
+#   run "fast-checks" bash scripts/fast-checks.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

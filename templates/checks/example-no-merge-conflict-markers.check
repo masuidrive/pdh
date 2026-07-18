@@ -1,0 +1,6 @@
+# Example fast-check. Adjust `glob` to your source dirs, or delete and add your own.
+# Catches leftover Git merge-conflict markers committed by accident.
+# pattern is POSIX ERE only (no \d \s \w \b \p{...} or (?...); use [[:space:]] etc).
+reason=leftover Git merge-conflict marker committed
+pattern=^(<<<<<<<|>>>>>>>)
+glob=src/**
