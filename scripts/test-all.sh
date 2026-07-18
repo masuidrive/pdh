@@ -23,6 +23,19 @@ run() {
 run "fast-checks" bash scripts/fast-checks.sh
 run "distribution consistency" bash scripts/check-distribution.sh
 
+# Link checking needs Unicode-aware slugification, so it is Python rather than
+# bash. This script is not distributed, so it does not fall under the
+# Markdown/bash-only constraint (product-brief.md AI-4).
+printf '\n=== links ===\n'
+if command -v python3 >/dev/null 2>&1; then
+  if ! python3 scripts/check-links.py; then
+    failed=1
+  fi
+else
+  printf 'check-links: python3 not found; cannot verify Markdown links\n' >&2
+  failed=1
+fi
+
 printf '\n=== shell syntax (shipped scripts) ===\n'
 syntax_failed=0
 while IFS= read -r script; do

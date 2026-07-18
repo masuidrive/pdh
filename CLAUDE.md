@@ -31,10 +31,11 @@ scripts/
   test-all.sh                        # この repo 自身の検査（配布物ではない）
   fast-checks.sh                     # 宣言的 grep 不変条件ランナー（配布物ではない）
   check-distribution.sh              # 配布セットの一貫性検査（配布物ではない）
+  check-links.py                     # Markdown リンク / アンカー検査（配布物ではない）
   checks/*.check                     # この repo 用 fast-check レジストリ
 ```
 
-`scripts/` 直下のうち `hookbus.js` だけが配布物。他は PDH repo 自身の検査であり、配布先へコピーしない（`templates/` 側に配布用の同名テンプレートがある）。
+`scripts/` 直下のうち `hookbus.js` だけが配布物。他は PDH repo 自身の検査であり、配布先へコピーしない（`templates/` 側に配布用の同名テンプレートがある）。配布しないので `AI-4`（配布物は Markdown / bash のみ）の対象外であり、`check-links.py` のように適した言語を使ってよい。
 
 # 基本方針
 
@@ -68,10 +69,11 @@ scripts/
 
 ## 自動検査
 
-`./scripts/test-all.sh` を実行する。中身は 3 つ:
+`./scripts/test-all.sh` を実行する。中身は 4 つ:
 
 - `scripts/fast-checks.sh` — `scripts/checks/*.check` の宣言的 grep 不変条件（`Based on` 行の commit id 置換禁止、配布物からの `templates/` 参照禁止、merge-conflict marker）
 - `scripts/check-distribution.sh` — grep で書けない検査（`Based on` 行の存在とパス一致、`INSTALL.md` 配置表 ↔ 実ファイルの双方向一致、**配布物間の重複行検出**）
+- `scripts/check-links.py` — Markdown のリンク検査（リンク先ファイルの存在、**アンカーが実在する見出しを指すか**）。見出しの改名でリンクが静かに切れるのを防ぐ
 - 配布 `*.sh` の構文検査
 
 **配布物を追加・改名・削除したら `./scripts/test-all.sh` が通ることを確認する。** README への追記漏れはここで落ちる。
@@ -92,7 +94,8 @@ scripts/
 | 1 | 配置表 未同期 | 配布物を追加したが `INSTALL.md` の配置表に載せ忘れ | `./scripts/test-all.sh`（check-distribution が検出） |
 | 2 | 文言の二重化 | 同じルールを 2 箇所に書き、片方だけ更新されて食い違う | `./scripts/test-all.sh`（重複行検出）。意図的な重複は allowlist に理由付きで登録 |
 | 3 | Codex 側の取り残し | skill を増減したのに `INSTALL.md` の symlink 手順や `templates/AGENTS.md` が古いまま | `INSTALL.md` の symlink ループと `templates/AGENTS.md` を確認 |
-| 4 | `Based on` 行 | 置換対象ファイルの行が無い / path が誤り / commit id が固定されている | `./scripts/test-all.sh`（fast-checks + check-distribution が検出） |
+| 4 | リンク切れ | 見出しを改名して他ファイルからのアンカーリンクが無効になる | `./scripts/test-all.sh`（check-links が検出） |
+| 5 | `Based on` 行 | 置換対象ファイルの行が無い / path が誤り / commit id が固定されている | `./scripts/test-all.sh`（fast-checks + check-distribution が検出） |
 
 # PDH (Ticket) 運用
 
