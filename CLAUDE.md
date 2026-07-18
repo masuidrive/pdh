@@ -71,7 +71,7 @@ scripts/
 `./scripts/test-all.sh` を実行する。中身は 3 つ:
 
 - `scripts/fast-checks.sh` — `scripts/checks/*.check` の宣言的 grep 不変条件（`Based on` 行の commit id 置換禁止、Codex wrapper へのワークフロー複製検出、merge-conflict marker）
-- `scripts/check-distribution.sh` — grep で書けない「存在」と「2 つのリストの一致」の検査（`Based on` 行の存在とパス一致、README §2 配置表 ↔ 実ファイルの双方向一致）
+- `scripts/check-distribution.sh` — grep で書けない検査（`Based on` 行の存在とパス一致、README §2 配置表 ↔ 実ファイルの双方向一致、**配布物間の重複行検出**）
 - 配布 `*.sh` の構文検査
 
 **配布物を追加・改名・削除したら `./scripts/test-all.sh` が通ることを確認する。** README への追記漏れはここで落ちる。
@@ -90,7 +90,7 @@ scripts/
 | # | カテゴリ | よくある漏れ | 対策 |
 |---|---|---|---|
 | 1 | README 未同期 | 配布物を追加したが README の配置表に載せ忘れ | `./scripts/test-all.sh`（check-distribution が検出） |
-| 2 | 文言の二重化 | 移動したはずの説明が移動元にも残る | `rg '<移動した一文>'` で全文 sweep |
+| 2 | 文言の二重化 | 同じルールを 2 箇所に書き、片方だけ更新されて食い違う | `./scripts/test-all.sh`（重複行検出）。意図的な重複は allowlist に理由付きで登録 |
 | 3 | Codex 側の取り残し | Claude 側 skill だけ更新し wrapper / AGENTS.md が古いまま | `templates/.agents/skills/` と `templates/AGENTS.md` を確認 |
 | 4 | `Based on` 行 | 置換対象ファイルの行が無い / path が誤り / commit id が固定されている | `./scripts/test-all.sh`（fast-checks + check-distribution が検出） |
 

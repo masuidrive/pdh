@@ -105,14 +105,9 @@ Ticket の状態は YAML frontmatter で判定する。
 
 ### Ticket immutable (絶対遵守)
 
-ticket の以下を implementor が **勝手に書き換えてはいけない**:
+ticket の Acceptance Criteria / Architectural Invariants check / 確定判断 (Design Decisions) / Out-of-scope は、implementor が勝手に書き換えてはいけない。意思決定者の意思を上書きさせないための gate であり、破られると ticket が意思決定を保持しなくなる。
 
-- **Acceptance Criteria**
-- **Architectural Invariants check**
-- **確定判断 (Design Decisions)**
-- **Out-of-scope**
-
-変更が必要だと判断したら、**実装を止めて PM に escalate** する。これは「PM の意思を上書きしない」ための gate。違反すると ticket が "PM の意思" を持たなくなり、ticket そのものの価値が消失する。
+**実装担当向けの正文は `.claude/skills/pdh-coding/SKILL.md` 「Ticket immutable rule (絶対遵守)」**（escalate 手順、solo / bot 実行時の中断方法を含む）。ここには重複させない。
 
 ### ブランチ戦略
 
