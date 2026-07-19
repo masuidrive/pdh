@@ -125,9 +125,33 @@ ticket の Acceptance Criteria を満たすコードを書く。out-of-scope は
 - **テスト到達不能な形に分岐ロジックを置かない**: 生成文字列内の script (サーバが返す HTML 内のインライン JS 等)・heredoc・テンプレート埋め込みコードに、条件分岐やデータ変換を直接書かない。テストランナー (vitest / pytest 等) が import して叩ける関数・モジュールに切り出し、unit test を付ける。埋め込み側にはイベント登録・呼び出しなどの最小の糊だけを残す
 - **実装→テストのループ**: 実装とテスト実行を自分自身が繰り返し、全件パスした状態で完了報告すること。テスト未実行のまま返さない
 - **完了報告の範囲**: 実装担当が報告できるのは `PDH-implement` の担当範囲まで。チケット全体の完了は `PDH-review` / `PDH-verify` / `PDH-human-review` 後に PM とユーザが判断するため、「ticket 完了」「close 可能」と断定しない
-- **重複検出 (テスト前)**: 実装完了後・テスト実行前に、変更ファイル間の構造的重複を検出する。閾値を超える重複は共通化を検討してからテストへ進む。テスト setup 等で重複が意図的なら、そのまま進めてよい。
-  - **使うツール・閾値・対象パスは `CLAUDE.md` で project ごとに指定する**（言語によって使える検出器が違うため、この skill では指定しない）
-  - 指定が無い、または環境制約で install できない場合は skip し、note に「重複検出 skip: 理由」と 1 行残す
+- **重複検出 (テスト前)**: 実装完了後、テスト実行前に `similarity-ts` (TS/JS) / `similarity-py` (Python) / `similarity-generic` (Ruby ほか) で変更ファイル間の構造的重複を検出する。閾値を超える重複が見つかった場合は共通化を検討してからテストに進む。重複が意図的 (テスト setup 等) な場合はそのまま進めてよい。
+
+  **install** (Rust 製 CLI 群。1 つの release archive に全 CLI 同梱: `similarity-ts` / `similarity-py` / `similarity-generic` ほか。npm/pip パッケージは無い):
+  - **prebuilt を優先** (ビルド不要・速い)。https://github.com/mizchi/similarity/releases から **自分の OS/arch に合う archive** を取り、PATH の通った dir に置く:
+    ```bash
+    # PLATFORM は自分の環境に合わせる (例: x86_64-unknown-linux-gnu / aarch64-apple-darwin)
+    gh release download --repo mizchi/similarity --pattern "*${PLATFORM}*.tar.gz" -D /tmp/sim --clobber
+    tar xzf /tmp/sim/*.tar.gz -C /tmp/sim
+    cp /tmp/sim/similarity-*/similarity-* "$HOME/.local/bin/"   # PATH の通った dir へ
+    ```
+  - **自分の OS/arch 用 prebuilt が無い場合のみ cargo でビルド** (`cargo` 必須、~60-90 秒):
+    ```bash
+    cargo install similarity-ts similarity-py similarity-generic
+    ```
+
+  **基本的な使い方** (`-t/--threshold` 既定 0.85、`-p/--print` でコード出力):
+  ```bash
+  similarity-ts ./frontend/src --threshold 0.7 --print
+  similarity-py ./src --threshold 0.7 --print
+  # similarity-generic は ts/py と仕様が異なり「単一ファイル指定」(dir/複数引数/--print 非対応、
+  # 関数比較は同一ファイル内)。プロジェクト全体は per-file ループで回す:
+  for f in $(find ./sdk/ruby/lib -name '*.rb'); do similarity-generic --language ruby -t 0.7 "$f"; done
+  ```
+
+  対応言語マップ: `similarity-ts` = TS/JS、`similarity-py` = Python、`similarity-generic` = Go / Java / C / C++ / C# / **Ruby** (`--language <lang>` 指定。**単一ファイル単位**で関数類似を比較、`--supported` で対応言語一覧)。`similarity-ts` / `similarity-py` は dir 再帰 + `--print` 可。
+
+  install できない環境 (Codex sandbox 等) では skip 可。skip した場合は note に「重複検出 skip: 環境制約 (理由)」と 1 行記録する
 - **PDH-implement 完了条件**: `CLAUDE.md` の「テスト」セクションを読み、記載されたテストコマンドを実行して all passed になること。結果をレスポンスに含める
 
 ## Commit cadence 契約
