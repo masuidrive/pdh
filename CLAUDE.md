@@ -55,11 +55,7 @@ scripts/
 
 ## どこに書くかの判断（CLAUDE.md / PDH-AGENTS.md / skill）
 
-ルールを追加するとき、次の 3 問で置き場所を決める。1 つでも「skill」を指すなら skill に置く。
-
-1. **プロジェクト固有か、PDH 共通か。** 固有なら `CLAUDE.md`、共通なら skill か `PDH-AGENTS.md`
-2. **常に必要か、特定の場面だけか。** `CLAUDE.md` と `PDH-AGENTS.md` は常時コンテキストに載り、skill は呼ばれた時だけ載る。**「常に効いていないと事故る」ものだけが常時側の資格を持つ**
-3. **誰が読むのか。** 役割を特定できる（実装担当だけ、PM だけ）なら、その役割の skill
+判断の 3 問は `templates/PDH-AGENTS.md`「Where A Rule Belongs」が正。この repo 固有の適用例だけをここに置く。
 
 例: 「変更前に `git log` / `git blame` で意図を把握する」は、共通・コード変更時のみ・実装担当なので `pdh-coding` skill が正。配布テンプレートの `CLAUDE.md` に同じことを書くと、コピー先で二重管理になる。
 

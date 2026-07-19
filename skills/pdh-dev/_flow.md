@@ -63,7 +63,7 @@ flowchart TD
 ## PDH-ticket-human-review. Ticket human review
 
 1. noteのStatusを`PDH-ticket-human-review`へ更新し、ticket修正点と未確定判断がnoteにあることを確認する
-2. 会話で全体概要、ticket reviewでの修正点、達成内容、AC、やらないこと、判断点、おすすめを先頭にした選択肢を示す
+2. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-ticket-human-review`側が正。ACは承認対象の文言そのままを引用し、要約に置き換えない
 3. **ユーザの明示承認まで`PDH-implement`へ進まない。**
 4. 差し戻しは`PDH-ticket-review`へ戻し、ticket更新後にhuman reviewを再実行する
 
@@ -152,8 +152,7 @@ Why E2E無バイアスlensとAC conformanceおよび妥当性lensをpersona matr
 ## PDH-human-review. 人間レビュー
 
 1. note Statusを`PDH-human-review`へ更新し、verifyまでの証拠がcommit済みであることを確認する
-2. 会話で達成内容、diff、主要file、AC、test、ユーザ操作手順、判断点、選択肢、残課題を示す
-   - **noteの`### Findings`表から判定がfollow-upと棄却の行を抜き出し、件数と理由つきで会話へ提示する。noteへ記録するだけで会話から省かない。**「何を直したか」と同じだけ「何を直さなかったか」がユーザの判断材料であり、scope判断が妥当かはここでしか検証されない。0件なら0件と明示する
+2. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-human-review`側が正。未対応findingはnoteの`### Findings`表から判定がfollow-upと棄却の行を抜き出して作る
    - UIは`./scripts/dev-server.sh`のURL、操作、期待表示を示す
    - APIは`curl`と期待statusおよびresponseを示す
    - authが必要なら方式、cookieやhelperの取得方法、secretを会話へ貼らない方針、cleanupを説明する

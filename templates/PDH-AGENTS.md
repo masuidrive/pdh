@@ -154,3 +154,56 @@ When asking the user for a decision, explain:
 - Options, with the recommended option first
 
 If there is doubt, a blocker, a missing decision, or no credible path to `PDH-human-review`, ask the user immediately instead of waiting for a later gate.
+
+## Human Gate Materials
+
+A human gate is only as good as the material the user receives. The user is not
+expected to reconstruct the agent's reasoning, re-read the diff, or ask for what
+is missing. Deliver the following in the conversation itself — recording it in
+the note file instead of presenting it does not satisfy the gate.
+
+At `PDH-ticket-human-review`, before implementation:
+
+- What this ticket will make possible, in one user-journey line
+- The Why, and how it connects to the brief
+- Every Acceptance Criterion, in the exact wording being approved
+- What changed during `PDH-ticket-review`, and why
+- What is explicitly out of scope
+- Open decision points, with options and a recommendation first
+- Known risks or dependencies that could invalidate the plan
+
+At `PDH-human-review`, before close:
+
+- What was achieved, in one user-journey line
+- Each AC with its evidence, and any AC met only indirectly
+- The diff summary and the main changed files
+- Test and verification output, verbatim enough to see pass/fail counts
+- **Every review finding that was not fixed** — the follow-up and rejected rows
+  of the note's `### Findings` table, with counts and one-line reasons. State
+  zero explicitly when there are none. What was deliberately left unfixed is
+  decision material of the same weight as what was fixed; the scope judgment is
+  verifiable nowhere else.
+- Concrete steps for the user to check the result themselves (URL and expected
+  display for UI, `curl` and expected status/body for API, auth method when
+  needed)
+- Remaining known issues
+
+If a required item cannot be produced, say so and say why, rather than
+presenting the gate as complete.
+
+## Where A Rule Belongs
+
+When adding a rule, decide its location with three questions. If any answer
+points to a skill, put it in the skill.
+
+1. **Project-specific, or PDH-common?** Project-specific goes to `CLAUDE.md`;
+   common goes to a skill or `PDH-AGENTS.md`.
+2. **Always needed, or only in a specific situation?** `CLAUDE.md` and
+   `PDH-AGENTS.md` are always in context; a skill loads only when invoked. Only
+   a rule that causes an accident when absent earns a place in the always-loaded
+   files.
+3. **Who reads it?** If the role is identifiable — implementer only, PM only —
+   it belongs to that role's skill.
+
+Do not write the same rule in two places. When you move wording, sweep the
+origin for leftovers.
