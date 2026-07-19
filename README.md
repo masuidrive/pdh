@@ -127,7 +127,7 @@ Claude Code で `tmux-director` と入力すると起動する。
 3. Director セッション内で監視対象 worker の key を allow-list で指定し、**固有 `--cursor` id** で Monitor 起動:
    ```bash
    SOCK_HASH=$(scripts/hookbus.js whoami | cut -d: -f1)
-   CURID="$SOCK_HASH:mon-$(tmux display-message -p '#{window_index}')"    # Director の %0 と必ず別
+   CURID="$SOCK_HASH:mon-$(tmux display-message -p '#{window_index}')"    # Director 自身の key と必ず別
    ROOT=/tmp/claude-events-$SOCK_HASH
    printf '%s\n' "$(stat -c%s "$ROOT/log.ndjson")" > "$ROOT/consumers/${CURID/:/%3A}.cursor"  # cursor を log 末尾へ直書き seed (__seed_no_match__ pull では seed されないため。backlog 再生回避)
    ```
@@ -140,7 +140,7 @@ Claude Code で `tmux-director` と入力すると起動する。
    ```
    worker の key は `<socket_hash>:<pane_id>` (例: `a3f2e1:%10`)。pane_id は `tmux list-panes -a -F '#{pane_id}'` で取れる。socket_hash は Director の `scripts/hookbus.js whoami` の `:` 前部分と同じ。`--include` 省略時は全 event が流れる (無関係な pane 含む) ので、監視対象は明示推奨。worker が Stop / Notification した瞬間、NDJSON 1 行が会話に通知として push される。
 
-   **⚠ `--cursor` を必ず明示する**: 省略時 cursor identity は `whoami` (= Director の `<hash>:%0`) にフォールバックする。cursor は「読んだ byte offset」を identity ごとに 1 ファイルで持ち emit ごとに advance するため、**同一 identity の `pull` が複数あると (Monitor 2 つ / Director の手動 `pull`) 片方が cursor を進めて他方がイベントを取り逃す**。各 Monitor に固有 `--cursor`、新規 cursor は上記のように log 末尾へ seed (offset 0 からだと全 backlog を replay し通知洪水)、複数 worker は「1 Monitor + `--include` 複数」で監視する。
+   **⚠ `--cursor` を必ず明示する**: 省略時 cursor identity は `whoami`（= Director 自身の pane の key。`<hash>:<pane_id>` 形式で、pane_id は環境ごとに異なる）にフォールバックする。cursor は「読んだ byte offset」を identity ごとに 1 ファイルで持ち emit ごとに advance するため、**同一 identity の `pull` が複数あると (Monitor 2 つ / Director の手動 `pull`) 片方が cursor を進めて他方がイベントを取り逃す**。各 Monitor に固有 `--cursor`、新規 cursor は上記のように log 末尾へ seed (offset 0 からだと全 backlog を replay し通知洪水)、複数 worker は「1 Monitor + `--include` 複数」で監視する。
 
 **動作確認** (Director 側で):
 ```bash

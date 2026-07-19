@@ -53,6 +53,18 @@ scripts/
 - **配布ファイル末尾の `Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/<path>` 行を壊さない。** `XXXXXXX` はプレースホルダのまま commit する（導入時に HEAD commit へ置換される）。path 部分は自身の配布先パスと一致させる
 - **`pdh-update` skill の更新手順が、追加した配布物をカバーしているか確認する**
 
+## どこに書くかの判断（CLAUDE.md / PDH-AGENTS.md / skill）
+
+ルールを追加するとき、次の 3 問で置き場所を決める。1 つでも「skill」を指すなら skill に置く。
+
+1. **プロジェクト固有か、PDH 共通か。** 固有なら `CLAUDE.md`、共通なら skill か `PDH-AGENTS.md`
+2. **常に必要か、特定の場面だけか。** `CLAUDE.md` と `PDH-AGENTS.md` は常時コンテキストに載り、skill は呼ばれた時だけ載る。**「常に効いていないと事故る」ものだけが常時側の資格を持つ**
+3. **誰が読むのか。** 役割を特定できる（実装担当だけ、PM だけ）なら、その役割の skill
+
+例: 「変更前に `git log` / `git blame` で意図を把握する」は、共通・コード変更時のみ・実装担当なので `pdh-coding` skill が正。配布テンプレートの `CLAUDE.md` に同じことを書くと、コピー先で二重管理になる。
+
+**同じルールが「テンプレートでは重複、実プロジェクトでは固有情報」になることがある。** 配布先ごとに参照先が変わる場合（辿るディレクトリ構成が違う等）は、`CLAUDE.md` にその差分だけを書いてよい。
+
 ## 重複の禁止
 
 - **同じルールを 2 箇所に書かない**（`product-brief.md` の `AI-1`）。PDH 汎用は `templates/PDH-AGENTS.md`、project 固有の書き方例は `templates/CLAUDE.md`、導入・更新手順は `INSTALL.md`、運用ルールは `docs/product-delivery-hierarchy.md`

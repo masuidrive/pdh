@@ -3,8 +3,6 @@
 @product-brief.md を参照すること
 @PDH-AGENTS.md
 
-**設計意図の探し方:** `git blame <file>` でコミットを特定 → コミットメッセージの ticket 名 → `tickets/done/` → `product-brief.md`
-
 ## ディレクトリ構造
 
 <!-- プロジェクトに合わせて書き換えること -->
@@ -166,7 +164,7 @@ Bash(
 
 ## tmux 環境
 
-- **Director (window 0) とワーカー window は異なる環境で動作する可能性がある**。典型例: Director がホスト上、ワーカーが Docker 内（またはその逆）
+- **Director の window とワーカー window は異なる環境で動作する可能性がある**。典型例: Director がホスト上、ワーカーが Docker 内（またはその逆）。Director は `tmux-director` skill を起動した window であって、特定の window 番号ではない
 - ファイルパス、DB 接続、ポートアクセスが環境間で異なることを前提にする。worktree の `.git` パスなど、環境依存の設定に注意
 - **tmux capture で worker の入力欄に灰色のテキストが見えても無視する**。それは Tab で確定する補完候補 (autocomplete ghost) であり、ユーザの書きかけ入力ではない
 

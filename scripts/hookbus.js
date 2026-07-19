@@ -62,7 +62,7 @@
 //         description: "tmux worker idle events",
 //         persistent: true
 //       })
-//     ⚠ --cursor 必須: 省略すると cursor identity が whoami (Director の %0) に fallback し、
+//     ⚠ --cursor 必須: 省略すると cursor identity が whoami (実行中の pane 自身の key) に fallback し、
 //     複数 pull (Monitor 2 つ / 手動 pull) が同じ cursor を共有して互いに advance しイベントを
 //     取り逃す。固有 id を渡し、起動前に consumers/<urlencode(id)>.cursor を log size に直書きして
 //     末尾 seed する (offset 0 からだと全 backlog を replay し通知洪水)。
