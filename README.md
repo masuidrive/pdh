@@ -102,7 +102,7 @@ PDH が engine に要求するのは 2 つだけ。
 
 ## tmux Director
 
-tmux 上で複数の Claude Code セッションを走らせている場合に、別 window の Claude Code を監督・指示するためのスキル。
+tmux 上で複数の Claude Code セッションを走らせている場合に、別 window の Claude Code を監督・指示するためのスキル。**Claude Code 専用**（hook 機構・slash command・worktree に依存するため。codex を使う場合は pdh-dev の subprocess worker 方式を使う）。
 
 - **Director (監督)** として振る舞い、自分ではコードを書かず、別 window の Claude Code に指示を出して作業を監視する
 - PDH ワークフロー (`PDH-open` → `PDH-ticket-review` → `PDH-ticket-human-review` → `PDH-implement` → `PDH-review` → `PDH-verify` → `PDH-human-review` → `PDH-close`) の遵守を監視し、逸脱 (テスト未実行、E2E 省略、AC 未達、human gate スキップ等) を検知して是正指示を出す
@@ -129,7 +129,8 @@ Claude Code で `tmux-director` と入力すると起動する。
    SOCK_HASH=$(scripts/hookbus.js whoami | cut -d: -f1)
    CURID="$SOCK_HASH:mon-$(tmux display-message -p '#{window_index}')"    # Director 自身の key と必ず別
    ROOT=/tmp/claude-events-$SOCK_HASH
-   printf '%s\n' "$(stat -c%s "$ROOT/log.ndjson")" > "$ROOT/consumers/${CURID/:/%3A}.cursor"  # cursor を log 末尾へ直書き seed (__seed_no_match__ pull では seed されないため。backlog 再生回避)
+   mkdir -p "$ROOT/consumers"
+   wc -c < "$ROOT/log.ndjson" | tr -d ' ' > "$ROOT/consumers/${CURID/:/%3A}.cursor"  # cursor を log 末尾へ直書き seed (__seed_no_match__ pull では seed されないため。backlog 再生回避)
    ```
    ```
    Monitor({

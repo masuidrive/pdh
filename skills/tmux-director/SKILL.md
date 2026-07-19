@@ -7,7 +7,7 @@ description: "tmux Director: tmux上の別windowで動いているClaude Codeを
 
 **あなたは「慎重な Director」である。迷ったら止まる。先走らない。gate では必ずユーザに聞く。自分の判断で承認・クローズ・実行開始をしない。**
 
-tmux で動いている別 window の Claude Code を管理・監督する。
+tmux で動いている別 window の Claude Code を管理・監督する（**Claude Code 専用**。下記「適用範囲」参照）。
 
 ## あなたの役割
 
@@ -15,11 +15,17 @@ tmux で動いている別 window の Claude Code を管理・監督する。
 
 **重要: 監視ループは Monitor Agent に委任する。**
 
-## engine の選択 (claude / codex)
+## 適用範囲: Claude Code 専用
 
-tmux-director skill を起動した直後、使用する engine が明確でない場合（ユーザが明示的に指定しておらず、会話履歴にも記録がない等）は、`which claude` / `which codex` で利用可能な CLI を確認し、複数ある場合だけユーザに「claude / codex どちらで進めるか」を尋ねる。1 つしか無ければそれを使い、指定済みなら確認不要。
+**この skill は Director / worker とも Claude Code であることを前提とする。** 以下の依存があり、他 engine では成立しない:
 
-選択した engine は window 側 pdh-dev にも引き継がれる前提。TD-2 で window に `/pdh-dev` を送る際にユーザが同じ engine を選ぶのが自然。director 側と window 側で異なる engine を使う意図がある場合のみ、ユーザに都度確認する。
+- **hookbus**: Claude Code の hook 機構（`SessionStart` / `Stop` / `SubagentStop` / `Notification` / `UserPromptSubmit`）に直接依存する
+- **slash command**: `/clear` `/pdh-dev` `/effort` を `tmux send-keys` で literal 送信する
+- **worktree / 応答形式**: `claude --worktree`、`EnterWorktree()`、`AskUserQuestion` の選択肢転送
+
+PDH のフロー自体は engine 中立（`product-brief.md` の `AI-5`）だが、**tmux による他 window の監督だけは Claude Code 固有機構の上に成り立っている**。codex を使う場合は、この skill ではなく pdh-dev `_execution-team.md`「spawn 機構」の subprocess worker 方式を使う。
+
+window 側の実装 worker だけを codex へ委譲する構成（cross-delegate）は、window の Claude Code が `_execution-team.md` に従って行うので、Director 側の前提は変わらない。
 
 ## 概要フロー
 
@@ -167,7 +173,7 @@ send-keys Enter
 - 既存 window 続行: 初回指示に `EnterWorktree({name: "<slug>"})` + `ticket.sh start --worktree` を含める
 - worktree path は `.worktrees/<slug>/` (ticket.sh default)
 - close 時は `ticket.sh close --keep-worktree` で worktree path 維持 (cwd dangling 防止)
-- 詳細は CLAUDE.md 「multi-worktree 並列運用」
+- 詳細は `docs/product-delivery-hierarchy.md`「ブランチ戦略」
 
 ---
 
@@ -186,36 +192,37 @@ hookbus 配線済のプロジェクトでは常に 1 を使うこと。未配線
 ls scripts/hookbus.js && jq '.hooks.Stop' .claude/settings.json
 ```
 
-両方存在すれば配線済。`env.CLAUDE_EVENT_DISABLE == "1"` なら dormant (event 書込ゼロ) なので、director セッションで以下を実施して活性化:
+両方存在すれば配線済。未配線なら INSTALL.md「.claude/settings.json を設定する」の hookbus 版に従って配線する（`.claude/settings.json` は起動時に読まれて固まるので、追加後は全 Claude セッションを再起動する）。
 
-1. `.claude/settings.json` の `env.CLAUDE_EVENT_DISABLE` を `"1"` から外す or 削除 (1 回だけ、project 全体に反映)
-2. Director pane の Claude 起動時に `CLAUDE_EVENT_ROLE=director claude` で起動 — director 自身の hook を除外 (log 汚染防止、Monitor Agent subagent にも env 継承で自動伝播)
-3. Director セッション内で監視対象 worker の key を決定し、**`--include` で明示的に allow-list** を指定して Monitor 起動:
+配線済みなら、監視対象 worker の key を **`--include` の allow-list** で指定して Monitor を起動する。
 
-   ```bash
-   # a) tmux socket hash を取得
-   SOCK_HASH=$(scripts/hookbus.js whoami | cut -d: -f1)
+**⚠ 以下の値は Bash で取得したあと、得られたリテラル値を Monitor のコマンド文字列へ埋め込むこと。** シェル変数はツール呼び出しをまたいで持続しないため、`$CURID` のまま Monitor へ渡すと空文字に展開される。
 
-   # b) 監視対象 pane の key を決める (TD-1 で選んだ pane_id)
-   #    例: w1=%10、w2=%11、w3=%12 の場合、key は "<SOCK_HASH>:%10" 等
+```bash
+# a) tmux socket hash と Monitor 専用の cursor id を求めて表示する
+SOCK_HASH=$(scripts/hookbus.js whoami | cut -d: -f1)
+CURID="$SOCK_HASH:mon-$(tmux display-message -p '#{window_index}')"   # Director 自身の key と必ず別
+ROOT=/tmp/claude-events-$SOCK_HASH
 
-   # c) ⚠ Monitor 専用の固有 cursor id を決める (Director 自身の key と必ず別。理由は下記)
-   CURID="$SOCK_HASH:mon-$(tmux display-message -p '#{window_index}')"
+# b) cursor を log 末尾へ seed し、offset 0 からの全 backlog 再生を避ける
+#    ⚠ `pull --include <no-match>` 方式は cursor file を作らないので seed されない (実測)
+#    cursor file 名は cursor id を URL-encode したもの (hookbus.js の encodeURIComponent)。
+#    cursor id に `%` を含めない限り ':' だけが %3A になる
+mkdir -p "$ROOT/consumers"
+wc -c < "$ROOT/log.ndjson" | tr -d ' ' > "$ROOT/consumers/${CURID/:/%3A}.cursor"
 
-   # d) cursor を log 末尾に seed して offset 0 からの全 backlog 再生を回避する。
-   #    ⚠ `pull --include <no-match>` 方式は cursor file を作らず seed されない (実測)。
-   #    cursor file (filename は CURID の ':' を %3A に URL-encode) に log size を直書きするのが確実:
-   ROOT=/tmp/claude-events-$SOCK_HASH
-   printf '%s\n' "$(stat -c%s "$ROOT/log.ndjson")" > "$ROOT/consumers/${CURID/:/%3A}.cursor"
-   ```
+echo "CURID=$CURID"    # ← この値を次の Monitor コマンドへ literal で埋め込む
+```
 
-   ```
-   Monitor({
-     command: "env -u CLAUDE_EVENT_DISABLE scripts/hookbus.js pull --cursor $CURID --include <w1-key> --include <w2-key> --include <w3-key> --follow",
-     description: "tmux worker idle events",
-     persistent: true
-   })
-   ```
+監視対象 pane の key は `<SOCK_HASH>:<pane_id>`（pane_id は TD-1 で選んだもの。例 `%10`）。
+
+```
+Monitor({
+  command: "scripts/hookbus.js pull --cursor <上で表示された CURID> --include <w1-key> --include <w2-key> --follow",
+  description: "tmux worker idle events",
+  persistent: true
+})
+```
 
    `--include` 未指定なら **全 worker の event** が流れる (無関係な pane も含む)。監視対象を絞るには明示必須。Director 自身の key は include list にないので自然に yield されない。
 
@@ -229,24 +236,7 @@ ls scripts/hookbus.js && jq '.hooks.Stop' .claude/settings.json
 
 ### 新規プロジェクトでの配線 (未配線時のみ)
 
-scripts/hookbus.js をコピーして `.claude/settings.json` に以下を追加:
-
-```json
-{
-  "env": {
-    "CLAUDE_EVENT_DISABLE": "1"
-  },
-  "hooks": {
-    "SessionStart":  [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
-    "Stop":          [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
-    "SubagentStop":  [{"hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}],
-    "Notification":  [{"matcher":"idle_prompt|permission_prompt",
-                       "hooks":[{"type":"command","command":"scripts/hookbus.js event","timeout":5}]}]
-  }
-}
-```
-
-Default で dormant (`CLAUDE_EVENT_DISABLE=1`) なので配線しても既存 Claude の挙動は変わらない。上記「配線チェック」→「活性化」手順で切替え。詳細は `scripts/hookbus.js` ヘッダコメント参照。
+配線手順（`scripts/hookbus.js` の配置と `.claude/settings.json` の hooks ブロック）は **INSTALL.md「.claude/settings.json を設定する」の hookbus 版が正**。ここには複製しない。hook の command は `"$CLAUDE_PROJECT_DIR/scripts/hookbus.js"` と絶対化する（相対パスだと worker が別ディレクトリへ cd した直後の Stop hook で not found になる）。
 
 ---
 
@@ -506,7 +496,7 @@ window が是正指示を **2回送っても同じ問題を繰り返す** 場合
 
 **ブランチ分離:** 各 window が別ブランチで作業するため、`ticket.sh start` がブランチを自動作成する。同一ファイルを複数チケットが変更する場合はマージ時にコンフリクトが発生する可能性がある。
 
-**Worktree 分離:** 各 window が Claude Code ネイティブ worktree (`claude --worktree <slug>` または `EnterWorktree({name: ...})`) に入ることで、それぞれ独立した cwd + working tree で作業する。Bash tool cwd の持続バグ (#31471 / #42837) の影響を受けない。ticket.sh start/close は依然 main repo で走るため、全 window で `flock -x /tmp/<project>-ticket.lock bash ticket.sh ...` を徹底すること (CLAUDE.md「multi-worktree 並列運用」参照)。
+**Worktree 分離:** 各 window が Claude Code ネイティブ worktree (`claude --worktree <slug>` または `EnterWorktree({name: ...})`) に入ることで、それぞれ独立した cwd + working tree で作業する。Bash tool cwd の持続バグ (#31471 / #42837) の影響を受けない。ticket.sh start/close は依然 main repo で走るため、全 window で `flock -x /tmp/<project>-ticket.lock bash ticket.sh ...` を徹底すること (`docs/product-delivery-hierarchy.md`「ブランチ戦略」参照)。
 
 ## worker の /clear タイミング
 

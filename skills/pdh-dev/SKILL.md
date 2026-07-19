@@ -7,7 +7,7 @@ description: "Ticket-centric 開発ワークフロー (1 user + AI 体制 single
 
 `Product Brief → Ticket → ticket-human-review → 実装 → review → verify → human-review → close` の順で、1 ticket を1 work unitとして処理する。
 
-実行モデルはteamのみとし、PMが各phaseをworkerへ委譲する。
+実行モデルはteam前提とし、PMが各phaseをworkerへ委譲する。
 
 ## 読み込み順序
 
@@ -26,7 +26,7 @@ description: "Ticket-centric 開発ワークフロー (1 user + AI 体制 single
 | `_execution-team.md` | teamの役割、spawn、stage実行手順 |
 | `_subagent-context.md` | 全workerに渡す共通promptと役割別指示 |
 
-**spawnは必須。利用不能時は単独続行せず中止して報告する。**
+**spawnできない環境で単独実行をteamと同等に扱わない。** 制限を説明し、確信度やgateの意味に影響するならユーザへ確認する（`PDH-AGENTS.md` Execution Model）。
 headless botもCLI subprocessでworkerをspawnする。
 
 Coding Engineer、QA、reviewer、AC裏取り、Surface Observerはstage別workerに分ける。

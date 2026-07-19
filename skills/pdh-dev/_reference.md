@@ -86,12 +86,17 @@ Design Decisionや実装詳細を自主的に書かない。
 |---|---|
 | Status | 冒頭に現在stageとtimestamp |
 | PDH-ticket-review | Why、AC、Design Decisions、Out-of-scope、Dependencies、Invariants。AC承認は得ない |
-| PDH-ticket-human-review | 修正点、概要、達成内容、AC、Out-of-scope、判断点、AC承認 |
 | PDH-implement | commit、実装中の判断、scope判断 |
-| PDH-review | attempt別のreview、finding、対応 |
+| PDH-review | attempt別のreview結果と対応 |
+| PDH-review > Findings (PDH-review-N) | findingの台帳。検出時点で1行追加し、判定列（採用 / follow-up / 棄却）と理由を埋める |
 | PDH-verify | process checklistと証拠 |
+| Technical reference 更新 | この ticketの差分に因果がある追記・上書き、または「該当なし」と理由 |
 | PDH-human-review | review依頼、確認手順、承認または差し戻し |
 | Discoveries | 想定外の事実 |
+
+section構成の正は`.ticket-config.yaml`の`note_content`。ここに無いsectionを前提にしない。
+`PDH-ticket-human-review`のAC承認は専用sectionを持たず、Statusと`PDH-ticket-review`へ記録する。
+attempt 2以降は`### Findings (PDH-review-2)`のように見出しを自分で追加する。
 
 次を守る。
 

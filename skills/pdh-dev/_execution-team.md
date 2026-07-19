@@ -85,8 +85,8 @@ codex exec -o "$d/result.txt" < "$promptfile" 2> "$d/stderr.log"
 Claude CodeがmainでcodexをworkerへspawnするときはBashツールで直接実行する。codex plugin等の別経路があっても使わない。
 
 - `run_in_background: true`で非同期にし、`timeout`は7200000（120分）にする
-- `-o <dir>/result.txt`で最終結果だけをfileへ出す。stdinは`< /dev/null`で即EOF、stderrは`2> <dir>/stderr.log`へ分離する
-- promptが長文・複数段落・特殊文字・日本語主体ならshell quoting失敗を避けてfile + stdinで渡す
+- `-o <dir>/result.txt`で最終結果だけをfileへ出し、stderrは`2> <dir>/stderr.log`へ分離する
+- **promptの渡し方は2通り。** 長文・複数段落・特殊文字・日本語主体ならshell quoting失敗を避けてfileへ書き出し`< <dir>/prompt.txt`で渡す。短くquotingが安全なものだけ引数で渡してよく、その場合だけstdinを`< /dev/null`で即EOFにする
 - worktree中のticketへ実行するときは`cd <worktree> && codex exec ...`の形にする（custom statusLineがある環境でcwdが毎回resetされる既知bug [anthropics/claude-code#31471](https://github.com/anthropics/claude-code/issues/31471) の回避）
 - 完了通知は軽量messageで届くので、result.txtだけReadする（通常~2KB）。stderr.logは失敗時に`tail -50`程度で部分読みし、`cat`で全部流し込まない
 
@@ -195,8 +195,3 @@ PMは差分、検証結果、ユーザ自身の確認手順を提示し、明示
 ### stage 遷移の宣言
 
 stageを移るたびにユーザへ宣言する（`_reference.md`「stage 遷移の宣言」）。
-
-### main engine の選択
-
-main engineが未指定で曖昧な場合だけ`which codex`でCLI存在を確認し、ユーザへclaudeまたはcodexの選択を求める。
-headless環境では実行系の指定を使い、指定がなければ既定claudeとする。
