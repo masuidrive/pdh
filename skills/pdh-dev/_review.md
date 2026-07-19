@@ -134,7 +134,14 @@ reviewer間またはlens間で結論が割れたら、unionや多数決で流さ
 ここにはDirectorの記録手順だけを置く。
 
 - 判定は 採用 / follow-up / 棄却 の3種。実在する範囲外問題はfollow-up、false positiveや前提誤りは棄却とする
-- findingはnoteの`### Findings (PDH-review-N)`表へ、**検出した時点で1行追加する**。判定列と理由は後で埋めてよいが、attempt終了後にまとめて書き起こさない
+- findingはnoteの`### Findings (PDH-review-N)`表へ、**検出した時点で1行追加する**。判定列と理由は後で埋めてよいが、attempt終了後にまとめて書き起こさない。表の形式は次で固定する（noteテンプレートに無い場合はDirectorがこの見出しごと追加する）
+
+  ```
+  | # | 観点 | Sev | 要旨 | 判定 | 理由 |
+  |---|---|---|---|---|---|
+  ```
+
+  観点は網羅探索チェックリストのlabel、Sevは Critical / Major / follow-up、判定は 採用 / follow-up / 棄却。
 - attempt 2以降は`### Findings (PDH-review-2)`のように見出しを自分で追加する
 - 修正確認attemptで出た新規findingも、follow-up / 棄却にしたものを含めて同じ表へ1行追加する（`PDH-human-review`はこの表から提示分を抜き出すため、載せないと報告漏れになる）
 

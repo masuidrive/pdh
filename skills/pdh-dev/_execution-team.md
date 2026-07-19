@@ -64,7 +64,9 @@ projectの実行profileとapproval policyを優先し、承認済みin-process s
 ### worker prompt の組み立て
 
 promptは「共通context + 役割別指示 + task固有依頼」で組み立てる。
-共通contextは`_subagent-context.md`を使い、`<TICKET_FILE>`、`<NOTE_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`を実値で埋める。
+共通contextは`_subagent-context.md`を使い、`<TICKET_FILE>`、`<NOTE_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`、`<TESTS_DIR>`、`<TMP_DIR>`を実値で埋める。
+`<TESTS_DIR>`と`<TMP_DIR>`は`ticket.sh start`/`restore`出力の`tests:`/`tmp:`パスを使う。workerは`ticket.sh`を実行しないので、PMが埋めないとworkerはこのパスを知る手段がない。
+レンズ1 reviewerだけは例外で、`<TICKET_FILE>`と`<NOTE_FILE>`を渡さない。
 promptはfileへ書き出し、stdinでworkerへ渡す。
 
 ### 起動コマンド（engine 別・権限は環境規約に従う）
