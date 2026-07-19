@@ -100,16 +100,12 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 
 pdh-dev が spawn するチームメンバーの engine / モデル設定。
 
-**既定（指定が無いとき）= 全 worker は main（PM）と同じ engine**。main が claude なら worker も claude、codex なら worker も codex。特定 engine をフローにハードコードしない。spawn 機構は engine 中立な subprocess（`claude -p` / `codex exec`、結果はファイル）で、混在も可（詳細は pdh-dev `_execution-team.md`「エンジン割り当て」「spawn 機構」）。
+engine 割り当ての規則（worker 既定 = main と同一、main engine の選び方、cross-delegate の適用範囲、spawn 機構）は pdh-dev `_execution-team.md`「エンジン割り当て」「spawn 機構」が正。ここには **この project 固有の上書きだけ**を書く。
 
-**main engine の選択**: 未指定で曖昧なときのみ `which codex` で確認し、ユーザに「claude / codex どちらで進めるか」を確認（既指定なら不要、セッション中は継続）。headless/CI 文脈では、その実行系が定義する環境変数を main engine とする（無ければ既定 claude）。
-
-**cross-delegate（任意・推奨既定値）**: 両 CLI が install されている環境では、**Coding Engineer（実装 worker）だけを main と逆の engine へ委譲**できる（pdh-dev `_execution-team.md`「エンジン割り当て」の cross-delegate 構成）。セッションで最初に実装へ入る時に 1 回だけユーザへ委譲可否を確認し、回答をセッション既定とする。委譲時の推奨既定値:
+<!-- cross-delegate を使う場合の、この project での推奨モデル。モデル名は時間で古びるので最新に読み替えて更新すること -->
 
 - main = claude → 実装 worker = `codex exec -m gpt-5.6-sol -c model_reasoning_effort="medium"`（機械的な実装は `medium`、統合・判断を含む難しい実装は `high`）
 - main = codex → 実装 worker = `claude -p --model opus`
-
-Coding Engineer 以外の worker は main と同一 engine のまま。モデル名は時間で古びるので、project 側で最新に読み替えて更新すること。
 
 **下表は「役割ごとに engine / model を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。PDH stage の定義と gate 条件は `PDH-AGENTS.md` と `/pdh-dev` を正とし、この表は project 固有の role / model override だけを書く。
 
@@ -161,11 +157,5 @@ Bash(
 - timeout は 120分（7200000ms）に設定すること
 - **worktree 中の ticket に対して実行する場合は必ず `cd <worktree> && codex exec ...` の形にする**（custom statusLine がある環境で cwd が毎回リセットされる既知バグ [anthropics/claude-code#31471](https://github.com/anthropics/claude-code/issues/31471) を回避するため）
 - **コンテキスト汚染対策**: 完了通知は `<task-notification>` として軽量メッセージで届く（出力本体は含まない）。result.txt だけ Read すれば ~2 KB で済む。stderr.log は失敗時のみ `tail -50` 程度で部分読みし、`cat` で全部流し込まない
-
-## tmux 環境
-
-- **Director の window とワーカー window は異なる環境で動作する可能性がある**。典型例: Director がホスト上、ワーカーが Docker 内（またはその逆）。Director は `tmux-director` skill を起動した window であって、特定の window 番号ではない
-- ファイルパス、DB 接続、ポートアクセスが環境間で異なることを前提にする。worktree の `.git` パスなど、環境依存の設定に注意
-- **tmux capture で worker の入力欄に灰色のテキストが見えても無視する**。それは Tab で確定する補完候補 (autocomplete ghost) であり、ユーザの書きかけ入力ではない
 
 # Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/CLAUDE.md

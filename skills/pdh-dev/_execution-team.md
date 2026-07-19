@@ -51,6 +51,7 @@ worker割当変更をDirector自身のmodel変更の代用にしない。
 - cross-delegateはCoding Engineerだけに許す。逆engine CLIの存在を確認し、session初回implement時に1回だけユーザへ確認し、その回答を以後のticketへ適用する
 - cross-delegate時もCoding Engineer以外はmainと同一engineを使う
 - 特定engineをworkflowへhardcodeしない
+- main engineが未指定で曖昧なときだけ、利用可能なCLIを確認してユーザへ「どちらで進めるか」を聞く。既指定なら聞かず、session中は同じengineを継続する。headless / CI文脈では、その実行系が定義する環境変数をmain engineとする
 
 ## spawn 機構（engine 中立 = subprocess / 結果はファイル）
 

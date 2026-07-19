@@ -542,7 +542,9 @@ active / idle の判断は Director が毎回行い、全 worker の状態が変
 
 ## 留意事項
 
-- window の Claude は Docker 内で動いている可能性がある。プロセスやコマンドの実行時にはそれを留意する
+- **Director の window とワーカー window は異なる環境で動作する可能性がある。** 典型例: Director がホスト上、ワーカーが Docker 内（またはその逆）。Director は本 skill を起動した window であって、特定の window 番号ではない
+- ファイルパス、DB 接続、ポートアクセスが環境間で異なることを前提にする。worktree の `.git` パスなど、環境依存の設定に注意
+- **tmux capture で worker の入力欄に灰色のテキストが見えても無視する。** それは Tab で確定する補完候補 (autocomplete ghost) であり、ユーザの書きかけ入力ではない
 - PDH ワークフローから大きく外れる場合は、window への指示を止め、ユーザにその旨を伝えて判断を仰ぐ
 
 Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/tmux-director/SKILL.md
