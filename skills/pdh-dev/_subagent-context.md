@@ -46,6 +46,20 @@ workerは`ticket.sh`を実行しない。上の2パスはPMがspawn promptで与
 `<SCOPE>`内だけを変更する。
 範囲外の問題は直さず結果でPMへ報告する。
 
+### 書き込み境界
+
+「read-only役」は無筆記の意味ではない。役割ごとに書いてよい先が違う。
+
+| 役割 | 書いてよい先 |
+|---|---|
+| Coding Engineer | `<SCOPE>`内のcode、test、`<TESTS_DIR>`、`<TMP_DIR>`、`<NOTE_FILE>`、`<RESULT_FILE>` |
+| QA Engineer | `<TESTS_DIR>`、`<TMP_DIR>`、`<RESULT_FILE>` |
+| reviewer / AC裏取り / Surface Observer | `<TMP_DIR>`、`<RESULT_FILE>`のみ |
+
+reviewer、AC裏取り、Surface Observerはproduct code、test、doc、`<NOTE_FILE>`を変更しない。
+観察と判断の記録は`<RESULT_FILE>`へ書き、作業メモやscreenshot等の中間生成物は`<TMP_DIR>`へ置く。
+これらの役がrepoの成果物へcommitやfile変更を行ったら、PMは差し戻す。
+
 ### 出力の返し方
 
 - `<RESULT_FILE>`へ要約、結論、根拠、次actionに絞った最終結果を書く
@@ -80,7 +94,7 @@ code、identifier、command、log、conventional-commit prefixは原文を保つ
 - CriticalとMajorを優先し、観点label、file:location、問題、推奨対応の形式で報告する。Severityの定義は`PDH-AGENTS.md`「Verification」が正で、自己流のrubricを作らない
 - findingは`<RESULT_FILE>`へ報告するだけでよい。noteの`### Findings`表へ書くのはPMである
 - Ticket不可侵を確認する
-- read-onlyとし、修正しない
+- 「書き込み境界」に従い、product code、test、doc、`<NOTE_FILE>`を修正しない
 - severityを修正命令にしない。採否とcurrent ticketへの包含はPMが判断する
 - 修正確認では指定finding、再現条件、修正diffだけを確認し、全diffや新規findingへ広げない
 - 修正が直接生んだCriticalまたはMajor regressionだけを元findingと分けて報告する
