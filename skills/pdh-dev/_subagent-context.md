@@ -77,7 +77,8 @@ code、identifier、command、log、conventional-commit prefixは原文を保つ
 - promptとticketから変更目的とdiff scopeを把握する
 - 対象commit SHAを結果へ明記し、その後のcommitをreview済み扱いしない
 - 最初に`.claude/skills/pdh-dev/_review.md`（Codexは`.agents/skills/pdh-dev/_review.md`）を読み、「reviewerの網羅探索チェックリスト」の8観点に従って系統的にreviewする。該当する観点は1 findingで止めず同種patternを全探索する
-- CriticalとMajorを優先し、観点label、file:location、問題、推奨対応の形式で報告する
+- CriticalとMajorを優先し、観点label、file:location、問題、推奨対応の形式で報告する。Severityの定義は`PDH-AGENTS.md`「Verification」が正で、自己流のrubricを作らない
+- findingは`<RESULT_FILE>`へ報告するだけでよい。noteの`### Findings`表へ書くのはPMである
 - Ticket不可侵を確認する
 - read-onlyとし、修正しない
 - severityを修正命令にしない。採否とcurrent ticketへの包含はPMが判断する
