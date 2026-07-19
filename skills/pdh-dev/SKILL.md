@@ -1,6 +1,6 @@
 ---
 name: pdh-dev
-description: "Ticket-centric 開発ワークフロー (1 user + AI 体制 single flow)。1 ticket = 1 work unit、実装前に ticket-human-review で AC 承認を取り、実装後に review / verify / human-review を行う。『開発開始』『実装して』『このチケットやって』『start dev』『pdh dev』『ticket dev』『チケット開発』で使う。新規チケット作成や既存チケット開始にも使う。"
+description: "Ticket-centric 開発ワークフロー。1 ticket = 1 work unit、実装前に ticket-human-review で AC 承認を取り、実装後に review / verify / human-review を行う。『開発開始』『実装して』『このチケットやって』『start dev』『pdh dev』『ticket dev』『チケット開発』で使う。新規チケット作成や既存チケット開始にも使う。"
 ---
 
 # PDH Dev — Ticket-centric 開発ワークフロー
@@ -8,35 +8,22 @@ description: "Ticket-centric 開発ワークフロー (1 user + AI 体制 single
 `Product Brief → Ticket → ticket-human-review → 実装 → review → verify → human-review → close` の順で、1 ticket を1 work unitとして処理する。
 
 実行モデルはteam前提とし、PMが各phaseをworkerへ委譲する。
+**spawnできない環境で単独実行をteamと同等に扱わない。** 制限を説明し、確信度やgateの意味に影響するならユーザへ確認する（`PDH-AGENTS.md`「Execution Model」）。headless botもCLI subprocessでworkerをspawnする。
 
-## 読み込み順序
+## この skill の読み方
 
-次の順で読む。
+`product-brief.md`、`docs/product-delivery-hierarchy.md`、`PDH-AGENTS.md`、`CLAUDE.md`（と存在すれば`CLAUDE.local.md`）を先に読む順序は`PDH-AGENTS.md`「Read Order」が正。
 
-| ファイル | 内容 |
-|---|---|
-| `PDH-AGENTS.md`（存在すれば） | PDH汎用のstage、gate、worker、verifyルール |
-| `CLAUDE.md` | project固有ルール、テストコマンド、approval policy、tool/model上書き |
-| `CLAUDE.local.md`（存在すれば） | gitignore済みの環境固有メモ。secret値は置かない |
-| `_principles.md` | 最重要原則と設計選択 |
-| `_reference.md` | 用語、stage遷移、ticket/note、AC、責務境界、self-check |
-| `_flow.md` | 8つの`PDH-*` stageとchecklist |
-| `_review.md` | review、網羅探索、収束診断、裏取り、品質ルール |
-| `_collaboration.md` | ユーザ相談と中止 |
-| `_execution-team.md` | teamの役割、spawn、stage実行手順 |
-| `_subagent-context.md` | 全workerに渡す共通promptと役割別指示 |
+そのうえで、この skill の分冊を必要に応じて開く。
 
-**spawnできない環境で単独実行をteamと同等に扱わない。** 制限を説明し、確信度やgateの意味に影響するならユーザへ確認する（`PDH-AGENTS.md` Execution Model）。
-headless botもCLI subprocessでworkerをspawnする。
+| ファイル | 内容 | 主に読むとき |
+|---|---|---|
+| `_principles.md` | 最重要原則と設計選択 | 判断に迷ったとき |
+| `_reference.md` | 用語、stage遷移、ticket/note構造、責務境界 | 記録先や用語を確認するとき |
+| `_flow.md` | 8つの`PDH-*` stageとchecklist | 各stageの実行時（中心的な分冊） |
+| `_review.md` | review、網羅探索、収束診断、裏取り | `PDH-review` |
+| `_collaboration.md` | ユーザ相談と中止 | 判断不能・blocker時 |
+| `_execution-team.md` | teamの役割、engine割当、spawn機構 | worker を spawn するとき |
+| `_subagent-context.md` | 全workerに渡す共通promptと役割別指示 | 同上 |
 
-Coding Engineer、QA、reviewer、AC裏取り、Surface Observerはstage別workerに分ける。
-PMはworkerのPASSを承認扱いせず、正典、ticket、diff、実コマンド出力、note証跡を照合し、不足があれば差し戻す。
-
-PMは着手時に`PDH-*` checklistをnoteへ置き、証拠が揃うまで完了扱いにしない。
-全スイートの固定コマンドは`scripts/test-all.sh`とし、サブセットや影響なし判断で代替しない。
-検証完了は対象SHA、実行コマンド、`Passed: N / N`等の実出力をnoteへ貼ってから主張する。
-
-通常は`PDH-review`と`PDH-verify`まで自動で進め、`PDH-human-review`で人間レビューを依頼する。
-依頼はnoteだけで済ませず、会話でやったこと、判断ポイント、おすすめを先頭にした次の選択肢を説明する。
-**ユーザの明示承認なしに`PDH-close`へ進まず、ticket全体を完了と報告しない。**
-疑問、判断不能、blocker、完了見込みなしが出た場合は、その時点でユーザに確認する。
+gate の意味と判定基準（stage flow、severity、scope、証拠要件）は`PDH-AGENTS.md`が正。この skill には手順を置く。

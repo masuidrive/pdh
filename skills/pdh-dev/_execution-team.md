@@ -163,7 +163,7 @@ AC承認は次のhuman reviewまで得ない。
 
 ### PDH-ticket-human-review: 実装前の人間レビュー (PM が担当)
 
-PMはticket修正点、概要、達成内容、AC、Out-of-scope、判断点を会話で説明し、明示承認までimplementへ進まない。
+PMが担当し、提示内容は`_flow.md`の`PDH-ticket-human-review`に従う。明示承認までimplementへ進まない。
 
 ### PDH-implement: 実装
 
@@ -173,20 +173,17 @@ PMはCoding Engineer 1人をspawnする。
 ### PDH-review: 品質検証
 
 初回reviewは1人以上を並行起動し、同一SHAのdiff全体を見せる。
-修正後は元finding、再現条件、修正diffだけを同じreviewerへ確認させる。
-finding修正はCoding Engineer、test再実行はQAへ委譲し、重要findingが残らないまでattemptを記録する。
-
-stage遷移をユーザへ宣言する。
+finding修正はCoding Engineer、test再実行はQAへ委譲する。
+attempt運用と修正確認の範囲は`_review.md`が正。
 
 ### PDH-verify: 完了検証
 
 AC裏取りAgentを1人spawnし、各ACの実達成を検証させる。
-Surface Observer前に`./scripts/dev-server.sh --seed`を実行する。
-外部surface変更時はObserverをspawnし、browser surfaceは実composed pageで対象SHA付き証跡を残す。
+Surface Observer前に`./scripts/dev-server.sh --seed`を実行し、外部surface変更時はObserverをspawnする。観察方法と証拠要件は`PDH-AGENTS.md`「Browser And Surface Checks」が正。
 
 ### PDH-human-review: 人間レビュー
 
-PMは差分、検証結果、ユーザ自身の確認手順を提示し、明示承認までcloseへ進まない。
+PMが担当し、提示内容は`_flow.md`の`PDH-human-review`に従う。明示承認までcloseへ進まない。
 
 ### PDH-close: クローズ
 
