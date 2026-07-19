@@ -67,9 +67,15 @@ The review and verification rules are:
   security, or stability. Report unmapped code, dead code documented as active,
   governance mixing, and reactive-fix growth as defects. The Director retains
   code only for one of those three reasons and records a one-line rejection reason.
-- **Cross-model review**: changes to authentication, authorization, database
-  schema, secrets, data deletion, or billing require at least one independent
-  review by a model different from the generator. If one review wing cannot
+- **Independent review triggers**: the following diffs must not skip independent
+  review — authentication, authorization, session/token/scope/ACL/group checks;
+  destructive or irreversible operations and the paths that reach them; database
+  migrations or schema changes; secrets; data deletion; billing; deploy
+  procedures; external API contracts; and newly exposed surface (new endpoint,
+  MCP tool, CLI subcommand). Reviewers on these diffs look for fail-open and
+  misuse before the happy path.
+- **Cross-model review**: for those same triggers, at least one of the reviews
+  must come from a model different from the generator. If one review wing cannot
   complete, substitute a different-model independent reviewer plus the
   Director's direct code read, and record why.
 - **Rewind discipline**: before rewinding implementation or review work, pin

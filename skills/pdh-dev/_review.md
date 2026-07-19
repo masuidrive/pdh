@@ -11,7 +11,7 @@ flowchart TD
     RB --> RC{"スコープ・過剰実装 gate を満たす?"}
     RC -- "いいえ" --> RN{"無関係な Critical/Major?"}
     RN -- "はい" --> RM["自動進行を止めて user へ相談"]
-    RN -- "いいえ" --> RI["棄却 / follow-up を記録して完了"]
+    RN -- "いいえ" --> RI["Findings 表の判定列を確定して完了"]
     RC -- "はい" --> RK["最小修正と複雑度差分を比較"]
     RK --> RL{"単純な修正方針を確定できる?"}
     RL -- "いいえ" --> RM
@@ -23,13 +23,13 @@ flowchart TD
     RH -- "はい" --> RI
 ```
 
-### Severity rubric
+### Severity の運用
 
-検出頻度は信頼度のヒントであって重要度ではない。
+Critical / Major / follow-up の定義は`PDH-AGENTS.md`「Verification」のSeverityが正。運用上の補足だけをここに置く。
 
-- Critical：AC未達、security違反、data lossなど、未修正では出荷不可。ユーザが明示受容してもPASSとは記録しない
-- Major：本ticketの変更対象または必要なuser journeyが劣化するが、出荷自体は可能
-- Minor / follow-up：上記以外。既定でfollow-upとし、Minorだけでloopを再開しない
+- 検出頻度は信頼度のヒントであって重要度ではない
+- Criticalはユーザが明示受容してもPASSとは記録しない
+- Minorだけでloopを再開しない
 
 ### 複雑度差分 gate
 
@@ -67,7 +67,7 @@ finding冒頭へ`[同名 symbol sweep]`等の観点labelを付ける。
 ### Review attempt の必須ルール
 
 1. 各reviewerは対象SHAを固定して結果へ明記する
-2. auth、authorization、DB schema、secret、data deletion、billing差分は、生成modelと異なるmodelの独立reviewを最低1本含める。不能時は別model reviewerとDirector直読で代替し、理由をnoteへ残す
+2. 独立review必須triggerとcross-model要件は`PDH-AGENTS.md`「Verification」が正。代替手段と理由記録もそちらに従う
 3. diff全体の網羅探索は初回だけとし、修正後は採用finding、再現条件、修正diffだけを同じreviewerへ渡す
 4. reviewerは事実の再現と解消を判定し、Directorは採用、follow-up、棄却とloop終了を判定する
 5. 完了には、採用CriticalとMajorが最新SHAで解消し、非採用findingの分類と理由がnoteへ必要である。全findingの実装は要求しない
@@ -79,8 +79,7 @@ finding冒頭へ`[同名 symbol sweep]`等の観点labelを付ける。
 同種Criticalが2 attemptで再発したらroot causeを診断してescalateする。
 root causeはticketの実装詳細混入、scope肥大、reviewer prompt偏り、確定値の下流委譲を確認する。
 
-implementationまたはreviewをrewindする前に、既知CriticalとMajorを実行可能なticket-local-testとして`ticket.sh start`/`restore`出力の`tests_dir`パスへ固定する（旧flat形式は`tests/tickets/<id>/`で後方互換）。
-rewind後の独立初回reviewをそのcheckと突合し、rewind理由をnoteへ残す。
+rewind前の手順は`PDH-AGENTS.md`「Verification」のRewind disciplineが正。
 
 `PDH-review-2`以降で初回findingが誤検出、pre-existing、Out-of-scope、user価値非直結と判明したら、追加fixを行わない。
 Discoveryへ記録し、元のACとuser journeyだけをverifyする。
@@ -130,18 +129,14 @@ reviewer間またはlens間で結論が割れたら、unionや多数決で流さ
 
 ## スコープ外問題と過剰実装の扱い
 
-reviewerの出力は修正命令ではなく仮説である。
-reviewerは不足に加え、AC外コード、dead codeを稼働中と誤記するdoc、product差分へのgovernance混入、reactive-fix肥大も欠陥として報告する。
-Directorは次のgateで分類する。
+**判定基準の正は`PDH-AGENTS.md`。** reviewer出力が仮説であること、severityだけでscopeを広げないこと、無関係な実在Critical/Majorは止めてユーザへ相談することは「Execution Model」、same ticketで直す4条件と例外の記録は「Verification」のScope boundary、AC外コード・dead code誤記・governance混入・reactive-fix肥大の報告は同AC traceが正。
 
-1. diffへ残す、またはfinding対応で加えるcodeは、briefまたはACへの直接貢献、security、stabilityのいずれかに限る。無関係変更は除く
-2. same ticketで直すのは、ACまたはWhy未達、current diff regression、同root causeによる出荷済み不具合の再発、またはCriticalかMajorが変更対象user journeyを危険にする場合に限る
-3. 実在する範囲外問題はfollow-up、false positiveや前提誤りは棄却とし、理由をnoteへ1行残す
-   findingはnoteの`### Findings (PDH-review-N)`表へ、**検出した時点で1行追加する**。判定列は後で埋めてよいが、attempt終了後にまとめて書き起こさない
-4. 境界では、修正なしでもAC達成とregressionなしを説明できるかで判定する。例外はACまたはdiffとの因果をnoteへ1行残す
+ここにはDirectorの記録手順だけを置く。
 
-severityだけでscopeを広げない。
-ticketと無関係な実在CriticalまたはMajorは自動吸収も黙ったfollow-up化もせず、作業を止めてユーザへ相談する。
+- 判定は 採用 / follow-up / 棄却 の3種。実在する範囲外問題はfollow-up、false positiveや前提誤りは棄却とする
+- findingはnoteの`### Findings (PDH-review-N)`表へ、**検出した時点で1行追加する**。判定列と理由は後で埋めてよいが、attempt終了後にまとめて書き起こさない
+- attempt 2以降は`### Findings (PDH-review-2)`のように見出しを自分で追加する
+- 修正確認attemptで出た新規findingも、follow-up / 棄却にしたものを含めて同じ表へ1行追加する（`PDH-human-review`はこの表から提示分を抜き出すため、載せないと報告漏れになる）
 
 ## レビュー品質ルール
 
