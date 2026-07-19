@@ -58,7 +58,7 @@ flowchart TD
 3. `product-brief.md`のArchitectural Invariantsと矛盾しないことをticketへ1行宣言する
 4. Design DecisionsとOut-of-scopeが実装workerに十分か確認し、未確定判断は実装前にユーザへ確認する
 5. 未完了Dependencyがあれば着手せず報告する
-6. human review用に修正点、概要、user journey、AC、Out-of-scope、判断点を整理する。このstageではAC承認を得ない
+6. human review用に修正点、概要、user journey、AC、Out-of-scope、判断点、計画を無効化しうるriskとdependencyを整理する。このstageではAC承認を得ない
 
 ## PDH-ticket-human-review. Ticket human review
 
@@ -152,11 +152,7 @@ Why E2E無バイアスlensとAC conformanceおよび妥当性lensをpersona matr
 ## PDH-human-review. 人間レビュー
 
 1. note Statusを`PDH-human-review`へ更新し、verifyまでの証拠がcommit済みであることを確認する
-2. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-human-review`側が正。未対応findingはnoteの`### Findings`表から判定がfollow-upと棄却の行を抜き出して作る
-   - UIは`./scripts/dev-server.sh`のURL、操作、期待表示を示す
-   - APIは`curl`と期待statusおよびresponseを示す
-   - authが必要なら方式、cookieやhelperの取得方法、secretを会話へ貼らない方針、cleanupを説明する
-   - `agent-browser`のcommand列だけをユーザ向け確認手順にしない
+2. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-human-review`側が正。未対応findingは、全attemptの`### Findings (PDH-review-N)`表を横断して判定がfollow-upと棄却の行を抜き出して作る。ユーザ確認用のURLは`./scripts/dev-server.sh`で用意する
 3. **明示承認までcloseしない。**
 4. 差し戻しはimplementへ戻し、reviewから再走する。途中blockerは直ちに確認する
 
@@ -168,15 +164,14 @@ Why E2E無バイアスlensとAC conformanceおよび妥当性lensをpersona matr
 
    ### 完了報告の必須要素
 
+   土台は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-human-review`側と同じ（user journey 1行、AC別の証拠、主要file、verbatimなtest出力、残課題）。close報告では次を追加する。
+
    - literalな1行目へ、user journeyで何ができるようになったかを書く
-   - 各ACの内容、達成状態、検証方法、data出所を報告する。user-facing ACが合成のみなら実data未確認のclose blockerとする
-   - 主要な変更fileを列挙する
+   - 各ACのdata出所を報告する。user-facing ACが合成dataのみなら実data未確認のclose blockerとする
    - main想定状態のuser journey実機証拠をUI screenshot、API response、SDK sample、CLI output等のsurface相応の形で示す
-   - test、E2E、検証はcommandとstdoutまたはstderrをverbatimで貼る。長い場合も合否件数とfailure箇所が分かる末尾を残す
    - merge直後に失うuser-observable機能をyesまたはnoで判定する。yesはdownstream復旧予定でもclose blockerとする
    - 何がどう変わり何ができるかを専門語なしで1〜2行にする
    - commit数等の内部mechanicsを価値要約へ並べず、注意事項だけNotesへ書く
-   - 懸念事項と残課題を報告する
    - ticket候補は既定ゼロとする。実際に触れて見つけた欠陥、gap、deferredだけを、diff、note、test証拠とともに挙げる
 2. 差し戻し理由をDiscoveriesへ記録して`PDH-implement`へ戻り、修正後は`PDH-review`から再走する
 3. 承認後に`./ticket.sh close`を実行する

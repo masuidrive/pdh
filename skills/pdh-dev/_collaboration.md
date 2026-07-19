@@ -10,14 +10,13 @@
 4. 重大なsecurity問題を発見した場合
 5. テスト、review、外部依存、環境制約により、同一session内に`PDH-human-review`へ到達する見込みを説明できない場合
 
-相談では論点と選択肢を会話で示し、おすすめを先頭に置き、各tradeoffを1行で添える。
+相談の提示形式は`PDH-AGENTS.md`「Reporting」に従い、各選択肢にtradeoffを1行添える。
 同一ticketと説明できない実在問題は、current ticketへ含める必要がある場合を除きfollow-upにする。
 
 通常は`PDH-review`と`PDH-verify`まで自動で進める。
 上の条件に該当したらhuman review gateを待たず、noteに加えて会話で状況、判断、選択肢を示す。
 
-承認には`OK`、`yes`、`進めて`、`閉じて`などの明示応答が必要である。
-初期選択、おすすめ、timeout、default、沈黙を回答や承認として扱わない。
+承認には`OK`、`yes`、`進めて`、`閉じて`などの明示応答が必要である（規範は`PDH-AGENTS.md`「Verification」Human authority）。
 
 ## 中止フロー
 

@@ -23,7 +23,7 @@ start_success_message: |
   `docs/product-delivery-hierarchy.md` のプロセスの一部として処理するチケットを開始しました。
   `current-ticket.md` の Why / Acceptance Criteria / Architectural Invariants check / 確定判断 / Out-of-scope を確認してから作業を開始してください。
   判断に迷ったら `product-brief.md` の Constraints / Architectural Invariants を確認。
-  PDH labels: PDH-open → PDH-ticket-review → PDH-implement → PDH-review → PDH-verify → PDH-human-review → PDH-close
+  PDH labels: PDH-open → PDH-ticket-review → PDH-ticket-human-review → PDH-implement → PDH-review → PDH-verify → PDH-human-review → PDH-close
 
 restore_success_message: |
 
@@ -50,18 +50,14 @@ note_content: |
 
   ## PDH-review. 品質検証結果
   <!-- PDH-review-1 / PDH-review-2 のように attempt ごとに記録する。
-       Devil's Advocate + Code Reviewer の実装後 review 結果を統合。
-       実モデル / engine は CLAUDE.md の Agent 実行プロファイルに従う。
+       独立 reviewer（1 人以上。構成と model は CLAUDE.md「チーム構成・モデル設定」）の
+       実装後 review 結果を統合。
        2 attempt 同種 Critical 再発で root cause 診断 → escalation。
        実装後 review 特有 gate: Ticket 不可侵 / logical commit cadence / E2E real API / テスト全件 PASS -->
 
   ### Findings (PDH-review-1)
-  <!-- finding は「見つけた時点」で 1 行追加する。判定列は後で埋めてよい。
-       最後にまとめて書き起こさない（落ちるため）。
-       判定は 採用 / follow-up / 棄却 の 3 種。分類基準は pdh-dev `_review.md`
-       「スコープ外問題と過剰実装の扱い」が正。
-       PDH-human-review では、この表の 判定 が follow-up / 棄却 の行を
-       そのままユーザへ提示する。 -->
+  <!-- 記録・分類・提示の運用は pdh-dev `_review.md`
+       「スコープ外問題と過剰実装の扱い」が正。 -->
 
   | # | 観点 | Sev | 要旨 | 判定 | 理由 |
   |---|---|---|---|---|---|
@@ -96,6 +92,13 @@ note_content: |
   <!-- 実装中に発見した想定外の事実を記録する。
        例: API の未文書化の挙動、ライブラリの制約、既存コードの隠れた依存関係。
        Implementation で対応した場合は実装ログに合わせて、ticket に書き戻しが必要な場合は PM に flag する。 -->
+
+  ## Open Questions
+  <!-- 実装中の可逆な迷いと採用した default 値を検出時点で append する
+       （運用は pdh-coding「Open Questions protocol」が正）。 -->
+
+  ## Resume Point
+  <!-- 中断時の最終 commit・理由・再開手順を記録する（pdh-coding「中断手順」が正）。 -->
 
 # Ticket template — pdh-dev SKILL の ticket 標準構造に準拠
 # このテンプレートには frontmatter が含まれていない。

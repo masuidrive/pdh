@@ -25,7 +25,7 @@ PDH stage labels are stable checklist keys, not heavyweight process numbers:
 
 `PDH-open` -> `PDH-ticket-review` -> `PDH-ticket-human-review` -> `PDH-implement` -> `PDH-review` -> `PDH-verify` -> `PDH-human-review` -> `PDH-close`
 
-`PDH-ticket-review` and `PDH-ticket-human-review` are separate stages. The former is the agent-side ticket contract check. The latter is the pre-implementation human gate where the user reviews the ticket summary, what changed during ticket review, what will be achieved, AC, out-of-scope, and decision points. Do not start implementation without explicit AC approval in `PDH-ticket-human-review`. Any later change to the Acceptance Criteria — adding, removing, or rewording — needs explicit user approval as well.
+`PDH-ticket-review` and `PDH-ticket-human-review` are separate stages. The former is the agent-side ticket contract check. The latter is the pre-implementation human gate; the material to present is defined in Human Gate Materials below. Do not start implementation without explicit AC approval in `PDH-ticket-human-review`. Any later change to the Acceptance Criteria — adding, removing, or rewording — needs explicit user approval as well.
 
 `PDH-human-review` is the close-before-human gate. Its purpose is for the user to compare what the coding agent did and achieved against the user's expectation. Do not advance to `PDH-close` or describe the ticket as complete without explicit user approval.
 
@@ -39,6 +39,10 @@ The Director must not change its own engine, model, profile, or reasoning effort
 
 If subagents/workers cannot be started, do not silently treat solo execution as equivalent. Explain the limitation and ask the user when it affects confidence or gate semantics.
 
+Do not `git push` unless the user explicitly requested it, an approved close
+flow performs it (for example ticket.sh `auto_push` on close), or `CLAUDE.md`
+explicitly authorizes it.
+
 ## Worker Instructions
 
 Workers/subagents do not inherit the Director's full conversation state. Every worker prompt should include:
@@ -49,7 +53,11 @@ Workers/subagents do not inherit the Director's full conversation state. Every w
 - The worker's exact responsibility and collision boundaries
 - For implementation workers, an instruction to read `.agents/skills/pdh-coding/SKILL.md` or `.claude/skills/pdh-coding/SKILL.md`
 
-Do not assign overlapping write ownership to multiple workers. Reading/review tasks may run in parallel; writing tasks should have clear ownership. Worker PASS is not approval; the Director must inspect the result.
+Exception: the unbiased Why-end-to-end review lens deliberately omits the
+ticket file, the AC, and the implementor's conclusions; its prompt carries only
+the Why (see the pdh-dev skill's review lens rules).
+
+Do not assign overlapping write ownership to multiple workers. Reading/review tasks may run in parallel; writing tasks should have clear ownership.
 
 ## Context Management
 
@@ -80,8 +88,7 @@ The review and verification rules are:
   Director's direct code read, and record why.
 - **Rewind discipline**: before rewinding implementation or review work, pin
   every detected Critical/Major as an executable `ticket-local-test` under the
-  `tests_dir` path shown by `ticket.sh start`/`restore` output (per-ticket
-  layout: `tickets/<name>/tests/`; legacy flat layout: `tests/tickets/<id>/`);
+  ticket's tests directory (see the `ticket-local-test` location rule below);
   afterward compare the independent first review with those checks
   and record the rewind reason.
 
@@ -105,7 +112,7 @@ Permanent tests and `ticket-local-test` are different:
 
 - Permanent tests in `scripts/test-all.sh`, CI, or `test/` should cover product contracts, Architectural Invariants, and generalized regressions. If the repository commits generated artifacts (bundled workers, compiled assets, generated SDK models), the permanent suite must rebuild them and fail when the rebuilt output differs from the committed files, so stale artifacts are caught deterministically instead of by reviewer attention.
 - Ticket-specific temporary checks, such as confirming an old route is now 404 or a specific fixture is hidden, are `ticket-local-test`.
-- Executable `ticket-local-test` scripts live at the `tests_dir` path shown by `ticket.sh start`/`restore` output (compat: legacy flat layout keeps them at `tests/tickets/<ticket-id>/test-ticket-local.sh`). `start`/`restore` announce that path but do not create the directory, so `mkdir -p` it when writing the first test.
+- Executable `ticket-local-test` scripts live at `<ticket_dir>/tests/`, derived by convention from the `ticket_dir:` path in `ticket.sh start`/`restore` output (per-ticket layout: `tickets/<name>/tests/`; compat: legacy flat layout keeps them at `tests/tickets/<ticket-id>/test-ticket-local.sh`). ticket.sh neither prints nor creates a tests path, so `mkdir -p` it when writing the first test.
 - Run them through `./scripts/test-ticket-local.sh [ticket-id]`.
 - Record seed, `tmp_dir` helpers, `agent-browser`, `curl`, and command evidence in the note file (the `note:` path from the same output; compat symlink: `current-note.md`).
 
@@ -139,8 +146,6 @@ a real browser driving the composed page. If browser verification is
 impossible in the current environment, do not substitute `curl` and report the
 surface as verified; state the constraint and ask the user.
 
-Human-review instructions are for the user, not the agent. Provide browser URLs and concrete click/visual checks for UI, `curl` commands and expected status/body for API, and a helper script under the ticket's `tmp_dir` (the `tmp_dir:` path from `ticket.sh start`/`restore`; per-ticket layout: `tickets/<name>/tmp/`) only when manual auth/cookie/setup is too awkward. Do not present an `agent-browser` command list as the user's review procedure.
-
 If auth is required, explain the auth method before human review. For non-localhost exposure, protect the surface with Basic Auth, a temporary token, Access, or another project-appropriate method. Do not paste secret values into the conversation; describe where the user can get or run them.
 
 ## Reporting
@@ -152,6 +157,14 @@ When asking the user for a decision, explain:
 - Verification evidence
 - Judgment points
 - Options, with the recommended option first
+
+This is the baseline for any decision request. At the two human gates, the
+full material list in Human Gate Materials supersedes it.
+
+Never report something as working without having run the relevant tests in
+this session. A missing command, missing dependency, or environment error
+counts as a test failure, not a skip; a single failing, unknown-skipped, or
+unrunnable test means the work is not done.
 
 If there is doubt, a blocker, a missing decision, or no credible path to `PDH-human-review`, ask the user immediately instead of waiting for a later gate.
 
@@ -183,9 +196,14 @@ At `PDH-human-review`, before close:
   zero explicitly when there are none. What was deliberately left unfixed is
   decision material of the same weight as what was fixed; the scope judgment is
   verifiable nowhere else.
-- Concrete steps for the user to check the result themselves (URL and expected
-  display for UI, `curl` and expected status/body for API, auth method when
-  needed)
+- Concrete steps for the user to check the result themselves. These
+  instructions are for the user, not the agent: browser URL and concrete
+  click/visual checks for UI, `curl` and expected status/body for API, the auth
+  method when needed. A helper script under the ticket's tmp directory (the
+  `tmp_dir:` path from `ticket.sh start`/`restore`; per-ticket layout:
+  `tickets/<name>/tmp/`) is acceptable only when manual auth/cookie/setup is
+  too awkward. Never present an `agent-browser` command list as the user's
+  review procedure.
 - Remaining known issues
 
 If a required item cannot be produced, say so and say why, rather than

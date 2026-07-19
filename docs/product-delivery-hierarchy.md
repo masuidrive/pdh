@@ -23,11 +23,17 @@ Brief → Ticket は「意思を実装可能な単位に分割する」関係。
 project-root/
   product-brief.md                          ← Brief: repo に 1 つ
   tickets/                                  ← ticket.sh が管理
-    250711-091538-fix-something.md
-    250715-143824-add-feature.md
+    .gitignore                              ← 各 ticket の tmp/ を除外
+    250711-091538-fix-something/            ← per-ticket ディレクトリ
+      ticket.md                             ← Ticket 本文
+      note.md                               ← 作業ノート
+      tests/                                ← ticket-local-test（必要時に agent が作成）
+      tmp/                                  ← 一時領域（ticket.sh が作成。git 管理外）
     done/
-      250629-131859-initial-setup.md
+      250629-131859-initial-setup/
 ```
+
+旧 flat 形式（`tickets/250711-091538-fix-something.md` 単一ファイル）も後方互換で扱える。実体のパスは `ticket.sh start`/`restore` 出力の `ticket:`/`note:` 行が正。
 
 ### 命名規則
 
@@ -35,7 +41,7 @@ project-root/
 |---|---|---|
 | Product Brief | `product-brief.md` | repo ルートに固定。1 つだけ |
 | Technical Reference | `technical-reference.md` | repo ルートに固定。1 つだけ。常に現在形の How（意思は持たない） |
-| Ticket | `YYMMDD-hhmmss-slug.md` | `250711-091538-fix-auth.md` |
+| Ticket | `YYMMDD-hhmmss-slug/`（中に `ticket.md` / `note.md`） | `250711-091538-fix-auth/ticket.md` |
 
 タイムスタンプは **UTC**。
 
@@ -72,7 +78,7 @@ Ticket の状態は YAML frontmatter で判定する。
 | `closed_at` がある | 完了 |
 | `cancelled_at` がある | 中止 |
 
-- 完了時 → `closed_at` を追加し、`done/` に移動する。
+- 完了時 → `closed_at` を追加し、`done/` に移動する（ticket ディレクトリごと移動する）。
 - 中止時 → `cancelled_at` を追加し、`done/` に移動する。本文に中止理由を残す。
 - `done/` への移動は整理のため。状態の正は frontmatter。
 - `done/` 内のファイルは消さない。判断の履歴として残す。
@@ -150,9 +156,9 @@ Stage label は checklist と引き継ぎ用の安定キーであり、重い工
 
 `PDH-ticket-review` と `PDH-ticket-human-review` は分ける。前者は agent が ticket contract を整える工程、後者は実装前にユーザが全体像・達成するもの・ticket review で修正した点・AC を見て、想定と合っているかをすり合わせる人間 gate。AC 承認は `PDH-ticket-human-review` で得る。承認なしに `PDH-implement` へ進まない。
 
-Agent は `PDH-verify` までを自動で進め、そこで止まらず `PDH-human-review` として人間にレビューを依頼する。`PDH-human-review` の目的は、coding agent がやったこと・達成したことをユーザが見て、それがユーザの想定と合っているかをすり合わせること。UI / API surface がある場合、`PDH-verify` では `./scripts/dev-server.sh --seed` を使う。server 不要で seed だけ必要な場合は `scripts/seed-pdh-verify.sh` を使い、repo / ticket にこの seed hook が無ければ作り、seed 不要なら no-op として成功させる。UI / browser surface がある場合、`PDH-verify` の Surface Observer は seed 後に、shared shell / CSS / auth を含む実 dev-server の composed page で `agent-browser` 等を使って主要ユースケースを実行する。renderer 単体を代替証拠にせず、対象 commit SHA と操作結果または実行不能理由を記録する。レビュー依頼は note に書くだけでなく、会話上で「やったこと」「判断ポイント」「次の選択肢」を説明する。レビュー可能な UI / API がある場合、`PDH-human-review` では `./scripts/dev-server.sh` で開発サーバを起動し、ユーザ自身が触って判断できる確認手順を提示する。UI はブラウザ URL と操作箇所、API は `curl` と期待レスポンス、手作業が難しい認証・cookie・fixture は ticket ごとの一時領域（`ticket.sh start`/`restore` 出力の `tmp_dir:` が示すパス。新レイアウトでは `tickets/<ticket-name>/tmp/`）の一時スクリプトで補助する。認証が必要な surface では dev mode で dummy login を用意し、localhost 以外へ出す場合は Basic Auth や一時 token 等で保護し、レビュー依頼前に、認証方式、必要な cookie / token / helper / cookie jar、秘密値を会話に貼らない方針、ユーザが実行する具体手順、確認後のサーバ停止や一時ファイルの扱いを説明する。`agent-browser` のコマンド列だけを人間向け確認手順にしない。判断が必要な選択肢は一番上におすすめを置くが、初期選択・timeout/default・沈黙を回答や承認として扱わない。`PDH-human-review` の承認があるまで `PDH-close` に進まず、チケット全体を完了と表現しない。途中で疑問・判断不能・blocker・完了見込みが立たない状態になった場合は、`PDH-human-review` を待たずにその時点でユーザに確認する。
+Agent は `PDH-verify` までを自動で進め、そこで止まらず `PDH-human-review` として人間にレビューを依頼する。`PDH-human-review` の目的は、coding agent がやったこと・達成したことをユーザが見て、それがユーザの想定と合っているかをすり合わせること。規範は `PDH-AGENTS.md` が正: gate でユーザへ渡す材料は「Human Gate Materials」、surface 検証の証拠要件は「Browser And Surface Checks」、開発サーバと seed は「Dev Server And Seed」、承認の扱い（初期選択・timeout/default・沈黙は承認でない）は「Verification」の Human authority。`PDH-human-review` の承認があるまで `PDH-close` に進まず、チケット全体を完了と表現しない。途中で疑問・判断不能・blocker・完了見込みが立たない状態になった場合は、`PDH-human-review` を待たずにその時点でユーザに確認する。
 
-恒久テストと `ticket-local-test` は分ける。`scripts/test-all.sh` / CI / `test/` に残すのは、Product Brief、Architectural Invariants、継続的な product contract、または一般化された regression だけとする。特定 ticket の一時的な移行確認（例: `/a` から `/b` への変更で旧 `/a` が 404 になること、特定 fixture 名がカタログに出ないこと）は `PDH-verify` の `ticket-local-test` とする。実行可能なものは `ticket.sh start` / `restore` 出力の `tests_dir:` が示すパス（新レイアウトでは `tickets/<ticket-name>/tests/`、旧 flat 形式は `tests/tickets/<ticket-id>/` で後方互換）に置き、`./scripts/test-ticket-local.sh [ticket-id]` で呼ぶ。seed / `tmp_dir` helper / `agent-browser` / `curl` の実行証跡は note に残す。恒久化するか迷う場合は、その期待が ticket 名や一時 fixture なしで今後も product contract として説明できるかを基準にする。
+恒久テストと `ticket-local-test` は分ける。`scripts/test-all.sh` / CI / `test/` に残すのは、Product Brief、Architectural Invariants、継続的な product contract、または一般化された regression だけとする。特定 ticket の一時的な移行確認（例: `/a` から `/b` への変更で旧 `/a` が 404 になること、特定 fixture 名がカタログに出ないこと）は `PDH-verify` の `ticket-local-test` とする。実行可能なものは `ticket.sh start` / `restore` 出力の `ticket_dir:` が示すディレクトリ配下の `tests/`（= `tickets/<ticket-name>/tests/`。ticket.sh はこのパスを出力も作成もしないので、必要時に `mkdir -p` する。旧 flat 形式は `tests/tickets/<ticket-id>/` で後方互換）に置き、`./scripts/test-ticket-local.sh [ticket-id]` で呼ぶ。seed / `tmp_dir` helper / `agent-browser` / `curl` の実行証跡は note に残す。恒久化するか迷う場合は、その期待が ticket 名や一時 fixture なしで今後も product contract として説明できるかを基準にする。
 
 テストは目的とコストの違う層に分ける。混ぜず、それぞれの入口を1つに保つ。
 
@@ -160,7 +166,7 @@ Agent は `PDH-verify` までを自動で進め、そこで止まらず `PDH-hum
 |---|---|---|---|
 | fast-check（超軽量・決定論） | `scripts/fast-checks.sh` + `scripts/checks/*.check` | ミリ秒 | 毎変更。`scripts/test-all.sh` の最初のステージとして、また `ticket-local-test` の前提ゲートとして |
 | 全体スイート（重量級） | `scripts/test-all.sh`（型検査・単体・E2E 等をまとめる） | 秒〜分 | `PDH-implement` の完了時と `PDH-verify` |
-| ticket-local-test（一時） | `tests_dir` 配下の `test-ticket-local.sh` | 可変 | その ticket の検証中だけ。CI・`test-all` に入れず、close 時に刈る |
+| ticket-local-test（一時） | `tickets/<ticket-name>/tests/` 配下の `test-ticket-local.sh` | 可変 | その ticket の検証中だけ。CI・`test-all` に入れず、close 時に刈る |
 | mutation testing（任意の重検査） | 言語ごとの専用ツール（JS/TS: Stryker、Python: mutmut 等） | 分〜十分超 | 定期棚卸しのみ。コストが大きいので CI・`test-all` に入れない |
 
 包含関係: fast-check ⊂ `test-all`（`test-all` は fast-check を最初に含む）。ticket-local-test も先頭で fast-check を通す。mutation testing は「テストがある」ではなく「テストが欠陥を検出できる」を測る別軸で、`test-all` の外に置く。
@@ -168,9 +174,9 @@ Agent は `PDH-verify` までを自動で進め、そこで止まらず `PDH-hum
 - **fast-check** は型で表せず・全体スイートでは重い・でも「この文字列パターンは禁止」と言い切れる repo 固有の不変条件（出荷済み不具合の再発防止など）を、grep で恒久検出する。汎用 linter（tsc/eslint 等）の代替ではない。仕組みは言語非依存なので `scripts/checks/README.md` の形式で各プロジェクトへ持ち込める。
 - **mutation testing** の実体は言語ごとに別ツールで汎用テンプレート化しない。導入するかは各プロジェクト判断とし、入れる場合も CI ではなく定期棚卸しで回す。
 
-`PDH-verify` / `PDH-human-review` で開発サーバが必要な場合は `./scripts/dev-server.sh` を使う。`--seed` は local 環境をリセットして PDH verify seed を投入し、`--port <port>` は固定 port、未指定なら空き port をランダム選択する。localhost 以外から見せる必要がある場合は共通オプション `--no-localhost` を使う。`--no-localhost` では外部 URL に port が出ないことが多いため、固定 port が必要な検証以外では `--port` を省略してよい。実装はアプリごとに異なり得る（例: プロジェクト既定の tunnel / 公開手段）。agent は app/script に実装された方法を使う。ticket の再現可能な product 検証条件が不足する場合だけ script / seed hook を更新し、sandbox・端末パス・local login 等の環境固有制約は local 設定か一時コマンドで扱う。Quick Tunnel は URL を知る人が到達できるため、露出内容を確認し、厳密な認可が必要なら named tunnel + Access 等の別設定を人間判断にする。
+`PDH-verify` / `PDH-human-review` で開発サーバが必要な場合は `./scripts/dev-server.sh` を使う（option と seed hook の規範は `PDH-AGENTS.md`「Dev Server And Seed」）。`--no-localhost` では外部 URL に port が出ないことが多いため、固定 port が必要な検証以外では `--port` を省略してよい。実装はアプリごとに異なり得る（例: プロジェクト既定の tunnel / 公開手段）。agent は app/script に実装された方法を使う。sandbox・端末パス・local login 等の環境固有制約は local 設定か一時コマンドで扱う。Quick Tunnel は URL を知る人が到達できるため、露出内容を確認し、厳密な認可が必要なら named tunnel + Access 等の別設定を人間判断にする。
 
-PDH の実行は stage ごとに subagent / worker へ委譲し、Director が結果を検品して統合する。worker の PASS は入力であって承認ではない。Director は各 stage の完了前に、正典・ticket・diff・実コマンド出力・note の証跡を照合し、矛盾や未確認があれば差し戻す。subagent を起動できない環境では、単独で完了扱いにせずユーザに確認する。
+PDH の実行は stage ごとに subagent / worker へ委譲し、Director が結果を検品して統合する（規範は `PDH-AGENTS.md`「Execution Model」）。
 
 
 ## テンプレート

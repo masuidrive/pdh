@@ -65,8 +65,12 @@ projectの実行profileとapproval policyを優先し、承認済みin-process s
 
 promptは「共通context + 役割別指示 + task固有依頼」で組み立てる。
 共通contextは`_subagent-context.md`を使い、`<TICKET_FILE>`、`<NOTE_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`、`<TESTS_DIR>`、`<TMP_DIR>`を実値で埋める。
-`<TESTS_DIR>`と`<TMP_DIR>`は`ticket.sh start`/`restore`出力の`tests:`/`tmp:`パスを使う。workerは`ticket.sh`を実行しないので、PMが埋めないとworkerはこのパスを知る手段がない。
-レンズ1 reviewerだけは例外で、`<TICKET_FILE>`と`<NOTE_FILE>`を渡さない。
+必須項目の正は`PDH-AGENTS.md`「Worker Instructions」。reviewerへはさらに`_review.md`「レビュアーへの指示ルール」の項目を含める。
+
+- `<TMP_DIR>`は`ticket.sh start`/`restore`出力の`tmp_dir:`パス、`<TESTS_DIR>`はそこには出力されないので同出力の`ticket_dir:`パス + `/tests/`（legacy flat layoutでは`tests/tickets/<id>/`）を規約で導出する。workerは`ticket.sh`を実行しないので、PMが埋めないとworkerはこのパスを知る手段がない
+- `<RESULT_FILE>`はworker自身がfile toolで書く成果物fileであり、stdout回収先とは別のパス（例: `$d/result.md`）を割り当てる。stdoutは診断用log（後述）
+- レンズ1 reviewerには`<TICKET_FILE>`と`<NOTE_FILE>`を渡さない。共通contextの該当2行は`(レンズ1のため非提供)`へ置き換え、役割別指示は「reviewer（レンズ1）」blockを使い、Whyの原文をprompt本文へ転記する。diffも渡さない
+
 promptはfileへ書き出し、stdinでworkerへ渡す。
 
 ### 起動コマンド（engine 別・権限は環境規約に従う）
@@ -75,22 +79,24 @@ promptはfileへ書き出し、stdinでworkerへ渡す。
 起動commandは割当engineに従い、run環境の認証を継承する。
 
 ```bash
-# claude
-claude -p < "$promptfile" > "$d/result.txt" 2> "$d/stderr.log"
+# claude（stdoutは診断log。成果物はworkerが<RESULT_FILE>=$d/result.mdへ書く）
+claude -p < "$promptfile" > "$d/stdout.log" 2> "$d/stderr.log"
 
-# codex
-codex exec -o "$d/result.txt" < "$promptfile" 2> "$d/stderr.log"
+# codex（-oは最終messageの控え。成果物は同上）
+codex exec -o "$d/last-message.txt" < "$promptfile" > "$d/stdout.log" 2> "$d/stderr.log"
 ```
+
+回収は`<RESULT_FILE>`を読む。無ければ無言終了として扱い、`stdout.log`/`last-message.txt`/`stderr.log`の末尾から原因を診断する。
 
 ### main = Claude Code のときの codex worker 起動
 
 Claude CodeがmainでcodexをworkerへspawnするときはBashツールで直接実行する。codex plugin等の別経路があっても使わない。
 
 - `run_in_background: true`で非同期にし、`timeout`は7200000（120分）にする
-- `-o <dir>/result.txt`で最終結果だけをfileへ出し、stderrは`2> <dir>/stderr.log`へ分離する
+- `-o <dir>/last-message.txt`で最終messageの控えをfileへ出し、stderrは`2> <dir>/stderr.log`へ分離する
 - **promptの渡し方は2通り。** 長文・複数段落・特殊文字・日本語主体ならshell quoting失敗を避けてfileへ書き出し`< <dir>/prompt.txt`で渡す。短くquotingが安全なものだけ引数で渡してよく、その場合だけstdinを`< /dev/null`で即EOFにする
 - worktree中のticketへ実行するときは`cd <worktree> && codex exec ...`の形にする（custom statusLineがある環境でcwdが毎回resetされる既知bug [anthropics/claude-code#31471](https://github.com/anthropics/claude-code/issues/31471) の回避）
-- 完了通知は軽量messageで届くので、result.txtだけReadする（通常~2KB）。stderr.logは失敗時に`tail -50`程度で部分読みし、`cat`で全部流し込まない
+- 完了通知は軽量messageで届くので、`<RESULT_FILE>`だけReadする（通常~2KB）。stderr.logは失敗時に`tail -50`程度で部分読みし、`cat`で全部流し込まない
 
 ### 並行起動（必須パターン: `&` background + PID 配列 + wait + exit code）
 
@@ -103,9 +109,9 @@ launch() { # launch <name> <engine> <promptfile>
   local name="$1" engine="$2" pf="$3" d="/tmp/wk-$1"
   mkdir -p "$d"
   if [ "$engine" = codex ]; then
-    codex exec -o "$d/result.txt" < "$pf" 2> "$d/stderr.log" &
+    codex exec -o "$d/last-message.txt" < "$pf" > "$d/stdout.log" 2> "$d/stderr.log" &
   else
-    claude -p < "$pf" > "$d/result.txt" 2> "$d/stderr.log" &
+    claude -p < "$pf" > "$d/stdout.log" 2> "$d/stderr.log" &
   fi
   PID2NAME[$!]="$name"
 }
@@ -133,22 +139,16 @@ PMはsource codeを直接編集しない。
 ### spawn のルール
 
 workerのengineとmodelはprojectのrole規約に従い、最小能力の軽量modelへ落とさない。
-spawn promptには次を必ず含める。
-
-- taskの目的と背景
-- 対象file path
-- ticketのAC、Architectural Invariants check、確定判断、Out-of-scope
-- 衝突しない担当範囲
-- Coding Engineerには`pdh-coding`を先に読む指示
+spawn promptの必須項目は`PDH-AGENTS.md`「Worker Instructions」が正（レンズ1例外を含む）。
 
 ### サブエージェント委譲ルール
 
 - review系workerはread-onlyにする
 - ユーザ指定reviewer構成を省略、短縮、統合で代替しない
-- 複数reviewer指定時は各reviewerが同じdiff全体を見て、担当分けだけで代替しない
+- 複数reviewer指定時は各reviewerが同じdiff全体を見て、担当分けだけで代替しない（レンズ1 reviewerは例外で、diffを渡さない）
 - 大規模検索、history調査、品質review、全test、doc再生成、実動確認はsubagentを優先する
 - subagent結果は要約、結論、失敗点、次actionだけに絞る
-- 並行reviewerに同じ`result.txt`を編集させず、各responseをPMが統合する
+- 並行reviewerに同じ`<RESULT_FILE>`を書かせず、workerごとに専用のresult fileを割り当てて各responseをPMが統合する
 
 ---
 
@@ -174,7 +174,7 @@ PMはCoding Engineer 1人をspawnする。
 
 ### PDH-review: 品質検証
 
-初回reviewは1人以上を並行起動し、同一SHAのdiff全体を見せる。
+初回reviewは1人以上を並行起動し、同一SHAのdiff全体を見せる（レンズ1 reviewerを除く）。
 finding修正はCoding Engineer、test再実行はQAへ委譲する。
 attempt運用と修正確認の範囲は`_review.md`が正。
 
