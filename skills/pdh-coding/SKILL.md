@@ -191,13 +191,18 @@ commit 分割の例 (画像入力機能の場合):
 6. `test: add unit tests for reference image validation`
 ...
 
-## E2E real API gate
+## 動作確認 gate（完了判定は実データ + 終端操作で行う）
+
+ビルド成功やテストパスは完了判定ではない。**実装後は実環境で動作確認する。**
+
+- **「stub」は外部 API の mock だけを指さない。** 自分が手で組み立てて系に流し込む入力すべて（合成ログ entry、手で set した context / DB 行、本番の上流が本来生成するデータを迂回する fixture 等）が stub。stub は早期 feedback 用で、**完了判定には使わない**。コードが「与えた入力どおりの出力」を返したことの確認は循環論法であり、完了判定ではない
+- **consume 側機能**（他所が生成するログ / イベント / payload / DB 行を読む機能）は、検証前に「実上流が実際に何を出すか」を実データで観測する（本番ログを query する等）。上流が consumer の必要フィールドを出していなければ、**その機能は未完成（不具合）であって pass ではない**
+- **「描画された / 生成された」で完了としない。** リンク・通知・画面遷移・外部副作用が目的なら、**終端のユーザ操作を実際に行って着地まで**確認する（リンクは実際にクリック、通知は実イベントで受信）。「実機 = 実トランスポート」を「実データ」と取り違えない（例: 実 Slack に合成ログを流すのは実データ確認ではない）
 
 外部 provider / 外部 API / webhook / SDK / 認証 等を経由する path がある場合、**実 API で 1 経路以上 200 確認** する。
 
 - credential が `.env` 等にある provider → 実 API 実行が必須
-- credential 不在の場合 → "deferred" として明示 escalate (自己判断で skip しない)（team: PM へ / solo: result.txt に記録）
-- stub / mock は早期 feedback には使うが、**完了判定には使わない**
+- credential 不在の場合 → "deferred" として明示 escalate (自己判断で skip しない)（team: PM へ / solo: result.txt に記録）。自発的に「stub で十分」と判断しない
 - 確認結果は note の実装ログ / Discoveries に記録 (response status / body 抜粋 / cost)
 
 ## コミットに含めてよいコードの基準

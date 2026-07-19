@@ -25,7 +25,7 @@ PDH stage labels are stable checklist keys, not heavyweight process numbers:
 
 `PDH-open` -> `PDH-ticket-review` -> `PDH-ticket-human-review` -> `PDH-implement` -> `PDH-review` -> `PDH-verify` -> `PDH-human-review` -> `PDH-close`
 
-`PDH-ticket-review` and `PDH-ticket-human-review` are separate stages. The former is the agent-side ticket contract check. The latter is the pre-implementation human gate where the user reviews the ticket summary, what changed during ticket review, what will be achieved, AC, out-of-scope, and decision points. Do not start implementation without explicit AC approval in `PDH-ticket-human-review`.
+`PDH-ticket-review` and `PDH-ticket-human-review` are separate stages. The former is the agent-side ticket contract check. The latter is the pre-implementation human gate where the user reviews the ticket summary, what changed during ticket review, what will be achieved, AC, out-of-scope, and decision points. Do not start implementation without explicit AC approval in `PDH-ticket-human-review`. Any later change to the Acceptance Criteria — adding, removing, or rewording — needs explicit user approval as well.
 
 `PDH-human-review` is the close-before-human gate. Its purpose is for the user to compare what the coding agent did and achieved against the user's expectation. Do not advance to `PDH-close` or describe the ticket as complete without explicit user approval.
 

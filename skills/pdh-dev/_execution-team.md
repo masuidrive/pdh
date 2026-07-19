@@ -80,6 +80,16 @@ claude -p < "$promptfile" > "$d/result.txt" 2> "$d/stderr.log"
 codex exec -o "$d/result.txt" < "$promptfile" 2> "$d/stderr.log"
 ```
 
+### main = Claude Code のときの codex worker 起動
+
+Claude CodeがmainでcodexをworkerへspawnするときはBashツールで直接実行する。codex plugin等の別経路があっても使わない。
+
+- `run_in_background: true`で非同期にし、`timeout`は7200000（120分）にする
+- `-o <dir>/result.txt`で最終結果だけをfileへ出す。stdinは`< /dev/null`で即EOF、stderrは`2> <dir>/stderr.log`へ分離する
+- promptが長文・複数段落・特殊文字・日本語主体ならshell quoting失敗を避けてfile + stdinで渡す
+- worktree中のticketへ実行するときは`cd <worktree> && codex exec ...`の形にする（custom statusLineがある環境でcwdが毎回resetされる既知bug [anthropics/claude-code#31471](https://github.com/anthropics/claude-code/issues/31471) の回避）
+- 完了通知は軽量messageで届くので、result.txtだけReadする（通常~2KB）。stderr.logは失敗時に`tail -50`程度で部分読みし、`cat`で全部流し込まない
+
 ### 並行起動（必須パターン: `&` background + PID 配列 + wait + exit code）
 
 独立workerは同一Bash呼出し内でbackground並行起動し、PIDごとに`wait`してexit codeを回収する。
