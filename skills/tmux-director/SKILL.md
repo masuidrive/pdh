@@ -145,7 +145,7 @@ PDH-open → PDH-ticket-review → PDH-ticket-human-review → PDH-implement →
 ```
 tmux send-keys -t WINDOW.PANE '/clear' Enter
 sleep 2
-tmux send-keys -t WINDOW.PANE '/pdh-dev 最初に EnterWorktree({name: "<ticket-slug>"}) で ticket 専用 worktree に入ってください。ticket.sh 系は flock -x /tmp/<project>-ticket.lock で排他してください。[追加指示があればここに]'
+tmux send-keys -t WINDOW.PANE '/pdh-dev 最初に EnterWorktree({name: "<ticket-slug>"}) で ticket 専用 worktree に入ってください。ticket.sh 系は排他ロック下で実行してください（flock があれば flock、macOS など flock 非同梱環境では mkdir ベースの atomic lock。下記「ticket.sh の排他ロック（クロス OS）」参照）。[追加指示があればここに]'
 tmux send-keys -t WINDOW.PANE Enter
 ```
 
@@ -496,7 +496,25 @@ window が是正指示を **2回送っても同じ問題を繰り返す** 場合
 
 **ブランチ分離:** 各 window が別ブランチで作業するため、`ticket.sh start` がブランチを自動作成する。同一ファイルを複数チケットが変更する場合はマージ時にコンフリクトが発生する可能性がある。
 
-**Worktree 分離:** 各 window が Claude Code ネイティブ worktree (`claude --worktree <slug>` または `EnterWorktree({name: ...})`) に入ることで、それぞれ独立した cwd + working tree で作業する。Bash tool cwd の持続バグ (#31471 / #42837) の影響を受けない。ticket.sh start/close は依然 main repo で走るため、全 window で `flock -x /tmp/<project>-ticket.lock bash ticket.sh ...` を徹底すること (`docs/product-delivery-hierarchy.md`「ブランチ戦略」参照)。
+**Worktree 分離:** 各 window が Claude Code ネイティブ worktree (`claude --worktree <slug>` または `EnterWorktree({name: ...})`) に入ることで、それぞれ独立した cwd + working tree で作業する。Bash tool cwd の持続バグ (#31471 / #42837) の影響を受けない。ticket.sh start/close は依然 main repo で走るため、全 window で ticket.sh を排他ロック下で走らせること（下記「ticket.sh の排他ロック（クロス OS）」。`docs/product-delivery-hierarchy.md`「ブランチ戦略」参照）。
+
+## ticket.sh の排他ロック（クロス OS）
+
+複数 window が同時に `ticket.sh start/close` を叩くと current-ticket symlink や branch を奪い合うため排他が要る。**`flock` は Linux (util-linux) 専用で macOS には同梱されない**。flock を前提に指示すると、macOS の worker が `brew install util-linux` 等の想定外な環境変更に走る（実測 2026-07-20）。flock があればそれを、無ければ `mkdir` の atomic 性で代替する（依存ゼロ・POSIX 共通）:
+
+```sh
+lock=/tmp/<project>-ticket.lock
+if command -v flock >/dev/null 2>&1; then
+  flock -x "$lock" bash ticket.sh "$@"
+else                                   # macOS など flock 非同梱環境
+  d="$lock.d"
+  until mkdir "$d" 2>/dev/null; do sleep 0.2; done
+  trap 'rmdir "$d" 2>/dev/null' EXIT
+  bash ticket.sh "$@"
+fi
+```
+
+worker への指示は「flock か mkdir-lock で排他」とし、特定コマンド（flock）の存在を前提にしないこと。macOS には `/usr/bin/lockf`・`/usr/bin/shlock` もあるが Linux 側で常在しないためクロス OS には mkdir-lock を既定にする。
 
 ## worker の /clear タイミング
 
