@@ -126,8 +126,11 @@ here in the same change that fixes the bug. If it cannot be expressed as a grep,
 record why in the ticket note instead. Keep patterns narrow: a fast-check that
 false-positives on legitimate code trains people to ignore it.
 
-## Example
+## Examples
 
-`example-no-merge-conflict-markers.check` in this directory shows the format with a
-universally useful check (leftover Git merge-conflict markers). Adjust its `glob`
-to your project's source directories, or delete it and add your own.
+The registry ships three examples. Adjust their globs and excludes for the
+project, or delete examples that do not fit:
+
+- `example-no-merge-conflict-markers.check`: rejects leftover conflict markers.
+- `example-max-source-lines.check`: starts source files at a 1500-line ceiling.
+- `example-max-test-lines.check`: starts test files at a 2500-line ceiling.

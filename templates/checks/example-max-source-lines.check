@@ -1,0 +1,6 @@
+# Example source-size ceiling. Adjust extensions and excludes for the project, or delete it.
+reason=source file exceeds 1500 lines; split it into cohesive modules
+max_lines=1500
+glob=**/*.ts,**/*.tsx,**/*.js,**/*.jsx,**/*.mjs,**/*.cjs,**/*.py,**/*.rb,**/*.go
+exclude=test/**,tests/**,spec/**,**/*.test.ts,**/*.test.tsx,**/*.test.js,**/*.test.jsx,**/*.test.mjs,**/*.test.cjs,**/*.spec.ts,**/*.spec.tsx,**/*.spec.js,**/*.spec.jsx,**/*.spec.mjs,**/*.spec.cjs,**/*.test.py,**/*.spec.rb,**/node_modules/**,**/dist/**,**/build/**,**/vendor/**,**/vendored/**,**/generated/**,**/*-data.mjs
+# Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/checks/example-max-source-lines.check

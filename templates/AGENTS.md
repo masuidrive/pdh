@@ -18,6 +18,8 @@ For PDH / ticket-centric work, also read:
 3. `.agents/skills/pdh-coding/SKILL.md` or `.claude/skills/pdh-coding/SKILL.md` for implementation workers
 4. `current-ticket.md` and `current-note.md` when they exist
 
+When authoring declarative fast-checks, also read `.agents/skills/pdh-check-writing/SKILL.md` or `.claude/skills/pdh-check-writing/SKILL.md`.
+
 Do not migrate legacy files in `tickets/` unless the user explicitly asks.
 
 ## Tool Term Mapping

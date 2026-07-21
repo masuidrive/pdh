@@ -27,7 +27,10 @@ BASED_ON_FILES=(
   "templates/product-brief.md"
   "templates/technical-reference.md"
   "templates/.ticket-config.yaml"
+  "templates/checks/example-max-source-lines.check"
+  "templates/checks/example-max-test-lines.check"
   "docs/product-delivery-hierarchy.md"
+  "skills/pdh-check-writing/SKILL.md"
   "skills/tmux-director/SKILL.md"
 )
 

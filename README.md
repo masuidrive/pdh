@@ -179,7 +179,7 @@ project-root/
   current-ticket/           ← 作業中 ticket への symlink (ticket.sh start/restore が作る。git 管理しない)
   AGENTS.md                 ← Codex CLI 向け設定 (CLAUDE.md / PDH-AGENTS.md への thin pointer)
   .agents/
-    skills/                 ← Codex 用 skill wrappers（実体は .claude/skills）
+    skills/                 ← Codex 用 symlink（実体は .claude/skills）
   scripts/
     test-all.sh             ← テスト一括実行
     fast-checks.sh          ← 決定論的 fast-check ランナー（宣言形式の grep 不変条件）
@@ -197,6 +197,7 @@ project-root/
     skills/
       pdh-dev/              ← PDH stage flow ワークフロースキル (SKILL.md + _*.md)
       pdh-coding/SKILL.md   ← コーディング標準スキル
+      pdh-check-writing/SKILL.md ← 宣言型 `.check` 執筆スキル
       tmux-director/SKILL.md ← tmux Director スキル
       pdh-update/SKILL.md    ← PDH アップデートスキル
 ```
@@ -214,6 +215,7 @@ pdh/
       SKILL.md                       ← PDH stage flow ワークフロースキル（入口）
       _*.md                          ← SKILL.md から参照される分冊（flow / review / execution-team 等）
     pdh-coding/SKILL.md              ← コーディング標準スキル
+    pdh-check-writing/SKILL.md       ← 宣言型 `.check` 執筆スキル
     tmux-director/SKILL.md           ← tmux Director スキル
     pdh-update/SKILL.md              ← PDH アップデートスキル
   templates/
@@ -225,7 +227,11 @@ pdh/
     AGENTS.md                        ← AGENTS.md テンプレート (Codex CLI 向け thin pointer)
     test-all.sh                      ← テスト一括実行テンプレート
     fast-checks.sh                   ← 決定論的 fast-check ランナーテンプレート
-    checks/                          ← fast-check レジストリテンプレート（README + サンプル）
+    checks/
+      README.md                      ← fast-check 3型の詳細仕様
+      example-no-merge-conflict-markers.check
+      example-max-source-lines.check ← source 1500行の汎用例
+      example-max-test-lines.check   ← test 2500行の汎用例
     dev-server.sh                    ← PDH verify / human-review 用の開発サーバ入口テンプレート
     seed-pdh-verify.sh               ← PDH verify / human-review 用のローカル seed hook テンプレート
     test-ticket-local.sh             ← `ticket-local-test` 実行テンプレート
