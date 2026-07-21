@@ -67,12 +67,37 @@ validate_pattern_dialect() {
 
 parse_glob_entry() {
   local entry="$1"
+  local suffix recursive_dir
+  parsed_glob_kind=""
   parsed_glob_dir=""
   parsed_glob_ext=""
+  parsed_glob_suffix=""
 
-  if [[ "$entry" =~ ^([^*?,[:space:]]+)/\*\*$ ]]; then
+  if [[ "$entry" == '**/*'* ]]; then
+    suffix="${entry#'**/*'}"
+    if (( ${#suffix} < 2 )) ||
+      [[ "$suffix" != .* && "$suffix" != -* ]] ||
+      [[ "$suffix" == */* || "$suffix" == *,* || "$suffix" == *[[:space:]]* ]] ||
+      has_glob_metacharacter "$suffix"; then
+      return 1
+    fi
+    parsed_glob_kind="repo_suffix"
+    parsed_glob_suffix="$suffix"
+  elif [[ "$entry" == '**/'*'/**' ]]; then
+    recursive_dir="${entry#'**/'}"
+    recursive_dir="${recursive_dir%'/**'}"
+    if [[ -z "$recursive_dir" || "$entry" != "**/$recursive_dir/**" ||
+      "$recursive_dir" == */* || "$recursive_dir" == *,* || "$recursive_dir" == *[[:space:]]* ]] ||
+      has_glob_metacharacter "$recursive_dir"; then
+      return 1
+    fi
+    parsed_glob_kind="recursive_dir"
+    parsed_glob_dir="$recursive_dir"
+  elif [[ "$entry" =~ ^([^*?,[:space:]]+)/\*\*$ ]]; then
+    parsed_glob_kind="tree"
     parsed_glob_dir="${BASH_REMATCH[1]}"
   elif [[ "$entry" =~ ^([^*?,[:space:]]+)/\*\*/\*\.([^./*?,[:space:]]+)$ ]]; then
+    parsed_glob_kind="extension"
     parsed_glob_dir="${BASH_REMATCH[1]}"
     parsed_glob_ext="${BASH_REMATCH[2]}"
   else
@@ -98,14 +123,35 @@ validate_glob_list() {
   local entries=()
 
   if [[ "$value" == ,* || "$value" == *, || "$value" == *,,* ]]; then
-    printf "fast-checks: %s: config error: %s entries must be <dir>/** or <dir>/**/*.<ext>\n" "$check_file" "$key" >&2
+    printf "fast-checks: %s: config error: %s entries must be <dir>/**, <dir>/**/*.<ext>, **/*<literal-suffix>, or **/<literal-dir>/**\n" "$check_file" "$key" >&2
     return 1
   fi
 
   IFS=',' read -r -a entries <<< "$value"
   for entry in "${entries[@]}"; do
     if ! parse_glob_entry "$entry"; then
-      printf "fast-checks: %s: config error: invalid %s entry '%s'; expected <dir>/** or <dir>/**/*.<ext>\n" "$check_file" "$key" "$entry" >&2
+      printf "fast-checks: %s: config error: invalid %s entry '%s'; expected <dir>/** or <dir>/**/*.<ext>, **/*<literal-suffix>, or **/<literal-dir>/**\n" "$check_file" "$key" "$entry" >&2
+      return 1
+    fi
+  done
+}
+
+validate_allow_list() {
+  local check_file="$1"
+  local value="$2"
+  local entry
+  local entries=()
+
+  if [[ "$value" == ,* || "$value" == *, || "$value" == *,,* ]]; then
+    printf 'fast-checks: %s: config error: allow entries must be exact repo-relative file paths\n' "$check_file" >&2
+    return 1
+  fi
+
+  IFS=',' read -r -a entries <<< "$value"
+  for entry in "${entries[@]}"; do
+    if [[ -z "$entry" || "$entry" == /* || "$entry" == ".." || "$entry" == ../* ||
+      "$entry" == */../* || "$entry" == */.. ]] || has_glob_metacharacter "$entry"; then
+      printf "fast-checks: %s: config error: invalid allow entry '%s'; expected an exact repo-relative file path\n" "$check_file" "$entry" >&2
       return 1
     fi
   done
@@ -113,11 +159,68 @@ validate_glob_list() {
 
 # Decide whether a file matches <dir>/** or <dir>/**/*.<ext>. Centralizing glob /
 # exclude matching in-script means the rg and grep paths apply identical semantics.
+parse_linter_command() {
+  local check_file="$1"
+  local template="$2"
+  local token
+  local placeholder_count=0
+
+  linter_tokens=()
+  linter_mode=""
+  IFS=$' \t\n' read -r -a linter_tokens <<< "$template"
+
+  if (( ${#linter_tokens[@]} == 0 )) ||
+    [[ "${linter_tokens[0]}" == '{{filename}}' || "${linter_tokens[0]}" == '{{filenames}}' ]]; then
+    printf 'fast-checks: %s: config error: linter_command must start with a command token\n' "$check_file" >&2
+    return 1
+  fi
+
+  for token in "${linter_tokens[@]}"; do
+    case "$token" in
+      '{{filename}}')
+        placeholder_count=$((placeholder_count + 1))
+        linter_mode="filename"
+        ;;
+      '{{filenames}}')
+        placeholder_count=$((placeholder_count + 1))
+        linter_mode="filenames"
+        ;;
+      *)
+        if [[ "$token" == *'{{filename}}'* || "$token" == *'{{filenames}}'* ]]; then
+          printf 'fast-checks: %s: config error: linter placeholder must be a standalone token\n' "$check_file" >&2
+          return 1
+        fi
+        ;;
+    esac
+  done
+
+  if [[ "$placeholder_count" -ne 1 ]]; then
+    printf 'fast-checks: %s: config error: linter_command must contain exactly one {{filename}} or {{filenames}} placeholder\n' "$check_file" >&2
+    return 1
+  fi
+}
+
+# file が <dir>/** または <dir>/**/*.<ext> にマッチするか判定する。glob/exclude の適用をスクリプト内に
+# 一元化し、rg/grep どちらの経路でも同じ判定を使う（Opus F1 / codex P2-1・P2-2）。
 file_matches_glob_entry() {
   local file="$1"
   local entry="$2"
 
   parse_glob_entry "$entry" || return 1
+  case "$parsed_glob_kind" in
+    repo_suffix)
+      case "$file" in
+        *"$parsed_glob_suffix") return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    recursive_dir)
+      case "/$file" in
+        */"$parsed_glob_dir"/*) return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+  esac
   case "$file" in
     "$parsed_glob_dir"/*) ;;
     *) return 1 ;;
@@ -178,8 +281,11 @@ for check_file in "${check_files[@]}"; do
   check_id="$(basename "$check_file" .check)"
   reason=""
   pattern=""
+  max_lines=""
+  linter_command=""
   glob=""
   exclude=""
+  allow=""
   config_valid=1
   config_line=0
 
@@ -200,8 +306,11 @@ for check_file in "${check_files[@]}"; do
     case "$key" in
       reason) reason="$value" ;;
       pattern) pattern="$value" ;;
+      max_lines) max_lines="$value" ;;
+      linter_command) linter_command="$value" ;;
       glob) glob="$value" ;;
       exclude) exclude="$value" ;;
+      allow) allow="$value" ;;
       *)
         printf 'fast-checks: %s:%s: unknown key %s\n' "$check_file" "$config_line" "$key" >&2
         config_valid=0
@@ -209,10 +318,9 @@ for check_file in "${check_files[@]}"; do
     esac
   done < "$check_file"
 
-  for required_key in reason pattern glob; do
+  for required_key in reason glob; do
     case "$required_key" in
       reason) required_value="$reason" ;;
-      pattern) required_value="$pattern" ;;
       glob) required_value="$glob" ;;
     esac
     if [[ -z "$required_value" ]]; then
@@ -221,7 +329,38 @@ for check_file in "${check_files[@]}"; do
     fi
   done
 
+  linter_tokens=()
+  linter_mode=""
+  if [[ -n "$linter_command" ]]; then
+    if [[ -n "$pattern" || -n "$max_lines" ]]; then
+      printf 'fast-checks: %s: config error: pattern, max_lines, and linter_command are mutually exclusive\n' "$check_file" >&2
+      config_valid=0
+    elif ! parse_linter_command "$check_file" "$linter_command"; then
+      config_valid=0
+    fi
+  else
+    if [[ -n "$pattern" && -n "$max_lines" ]]; then
+      printf 'fast-checks: %s: config error: pattern and max_lines are mutually exclusive\n' "$check_file" >&2
+      config_valid=0
+    elif [[ -z "$pattern" && -z "$max_lines" ]]; then
+      printf 'fast-checks: %s: missing pattern or max_lines\n' "$check_file" >&2
+      config_valid=0
+    fi
+  fi
+
   if [[ -n "$pattern" ]] && ! validate_pattern_dialect "$check_file" "$pattern"; then
+    config_valid=0
+  fi
+
+  if [[ -n "$max_lines" && ! "$max_lines" =~ ^[1-9][0-9]*$ ]]; then
+    printf 'fast-checks: %s: config error: max_lines must be a positive decimal integer\n' "$check_file" >&2
+    config_valid=0
+  fi
+
+  if [[ -n "$pattern" && -n "$allow" ]]; then
+    printf 'fast-checks: %s: config error: allow is only valid with max_lines\n' "$check_file" >&2
+    config_valid=0
+  elif [[ -n "$allow" ]] && ! validate_allow_list "$check_file" "$allow"; then
     config_valid=0
   fi
 
@@ -235,12 +374,22 @@ for check_file in "${check_files[@]}"; do
   if [[ -n "$exclude" ]]; then
     IFS=',' read -r -a exclude_globs <<< "$exclude"
   fi
+  allow_files=()
+  if [[ -n "$allow" ]]; then
+    IFS=',' read -r -a allow_files <<< "$allow"
+  fi
 
   if ! validate_glob_list "$check_file" "glob" "$glob"; then
     failed=1
     continue
   fi
   if [[ -n "$exclude" ]] && ! validate_glob_list "$check_file" "exclude" "$exclude"; then
+    failed=1
+    continue
+  fi
+
+  if [[ -n "$linter_command" ]] && ! command -v -- "${linter_tokens[0]}" >/dev/null 2>&1; then
+    printf 'fast-checks: %s: linter not found: %s\n' "$check_id" "${linter_tokens[0]}" >&2
     failed=1
     continue
   fi
@@ -268,11 +417,88 @@ for check_file in "${check_files[@]}"; do
       fi
       [[ "$excluded" -eq 1 ]] && continue
 
+      allowed=0
+      if (( ${#allow_files[@]} > 0 )); then
+        for allow_file in "${allow_files[@]}"; do
+          if [[ "$file" == "$allow_file" ]]; then
+            allowed=1
+            break
+          fi
+        done
+      fi
+      [[ "$allowed" -eq 1 ]] && continue
+
       matched_files+=("$file")
     done
   fi
 
   if (( ${#matched_files[@]} == 0 )); then
+    continue
+  fi
+
+  if [[ -n "$max_lines" ]]; then
+    for matched_file in "${matched_files[@]}"; do
+      if ! line_count="$(wc -l < "$matched_file")"; then
+        printf 'fast-checks: %s: wc failed for %s\n' "$check_id" "$matched_file" >&2
+        failed=1
+        continue
+      fi
+      line_count="${line_count//[[:space:]]/}"
+      if (( line_count > max_lines )); then
+        printf '%s: %s: %s lines > max %s: %s\n' "$check_id" "$matched_file" "$line_count" "$max_lines" "$reason"
+        failed=1
+      fi
+    done
+    continue
+  fi
+
+  if [[ -n "$linter_command" ]]; then
+    linter_file_args=()
+    for matched_file in "${matched_files[@]}"; do
+      if [[ "$matched_file" == -* ]]; then
+        linter_file_args+=("./$matched_file")
+      else
+        linter_file_args+=("$matched_file")
+      fi
+    done
+
+    if [[ "$linter_mode" == "filename" ]]; then
+      linter_index=0
+      for matched_file in "${matched_files[@]}"; do
+        linter_argv=()
+        for token in "${linter_tokens[@]}"; do
+          if [[ "$token" == '{{filename}}' ]]; then
+            linter_argv+=("${linter_file_args[$linter_index]}")
+          else
+            linter_argv+=("$token")
+          fi
+        done
+        linter_output="$("${linter_argv[@]}" 2>&1)"
+        linter_status=$?
+        if [[ "$linter_status" -ne 0 ]]; then
+          printf '%s: linter failed for %s (exit %s): %s\n' "$check_id" "$matched_file" "$linter_status" "$reason"
+          [[ -z "$linter_output" ]] || printf '%s\n' "$linter_output"
+          failed=1
+        fi
+        linter_index=$((linter_index + 1))
+      done
+    else
+      linter_argv=()
+      for token in "${linter_tokens[@]}"; do
+        if [[ "$token" == '{{filenames}}' ]]; then
+          linter_argv+=("${linter_file_args[@]}")
+        else
+          linter_argv+=("$token")
+        fi
+      done
+      linter_output="$("${linter_argv[@]}" 2>&1)"
+      linter_status=$?
+      if [[ "$linter_status" -ne 0 ]]; then
+        printf '%s: linter failed for %s files (exit %s): %s\n' "$check_id" "${#matched_files[@]}" "$linter_status" "$reason"
+        [[ -z "$linter_output" ]] || printf '%s\n' "$linter_output"
+        failed=1
+      fi
+    fi
     continue
   fi
 
