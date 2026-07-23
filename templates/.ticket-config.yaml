@@ -15,6 +15,15 @@ auto_push: true
 # Automatically delete remote feature branch after closing ticket
 delete_remote_on_close: true
 
+# Worktree settings
+# `ticket.sh start --worktree` が worktree を作成・再開したとき、main repo から
+# コピーする gitignored ファイル（repo root 相対）。既存ファイルは上書きせず、
+# source が無ければ warning のみで続行する。一時的な追加は
+# `./ticket.sh start --worktree --copy-file <path>`（繰り返し可）。
+# worktree での実行に必要な gitignored ファイルをプロジェクトに合わせて列挙する。
+worktree_copy_files:
+  - .env
+
 # Success messages
 new_success_message: |
   Ticket を作成しました。内容を編集してから `./ticket.sh start <ticket_name>` で作業を開始してください。

@@ -207,6 +207,7 @@ Agent Teams を使うために、`.claude/settings.json` に以下を配置す�
 - `default_branch`: メインブランチ名（default: `main`）
 - `branch_prefix`: feature ブランチのプレフィックス（default: `features/`）
 - `auto_push`: close 時に自動 push するか
+- `worktree_copy_files`: `ticket.sh start --worktree` 時に main repo からコピーする gitignored ファイルのリスト（template default: `.env`）。worktree で動くために必要なファイルに合わせて編集する
 - `default_content`: Ticket テンプレート（Why / What+AC / Architectural Invariants check / 確定判断 / Out-of-scope + 任意: Implementation Notes / Dependencies）
 - `note_content`: 作業メモテンプレート（PDH-ticket-review / PDH-implement / PDH-review + Findings 表 / PDH-verify / Technical reference 更新 / PDH-human-review / Discoveries / Open Questions / Resume Point）
 

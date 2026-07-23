@@ -129,6 +129,7 @@ main ← features/250711-091538-fix-auth (Ticket ブランチ)
 
 - ticket.sh が Ticket ごとに `features/<ticket-name>` ブランチを作り、close 時にマージ先（ticket frontmatter の `branch` フィールド、default `main`）にマージする。
 - 並列で複数 ticket を進める場合は、worktree 分離 (`claude --worktree <slug>` or `EnterWorktree({name: "<slug>"})`) を使うと PM (Director) と worker が独立に動ける。詳細は `.claude/skills/tmux-director/SKILL.md` 「複数 window による並行チケット実行」参照。
+- worktree には gitignored ファイル（`.env` 等）が入らない。worktree での実行に必要なものは `.ticket-config.yaml` の `worktree_copy_files` に列挙しておくと `ticket.sh start --worktree` が作成・再開時にコピーする（単発の追加は `--copy-file <path>`）。**このコピーは ticket.sh 自身が扱う worktree にだけ働く**。engine 側の機構（`claude --worktree` / `EnterWorktree` 等）だけで作った worktree には適用されないため、その場合は必要ファイルを手動でコピーする。
 
 ### Coding agent 向け
 
