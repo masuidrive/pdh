@@ -529,3 +529,13 @@ grep -q 'PASSED\[@\]} > 0' scripts/test-all.sh && echo "修正済み" || echo "�
 「要修正」なら、`tmp/pdh/templates/test-all.sh` の Summary ブロック（`(( ${#PASSED[@]} > 0 ))` / `(( ${#FAILED[@]} > 0 ))` の要素数ガード）を該当箇所に反映する。suite 定義（`run "..."` 行）は自分のものを残すこと。
 
 修正後、**suite が 1 つも定義されていない状態と、失敗する suite がある状態の両方で実行して確認する**（このバグは空配列でだけ出る）。
+
+#### `.ticket-config.yaml` に `worktree_copy_files` を追加（2026-07 以降）
+
+worktree には gitignored ファイル（`.env` 等）が入らない。`worktree_copy_files` に列挙すると `ticket.sh start --worktree` が作成・再開時に main repo からコピーする（ticket.sh 本体の対応は手順 7 の selfupdate で入る。古い ticket.sh でもキーが無視されるだけで無害）。`.ticket-config.yaml` は project カスタマイズが濃く diff マージで取りこぼされやすいので、キーの有無を直接確認する:
+
+```bash
+grep -q '^worktree_copy_files:' .ticket-config.yaml && echo "適用済み" || echo "要追加"
+```
+
+「要追加」なら `tmp/pdh/templates/.ticket-config.yaml` の `# Worktree settings` ブロック（コメント含む）を `.ticket-config.yaml` にコピーし、worktree での実行に必要な gitignored ファイルに合わせてリストを編集する。

@@ -57,6 +57,7 @@ scripts/
 - **配布ファイルを追加・改名・削除したら、`INSTALL.md` の配置表（「ファイルを配置する」のコピー元/コピー先テーブル）と README のディレクトリ構造図を同じ commit で更新する。** 配布物の一覧は `INSTALL.md` にある
 - **配布ファイル末尾の `Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/<path>` 行を壊さない。** `XXXXXXX` はプレースホルダのまま commit する（導入時に HEAD commit へ置換される）。path 部分は自身の配布先パスと一致させる
 - **`pdh-update` skill の更新手順が、追加した配布物をカバーしているか確認する**
+- **上書きされないテンプレート（`.ticket-config.yaml` / `CLAUDE.md` / `test-all.sh` 等、project カスタマイズを保持するファイル）に項目を追加・変更したら、`INSTALL.md`「既知の移行手順」に冪等な確認コマンド付きで追記する。** これらは pdh-update の diff マージ任せで、既存プロジェクトに確実には届かない。skill（常に上書き）だけが diff 伝播を信用してよい
 
 ## どこに書くかの判断（CLAUDE.md / PDH-AGENTS.md / skill）
 
