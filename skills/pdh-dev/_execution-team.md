@@ -53,6 +53,13 @@ worker割当変更をDirector自身のmodel変更の代用にしない。
 - 特定engineをworkflowへhardcodeしない
 - main engineが未指定で曖昧なときだけ、利用可能なCLIを確認してユーザへ「どちらで進めるか」を聞く。既指定なら聞かず、session中は同じengineを継続する。headless / CI文脈では、その実行系が定義する環境変数をmain engineとする
 
+### worker の reasoning effort
+
+- **Coding Engineer（実装 worker）を Opus 5 で動かすときは reasoning effort を `medium` にする。** 実装タスクの大半は「仕様が確定した機械的な変換」であり、そこに `high` 以上を充てても品質は上がらず所要時間とコストだけが増える。設計判断が要る場合は effort を上げるのではなく、実装前に ticket 側で判断を確定させる（`_flow.md` の ticket-review / human-review がその場）
+- 上げるのは**探索・判断・レビュー**の役割。architecture 検討、root cause の切り分け、review / verify は既定の effort（または明示的に高い effort）を使う
+- **Director 自身の effort は対象外**。上記「Director のモデル固定」が優先し、ユーザの明示指定なしに変更しない
+- モデル名は時間で古びる。ここで言う Opus 5 は「その時点で最上位の汎用 coding モデル」を指し、世代が変わったら読み替えて本節を更新する
+
 ## spawn 機構（engine 中立 = subprocess / 結果はファイル）
 
 workerはCLI subprocessで起動し、結果を専用fileで回収する。
