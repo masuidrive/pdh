@@ -1,0 +1,30 @@
+# This repository ships text, not a running product, so CI runs the same
+# consistency checks a maintainer would run locally: scripts/test-all.sh.
+#
+# It matters that this runs somewhere automatic. The FORCE_COLOR stage inside
+# test-all.sh exists because a colorized clock reading once took the whole gate
+# down in a consuming project, and that class of breakage is invisible until
+# someone happens to run the script in a shell that sets FORCE_COLOR.
+#
+# ripgrep is deliberately not installed: fast-checks.sh falls back to grep, and
+# running CI without rg keeps that fallback path exercised.
+name: test-all
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-all:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: scripts/test-all.sh
+        run: bash scripts/test-all.sh

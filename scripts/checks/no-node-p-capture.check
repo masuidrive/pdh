@@ -1,0 +1,10 @@
+# `node -p` renders its result through util.inspect, which colorizes numbers when
+# FORCE_COLOR is set (coding-agent shells commonly export FORCE_COLOR=3). Capturing
+# that output into a shell variable therefore yields $'\e[33m123\e[39m', and any
+# later arithmetic or numeric comparison breaks with a syntax error. This is exactly
+# how fast-checks.sh took every gate in a consuming project down.
+# Use `node -e 'process.stdout.write(String(...))'` when a shell needs the value.
+# pattern is POSIX ERE only (no \d \s \w \b \p{...} or (?...); use [[:space:]] etc).
+reason=do not capture `node -p` output in a shell: FORCE_COLOR makes it ANSI-colorized, which breaks arithmetic and numeric comparisons. Use `node -e 'process.stdout.write(String(...))'`
+pattern=\$\(node (-p|--print)[[:space:]]
+glob=scripts/**,templates/**
