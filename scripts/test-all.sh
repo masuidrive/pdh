@@ -21,6 +21,10 @@ run() {
 }
 
 run "fast-checks" bash scripts/fast-checks.sh
+# Agent shells commonly export FORCE_COLOR, which makes Node colorize numbers.
+# The runner's own clock captures one, so a regression here breaks the whole gate
+# with a shell syntax error rather than a check failure. Run it under color once.
+run "fast-checks (FORCE_COLOR=3)" env FORCE_COLOR=3 bash scripts/fast-checks.sh
 run "distribution consistency" bash scripts/check-distribution.sh
 
 # Link checking needs Unicode-aware slugification, so it is Python rather than

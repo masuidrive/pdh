@@ -26,14 +26,30 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CHECKS_DIR="${CHECKS_DIR:-$SCRIPT_DIR/checks}"
 
 # Portable millisecond clock: node, then python3, then coarse `date` seconds.
+# Must emit bare digits: the value feeds `$((end_ms - start_ms))`, so any decoration
+# turns the whole gate into a shell syntax error.
+# `node -p` renders through util.inspect, which colorizes numbers whenever FORCE_COLOR
+# is set (agent shells commonly export FORCE_COLOR=3). It returned
+# $'\e[33m1785825978963\e[39m' and took every run of this script down with it.
+# `console.log(<number>)` has the same problem; only `process.stdout.write` of a string
+# bypasses the inspector. Note the asymmetry: string arguments are never colorized, so
+# the bug is invisible until the captured value happens to be numeric.
 now_ms() {
+  local raw="" epoch
   if command -v node >/dev/null 2>&1; then
-    node -p 'Date.now()'
+    raw="$(node -e 'process.stdout.write(String(Date.now()))')"
   elif command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import time; print(int(time.time()*1000))'
-  else
-    echo $(( $(date +%s) * 1000 ))
+    raw="$(python3 -c 'import sys, time; sys.stdout.write(str(int(time.time() * 1000)))')"
   fi
+  # Do not "keep only digits" to normalize: the SGR parameters are digits too, so
+  # \e[33m42\e[39m becomes 334239 — no syntax error, just a silently wrong elapsed time.
+  # Validate strictly instead, and fall back to a clock that cannot be decorated.
+  if [[ ! "$raw" =~ ^[0-9]+$ ]]; then
+    epoch="$(date +%s 2>/dev/null)"
+    [[ "$epoch" =~ ^[0-9]+$ ]] || epoch=0
+    raw=$(( epoch * 1000 ))
+  fi
+  printf '%s' "$raw"
 }
 
 start_ms="$(now_ms)"
