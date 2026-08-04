@@ -1,0 +1,14 @@
+# Example fast-check. Adjust `glob` to the directories that hold your shell scripts,
+# or delete it if your project has none.
+# `node -p` renders its result through util.inspect, which colorizes numbers when
+# FORCE_COLOR is set (coding-agent shells commonly export FORCE_COLOR=3). Capturing
+# that output into a shell variable therefore yields $'\e[33m123\e[39m', and any
+# later arithmetic or numeric comparison breaks with a syntax error.
+# Use `node -e 'process.stdout.write(String(...))'` when a shell needs the value.
+# Note the asymmetry that makes this hard to spot by eye: console.log colorizes a
+# number the same way, but never a string, so one call site can break while an
+# identical-looking one does not.
+# pattern is POSIX ERE only (no \d \s \w \b \p{...} or (?...); use [[:space:]] etc).
+reason=do not capture `node -p` output in a shell: FORCE_COLOR makes it ANSI-colorized, which breaks arithmetic and numeric comparisons. Use `node -e 'process.stdout.write(String(...))'`
+pattern=\$\(node (-p|--print)[[:space:]]
+glob=scripts/**
