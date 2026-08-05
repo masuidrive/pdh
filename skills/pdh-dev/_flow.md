@@ -152,7 +152,7 @@ Why E2E無バイアスlensとAC conformanceおよび妥当性lensをpersona matr
 ## PDH-human-review. 人間レビュー
 
 1. note Statusを`PDH-human-review`へ更新し、verifyまでの証拠がcommit済みであることを確認する
-2. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-human-review`側が正。未対応findingは、全attemptの`### Findings (PDH-review-N)`表を横断して判定がfollow-upと棄却の行を抜き出して作る。ユーザ確認用のURLは`./scripts/dev-server.sh`で用意する
+2. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-human-review`側が正。未対応findingは、全attemptの`### Findings (PDH-review-N)`表を横断して判定が起票・記録のみ・棄却の行を抜き出して作る。ユーザ確認用のURLは`./scripts/dev-server.sh`で用意する
 3. **明示承認までcloseしない。**
 4. 差し戻しはimplementへ戻し、reviewから再走する。途中blockerは直ちに確認する
 

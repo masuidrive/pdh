@@ -20,7 +20,7 @@
 PMが行うこと：
 
 - review結果をtriageし、採否と修正方針を決める
-- severityだけで修正せず、AC、current diff、user journeyとの因果で採用、follow-up、棄却を決める
+- severityだけで修正せず、AC、current diff、user journeyとの因果で採用、起票、記録のみ、棄却を決める
 - 修正前に複雑度差分を確認し、永続stateまたは公開surface追加案を削除、拒否、制約案と比較する
 - workerをspawnしてdispatchする
 - noteとticketの更新、commit、ユーザ報告を行う

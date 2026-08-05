@@ -11,7 +11,7 @@
 5. テスト、review、外部依存、環境制約により、同一session内に`PDH-human-review`へ到達する見込みを説明できない場合
 
 相談の提示形式は`PDH-AGENTS.md`「Reporting」に従い、各選択肢にtradeoffを1行添える。
-同一ticketと説明できない実在問題は、current ticketへ含める必要がある場合を除きfollow-upにする。
+同一ticketと説明できない実在問題は、current ticketへ含める必要がある場合を除き、起票 / 記録のみ / 棄却のいずれかへ振り分ける。実在することは起票の理由にならない（`PDH-AGENTS.md`「Verification」のScope boundaryが正）。
 
 通常は`PDH-review`と`PDH-verify`まで自動で進める。
 上の条件に該当したらhuman review gateを待たず、noteに加えて会話で状況、判断、選択肢を示す。

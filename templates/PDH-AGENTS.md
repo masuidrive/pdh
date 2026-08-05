@@ -69,7 +69,8 @@ The review and verification rules are:
 
 - **Severity**: Critical means the ticket cannot ship unfixed because an AC
   is unmet, security is violated, or data can be lost; Major degrades this
-  ticket's user journey. Everything else defaults to follow-up.
+  ticket's user journey. Everything else is lower priority; its disposition is
+  decided by the scope boundary below, and is not automatically a new ticket.
 - **AC trace and over-implementation**: check forward that every AC has named
   implementation evidence and reverse-map every substantive change to the brief/AC,
   security, or stability. Report unmapped code, dead code documented as active,
@@ -96,12 +97,24 @@ The review and verification rules are:
   exact commit SHA. A later change invalidates the evidence it can affect.
   Browser verification must use the real runtime composition (dev server,
   shared shell/styles, auth, and seed), not an isolated renderer substitute.
-- **Scope boundary**: keep a finding in the current ticket only when leaving it
+- **Scope boundary**: keep a finding in the current ticket when leaving it
   unfixed would mean AC is unmet, the current diff caused a regression, the
-  same root cause can recreate an actually shipped defect, or a Critical/Major
-  finding makes this ticket's changed/required user journey unsafe to review.
-  Otherwise record it as a follow-up. An exception
-  requires one note line connecting the fix directly to the AC or current diff.
+  same root cause can recreate an actually shipped defect, a Critical/Major
+  finding makes this ticket's changed/required user journey unsafe to review,
+  or the finding shares this ticket's Why — fixing it completes the ticket
+  rather than widening it. Size and convenience are not reasons; a shared Why
+  is. An exception requires one note line tying the fix to the AC, the current
+  diff, or that shared Why.
+- **A deferred ticket needs its own reason to exist.** Deferring is not free: a
+  ticket no one would schedule on its own is backlog, not a plan. Put every
+  unfixed finding into exactly one disposition — **fix now** (scope boundary
+  above), **file** (its Why stands on its own and it is worth scheduling as an
+  independent unit of work), **record only** (real, but not worth a ticket and
+  not being done now), or **reject** (false positive or wrong premise). Being
+  real is not by itself a reason to file. When a finding cannot justify being an
+  independent unit but is worth doing, do it in the current ticket instead of
+  deferring it. Record-only findings live in the note, and in the repository's
+  standing reference document when they are a durable landmine.
 - **Human authority**: a human gate or product decision requires an explicit
   user response. A highlighted/default form option, silence, or worker output
   is not approval. Environment-specific constraints must not be solved by
@@ -191,8 +204,9 @@ At `PDH-human-review`, before close:
 - Each AC with its evidence, and any AC met only indirectly
 - The diff summary and the main changed files
 - Test and verification output, verbatim enough to see pass/fail counts
-- **Every review finding that was not fixed** — the follow-up and rejected rows
-  of the note's `### Findings` table, with counts and one-line reasons. State
+- **Every review finding that was not fixed** — the filed, record-only, and
+  rejected rows of the note's `### Findings` table, with counts, one-line
+  reasons, and which of them became tickets. State
   zero explicitly when there are none. What was deliberately left unfixed is
   decision material of the same weight as what was fixed; the scope judgment is
   verifiable nowhere else.

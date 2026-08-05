@@ -88,7 +88,7 @@ Design Decisionや実装詳細を自主的に書かない。
 | PDH-ticket-review | Why、AC、Design Decisions、Out-of-scope、Dependencies、Invariants。AC承認は得ない |
 | PDH-implement | commit、実装中の判断、scope判断 |
 | PDH-review | attempt別のreview結果と対応 |
-| PDH-review > Findings (PDH-review-N) | findingの台帳。検出時点で1行追加し、判定列（採用 / follow-up / 棄却）と理由を埋める |
+| PDH-review > Findings (PDH-review-N) | findingの台帳。検出時点で1行追加し、判定列（採用 / 起票 / 記録のみ / 棄却）と理由を埋める |
 | PDH-verify | process checklistと証拠 |
 | Technical reference 更新 | この ticketの差分に因果がある追記・上書き、または「該当なし」と理由 |
 | PDH-human-review | review依頼、確認手順、承認または差し戻し |

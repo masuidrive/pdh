@@ -25,11 +25,11 @@ flowchart TD
 
 ### Severity の運用
 
-Critical / Major / follow-up の定義は`PDH-AGENTS.md`「Verification」のSeverityが正。運用上の補足だけをここに置く。
+Critical / Major / Minor の定義は`PDH-AGENTS.md`「Verification」のSeverityが正。運用上の補足だけをここに置く。
 
 - 検出頻度は信頼度のヒントであって重要度ではない
 - Criticalはユーザが明示受容してもPASSとは記録しない
-- follow-up相当の指摘だけでloopを再開しない
+- Minor相当の指摘だけでloopを再開しない
 
 ### 複雑度差分 gate
 
@@ -70,9 +70,9 @@ finding冒頭へ`[同名 symbol sweep]`等の観点labelを付ける。
 1. 各reviewerは対象SHAを固定して結果へ明記する
 2. 独立review必須triggerとcross-model要件は`PDH-AGENTS.md`「Verification」が正。代替手段と理由記録もそちらに従う
 3. diff全体の網羅探索は初回だけとし、修正後は採用finding、再現条件、修正diffだけを同じreviewerへ渡す
-4. reviewerは事実の再現と解消を判定し、Directorは採用、follow-up、棄却とloop終了を判定する
+4. reviewerは事実の再現と解消を判定し、Directorは採用、起票、記録のみ、棄却とloop終了を判定する
 5. 完了には、採用CriticalとMajorが最新SHAで解消し、非採用findingの分類と理由がnoteへ必要である。全findingの実装は要求しない
-6. 修正確認の新規findingを自動でloopへ加えない。修正起因CriticalまたはMajorだけscope gateへ戻し、他はfollow-upまたは棄却する
+6. 修正確認の新規findingを自動でloopへ加えない。修正起因CriticalまたはMajorだけscope gateへ戻し、他は起票 / 記録のみ / 棄却へ振り分ける
 7. PASS済みreviewerは次diffがその観点へ影響する場合だけ再実行する
 
 ### Review attempt 収束性診断
@@ -136,7 +136,7 @@ reviewer間またはlens間で結論が割れたら、unionや多数決で流さ
 
 ここにはDirectorの記録手順だけを置く。
 
-- 判定は 採用 / follow-up / 棄却 の3種。実在する範囲外問題はfollow-up、false positiveや前提誤りは棄却とする
+- 判定は 採用 / 起票 / 記録のみ / 棄却 の4種。**実在することは起票の理由にならない。** 独立した作業単位として成立する（それ単体でスケジュールされるWhyを持つ）ものだけを起票し、成立しないが直す価値があるものは採用して現チケット内で直す。直す価値が無いものは記録のみ。false positiveや前提誤りは棄却。判定基準は`PDH-AGENTS.md`「Verification」のScope boundaryが正
 - findingはnoteの`### Findings (PDH-review-N)`表へ、**検出した時点で1行追加する**。判定列と理由は後で埋めてよいが、attempt終了後にまとめて書き起こさない。表の形式は次で固定する（noteテンプレートに無い場合はDirectorがこの見出しごと追加する）
 
   ```
@@ -144,9 +144,9 @@ reviewer間またはlens間で結論が割れたら、unionや多数決で流さ
   |---|---|---|---|---|---|
   ```
 
-  観点は網羅探索チェックリストのlabel、Sevは Critical / Major / follow-up、判定は 採用 / follow-up / 棄却。
+  観点は網羅探索チェックリストのlabel、Sevは Critical / Major / Minor、判定は 採用 / 起票 / 記録のみ / 棄却。
 - attempt 2以降は`### Findings (PDH-review-2)`のように見出しを自分で追加する
-- 修正確認attemptで出た新規findingも、follow-up / 棄却にしたものを含めて同じ表へ1行追加する（`PDH-human-review`はこの表から提示分を抜き出すため、載せないと報告漏れになる）
+- 修正確認attemptで出た新規findingも、起票 / 記録のみ / 棄却にしたものを含めて同じ表へ1行追加する（`PDH-human-review`はこの表から提示分を抜き出すため、載せないと報告漏れになる）
 
 ## レビュー品質ルール
 
