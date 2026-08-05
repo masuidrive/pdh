@@ -229,6 +229,7 @@ Monitor({
    **⚠ cursor identity の落とし穴 — 必ず `--cursor` を明示する**: `pull` は `--cursor` 省略時、cursor identity を `whoami`（= Director 自身の pane の key。`<hash>:<pane_id>`）にフォールバックする (`scripts/hookbus.js` `pullCommand`)。cursor は「どこまで読んだか」を identity ごとに 1 ファイル (byte offset) で保持し、event を emit するたびに advance + 永続化する。**同じ identity を使う `pull` が複数あると (Monitor を 2 つ起動する / Director が診断で手動 `pull` を叩く 等)、片方が cursor を末尾まで進めてしまい、他方はイベントを consume 済み扱いで取り逃す**。実際これで worker の Stop イベントが一度も通知されない事故が起きた。鉄則:
    - **各 Monitor に固有の `--cursor <id>`** を渡す (Director 自身の key と必ず別)。
    - **新規 cursor は offset 0 から = log 全 backlog を replay** し通知洪水で Monitor が auto-stop するので、起動前に上記 d) で cursor を log 末尾へ seed して「以降の新規イベントだけ」にする。
+   - **⚠ 監視対象を増減するときは、cursor の seed もやり直す。**`--include` を書き換えて cursor 名を据え置くと、停止し損ねた古い pull と cursor を奪い合う。かといって cursor 名を変えると **新規 cursor 扱いで backlog が全部再生される**。**`--include` の変更と cursor の seed は必ずセット**で行うこと（実際、窓の役割が変わって include に足した際にこれを踏み、7,300 万バイト分の過去イベントが流れた）。
    - **複数 worker は「Monitor を N 個」ではなく「1 Monitor + `--include` 複数」**で監視し、cursor を 1 本に保つ。
    - Director が診断目的で手動 `pull` を叩く時も `--cursor` を別 id にする (でないと Monitor の cursor を汚染する)。
 
