@@ -185,8 +185,23 @@ If there is doubt, a blocker, a missing decision, or no credible path to `PDH-hu
 
 A human gate is only as good as the material the user receives. The user is not
 expected to reconstruct the agent's reasoning, re-read the diff, or ask for what
-is missing. Deliver the following in the conversation itself — recording it in
-the note file instead of presenting it does not satisfy the gate.
+is missing.
+
+Deliver the following in a form the user can read without reconstructing it:
+the conversation itself, or a single assembled document whose link or path is
+given in the conversation alongside a short summary. **Recording it only in the
+note file does not satisfy the gate** — the note is the agent's working record,
+not delivery. When the material spans several decisions, needs background
+explanation, or has to be looked at rather than read, prefer the assembled
+document; a long gate report pasted into the conversation scrolls away and
+cannot be re-read at the moment the user decides.
+
+How the document is assembled depends on what the engine can do. An engine that
+can publish a rendered artifact should do so. An engine that cannot should write
+the same structure to a file under the ticket's tmp directory and give its path.
+The requirement is the material and its readability, not the rendering
+mechanism; do not skip the gate material because the richer mechanism is
+unavailable.
 
 At `PDH-ticket-human-review`, before implementation:
 
