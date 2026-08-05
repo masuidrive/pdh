@@ -200,6 +200,7 @@ project-root/
       pdh-check-writing/SKILL.md ← 宣言型 `.check` 執筆スキル
       tmux-director/SKILL.md ← tmux Director スキル
       pdh-update/SKILL.md    ← PDH アップデートスキル
+      decision-board/       ← 判断ボードスキル (SKILL.md + テンプレート + 生成スクリプト)
 ```
 
 ## このリポジトリの構成
@@ -218,6 +219,11 @@ pdh/
     pdh-check-writing/SKILL.md       ← 宣言型 `.check` 執筆スキル
     tmux-director/SKILL.md           ← tmux Director スキル
     pdh-update/SKILL.md              ← PDH アップデートスキル
+    decision-board/
+      SKILL.md                       ← 判断ボードスキル（何を書くか / 回答をどう受け取るか）
+      board-kit.tpl                  ← 見た目・回答フォーム・目次・コピー機構
+      build-board.sh                 ← マーカーを置換して 1 枚の HTML を書き出す（POSIX sh のみ）
+      mermaid-render.min.js          ← 図をブラウザ側で描くための bundle（図がある board にだけ差し込む）
   templates/
     product-brief.md                 ← Product Brief テンプレート
     technical-reference.md           ← Technical Reference テンプレート（現在の実装の How）
