@@ -208,13 +208,15 @@ __TITLE__
         padding-top:10px;margin-top:4px;}
   .meta .k{font-weight:700;letter-spacing:.05em;}
   .meta code{font-size:11px;background:transparent;padding:0;color:var(--ink-3);}
+  /* ⚠ 見出し（h1 / h3）に text-wrap:balance を付けない。日本語では行が不自然に割れる
+     （禁則と単語境界の扱いが英文前提のため）。2026-08-05 に削除。 */
   h1{font-size:clamp(25px,4vw,34px);line-height:1.28;letter-spacing:-.02em;
-     text-wrap:balance;margin:0;font-weight:700;}
+     margin:0;font-weight:700;}
   .lede{color:var(--ink-2);font-size:17px;margin:0;}
   .src{font-size:13px;color:var(--ink-3);}
   h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);
      margin:0 0 2px;font-weight:700;}
-  h3{font-size:19px;margin:0;letter-spacing:-.01em;text-wrap:balance;}
+  h3{font-size:19px;margin:0;letter-spacing:-.01em;}
   p{margin:0;}
   a{color:var(--acc);text-decoration:underline;text-underline-offset:3px;
     text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,var(--acc) 45%,transparent);}
@@ -353,6 +355,19 @@ __TITLE__
   nav.toc a.current{background:var(--raise);color:var(--ink);}
   nav.toc a.is-decide.current{color:var(--acc);}
 
+  /* ── JS が走らなかったときだけ残る案内 ──
+     CSP が inline script を止める配信経路（file viewer の pane など）では、
+     集計・コピー・目次・進捗が «全部» 消える。noscript は «JS 無効» のときしか
+     出ないので、CSP ブロックには効かない。だから既定で表示しておき、
+     script の最後で消す。JS が動く環境では読み込み中に一瞬出るだけ。 */
+  #nojs{border:1px solid var(--bad);background:var(--bad-soft);
+        border-radius:14px;padding:18px 20px;font-size:14.5px;line-height:1.8;}
+  #nojs p{margin:0 0 10px;}
+  #nojs p:last-child{margin-bottom:0;}
+  #nojs b{color:var(--bad);}
+  #nojs code{font-family:var(--mono);font-size:13px;background:var(--card);
+             border:1px solid var(--rule);border-radius:5px;padding:1px 5px;}
+
   @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
 </style>
 
@@ -369,6 +384,11 @@ __TITLE__
 </nav>
 
 <main>
+<div id="nojs">
+  <p><b>この画面では JavaScript が止められています。</b>選択の集計・コピー・目次・進捗バーは動きません。<b>判断の内容と選択肢はすべてそのまま読めます。</b></p>
+  <p><b>回答は、判断の番号と選んだ記号を会話にそのまま書いてください。</b>例: <code>判断1: A / 判断2: B / 判断3: その他 — …</code></p>
+  <p>集計とコピーを動かすなら、このファイルを<b>ブラウザで直接開く</b>か、置いてあるディレクトリで <code>python3 -m http.server</code> を実行して開いてください。ファイルビューア経由だと <code>Content-Security-Policy: default-src 'none'</code> で inline script がブロックされます。</p>
+</div>
 __CONTENT__
 </main>
 </div>
@@ -755,5 +775,11 @@ __MERMAID__
     if (dx > 0 && !isOpen()) setOpen(true);
     else if (dx < 0 && isOpen()) setOpen(false);
   }, {passive: true});
+
+  // ── JS が動かない環境の案内を消す。⚠ «最後» にやること ──
+  // 途中で例外が出て board が半分しか組まれなかった場合、案内は «残るべき» である。
+  // 先頭で消すと、壊れた board を「正常に見えるが答えられない」状態で出すことになる。
+  var nojsEl = document.getElementById('nojs');
+  if (nojsEl && nojsEl.parentNode) nojsEl.parentNode.removeChild(nojsEl);
 })();
 </script>
