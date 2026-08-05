@@ -97,24 +97,42 @@ The review and verification rules are:
   exact commit SHA. A later change invalidates the evidence it can affect.
   Browser verification must use the real runtime composition (dev server,
   shared shell/styles, auth, and seed), not an isolated renderer substitute.
+  A reviewer's prompt must name the commit SHA under review, and the reviewer
+  must read that SHA. Do not commit to the ref under review while a review is
+  running; if it moves, the review result is void and must be re-run against the
+  fix delta.
 - **Scope boundary**: keep a finding in the current ticket when leaving it
   unfixed would mean AC is unmet, the current diff caused a regression, the
   same root cause can recreate an actually shipped defect, a Critical/Major
   finding makes this ticket's changed/required user journey unsafe to review,
   or the finding shares this ticket's Why — fixing it completes the ticket
-  rather than widening it. Size and convenience are not reasons; a shared Why
-  is. An exception requires one note line tying the fix to the AC, the current
-  diff, or that shared Why.
+  rather than widening it. An exception requires one note line tying the fix to
+  the AC, the current diff, or that shared Why. A shared Why is a reason to fix
+  now; size and convenience are never reasons on their own to defer.
+  **Fixing now is the default.** Deferring is justified only when the finding is
+  genuinely a different problem **and** fixing it here would be expensive —
+  neither condition alone is enough. Being cheap to fix is itself a reason to do
+  it now, even when the finding could stand as its own ticket.
+  When a finding's root cause can exist in the same form in more than one place,
+  enumerate those places before close and record a disposition for each. "There
+  may be others" is not a close-ready state.
 - **A deferred ticket needs its own reason to exist.** Deferring is not free: a
   ticket no one would schedule on its own is backlog, not a plan. Put every
   unfixed finding into exactly one disposition — **fix now** (scope boundary
-  above), **file** (its Why stands on its own and it is worth scheduling as an
-  independent unit of work), **record only** (real, but not worth a ticket and
-  not being done now), or **reject** (false positive or wrong premise). Being
-  real is not by itself a reason to file. When a finding cannot justify being an
-  independent unit but is worth doing, do it in the current ticket instead of
-  deferring it. Record-only findings live in the note, and in the repository's
-  standing reference document when they are a durable landmine.
+  above), **file** (its Why stands on its own, it is worth scheduling as an
+  independent unit of work, and fixing it here would be expensive), **record
+  only** (real, but not worth a ticket and not being done now), or **reject**
+  (false positive or wrong premise). Being real is not by itself a reason to
+  file. When a finding cannot justify being an independent unit but is worth
+  doing, do it in the current ticket instead of deferring it. Record-only
+  findings live in the note, and in the repository's standing reference document
+  when they are a durable landmine. A record-only finding must carry at least
+  one anchor that can be searched for later — a symbol name, file path,
+  endpoint, or configuration key. A finding whose wording admits no anchor is
+  too vague to be usable later; rewrite it or reject it. A finding marked
+  **file** must have its ticket created before the current ticket closes, and
+  the close report must name it. When that is not possible, choose record-only
+  or fix now instead — "file it later" is not a disposition.
 - **Human authority**: a human gate or product decision requires an explicit
   user response. A highlighted/default form option, silence, or worker output
   is not approval. Environment-specific constraints must not be solved by
@@ -152,6 +170,12 @@ The check must exercise the same composed page the user receives, including
 the shared page shell and CSS. Record the tested commit SHA. For visual UI,
 cover light and dark color schemes when the application supports them.
 
+When capturing variants — theme, locale, permission level — confirm that each
+captured artifact really is that variant: read the state the application itself
+exposes, or show that the artifacts actually differ between variants. A
+screenshot always succeeds, so an emulation that silently failed to apply looks
+identical to one that worked.
+
 HTTP-level tools (`curl`, API test scripts) verify server behavior only. They
 are never acceptable evidence for a browser surface: client-side logic (drag &
 drop, FormData construction, rendering, form submission) is exercised only by
@@ -179,6 +203,16 @@ this session. A missing command, missing dependency, or environment error
 counts as a test failure, not a skip; a single failing, unknown-skipped, or
 unrunnable test means the work is not done.
 
+Paste the suite's own summary lines into the gate record; do not replace them
+with a claim about the outcome. If any step is not green, excusing it requires
+running that same step on the base ref and showing it fails there too. Asserting
+that the failure is unrelated is not an excuse.
+
+A test that passed only on retry is a fourth outcome, distinct from pass, fail,
+and skip. Report retry-passes with their count and the names of the affected
+tests; never fold them into a green summary. Whether they block the close is for
+a human to decide — but they must not be invisible.
+
 If there is doubt, a blocker, a missing decision, or no credible path to `PDH-human-review`, ask the user immediately instead of waiting for a later gate.
 
 ## Human Gate Materials
@@ -203,6 +237,10 @@ The requirement is the material and its readability, not the rendering
 mechanism; do not skip the gate material because the richer mechanism is
 unavailable.
 
+When an option defers a class of defect, list the instances of that class known
+at the time — how many and where. "There may be others" leaves the user
+approving a set whose members they cannot see.
+
 At `PDH-ticket-human-review`, before implementation:
 
 - What this ticket will make possible, in one user-journey line
@@ -224,7 +262,11 @@ At `PDH-human-review`, before close:
   reasons, and which of them became tickets. State
   zero explicitly when there are none. What was deliberately left unfixed is
   decision material of the same weight as what was fixed; the scope judgment is
-  verifiable nowhere else.
+  verifiable nowhere else. Before building the material from the findings table,
+  confirm that each row's disposition matches the current decision. Where a
+  decision changed, rewrite the disposition and keep the previous one in the same
+  cell (`file → fixed in this ticket`), so the material reports what was actually
+  left undone.
 - Concrete steps for the user to check the result themselves. These
   instructions are for the user, not the agent: browser URL and concrete
   click/visual checks for UI, `curl` and expected status/body for API, the auth

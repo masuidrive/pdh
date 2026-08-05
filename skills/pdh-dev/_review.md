@@ -87,7 +87,9 @@ Discoveryへ記録し、元のACとuser journeyだけをverifyする。
 invariant test追加やcosmetic alignmentなどのengineering aestheticsをscope拡張理由にしない。
 
 3 attempt以上のpatch loopへ入らない。
-scope再作成、実code factと3案以上を示すescalation、戦略転換のいずれかを選ぶ。
+巡回数はnoteの`### Findings (PDH-review-N)`見出しが表す。**Nが3に達した時点でescalateする。**禁止形だけでは、既に入ってしまったloopの出口を示さないため、到達時の手順をここで定める。
+scope再作成、実code factと3案以上を示すescalation、戦略転換、レビュー対象の変更のいずれかを選ぶ。
+レビュー対象の変更とは、diffを読むのをやめて実data・実挙動の監査へ切り替えることを指す。同じdiffを読み直すloopは、欠陥がdiffの外にあるとき原理的に収束しない。
 動的言語などで入口検出だけでは同種Majorが3 attempt再発する場合は、入口除外、通過遮断、最終生成物sentinelの3段防御へ転換する。
 
 ### 裏取りルール
