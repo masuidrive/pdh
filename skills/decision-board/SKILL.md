@@ -130,10 +130,10 @@ content の骨格。**この順に並べる**（表示順 = 記述順）:
     </db-ticket>
   </db-tickets>
   <db-pane>
-    <db-doc tab="チケット"><db-markdown><script type="text/markdown">
+    <db-doc id="ticket" tab="チケット"><db-markdown><script type="text/markdown">
 （ticket.md をそのまま貼る）
 </script></db-markdown></db-doc>
-    <db-doc tab="作業ノート"><db-markdown><script type="text/markdown">
+    <db-doc id="note" tab="作業ノート"><db-markdown><script type="text/markdown">
 （note.md をそのまま貼る）
 </script></db-markdown></db-doc>
   </db-pane>
@@ -154,6 +154,21 @@ content の骨格。**この順に並べる**（表示順 = 記述順）:
 `id="ac1"` が付く（`<db-ref to="ac1">` の宛先になる）。判断者はチケットを読まなくても決められる
 作りにするのが前提だが、**確かめたい人がその場で原文に当たれる**ことが信頼の裏付けになる。
 ⚠ 原文に `</script>` を含む場合だけ `<\/script>` にエスケープする。
+
+**原文への入口は本文の中に置く。**チケットカードには「チケットを開く」「作業ノートを開く」が
+自動で出る（`db-doc` の `tab` から作られるので書かなくてよい）。**それ以外の場所からも
+`db-ref` で開ける** — `db-doc` に `id` を付けておき、判断や資料の文中から指す:
+
+```html
+<db-ref to="note">作業ノート全文</db-ref>   <!-- 資料の先頭を開く -->
+<db-ref to="ac3">AC3</db-ref>                <!-- 原文の中の 1 行を開いて光らせる -->
+```
+
+**「上のボタンを押してください」と書かない。**それは強いられる移動であり、押せるものを
+その場に置けば済む（「やってはいけないこと」の「名前で指す」と同じ理由）。
+
+**ペインの幅は読む人が変えられる。**左端を掴んで drag（`← →` キー / ダブルクリックで既定に戻る）。
+幅は board 横断で保存されるので、**書き手が幅を指定する必要はない。**
 
 **本文の幅は `--db-w` で決まる。**既定は 830px（日本語 45〜50 字/行）で、1500px 以上で 1000px、
 1900px 以上で 1180px に広がる。**幅は上限であって固定値ではない** — 広い画面で余白を捨てないための
@@ -369,8 +384,8 @@ content の骨格。**この順に並べる**（表示順 = 記述順）:
 | `db-per-item` `db-item` | 項目ごとの処置。`name` / `choices` / `key` / `label` / `detail` |
 | `db-approve` | gate を通す行為。`label` / `requires-all` |
 | `db-submit` | 提出欄。集計・全部コピー・クリア（中身は書かない） |
-| `db-ref` | 参照。`to` の 1 本で AC / 資料 / 判断を指し、その場で開いて光らせる |
-| `db-pane` `db-doc` | 右ペイン。`tab`。1200px 以上は本文を押し縮め、狭い画面は覆う |
+| `db-ref` | 参照。`to` の 1 本で AC / 資料 / 判断 / 原文（`db-doc` の `id`）を指し、その場で開いて光らせる |
+| `db-pane` `db-doc` | 右ペイン。`tab` / `id`。1200px 以上は本文を押し縮め、狭い画面は覆う。**左端を掴んで幅を変えられる** |
 | `db-markdown` | `script[type="text/markdown"]` の中身を描画。ticket / note の原文用 |
 | `db-text-input` `db-number-input` `db-val` `db-link` | 入力と参照。`persist="shared"` で board 横断保存 |
 

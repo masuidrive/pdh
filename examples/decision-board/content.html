@@ -21,7 +21,7 @@
 </db-tickets>
 
 <db-pane>
-  <db-doc tab="チケット"><db-markdown><script type="text/markdown">
+  <db-doc id="ticket" tab="チケット"><db-markdown><script type="text/markdown">
 ## 260805-000000-duplicate-notification-mail
 
 ### Why / Intent
@@ -38,7 +38,7 @@
 
 - 通知テンプレートの改善（別 ticket）
 </script></db-markdown></db-doc>
-  <db-doc tab="作業ノート"><db-markdown><script type="text/markdown">
+  <db-doc id="note" tab="作業ノート"><db-markdown><script type="text/markdown">
 # Work Notes
 
 ## Findings
@@ -74,7 +74,7 @@
     <db-reveal chip="実測値">重複排除の追加コストは 1 通あたり <db-val name="cost" empty="—"></db-val> ms（下の入力で試算が変わります）。
       <db-number-input name="cost" label="想定 ms" value="3" min="1" max="50"></db-number-input>
       ・ <db-ref to="r1">全文を出す — 実測の表を見る</db-ref></db-reveal>
-    <db-reveal chip="関係する受け入れ条件"><db-ref to="ac3">AC3</db-ref> 二重送信が起きたら記録に残る — f2 はこの記録の「読みやすさ」の話で、条件自体は満たしています。</db-reveal>
+    <db-reveal chip="関係する受け入れ条件"><db-ref to="ac3">AC3</db-ref> 二重送信が起きたら記録に残る — f2 はこの記録の「読みやすさ」の話で、条件自体は満たしています（<db-ref to="note">作業ノート全文</db-ref>）。</db-reveal>
   </db-chips>
 
   <db-prose label="決めないとどうなるか">close 自体は進められます。起票は close 時にまとめるのが手戻りが少ないので、判断 2 と一緒に返してもらえると 1 度で済みます。</db-prose>

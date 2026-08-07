@@ -55,7 +55,7 @@
   var KEY = 'dbboard:' + location.pathname;
   var SHARED = 'dbboard:shared';
   var store = { ans: {}, note: {}, per: {}, appr: {}, inputs: {} };
-  var shared = { inputs: {}, theme: 'auto' };
+  var shared = { inputs: {}, theme: 'auto', paneW: 0 };
   var restoredHasContent = false;
   try {
     var raw = localStorage.getItem(KEY);
@@ -68,6 +68,7 @@
       var s = JSON.parse(rawS);
       if (s.inputs) shared.inputs = s.inputs;
       if (s.theme) shared.theme = s.theme;
+      if (s.paneW) shared.paneW = s.paneW;
     }
   } catch (e) { /* localStorage 不可でも board は動く */ }
   function save() {
@@ -902,11 +903,25 @@
       var h2 = txt('h2', null, tk.getAttribute('name') || '');
       tk.insertBefore(h2, head.nextSibling);
     });
-    if (pane) tks.appendChild(txt('div', 'db-tk-note', '全文は右のパネルで開けます（上の「チケット」ボタン）。'));
+    /* 原文への入口はチケットカードの中に置く。«上のボタンを押せ» と案内するのは
+       強いられる移動になるので、押せるものをその場に出す */
+    if (pane && paneDocs.length) {
+      var opens = el('div', 'db-tk-open');
+      paneDocs.forEach(function (dc, i) {
+        var b = txt('button', 'db-openbtn', (dc.getAttribute('tab') || ('資料 ' + (i + 1))) + 'を開く');
+        b.type = 'button';
+        b.addEventListener('click', function () { openPane(i, null); });
+        opens.appendChild(b);
+      });
+      tks.appendChild(opens);
+    }
   });
 
   /* ── 右ペイン ── */
   var paneOpen = false, paneScrimEl = null;
+  /* ⚠ この 3 つは setupPaneResize() より «前» に代入しておくこと。関数宣言は巻き上がるが
+     var の代入は実行順なので、後ろに置くと復元時だけ undefined を掴んで幅が NaN になる */
+  var PANE_MIN = 320, PANE_DEFAULT = 400, PANE_CAP = 880;
   if (pane) {
     var tabs = el('div', 'db-pane-tabs');
     var body = el('div', 'db-pane-body');
@@ -931,6 +946,7 @@
     paneScrimEl.addEventListener('click', closePane);
     doc.body.appendChild(paneScrimEl);
     pane.setAttribute('data-open', 'off');
+    setupPaneResize();
     var showTab = function (i) {
       paneDocs.forEach(function (dc, j) {
         dc.classList.toggle('on', i === j);
@@ -941,6 +957,66 @@
     window._dbPaneBody = body;
     showTab(0);
   }
+  /* ── ペイン幅の drag ──
+     幅は --db-pane-w 1 つで決まる（ペイン本体・本文の margin-right・toast のずらし）。
+     値は board 横断で保存する（テーマと同じ扱い。読む人の画面の都合であって board の内容ではない）。
+     上限は «本文が読める幅を残す» ことで決める。1200px 以上ではペインが本文を押し縮めるので
+     本文側に 420px を残し、それ未満（ペインが覆う場合）は画面端だけ空ける。 */
+  function paneMax() {
+    var vw = window.innerWidth;
+    var railW = rail ? rail.getBoundingClientRect().width : 0;
+    var lim = vw >= 1200 ? vw - railW - 420 : vw - 120;
+    return Math.max(PANE_MIN, Math.min(PANE_CAP, lim));
+  }
+  function applyPaneWidth(w, persist) {
+    w = Math.round(Math.min(paneMax(), Math.max(PANE_MIN, w)));
+    doc.documentElement.style.setProperty('--db-pane-w', w + 'px');
+    if (persist) { shared.paneW = w; save(); }
+    return w;
+  }
+  function setupPaneResize() {
+    if (shared.paneW) applyPaneWidth(shared.paneW, false);
+    var grip = el('div', 'db-pane-grip');
+    grip.setAttribute('role', 'separator');
+    grip.setAttribute('aria-orientation', 'vertical');
+    grip.setAttribute('aria-label', 'パネルの幅を変える（ドラッグ / ← → キー / ダブルクリックで既定に戻す）');
+    grip.title = 'ドラッグで幅を変える（ダブルクリックで既定に戻す）';
+    grip.tabIndex = 0;
+    pane.appendChild(grip);
+    var dragging = false;
+    grip.addEventListener('pointerdown', function (ev) {
+      dragging = true;
+      try { grip.setPointerCapture(ev.pointerId); } catch (e) { }
+      doc.documentElement.classList.add('db-resizing');
+      ev.preventDefault();
+    });
+    grip.addEventListener('pointermove', function (ev) {
+      if (dragging) applyPaneWidth(window.innerWidth - ev.clientX, false);
+    });
+    var end = function (ev) {
+      if (!dragging) return;
+      dragging = false;
+      try { grip.releasePointerCapture(ev.pointerId); } catch (e) { }
+      doc.documentElement.classList.remove('db-resizing');
+      applyPaneWidth(window.innerWidth - ev.clientX, true);
+    };
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', end);
+    grip.addEventListener('dblclick', function () { applyPaneWidth(PANE_DEFAULT, true); });
+    grip.addEventListener('keydown', function (ev) {
+      var cur = pane.getBoundingClientRect().width, step = ev.shiftKey ? 80 : 24;
+      if (ev.key === 'ArrowLeft') applyPaneWidth(cur + step, true);
+      else if (ev.key === 'ArrowRight') applyPaneWidth(cur - step, true);
+      else if (ev.key === 'Home') applyPaneWidth(PANE_DEFAULT, true);
+      else return;
+      ev.preventDefault();
+    });
+    /* 画面が狭くなったら clamp し直す。保存値そのものは残す（広い画面に戻れば元の幅に戻る） */
+    window.addEventListener('resize', function () {
+      if (shared.paneW) applyPaneWidth(shared.paneW, false);
+    });
+  }
+
   function openPane(tabIdx, anchorId) {
     if (!pane) return;
     paneOpen = true;
@@ -956,8 +1032,10 @@
         var b = window._dbPaneBody;
         if (!t || !b) return;
         var top = t.getBoundingClientRect().top - b.getBoundingClientRect().top + b.scrollTop - 12;
-        b.scrollTop = top;
-        highlight(t);
+        b.scrollTop = Math.max(0, top);
+        /* 資料そのものを指した場合（db-doc の id）は先頭に送るだけ。
+           文書 1 枚まるごと光らせても «どこ» の情報にならない */
+        if (t.tagName.toLowerCase() !== 'db-doc') highlight(t);
       }, 260);
     }
   }

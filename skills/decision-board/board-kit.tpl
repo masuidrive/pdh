@@ -19,6 +19,7 @@ __TITLE__
   --sans:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",Meiryo,sans-serif;
   --top1:45px; /* topbar 高さ。runtime が実測で上書きする */
   --db-w:830px; /* 本文の幅上限。日本語 45〜50 字/行。広い画面では下の media query が広げる */
+  --db-pane-w:400px; /* 右ペインの幅。掴んで動かすと runtime が上書きし、board 横断で保存する */
 }
 /* 本文幅は «上限» であって固定値ではない。広い画面では余白を捨てず段階的に広げる。
    board 側で変えたいときは content の先頭で :root{--db-w:...} を 1 行上書きすればよい
@@ -154,6 +155,11 @@ db-ticket+db-ticket{border-top:1px solid var(--rule);padding-top:14px}
 .db-tk-head .who{font-size:12px;color:var(--dim)}
 db-ticket h2{margin:0;font-size:18px}
 .db-tk-note{font-size:12.5px;color:var(--dim)}
+/* 原文への入口。チップと同じ «押せるもの» の見た目に揃える（開く UI を増やさない） */
+.db-tk-open{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.db-openbtn{cursor:pointer;border:1px solid var(--line);color:var(--dim);background:var(--card2);border-radius:99px;
+  padding:3px 11px;font-size:12px;font-weight:700;white-space:nowrap;transition:background .14s ease,border-color .14s ease,color .14s ease}
+.db-openbtn:hover{background:var(--chip);border-color:var(--optline);color:var(--ink)}
 
 /* ── facts（語 + 説明の行） ── */
 db-facts{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;align-items:baseline}
@@ -365,7 +371,7 @@ db-submit pre{margin:0;padding:13px;border:1px solid var(--line);border-radius:9
 .db-sub-tks{display:flex;gap:8px;flex-wrap:wrap}
 
 /* ── 右ペイン ── */
-db-pane{position:fixed;right:0;top:0;bottom:0;width:400px;background:var(--card);border-left:1px solid var(--line);z-index:65;display:flex;flex-direction:column;transform:translateX(101%);transition:transform .22s ease;box-shadow:-8px 0 30px rgba(0,0,0,.12)}
+db-pane{position:fixed;right:0;top:0;bottom:0;width:var(--db-pane-w);background:var(--card);border-left:1px solid var(--line);z-index:65;display:flex;flex-direction:column;transform:translateX(101%);transition:transform .22s ease;box-shadow:-8px 0 30px rgba(0,0,0,.12)}
 db-pane[data-open="on"]{transform:none}
 .db-pane-tabs{flex:none;display:flex;align-items:center;gap:8px;padding:10px 13px;border-bottom:1px solid var(--line);background:var(--card2)}
 .db-ptab{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:5px 12px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--dim)}
@@ -376,14 +382,25 @@ db-doc{display:none}
 db-doc.on{display:block}
 .db-panescrim{display:none}
 @media (min-width:1200px){
-  .db-main[data-pane="on"]{margin-right:400px}
-  .db-topbar[data-pane="on"]{margin-right:400px}
-  .db-toast[data-pane="on"]{margin-left:-200px}
+  .db-main[data-pane="on"]{margin-right:var(--db-pane-w)}
+  .db-topbar[data-pane="on"]{margin-right:var(--db-pane-w)}
+  .db-toast[data-pane="on"]{margin-left:calc(var(--db-pane-w) / -2)}
 }
 @media (max-width:1199px){
   .db-panescrim.on{display:block;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:60}
 }
-@media (max-width:700px){db-pane{width:100%;border-left:none}}
+@media (max-width:700px){db-pane{width:100%;border-left:none}.db-pane-grip{display:none}}
+
+/* ペイン幅の drag。掴む帯は 9px（枠より広い当たり判定）、見える線は hover / drag のときだけ */
+.db-pane-grip{position:absolute;left:-4px;top:0;bottom:0;width:9px;z-index:2;cursor:col-resize;
+  background:transparent;border:none;padding:0;touch-action:none}
+.db-pane-grip::before{content:"";position:absolute;left:3px;top:0;bottom:0;width:3px;border-radius:2px;
+  background:transparent;transition:background .15s ease}
+.db-pane-grip:hover::before,.db-pane-grip:focus-visible::before,html.db-resizing .db-pane-grip::before{background:var(--optline)}
+.db-pane-grip:focus-visible{outline:none}
+html.db-resizing{cursor:col-resize}
+html.db-resizing db-pane{transition:none}
+html.db-resizing .db-pane-body,html.db-resizing .db-main{user-select:none}
 [data-hl]{animation:dbHl 1.8s ease-out}
 @keyframes dbHl{0%,55%{background:var(--decbg);box-shadow:0 0 0 5px var(--decbg);border-radius:3px}100%{background:transparent;box-shadow:none}}
 

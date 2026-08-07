@@ -19,6 +19,7 @@
   --sans:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",Meiryo,sans-serif;
   --top1:45px; /* topbar 高さ。runtime が実測で上書きする */
   --db-w:830px; /* 本文の幅上限。日本語 45〜50 字/行。広い画面では下の media query が広げる */
+  --db-pane-w:400px; /* 右ペインの幅。掴んで動かすと runtime が上書きし、board 横断で保存する */
 }
 /* 本文幅は «上限» であって固定値ではない。広い画面では余白を捨てず段階的に広げる。
    board 側で変えたいときは content の先頭で :root{--db-w:...} を 1 行上書きすればよい
@@ -154,6 +155,11 @@ db-ticket+db-ticket{border-top:1px solid var(--rule);padding-top:14px}
 .db-tk-head .who{font-size:12px;color:var(--dim)}
 db-ticket h2{margin:0;font-size:18px}
 .db-tk-note{font-size:12.5px;color:var(--dim)}
+/* 原文への入口。チップと同じ «押せるもの» の見た目に揃える（開く UI を増やさない） */
+.db-tk-open{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.db-openbtn{cursor:pointer;border:1px solid var(--line);color:var(--dim);background:var(--card2);border-radius:99px;
+  padding:3px 11px;font-size:12px;font-weight:700;white-space:nowrap;transition:background .14s ease,border-color .14s ease,color .14s ease}
+.db-openbtn:hover{background:var(--chip);border-color:var(--optline);color:var(--ink)}
 
 /* ── facts（語 + 説明の行） ── */
 db-facts{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;align-items:baseline}
@@ -365,7 +371,7 @@ db-submit pre{margin:0;padding:13px;border:1px solid var(--line);border-radius:9
 .db-sub-tks{display:flex;gap:8px;flex-wrap:wrap}
 
 /* ── 右ペイン ── */
-db-pane{position:fixed;right:0;top:0;bottom:0;width:400px;background:var(--card);border-left:1px solid var(--line);z-index:65;display:flex;flex-direction:column;transform:translateX(101%);transition:transform .22s ease;box-shadow:-8px 0 30px rgba(0,0,0,.12)}
+db-pane{position:fixed;right:0;top:0;bottom:0;width:var(--db-pane-w);background:var(--card);border-left:1px solid var(--line);z-index:65;display:flex;flex-direction:column;transform:translateX(101%);transition:transform .22s ease;box-shadow:-8px 0 30px rgba(0,0,0,.12)}
 db-pane[data-open="on"]{transform:none}
 .db-pane-tabs{flex:none;display:flex;align-items:center;gap:8px;padding:10px 13px;border-bottom:1px solid var(--line);background:var(--card2)}
 .db-ptab{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:5px 12px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--dim)}
@@ -376,14 +382,25 @@ db-doc{display:none}
 db-doc.on{display:block}
 .db-panescrim{display:none}
 @media (min-width:1200px){
-  .db-main[data-pane="on"]{margin-right:400px}
-  .db-topbar[data-pane="on"]{margin-right:400px}
-  .db-toast[data-pane="on"]{margin-left:-200px}
+  .db-main[data-pane="on"]{margin-right:var(--db-pane-w)}
+  .db-topbar[data-pane="on"]{margin-right:var(--db-pane-w)}
+  .db-toast[data-pane="on"]{margin-left:calc(var(--db-pane-w) / -2)}
 }
 @media (max-width:1199px){
   .db-panescrim.on{display:block;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:60}
 }
-@media (max-width:700px){db-pane{width:100%;border-left:none}}
+@media (max-width:700px){db-pane{width:100%;border-left:none}.db-pane-grip{display:none}}
+
+/* ペイン幅の drag。掴む帯は 9px（枠より広い当たり判定）、見える線は hover / drag のときだけ */
+.db-pane-grip{position:absolute;left:-4px;top:0;bottom:0;width:9px;z-index:2;cursor:col-resize;
+  background:transparent;border:none;padding:0;touch-action:none}
+.db-pane-grip::before{content:"";position:absolute;left:3px;top:0;bottom:0;width:3px;border-radius:2px;
+  background:transparent;transition:background .15s ease}
+.db-pane-grip:hover::before,.db-pane-grip:focus-visible::before,html.db-resizing .db-pane-grip::before{background:var(--optline)}
+.db-pane-grip:focus-visible{outline:none}
+html.db-resizing{cursor:col-resize}
+html.db-resizing db-pane{transition:none}
+html.db-resizing .db-pane-body,html.db-resizing .db-main{user-select:none}
 [data-hl]{animation:dbHl 1.8s ease-out}
 @keyframes dbHl{0%,55%{background:var(--decbg);box-shadow:0 0 0 5px var(--decbg);border-radius:3px}100%{background:transparent;box-shadow:none}}
 
@@ -485,7 +502,7 @@ db-link .db-lk-copy{border:1px solid var(--line);background:var(--card2);border-
 </db-tickets>
 
 <db-pane>
-  <db-doc tab="チケット"><db-markdown><script type="text/markdown">
+  <db-doc id="ticket" tab="チケット"><db-markdown><script type="text/markdown">
 ## 260805-000000-duplicate-notification-mail
 
 ### Why / Intent
@@ -502,7 +519,7 @@ db-link .db-lk-copy{border:1px solid var(--line);background:var(--card2);border-
 
 - 通知テンプレートの改善（別 ticket）
 </script></db-markdown></db-doc>
-  <db-doc tab="作業ノート"><db-markdown><script type="text/markdown">
+  <db-doc id="note" tab="作業ノート"><db-markdown><script type="text/markdown">
 # Work Notes
 
 ## Findings
@@ -538,7 +555,7 @@ db-link .db-lk-copy{border:1px solid var(--line);background:var(--card2);border-
     <db-reveal chip="実測値">重複排除の追加コストは 1 通あたり <db-val name="cost" empty="—"></db-val> ms（下の入力で試算が変わります）。
       <db-number-input name="cost" label="想定 ms" value="3" min="1" max="50"></db-number-input>
       ・ <db-ref to="r1">全文を出す — 実測の表を見る</db-ref></db-reveal>
-    <db-reveal chip="関係する受け入れ条件"><db-ref to="ac3">AC3</db-ref> 二重送信が起きたら記録に残る — f2 はこの記録の「読みやすさ」の話で、条件自体は満たしています。</db-reveal>
+    <db-reveal chip="関係する受け入れ条件"><db-ref to="ac3">AC3</db-ref> 二重送信が起きたら記録に残る — f2 はこの記録の「読みやすさ」の話で、条件自体は満たしています（<db-ref to="note">作業ノート全文</db-ref>）。</db-reveal>
   </db-chips>
 
   <db-prose label="決めないとどうなるか">close 自体は進められます。起票は close 時にまとめるのが手戻りが少ないので、判断 2 と一緒に返してもらえると 1 度で済みます。</db-prose>
@@ -668,7 +685,7 @@ db-link .db-lk-copy{border:1px solid var(--line);background:var(--card2);border-
   var KEY = 'dbboard:' + location.pathname;
   var SHARED = 'dbboard:shared';
   var store = { ans: {}, note: {}, per: {}, appr: {}, inputs: {} };
-  var shared = { inputs: {}, theme: 'auto' };
+  var shared = { inputs: {}, theme: 'auto', paneW: 0 };
   var restoredHasContent = false;
   try {
     var raw = localStorage.getItem(KEY);
@@ -681,6 +698,7 @@ db-link .db-lk-copy{border:1px solid var(--line);background:var(--card2);border-
       var s = JSON.parse(rawS);
       if (s.inputs) shared.inputs = s.inputs;
       if (s.theme) shared.theme = s.theme;
+      if (s.paneW) shared.paneW = s.paneW;
     }
   } catch (e) { /* localStorage 不可でも board は動く */ }
   function save() {
@@ -1515,11 +1533,25 @@ db-link .db-lk-copy{border:1px solid var(--line);background:var(--card2);border-
       var h2 = txt('h2', null, tk.getAttribute('name') || '');
       tk.insertBefore(h2, head.nextSibling);
     });
-    if (pane) tks.appendChild(txt('div', 'db-tk-note', '全文は右のパネルで開けます（上の「チケット」ボタン）。'));
+    /* 原文への入口はチケットカードの中に置く。«上のボタンを押せ» と案内するのは
+       強いられる移動になるので、押せるものをその場に出す */
+    if (pane && paneDocs.length) {
+      var opens = el('div', 'db-tk-open');
+      paneDocs.forEach(function (dc, i) {
+        var b = txt('button', 'db-openbtn', (dc.getAttribute('tab') || ('資料 ' + (i + 1))) + 'を開く');
+        b.type = 'button';
+        b.addEventListener('click', function () { openPane(i, null); });
+        opens.appendChild(b);
+      });
+      tks.appendChild(opens);
+    }
   });
 
   /* ── 右ペイン ── */
   var paneOpen = false, paneScrimEl = null;
+  /* ⚠ この 3 つは setupPaneResize() より «前» に代入しておくこと。関数宣言は巻き上がるが
+     var の代入は実行順なので、後ろに置くと復元時だけ undefined を掴んで幅が NaN になる */
+  var PANE_MIN = 320, PANE_DEFAULT = 400, PANE_CAP = 880;
   if (pane) {
     var tabs = el('div', 'db-pane-tabs');
     var body = el('div', 'db-pane-body');
@@ -1544,6 +1576,7 @@ db-link .db-lk-copy{border:1px solid var(--line);background:var(--card2);border-
     paneScrimEl.addEventListener('click', closePane);
     doc.body.appendChild(paneScrimEl);
     pane.setAttribute('data-open', 'off');
+    setupPaneResize();
     var showTab = function (i) {
       paneDocs.forEach(function (dc, j) {
         dc.classList.toggle('on', i === j);
@@ -1554,6 +1587,66 @@ db-link .db-lk-copy{border:1px solid var(--line);background:var(--card2);border-
     window._dbPaneBody = body;
     showTab(0);
   }
+  /* ── ペイン幅の drag ──
+     幅は --db-pane-w 1 つで決まる（ペイン本体・本文の margin-right・toast のずらし）。
+     値は board 横断で保存する（テーマと同じ扱い。読む人の画面の都合であって board の内容ではない）。
+     上限は «本文が読める幅を残す» ことで決める。1200px 以上ではペインが本文を押し縮めるので
+     本文側に 420px を残し、それ未満（ペインが覆う場合）は画面端だけ空ける。 */
+  function paneMax() {
+    var vw = window.innerWidth;
+    var railW = rail ? rail.getBoundingClientRect().width : 0;
+    var lim = vw >= 1200 ? vw - railW - 420 : vw - 120;
+    return Math.max(PANE_MIN, Math.min(PANE_CAP, lim));
+  }
+  function applyPaneWidth(w, persist) {
+    w = Math.round(Math.min(paneMax(), Math.max(PANE_MIN, w)));
+    doc.documentElement.style.setProperty('--db-pane-w', w + 'px');
+    if (persist) { shared.paneW = w; save(); }
+    return w;
+  }
+  function setupPaneResize() {
+    if (shared.paneW) applyPaneWidth(shared.paneW, false);
+    var grip = el('div', 'db-pane-grip');
+    grip.setAttribute('role', 'separator');
+    grip.setAttribute('aria-orientation', 'vertical');
+    grip.setAttribute('aria-label', 'パネルの幅を変える（ドラッグ / ← → キー / ダブルクリックで既定に戻す）');
+    grip.title = 'ドラッグで幅を変える（ダブルクリックで既定に戻す）';
+    grip.tabIndex = 0;
+    pane.appendChild(grip);
+    var dragging = false;
+    grip.addEventListener('pointerdown', function (ev) {
+      dragging = true;
+      try { grip.setPointerCapture(ev.pointerId); } catch (e) { }
+      doc.documentElement.classList.add('db-resizing');
+      ev.preventDefault();
+    });
+    grip.addEventListener('pointermove', function (ev) {
+      if (dragging) applyPaneWidth(window.innerWidth - ev.clientX, false);
+    });
+    var end = function (ev) {
+      if (!dragging) return;
+      dragging = false;
+      try { grip.releasePointerCapture(ev.pointerId); } catch (e) { }
+      doc.documentElement.classList.remove('db-resizing');
+      applyPaneWidth(window.innerWidth - ev.clientX, true);
+    };
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', end);
+    grip.addEventListener('dblclick', function () { applyPaneWidth(PANE_DEFAULT, true); });
+    grip.addEventListener('keydown', function (ev) {
+      var cur = pane.getBoundingClientRect().width, step = ev.shiftKey ? 80 : 24;
+      if (ev.key === 'ArrowLeft') applyPaneWidth(cur + step, true);
+      else if (ev.key === 'ArrowRight') applyPaneWidth(cur - step, true);
+      else if (ev.key === 'Home') applyPaneWidth(PANE_DEFAULT, true);
+      else return;
+      ev.preventDefault();
+    });
+    /* 画面が狭くなったら clamp し直す。保存値そのものは残す（広い画面に戻れば元の幅に戻る） */
+    window.addEventListener('resize', function () {
+      if (shared.paneW) applyPaneWidth(shared.paneW, false);
+    });
+  }
+
   function openPane(tabIdx, anchorId) {
     if (!pane) return;
     paneOpen = true;
@@ -1569,8 +1662,10 @@ db-link .db-lk-copy{border:1px solid var(--line);background:var(--card2);border-
         var b = window._dbPaneBody;
         if (!t || !b) return;
         var top = t.getBoundingClientRect().top - b.getBoundingClientRect().top + b.scrollTop - 12;
-        b.scrollTop = top;
-        highlight(t);
+        b.scrollTop = Math.max(0, top);
+        /* 資料そのものを指した場合（db-doc の id）は先頭に送るだけ。
+           文書 1 枚まるごと光らせても «どこ» の情報にならない */
+        if (t.tagName.toLowerCase() !== 'db-doc') highlight(t);
       }, 260);
     }
   }
