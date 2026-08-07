@@ -1,785 +1,467 @@
+<!doctype html>
+<!-- decision-board v2 shell.
+     markers: __TITLE__ / __CONTENT__ / __RUNTIME__ / __MERMAID__ (build-board.sh が置換する)
+     中身は db-* コンポーネントで書く。CSS / JS はこのシェルと board-runtime.js が持つ — 書き直さないこと。 -->
+<html lang="ja">
+<head>
 __TITLE__
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
 <style>
-  :root{
-    --ink:#16130d; --ink-2:#413a2f; --ink-3:#6b6156; --rule:#e0d9cc;
-    --bg:#faf8f4; --card:#ffffff; --raise:#f3efe6;
-    --acc:#a8641a; --acc-soft:#f6ead9; --acc-ink:#ffffff;
-    --ok:#2f6b3f; --ok-soft:#e6f0e4;
-    --bad:#a32b28; --bad-soft:#f8e6e2;
-    --warn:#8a6a12; --warn-soft:#f7eecd;
-    --decide-bg:#f7f0e3;
-    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
-  }
-  @media (prefers-color-scheme:dark){:root{
-      --ink:#e8edf3; --ink-2:#b0b5bc; --ink-3:#858b92; --rule:#373d44;
-      --bg:#1d232a; --card:#242a31; --raise:#2c3239;
-      --acc:#e0b085; --acc-soft:#363637; --acc-ink:#1d232a;
-      --ok:#86c98f; --ok-soft:#2a3737;
-      --bad:#f0938c; --bad-soft:#373237;
-      --warn:#ddbe62; --warn-soft:#343634;
-      --decide-bg:#272a2f;}}
-  :root[data-theme="dark"]{
-      --ink:#e8edf3; --ink-2:#b0b5bc; --ink-3:#858b92; --rule:#373d44;
-      --bg:#1d232a; --card:#242a31; --raise:#2c3239;
-      --acc:#e0b085; --acc-soft:#363637; --acc-ink:#1d232a;
-      --ok:#86c98f; --ok-soft:#2a3737;
-      --bad:#f0938c; --bad-soft:#373237;
-      --warn:#ddbe62; --warn-soft:#343634;
-      --decide-bg:#272a2f;}
-  :root[data-theme="light"]{
-      --ink:#16130d; --ink-2:#413a2f; --ink-3:#6b6156; --rule:#e0d9cc;
-      --bg:#faf8f4; --card:#ffffff; --raise:#f3efe6;
-      --acc:#a8641a; --acc-soft:#f6ead9; --acc-ink:#ffffff; --ok:#2f6b3f; --ok-soft:#e6f0e4;
-      --bad:#a32b28; --bad-soft:#f8e6e2; --warn:#8a6a12; --warn-soft:#f7eecd;
-      --decide-bg:#f7f0e3;}
-  html{scroll-behavior:smooth;}
-  body{background:var(--bg);color:var(--ink);font-family:var(--sans);
-       line-height:1.75;font-size:16px;padding:clamp(20px,4vw,56px) clamp(16px,4vw,40px);}
-  .shell{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:30px;}
-  @media (min-width:1080px){ .shell{grid-template-columns:236px minmax(0,1fr);gap:44px;align-items:start;} }
-  main{max-width:880px;margin:0;display:flex;flex-direction:column;gap:32px;min-width:0;}
+/* ── tokens ──
+   有彩色は「選択中 / 推奨 / ⚠ / 判断ラベル」だけに使う。他はグレー系。 */
+:root{color-scheme:light dark;
+  --bg:#f4f3ef; --card:#fff; --card2:#faf9f5; --ink:#191a1c; --dim:#63676c;
+  --line:#e3e2db; --rule:#eceae3;
+  --doc:#1d5fa4; --dec:#8f4f0d; --decbg:#fcf2e6; --warn:#a32a1e; --ok:#1c6b45;
+  --chip:#efeee7; --rail:#efeee9; --optline:#c9c7bb; --opthover:#efeade;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",Meiryo,sans-serif;
+  --top1:45px; /* topbar 高さ。runtime が実測で上書きする */
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141619; --card:#1c1f23; --card2:#22262b; --ink:#e8e9ea; --dim:#9aa1a9;
+  --line:#2f343a; --rule:#282d33; --doc:#7db4ea; --dec:#e2a869; --decbg:#33240f;
+  --warn:#f08a7d; --ok:#6fc79b; --chip:#262b31; --rail:#191c20; --optline:#4d555e; --opthover:#262b31;}}
+:root[data-theme="dark"]{
+  --bg:#141619; --card:#1c1f23; --card2:#22262b; --ink:#e8e9ea; --dim:#9aa1a9;
+  --line:#2f343a; --rule:#282d33; --doc:#7db4ea; --dec:#e2a869; --decbg:#33240f;
+  --warn:#f08a7d; --ok:#6fc79b; --chip:#262b31; --rail:#191c20; --optline:#4d555e; --opthover:#262b31;}
 
-  /* ── 目次 ── */
-  /* モバイル既定: 画面外のドロワー。z-index で本文の上に重ねる */
-  nav.toc{font-size:13.5px;line-height:1.55;
-          position:fixed;inset:0 auto 0 0;z-index:100;
-          width:min(300px,82vw);max-width:82vw;
-          background:var(--card);border-right:1px solid var(--rule);
-          padding:66px 16px calc(24px + env(safe-area-inset-bottom));
-          overflow-y:auto;overscroll-behavior:contain;
-          transform:translateX(-101%);transition:transform .22s ease;
-          box-shadow:0 0 40px rgba(0,0,0,.22);}
-  nav.toc.open{transform:none;}
-  body.toc-open{overflow:hidden;}
+*{box-sizing:border-box}
+html{overflow-x:hidden}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font-family:var(--sans);font-size:15px;line-height:1.65;text-wrap:pretty;-webkit-text-size-adjust:100%}
+a{color:var(--doc)} a:hover{color:var(--dec)}
+button{font:inherit;color:inherit}
+img{max-width:100%;height:auto;display:block}
+code{font-family:var(--mono);font-size:.86em;background:var(--card2);border:1px solid var(--rule);border-radius:4px;padding:0 4px}
 
-  .toc-backdrop{position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.42);
-                opacity:0;pointer-events:none;transition:opacity .22s ease;}
-  .toc-backdrop.open{opacity:1;pointer-events:auto;}
+/* ── JS 無効（CSP に止められた場合）のフォールバック ──
+   #nojs は既定で表示し、runtime の最後で消す。走れば消え、止められれば残る。
+   その場合も db-* の中身は light DOM のテキストとしてそのまま読める。 */
+#nojs{display:block;margin:14px auto;max-width:830px;border:1.5px solid var(--warn);border-radius:10px;
+  padding:12px 15px;font-size:13.5px;line-height:1.7;background:var(--card)}
+#nojs strong{color:var(--warn)}
 
-  .toc-toggle{position:fixed;z-index:101;left:12px;top:12px;
-              width:44px;height:44px;padding:0;border-radius:11px;
-              display:flex;align-items:center;justify-content:center;
-              background:var(--card);color:var(--acc);border:1px solid var(--rule);
-              box-shadow:0 2px 10px rgba(0,0,0,.13);}
-  .toc-toggle span{display:block;width:19px;height:2px;background:currentColor;
-                   position:relative;border-radius:2px;}
-  .toc-toggle span::before,.toc-toggle span::after{content:"";position:absolute;left:0;
-      width:19px;height:2px;background:currentColor;border-radius:2px;}
-  .toc-toggle span::before{top:-6px;} .toc-toggle span::after{top:6px;}
-  .toc-toggle .badge{position:absolute;right:-5px;top:-5px;min-width:18px;height:18px;
-      border-radius:999px;background:var(--acc);color:var(--acc-ink);font-size:10.5px;font-weight:700;
-      display:flex;align-items:center;justify-content:center;padding:0 4px;}
-  .swipe-hint{display:none;}
+/* JS 前の素の状態でも読めるよう、主要 db-* をブロック表示にしておく */
+db-board,db-decision,db-section,db-appendix,db-options,db-option,db-note,db-facts,db-row,
+db-dataset,db-record,db-cell,db-reveal,db-chips,db-shot,db-variant,db-card,db-stack,db-prose,db-lede,
+db-tickets,db-ticket,db-deps,db-pane,db-doc,db-markdown,db-submit,db-memo,db-per-item,db-item,
+db-approve,db-embed,db-meta,db-weak{display:block}
+db-badge,db-ref,db-val,db-link,db-col{display:inline}
+db-col{color:var(--dim);font-size:12px}
+db-markdown>script[type="text/markdown"]{display:none}
+/* JS が止められた場合の読みやすさ: 属性に入っている見出し・ラベルを ::before で描く。
+   runtime が動けば <html class="js"> になり、こちらは消えて本組みに置き換わる */
+html:not(.js) db-decision{border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0;background:var(--card)}
+html:not(.js) db-decision::before{content:"判断 — " attr(title);display:block;font-size:18px;font-weight:700;margin-bottom:8px}
+html:not(.js) db-option{border:1px solid var(--optline);border-radius:10px;padding:10px 12px;margin:6px 0}
+html:not(.js) db-option::before{content:attr(key) ": " attr(label);display:block;font-weight:700}
+html:not(.js) db-section{border:1px solid var(--line);border-radius:10px;padding:13px;margin:8px 0;background:var(--card)}
+html:not(.js) db-section::before{content:"資料 — " attr(title);display:block;font-size:16px;font-weight:700;margin-bottom:6px}
+html:not(.js) db-appendix::before{content:attr(title);display:block;font-weight:700;margin:10px 0 4px}
+html:not(.js) db-ticket::before{content:attr(name) "（" attr(status) "）";display:block;font-size:17px;font-weight:700;margin-bottom:6px}
+html:not(.js) db-row{margin:3px 0}
+html:not(.js) db-row::before{content:attr(name) " — ";font-weight:700;color:var(--dim);font-size:.92em}
+html:not(.js) db-prose[label]::before{content:attr(label);display:block;font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--dim)}
+html:not(.js) db-reveal[label]::before{content:"▸ " attr(label);display:block;font-size:12.5px;font-weight:700;color:var(--dim);margin:6px 0 2px}
+html:not(.js) db-reveal[chip]::before{content:"▸ " attr(chip);display:block;font-size:12.5px;font-weight:700;color:var(--dim);margin:6px 0 2px}
+html:not(.js) db-shot::before{content:attr(tag) " " attr(label) "（画像スロット " attr(w) "×" attr(h) "）";display:block;font-size:12px;color:var(--dim)}
+html:not(.js) db-note[label]::before{content:attr(label);display:block;font-weight:700;font-size:13px}
+html:not(.js) db-item::before{content:attr(label) " — " attr(detail);display:block;font-weight:700;font-size:13.5px}
+html:not(.js) db-col{display:none}
+html:not(.js) db-cell{display:inline;padding-right:10px}
+html:not(.js) db-record{display:block;border-bottom:1px solid var(--rule);padding:3px 0}
+html:not(.js) db-pane{border-top:2px solid var(--line);margin-top:20px;padding-top:10px}
+html:not(.js) db-doc::before{content:"（参考全文: " attr(tab) " — ビューアの制限で整形表示できません）";display:block;font-size:12px;color:var(--dim)}
+/* JS が動いたら（<html class="js">）、runtime が組み立てるまでの畳み対象を隠して flash を防ぐ */
+.js db-reveal:not([data-open])>*{display:none}
+.js db-pane:not([data-open]){display:none}
+.js db-appendix:not([data-open])>db-section{display:none}
 
-  @media (min-width:1080px){
-    nav.toc{position:sticky;inset:auto;top:24px;width:auto;max-width:none;
-            transform:none;background:transparent;border-right:0;box-shadow:none;
-            padding:0;max-height:calc(100vh - 48px);z-index:auto;}
-    .toc-toggle,.toc-backdrop{display:none;}
-    body.toc-open{overflow:auto;}
-  }
-  @media (max-width:1079px){
-    body{padding-top:68px;}
-    .swipe-hint{display:block;font-size:12px;color:var(--ink-3);
-                margin:6px 0 0;padding-left:9px;line-height:1.5;}
-  }
-  @media (prefers-reduced-motion:reduce){
-    html{scroll-behavior:auto;}
-    nav.toc,.toc-backdrop{transition:none;}
-  }
-  nav.toc h4{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
-             margin:0 0 10px;font-weight:700;}
-  nav.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;}
-  nav.toc a{display:flex;gap:8px;align-items:baseline;text-decoration:none;color:var(--ink-2);
-            padding:6px 9px;border-radius:7px;border-left:3px solid transparent;}
-  nav.toc a:hover{background:var(--raise);color:var(--ink);}
-  nav.toc a:focus-visible{outline:2px solid var(--acc);outline-offset:1px;}
-  nav.toc a.is-decide{color:var(--acc);font-weight:700;border-left-color:var(--acc);}
-  nav.toc a.is-decide:hover{background:var(--raise);}
-  nav.toc a.is-decide:hover{opacity:.85;}
-  nav.toc .mark{font-size:10px;font-variant-numeric:tabular-nums;flex:none;min-width:13px;}
-  nav.toc a.done .mark{color:var(--ok);}
-  nav.toc .sep{height:1px;background:var(--rule);margin:9px 2px;}
-  .toc-hint{font-size:12px;color:var(--ink-3);margin-top:12px;padding-left:9px;}
+/* ── 生成 chrome: topbar ── */
+.db-topbar{position:sticky;top:0;z-index:45;background:var(--card);border-bottom:1px solid var(--line);margin-left:262px}
+.db-topbar-in{max-width:830px;margin:0 auto;padding:8px 16px;display:flex;align-items:center;gap:10px}
+.db-topbar-date{font-family:var(--mono);font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums;flex:none}
+.db-topbar-sep{width:1px;height:11px;background:var(--line);flex:none}
+.db-topbar-title{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.db-tbtn{border:1px solid var(--line);background:var(--card2);border-radius:8px;padding:4px 11px;font-size:12px;cursor:pointer;color:var(--dim);white-space:nowrap;flex:none}
+.db-tbtn:hover{color:var(--ink);border-color:var(--dim)}
+.db-tbtn-toc{display:none}
+@media (max-width:700px){.db-tbtn-theme{display:none}}
 
-  /* ── 判断セクション（手を動かす場所）と 資料セクション（読む場所）の区別 ── */
-  section.decide{background:var(--decide-bg);border:1px solid var(--rule);
-                 border-left:4px solid var(--acc);border-radius:14px;
-                 padding:clamp(16px,2.6vw,24px);scroll-margin-top:20px;}
-  section.decide > h2{color:var(--acc);display:flex;align-items:center;gap:9px;}
-  section.decide .card{border-color:var(--rule);}
-  section:not(.decide){scroll-margin-top:20px;}
-  .kicker{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.1em;
-          padding:3px 8px;margin-right:9px;border-radius:5px;background:var(--acc);color:var(--acc-ink);}
-  .kicker.read{background:transparent;color:var(--ink-3);border:1px solid var(--rule);}
-  /* ── 判断の導入: 症状 → 仕組み → 選択肢 の順を «構造で» 強制する ── */
-  /* 判断の見出し行: 「判断 N · <どの ticket の話か>」 */
-  .dhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;}
-  .dnum{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em;
-        color:var(--acc);text-transform:uppercase;flex:none;}
-  .dtk{font-size:13px;font-weight:700;color:var(--ink-2);
-       display:flex;align-items:baseline;gap:7px;}
-  .dtk::before{content:"";width:5px;height:5px;border-radius:50%;
-               background:var(--acc);flex:none;transform:translateY(-2px);}
-  /* 決めてほしいこと（1 行） */
-  .sym{font-size:19px;line-height:1.6;margin:0;letter-spacing:-.01em;text-wrap:pretty;}
-  .sym strong{color:var(--acc);}
+/* ── 生成 chrome: 左レール（目次） ── */
+.db-rail{position:fixed;left:0;top:0;bottom:0;width:262px;background:var(--rail);border-right:1px solid var(--line);overflow-y:auto;z-index:40}
+.db-rail-head{padding:0 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;position:sticky;top:0;background:var(--rail);border-bottom:1px solid var(--line);min-height:45px;z-index:1}
+.db-rail-head>span{font-size:10.5px;font-weight:700;letter-spacing:.14em;color:var(--dim)}
+.db-rail-close{display:none;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:3px 10px;font-size:12px;cursor:pointer}
+.db-rail-body{padding:10px 9px 26px;display:flex;flex-direction:column;gap:2px}
+.db-rail-cap{font-size:10px;font-weight:700;letter-spacing:.12em;padding:6px 9px 5px}
+.db-rail-cap.dec{color:var(--dec)} .db-rail-cap.doc{color:var(--dim);padding-top:14px}
+.db-toc{display:flex;gap:9px;align-items:center;padding:7px 9px;border-radius:7px;font-size:13px;color:var(--dim);text-decoration:none;transition:background .14s ease,color .14s ease}
+.db-toc:hover{background:var(--chip);color:var(--ink)}
+.db-toc.ref{font-size:12.5px;padding:6px 9px}
+.db-toc.on{background:var(--chip);font-weight:700;color:var(--ink)}
+.db-toc.submit{margin-top:14px;font-weight:700}
+.db-toc>span.t{flex:1;min-width:0}
+.db-check{width:18px;height:18px;border-radius:99px;border:1.5px dashed var(--line);flex:none;position:relative}
+.db-check.on{background:var(--ok);border:1.5px solid var(--ok)}
+.db-check.on::after{content:"";position:absolute;left:5.5px;top:3px;width:5px;height:9px;border-right:2px solid var(--card);border-bottom:2px solid var(--card);transform:rotate(40deg)}
+.db-scrim{display:none}
 
-  /* なぜ聞くのか — 「決めてほしい」と「念のため確認」を «種別として» 分ける */
-  .askwhy{display:flex;flex-direction:column;gap:6px;border-radius:9px;padding:12px 15px;
-          border:1px solid var(--rule);}
-  .askwhy.need{border-color:var(--acc);}
-  .askwhy.check{border-style:dashed;}
-  .askwhy .kind{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;
-                letter-spacing:.08em;}
-  .askwhy.need .kind{color:var(--acc);}
-  .askwhy.check .kind{color:var(--ink-3);}
-  .askwhy p{font-size:14px;color:var(--ink-2);line-height:1.7;}
-  .askwhy p strong{color:var(--ink);}
+/* ── main 配置 ── */
+.db-main{margin-left:262px;min-height:100vh;padding:0 0 48px}
+.db-main-in{max-width:830px;margin:0 auto;padding:16px 16px 0;display:flex;flex-direction:column;gap:13px}
+.db-header{display:flex;flex-direction:column;gap:13px}
+.db-gate{display:inline-flex;align-self:flex-start;padding:3px 9px;border-radius:99px;font-size:11.5px;font-weight:700;background:var(--decbg);color:var(--dec)}
+.db-header h1{margin:0;font-size:26px;line-height:1.32;letter-spacing:-.01em}
+db-lede{margin:0;font-size:15.5px;line-height:1.75}
 
-  /* 経緯: 元の問題 → やろうとしたこと → 起きたこと → 期限 */
-  .story{display:flex;flex-direction:column;gap:0;
-         background:var(--raise);border-radius:9px;padding:4px 16px;}
-  .story .row{display:grid;grid-template-columns:minmax(96px,auto) 1fr;gap:4px 16px;
-              padding:11px 0;border-bottom:1px solid var(--rule);align-items:baseline;}
-  .story .row:last-child{border-bottom:none;}
-  .story .rk{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--ink-3);
-             white-space:nowrap;}
-  .story .rv{font-size:14.5px;color:var(--ink-2);line-height:1.75;}
-  .story .rv strong{color:var(--ink);}
-  @media (max-width:620px){ .story .row{grid-template-columns:1fr;} }
+/* 復元バナー */
+.db-restored{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--ok);border-radius:9px;background:var(--card);font-size:13px}
+.db-restored b{color:var(--ok)} .db-restored span{flex:1;color:var(--dim)}
+.db-restored button{border:none;background:transparent;color:var(--dim);cursor:pointer;font-size:17px;line-height:1}
 
-  /* 選択肢の «軸» を固定する — 利用者 / コスト / 取り返し */
-  .axes{display:flex;flex-direction:column;gap:0;margin-top:2px;}
-  .axes .ax{display:grid;grid-template-columns:minmax(104px,auto) 1fr;gap:3px 14px;
-            padding:7px 0;border-bottom:1px dashed var(--rule);align-items:baseline;}
-  .axes .ax:last-child{border-bottom:none;}
-  .axes .ak{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--ink-3);white-space:nowrap;}
-  .axes .av{font-size:14px;color:var(--ink-2);line-height:1.7;}
-  .axes .av strong{color:var(--ink);}
-  @media (max-width:620px){ .axes .ax{grid-template-columns:1fr;} }
+/* ── 生成 chrome: トリアージ ── */
+.db-triage{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.db-triage-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;border-bottom:1px solid var(--rule)}
+.db-triage-head span{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--dim)}
+.db-triage a{display:flex;gap:11px;align-items:flex-start;padding:11px 15px;border-top:1px solid var(--rule);text-decoration:none;color:inherit}
+.db-triage a:first-of-type{border-top:none}
+.db-triage a:hover{background:var(--card2)}
+.db-triage .t-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.db-triage .t-title{font-size:14.5px;font-weight:700;display:block}
+.db-triage .t-sub{font-size:12.5px;color:var(--dim);display:block}
+.db-triage .t-tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;background:var(--decbg);color:var(--dec);white-space:nowrap;margin-top:2px}
+.db-triage .db-check{margin-top:2px}
+db-deps{border-top:1px solid var(--rule);padding:11px 15px;display:flex;flex-direction:column;gap:5px;background:var(--card2);font-size:13.5px;line-height:1.7}
+db-deps::before{content:"順番の依存";font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--dim)}
 
-  /* 決めないとどうなるか */
-  .blocking{font-size:13.5px;color:var(--ink-2);display:flex;gap:9px;align-items:baseline;}
-  .blocking .k{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--acc);white-space:nowrap;}
-  .blocking strong{color:var(--ink);}
-  .why{display:flex;flex-direction:column;gap:5px;
-       background:var(--raise);border-radius:9px;padding:13px 16px;}
-  .why > .lbl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
-              color:var(--ink-3);font-weight:700;}
-  .why p{font-size:14.5px;color:var(--ink-2);line-height:1.75;}
-  .why p strong{color:var(--ink);}
-  .ask{font-size:15px;font-weight:700;margin:2px 0 0;}
-  /* ── 折りたたみ: 既定は閉じる。読みやすさを壊さずに «裏取り» を残す ── */
-  details.more{border:1px solid var(--rule);border-radius:9px;background:var(--card);
-               overflow:hidden;}
-  details.more > summary{cursor:pointer;padding:11px 15px;font-size:13.5px;font-weight:700;
-      color:var(--acc);list-style:none;display:flex;gap:9px;align-items:center;
-      user-select:none;}
-  details.more > summary::-webkit-details-marker{display:none;}
-  details.more > summary::before{content:"\25B8";display:inline-block;
-      transition:transform .15s ease;font-size:11px;}
-  details.more[open] > summary::before{transform:rotate(90deg);}
-  details.more > summary:hover{background:var(--raise);}
-  details.more > summary:focus-visible{outline:2px solid var(--acc);outline-offset:-2px;}
-  details.more .inner{padding:2px 15px 15px;display:flex;flex-direction:column;gap:11px;
-      font-size:14px;color:var(--ink-2);line-height:1.75;}
-  details.more .inner strong{color:var(--ink);}
-  details.more .inner table{font-size:13.5px;}
-  @media (prefers-reduced-motion:reduce){ details.more > summary::before{transition:none;} }
+/* ── チケットカード ── */
+db-tickets{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:15px;display:flex;flex-direction:column;gap:12px;scroll-margin-top:calc(var(--top1) + 8px)}
+db-ticket{display:flex;flex-direction:column;gap:10px}
+db-ticket+db-ticket{border-top:1px solid var(--rule);padding-top:14px}
+.db-tk-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.db-tk-head .cap{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--dim)}
+.db-tk-head .st{display:inline-flex;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;background:var(--chip)}
+.db-tk-head .who{font-size:12px;color:var(--dim)}
+db-ticket h2{margin:0;font-size:18px}
+.db-tk-note{font-size:12.5px;color:var(--dim)}
 
-  /* ── この board で扱う ticket の一覧 ── */
-  .tks{display:flex;flex-direction:column;gap:14px;}
-  .tk{display:flex;flex-direction:column;gap:7px;
-      border-left:3px solid var(--acc);padding:2px 0 2px 14px;}
-  .tk .tk-head{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;}
-  .tk .tk-who{font-size:12px;font-weight:700;letter-spacing:.05em;color:var(--acc);}
-  .tk .tk-name{font-size:16.5px;font-weight:700;letter-spacing:-.01em;}
-  .tk .tk-sym{font-size:14.5px;color:var(--ink-2);}
-  .tk .tk-sym strong{color:var(--ink);}
-  .tk .tk-id{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);word-break:break-all;}
-  .tk .tk-q{font-size:12.5px;color:var(--ink-3);}
-  .tk .tk-q b{color:var(--acc);}
+/* ── facts（語 + 説明の行） ── */
+db-facts{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;align-items:baseline}
+db-facts>db-row{display:contents}
+db-row>.db-k{font-size:11.5px;font-weight:700;color:var(--dim);white-space:nowrap}
+db-row>.db-v{min-width:0}
+db-row>.db-k.warn{color:var(--warn)}
+@media (max-width:560px){
+  db-facts{display:flex;flex-direction:column;gap:8px}
+  db-facts>db-row{display:block}
+  db-facts db-row>.db-k{display:block;margin-bottom:1px}
+}
 
-  /* 追跡情報は «下に小さく»。先頭に置かない */
-  .meta{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;
-        font-size:11.5px;color:var(--ink-3);border-top:1px solid var(--rule);
-        padding-top:10px;margin-top:4px;}
-  .meta .k{font-weight:700;letter-spacing:.05em;}
-  .meta code{font-size:11px;background:transparent;padding:0;color:var(--ink-3);}
-  /* ⚠ 見出し（h1 / h3）に text-wrap:balance を付けない。日本語では行が不自然に割れる
-     （禁則と単語境界の扱いが英文前提のため）。2026-08-05 に削除。 */
-  h1{font-size:clamp(25px,4vw,34px);line-height:1.28;letter-spacing:-.02em;
-     margin:0;font-weight:700;}
-  .lede{color:var(--ink-2);font-size:17px;margin:0;}
-  .src{font-size:13px;color:var(--ink-3);}
-  h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);
-     margin:0 0 2px;font-weight:700;}
-  h3{font-size:19px;margin:0;letter-spacing:-.01em;}
-  p{margin:0;}
-  a{color:var(--acc);text-decoration:underline;text-underline-offset:3px;
-    text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,var(--acc) 45%,transparent);}
-  a:hover{text-decoration-color:var(--acc);}
-  a:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:3px;}
-  code{font-family:var(--mono);font-size:.87em;background:var(--raise);
-       padding:.1em .38em;border-radius:4px;}
-  section{display:flex;flex-direction:column;gap:13px;}
-  .card{background:var(--card);border:1px solid var(--rule);border-radius:12px;
-        padding:clamp(17px,3vw,25px);display:flex;flex-direction:column;gap:14px;}
-  .scroll{overflow-x:auto;}
-  table{border-collapse:collapse;width:100%;font-size:14px;min-width:460px;}
-  th{text-align:left;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
-     color:var(--ink-3);border-bottom:1px solid var(--rule);padding:0 12px 8px 0;font-weight:600;}
-  td{padding:9px 12px 9px 0;border-bottom:1px solid var(--rule);vertical-align:top;}
-  tbody tr:last-child td{border-bottom:none;}
-  .num{font-variant-numeric:tabular-nums;white-space:nowrap;}
-  .chip{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.05em;
-        padding:2px 9px;border-radius:999px;white-space:nowrap;}
-  .c-ok{background:var(--ok-soft);color:var(--ok);}
-  .c-bad{background:var(--bad-soft);color:var(--bad);}
-  .c-warn{background:var(--warn-soft);color:var(--warn);}
-  .c-acc{background:var(--acc-soft);color:var(--acc);}
-  .note{background:var(--raise);border-radius:9px;padding:13px 16px;font-size:14px;color:var(--ink-2);}
-  .note strong{color:var(--ink);}
-  hr{border:none;border-top:1px solid var(--rule);margin:0;}
-  blockquote{margin:0;padding-left:16px;border-left:3px solid var(--acc);
-             color:var(--ink-2);font-size:15px;}
-  pre.code{background:var(--raise);border-radius:8px;padding:12px 14px;overflow-x:auto;
-           font-family:var(--mono);font-size:12.5px;margin:0;line-height:1.6;white-space:pre;}
-  figure{margin:0;display:flex;flex-direction:column;gap:8px;}
-  figure img{width:100%;max-width:100%;border:1px solid var(--rule);border-radius:9px;display:block;}
-  /* 図(SVG)は元の寸法を持つので、そのままだと親からはみ出す。
-     縮めて収め、それでも足りない場合は «図だけ» を横スクロールさせる（本文は動かさない）。 */
-  figure svg{max-width:100%;height:auto;display:block;margin:0 auto;}
-  figure .mmwrap{overflow-x:auto;max-width:100%;}
-  figcaption{font-size:13.5px;color:var(--ink-2);}
-  figcaption strong{color:var(--ink);}
-  .shot-dark{display:none;}
-  @media (prefers-color-scheme:dark){.shot-light{display:none}.shot-dark{display:block}}
-  :root[data-theme="dark"] .shot-light{display:none}
-  :root[data-theme="dark"] .shot-dark{display:block}
-  :root[data-theme="light"] .shot-light{display:block}
-  :root[data-theme="light"] .shot-dark{display:none}
+/* ── 判断カード ── */
+db-decision{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:clip;scroll-margin-top:calc(var(--top1) + 8px)}
+.db-dhead{position:sticky;top:var(--top1);z-index:20;display:flex;gap:12px;align-items:flex-start;padding:11px 15px;background:var(--card2);border-bottom:1px solid var(--rule)}
+.db-dhead .l{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.db-dhead .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.db-dhead .num{font-size:11px;font-weight:700;color:var(--dec)}
+.db-dhead .tk{font-size:11.5px;color:var(--dim)}
+.db-dhead h2{margin:0;font-size:18px;line-height:1.4}
+.db-copy1{flex:none;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:5px 11px;font-size:12px;cursor:pointer;white-space:nowrap}
+.db-copy1:hover{border-color:var(--dim)}
+.db-dbody{padding:14px 15px;display:flex;flex-direction:column;gap:13px}
 
-  .opt{background:var(--card);border:1px solid var(--rule);border-left-width:3px;
-       border-radius:9px;padding:14px 16px;display:block;cursor:pointer;
-       transition:background .12s,border-color .12s;}
-  .opt:hover{border-color:var(--acc);}
-  .opt.rec{border-left-color:var(--acc);}
-  .opt.other{border-style:dashed;}
-  .opt:has(input:checked){background:var(--raise);border-color:var(--acc);
-                          box-shadow:inset 0 0 0 1px var(--acc);}
-  .opt:has(input:checked) .opt-title{color:var(--acc);}
-  .opt:focus-within{outline:2px solid var(--acc);outline-offset:2px;}
-  .opt-head{display:flex;align-items:flex-start;gap:11px;}
-  .opt-head input{margin:6px 0 0;width:17px;height:17px;accent-color:var(--acc);flex:none;cursor:pointer;}
-  .opt-title{font-size:16px;font-weight:700;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;}
-  .opt-body{margin:9px 0 0 28px;display:flex;flex-direction:column;gap:7px;}
-  .opt dl{margin:0;display:flex;flex-direction:column;gap:4px;font-size:14.5px;}
-  .opt dt,.lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:700;}
-  .opt dd{margin:0;color:var(--ink-2);}
-  .opt ul{margin:0;padding-left:19px;color:var(--ink-2);font-size:14.5px;}
-  .opt li{margin:2px 0;}
-  .qgroup{display:flex;flex-direction:column;gap:9px;}
-  label.free{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:700;}
-  textarea{width:100%;box-sizing:border-box;background:var(--raise);color:var(--ink);
-           border:1px solid var(--rule);border-radius:8px;padding:11px 13px;
-           font-family:var(--sans);font-size:14.5px;line-height:1.7;resize:vertical;}
-  textarea:focus{outline:2px solid var(--acc);outline-offset:1px;border-color:var(--acc);}
-  textarea#out{font-family:var(--mono);font-size:13px;min-height:230px;line-height:1.65;}
-  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-  button{font-family:var(--sans);font-size:14.5px;font-weight:700;cursor:pointer;
-         border-radius:8px;padding:9px 18px;border:1px solid var(--acc);
-         background:var(--acc);color:var(--acc-ink);}
-  button:hover{opacity:.86;}
-  button.ghost{background:transparent;color:var(--acc);}
-  button:focus-visible{outline:2px solid var(--acc);outline-offset:2px;}
-  .flash{font-size:13.5px;font-weight:700;color:var(--ok);opacity:0;transition:opacity .18s;}
-  .flash.on{opacity:1;}
+/* prose ブロック */
+db-prose{display:flex;flex-direction:column;gap:4px}
+db-prose>.db-plabel{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--dim)}
+db-prose>.db-pbody{margin:0;font-size:14px;line-height:1.7}
+db-prose[emphasis]>.db-pbody{font-size:15.5px;font-weight:700;line-height:1.6}
+db-prose[accent]{border-left:2px solid var(--dec);padding:2px 0 2px 12px}
+db-prose[accent]>.db-plabel{color:var(--dec)}
+db-prose[accent="check"]{border-left-color:var(--doc)}
+db-prose[accent="check"]>.db-plabel{color:var(--doc)}
+db-prose[accent]>.db-pbody{color:var(--dim)}
+db-prose[accent]>.db-pbody strong{color:var(--ink)}
 
-  /* ── 先頭の要約ストリップ: 決めることだけを 1 行ずつ ── */
-  .strip{display:flex;flex-direction:column;}
-  .strip a.sr{display:grid;grid-template-columns:14px auto 1fr auto;gap:3px 12px;
-              align-items:baseline;padding:12px 6px;text-decoration:none;color:inherit;
-              border-bottom:1px solid var(--rule);border-radius:6px;}
-  .strip a.sr:last-child{border-bottom:none;}
-  .strip a.sr:hover{background:var(--raise);}
-  .strip a.sr:focus-visible{outline:2px solid var(--acc);outline-offset:-2px;}
-  .strip .sr-m{font-size:12px;color:var(--ink-3);}
-  .strip a.sr.done .sr-m{color:var(--ok);}
-  .strip .sr-n{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;
-               color:var(--ink-3);white-space:nowrap;}
-  .strip .sr-t{font-size:14.5px;line-height:1.6;color:var(--ink-2);}
-  .strip .sr-t strong{color:var(--ink);}
-  .strip a.sr.done .sr-t,.strip a.sr.done .sr-t strong{color:var(--ink-3);}
-  .strip .sr-k{font-size:10px;font-weight:700;letter-spacing:.05em;padding:2px 8px;
-               border-radius:999px;white-space:nowrap;}
-  .strip .sr-k.need{background:var(--acc-soft);color:var(--acc);}
-  .strip .sr-k.check{border:1px solid var(--rule);color:var(--ink-3);}
-  @media (max-width:620px){
-    .strip a.sr{grid-template-columns:14px auto 1fr;}
-    .strip .sr-k{grid-column:3;justify-self:start;margin-top:4px;}
-  }
+/* ── 選択肢 ── */
+db-options{display:flex;flex-direction:column;gap:8px}
+.db-opts-cap{display:flex;align-items:baseline;gap:9px}
+.db-opts-cap .a{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--dim)}
+.db-opts-cap .b{font-size:12px;color:var(--dim)}
+db-option{cursor:pointer;text-align:left;width:100%;border:1.5px solid var(--optline);background:var(--card);border-radius:10px;padding:12px 13px;display:flex;flex-direction:column;gap:9px;transition:background .14s ease,border-color .14s ease}
+db-option:hover{border-color:var(--dec);background:var(--opthover)}
+db-option[data-sel="on"]{border-color:var(--dec);background:var(--decbg);box-shadow:inset 0 0 0 1px var(--dec)}
+.db-opt-head{display:flex;align-items:center;gap:9px;width:100%}
+.db-opt-title{flex:1;font-size:15px;font-weight:700}
+.db-dot{width:16px;height:16px;border-radius:99px;border:1.5px solid var(--line);background:var(--card);flex:none}
+db-option[data-sel="on"] .db-dot{background:var(--dec);border-color:var(--dec);box-shadow:inset 0 0 0 3.5px var(--card)}
+.db-box{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--line);background:var(--card);flex:none;position:relative}
+db-option[data-sel="on"] .db-box{background:var(--dec);border-color:var(--dec)}
+db-option[data-sel="on"] .db-box::after{content:"";position:absolute;left:4.5px;top:1.5px;width:5px;height:9px;border-right:2px solid var(--card);border-bottom:2px solid var(--card);transform:rotate(40deg)}
+.db-rec{font-size:11px;font-weight:700;background:var(--dec);color:#fff;border-radius:99px;padding:2px 9px;white-space:nowrap}
+db-option>db-row{display:block;position:relative;padding-left:106px;font-size:13.5px;line-height:1.6}
+db-option db-row>.db-k{position:absolute;left:0;top:1.5px;width:96px;letter-spacing:.05em;font-size:10.5px;white-space:normal}
+@media (max-width:980px){
+  db-option>db-row{padding-left:0}
+  db-option db-row>.db-k{position:static;width:auto;display:block;margin-bottom:2px}
+}
+db-weak{display:block;font-size:13px;line-height:1.6;color:var(--dim);border-top:1px solid var(--line);padding-top:8px;width:100%}
+db-weak::before{content:"⚠ 弱点: ";color:var(--warn);font-weight:700}
+db-memo textarea{width:100%;min-height:64px;resize:vertical;border:1px solid var(--line);border-radius:9px;padding:10px 12px;font:inherit;font-size:14px;background:var(--card2);color:var(--ink)}
 
-  /* ── 判断ごとのコピー ── */
-  .copy1{margin-left:auto;font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:7px;
-         background:transparent;border:1px solid var(--rule);color:var(--ink-3);}
-  .copy1:hover{border-color:var(--acc);color:var(--acc);opacity:1;}
+/* per-item */
+db-per-item{display:flex;flex-direction:column;gap:8px}
+db-item{border:1px solid var(--optline);border-radius:10px;padding:10px 13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--card)}
+db-item .db-it-l{flex:1;min-width:200px}
+db-item .db-it-label{font-size:14px;font-weight:700}
+db-item .db-it-detail{font-size:12.5px;color:var(--dim)}
+.db-seg{display:flex;gap:6px;flex:none}
+.db-seg button{border:1px solid var(--line);background:var(--card2);border-radius:99px;padding:3px 11px;font-size:12px;font-weight:700;cursor:pointer;color:var(--dim);transition:background .14s ease,border-color .14s ease,color .14s ease}
+.db-seg button:hover{border-color:var(--dim);color:var(--ink)}
+.db-seg button.on{background:var(--dec);border-color:var(--dec);color:#fff}
 
-  /* ── 常時見える回答バー ── */
-  body{padding-bottom:74px;}
-  .abar{position:fixed;left:0;right:0;bottom:0;z-index:98;
-        background:color-mix(in srgb,var(--card) 94%,transparent);
-        -webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);
-        border-top:1px solid var(--rule);padding:10px 14px;
-        display:flex;gap:9px 14px;align-items:center;justify-content:center;flex-wrap:wrap;}
-  .abar .prog{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap;}
-  .abar .prog b{color:var(--acc);font-size:15px;}
-  .abar .dots{display:flex;gap:5px;}
-  .abar .dot{width:9px;height:9px;border-radius:50%;background:var(--rule);}
-  .abar .dot.on{background:var(--acc);}
-  .abar button{padding:7px 15px;font-size:13.5px;}
-  .abar .flash{font-size:12.5px;}
-  /* 狭い画面ではバーが 2 行に折り返すので、その分だけ本文の下を空ける */
-  @media (max-width:620px){ .abar .dots{display:none;} body{padding-bottom:104px;} }
+/* 承認 */
+db-approve{border:1.5px solid var(--optline);border-radius:10px;padding:12px 13px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--card)}
+db-approve .db-ap-note{flex:1;min-width:200px;font-size:13px;color:var(--dim)}
+db-approve button{border:1px solid var(--dec);background:var(--dec);color:#fff;border-radius:9px;padding:7px 14px;font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+db-approve button:disabled{background:var(--chip);border-color:var(--line);color:var(--dim);cursor:not-allowed}
+db-approve[data-on="on"]{border-color:var(--ok)}
+db-approve[data-on="on"] button{background:var(--ok);border-color:var(--ok)}
 
-  /* ── 出力欄を手で編集したときの警告 ── */
-  .stale{display:none;gap:11px;align-items:center;flex-wrap:wrap;font-size:13px;
-         color:var(--warn);background:var(--warn-soft);border-radius:8px;padding:9px 13px;}
-  .stale.on{display:flex;}
-  .stale button{padding:5px 12px;font-size:12.5px;border-color:var(--warn);
-                background:transparent;color:var(--warn);}
+/* ── チップと折りたたみ ── */
+db-chips{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:12px}
+.db-chips-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.db-chips-row .cap{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--dim)}
+.db-chip{cursor:pointer;border:1px solid var(--line);color:var(--dim);background:var(--card2);border-radius:99px;padding:3px 11px;font-size:12px;font-weight:700;white-space:nowrap;transition:background .14s ease,border-color .14s ease,color .14s ease}
+.db-chip:hover{border-color:var(--dim);color:var(--ink);background:var(--chip)}
+.db-chip.on{background:var(--ink);border-color:var(--ink);color:var(--card)}
 
-  /* ── 目次: 現在地 ── */
-  nav.toc a.current{background:var(--raise);color:var(--ink);}
-  nav.toc a.is-decide.current{color:var(--acc);}
+/* 三角マーカー: 「1 つのものを開く」の共通アフォーダンス */
+.db-tri{display:inline-block;width:0;height:0;margin-right:7px;position:relative;top:1px;
+  border-left:5px solid var(--dim);border-top:4px solid transparent;border-bottom:4px solid transparent;flex:none}
+[data-open="on"]>.db-trig .db-tri,[data-open="on"]>.db-shead .db-tri,[data-open="on"]>.db-apx-card .db-tri{
+  border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--dim);border-bottom:0;top:-1px}
 
-  /* ── JS が走らなかったときだけ残る案内 ──
-     CSP が inline script を止める配信経路（file viewer の pane など）では、
-     集計・コピー・目次・進捗が «全部» 消える。noscript は «JS 無効» のときしか
-     出ないので、CSP ブロックには効かない。だから既定で表示しておき、
-     script の最後で消す。JS が動く環境では読み込み中に一瞬出るだけ。 */
-  #nojs{border:1px solid var(--bad);background:var(--bad-soft);
-        border-radius:14px;padding:18px 20px;font-size:14.5px;line-height:1.8;}
-  #nojs p{margin:0 0 10px;}
-  #nojs p:last-child{margin-bottom:0;}
-  #nojs b{color:var(--bad);}
-  #nojs code{font-family:var(--mono);font-size:13px;background:var(--card);
-             border:1px solid var(--rule);border-radius:5px;padding:1px 5px;}
+db-reveal{display:flex;flex-direction:column;gap:0}
+db-reveal>.db-trig{cursor:pointer;border:none;background:transparent;padding:0;text-align:left;display:flex;align-items:center;font-size:13.5px;font-weight:700;color:var(--ink)}
+db-reveal>.db-trig .db-quiet{color:var(--dim);font-weight:400;margin-right:6px}
+db-reveal[data-open="on"]>.db-trig{margin-bottom:8px}
+db-reveal>.db-body{display:none}
+db-reveal[data-open="on"]>.db-body{display:flex;flex-direction:column;gap:10px;animation:dbIn .2s ease-out}
+db-reveal[boxed]>.db-trig{border:1px solid var(--line);border-radius:9px;background:var(--card2);padding:10px 13px;margin-bottom:0}
+db-reveal[boxed][data-open="on"]>.db-trig{border-radius:9px 9px 0 0;border-bottom:none}
+db-reveal[boxed]>.db-body{border:1px solid var(--line);border-radius:0 0 9px 9px;background:var(--card2);padding:0 13px 13px}
+db-reveal[chip]{margin-left:18px}
+db-reveal[chip]>.db-trig{display:none}
+db-reveal[chip]>.db-body{border:1px solid var(--line);border-radius:9px;background:var(--card2);padding:11px 13px;font-size:13.5px;line-height:1.65}
+db-reveal[chip][tone="warn"]>.db-body{border-color:var(--warn)}
+@media (max-width:700px){db-reveal[chip]{margin-left:9px}}
+/* 長いパネルの sticky ヘッダ（付録 · ◯◯ + 畳む）。runtime が高さで自動付与 */
+.db-phead{position:sticky;top:calc(var(--top1) + 44px);z-index:5;display:flex;align-items:center;gap:8px;margin:-11px -13px 9px;padding:8px 13px;background:var(--card2);border-bottom:1px solid var(--line);border-radius:8px 8px 0 0}
+.db-phead span{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--dim);flex:1}
+.db-phead button{border:1px solid var(--line);background:var(--card);border-radius:7px;padding:3px 9px;font-size:11.5px;cursor:pointer;color:var(--dim);white-space:nowrap;flex:none;display:flex;align-items:center}
+@keyframes dbIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
 
-  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+/* ── note / badge / card / stack ── */
+db-note{border:1px solid var(--line);border-radius:9px;padding:11px 13px;background:var(--card2);font-size:14px;line-height:1.65}
+db-note[tone="warn"]{border-color:var(--warn);background:var(--card)}
+db-note[tone="ok"]{border-color:var(--ok);background:var(--card)}
+db-note[tone="quiet"]{border-style:dashed;color:var(--dim)}
+db-note>.db-nlabel{display:block;font-weight:700;font-size:13px;margin-bottom:4px}
+db-note[tone="warn"]>.db-nlabel{color:var(--warn)}
+db-note[tone="ok"]>.db-nlabel{color:var(--ok)}
+db-badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:99px;font-size:11px;font-weight:700;background:var(--chip);border:1px solid var(--line);color:var(--dim)}
+db-badge[tone="warn"]{color:var(--warn);border-color:var(--warn);background:transparent}
+db-badge[tone="ok"]{color:var(--ok);border-color:var(--ok);background:transparent}
+db-badge[tone="acc"]{color:var(--dec);border-color:transparent;background:var(--decbg)}
+db-card{border:1px solid var(--line);border-radius:9px;padding:11px 13px;background:var(--card2)}
+db-stack{display:flex;flex-direction:column;gap:9px}
+db-stack[dir="row"]{flex-direction:row;flex-wrap:wrap;align-items:baseline}
+db-meta{font-size:12px;color:var(--dim);border-top:1px solid var(--rule);padding-top:11px}
+.db-tail{display:flex;flex-direction:column;gap:3px;border-top:1px solid var(--rule);padding-top:11px}
+.db-tail>.cap{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--dim)}
+
+/* ── dataset（広い画面=表 / 狭い画面=カード） ── */
+db-dataset{display:flex;flex-direction:column;gap:6px}
+db-dataset>.db-ds-cap{font-size:12.5px;color:var(--dim)}
+.db-ds{border:1px solid var(--line);border-radius:9px;overflow-x:auto}
+.db-ds-t{display:grid;min-width:min-content;font-size:13.5px;font-variant-numeric:tabular-nums}
+.db-ds-t>.h{padding:8px 11px;border-bottom:1px solid var(--rule);font-size:11.5px;color:var(--dim);background:var(--card2);font-weight:700;white-space:nowrap}
+.db-ds-t>.h.num{text-align:right}
+.db-ds-rec{display:contents}
+.db-ds-rec>span{padding:8px 11px;border-bottom:1px solid var(--rule);white-space:nowrap}
+.db-ds-rec>span.wrap{white-space:normal;min-width:180px}
+.db-ds-rec>span.num{text-align:right;font-family:var(--mono)}
+.db-ds-rec.last>span{border-bottom:none}
+.db-ds-rec.pick>span{background:var(--decbg);font-weight:700}
+.db-ds-rec.warn>span .db-wv{color:var(--warn)}
+.db-ds-rec>span>.k{display:none}
+.db-pickb{font-size:11px;color:var(--dec);font-weight:700;margin-left:6px}
+@media (max-width:700px){
+  .db-ds{overflow:visible;border:none}
+  .db-ds-t{display:flex;flex-direction:column;gap:9px;min-width:0}
+  .db-ds-t>.h{display:none}
+  .db-ds-rec{display:grid;grid-template-columns:1fr;gap:5px;border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--card)}
+  .db-ds-rec.pick{border-color:var(--dec);background:var(--decbg)}
+  .db-ds-rec.pick>span{background:none}
+  .db-ds-rec>span{padding:0;border:none;white-space:normal;text-align:left}
+  .db-ds-rec>span.num{text-align:left}
+  .db-ds-rec>span>.k{display:block;font-size:10.5px;font-weight:700;color:var(--dim)}
+}
+
+/* ── shot ── */
+db-shot{display:flex;flex-direction:column;gap:8px;margin:0}
+db-shot .db-shot-tag{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+db-shot .db-shot-tag .b{font-size:11px;font-weight:700;background:var(--card2);border:1px solid var(--line);border-radius:99px;padding:2px 8px;color:var(--doc)}
+db-shot[tone="warn"] .db-shot-tag .b{border-color:var(--warn);color:var(--warn)}
+db-shot .db-shot-tag .m{font-family:var(--mono);font-size:12px;color:var(--dim);word-break:break-all}
+db-shot .db-ph{border:1.5px dashed var(--line);border-radius:9px;background:var(--card2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:var(--dim);text-align:center;padding:10px}
+db-shot[tone="warn"] .db-ph{border-color:var(--warn)}
+db-shot .db-ph .dim{font-family:var(--mono);font-size:12.5px}
+db-shot .db-ph .lb{font-size:12.5px;font-weight:700}
+db-shot .db-ph .sub{font-size:11.5px}
+db-shot img{border:1px solid var(--line);border-radius:9px}
+db-shot .db-cap{margin:0;font-size:13.5px;line-height:1.65;border-left:2px solid var(--line);padding-left:11px}
+db-shot[tone="warn"] .db-cap{border-left-color:var(--warn);color:var(--warn)}
+.db-vars{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+db-variant .vl{font-size:11px;font-weight:700;color:var(--dim);margin-bottom:4px;display:block}
+
+/* ── 資料セクションと付録 ── */
+db-appendix{display:flex;flex-direction:column;gap:13px}
+db-appendix>.db-apx-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 15px;display:flex;gap:12px;align-items:center;cursor:pointer;margin-top:5px}
+db-appendix>.db-apx-card .l{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+db-appendix>.db-apx-card .t{font-size:15px;font-weight:700}
+db-appendix>.db-apx-card .s{font-size:13px;line-height:1.6;color:var(--dim)}
+db-appendix[data-open="off"]>db-section{display:none}
+db-appendix[data-open="on"]>db-section{display:block;animation:dbIn .26s ease-out both}
+db-section{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:clip;scroll-margin-top:calc(var(--top1) + 8px)}
+.db-shead{position:sticky;top:var(--top1);z-index:6;display:flex;gap:12px;align-items:flex-start;padding:13px 15px;cursor:pointer;background:var(--card)}
+db-section[data-open="on"]>.db-shead{background:var(--card2);border-bottom:1px solid var(--rule)}
+.db-shead .l{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.db-shead h2{margin:0;font-size:14.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.db-shead .sum{margin:0;font-size:13.5px;line-height:1.6;color:var(--dim)}
+db-section[data-open="on"] .db-shead .sum{display:none}
+db-section>.db-sbody{display:none}
+db-section[data-open="on"]>.db-sbody{display:flex;flex-direction:column;gap:10px;padding:13px 15px 15px;animation:dbIn .2s ease-out}
+.db-openb{flex:none;border:1px solid var(--line);background:var(--card2);border-radius:8px;padding:4px 11px;font-size:12px;cursor:pointer;color:var(--dim);white-space:nowrap;display:flex;align-items:center}
+
+/* ── 提出 ── */
+db-submit{scroll-margin-top:calc(var(--top1) + 8px);margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px;display:flex;flex-direction:column;gap:11px}
+.db-sub-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.db-sub-head h2{margin:0;font-size:17px}
+.db-sub-btns{display:flex;gap:8px;flex-wrap:wrap}
+.db-sub-copy{border:1px solid var(--dec);background:var(--dec);color:#fff;border-radius:9px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.db-sub-ghost{border:1px solid var(--line);background:var(--card2);color:var(--dim);border-radius:9px;padding:7px 14px;font-size:13px;cursor:pointer;white-space:nowrap}
+db-submit pre{margin:0;padding:13px;border:1px solid var(--line);border-radius:9px;background:var(--card2);font-family:var(--mono);font-size:12.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word;max-height:340px;overflow:auto}
+.db-sub-note{margin:0;font-size:13.5px;color:var(--dim)}
+.db-sub-tks{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ── 右ペイン ── */
+db-pane{position:fixed;right:0;top:0;bottom:0;width:400px;background:var(--card);border-left:1px solid var(--line);z-index:65;display:flex;flex-direction:column;transform:translateX(101%);transition:transform .22s ease;box-shadow:-8px 0 30px rgba(0,0,0,.12)}
+db-pane[data-open="on"]{transform:none}
+.db-pane-tabs{flex:none;display:flex;align-items:center;gap:8px;padding:10px 13px;border-bottom:1px solid var(--line);background:var(--card2)}
+.db-ptab{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:5px 12px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--dim)}
+.db-ptab.on{background:var(--ink);border-color:var(--ink);color:var(--card)}
+.db-pane-close{margin-left:auto;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--dim)}
+.db-pane-body{flex:1;overflow-y:auto;padding:14px 16px 44px;overscroll-behavior:contain}
+db-doc{display:none}
+db-doc.on{display:block}
+.db-panescrim{display:none}
+@media (min-width:1200px){
+  .db-main[data-pane="on"]{margin-right:400px}
+  .db-topbar[data-pane="on"]{margin-right:400px}
+  .db-toast[data-pane="on"]{margin-left:-200px}
+}
+@media (max-width:1199px){
+  .db-panescrim.on{display:block;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:60}
+}
+@media (max-width:700px){db-pane{width:100%;border-left:none}}
+[data-hl]{animation:dbHl 1.8s ease-out}
+@keyframes dbHl{0%,55%{background:var(--decbg);box-shadow:0 0 0 5px var(--decbg);border-radius:3px}100%{background:transparent;box-shadow:none}}
+
+/* ── markdown 描画（db-markdown が生成） ── */
+.db-md{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;font-size:13.5px;line-height:1.8;display:flex;flex-direction:column;gap:11px}
+.db-md h2{margin:0;font-size:16.2px;font-weight:700}
+.db-md h3{margin:5px 0 0;font-size:13.5px;font-weight:700;border-bottom:1px solid var(--rule);padding-bottom:5px}
+.db-md h4{margin:0;font-size:13.5px;font-weight:700}
+.db-md p{margin:0}
+.db-md ul,.db-md ol{margin:0;padding-left:19px;display:flex;flex-direction:column;gap:7px}
+.db-md blockquote{margin:0;border-left:2px solid var(--line);padding-left:12px;color:var(--dim);display:flex;flex-direction:column;gap:5px}
+.db-md .fm{font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--dim);background:var(--card2);border:1px solid var(--rule);border-radius:7px;padding:9px 11px}
+.db-md pre{margin:0;padding:10px 12px;border:1px solid var(--rule);border-radius:7px;background:var(--card2);font-family:var(--mono);font-size:12px;line-height:1.7;overflow-x:auto}
+.db-md pre code{border:none;background:none;padding:0}
+.db-md .tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:7px}
+.db-md table{border-collapse:collapse;font-size:12.5px;min-width:100%}
+.db-md th,.db-md td{padding:7px 11px;border-top:1px solid var(--rule);text-align:left;vertical-align:top}
+.db-md thead th{border-top:none;background:var(--card2);font-weight:700;font-size:12px;color:var(--dim)}
+.db-md hr{border:none;border-top:1px solid var(--rule);margin:4px 0;width:100%}
+
+/* ── ref / link / embed / unknown ── */
+db-ref{color:var(--doc);font-weight:700;border-bottom:1px dotted var(--doc);cursor:pointer;font-size:.95em}
+db-embed{border:1px dashed var(--line);border-radius:9px;padding:11px 13px}
+.db-unknown{display:block;border:1px dashed var(--line);border-radius:9px;padding:9px 12px;margin:4px 0}
+.db-unknown::before{content:"この節は既定の表示です（未対応の部品: " attr(data-tag) "）";display:block;font-size:11px;color:var(--dim);margin-bottom:5px}
+
+/* ── mermaid ── */
+pre.mermaid{margin:0;padding:12px;border:1px solid var(--rule);border-radius:9px;background:var(--card2);font-family:var(--mono);font-size:12px;overflow-x:auto}
+.mmwrap{overflow-x:auto;border:1px solid var(--rule);border-radius:9px;background:var(--card2);padding:8px}
+.mmwrap svg{display:block;margin:0 auto}
+figure{margin:0;display:flex;flex-direction:column;gap:8px}
+figure figcaption{font-size:13.5px;line-height:1.65;border-left:2px solid var(--line);padding-left:11px}
+
+/* ── toast ── */
+.db-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:80;background:var(--ink);color:var(--bg);padding:8px 15px;border-radius:99px;font-size:13px;font-weight:700;opacity:0;transition:opacity .2s;pointer-events:none}
+.db-toast.on{opacity:1}
+
+/* ── 入力（base_url など） ── */
+.db-in{display:flex;flex-direction:column;gap:3px;min-width:0}
+.db-in .lb{font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--dim)}
+.db-in input{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-family:var(--mono);font-size:13px;background:var(--card);color:var(--ink);width:100%}
+db-text-input,db-number-input{display:inline-flex;min-width:0;vertical-align:bottom}
+db-text-input{flex:1;min-width:140px}
+db-number-input{width:110px}
+db-val{font-family:var(--mono);font-size:.95em}
+.db-inrow{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+db-link .db-lk-path{font-family:var(--mono);font-size:12px;word-break:break-all}
+db-link a{font-size:12px;margin-left:6px}
+db-link .db-lk-copy{border:1px solid var(--line);background:var(--card2);border-radius:7px;padding:2px 8px;font-size:11px;cursor:pointer;color:var(--dim);margin-left:6px}
+
+/* ── モバイル（≤980px）: レールがドロワーに ── */
+@media (max-width:980px){
+  .db-rail{top:auto;right:0;width:auto;height:74vh;border-right:none;border-top:1px solid var(--line);border-radius:16px 16px 0 0;transform:translateY(103%);transition:transform .24s;box-shadow:0 -12px 40px rgba(0,0,0,.2);z-index:70}
+  .db-rail.open{transform:translateY(0)}
+  .db-rail-close{display:block}
+  .db-main{margin-left:0}
+  .db-topbar{margin-left:0}
+  .db-tbtn-toc{display:block}
+  .db-scrim.on{display:block;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:60}
+}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+@media print{
+  .db-rail,.db-scrim,db-pane,.db-panescrim,.db-topbar,.db-toast,#nojs{display:none!important}
+  .db-main{margin:0}
+  db-reveal>.db-body{display:flex!important}
+  db-appendix[data-open="off"]>db-section{display:block!important}
+  db-section>.db-sbody{display:flex!important}
+}
 </style>
-
-<button class="toc-toggle" id="tocToggle" type="button"
-        aria-label="目次を開く" aria-expanded="false" aria-controls="toc"><span></span><em class="badge" id="tocBadge" hidden></em></button>
-<div class="toc-backdrop" id="tocBackdrop" hidden></div>
-
-<div class="shell">
-<nav class="toc" id="toc" aria-label="目次">
-  <h4>目次</h4>
-  <ol id="toclist"></ol>
-  <p class="toc-hint">色が付いているのが<strong>判断する場所</strong>です。</p>
-  <p class="swipe-hint">左へスワイプ、または背景をタップで閉じます。</p>
-</nav>
-
-<main>
+</head>
+<body>
 <div id="nojs">
-  <p><b>この画面では JavaScript が止められています。</b>選択の集計・コピー・目次・進捗バーは動きません。<b>判断の内容と選択肢はすべてそのまま読めます。</b></p>
-  <p><b>回答は、判断の番号と選んだ記号を会話にそのまま書いてください。</b>例: <code>判断1: A / 判断2: B / 判断3: その他 — …</code></p>
-  <p>集計とコピーを動かすなら、このファイルを<b>ブラウザで直接開く</b>か、置いてあるディレクトリで <code>python3 -m http.server</code> を実行して開いてください。ファイルビューア経由だと <code>Content-Security-Policy: default-src 'none'</code> で inline script がブロックされます。</p>
+  <strong>このページの仕組み（選択・集計・コピー）が動いていません。</strong>
+  開いているビューアが script を止めている可能性があります。ブラウザで直接開くか、
+  そのディレクトリで <code>python3 -m http.server</code> を実行して開き直してください。
+  このままでも本文は読めます。<strong>判断は、会話に「判断 1: A」「判断 2: 起票候補 1 と 3」のように
+  番号と記号で直接答えても構いません。</strong>
 </div>
 __CONTENT__
-</main>
-</div>
-
-__MERMAID__
-
 <script>
-(function(){
-  var TITLE = "__BOARDTITLE__";
-  var main    = document.querySelector('main');
-  var out     = document.getElementById('out');
-  var flashEl = document.getElementById('flash');
-  var tocList = document.getElementById('toclist');
-  var strip = null, abar = null, abarProg = null, abarDots = null, abarFlash = null;
-  var dirty = false, stale = null;
-
-  function secs(){ return Array.prototype.slice.call(document.querySelectorAll('section[data-q]')); }
-  function label(sec){ return sec.getAttribute('data-label') || ('判断 ' + sec.getAttribute('data-q')); }
-  function picked(sec){
-    return Array.prototype.slice
-      .call(sec.querySelectorAll('input[name="q' + sec.getAttribute('data-q') + '"]:checked'))
-      .map(function(i){ return i.value; });
-  }
-  function answered(sec){ return picked(sec).length > 0; }
-
-  // ── 回答のテキスト化。list を絞れば「その判断だけ」「その ticket だけ」になる ──
-  function buildFrom(list, heading){
-    var lines = ['# 判断ボードの回答 — ' + heading, ''];
-    var n = 0;
-    list.forEach(function(sec){
-      var p = picked(sec);
-      var note = sec.querySelector('textarea[data-note]');
-      var noteVal = note ? note.value.trim() : '';
-      var isMulti = !!sec.querySelector('input[type=checkbox]');
-      var hasOther = p.indexOf('__OTHER__') !== -1;
-      var normal = p.filter(function(v){ return v !== '__OTHER__'; });
-      var otherText = hasOther ? (noteVal || '（メモ未記入）') : '';
-      lines.push('## ' + label(sec));
-      if (p.length) {
-        n++;
-        if (isMulti) {
-          // ⚠ 選ばなかったものも '- [ ]' で全部出す。
-          //    選んだものだけ書くと、読む側は «却下» と «選び忘れ» を区別できない。
-          //    実際、3 択のうち 1 つだけ選ばれた回答が来て、残り 2 つの意図を
-          //    問い直すことになった（2026-08-04）。
-          Array.prototype.slice.call(sec.querySelectorAll('input[type=checkbox]'))
-            .forEach(function(i){
-              if (i.value === '__OTHER__') return;
-              lines.push((i.checked ? '- [x] ' : '- [ ] ') + i.value);
-            });
-          if (hasOther) lines.push('- [x] その他: ' + otherText);
-        } else if (hasOther) { lines.push('選択: その他 — ' + otherText); }
-        else { lines.push('選択: ' + normal[0]); }
-      } else { lines.push('選択: （未選択）'); }
-      if (noteVal && !hasOther) lines.push('メモ: ' + noteVal);
-      lines.push('');
-    });
-    lines.push('---');
-    lines.push('回答済み ' + n + ' / ' + list.length);
-    return lines.join('\n');
-  }
-  function build(){ return buildFrom(secs(), TITLE); }
-
-  function flashOn(el, msg, bad){
-    if (!el) return;
-    el.textContent = msg;
-    el.style.color = bad ? 'var(--bad)' : 'var(--ok)';
-    el.classList.add('on');
-    setTimeout(function(){ el.classList.remove('on'); }, 2400);
-  }
-  function copyText(text, fl){
-    function fallback(){
-      var ta = document.createElement('textarea');
-      ta.value = text; ta.setAttribute('readonly','');
-      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
-      document.body.appendChild(ta); ta.select();
-      var ok = false;
-      try { ok = document.execCommand('copy'); } catch(e) { ok = false; }
-      document.body.removeChild(ta);
-      if (!ok && out) { out.focus(); out.select(); }
-      flashOn(fl, ok ? 'コピーしました' : '全選択しました — Cmd/Ctrl+C', !ok);
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function(){ flashOn(fl, 'コピーしました'); }, fallback);
-    } else { fallback(); }
-  }
-
-  // ── 回答の自動保存。URL ごとに保存するので、板が変われば混ざらない ──
-  var KEY = 'dboard:' + location.pathname;
-  function save(){
-    try {
-      var d = {r:{}, n:{}};
-      secs().forEach(function(sec){
-        var name = 'q' + sec.getAttribute('data-q');
-        var p = picked(sec);
-        if (p.length) d.r[name] = p;
-        var t = sec.querySelector('textarea[data-note]');
-        if (t && t.value.trim()) d.n[name] = t.value;
-      });
-      localStorage.setItem(KEY, JSON.stringify(d));
-    } catch(e){}
-  }
-  function restore(){
-    try {
-      var raw = localStorage.getItem(KEY); if (!raw) return false;
-      var d = JSON.parse(raw) || {}, any = false;
-      secs().forEach(function(sec){
-        var name = 'q' + sec.getAttribute('data-q');
-        var want = (d.r || {})[name];
-        if (want && want.length) {
-          Array.prototype.slice.call(sec.querySelectorAll('input[name="' + name + '"]')).forEach(function(i){
-            if (want.indexOf(i.value) !== -1) { i.checked = true; any = true; }
-          });
-        }
-        var t = sec.querySelector('textarea[data-note]');
-        if (t && (d.n || {})[name]) { t.value = d.n[name]; any = true; }
-      });
-      return any;
-    } catch(e){ return false; }
-  }
-  function clearSaved(){ try { localStorage.removeItem(KEY); } catch(e){} }
-
-  // ── ① 先頭の要約ストリップ。本文から生成するので中身とズレない ──
-  if (main && secs().length) {
-    var stripSec = document.createElement('section');
-    stripSec.id = 'strip-sec';
-    stripSec.innerHTML = '<h2><span class="kicker">一覧</span>決めることは ' + secs().length + ' 件</h2>'
-      + '<div class="card"><div class="strip" id="strip"></div></div>';
-    var hdr = main.querySelector('header');
-    if (hdr) { main.insertBefore(stripSec, hdr.nextSibling); }
-    else { main.insertBefore(stripSec, main.firstChild); }
-    strip = stripSec.querySelector('#strip');
-    secs().forEach(function(sec){
-      if (!sec.id) sec.id = 'dec-' + sec.getAttribute('data-q');
-      var kind = sec.querySelector('.askwhy.check') ? 'check' : 'need';
-      var sym  = sec.querySelector('.sym');
-      var a = document.createElement('a');
-      a.className = 'sr'; a.href = '#' + sec.id;
-      a.innerHTML = '<span class="sr-m">○</span>'
-        + '<span class="sr-n">判断 ' + sec.getAttribute('data-q') + '</span>'
-        + '<span class="sr-t">' + (sym ? sym.innerHTML : label(sec)) + '</span>'
-        + '<span class="sr-k ' + kind + '">' + (kind === 'need' ? '決めてほしい' : '念のため確認') + '</span>';
-      strip.appendChild(a);
-    });
-  }
-
-  // ── ② 判断ごとのコピー。決まったものから順に返せる ──
-  secs().forEach(function(sec){
-    var head = sec.querySelector('.dhead'); if (!head) return;
-    var b = document.createElement('button');
-    b.type = 'button'; b.className = 'copy1'; b.textContent = 'この判断だけコピー';
-    b.addEventListener('click', function(e){
-      e.preventDefault();
-      copyText(buildFrom([sec], label(sec)), null);
-      b.textContent = 'コピーしました';
-      setTimeout(function(){ b.textContent = 'この判断だけコピー'; }, 1800);
-    });
-    head.appendChild(b);
-  });
-
-  // ── ③ ticket 単位のコピー（section に data-tk があるときだけ） ──
-  var barEl = document.querySelector('.bar');
-  var groups = [];
-  secs().forEach(function(sec){
-    var tk = sec.getAttribute('data-tk'); if (!tk) return;
-    var g = groups.filter(function(x){ return x.tk === tk; })[0];
-    if (!g) { g = {tk: tk, list: []}; groups.push(g); }
-    g.list.push(sec);
-  });
-  if (barEl && groups.length > 1) {
-    var wrap = document.createElement('div');
-    wrap.className = 'bar';
-    groups.forEach(function(g){
-      var b = document.createElement('button');
-      b.type = 'button'; b.className = 'ghost';
-      b.textContent = '「' + g.tk + '」の ' + g.list.length + ' 件だけ';
-      b.addEventListener('click', function(){ copyText(buildFrom(g.list, g.tk), flashEl); });
-      wrap.appendChild(b);
-    });
-    barEl.parentNode.insertBefore(wrap, barEl.nextSibling);
-  }
-
-  // ── ④ 出力欄を手で編集すると自動更新が止まる。それを黙って起こさない ──
-  if (out) {
-    stale = document.createElement('div');
-    stale.className = 'stale';
-    stale.innerHTML = '<span><strong>手で編集したので、自動更新を止めています。</strong>'
-      + 'このあと選択を変えても、下の文には反映されません。</span>';
-    var rb = document.createElement('button');
-    rb.type = 'button'; rb.textContent = '選択から作り直す';
-    rb.addEventListener('click', function(){ dirty = false; stale.classList.remove('on'); refresh(); });
-    stale.appendChild(rb);
-    out.parentNode.insertBefore(stale, out);
-  }
-
-  // ── ⑤ 常時見える回答バー ──
-  if (out && secs().length) {
-    abar = document.createElement('div');
-    abar.className = 'abar';
-    abar.innerHTML = '<span class="prog"><b>0</b> / ' + secs().length + ' 回答済み</span><span class="dots"></span>';
-    var bCopy = document.createElement('button');
-    bCopy.type = 'button'; bCopy.textContent = 'まとめてコピー';
-    var bJump = document.createElement('button');
-    bJump.type = 'button'; bJump.className = 'ghost'; bJump.textContent = '内容を見る';
-    abarFlash = document.createElement('span');
-    abarFlash.className = 'flash';
-    abarFlash.setAttribute('role', 'status'); abarFlash.setAttribute('aria-live', 'polite');
-    abar.appendChild(bCopy); abar.appendChild(bJump); abar.appendChild(abarFlash);
-    document.body.appendChild(abar);
-    abarProg = abar.querySelector('.prog b');
-    abarDots = abar.querySelector('.dots');
-    secs().forEach(function(){
-      var d = document.createElement('span'); d.className = 'dot'; abarDots.appendChild(d);
-    });
-    bCopy.addEventListener('click', function(){ copyText(out.value, abarFlash); });
-    bJump.addEventListener('click', function(){
-      out.scrollIntoView({behavior: 'smooth', block: 'center'});
-      setTimeout(function(){ out.focus({preventScroll: true}); }, 420);
-    });
-  }
-
-  // ── 目次を生成（見出しから。手書きしないので本文とずれない） ──
-  var allSecs = Array.prototype.slice.call(document.querySelectorAll('main section'));
-  allSecs.forEach(function(sec, i){
-    // 判断セクションは data-label を使う（h2 を持たない設計のため）。
-    // 資料セクションは h2 のテキストから kicker を除いたもの。
-    var isDecide = sec.hasAttribute('data-q');
-    var text;
-    if (isDecide) {
-      text = sec.getAttribute('data-label') || ('判断 ' + sec.getAttribute('data-q'));
-    } else {
-      var h = sec.querySelector('h2'); if (!h) return;
-      var kicker = h.querySelector('.kicker');
-      text = h.textContent.replace(kicker ? kicker.textContent : '', '').trim();
-    }
-    if (!sec.id) sec.id = 'sec-' + i;
-    var li = document.createElement('li');
-    var a = document.createElement('a');
-    a.href = '#' + sec.id;
-    a.innerHTML = '<span class="mark"></span><span>' + text + '</span>';
-    if (isDecide) { a.className = 'is-decide'; a.dataset.q = sec.getAttribute('data-q'); }
-    li.appendChild(a); tocList.appendChild(li);
-  });
-
-  var badge = document.getElementById('tocBadge');
-  function syncToc(){
-    var left = 0;
-    tocList.querySelectorAll('a.is-decide').forEach(function(a){
-      var sec = document.getElementById(a.getAttribute('href').slice(1));
-      var ok = sec && answered(sec);
-      a.classList.toggle('done', !!ok);
-      a.querySelector('.mark').textContent = ok ? '✓' : '○';
-      if (!ok) left++;
-    });
-    if (badge) { badge.hidden = left === 0; badge.textContent = left; }
-  }
-  function syncStrip(){
-    if (!strip) return;
-    Array.prototype.slice.call(strip.querySelectorAll('a.sr')).forEach(function(a){
-      var sec = document.getElementById(a.getAttribute('href').slice(1));
-      var ok = sec && answered(sec);
-      a.classList.toggle('done', !!ok);
-      a.querySelector('.sr-m').textContent = ok ? '✓' : '○';
-    });
-  }
-  function syncBar(){
-    if (!abar) return;
-    var n = 0;
-    secs().forEach(function(s, i){
-      var ok = answered(s);
-      if (ok) n++;
-      var d = abarDots.children[i]; if (d) d.classList.toggle('on', ok);
-    });
-    abarProg.textContent = n;
-  }
-  function refresh(){
-    if (out && !dirty) out.value = build();
-    syncToc(); syncStrip(); syncBar(); save();
-  }
-
-  document.addEventListener('change', function(e){
-    if (!e.target.matches('input[type=radio], input[type=checkbox]')) return;
-    refresh();
-    if (e.target.value === '__OTHER__' && e.target.checked) {
-      var ta = e.target.closest('section').querySelector('textarea[data-note]');
-      if (ta) ta.focus();
-    }
-  });
-  document.addEventListener('input', function(e){
-    if (e.target.matches('textarea[data-note]')) refresh();
-    if (out && e.target === out) {
-      dirty = true;
-      if (stale) stale.classList.add('on');
-      save();
-    }
-  });
-
-  var copyBtn = document.getElementById('copy');
-  if (copyBtn) copyBtn.addEventListener('click', function(){ copyText(out.value, flashEl); });
-  var resetBtn = document.getElementById('reset');
-  if (resetBtn) resetBtn.addEventListener('click', function(){
-    document.querySelectorAll('input[type=radio], input[type=checkbox]').forEach(function(i){ i.checked = false; });
-    document.querySelectorAll('textarea[data-note]').forEach(function(t){ t.value = ''; });
-    dirty = false;
-    if (stale) stale.classList.remove('on');
-    clearSaved(); refresh(); flashOn(flashEl, 'クリアしました');
-  });
-
-  var restored = restore();
-  refresh();
-  if (restored) { flashOn(flashEl, '前回の回答を復元しました'); flashOn(abarFlash, '前回の回答を復元しました'); }
-
-  // ── 目次の現在地 ──
-  var spyLinks = Array.prototype.slice.call(tocList.querySelectorAll('a'));
-  var spyTargets = spyLinks.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); });
-  var rafId = 0;
-  function spy(){
-    rafId = 0;
-    var best = -1;
-    for (var i = 0; i < spyTargets.length; i++) {
-      var t = spyTargets[i]; if (!t) continue;
-      if (t.getBoundingClientRect().top <= 140) best = i;
-    }
-    spyLinks.forEach(function(a, i){ a.classList.toggle('current', i === best); });
-  }
-  function spySoon(){ if (!rafId) rafId = requestAnimationFrame(spy); }
-  window.addEventListener('scroll', spySoon, {passive: true});
-  window.addEventListener('resize', spySoon);
-  spy();
-
-  // ── モバイル: ドロワー（ハンバーガー + スワイプ） ──
-  var toc = document.getElementById('toc');
-  var toggle = document.getElementById('tocToggle');
-  var backdrop = document.getElementById('tocBackdrop');
-  var mq = window.matchMedia('(max-width:1079px)');
-
-  function isDrawer(){ return mq.matches; }
-  function isOpen(){ return toc.classList.contains('open'); }
-  function setOpen(open){
-    if (!isDrawer()) return;
-    toc.classList.toggle('open', open);
-    backdrop.classList.toggle('open', open);
-    backdrop.hidden = !open;
-    document.body.classList.toggle('toc-open', open);
-    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    toggle.setAttribute('aria-label', open ? '目次を閉じる' : '目次を開く');
-    if (open) { var f = toc.querySelector('a'); if (f) f.focus({preventScroll: true}); }
-    else { toggle.focus({preventScroll: true}); }
-  }
-  toggle.addEventListener('click', function(){ setOpen(!isOpen()); });
-  backdrop.addEventListener('click', function(){ setOpen(false); });
-  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && isOpen()) setOpen(false); });
-  toc.addEventListener('click', function(e){ if (e.target.closest('a')) setOpen(false); });
-  mq.addEventListener('change', function(){
-    if (!isDrawer()) {
-      toc.classList.remove('open'); backdrop.classList.remove('open');
-      backdrop.hidden = true; document.body.classList.remove('toc-open');
-    }
-  });
-
-  // スワイプ: 右で開く / 左で閉じる。
-  // 横スクロールする要素の中で始めた指は無視する（表・コード・入力欄を奪わない）
-  var sx = 0, sy = 0, tracking = false;
-  function scrollableAncestor(el){
-    while (el && el !== document.body) {
-      if (el.scrollWidth > el.clientWidth + 4) return true;
-      if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') return true;
-      el = el.parentElement;
-    }
-    return false;
-  }
-  document.addEventListener('touchstart', function(e){
-    if (!isDrawer() || e.touches.length !== 1) { tracking = false; return; }
-    var t = e.touches[0];
-    if (!isOpen() && scrollableAncestor(e.target)) { tracking = false; return; }
-    sx = t.clientX; sy = t.clientY; tracking = true;
-  }, {passive: true});
-  document.addEventListener('touchend', function(e){
-    if (!tracking) return;
-    tracking = false;
-    var t = e.changedTouches[0];
-    var dx = t.clientX - sx, dy = t.clientY - sy;
-    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    if (dx > 0 && !isOpen()) setOpen(true);
-    else if (dx < 0 && isOpen()) setOpen(false);
-  }, {passive: true});
-
-  // ── JS が動かない環境の案内を消す。⚠ «最後» にやること ──
-  // 途中で例外が出て board が半分しか組まれなかった場合、案内は «残るべき» である。
-  // 先頭で消すと、壊れた board を「正常に見えるが答えられない」状態で出すことになる。
-  var nojsEl = document.getElementById('nojs');
-  if (nojsEl && nojsEl.parentNode) nojsEl.parentNode.removeChild(nojsEl);
-})();
+__MERMAID__
 </script>
+<script>
+__RUNTIME__
+</script>
+</body>
+</html>

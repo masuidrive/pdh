@@ -63,7 +63,7 @@ bash ticket.sh init
 | `tmp/pdh/skills/pdh-check-writing/SKILL.md` | `.claude/skills/pdh-check-writing/SKILL.md` | 宣言型 `.check` 執筆スキル |
 | `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
 | `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
-| `tmp/pdh/skills/decision-board/` | `.claude/skills/decision-board/` | 判断ボードスキル（`SKILL.md` / `board-kit.tpl` / `build-board.sh` / `mermaid-render.min.js` を**ディレクトリごと**コピーする） |
+| `tmp/pdh/skills/decision-board/` | `.claude/skills/decision-board/` | 判断ボードスキル（`SKILL.md` / `board-kit.tpl` / `board-runtime.js` / `build-board.sh` / `mermaid-render.min.js` を**ディレクトリごと**コピーする） |
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
 | `tmp/pdh/templates/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH 汎用 agent ルール |
 | `tmp/pdh/templates/CLAUDE.local.md.example` | `CLAUDE.local.md.example` | 環境固有 agent メモのサンプル（実体は commit しない） |
@@ -389,6 +389,23 @@ rm -rf tmp/pdh
 11. 後片付け: `rm -rf tmp/pdh`
 
 ### 既知の移行手順
+
+#### decision-board v2 — コンポーネント方式へ全面置き換え（2026-08 以降）
+
+decision-board skill は class ベースの markup（`.axes` / `.opt` / `.askwhy`）から
+**`db-*` コンポーネント方式**（`board-runtime.js` + 新 `board-kit.tpl`）へ置き換わった。
+`build-board.sh` の引数も変わっている（tpl / runtime は同梱ファイルから自動解決）。
+
+**移行はディレクトリごとの上書きコピーで完了する**（board は gate のたびに全文生成されるので、
+過去の board.html を作り直す必要はない）:
+
+```bash
+cp -r tmp/pdh/skills/decision-board/. .claude/skills/decision-board/
+ls .claude/skills/decision-board/board-runtime.js   # 存在すれば更新済み
+```
+
+⚠ 旧 skill の書き方（`section.decide` / `data-q` / `.axes` の手書き HTML）で board を
+作り続けないこと。新 SKILL.md の「ボードの組み立て方」に従う。
 
 #### 導入・更新手順が README.md → INSTALL.md へ移動（2026-07 以降）
 

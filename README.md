@@ -221,9 +221,12 @@ pdh/
     pdh-update/SKILL.md              ← PDH アップデートスキル
     decision-board/
       SKILL.md                       ← 判断ボードスキル（何を書くか / 回答をどう受け取るか）
-      board-kit.tpl                  ← 見た目・回答フォーム・目次・コピー機構
-      build-board.sh                 ← マーカーを置換して 1 枚の HTML を書き出す（POSIX sh のみ）
+      board-kit.tpl                  ← HTML シェル（配色トークン・CSS・JS 無効時のフォールバック）
+      board-runtime.js               ← db-* コンポーネントの実体（目次・回答・コピー・自動保存・右ペイン）
+      build-board.sh                 ← content を差し込んで 1 枚の HTML を書き出す（POSIX sh のみ）
       mermaid-render.min.js          ← 図をブラウザ側で描くための bundle（図がある board にだけ差し込む）
+  examples/
+    decision-board/                  ← 実データから組んだ board の実例（配布物ではない）
   templates/
     product-brief.md                 ← Product Brief テンプレート
     technical-reference.md           ← Technical Reference テンプレート（現在の実装の How）
