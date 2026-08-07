@@ -95,12 +95,42 @@ PDH-open → PDH-ticket-review → PDH-ticket-human-review → PDH-implement →
 
 **gate は毎回必ずユーザに確認すること（絶対原則）:** たとえユーザがそれまで全ての質問に「yes」「OK」「y」と答え続けていたとしても、gate（PDH-ticket-human-review / PDH-human-review）では必ず立ち止まってユーザに確認する。「前回 OK だったから今回も OK だろう」という推測で gate をスキップしてはならない。window が AskUserQuestion を出さずに止まった場合でも、Director が代わりに承認・クローズを指示するのではなく、まずユーザに状況を報告して承認を得ること。
 
-**gate 報告時の必須アクション:** ユーザに承認を求める前に、Director は必ず `ticket.sh start`/`restore` 出力の `ticket:`/`note:` パス（互換 symlink: `current-ticket.md`/`current-note.md`）を Read し、**ユーザがこの報告だけで判断できる包括的サマリ**を作成すること。window の AskUserQuestion の選択肢をそのまま転送するだけでは不十分。サマリには以下を含める:
+**gate 報告時の必須アクション:** ユーザに承認を求める前に、Director は必ず `ticket.sh start`/`restore` 出力の `ticket:`/`note:` パス（互換 symlink: `current-ticket.md`/`current-note.md`）を Read し、**ユーザがこの材料だけで判断できる 1 枚の文書**を作成すること。含めるもの:
 - チケットの目的・背景（Why）
 - 実装の全体像（変更ファイル、変更規模、依存関係への影響）
 - レビューで発見・修正された重要ポイント
 - AC の変更点（あれば）
 - 懸念事項・リスク
+
+---
+
+## ⚠ ユーザは window を見ない — Director が唯一の窓口
+
+**前提: ユーザは各 window の画面を基本的に見ない。** pane も、worker が publish した gate report も、**Director が渡さない限り読まない。**したがって **Director が渡した材料が、ユーザの持つ情報のすべて**である。ここから 3 つの帰結が出る。
+
+### 1. `AskUserQuestion` だけで判断を求めてはならない
+
+選択肢の label と description には数十文字しか入らない。**背景・証拠・トレードオフが載らない**ので、ユーザは「どちらがマシそうか」を勘で選ぶことになる。**判断材料は必ず読み返せる 1 枚の文書（board）に置き、`AskUserQuestion` は決定の入口としてのみ使う。**
+
+**順序: board を作って発行 → URL を提示 → そのうえで `AskUserQuestion`。board が先。**
+
+### 2. gate だけでなく scope の判断にも board を作る
+
+「この finding を本 ticket で直すか / 起票するか / 記録のみか」「次にどの ticket を流すか」は、**window の中では自明でもユーザには背景がゼロ**である。gate（`PDH-ticket-human-review` / `PDH-human-review`）と同じ扱いにする。
+
+判断が 1 件でも、選択肢が単純に見えても同じ。**「単純に見える」のは window の文脈を持っている側の感覚であって、ユーザの感覚ではない。**
+
+### 3. worker が publish した gate report は board の代わりにならない
+
+worker が自分で材料を artifact にしていても、**それをそのまま転送して済ませてはならない。**理由は 3 つ:
+
+- **ticket 単位でしか書かれていない。**複数 window を横断する判断（どちらを先に close するか、merge の順序、番号や lock の競合）が載らない
+- **worker の推奨は書いてあるが、選ばなかった場合に何が起きるかが書かれていないことが多い。**選択肢が Pros / Cons の形になっていないと、ユーザは推奨を追認する以外の選択ができない
+- **Director の裏取り結果が入っていない。** worker の PASS は入力であって承認ではない（「あなたの役割」参照）。証拠鮮度・数字・主張をこちらで確認したなら、**その結果は Director が書くしかない**
+
+**正しい形**: worker の gate report は**材料として引用・リンク**し、**Director が board を作る。**board には Director の検証結果と、window を横断した判断を載せる。
+
+> 発行手段は engine の能力で分岐する。artifact を publish できる engine はそれを使い、できない engine は同じ構造を ticket の tmp 配下のファイルに書いて path を渡す。**要求は「材料と、その読みやすさ」であって、発行の機構ではない**（`PDH-AGENTS.md`「Human Gate Materials」）。
 
 **レビューフェーズ:** PDH-review（品質検証、実装後 review。attempt は PDH-review-1 / PDH-review-2 として note に記録）
 
@@ -145,7 +175,7 @@ PDH-open → PDH-ticket-review → PDH-ticket-human-review → PDH-implement →
 ```
 tmux send-keys -t WINDOW.PANE '/clear' Enter
 sleep 2
-tmux send-keys -t WINDOW.PANE '/pdh-dev 最初に EnterWorktree({name: "<ticket-slug>"}) で ticket 専用 worktree に入ってください。ticket.sh 系は排他ロック下で実行してください（flock があれば flock、macOS など flock 非同梱環境では mkdir ベースの atomic lock。下記「ticket.sh の排他ロック（クロス OS）」参照）。[追加指示があればここに]'
+tmux send-keys -t WINDOW.PANE '/pdh-dev 最初に `./ticket.sh start --worktree <ticket-name>` を排他ロック下で実行し、EnterWorktree({path: ...}) で移ってください。ticket.sh 系は排他ロック下で実行してください（flock があれば flock、macOS など flock 非同梱環境では mkdir ベースの atomic lock。下記「ticket.sh の排他ロック（クロス OS）」参照）。[追加指示があればここに]'
 tmux send-keys -t WINDOW.PANE Enter
 ```
 
@@ -170,7 +200,11 @@ send-keys Enter
 
 運用:
 - 新規 window 起動: `claude --worktree <slug>` 経由が最もクリーン
-- 既存 window 続行: 初回指示に `EnterWorktree({name: "<slug>"})` + `ticket.sh start --worktree` を含める
+- 既存 window 続行: 初回指示に **`ticket.sh start --worktree <ticket-name>`**（排他ロック下）+ `EnterWorktree({path: ...})` を含める
+
+**⚠ 既に worktree 内で起動している window に `EnterWorktree({name: ...})` を指示しない。**`name` 指定は `.claude/worktrees/` 配下にしか作れず、そこでは **`ticket.sh start` が `fatal: 'main' is already used by worktree` で失敗する**（start は base branch を checkout してから feature branch を作る実装で、main は primary worktree が占有しているため）。しかも **worktree 内のセッションは `.claude/worktrees/` 配下以外へ移れない**（`is not under /workspaces/<repo>/.claude/worktrees` で拒否される）。
+
+したがって **2 巡目以降の window には必ず `ticket.sh start --worktree` を使わせる。**移動に失敗した場合、worker は「全コマンドで絶対パスを明示する」運用で続行できるが、**Bash の cwd は毎回元の worktree へ戻る**ので事故が起きやすい。**新しい ticket を始めるときは、可能なら新規セッションを新 worktree で立てるほうが確実。**
 - worktree path は `.worktrees/<slug>/` (ticket.sh default)
 - close 時は `ticket.sh close --keep-worktree` で worktree path 維持 (cwd dangling 防止)
 - 詳細は `docs/product-delivery-hierarchy.md`「ブランチ戦略」
@@ -251,7 +285,19 @@ tmux send-keys -t WINDOW.PANE 'ここに指示内容'
 tmux send-keys -t WINDOW.PANE Enter
 ```
 
-**⚠ text と Enter を同じ send-keys 呼び出しに混ぜない。** `send-keys '...' Enter` を 1 回で実行すると、長文や slash 混在テキストで Enter が text の一部として buffer に吸収され、prompt に text が残ったまま submit されない race が頻発する (複数回実測)。必ず 2 段階 (text だけ → Enter 単独)。送信後は capture-pane で `❯ Press up to edit queued messages` or spinner が出ているか確認する。
+**⚠ text と Enter を同じ send-keys 呼び出しに混ぜない。** `send-keys '...' Enter` を 1 回で実行すると、長文や slash 混在テキストで Enter が text の一部として buffer に吸収され、prompt に text が残ったまま submit されない race が頻発する (複数回実測)。必ず 2 段階 (text だけ → Enter 単独)。
+
+**ただし 2 段階化だけでは取りこぼしが残る。**原因は 1 つではない（逐字入力を Enter が追い越す / buffer がファイル末尾の改行を持ち込む / pane が copy-mode・permission dialog で入力を受けられない / **入力欄は空なのにテキストが残像表示される**）。個別の原因を潰し切るのは現実的でないので、**送り方を正すのではなく、届いたことを検証する。**
+
+- **⚠ 到達確認は画面ではなく worker の transcript で行う。**`capture-pane` による判定は**両方向に嘘をつく** — prompt 行にテキストが見えても未送信とは限らず（残像は入力欄が空でも残り、`C-u` では消えない）、空に見えても submit された証拠にならない。全メッセージの先頭に固定の prefix を付け、worker の transcript にそれが現れたかで判定する（transcript path は hookbus event の `transcript_path` に入っている）
+- 長文・複数行は逐字入力ではなく **buffer 経由**で送り、**載せる前に末尾改行を落とす**。paste の前に `C-u` で入力欄をクリアし、**Enter は単独コマンドで paste の 0.5 秒後**
+- 届いていなければ **Enter だけ再送する**（paste をやり直すと二重入力になる）。数回で届かなければ **loud fail してユーザに報告する**
+- **未確認の送信を「送った」と報告しない**
+- **pane に自分が送った覚えのないテキストが残っていても勝手に Enter しない。**gate の承認に見えるテキストが第三者・誤入力・別 agent 由来のことがある。出所は transcript の grep で確認する
+
+**この手順をコマンドとして固定するのは project 側の `CLAUDE.md` に置く**（送信関数 1 つを全 window で共有するため）。ここが定めるのは上の契約であって、実装の形ではない。
+
+例外は 2 つ。**slash command（`/clear` `/compact` `/pdh-dev`）は buffer 経由にせず literal な `send-keys` で送る**（TD-2.2 の理由 — harness が literal な入力として受けたときだけ発火する。短いので追い越しも起きない）。**`AskUserQuestion` への数字回答も同様。**
 
 **重要: Window への指示は常に 1 フェーズ分のみ。** 「PDH-implement をやって、その後 PDH-review も進めて」のように複数フェーズをまとめて指示しない。ユーザ確認 gate（PDH-ticket-human-review, PDH-human-review）を飛ばす原因になる。
 
@@ -358,6 +404,25 @@ tmux window {WINDOW.PANE} の画面を定期的にキャプチャし、以下の
 ```
 ```
 
+### TD-3.2.5. ⚠ 完了して静止した窓は通知されない
+
+**hookbus が event を出すのは «動いた» window だけである。**フェーズを終えて入力待ちのまま静止した window は、それ以降 1 つも event を出さない。**Director が能動的に見に行かないと、その window は存在ごと視界から消える。**
+
+2026-08-04 に 3 回踏んだ（窓 2 が close 順待ちで 1 時間以上、窓 3 が AC 承認待ちで 1 時間 50 分、窓 1 が 3.5 時間）。いずれも**こちらが別の window の議論に集中している間**に起きている。
+
+対策:
+
+- **判断を要求した window は「待たせている」と認識し続ける。**gate に上げた時点でリストに残す
+- **他の window の議論が一段落したら、必ず全 window の最終 assistant 発言の «時刻» を確認する**（画面ではなく transcript）:
+
+```bash
+for d in ~/.claude/projects/-<repo-encoded>*/; do
+  f=$(ls -t "$d"/*.jsonl 2>/dev/null | head -1); [ -n "$f" ] && echo "$(date -r "$f" '+%H:%M')  $(basename "$d")"
+done | sort -r | head
+```
+
+- **idle 通知（`Notification` + `Claude is waiting for your input`）を機械的に無視しない。**「作業の途中で待っている」のか「終わって報告済みで待っている」のかは、**transcript の最終 assistant 発言を読めば 1 秒で分かる**
+
 ### TD-3.3. Monitor 報告を受けた後の Director の行動
 
 | 報告の種類 | Director の行動 |
@@ -438,6 +503,8 @@ PDH-ticket-human-review または PDH-human-review に該当する場合、セ�
 - **自分でソースコードを編集しない**
 - **自分でチケットの開け閉め（ticket.sh）をしない**
 - **自分でサーバー起動・ビルド・seed 投入等の実作業を実行しない** — 状態を変更する操作は全て window に send-keys で指示する。Director が直接実行するのはスクリーンショット撮影・API 読み取り（curl GET）等の読み取り専用操作のみ
+- **⚠ 本番の状態を変える操作を自分でしない。**とりわけ**非可逆な操作**（元に戻せない設定変更・リソースの作成/削除・データの書き込み）は、ユーザ承認を得たうえで **worker に ticket の一部として実行させる**。Director が直接叩くと、**実行の記録が ticket の外に落ちる**。worker には「**実行前後の状態・発行時刻・コマンド全文を note に記録する**」ことまで指示する
+  - 実例: 「有効化すると二度と戻せない」と警告が出るクラウド機能の切り替え。ユーザ承認済みでも Director は実行せず、worker が実行して**実行前後の値**を note に残した。承認は「やってよい」であって「記録しなくてよい」ではない
 - **自分で `tmux capture-pane` を繰り返さない** — Monitor Agent に委任する
 
 **window への指示についても以下を守る。**
@@ -450,7 +517,9 @@ PDH-ticket-human-review または PDH-human-review に該当する場合、セ�
 - **product-brief.md、Ticket、note を読んで状況を把握する**
 - **window が PDH ワークフローに従っているか、Monitor の報告で確認する**（ステップ一覧は「PDH ステップ参照」セクション参照）
 - **テスト・E2E・AC チェックが飛ばされていないか監視する**
+- **各 window の context 使用率を監視し、50% を超えたら適当なタイミングで `/compact` を送る**（「コンテキスト管理」参照）。使用率は `tmux capture-pane` の status line の `ctx` 表示で分かる。**枯渇してから動くのでは遅い** — context を最も食う工程は終盤に来る
 - **Window の AskUserQuestion には自分で回答せず、必ずユーザに内容を提示して承認を得てから回答する**
+- **ユーザに判断を求めるときは、先に board（1 枚の文書）を作る** — gate も scope も同じ。`AskUserQuestion` だけでは材料が載らない。**worker が publish した gate report は代わりにならない**（「ユーザは window を見ない」参照）
 - **ユーザに確認する際は、window の情報（検証手段・AC・状況・懸念事項）を十分にまとめて伝える** — ユーザがこの報告だけで意思決定できるようにする
 
 ---
@@ -473,14 +542,57 @@ PDH-ticket-human-review または PDH-human-review に該当する場合、セ�
 
 ---
 
-## コンテキストリセット
+## コンテキスト管理
 
-window が是正指示を **2回送っても同じ問題を繰り返す** 場合、コンテキストの肥大化が原因の可能性がある。ユーザに状況を報告し、リセットの承認を得てから以下を実行する:
+Director は worker の context 残量を管理する責任を持つ。手段は 2 つあり、**目的が違う**。
 
-1. window に「現在の進捗と状況を、`ticket.sh start`/`restore` 出力の `note:` パス（互換 symlink: `current-note.md`）に記録してください」と指示
-2. Monitor Agent で記録完了を確認
-3. `/clear` を送信
-4. `/pdh-dev` で作業を再開させる（note に記録された状況から自動的に再開される）
+| | `/compact` | `/clear` |
+|---|---|---|
+| **目的** | 枯渇の**予防** | 肥大化した context の**除去** |
+| **いつ** | 使用率が 50% を超えたら、適当なタイミングで | 是正指示が 2 回効かないとき |
+| **残るもの** | 要約 + note | note だけ |
+| **ユーザ承認** | 不要（Director の判断で送る） | **必要**（作業の連続性が切れるため） |
+
+### 予防的な compact — 50% を超えたら
+
+**ticket を 1 本走らせる worker window は、context 使用率が 50% を超えたら、適当なタイミングで `/compact` を送る。**枯渇してから動くのでは遅い。
+
+**50% で動く理由**: PDH で最も context を食う工程 — **フルスイートの出力・レビュー指摘の triage・human-review 材料の作成** — は、どれも**最後に来る**。前半で 50% を使っていると、その 3 つを同じ window で完走できない。実際に 96% でこの 3 つを残した window が発生している。**残量は「今のために」ではなく「終盤のために」確保する。**
+
+status line の `ctx` 表示は各モデルの window に対する割合なので、この閾値はモデルに依らず同じ形で使える。短命な window（1 タスクで終わるもの）は対象外でよい。
+
+**「適当なタイミング」の判断**:
+
+| 送ってよい | 送ってはいけない |
+|---|---|
+| phase 遷移の直後（`PDH-implement` → `PDH-review` など） | **実装・修正の途中** |
+| commit した直後 | **gate 材料（human-review の artifact）を作っている最中** |
+| 長い background（フルスイート / codex gate / 実 API 実測）を待っている間 | **未 commit の変更があるとき** |
+
+**未 commit の変更がある状態で compact してはならない。**「何を直そうとしていたか」は要約から落ちるが、diff には残らない。
+
+### 送り方（compact / clear 共通）
+
+1. window に**状態を note へ落とすよう指示する**（下記）
+2. **note へ落としたという返答を確認する**（Monitor / transcript で。画面で判定しない）
+3. slash command を **literal な `send-keys` で送る**（`/compact` / `/clear`。**buffer 経由にしない** — TD-2.2 と同じ理由）
+4. `/clear` の場合のみ、続けて `/pdh-dev` を送って再開させる
+
+**⚠ 要約に何が残るかは制御できない。**したがって `PDH-AGENTS.md`「Context Management」が要求する次の 5 つは、要約ではなく **note に書かせる**:
+
+1. **現在の ticket id と PDH stage**
+2. **未解決の懸念**（まだ誰にも言っていないものを含む）
+3. **ユーザの決定と明示承認**（何がいつ承認されたか。AC 変更があればその経緯も）
+4. **走らせていて結果が出ていないもの**（background command / 待っている外部の結果）
+5. **次にやる具体的な 1 手**
+
+**このうち最も失われやすいのは 2 と 4。**完了した作業は commit に、決定は ticket に残るが、**「気になっているがまだ書いていないこと」と「投げっぱなしの非同期処理」は、要約からも repo からも消える。**
+
+### リセット（`/clear`）
+
+window が是正指示を **2回送っても同じ問題を繰り返す** 場合、コンテキストの肥大化が原因の可能性がある。**ユーザに状況を報告し、リセットの承認を得てから**上記の送り方で `/clear` → `/pdh-dev` を実行する。
+
+compact と違いユーザ承認が要るのは、`/clear` が「作業の連続性を切って note から再開させる」操作だからである。**予防的な compact を怠った結果として `/clear` が必要になるのは、Director の管理の失敗**として扱う。
 
 ---
 
