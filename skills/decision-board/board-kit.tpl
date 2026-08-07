@@ -20,6 +20,7 @@ __TITLE__
   --top1:45px; /* topbar 高さ。runtime が実測で上書きする */
   --db-w:830px; /* 本文の幅上限。日本語 45〜50 字/行。広い画面では下の media query が広げる */
   --db-pane-w:400px; /* 右ペインの幅。掴んで動かすと runtime が上書きし、board 横断で保存する */
+  --cast1:rgba(0,0,0,.21); --cast2:rgba(0,0,0,.08); /* 本文がペインへ落とす影 */
 }
 /* 本文幅は «上限» であって固定値ではない。広い画面では余白を捨てず段階的に広げる。
    board 側で変えたいときは content の先頭で :root{--db-w:...} を 1 行上書きすればよい
@@ -29,11 +30,13 @@ __TITLE__
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#141619; --card:#1c1f23; --card2:#22262b; --ink:#e8e9ea; --dim:#9aa1a9;
   --line:#2f343a; --rule:#282d33; --doc:#7db4ea; --dec:#e2a869; --decbg:#33240f;
-  --warn:#f08a7d; --ok:#6fc79b; --chip:#262b31; --rail:#191c20; --optline:#4d555e; --opthover:#262b31;}}
+  --warn:#f08a7d; --ok:#6fc79b; --chip:#262b31; --rail:#191c20; --optline:#4d555e; --opthover:#262b31;
+  --cast1:rgba(0,0,0,.55); --cast2:rgba(0,0,0,.22);}}
 :root[data-theme="dark"]{
   --bg:#141619; --card:#1c1f23; --card2:#22262b; --ink:#e8e9ea; --dim:#9aa1a9;
   --line:#2f343a; --rule:#282d33; --doc:#7db4ea; --dec:#e2a869; --decbg:#33240f;
-  --warn:#f08a7d; --ok:#6fc79b; --chip:#262b31; --rail:#191c20; --optline:#4d555e; --opthover:#262b31;}
+  --warn:#f08a7d; --ok:#6fc79b; --chip:#262b31; --rail:#191c20; --optline:#4d555e; --opthover:#262b31;
+  --cast1:rgba(0,0,0,.55); --cast2:rgba(0,0,0,.22);}
 
 *{box-sizing:border-box}
 html{overflow-x:hidden}
@@ -385,6 +388,13 @@ db-doc.on{display:block}
   .db-main[data-pane="on"]{margin-right:var(--db-pane-w)}
   .db-topbar[data-pane="on"]{margin-right:var(--db-pane-w)}
   .db-toast[data-pane="on"]{margin-left:calc(var(--db-pane-w) / -2)}
+  /* 本文を押し縮めるモードでは、ペインは «下に敷かれた資料» である。
+     ペイン側が外へ影を落とすと «上に浮いたパネル» に見えるので、向きを逆にして
+     本文が落とす影をペインの左端に描く。覆うモード（1199px 以下）は本当に上に来るので
+     元の影のまま — 見た目が «どちらが上か» を正しく言うようにする */
+  db-pane[data-open="on"]{box-shadow:none}
+  db-pane[data-open="on"]::before{content:"";position:absolute;left:0;top:0;bottom:0;width:26px;z-index:3;pointer-events:none;
+    background:linear-gradient(to right,var(--cast1),var(--cast2) 45%,transparent)}
 }
 @media (max-width:1199px){
   .db-panescrim.on{display:block;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:60}
@@ -392,7 +402,7 @@ db-doc.on{display:block}
 @media (max-width:700px){db-pane{width:100%;border-left:none}.db-pane-grip{display:none}}
 
 /* ペイン幅の drag。掴む帯は 9px（枠より広い当たり判定）、見える線は hover / drag のときだけ */
-.db-pane-grip{position:absolute;left:-4px;top:0;bottom:0;width:9px;z-index:2;cursor:col-resize;
+.db-pane-grip{position:absolute;left:-4px;top:0;bottom:0;width:9px;z-index:4;cursor:col-resize;
   background:transparent;border:none;padding:0;touch-action:none}
 .db-pane-grip::before{content:"";position:absolute;left:3px;top:0;bottom:0;width:3px;border-radius:2px;
   background:transparent;transition:background .15s ease}
