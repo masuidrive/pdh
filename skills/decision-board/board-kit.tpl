@@ -18,7 +18,13 @@ __TITLE__
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --sans:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",Meiryo,sans-serif;
   --top1:45px; /* topbar 高さ。runtime が実測で上書きする */
+  --db-w:830px; /* 本文の幅上限。日本語 45〜50 字/行。広い画面では下の media query が広げる */
 }
+/* 本文幅は «上限» であって固定値ではない。広い画面では余白を捨てず段階的に広げる。
+   board 側で変えたいときは content の先頭で :root{--db-w:...} を 1 行上書きすればよい
+   （右ペインを開くと .db-main が margin-right される分だけ実効幅は縮む。max-width なので溢れない） */
+@media (min-width:1500px){:root{--db-w:1000px}}
+@media (min-width:1900px){:root{--db-w:1180px}}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#141619; --card:#1c1f23; --card2:#22262b; --ink:#e8e9ea; --dim:#9aa1a9;
   --line:#2f343a; --rule:#282d33; --doc:#7db4ea; --dec:#e2a869; --decbg:#33240f;
@@ -40,7 +46,7 @@ code{font-family:var(--mono);font-size:.86em;background:var(--card2);border:1px 
 /* ── JS 無効（CSP に止められた場合）のフォールバック ──
    #nojs は既定で表示し、runtime の最後で消す。走れば消え、止められれば残る。
    その場合も db-* の中身は light DOM のテキストとしてそのまま読める。 */
-#nojs{display:block;margin:14px auto;max-width:830px;border:1.5px solid var(--warn);border-radius:10px;
+#nojs{display:block;margin:14px auto;max-width:var(--db-w);border:1.5px solid var(--warn);border-radius:10px;
   padding:12px 15px;font-size:13.5px;line-height:1.7;background:var(--card)}
 #nojs strong{color:var(--warn)}
 
@@ -82,7 +88,7 @@ html:not(.js) db-doc::before{content:"（参考全文: " attr(tab) " — ビュ�
 
 /* ── 生成 chrome: topbar ── */
 .db-topbar{position:sticky;top:0;z-index:45;background:var(--card);border-bottom:1px solid var(--line);margin-left:262px}
-.db-topbar-in{max-width:830px;margin:0 auto;padding:8px 16px;display:flex;align-items:center;gap:10px}
+.db-topbar-in{max-width:var(--db-w);margin:0 auto;padding:8px 16px;display:flex;align-items:center;gap:10px}
 .db-topbar-date{font-family:var(--mono);font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums;flex:none}
 .db-topbar-sep{width:1px;height:11px;background:var(--line);flex:none}
 .db-topbar-title{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
@@ -112,7 +118,7 @@ html:not(.js) db-doc::before{content:"（参考全文: " attr(tab) " — ビュ�
 
 /* ── main 配置 ── */
 .db-main{margin-left:262px;min-height:100vh;padding:0 0 48px}
-.db-main-in{max-width:830px;margin:0 auto;padding:16px 16px 0;display:flex;flex-direction:column;gap:13px}
+.db-main-in{max-width:var(--db-w);margin:0 auto;padding:16px 16px 0;display:flex;flex-direction:column;gap:13px}
 .db-header{display:flex;flex-direction:column;gap:13px}
 .db-gate{display:inline-flex;align-self:flex-start;padding:3px 9px;border-radius:99px;font-size:11.5px;font-weight:700;background:var(--decbg);color:var(--dec)}
 .db-header h1{margin:0;font-size:26px;line-height:1.32;letter-spacing:-.01em}

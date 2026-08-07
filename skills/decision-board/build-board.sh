@@ -49,6 +49,21 @@ while IFS= read -r tag; do
   fi
 done < "$tmp/used"
 
+# 実在の ticket を扱う board に右ペインが無いのを止める。
+# 判定は «db-tickets の中に ID 行があるか» で行う。db-ticket は ticket に紐づかない判断
+# （次に何を流すかの割り当てなど）にも使えるので、db-ticket の存在だけでは条件にできない。
+# ID があるということは ticket.md / note.md が実在するということで、SKILL.md はそれを
+# 右ペインに全文で入れると定めている（判断者がその場で原文に当たれることが信頼の裏付け）。
+if awk '
+    /<db-tickets/{inb=1} inb&&/name="ID"/{found=1} /<\/db-tickets>/{inb=0}
+    END{exit found?0:1}
+  ' "$content" && ! grep -q '<db-pane' "$content"; then
+  echo "build-board.sh: ticket の ID を出しているのに <db-pane> が無い。ticket.md / note.md を" >&2
+  echo "  <db-pane><db-doc tab=\"チケット\">…</db-doc><db-doc tab=\"作業ノート\">…</db-doc></db-pane> に全文で入れること。" >&2
+  echo "  ID を出さない board（ticket に紐づかない判断）ならこの検査は掛からない。" >&2
+  bad=1
+fi
+
 # db-embed の reason 必須（開始タグが 1 行に書かれている前提。跨いだ場合は runtime 側の表示で気づける）
 if grep -n '<db-embed' "$content" | grep -v 'reason=' >/dev/null 2>&1; then
   echo "build-board.sh: <db-embed> に reason= が無い行がある。なぜ既存の語彙で書けなかったかを必ず書く:" >&2

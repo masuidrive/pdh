@@ -100,9 +100,14 @@ sh <skill_dir>/build-board.sh content.html "<board 名>" mermaid > board.html  #
 
 **⚠ mermaid bundle は 1.5 MB ある。図が 1 つも無い board には差し込まない**（第 3 引数を省く）。
 
-**未知の `db-*` タグと reason 無しの `db-embed` は build がエラーで止める。**描画側は寛容
-（既定の表示に落として画面にそう書く）だが、生成の時点で気づけるものを黙って通さない。
-build が通らないときにタグ名の当て推量で回避しないこと — この一覧が語彙のすべてである。
+**次の 3 つは build がエラーで止める。**描画側は寛容（既定の表示に落として画面にそう書く）だが、
+生成の時点で気づけるものを黙って通さない。build が通らないときにタグ名の当て推量で回避しないこと —
+この一覧が語彙のすべてである。
+
+- 未知の `db-*` タグ
+- reason 無しの `db-embed`
+- **ticket の ID を出しているのに `<db-pane>` が無い**（下記「ticket.md / note.md は右ペインに全文で入れる」）。
+  判定は `db-tickets` の中の ID 行で行うので、ticket に紐づかない判断の board には掛からない
 
 **⚠ 内容を «直して作り直す» 手順は必ず残す。**配色変更・不具合修正で同じ board を
 何度も作り直すことになる（実際 1 日に 6 回あった）。content.html を残しておけば再 build は 1 コマンド。
@@ -149,6 +154,17 @@ content の骨格。**この順に並べる**（表示順 = 記述順）:
 `id="ac1"` が付く（`<db-ref to="ac1">` の宛先になる）。判断者はチケットを読まなくても決められる
 作りにするのが前提だが、**確かめたい人がその場で原文に当たれる**ことが信頼の裏付けになる。
 ⚠ 原文に `</script>` を含む場合だけ `<\/script>` にエスケープする。
+
+**本文の幅は `--db-w` で決まる。**既定は 830px（日本語 45〜50 字/行）で、1500px 以上で 1000px、
+1900px 以上で 1180px に広がる。**幅は上限であって固定値ではない** — 広い画面で余白を捨てないための
+段階指定である。board 側で変えたいときは content の先頭に 1 行置く:
+
+```html
+<style>:root{--db-w:1100px}</style>
+```
+
+⚠ **変えるのは «その board の中身が広い幅を要求する» ときだけ**（横に広い表・並べて見る画像など）。
+読みやすさの上限を超えて広げると 1 行が長くなり、行を追う目の動きが増える。
 
 ## 判断ブロックの書き方 — これは «エンジニアが PM に上げる escalation» である
 
@@ -439,11 +455,14 @@ agent-browser eval "
 (function(){ document.querySelector('db-option').click();
   return {decide: document.querySelectorAll('db-decision').length,
           checked: document.querySelectorAll('.db-triage .db-check.on').length,
+          docs: document.querySelectorAll('db-doc').length,
           out: document.getElementById('out').textContent.slice(0, 200)}; })()
 "
 ```
 
 **`decide` が判断の数と一致し、`checked` が 1 になり、`out` に選択が出る**ことを確認する。
+**`docs` は右ペインのタブ数**（ticket board なら ticket.md / note.md の 2）。build は `db-pane` の
+欠落を止めるが、**中身が入っていない**（`db-markdown` の貼り忘れ）はここでしか気づけない。
 「その他」を使う設問があるなら、それも 1 度選んでメモを書いてみる。図がある board は
 ブラウザで図の崩れも見る。
 
