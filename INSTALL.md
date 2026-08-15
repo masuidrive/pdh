@@ -63,7 +63,7 @@ bash ticket.sh init
 | `tmp/pdh/skills/pdh-check-writing/SKILL.md` | `.claude/skills/pdh-check-writing/SKILL.md` | 宣言型 `.check` 執筆スキル |
 | `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
 | `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
-| `tmp/pdh/skills/decision-board/` | `.claude/skills/decision-board/` | 判断ボードスキル（`SKILL.md` / `board-kit.tpl` / `board-runtime.js` / `build-board.sh` / `mermaid-render.min.js` を**ディレクトリごと**コピーする） |
+| `tmp/pdh/skills/pdh-ticket-decision-board/` | `.claude/skills/pdh-ticket-decision-board/` | 判断ボードスキル（`SKILL.md` / `render-html-common.md` / `create-doc.md` / `create-slides.md` / `examples.md` を**ディレクトリごと**コピーする） |
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
 | `tmp/pdh/templates/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH 汎用 agent ルール |
 | `tmp/pdh/templates/CLAUDE.local.md.example` | `CLAUDE.local.md.example` | 環境固有 agent メモのサンプル（実体は commit しない） |
@@ -87,7 +87,7 @@ Codex CLI はプロジェクト直下の `.agents/skills/` を skill として�
 
 ```bash
 mkdir -p .agents/skills
-for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director decision-board; do
+for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-ticket-decision-board; do
   ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done
 ```
@@ -390,22 +390,34 @@ rm -rf tmp/pdh
 
 ### 既知の移行手順
 
-#### decision-board v2 — コンポーネント方式へ全面置き換え（2026-08 以降）
+#### decision-board → pdh-ticket-decision-board へ置き換え（2026-08-15 以降）
 
-decision-board skill は class ベースの markup（`.axes` / `.opt` / `.askwhy`）から
-**`db-*` コンポーネント方式**（`board-runtime.js` + 新 `board-kit.tpl`）へ置き換わった。
-`build-board.sh` の引数も変わっている（tpl / runtime は同梱ファイルから自動解決）。
+**`decision-board` skill は撤去され、`pdh-ticket-decision-board` に置き換わった。**
+単なる rename ではなく、扱う範囲と作り方の両方が変わっている。
 
-**移行はディレクトリごとの上書きコピーで完了する**（board は gate のたびに全文生成されるので、
-過去の board.html を作り直す必要はない）:
+| | 旧 `decision-board` | 新 `pdh-ticket-decision-board` |
+|---|---|---|
+| 扱う gate | 実装前・close 前の両方 | **実装前（`PDH-ticket-human-review`）だけ** |
+| 媒体 | HTML 1 枚に固定 | Markdown / 端末に出す文章 / PR コメント / HTML 文書 / HTML 2 軸デッキ から選ぶ |
+| 作り方 | `db-*` タグを `build-board.sh` に渡す | 規則に従って組む（生成スクリプトは持たない） |
+| 検査 | 発行前の 2 段 | Completed Staff Work の 1 問 + 形・文・判断の 3 層 + 別 engine の reviewer に 6 問 |
+
+移行手順:
 
 ```bash
-cp -r tmp/pdh/skills/decision-board/. .claude/skills/decision-board/
-ls .claude/skills/decision-board/board-runtime.js   # 存在すれば更新済み
+rm -rf .claude/skills/decision-board .agents/skills/decision-board
+cp -r tmp/pdh/skills/pdh-ticket-decision-board/ .claude/skills/pdh-ticket-decision-board/
+ln -snf ../../.claude/skills/pdh-ticket-decision-board .agents/skills/pdh-ticket-decision-board
 ```
 
-⚠ 旧 skill の書き方（`section.decide` / `data-q` / `.axes` の手書き HTML）で board を
-作り続けないこと。新 SKILL.md の「ボードの組み立て方」に従う。
+⚠ **`build-board.sh` / `board-kit.tpl` / `board-runtime.js` / `mermaid-render.min.js` は
+配布されなくなった。**これらで作った過去の `board.html` はそのまま読めるが、**再 build する
+手段は無い。**必要なら旧ファイルを自プロジェクトへ退避してから更新すること。
+
+⚠ **close 前 gate（`PDH-human-review`）の board を作る手順は、現在どの skill も持たない。**
+`PDH-AGENTS.md`「Human Gate Materials」が求める材料は変わらないので、そこを直接読んで用意する。
+`pdh-ticket-decision-board` を読み替えて使ってもよいが、**主線の構成と AC の扱いは実装前 gate
+向けなので、そのままでは合わない。**
 
 #### 導入・更新手順が README.md → INSTALL.md へ移動（2026-07 以降）
 
@@ -431,7 +443,7 @@ README.md 側にも INSTALL.md へのリンクを残してあるので、古い 
 
 ```bash
 # 旧 wrapper があれば撤去し、symlink に置き換える（冪等）
-for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director decision-board; do
+for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-ticket-decision-board; do
   [ -e ".agents/skills/$s" ] && [ ! -L ".agents/skills/$s" ] && rm -rf ".agents/skills/$s"
   [ -d ".claude/skills/$s" ] && ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done

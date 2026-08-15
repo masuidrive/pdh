@@ -200,7 +200,7 @@ project-root/
       pdh-check-writing/SKILL.md ← 宣言型 `.check` 執筆スキル
       tmux-director/SKILL.md ← tmux Director スキル
       pdh-update/SKILL.md    ← PDH アップデートスキル
-      decision-board/       ← 判断ボードスキル (SKILL.md + テンプレート + 生成スクリプト)
+      pdh-ticket-decision-board/ ← 判断ボードスキル (SKILL.md + renderer 分冊)
 ```
 
 ## このリポジトリの構成
@@ -219,14 +219,12 @@ pdh/
     pdh-check-writing/SKILL.md       ← 宣言型 `.check` 執筆スキル
     tmux-director/SKILL.md           ← tmux Director スキル
     pdh-update/SKILL.md              ← PDH アップデートスキル
-    decision-board/
-      SKILL.md                       ← 判断ボードスキル（何を書くか / 回答をどう受け取るか）
-      board-kit.tpl                  ← HTML シェル（配色トークン・CSS・JS 無効時のフォールバック）
-      board-runtime.js               ← db-* コンポーネントの実体（目次・回答・コピー・自動保存・右ペイン）
-      build-board.sh                 ← content を差し込んで 1 枚の HTML を書き出す（POSIX sh のみ）
-      mermaid-render.min.js          ← 図をブラウザ側で描くための bundle（図がある board にだけ差し込む）
-  examples/
-    decision-board/                  ← 実データから組んだ board の実例（配布物ではない）
+    pdh-ticket-decision-board/
+      SKILL.md                       ← 判断ボードスキル（媒体に依存しない規則。実装前 gate 用）
+      render-html-common.md          ← HTML renderer 2 種が共有する CSS・DOM・回答フォームの実装規則
+      create-doc.md                  ← 1 枚の HTML 文書として組む renderer
+      create-slides.md               ← 横に読み進める HTML 2 軸デッキとして組む renderer
+      examples.md                    ← 日付つきの事故・実測値（規則の根拠を確かめたいときだけ読む）
   templates/
     product-brief.md                 ← Product Brief テンプレート
     technical-reference.md           ← Technical Reference テンプレート（現在の実装の How）

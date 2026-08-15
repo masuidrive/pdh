@@ -20,8 +20,7 @@ INSTALL.md                           # 導入・更新手順。配布物の配�
 docs/
   product-delivery-hierarchy.md      # PDH 運用ルール（配布物）
 skills/                              # Claude Code skill の実体（配布物）
-  pdh-dev/  pdh-coding/  pdh-check-writing/  pdh-update/  tmux-director/  decision-board/
-examples/                            # 実例（配布物ではない。decision-board の実 board など）
+  pdh-dev/  pdh-coding/  pdh-check-writing/  pdh-update/  tmux-director/  pdh-ticket-decision-board/
 templates/                           # 配布テンプレート
   PDH-AGENTS.md                      # PDH 汎用 agent ルール（この repo でもこれを正として読む）
   CLAUDE.md                          # 配布先 project 固有ルールの雛形
