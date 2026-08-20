@@ -1,0 +1,661 @@
+/* pdh-decision-board kit — board.css
+   文書版の組版 + カード・表・画面写真・付録 + 回答フォーム。
+   ⚠ 読み込み順: tokens.css を«先»に inline し、その後ろにこのファイルを置く。
+   色・面（bg/paper/fill）・寸法の基準 token は tokens.css にしか定義しない —
+   ここで再定義すると、明暗どちらかだけ直したときに配色がズレる（v1 で実際に二重化した）。
+   デッキ版は、このファイルを読み込んだ«後ろ»に deck.css を重ねる。
+   規則の本体は ../render-html-common.md と ../create-doc.md。食い違ったら規則が正。 */
+
+/* ---------- board 固有の組版 token ----------
+   tokens.css に無い文字階調と幅だけをここに置く。tokens.css と同名の token を書かない。 */
+:root {
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.125rem;
+  --text-lg: 1.3125rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+
+  --lh-body: calc(var(--u) * 7);
+  --lh-sm: calc(var(--u) * 6);
+  --lh-lg: calc(var(--u) * 8);
+  --lh-xl: calc(var(--u) * 9);
+  --lh-2xl: calc(var(--u) * 11);
+
+  --wide: 72rem;
+  --wide-in: 64rem;
+}
+
+/* ---------- 土台（文書・デッキ共通） ---------- */
+html, body { overflow-x: clip; }
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+}
+
+.board, .board *, .deck, .deck * { box-sizing: border-box; }
+.board, .deck { line-break: strict; overflow-wrap: anywhere; }
+.board pre, .deck pre { line-break: strict; white-space: pre-wrap; }
+
+/* 帯は下 40% だけ。全面を塗らない（render-html-common.md「強調」）。 */
+mark.k {
+  color: inherit;
+  background: linear-gradient(transparent 60%, var(--mark) 60%);
+  font-weight: 700;
+}
+
+/* 弱い文字（補足・脇の説明）。部品ごとに薄い色を直接書かず、これを使う。
+   書き手が自然に class="mut" と書いて未定義のまま出た事故がある（examples.md 2026-08-14）。 */
+.mut { color: var(--muted); font-size: var(--text-sm); }
+
+/* ---------- 文書版の組版 ---------- */
+/* 見出しは常に --font-head（明朝トグルは本文 --font-body だけを差し替える）。 */
+.board h1, .board h2, .board h3, .board h4, .deck h1, .deck h2, .deck h3, .deck h4 { font-family: var(--font-head); }
+.board {
+  width: min(100%, var(--wide));
+  margin-inline: auto;
+  padding: calc(var(--u) * 6) calc(var(--u) * 5) calc(var(--u) * 24);
+}
+
+.board .prose { max-width: var(--measure); }
+.board p { line-height: var(--lh-body); margin-block: calc(var(--u) * 3); }
+.board li { line-height: var(--lh-body); margin-block: calc(var(--u) * 2); }
+.board ul, .board ol { padding-inline-start: calc(var(--u) * 6); }
+
+.board h1 {
+  font-size: var(--text-2xl);
+  line-height: var(--lh-2xl);
+  margin: 0 0 calc(var(--u) * 2);
+}
+.board .sub {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+  margin-block: 0 calc(var(--u) * 8);
+}
+/* h2 だけ上端へ固定する。表が裏を通っても scroll 範囲を増やさない box-shadow で
+   背景を左右へ伸ばす（create-doc.md）。h3 まで固定すると狭い画面の本文が減る。 */
+.board h2 {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: calc(var(--u) * 12) 0 calc(var(--u) * 4);
+  padding-block: calc(var(--u) * 2);
+  font-size: var(--text-xl);
+  line-height: var(--lh-xl);
+  background: var(--bg);
+  box-shadow: -50vw 0 0 0 var(--bg), 50vw 0 0 0 var(--bg);
+}
+.board h3 {
+  margin: calc(var(--u) * 7) 0 calc(var(--u) * 3);
+  font-size: var(--text-md);
+  line-height: var(--lh-lg);
+}
+.board h4 {
+  margin: calc(var(--u) * 5) 0 calc(var(--u) * 2);
+  font-size: var(--text-base);
+  line-height: var(--lh-body);
+}
+
+/* ⚠ 素の <a> に色を当てる。class を付けたリンク（.docref / .acref）だけを塗っていたため、
+   生成側が素の <a> を出すと «ブラウザ既定の青と紫» になり、暗い配色で地に沈んだ
+   （2026-08-18 に実測。判断面の案内リンク 4 本が読めなかった）。
+   ⚠ 訪問済みも同じ色にする — 読んだかどうかは判断に関係なく、色が変わると別物に見える。
+   下線は残す。色だけで «押せる» を示すと、色が見えない環境で手がかりが消える。 */
+.board a, .deck a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: .18em; }
+.board a:visited, .deck a:visited { color: var(--accent); }
+.board a:hover, .deck a:hover { text-decoration-thickness: 2px; }
+/* 画面写真・地図のリンクは «部品» なので、この色を継がない。
+   ⚠ .deck を前置しない — 地図（.map）と原寸表示（.shot-zoom）は deck の «外» に置く
+   規約なので、`.deck a.mapcell` では当たらない（2026-08-18 に既定の青のまま残った）。 */
+a.shot-open, a.mapcell, a.shot-zoom, .lightbox-close { color: inherit; text-decoration: none; }
+
+.board code {
+  padding: 0 calc(var(--u) * 1);
+  border-radius: calc(var(--u) * 1);
+  background: var(--fill);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  /* ⚠ 先頭の空白を潰さない。既定の normal では字下げが消え、«変更前» と «変更後» を
+     並べた表が «同じもの» として描かれる（2026-08-17 に実際に起きた。字下げを入れる
+     という判断の board で、唯一の図が何も示していなかった）。 */
+  white-space: pre-wrap;
+}
+.board pre {
+  padding: calc(var(--u) * 3);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+  background: var(--fill);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+  overflow-x: auto;
+}
+
+/* 表: 横 overflow は .table-wrap の中だけで受け、ページ本体を横に動かさない。 */
+/* .tw は同じ包みの別名 — 見本（ui-sample.html）とデッキ版が .tw を使うため、
+   媒体で包み名を覚え分けなくて済むよう文書版でも両方受ける。 */
+.board .table-wrap, .board .tw { max-width: 100%; overflow-x: auto; }
+/* 狭い画面で列が 2〜3 文字まで潰れると照合できなくなる。
+   最小幅を与え、はみ出しは .table-wrap の中の横スクロールで受ける。 */
+.board .table-wrap table, .board .tw table { min-width: 34rem; }
+.board .wide { width: min(100%, var(--wide)); }
+.board table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+}
+.board th, .board td {
+  padding: calc(var(--u) * 2) calc(var(--u) * 3);
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  /* 数が並ぶ列で桁を縦に揃える。比例数字だと増減の検算で目が滑る。 */
+  font-variant-numeric: tabular-nums;
+}
+.board th { background: var(--fill); font-weight: 700; }
+/* 短い語だけが入る列は、途中で割らない（`pptx` が `ppt/x` に割れるのを防ぐ）。
+   .board 全体の overflow-wrap: anywhere がここにも効いてしまうため。 */
+.board table.keep-first td:first-child,
+.board table.keep-first th:first-child { white-space: nowrap; }
+/* rowspan を使う表には .keep-first を付けられない — 第 1 セルが «状態» 列になる行が
+   あり、nowrap にすると長い説明が 1 行に伸びて表が横へ広がる（実測 1112px → 544px）。
+   AC 名のような短いラベルだけが折り返さないよう、rowspan のセルにだけ効かせる。 */
+.board table td[rowspan]:first-child { white-space: nowrap; }
+
+/* ---------- カード ---------- */
+.card {
+  margin-block: calc(var(--u) * 5);
+  padding: calc(var(--u) * 4) calc(var(--u) * 5);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+  background: var(--paper);
+}
+/* 推奨・注意は «枠と小さなバッジ» で示し、塗らない。
+   塗り（背景色）は «選ばれている» だけの印（render-html-common.md）。
+   ここで塗ると、回答フォームで選択中のカードと見分けが付かなくなる。 */
+.card.rec { border-color: var(--accent); }
+.card.care { border-color: var(--warn); }
+.card > :first-child { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+
+.tag {
+  display: inline-block;
+  margin-inline-end: calc(var(--u) * 2);
+  padding: 0 calc(var(--u) * 2);
+  border: 1px solid currentColor;
+  border-radius: calc(var(--u) * 1);
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+  font-weight: 700;
+}
+.tag.rec { color: var(--accent); }
+.tag.alt { color: var(--muted); }
+.tag.care { color: var(--warn); }
+
+/* ---------- 決定サマリーと選択肢の軸 ---------- */
+.summary-list { margin: 0; padding: 0; list-style: none; }
+.summary-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+  gap: calc(var(--u) * 1) calc(var(--u) * 4);
+  padding-block: calc(var(--u) * 3);
+  border-top: 1px solid var(--line);
+}
+.summary-list > li:last-child { border-bottom: 1px solid var(--line); }
+.summary-list .lbl { color: var(--muted); font-weight: 700; font-size: var(--text-sm); }
+@media (max-width: 560px) {
+  .summary-list > li { grid-template-columns: minmax(0, 1fr); }
+}
+
+.axis { margin: calc(var(--u) * 3) 0 0; padding: 0; list-style: none; }
+.axis > li {
+  display: grid;
+  grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr);
+  gap: calc(var(--u) * 1) calc(var(--u) * 4);
+  padding-block: calc(var(--u) * 2);
+  border-top: 1px dashed var(--line);
+}
+.axis .lbl { color: var(--muted); font-weight: 700; font-size: var(--text-sm); }
+@media (max-width: 560px) {
+  .axis > li { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- AC 原文（details / popover） ---------- */
+.acx { margin-block: calc(var(--u) * 4); }
+.acx > summary {
+  display: block;
+  cursor: pointer;
+  padding-block: calc(var(--u) * 1);
+  line-height: var(--lh-body);
+}
+.acx > summary::marker,
+.acx > summary::-webkit-details-marker { content: ""; display: none; }
+/* 汎用の details[open] > summary::before に特異度で負けないよう .acx[open] を含める。 */
+.acx[open] > summary::before,
+.acx > summary::before { content: none; }
+.acx > summary .more {
+  color: var(--accent);
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+.acx .src {
+  margin-block: calc(var(--u) * 2) 0;
+  padding: calc(var(--u) * 3);
+  border-inline-start: 3px solid var(--line);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+}
+.acnum {
+  display: inline-block;
+  min-width: 3.4em;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* 本文中の AC 参照は <button popovertarget> + <span popover>（create-doc.md）。
+   popover 非対応環境では参照が開かないだけで、本文は壊れない。 */
+.acref {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  cursor: pointer;
+}
+.acpop { display: none; }
+.acpop:popover-open {
+  display: block;
+  width: min(92vw, 38rem);
+  padding: calc(var(--u) * 4);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+  color: var(--ink);
+  background: var(--paper);
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+  box-shadow: var(--shadow);
+}
+
+/* ---------- v2 部品（steps / timeline / compare / quote / fig / mermaid） ----------
+   primitives.css（見本ページ）から移動した共有部品。色・幅は token のみで書く。
+   使い方の規則は ../create-doc.md「v2 部品」。 */
+/* steps — 順番が意味を持つ列挙（依存順・段階承認・確認手順） */
+ol.steps{list-style:none;margin:0 0 calc(var(--u)*5);padding:0;max-width:var(--measure);counter-reset:step}
+ol.steps>li{position:relative;margin:0;padding:0 0 calc(var(--u)*5) calc(var(--u)*10);counter-increment:step}
+ol.steps li::before{content:counter(step);position:absolute;left:0;top:.05em;width:1.6rem;height:1.6rem;border-radius:999px;
+  display:grid;place-items:center;font-family:var(--font-head);font-size:.85rem;font-weight:700;
+  background:var(--fill);color:var(--muted);border:1px solid var(--line)}
+ol.steps li::after{content:"";position:absolute;left:.8rem;top:calc(.05em + 1.8rem);bottom:calc(var(--u)*1);border-left:1px solid var(--line)}
+ol.steps li:last-child{padding-bottom:0}
+ol.steps li:last-child::after{display:none}
+ol.steps li.done::before{content:"✓";background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+ol.steps li.on::before{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+ol.steps li b{display:block;font-family:var(--font-head)}
+ol.steps li .sub{color:var(--muted);font-size:.9rem}
+
+/* timeline — 経緯を時系列で。1 行 = 事実 1 つ、日付必須 */
+ul.tl{list-style:none;margin:0 0 calc(var(--u)*5);padding:0;max-width:var(--measure)}
+ul.tl>li{position:relative;margin:0;padding:0 0 calc(var(--u)*4) calc(var(--u)*8)}
+ul.tl li::before{content:"";position:absolute;left:.3rem;top:.5em;width:.55rem;height:.55rem;border-radius:999px;background:var(--muted)}
+ul.tl li::after{content:"";position:absolute;left:.55rem;top:calc(.5em + .8rem);bottom:0;border-left:1px solid var(--line)}
+ul.tl li:last-child{padding-bottom:0}
+ul.tl li:last-child::after{display:none}
+ul.tl li.warn::before{background:var(--warn)}
+ul.tl li.mark::before{background:var(--accent)}
+ul.tl time{display:block;font-family:var(--font-head);font-size:.78rem;letter-spacing:.05em;color:var(--muted)}
+
+/* compare — 軸を固定して案を横に比べる。推奨列だけ accent-soft。
+   ⚠ selector に table を挟んで specificity を上げている — .board / .deck の汎用セル
+   （全辺 border）が後から読み込まれても、この部品の「横罫だけ」の形を保つため。 */
+.compare table{border-collapse:collapse;width:100%;font-size:.9rem}
+.compare table th,.compare table td{border:0;border-bottom:1px solid var(--line);background:transparent;
+  padding:calc(var(--u)*2) calc(var(--u)*3);text-align:left;vertical-align:top}
+.compare table thead th{background:var(--fill);font-family:var(--font-head)}
+.compare table tbody th{font-family:var(--font-head);color:var(--muted);font-weight:700;white-space:nowrap}
+.compare table tr:last-child td,.compare table tr:last-child th{border-bottom:0}
+.compare table .rec{background:var(--accent-soft);border-radius:0;margin:0}  /* deck.css の裸 .rec（角丸・margin）を受けない */
+/* compare の推奨 tag と fig の badge — 部品が依存する装飾。selector は .board/.deck の
+   汎用 .tag（枠バッジ）より特異度を上げ、後読みの .deck .tag にも負けない形にする。 */
+.compare table .tag{font-size:.7rem;font-family:var(--font-head);font-weight:400;letter-spacing:.08em;
+  color:var(--ok);border:1px solid var(--ok);border-radius:999px;padding:0 calc(var(--u)*2);
+  margin:0 0 0 calc(var(--u)*2);vertical-align:2px}  /* shorthand で .deck .tag の margin-bottom を遮る */
+
+
+/* quote — 報告・発言は原文で。出典（誰・どこ・いつ）必須 */
+.quote{border-left:3px solid var(--line);background:var(--paper);border-radius:0 var(--r) var(--r) 0;
+  margin:0 0 calc(var(--u)*5);padding:calc(var(--u)*2) calc(var(--u)*4);max-width:var(--measure)}
+.quote p{margin:0}
+.quote cite{display:block;font-style:normal;font-family:var(--font-head);font-size:.78rem;color:var(--muted);margin-top:var(--u)}
+
+/* fig — 画像・SVG 図・flowchart の共通枠。caption に「何を見てほしいか」を必ず書く */
+.fig{border:1px solid var(--line);border-radius:var(--r);background:var(--paper);overflow:hidden;margin:0 0 calc(var(--u)*5)}
+.fig .bar{display:flex;align-items:center;gap:calc(var(--u)*2);border-bottom:1px solid var(--line);
+  background:var(--fill);padding:calc(var(--u)*1) calc(var(--u)*3);font-size:.8rem;font-family:var(--font-head)}
+.fig img,.fig svg{display:block;max-width:100%;height:auto}
+.mermaid-svg svg{display:block;max-width:100%;height:auto}
+.fig .media{overflow-x:auto}
+.fig .media.pad{padding:calc(var(--u)*4)}
+.fig .ph{display:grid;place-items:center;min-height:12rem;margin:calc(var(--u)*3);border:2px dashed var(--line);
+  border-radius:var(--r);color:var(--muted);font-family:var(--font-head);font-size:.85rem}
+.fig .badge{margin-left:auto;font-size:.7rem;letter-spacing:.08em;color:var(--warn);border:1px solid var(--warn);
+  border-radius:999px;padding:0 calc(var(--u)*2)}
+.fig figcaption{padding:calc(var(--u)*2) calc(var(--u)*4);font-size:.85rem;color:var(--muted);border-top:1px solid var(--line)}
+.fig svg text{font-family:var(--font-head);font-size:13px;fill:var(--ink)}
+.fig svg .dim{fill:var(--muted)}
+
+/* ---------- 汎用の畳みと目次（v2 部品の続き — primitives.css から移動） ----------
+   details.fold = 根拠の詳細を 1 手で開く汎用の畳み（AC 原文専用の .acx とは別部品）。
+   toc = 文書版の目次。前提 DOM: <div class="layout"><nav class="toc" id="toc">
+   <button class="toc-t" id="toct">目次</button><ol><li><a href="#節id">…</ol></nav>
+   <div class="content">…節…</div></div>。現在地と stuck 検出は page.js が担う。
+   ⚠ .toc a の色は .board a（accent + 下線）を後方定義で上書きしている — 並びを前へ動かさない。 */
+/* details — 裏付けを 1 手で開く */
+details.fold{border:1px solid var(--line);border-radius:var(--r);background:var(--paper);
+  padding:calc(var(--u)*2) calc(var(--u)*4);margin:0 0 calc(var(--u)*3)}
+details.fold summary{cursor:pointer;font-weight:700}
+details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:calc(var(--u)*2);margin-bottom:calc(var(--u)*2)}
+
+h2.stuck{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* 貼り付き中は 1 行に切り詰め、2 行分の高さで本文を隠さない */
+/* toc-rail — 折りたたみ sidebar。現在地と回答済み ✓ */
+.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:calc(var(--u)*4)}
+.content{min-width:0}
+@media (min-width:1080px){.layout{grid-template-columns:13rem minmax(0,1fr);gap:calc(var(--u)*8)}
+  .page{max-width:calc(var(--measure) + 34rem)}}
+.toc{font-size:.85rem}
+.toc ol{list-style:none;margin:0;padding:0}
+/* .board li の本文用 margin を受けない — 受けると項目間に隙間ができ、
+   border-left の縦線が項目ごとに分割されて見える（見本は 1 本の連続線。2026-08-20 実測） */
+.toc li{margin:0}
+.toc a{display:block;padding:calc(var(--u)*1) calc(var(--u)*3);color:var(--muted);text-decoration:none;
+  border-left:2px solid var(--line)}
+/* ⚠ .board .sub（h1 の副題 — margin-bottom 32px）と同名 class の衝突を遮断する。
+   遮断しないと下位項目の li 間に 32px の隙間ができ、縦線が分割されて見える
+   （margin が li を突き抜けて collapse するため、li の rect にも margin にも現れない — 2026-08-20 実測） */
+.toc a.sub{padding-left:calc(var(--u)*6);margin:0;line-height:inherit}
+.toc a.on{color:var(--accent);border-left-color:var(--accent);background:var(--accent-soft)}
+.toc a.done::after{content:" ✓";color:var(--ok);font-weight:700}
+.toc .toc-t{display:none}
+/* ⚠ .layout（目次レールつき）の中では h2 の背景拡張を右だけにする。
+   左へ 50vw 伸ばすと、h2 と同じ高さ帯の目次項目が地の色で塗り潰される
+   （2026-08-20 に実測 — DOM にも hit-test にも写らない box-shadow なので、
+   目次の 2 番目が「存在するのに描画されない」という見え方になった）。
+   目次の無い 1 段組の board では従来どおり左右へ伸ばす（板の左 padding を覆うため）。 */
+.layout .content h2 { box-shadow: 50vw 0 0 0 var(--bg); }
+@media (min-width:1080px){.toc{position:sticky;top:calc(var(--u)*4);align-self:start;
+  max-height:calc(100vh - 2rem);overflow:auto}}
+@media (max-width:1079.9px){
+  /* 帯にしない — ボタンだけ右上に浮かせ、heading と同じ高さを共有する */
+  .toc{position:fixed;top:calc(var(--u)*2);right:calc(var(--u)*3);z-index:6}
+  .toc .toc-t{display:inline-block;border:1px solid var(--line);border-radius:999px;
+    background:var(--paper);box-shadow:var(--shadow);
+    padding:calc(var(--u)*1) calc(var(--u)*4);font:inherit;cursor:pointer}
+  .toc ol{display:none;position:absolute;right:0;top:calc(100% + var(--u)*2);
+    background:var(--paper);border:1px solid var(--line);border-radius:var(--r);
+    box-shadow:var(--shadow);min-width:13rem;max-height:70vh;overflow:auto;
+    padding:calc(var(--u)*2)}
+  .toc.open ol{display:block}
+  h2.stuck{padding-right:6rem} /* 逃げは上端に貼り付いている間だけ。流れの中では幅を捨てない */}
+
+
+/* ---------- 画面写真・付録 ---------- */
+/* figure / blockquote はブラウザ既定で margin-inline: 40px を持つ。
+   width:100% と合わさると狭い画面で横へはみ出すため、明示的に 0 へ戻す。 */
+.board figure, .board blockquote { margin-inline: 0; }
+
+.shot { margin-block: calc(var(--u) * 4); }
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+}
+.shot figcaption {
+  margin-top: calc(var(--u) * 2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+}
+/* 画面写真。1 スロット 1 枚が既定で、明暗の比較だけ 2 枚並べる。 */
+.shots { display: grid; gap: calc(var(--u) * 4); }
+@media (min-width: 900px) { .shots { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- 画面写真を原寸で開く ----------
+   mockup・変更前後の比較は合意した文章と同じ重さで扱う（base skill「合意済みの画像」）。
+   縮小のままでは文言・色・導線が読めないので、押すと原寸で開く。
+   :target と <a href="#…"> だけで成立させる — script を止めるビューアで開かれても壊れない。
+   閉じるのは overlay のどこを押してもよい（href が元の figure へ戻す）。Esc は board.js の上乗せ。
+   ⚠ デッキでは .shot-zoom を .deck の «外» に置く。面の中身（.p > .in）には自動縮小の
+   transform が掛かるため、その中の fixed は viewport ではなく面に張り付く。 */
+.shot-open { display: block; cursor: zoom-in; }
+.shot-zoom {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 30;               /* 地図(3)・三角(4)・進捗(20) より上 */
+  overflow: auto;
+  padding: calc(var(--u) * 6);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  cursor: zoom-out;
+}
+.shot-zoom:target { display: block; }
+.shot-zoom img {
+  display: block;
+  margin: 0 auto;
+  width: auto;
+  height: auto;
+  max-width: none;           /* 原寸。入りきらない分は overlay 側の scroll で見る */
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+}
+.shot-zoom .shot-zoom-hint {
+  position: fixed;
+  inset: auto auto calc(var(--u) * 3) 50%;
+  transform: translateX(-50%);
+  padding: calc(var(--u) * 1) calc(var(--u) * 3);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+  color: var(--muted);
+  background: var(--paper);
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+  white-space: nowrap;
+}
+
+/* ---------- ホストと port の入力 → 確認 URL の生成 ----------
+   board にはホスト名を書けない（読み手が開く環境のアドレスは書き手には分からない）。
+   本文には path だけを書き、読み手が自分の環境のホストを一度だけ入れる。
+   未入力の間は path だけが見え、入力すると «開く» と «URL をコピー» が現れる（board.js）。 */
+.host-setup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 3) calc(var(--u) * 5);
+  align-items: center;
+  margin-block: calc(var(--u) * 4);
+  padding: calc(var(--u) * 3) calc(var(--u) * 4);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+  background: var(--paper);
+}
+.host-setup label {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.host-setup input {
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 1);
+  padding: calc(var(--u) * 1) calc(var(--u) * 2);
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+.host-setup input[data-host-input] { min-width: 16rem; flex: 1 1 auto; }
+.host-setup input[data-port-input] { width: 6.5rem; }
+.check-tools {
+  display: inline-flex;
+  gap: calc(var(--u) * 2);
+  margin-inline-start: calc(var(--u) * 2);
+  vertical-align: baseline;
+}
+.check-tools[hidden] { display: none; }
+.check-open { color: var(--accent); text-underline-offset: 0.18em; }
+.check-copy {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 1);
+  padding: 0 calc(var(--u) * 2);
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.appendix-note {
+  margin-block: calc(var(--u) * 4);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+}
+
+/* ---------- 回答フォーム（文書・デッキで «同じ 1 つ» を使う） ----------
+   片方だけ直すと、同じ判断が媒体によって違う見た目・違う挙動になる。 */
+.answer-set {
+  display: grid;
+  gap: calc(var(--u) * 3);
+  margin-block: calc(var(--u) * 5);
+}
+/* ⚠ 素の button にだけ効かせる。カードに掛けるとカードの見た目が消える。 */
+button.answer-choice,
+[data-copy-answer] {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+  padding: calc(var(--u) * 3) calc(var(--u) * 4);
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* 選択肢のカードそのものを押せるようにする。ボタン行を別に置くと、
+   読み終えたその場で押せず、下まで行って選び直すことになる。 */
+.card.answer-choice {
+  position: relative;
+  cursor: pointer;
+  /* 左端は «選ぶ丸» と、選択中に出る帯を置く場所。選ばれていないときも空けておく。
+     選んだ瞬間に空けると、本文が右へずれて «別の文章になった» ように見える。 */
+  padding-inline-start: calc(var(--u) * 10);
+  /* ⚠ 選択肢カードの地は 4 枚全部をここで決める。文書版とデッキ版でカードの
+     既定の地が違うため、推奨カードだけ書き換えると片方で «推奨が 1 枚だけ濃い»、
+     もう片方で «推奨が 1 枚だけ薄い» になる。 */
+  background: var(--paper);
+  transition: opacity .12s ease, border-color .12s ease;
+}
+.card.answer-choice:hover { border-color: var(--accent); }
+.card.answer-choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ⚠ 左端が «いまこれを選んでいるか»、右端が «推奨か別案か»。この左右を入れ替えない。
+   逆に置くと、推奨のバッジのほうが «選ばれている印» に読める
+   （ユーザ指摘 2026-08-15「逆な気がする」）。 */
+.card.answer-choice > h4 { position: relative; }
+.card.answer-choice > h4::before {
+  content: "";
+  position: absolute;
+  /* 見出しの 1 行目に合わせる。カードの上端からの距離で置くと、
+     見出しが 2 行になった媒体で丸だけが取り残される。 */
+  inset-inline-start: calc(var(--u) * -6);
+  inset-block-start: 0.16em;
+  width: 0.95em;
+  height: 0.95em;
+  border: 2px solid var(--muted);
+  border-radius: 999px;
+  background: var(--paper);
+}
+.card.answer-choice.is-selected > h4::before {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--paper);
+}
+/* 推奨・別案・その他のバッジは見出しの右端へ寄せる。
+   ⚠ padding と background を書き直しているのは、デッキ版に «推奨のかたまり» を表す
+   ブロック用の `.rec` があり、`class="tag rec"` のバッジまで巻き込むため。 */
+.card.answer-choice > h4 > .tag {
+  float: inline-end;
+  margin: 0 0 0 calc(var(--u) * 3);
+  padding: 0 calc(var(--u) * 2);
+  background: transparent;
+}
+
+/* 塗りは «選ばれている» だけの印にする。推奨カードまで塗ると、
+   どちらが選択中か見分けられない（ユーザ指摘 2026-08-15「選択わかりにくい」）。
+   推奨であることは、右のバッジと枠線の色が伝える。 */
+.card.answer-choice.is-selected {
+  border-color: var(--accent);
+  border-width: 2px;
+  box-shadow: inset calc(var(--u) * 1.5) 0 0 0 var(--accent);
+  background: var(--accent-soft);
+}
+.card.answer-choice.is-selected > h4 { color: var(--accent); }
+/* 選ばれていないカードは «引く»。選んだ 1 枚だけが前に出るようにする。 */
+.card.answer-choice.is-dimmed { opacity: 0.6; }
+
+.answer-note,
+[data-answer-output] {
+  width: 100%;
+  min-height: calc(var(--u) * 24);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+  padding: calc(var(--u) * 3);
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  line-height: var(--lh-body);
+}
+.answer-jump {
+  color: var(--accent);
+  text-underline-offset: 0.18em;
+}
+.answer-progress {
+  position: fixed;
+  inset: calc(var(--u) * 3) calc(var(--u) * 3) auto auto;
+  z-index: 20;
+  display: flex;
+  gap: calc(var(--u) * 2);
+  padding: calc(var(--u) * 2) calc(var(--u) * 3);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+  color: var(--ink);
+  background: var(--paper);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow);
+}
+/* 狭い画面では固定バッジが sticky な見出しに重なるので、下端へ逃がす。
+   （デッキでは右下に地図があるため、deck.css が左下へ上書きする。） */
+@media (max-width: 700px) {
+  .answer-progress {
+    inset: auto calc(var(--u) * 3) calc(var(--u) * 3) auto;
+    opacity: 0.94;
+  }
+}
+
+[data-copy-status] {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+  min-height: var(--lh-sm);
+}

@@ -645,13 +645,34 @@ fi
 
 worker への指示は「flock か mkdir-lock で排他」とし、特定コマンド（flock）の存在を前提にしないこと。macOS には `/usr/bin/lockf`・`/usr/bin/shlock` もあるが Linux 側で常在しないためクロス OS には mkdir-lock を既定にする。
 
+## ticket close 後の後片付け（必須 3 点）
+
+**worker が ticket を close したら、Director は次の ticket を割り当てる前に、この 3 点を必ず実施する。**
+どれも「やり忘れても当日は困らない」ため放置されやすいが、残骸は**次の ticket の事故**として返ってくる
+（古い dev server が port を塞ぐ / 前 ticket の branch のまま誤操作する / context が肥大したまま次を始める）。
+
+1. **その ticket のために起動したプロセスを止める。**dev server（`dev-server.sh` / hypercorn）、
+   検証用の `http.server`、`agent-browser` のセッション、その ticket 専用の Monitor が対象。
+   探し方は「kickoff・note に記録された background」と「`ss -tlnp` で worktree 由来の listen port」の 2 経路。
+   ⚠ **広いパターンの `pkill -f` を使わない** — パターンが自分のシェルのコマンドライン文字列にも一致して
+   巻き添えにする（2026-08-19 に実測。exit 144 で後続コマンドごと落ちた）。**PID か port を特定して個別に kill する。**
+   ⚠ 他 ticket・他 window のプロセスに触れない。誰が起動したか分からないプロセスは殺さずユーザに確認する。
+2. **window を `/clear` する**（下記「worker の /clear タイミング」の close 行。送り方は「送り方」節）。
+3. **worker に `ExitWorktree()` を実行させ、main repo（main branch）へ戻す。**pane の処理が
+   終わった時点で（次の kickoff まで先送りせず）必ず実行させる。⚠ **Bash の `cd` では戻れない** —
+   cd はそのコマンドの subprocess にしか効かず、Claude Code セッションの現在地（worktree 設定）は
+   `ExitWorktree()` でしか解除されない（ユーザ指摘 2026-08-19。cd で「戻った」と報告した worker の
+   セッションは worktree に残ったままだった）。`/clear` も cwd を戻さない。`close --keep-worktree` で
+   worktree 自体を残す場合も、**worker の現在地は main に戻す** — 前 ticket の feature branch を
+   現在地にしたまま次の作業を始めると、誤 commit・誤参照の温床になる。
+
 ## worker の /clear タイミング
 
 worker (別 window の Claude Code) の ctx が蓄積すると性能劣化 + auto-compaction の不確定性が増す。以下の基準で **積極的に /clear** する (手戻りを恐れない):
 
 | 状況 | 推奨アクション |
 |---|---|
-| **Ticket close 直後 (ctx 関係なし)** | **必ず次 Ticket start 前に /clear** ← デフォルトルール |
+| **Ticket close 直後 (ctx 関係なし)** | **必ず次 Ticket start 前に /clear** ← デフォルトルール。プロセス停止・main 復帰とセットで行う（上記「ticket close 後の後片付け」） |
 | worker ctx > 80% かつ bg task (codex exec 等) 実行中で Claude idle | **最低コスト /clear のベストタイミング** — ファイル state は durable、bg task 出力先は /tmp の mktemp dir に残る |
 | worker ctx > 90% | Ticket 途中でも /clear を検討。Ticket 内進捗が commit 済なら手戻りほぼゼロ |
 

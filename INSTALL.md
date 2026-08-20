@@ -63,7 +63,10 @@ bash ticket.sh init
 | `tmp/pdh/skills/pdh-check-writing/SKILL.md` | `.claude/skills/pdh-check-writing/SKILL.md` | 宣言型 `.check` 執筆スキル |
 | `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
 | `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
-| `tmp/pdh/skills/pdh-ticket-decision-board/` | `.claude/skills/pdh-ticket-decision-board/` | 判断ボードスキル（`SKILL.md` / `render-html-common.md` / `create-doc.md` / `create-slides.md` / `examples.md` を**ディレクトリごと**コピーする） |
+| `tmp/pdh/skills/pdh-decision-board-base/` | `.claude/skills/pdh-decision-board-base/` | 判断ボードの共通規則と renderer（分冊 `*.md` / `evals/` / `kit/`（CSS・JS・検査 script・見本）を**ディレクトリごと**コピーする） |
+| `tmp/pdh/skills/pdh-ticket-decision-board/SKILL.md` | `.claude/skills/pdh-ticket-decision-board/SKILL.md` | 実装前 gate（AC 承認）の判断ボードスキル — base への差分 |
+| `tmp/pdh/skills/pdh-close-decision-board/SKILL.md` | `.claude/skills/pdh-close-decision-board/SKILL.md` | close 前 gate（出荷承認）の判断ボードスキル — base への差分 |
+| `tmp/pdh/skills/common-writing/SKILL.md` | `.claude/skills/common-writing/SKILL.md` | 文章の共通規則（判断ボードの本文が従う） |
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
 | `tmp/pdh/templates/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH 汎用 agent ルール |
 | `tmp/pdh/templates/CLAUDE.local.md.example` | `CLAUDE.local.md.example` | 環境固有 agent メモのサンプル（実体は commit しない） |
@@ -87,7 +90,7 @@ Codex CLI はプロジェクト直下の `.agents/skills/` を skill として�
 
 ```bash
 mkdir -p .agents/skills
-for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-ticket-decision-board; do
+for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing; do
   ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done
 ```
@@ -390,6 +393,28 @@ rm -rf tmp/pdh
 
 ### 既知の移行手順
 
+#### pdh-ticket-decision-board の 3 分冊化 + close 前 gate の追加（2026-08-20 以降）
+
+**判断ボード skill は 3 つの構成になった。**gate と媒体に依存しない共通規則・renderer 分冊・kit（CSS/JS/検査 script）は新設の `pdh-decision-board-base` が持ち、`pdh-ticket-decision-board`（実装前 gate）と新設の `pdh-close-decision-board`（close 前 gate）は base への差分だけを持つ。本文の文章規則は新設の `common-writing` を参照する。
+
+**⚠ 単なるファイル追加ではない。**旧 `pdh-ticket-decision-board/` に入っていた `render-html-common.md` / `create-doc.md` / `create-slides.md` / `examples.md` は base 側へ移動して内容も更新されているため、**旧配置のまま残すと 2 系統の規則が食い違う。**
+
+移行手順:
+
+```bash
+rm -rf .claude/skills/pdh-ticket-decision-board
+cp -r tmp/pdh/skills/pdh-decision-board-base/ .claude/skills/pdh-decision-board-base/
+cp -r tmp/pdh/skills/pdh-ticket-decision-board/ .claude/skills/pdh-ticket-decision-board/
+cp -r tmp/pdh/skills/pdh-close-decision-board/ .claude/skills/pdh-close-decision-board/
+cp -r tmp/pdh/skills/common-writing/ .claude/skills/common-writing/
+for s in pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing; do
+  ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
+done
+```
+
+kit の CSS（tokens.css の palette）を変えたときは `python3 .claude/skills/pdh-decision-board-base/kit/check-contrast.py` が exit 0 になることを確認する。
+
+
 #### decision-board → pdh-ticket-decision-board へ置き換え（2026-08-15 以降）
 
 **`decision-board` skill は撤去され、`pdh-ticket-decision-board` に置き換わった。**
@@ -443,7 +468,7 @@ README.md 側にも INSTALL.md へのリンクを残してあるので、古い 
 
 ```bash
 # 旧 wrapper があれば撤去し、symlink に置き換える（冪等）
-for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-ticket-decision-board; do
+for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing; do
   [ -e ".agents/skills/$s" ] && [ ! -L ".agents/skills/$s" ] && rm -rf ".agents/skills/$s"
   [ -d ".claude/skills/$s" ] && ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done

@@ -1,0 +1,53 @@
+/* 判断ボード kit v2 — tokens.css
+   全 board が読み込む変数。基準はここにしか無い。dark は差し替えだけ。
+   値の根拠: APCA 実測（本文 |Lc|>=90 / 補足 >=60 / 罫線 >=25 — 検査は check-contrast.py）。
+   --line は装飾ではなく形状の輪郭 — 地の段差(bg/paper)を控えめにする分、輪郭が形を担う。 */
+/* ============================================================
+   層 1: tokens — 全 board が読み込む変数。基準はここにしか無い。
+   dark は token の差し替えだけで、部品の CSS は 1 行も変わらない。
+   ============================================================ */
+:root{
+  /* 地と字 */
+  --bg:#f4f6f8;        /* ページの地。紙よりわずかに沈む寒色 */
+  --paper:#ffffff;     /* カード・本文の紙 */
+  --fill:#eef1f4;      /* 紙の上の控えめな塗り（code・表 header） */
+  --ink:#1c2126;       /* 本文 */
+  --muted:#5c6672;     /* 補足・キャプション */
+  --line:#bcc8d3;      /* 罫線 */
+  /* 有彩色 — 意味は 3 つだけ。濃=字/線/バッジ、淡=小さな面の地 */
+  --accent:#17657f;      --accent-soft:#e3eef2;  /* 判断・選択・接続 */
+  --on-accent:#ffffff;   /* accent 塗りの上の字 */
+  --ok:#2e6b4e;          --ok-soft:#e7f1ea;      /* 推奨・合格 */
+  --warn:#8a5512;        --warn-soft:#faf1e2;    /* 注意・未測定・停止条件 */
+  --mark:#faeaa8;      /* mark.k の帯。塗り«だけ»で意味を運ぶ唯一の面なので、
+                          bg / paper の両方に対して面の下限 1.08 を要求する（check-contrast.py） */
+  /* 寸法 */
+  --measure:44rem;     /* 本文幅の唯一の基準。全 container はここから導く */
+  --u:.25rem;          /* 余白の目盛 */
+  --r:6px;             /* 角丸 */
+  --font-head:ui-sans-serif,system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  --font-body:var(--font-head); /* 既定はゴシック。明朝は調整 UI（data-font="mincho"）で試す */
+  --shadow:0 2px 8px rgba(28,33,38,.15); /* 浮く要素の影。影もここだけ */
+  color-scheme:light;
+}
+
+/* dark — 閲覧者の設定に追従（明示指定が最優先） */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b0e13; --paper:#1a2027; --fill:#2a333e; --ink:#f2f5f9; --muted:#b9c3ce; --line:#66788a;
+  --accent:#93cee2; --accent-soft:#20404f; --on-accent:#0b0e13;
+  --ok:#9cdab7;     --ok-soft:#20402c;
+  --warn:#f3c886;   --warn-soft:#4a3825;
+  --mark:#4a3825;
+  --shadow:0 2px 10px rgba(0,0,0,.55);
+  color-scheme:dark;
+}}
+:root[data-font="mincho"]{--font-body:"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP","BIZ UDMincho",serif}
+:root[data-theme="dark"]{
+  --bg:#0b0e13; --paper:#1a2027; --fill:#2a333e; --ink:#f2f5f9; --muted:#b9c3ce; --line:#66788a;
+  --accent:#93cee2; --accent-soft:#20404f; --on-accent:#0b0e13;
+  --ok:#9cdab7;     --ok-soft:#20402c;
+  --warn:#f3c886;   --warn-soft:#4a3825;
+  --mark:#4a3825;
+  --shadow:0 2px 10px rgba(0,0,0,.55);
+  color-scheme:dark;
+}

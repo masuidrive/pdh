@@ -1,0 +1,16 @@
+# evals — この skill の評価シナリオ
+
+**この skill への規則の追加・削除は、ここの評価で測ってから行う**（Anthropic 「Skill authoring best practices」の evaluation-driven development）。事故が起きたら、散文の規則を足す前に、まずその事故をシナリオとしてここへ再現する。
+
+各シナリオは実際に起きた失敗の再現である。入力とタスクを fresh agent （この repo では claude opus と codex gpt-5.6-sol xhigh の両方）へ渡し、出力を expected_behavior と突き合わせる。
+
+## 実行方法
+
+1. fresh agent に `SKILL.md`（と、シナリオが指定する分冊）を読ませる
+2. シナリオの「入力」と「タスク」だけを渡す。expected_behavior は渡さない
+3. 出力を expected_behavior の各項目で PASS / FAIL 判定する
+4. FAIL した項目だけが skill を直す理由になる。直したら再実行する
+
+baseline（skill 無しで同じタスクを解かせた結果）と比べると、その規則が実際に挙動を変えているかが分かる。変えていない規則は削る候補である。
+
+⚠ eval-3 の題材は、SKILL.md「判断カードの型」の良例/悪例と同じ実失敗である。agent が例を照合するだけで通れるため、汎化の検査としては弱い。別の題材で同じ失敗形を試すシナリオを足すときは、skill 本文に例が無いものを選ぶ。
