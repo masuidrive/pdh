@@ -1,7 +1,6 @@
 # PDH Dev — 実行モデル: Team (multi-agent CLI)
 
-このファイルはteamの役割と実行方法だけを定義する。
-フローとgateは`_principles.md`、`_reference.md`、`_flow.md`、`_review.md`、`_collaboration.md`を参照する。
+このファイルはteamの役割と実行方法だけを定義する。フローとgateは`_principles.md`、`_reference.md`、`_flow.md`、`_review.md`、`_collaboration.md`を参照する。
 
 ---
 
@@ -38,10 +37,7 @@ PMが行わないこと：
 
 ### Director のモデル固定
 
-Directorは自分のengine、model、profile、reasoning effortを自律変更しない。
-当該作業でユーザが明示指定した場合だけ変更できる。
-実行基盤が自動変更した場合は事実を記録して報告し、Directorの要求または追認扱いしない。
-worker割当変更をDirector自身のmodel変更の代用にしない。
+Directorは自分のengine、model、profile、reasoning effortを自律変更しない。当該作業でユーザが明示指定した場合だけ変更できる。実行基盤が自動変更した場合は事実を記録して報告し、Directorの要求または追認扱いしない。 worker割当変更をDirector自身のmodel変更の代用にしない。
 
 ## エンジン割り当て（既定 = main と同一 / プロジェクト規約で上書き）
 
@@ -62,17 +58,13 @@ worker割当変更をDirector自身のmodel変更の代用にしない。
 
 ## spawn 機構（engine 中立 = subprocess / 結果はファイル）
 
-workerはCLI subprocessで起動し、結果を専用fileで回収する。
-workerが起動できない場合はDirector単独でstage完了扱いせず、中止、報告、またはユーザ確認へ切り替える。
+workerはCLI subprocessで起動し、結果を専用fileで回収する。 workerが起動できない場合はDirector単独でstage完了扱いせず、中止、報告、またはユーザ確認へ切り替える。
 
-projectの実行profileとapproval policyを優先し、承認済みin-process subagent機構があれば優先する。
-**`--dangerously-*`系bypass flagは、ユーザまたはsessionが明示許可した場合だけ使う。**
+projectの実行profileとapproval policyを優先し、承認済みin-process subagent機構があれば優先する。**`--dangerously-*`系bypass flagは、ユーザまたはsessionが明示許可した場合だけ使う。**
 
 ### worker prompt の組み立て
 
-promptは「共通context + 役割別指示 + task固有依頼」で組み立てる。
-共通contextは`_subagent-context.md`を使い、`<TICKET_FILE>`、`<NOTE_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`、`<TESTS_DIR>`、`<TMP_DIR>`を実値で埋める。
-必須項目の正は`PDH-AGENTS.md`「Worker Instructions」。reviewerへはさらに`_review.md`「レビュアーへの指示ルール」の項目を含める。
+promptは「共通context + 役割別指示 + task固有依頼」で組み立てる。共通contextは`_subagent-context.md`を使い、`<TICKET_FILE>`、`<NOTE_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`、`<TESTS_DIR>`、`<TMP_DIR>`を実値で埋める。必須項目の正は`PDH-AGENTS.md`「Worker Instructions」。reviewerへはさらに`_review.md`「レビュアーへの指示ルール」の項目を含める。
 
 - `<TMP_DIR>`は`ticket.sh start`/`restore`出力の`tmp_dir:`パス、`<TESTS_DIR>`はそこには出力されないので同出力の`ticket_dir:`パス + `/tests/`（legacy flat layoutでは`tests/tickets/<id>/`）を規約で導出する。workerは`ticket.sh`を実行しないので、PMが埋めないとworkerはこのパスを知る手段がない
 - `<RESULT_FILE>`はworker自身がfile toolで書く成果物fileであり、stdout回収先とは別のパス（例: `$d/result.md`）を割り当てる。stdoutは診断用log（後述）
@@ -82,8 +74,7 @@ promptはfileへ書き出し、stdinでworkerへ渡す。
 
 ### 起動コマンド（engine 別・権限は環境規約に従う）
 
-承認待ちが発生したらbypassせず、ユーザ承認を得るか承認済みin-process機構へ切り替える。
-起動commandは割当engineに従い、run環境の認証を継承する。
+承認待ちが発生したらbypassせず、ユーザ承認を得るか承認済みin-process機構へ切り替える。起動commandは割当engineに従い、run環境の認証を継承する。
 
 ```bash
 # claude（stdoutは診断log。成果物はworkerが<RESULT_FILE>=$d/result.mdへ書く）
@@ -107,8 +98,7 @@ Claude CodeがmainでcodexをworkerへspawnするときはBashツールで直接
 
 ### 並行起動（必須パターン: `&` background + PID 配列 + wait + exit code）
 
-独立workerは同一Bash呼出し内でbackground並行起動し、PIDごとに`wait`してexit codeを回収する。
-各workerへ専用dirとresult fileを割り当て、同一fileへの同時書込みを避ける。
+独立workerは同一Bash呼出し内でbackground並行起動し、PIDごとに`wait`してexit codeを回収する。各workerへ専用dirとresult fileを割り当て、同一fileへの同時書込みを避ける。
 
 ```bash
 declare -A PID2NAME RC
@@ -128,25 +118,19 @@ for pid in "${!PID2NAME[@]}"; do
 done
 ```
 
-workerごとにrc、resultとstderrの`ls -l`、stderr末尾120行を診断証跡へ残す。
-non-zero rcまたは空もしくは欠落resultでは、rcとstderrを併読して報告する。
-spawn失敗時は単独続行しない。
+workerごとにrc、resultとstderrの`ls -l`、stderr末尾120行を診断証跡へ残す。 non-zero rcまたは空もしくは欠落resultでは、rcとstderrを併読して報告する。 spawn失敗時は単独続行しない。
 
-同時worker数が多い場合はbatch分割して起動上限を設ける。
-mainとworkerが同じengineならin-process並行spawnを使える。
-cross-engineとheadless CIはsubprocessを使う。
+同時worker数が多い場合はbatch分割して起動上限を設ける。 mainとworkerが同じengineならin-process並行spawnを使える。 cross-engineとheadless CIはsubprocessを使う。
 
 ## チーム運用・サブエージェント運用
 
 ### 原則
 
-read-only taskは並行Review Agentへ、write taskは1人のCoding Engineerへ割り当てる。
-PMはsource codeを直接編集しない。
+read-only taskは並行Review Agentへ、write taskは1人のCoding Engineerへ割り当てる。 PMはsource codeを直接編集しない。
 
 ### spawn のルール
 
-workerのengineとmodelはprojectのrole規約に従い、最小能力の軽量modelへ落とさない。
-spawn promptの必須項目は`PDH-AGENTS.md`「Worker Instructions」が正（レンズ1例外を含む）。
+workerのengineとmodelはprojectのrole規約に従い、最小能力の軽量modelへ落とさない。 spawn promptの必須項目は`PDH-AGENTS.md`「Worker Instructions」が正（レンズ1例外を含む）。
 
 ### サブエージェント委譲ルール
 
@@ -167,8 +151,7 @@ PMは`_flow.md`の`PDH-open`に従い、ticketとnoteを確定する。
 
 ### PDH-ticket-review: ticket contract check (PM が担当)
 
-PMはticket contractを整える。
-AC承認は次のhuman reviewまで得ない。
+PMはticket contractを整える。 AC承認は次のhuman reviewまで得ない。
 
 ### PDH-ticket-human-review: 実装前の人間レビュー (PM が担当)
 
@@ -176,19 +159,15 @@ PMが担当し、提示内容は`_flow.md`の`PDH-ticket-human-review`に従う�
 
 ### PDH-implement: 実装
 
-PMはCoding Engineer 1人をspawnする。
-整合性gate後にQAをspawnして完了checkし、失敗はCoding Engineerへ戻す。
+PMはCoding Engineer 1人をspawnする。整合性gate後にQAをspawnして完了checkし、失敗はCoding Engineerへ戻す。
 
 ### PDH-review: 品質検証
 
-初回reviewは1人以上を並行起動し、同一SHAのdiff全体を見せる（レンズ1 reviewerを除く）。
-finding修正はCoding Engineer、test再実行はQAへ委譲する。
-attempt運用と修正確認の範囲は`_review.md`が正。
+初回reviewは1人以上を並行起動し、同一SHAのdiff全体を見せる（レンズ1 reviewerを除く）。 finding修正はCoding Engineer、test再実行はQAへ委譲する。 attempt運用と修正確認の範囲は`_review.md`が正。
 
 ### PDH-verify: 完了検証
 
-AC裏取りAgentを1人spawnし、各ACの実達成を検証させる。
-Surface Observer前に`./scripts/dev-server.sh --seed`を実行し、外部surface変更時はObserverをspawnする。観察方法と証拠要件は`PDH-AGENTS.md`「Browser And Surface Checks」が正。
+AC裏取りAgentを1人spawnし、各ACの実達成を検証させる。 Surface Observer前に`./scripts/dev-server.sh --seed`を実行し、外部surface変更時はObserverをspawnする。観察方法と証拠要件は`PDH-AGENTS.md`「Browser And Surface Checks」が正。
 
 ### PDH-human-review: 人間レビュー
 

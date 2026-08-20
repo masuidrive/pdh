@@ -10,8 +10,7 @@
 
 ## stage 遷移の宣言
 
-stage遷移と差し戻しは毎回短く宣言する。
-省略または暗黙の遷移を禁止する。
+stage遷移と差し戻しは毎回短く宣言する。省略または暗黙の遷移を禁止する。
 
 ```text
 [PDH-open] -> [PDH-ticket-review] — ticket 確定
@@ -71,14 +70,11 @@ product-brief.mdとの整合を1行で宣言
 
 ## AC に書いてよいもの / 書いてはいけないもの
 
-ACには観察可能なproduct動作を書く。
-review結果やtest pass等のprocess要件は書かず、noteのchecklistへ置く。
+ACには観察可能なproduct動作を書く。 review結果やtest pass等のprocess要件は書かず、noteのchecklistへ置く。
 
 ## Implementation Notes は自主的に書かない
 
-Implementation Notesはユーザが明示または会話で言及した事項だけを、関数名またはmodule名levelまで書く。
-Design Decisionや実装詳細を自主的に書かない。
-実装担当は空でも実装する。
+Implementation Notesはユーザが明示または会話で言及した事項だけを、関数名またはmodule名levelまで書く。 Design Decisionや実装詳細を自主的に書かない。実装担当は空でも実装する。
 
 ## note のセクション構成
 
@@ -94,9 +90,7 @@ Design Decisionや実装詳細を自主的に書かない。
 | PDH-human-review | review依頼、確認手順、承認または差し戻し |
 | Discoveries | 想定外の事実 |
 
-section構成の正は`.ticket-config.yaml`の`note_content`。ここに無いsectionを前提にしない。
-`PDH-ticket-human-review`のAC承認は専用sectionを持たず、Statusと`PDH-ticket-review`へ記録する。
-attempt 2以降は`### Findings (PDH-review-2)`のように見出しを自分で追加する。
+section構成の正は`.ticket-config.yaml`の`note_content`。ここに無いsectionを前提にしない。 `PDH-ticket-human-review`のAC承認は専用sectionを持たず、Statusと`PDH-ticket-review`へ記録する。 attempt 2以降は`### Findings (PDH-review-2)`のように見出しを自分で追加する。
 
 次を守る。
 

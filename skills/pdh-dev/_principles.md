@@ -4,16 +4,13 @@
 
 価値を届けるためにworkflowを選び、workflowの適用自体を目的にしない。
 
-判断ではuser journey動作をengineering aestheticsより優先する。
-downstream ticketでの復旧予定を理由に、mainのconsumer surfaceを壊してcloseしてはならない（`_flow.md`「PDH-close」）。
+判断ではuser journey動作をengineering aestheticsより優先する。 downstream ticketでの復旧予定を理由に、mainのconsumer surfaceを壊してcloseしてはならない（`_flow.md`「PDH-close」）。
 
 階層と各層の責務は`docs/product-delivery-hierarchy.md`「構造」が正。Outcome、Scope、Design Decisions、Non-goalsはticketへ直接書く。
 
 ## 症状ではなく目的から解く
 
-bugfixやfeature ticketのWhyとACは、`product-brief.md`の目的と利益から逆算する。
-症状や要望は、briefで損なわれる、または前進する目的へWhyを翻訳し、そのWhyからACを派生させる。
-症状の直接修正とbriefの目的またはInvariantsが乖離する場合は実装せず提起する。
+bugfixやfeature ticketのWhyとACは、`product-brief.md`の目的と利益から逆算する。症状や要望は、briefで損なわれる、または前進する目的へWhyを翻訳し、そのWhyからACを派生させる。症状の直接修正とbriefの目的またはInvariantsが乖離する場合は実装せず提起する。
 
 ## YAGNI / 最小実装
 

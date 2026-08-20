@@ -40,14 +40,29 @@ flowchart TD
    - `./ticket.sh start`が生成した構造に従う
    - ACをcopyしない。ACのsource of truthはticketだけとする
 
-このstageでは読むticketとnoteだけを確定する。
-妥当性checkとAC承認は後続stageへ分ける。
+このstageでは読むticketとnoteだけを確定する。妥当性checkとAC承認は後続stageへ分ける。
 
 ## PDH-ticket-review. Ticket contract check
 
 1. WhyとAC
    - Whyを`product-brief.md`の目的へ接続する。症状から翻訳した要求がbriefと矛盾する場合は実装せず提起する
-   - 曖昧なACを具体化する
+   - 曖昧なACを具体化する。具体化とは「いま調べれば確定できることを、調べてから書く」である。次の4つはいずれも調べれば消えるので、ACへ残さない — 未測定の数値目標／可否を条件にした分岐／文面のない「◯◯が入る」／対象を列挙しない件数
+   - **調べる対象はACだけではない。ticket全体から次を機械的に洗い出し、書き手が測れるものは測って確定させる。**記憶に頼って「もう調べ終わった」と判定しない
+
+     | 調べる場所 | 確認すること |
+     |---|---|
+     | `Open Questions` | 全件出す。**書き手が測れるものは測って消す。**残すのは承認者にしか決められないものと、実装しないと分からないものだけ |
+     | 未確認を表す語 | 「未確認」「要確認」「見込み」「はず」「思われる」「かもしれない」をgrepする。**自覚していない未確定はここに出る** |
+     | contract / data model の記述 | 「変更なし」「不変の見込み」と書いた行を、実体を開いて確かめる |
+     | 影響レイヤーの列挙 | 挙げた各レイヤーをgrepする。**挙げなかったレイヤーが本当に無関係かも確かめる** |
+     | **ticketが事実として断定する文** | フィールド名・関数名・呼び出し元の数・件数を**元の実体に当たる。**ticketにそう書いてあることは正しさの証明ではない |
+     | 合意に使われた画像 | **開く。**完成形のmockup・試作・変更前後の比較は、合意した文章と同じ重さで扱い、決めている文言・色・導線・並び順を文字にも起こす |
+
+     **最も多く出るのは「ticketが事実として断定する文」である。**起票時の理解がそのままACへ運ばれ、**ACでは「確かめた事実」の顔をする。存在しないフィールドを指すACは、実装する人が別のものに読み替えるので、承認した約束と出荷されるものが食い違う。**
+
+     **この洗い出しを`PDH-ticket-human-review`の材料づくりまで先送りしない。**材料を作る段階で欠陥が出ると、ticket・材料・推奨をまとめて作り直すことになる
+   - ACごとに「この判定は、実装が対象を取り違えても満たせてしまわないか」を確認する
+   - ACごとに「達成できると確かめたか」を判定する。確かめていなければ、確かめる手段をnoteの`Required Probes`へ書き、**PDH-ticket-human-reviewの前に実行して結果をnoteへ書く**。実行できないもの（実装しないと分からないこと）は、ACに結果を書かず「測って記録する＋この値を下回ったら止めて報告する」の形にする。**未確認の結果をACの達成条件にしない**
    - review済みやtest pass等のprocess要件はnote checklistへ移し、ACには観察可能なproduct動作だけを書く
    - runtimeでUXまたはSecurity invariantを強制するticketは、runtime enforceの保証mechanismをACへ1行明記する
    - ACが触るconsumer surfaceをnoteへ列挙する。カテゴリと具体項目：UI（画面・component・form・modal・navigation）、HTTP API（endpoint path・request/response schema・status code・error message）、SDK（class/method/type・例外・README example。複数言語ある場合は全言語）、CLI（command名・option/flag・help・exit code・出力フォーマット）、Config（設定キー・環境変数・default値・validation message）、生成物（OpenAPI・自動生成SDK model・docsページ・migration script）、観測surface（logフォーマット・metrics名・event payload・trace span属性）
@@ -71,14 +86,11 @@ flowchart TD
 
 前提は`PDH-ticket-human-review`でticket contractとACが承認済みであること。
 
-investigate、implement、testsは1つの作業文脈で完遂する。
-別plan artifactは作らず、設計判断をnoteの実装logとcommit messageへappendする。
-commitは論理単位ごとに`[<ticket-name>] <type>(<scope>): <summary>`形式で行い、各commitでtest pass状態を保つ。
+investigate、implement、testsは1つの作業文脈で完遂する。別plan artifactは作らず、設計判断をnoteの実装logとcommit messageへappendする。 commitは論理単位ごとに`[<ticket-name>] <type>(<scope>): <summary>`形式で行い、各commitでtest pass状態を保つ。
 
 ### 実行指示の必須内容（worker への spawn prompt に含める）
 
-`_subagent-context.md`の共通contextと役割別指示にtask固有依頼を加える。
-土台を毎回書き写さない。
+`_subagent-context.md`の共通contextと役割別指示にtask固有依頼を加える。土台を毎回書き写さない。
 
 ### 整合性 gate (実装後、完了チェックに渡す前)
 
@@ -96,8 +108,7 @@ commitは論理単位ごとに`[<ticket-name>] <type>(<scope>): <summary>`形式
 
 ## PDH-review. 品質検証 (実装後 review)
 
-review前にticket frontmatterの`branch`をbase branchとしてfetchし、未指定ならrepoのdefault branchへfallbackして、`git merge-base --is-ancestor origin/<base> HEAD`を確認する。
-falseなら`git merge origin/<base> --no-edit`で取り込み、conflict解消後にreviewする。
+review前にticket frontmatterの`branch`をbase branchとしてfetchし、未指定ならrepoのdefault branchへfallbackして、`git merge-base --is-ancestor origin/<base> HEAD`を確認する。 falseなら`git merge origin/<base> --no-edit`で取り込み、conflict解消後にreviewする。
 
 ### 独立レビュー必須トリガ
 
@@ -113,8 +124,7 @@ trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndepend
 
 ### review 観点
 
-`_review.md`の網羅探索checklistに加え、product brief整合、AC、security、error handling、影響layer、検証手法を確認する。
-Why E2E無バイアスlensとAC conformanceおよび妥当性lensをpersona matrix込みで実施し、結論の矛盾は前提差を確認して裁定する。
+`_review.md`の網羅探索checklistに加え、product brief整合、AC、security、error handling、影響layer、検証手法を確認する。 Why E2E無バイアスlensとAC conformanceおよび妥当性lensをpersona matrix込みで実施し、結論の矛盾は前提差を確認して裁定する。
 
 ### 修正ループ
 
@@ -122,8 +132,7 @@ Why E2E無バイアスlensとAC conformanceおよび妥当性lensをpersona matr
 2. 中間attemptでは変更fileとimport chain上の影響testだけを実行する
 3. 元finding、再現条件、修正diffだけを同じreviewerへ渡し、対象SHA付きで確認する
 
-完了条件は、最新SHAで採用CriticalとMajorが解消し、非採用理由がnoteにあること。
-未解消をユーザが受容してもPASSにせず、risk、理由、承認文を残す。
+完了条件は、最新SHAで採用CriticalとMajorが解消し、非採用理由がnoteにあること。未解消をユーザが受容してもPASSにせず、risk、理由、承認文を残す。
 
 ## PDH-verify. 完了検証
 

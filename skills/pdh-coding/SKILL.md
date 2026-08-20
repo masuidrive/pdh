@@ -182,8 +182,7 @@ commit 分割の例 (画像入力機能の場合):
 3. `feat(chain): propagate images via pipe_data.steps[].images`
 4. `feat(validation): add 422 error path for invalid reference inputs`
 5. `feat(persistence): guard against data URI in process config`
-6. `test: add unit tests for reference image validation`
-...
+6. `test: add unit tests for reference image validation`...
 
 ## 動作確認 gate（完了判定は実データ + 終端操作で行う）
 

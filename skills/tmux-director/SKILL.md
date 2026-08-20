@@ -104,7 +104,7 @@ PDH-open → PDH-ticket-review → PDH-ticket-human-review → PDH-implement →
 
 ---
 
-## ⚠ ユーザは window を見ない — Director が唯一の窓口
+## ユーザは window を見ない — Director が唯一の窓口
 
 **前提: ユーザは各 window の画面を基本的に見ない。** pane も、worker が publish した gate report も、**Director が渡さない限り読まない。**したがって **Director が渡した材料が、ユーザの持つ情報のすべて**である。ここから 3 つの帰結が出る。
 
@@ -181,7 +181,7 @@ tmux send-keys -t WINDOW.PANE Enter
 
 **重要**: 新しいチケットを始める時は、必ず `/clear` → `/pdh-dev` の順で送信すること。コンテキストが蓄積すると window の性能が劣化する。
 
-**⚠ slash command (`/clear`、`/effort`、`/pdh-dev` 等) は必ず literal な tmux send-keys で送ること。** kickoff message のテキスト内に「1. `/clear` してから...」と書いても、Claude Code は slash command を実行しない (harness が literal prompt 入力として受けた場合のみ発火する)。message 内の指示はただのテキストとして読まれるだけで、window は前セッション状態のまま続行してしまう。以下の 2-3 段で送ること:
+**slash command (`/clear`、`/effort`、`/pdh-dev` 等) は必ず literal な tmux send-keys で送ること。** kickoff message のテキスト内に「1. `/clear` してから...」と書いても、Claude Code は slash command を実行しない (harness が literal prompt 入力として受けた場合のみ発火する)。message 内の指示はただのテキストとして読まれるだけで、window は前セッション状態のまま続行してしまう。以下の 2-3 段で送ること:
 
 ```
 send-keys '/clear' Enter
@@ -194,7 +194,7 @@ send-keys Enter
 
 **Worktree 運用** (デフォルト、全 ticket 対象):
 
-**⚠ 全 ticket で worktree 分離をデフォルトにする**。複数 ticket 並列時だけでなく、単独 ticket / hotfix / infra ticket でも同じ。kickoff に必ず `ticket.sh start --worktree <ticket-name>` または `EnterWorktree({name: "<slug>"})` を含める。
+**全 ticket で worktree 分離をデフォルトにする**。複数 ticket 並列時だけでなく、単独 ticket / hotfix / infra ticket でも同じ。kickoff に必ず `ticket.sh start --worktree <ticket-name>` または `EnterWorktree({name: "<slug>"})` を含める。
 
 理由: worktree 無しで `ticket.sh start` すると main_repo /workspace の HEAD が feature branch に切り替わり、**PM (Director) が main 側で git 操作 (main 切替・他 ticket 差替え・demo restart 等) を並行できなくなる**。また worker session の cwd が feature branch 依存になり、close まで main_repo がロックされる。worktree 分離すれば main_repo HEAD = default_branch に居続けられ、Director と worker が独立に動ける。
 
@@ -202,7 +202,7 @@ send-keys Enter
 - 新規 window 起動: `claude --worktree <slug>` 経由が最もクリーン
 - 既存 window 続行: 初回指示に **`ticket.sh start --worktree <ticket-name>`**（排他ロック下）+ `EnterWorktree({path: ...})` を含める
 
-**⚠ 既に worktree 内で起動している window に `EnterWorktree({name: ...})` を指示しない。**`name` 指定は `.claude/worktrees/` 配下にしか作れず、そこでは **`ticket.sh start` が `fatal: 'main' is already used by worktree` で失敗する**（start は base branch を checkout してから feature branch を作る実装で、main は primary worktree が占有しているため）。しかも **worktree 内のセッションは `.claude/worktrees/` 配下以外へ移れない**（`is not under /workspaces/<repo>/.claude/worktrees` で拒否される）。
+**既に worktree 内で起動している window に `EnterWorktree({name: ...})` を指示しない。**`name` 指定は `.claude/worktrees/` 配下にしか作れず、そこでは **`ticket.sh start` が `fatal: 'main' is already used by worktree` で失敗する**（start は base branch を checkout してから feature branch を作る実装で、main は primary worktree が占有しているため）。しかも **worktree 内のセッションは `.claude/worktrees/` 配下以外へ移れない**（`is not under <repo>/.claude/worktrees` で拒否される）。
 
 したがって **2 巡目以降の window には必ず `ticket.sh start --worktree` を使わせる。**移動に失敗した場合、worker は「全コマンドで絶対パスを明示する」運用で続行できるが、**Bash の cwd は毎回元の worktree へ戻る**ので事故が起きやすい。**新しい ticket を始めるときは、可能なら新規セッションを新 worktree で立てるほうが確実。**
 - worktree path は `.worktrees/<slug>/` (ticket.sh default)
@@ -230,7 +230,7 @@ ls scripts/hookbus.js && jq '.hooks.Stop' .claude/settings.json
 
 配線済みなら、監視対象 worker の key を **`--include` の allow-list** で指定して Monitor を起動する。
 
-**⚠ 以下の値は Bash で取得したあと、得られたリテラル値を Monitor のコマンド文字列へ埋め込むこと。** シェル変数はツール呼び出しをまたいで持続しないため、`$CURID` のまま Monitor へ渡すと空文字に展開される。
+**以下の値は Bash で取得したあと、得られたリテラル値を Monitor のコマンド文字列へ埋め込むこと。** シェル変数はツール呼び出しをまたいで持続しないため、`$CURID` のまま Monitor へ渡すと空文字に展開される。
 
 ```bash
 # a) tmux socket hash と Monitor 専用の cursor id を求めて表示する
@@ -239,7 +239,7 @@ CURID="$SOCK_HASH:mon-$(tmux display-message -p '#{window_index}')"   # Director
 ROOT=/tmp/claude-events-$SOCK_HASH
 
 # b) cursor を log 末尾へ seed し、offset 0 からの全 backlog 再生を避ける
-#    ⚠ `pull --include <no-match>` 方式は cursor file を作らないので seed されない (実測)
+#    `pull --include <no-match>` 方式は cursor file を作らないので seed されない (実測)
 #    cursor file 名は cursor id を URL-encode したもの (hookbus.js の encodeURIComponent)。
 #    cursor id に `%` を含めない限り ':' だけが %3A になる
 mkdir -p "$ROOT/consumers"
@@ -260,10 +260,10 @@ Monitor({
 
    `--include` 未指定なら **全 worker の event** が流れる (無関係な pane も含む)。監視対象を絞るには明示必須。Director 自身の key は include list にないので自然に yield されない。
 
-   **⚠ cursor identity の落とし穴 — 必ず `--cursor` を明示する**: `pull` は `--cursor` 省略時、cursor identity を `whoami`（= Director 自身の pane の key。`<hash>:<pane_id>`）にフォールバックする (`scripts/hookbus.js` `pullCommand`)。cursor は「どこまで読んだか」を identity ごとに 1 ファイル (byte offset) で保持し、event を emit するたびに advance + 永続化する。**同じ identity を使う `pull` が複数あると (Monitor を 2 つ起動する / Director が診断で手動 `pull` を叩く 等)、片方が cursor を末尾まで進めてしまい、他方はイベントを consume 済み扱いで取り逃す**。実際これで worker の Stop イベントが一度も通知されない事故が起きた。鉄則:
+   **cursor identity の落とし穴 — 必ず `--cursor` を明示する**: `pull` は `--cursor` 省略時、cursor identity を `whoami`（= Director 自身の pane の key。`<hash>:<pane_id>`）にフォールバックする (`scripts/hookbus.js` `pullCommand`)。cursor は「どこまで読んだか」を identity ごとに 1 ファイル (byte offset) で保持し、event を emit するたびに advance + 永続化する。**同じ identity を使う `pull` が複数あると (Monitor を 2 つ起動する / Director が診断で手動 `pull` を叩く 等)、片方が cursor を末尾まで進めてしまい、他方はイベントを consume 済み扱いで取り逃す**。実際これで worker の Stop イベントが一度も通知されない事故が起きた。鉄則:
    - **各 Monitor に固有の `--cursor <id>`** を渡す (Director 自身の key と必ず別)。
    - **新規 cursor は offset 0 から = log 全 backlog を replay** し通知洪水で Monitor が auto-stop するので、起動前に上記 d) で cursor を log 末尾へ seed して「以降の新規イベントだけ」にする。
-   - **⚠ 監視対象を増減するときは、cursor の seed もやり直す。**`--include` を書き換えて cursor 名を据え置くと、停止し損ねた古い pull と cursor を奪い合う。かといって cursor 名を変えると **新規 cursor 扱いで backlog が全部再生される**。**`--include` の変更と cursor の seed は必ずセット**で行うこと（実際、窓の役割が変わって include に足した際にこれを踏み、7,300 万バイト分の過去イベントが流れた）。
+   - **監視対象を増減するときは、cursor の seed もやり直す。**`--include` を書き換えて cursor 名を据え置くと、停止し損ねた古い pull と cursor を奪い合う。かといって cursor 名を変えると **新規 cursor 扱いで backlog が全部再生される**。**`--include` の変更と cursor の seed は必ずセット**で行うこと（実際、窓の役割が変わって include に足した際にこれを踏み、7,300 万バイト分の過去イベントが流れた）。
    - **複数 worker は「Monitor を N 個」ではなく「1 Monitor + `--include` 複数」**で監視し、cursor を 1 本に保つ。
    - Director が診断目的で手動 `pull` を叩く時も `--cursor` を別 id にする (でないと Monitor の cursor を汚染する)。
 
@@ -285,11 +285,11 @@ tmux send-keys -t WINDOW.PANE 'ここに指示内容'
 tmux send-keys -t WINDOW.PANE Enter
 ```
 
-**⚠ text と Enter を同じ send-keys 呼び出しに混ぜない。** `send-keys '...' Enter` を 1 回で実行すると、長文や slash 混在テキストで Enter が text の一部として buffer に吸収され、prompt に text が残ったまま submit されない race が頻発する (複数回実測)。必ず 2 段階 (text だけ → Enter 単独)。
+**text と Enter を同じ send-keys 呼び出しに混ぜない。** `send-keys '...' Enter` を 1 回で実行すると、長文や slash 混在テキストで Enter が text の一部として buffer に吸収され、prompt に text が残ったまま submit されない race が頻発する (複数回実測)。必ず 2 段階 (text だけ → Enter 単独)。
 
 **ただし 2 段階化だけでは取りこぼしが残る。**原因は 1 つではない（逐字入力を Enter が追い越す / buffer がファイル末尾の改行を持ち込む / pane が copy-mode・permission dialog で入力を受けられない / **入力欄は空なのにテキストが残像表示される**）。個別の原因を潰し切るのは現実的でないので、**送り方を正すのではなく、届いたことを検証する。**
 
-- **⚠ 到達確認は画面ではなく worker の transcript で行う。**`capture-pane` による判定は**両方向に嘘をつく** — prompt 行にテキストが見えても未送信とは限らず（残像は入力欄が空でも残り、`C-u` では消えない）、空に見えても submit された証拠にならない。全メッセージの先頭に固定の prefix を付け、worker の transcript にそれが現れたかで判定する（transcript path は hookbus event の `transcript_path` に入っている）
+- **到達確認は画面ではなく worker の transcript で行う。**`capture-pane` による判定は**両方向に嘘をつく** — prompt 行にテキストが見えても未送信とは限らず（残像は入力欄が空でも残り、`C-u` では消えない）、空に見えても submit された証拠にならない。全メッセージの先頭に固定の prefix を付け、worker の transcript にそれが現れたかで判定する（transcript path は hookbus event の `transcript_path` に入っている）
 - 長文・複数行は逐字入力ではなく **buffer 経由**で送り、**載せる前に末尾改行を落とす**。paste の前に `C-u` で入力欄をクリアし、**Enter は単独コマンドで paste の 0.5 秒後**
 - 届いていなければ **Enter だけ再送する**（paste をやり直すと二重入力になる）。数回で届かなければ **loud fail してユーザに報告する**
 - **未確認の送信を「送った」と報告しない**
@@ -307,11 +307,26 @@ tmux send-keys -t <pane> 'X'      # 「元のテキストX」なら実体、「X
 tmux send-keys -t <pane> BSpace   # 確認後に戻す
 ```
 
-**BSpace を送るとゴーストは «復活する»。**空のバッファに BSpace を送っても消すものが無く、再描画で元のテキストが戻る。つまりゴーストは**バッファではなく描画状態に居る**ので **`C-u` では消えない**。消せるのは paste による上書きだけ（送信手順が C-u → paste の順になっているのはこのため。C-u は打ちかけの実体を消す役で、ゴースト対策ではない）。
+**BSpace を送るとゴーストは「復活する」。**空のバッファに BSpace を送っても消すものが無く、再描画で元のテキストが戻る。つまりゴーストは**バッファではなく描画状態に居る**ので **`C-u` では消えない**。消せるのは paste による上書きだけ（送信手順が C-u → paste の順になっているのはこのため。C-u は打ちかけの実体を消す役で、ゴースト対策ではない）。
 
 **ゴーストの文言は固定ではない。**状況に合わせて変わったように見えることがある（同じ pane で「両方終わったら close して…」→「フルスイートが通ったら close して…」と変化した実例）。**変化することを「人間が打っている」証拠にしてはならない** — 観測されたゴーストはいずれも Director が直前に paste した文章の語彙の組み替えで、Director が付けた prefix ごと現れた例もある（人間はこの prefix を打たない）。機構は未特定。**したがって「誰が打ったか」を推測して人の運用を変えさせない。**
 
 **pane にテキストが残っているのを見つけても、Director は勝手に Enter しない。**自分の送信の取りこぼしなら Enter を再送してよいが、**自分が送った覚えのないテキストは出所を確認するまで触らない。**出所は transcript の grep で確認する（agent 由来なら送信元 session に tool_use として残る。transcript は compact でも消えないので、compact 前の送信も追える）。
+
+**⚠ 順序を守る。1 文字送る判別を «先に» 行い、grep はその後にする。**上の 1 文字テストはミリ秒で決着するが、grep は誤読しやすい。
+
+**⚠ grep は Director 自身の session を必ず除外する。**`capture-pane` の出力は tool result として **Director の transcript に入る**ので、素朴に grep すると **自分の観測記録が必ずヒットする。**これを「自分の送信ファイルには無い → 自分のものではない → 誰か他人が打っている」と読むと、**存在しない第三者を作り出す。**
+
+```bash
+# ❌ これは必ず自分にヒットする（capture-pane の出力が入っているだけ）
+grep -rl '<テキスト>' /home/vscode/.claude/projects/
+# ✅ 自分の session を除き、«送信された user メッセージ» として存在するかを見る
+grep -rl '<テキスト>' /home/vscode/.claude/projects/ | grep -v "$MY_SESSION_ID"
+```
+
+**⚠ 決め手は「worker の transcript に、単独の user メッセージとして届いているか」である。**届いていなければ、それは**送信されていない** — 画面にあるだけである。Director が引用した文章の中に現れるのは、**Director 自身が引用したから**であって、届いた証拠ではない。
+
+**2026-08-15 に実際に踏んだ。**ゴーストを 8 回「注入」と誤認し、**存在しない第三者がいるとユーザへ 8 回報告し、worker を全面停止させた。**上の「誰が打ったかを推測して人の運用を変えさせない」を破っている。**1 文字テストは一度も実行していなかった。**
 
 例外は 2 つ。**slash command（`/clear` `/compact` `/pdh-dev`）は buffer 経由にせず literal な `send-keys` で送る**（TD-2.2 の理由 — harness が literal な入力として受けたときだけ発火する。短いので追い越しも起きない）。**`AskUserQuestion` への数字回答も同様。**
 
@@ -420,16 +435,16 @@ tmux window {WINDOW.PANE} の画面を定期的にキャプチャし、以下の
 ```
 ```
 
-### TD-3.2.5. ⚠ 完了して静止した窓は通知されない
+### TD-3.2.5. 完了して静止した窓は通知されない
 
-**hookbus が event を出すのは «動いた» window だけである。**フェーズを終えて入力待ちのまま静止した window は、それ以降 1 つも event を出さない。**Director が能動的に見に行かないと、その window は存在ごと視界から消える。**
+**hookbus が event を出すのは「動いた」 window だけである。**フェーズを終えて入力待ちのまま静止した window は、それ以降 1 つも event を出さない。**Director が能動的に見に行かないと、その window は存在ごと視界から消える。**
 
 2026-08-04 に 3 回踏んだ（窓 2 が close 順待ちで 1 時間以上、窓 3 が AC 承認待ちで 1 時間 50 分、窓 1 が 3.5 時間）。いずれも**こちらが別の window の議論に集中している間**に起きている。
 
 対策:
 
 - **判断を要求した window は「待たせている」と認識し続ける。**gate に上げた時点でリストに残す
-- **他の window の議論が一段落したら、必ず全 window の最終 assistant 発言の «時刻» を確認する**（画面ではなく transcript）:
+- **他の window の議論が一段落したら、必ず全 window の最終 assistant 発言の「時刻」を確認する**（画面ではなく transcript）:
 
 ```bash
 for d in ~/.claude/projects/-<repo-encoded>*/; do
@@ -519,7 +534,7 @@ PDH-ticket-human-review または PDH-human-review に該当する場合、セ�
 - **自分でソースコードを編集しない**
 - **自分でチケットの開け閉め（ticket.sh）をしない**
 - **自分でサーバー起動・ビルド・seed 投入等の実作業を実行しない** — 状態を変更する操作は全て window に send-keys で指示する。Director が直接実行するのはスクリーンショット撮影・API 読み取り（curl GET）等の読み取り専用操作のみ
-- **⚠ 本番の状態を変える操作を自分でしない。**とりわけ**非可逆な操作**（元に戻せない設定変更・リソースの作成/削除・データの書き込み）は、ユーザ承認を得たうえで **worker に ticket の一部として実行させる**。Director が直接叩くと、**実行の記録が ticket の外に落ちる**。worker には「**実行前後の状態・発行時刻・コマンド全文を note に記録する**」ことまで指示する
+- **本番の状態を変える操作を自分でしない。**とりわけ**非可逆な操作**（元に戻せない設定変更・リソースの作成/削除・データの書き込み）は、ユーザ承認を得たうえで **worker に ticket の一部として実行させる**。Director が直接叩くと、**実行の記録が ticket の外に落ちる**。worker には「**実行前後の状態・発行時刻・コマンド全文を note に記録する**」ことまで指示する
   - 実例: 「有効化すると二度と戻せない」と警告が出るクラウド機能の切り替え。ユーザ承認済みでも Director は実行せず、worker が実行して**実行前後の値**を note に残した。承認は「やってよい」であって「記録しなくてよい」ではない
 - **自分で `tmux capture-pane` を繰り返さない** — Monitor Agent に委任する
 
@@ -594,7 +609,7 @@ status line の `ctx` 表示は各モデルの window に対する割合なの�
 3. slash command を **literal な `send-keys` で送る**（`/compact` / `/clear`。**buffer 経由にしない** — TD-2.2 と同じ理由）
 4. `/clear` の場合のみ、続けて `/pdh-dev` を送って再開させる
 
-**⚠ 要約に何が残るかは制御できない。**したがって `PDH-AGENTS.md`「Context Management」が要求する次の 5 つは、要約ではなく **note に書かせる**:
+**要約に何が残るかは制御できない。**したがって `PDH-AGENTS.md`「Context Management」が要求する次の 5 つは、要約ではなく **note に書かせる**:
 
 1. **現在の ticket id と PDH stage**
 2. **未解決の懸念**（まだ誰にも言っていないものを含む）
@@ -676,7 +691,7 @@ worker (別 window の Claude Code) の ctx が蓄積すると性能劣化 + aut
 | worker ctx > 80% かつ bg task (codex exec 等) 実行中で Claude idle | **最低コスト /clear のベストタイミング** — ファイル state は durable、bg task 出力先は /tmp の mktemp dir に残る |
 | worker ctx > 90% | Ticket 途中でも /clear を検討。Ticket 内進捗が commit 済なら手戻りほぼゼロ |
 
-**⚠ autonomous 連続走行 (「T2-T6 まで自律で進めて」等) でも /clear gate をスキップしない。** PM が「まとめて全部やって」と指示すると Director が各 ticket 境界に介入しない結果、/clear が送信されず ctx が 60-80% まで膨らむ事故が頻発する (実測)。必ず各 ticket close を PM が察知して `/clear` → 次 Ticket kickoff の 2 段階を挟むこと。hookbus Monitor から Stop event を受けたタイミング or base_branch 切替依頼の sendmsg を受けたタイミングで介入する。
+**autonomous 連続走行 (「T2-T6 まで自律で進めて」等) でも /clear gate をスキップしない。** PM が「まとめて全部やって」と指示すると Director が各 ticket 境界に介入しない結果、/clear が送信されず ctx が 60-80% まで膨らむ事故が頻発する (実測)。必ず各 ticket close を PM が察知して `/clear` → 次 Ticket kickoff の 2 段階を挟むこと。hookbus Monitor から Stop event を受けたタイミング or base_branch 切替依頼の sendmsg を受けたタイミングで介入する。
 
 **手順**: Escape (在行 work 停止) → `send-keys '/clear'` → `send-keys Enter` → `sleep 2` → `send-keys '<resume kickoff>'` → `send-keys Enter` (長文 resume kickoff は text と Enter を分離、TD-3.1 rule 参照)
 

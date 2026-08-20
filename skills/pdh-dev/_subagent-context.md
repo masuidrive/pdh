@@ -20,9 +20,7 @@ PMはspawn promptの冒頭にこの内容を置き、続けて該当する役割
 5. `CLAUDE.local.md`（存在すれば。secret値を置かない環境固有メモ）
 6. `<TICKET_FILE>`（Why、AC、Invariants、確定判断、Out-of-scope）
 
-**例外: レンズ1（Why end-to-end 無バイアス）の reviewer だけは 6 を読まない。**
-PMはこのworkerへ`<TICKET_FILE>`と`<NOTE_FILE>`を渡さず、prompt本文にWhyだけを転記する。
-渡していないticketやnoteを自分で探して読まない（`_review.md`「レンズ1」）。
+**例外: レンズ1（Why end-to-end 無バイアス）の reviewer だけは 6 を読まない。** PMはこのworkerへ`<TICKET_FILE>`と`<NOTE_FILE>`を渡さず、prompt本文にWhyだけを転記する。渡していないticketやnoteを自分で探して読まない（`_review.md`「レンズ1」）。
 
 `PDH-AGENTS.md`「Read Order」のskill読了はDirector向けであり、workerはpromptと役割別指示で指定されたファイルだけ読めばよい。
 
@@ -35,8 +33,7 @@ PMはこのworkerへ`<TICKET_FILE>`と`<NOTE_FILE>`を渡さず、prompt本文�
 - ticket-local-testの置き場：`<TESTS_DIR>`（存在しなければ`mkdir -p`する）
 - ticket作業用の一時ファイル置き場：`<TMP_DIR>`。repo直下や`/tmp`へ散らかさない
 
-workerは`ticket.sh`を実行しない。`<TESTS_DIR>`と`<TMP_DIR>`はPMがspawn promptで与える。
-与えられていないのに必要になったら、自分で推測せず結果でPMへ報告する。
+workerは`ticket.sh`を実行しない。`<TESTS_DIR>`と`<TMP_DIR>`はPMがspawn promptで与える。与えられていないのに必要になったら、自分で推測せず結果でPMへ報告する。
 
 ### 不可侵（厳守）
 
@@ -45,8 +42,7 @@ workerは`ticket.sh`を実行しない。`<TESTS_DIR>`と`<TMP_DIR>`はPMがspaw
 
 ### 担当範囲
 
-`<SCOPE>`内だけを変更する。
-範囲外の問題は直さず結果でPMへ報告する。
+`<SCOPE>`内だけを変更する。範囲外の問題は直さず結果でPMへ報告する。
 
 ### 書き込み境界
 
@@ -58,9 +54,7 @@ workerは`ticket.sh`を実行しない。`<TESTS_DIR>`と`<TMP_DIR>`はPMがspaw
 | QA Engineer | `<TESTS_DIR>`、`<TMP_DIR>`、`<RESULT_FILE>` |
 | reviewer / AC裏取り / Surface Observer | `<TMP_DIR>`、`<RESULT_FILE>`のみ |
 
-reviewer、AC裏取り、Surface Observerはproduct code、test、doc、`<NOTE_FILE>`を変更しない。
-観察と判断の記録は`<RESULT_FILE>`へ書き、作業メモやscreenshot等の中間生成物は`<TMP_DIR>`へ置く。
-これらの役がrepoの成果物へcommitやfile変更を行ったら、PMは差し戻す。
+reviewer、AC裏取り、Surface Observerはproduct code、test、doc、`<NOTE_FILE>`を変更しない。観察と判断の記録は`<RESULT_FILE>`へ書き、作業メモやscreenshot等の中間生成物は`<TMP_DIR>`へ置く。これらの役がrepoの成果物へcommitやfile変更を行ったら、PMは差し戻す。
 
 ### 出力の返し方
 
@@ -70,8 +64,7 @@ reviewer、AC裏取り、Surface Observerはproduct code、test、doc、`<NOTE_F
 
 ### 言語
 
-散文は`product-brief.md`の作業言語に合わせる。
-code、identifier、command、log、conventional-commit prefixは原文を保つ。
+散文は`product-brief.md`の作業言語に合わせる。 code、identifier、command、log、conventional-commit prefixは原文を保つ。
 
 ---
 

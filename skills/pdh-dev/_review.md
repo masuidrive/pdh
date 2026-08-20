@@ -2,8 +2,7 @@
 
 ## レビューパターン
 
-reviewは、初回結果のunionと事実確認、scope gate、複雑度比較、採用findingの最小修正、影響test、finding限定確認の順で行う。
-attemptは`PDH-review-1`、`PDH-review-2`のようにnote file（`ticket.sh start`/`restore`出力の`note:`パス。互換symlink: `current-note.md`）の子ログへ記録する。
+reviewは、初回結果のunionと事実確認、scope gate、複雑度比較、採用findingの最小修正、影響test、finding限定確認の順で行う。 attemptは`PDH-review-1`、`PDH-review-2`のようにnote file（`ticket.sh start`/`restore`出力の`note:`パス。互換symlink: `current-note.md`）の子ログへ記録する。
 
 ```mermaid
 flowchart TD
@@ -33,10 +32,7 @@ Critical / Major / Minor の定義は`PDH-AGENTS.md`「Verification」のSeverit
 
 ### 複雑度差分 gate
 
-修正で永続columnまたはtable、公開endpoint、画面、権限、state名または遷移が増える場合は、既存state削除、input拒否、process制約案と比較する。
-新概念を追加する場合は、単純案でACまたはsecurity contractを満たせない理由をnoteへ残す。
-1 findingのため永続stateまたは公開surfaceを2つ以上増やす必要があれば、自動修正を止めてユーザへ相談する。
-局所patchを足すより直前の単純designへ戻す方が小さければ、designを戻す。
+修正で永続columnまたはtable、公開endpoint、画面、権限、state名または遷移が増える場合は、既存state削除、input拒否、process制約案と比較する。新概念を追加する場合は、単純案でACまたはsecurity contractを満たせない理由をnoteへ残す。 1 findingのため永続stateまたは公開surfaceを2つ以上増やす必要があれば、自動修正を止めてユーザへ相談する。局所patchを足すより直前の単純designへ戻す方が小さければ、designを戻す。
 
 ### レビュアーへの指示ルール
 
@@ -51,8 +47,7 @@ reviewer promptには次を含める。
 
 ### reviewer の網羅探索チェックリスト
 
-reviewerは1 findingに止まらず、該当観点で同種patternを系統的に全探索する。
-非該当観点はskipできる。
+reviewerは1 findingに止まらず、該当観点で同種patternを系統的に全探索する。非該当観点はskipできる。
 
 - 同名symbol sweep：変更identifier、field、endpoint、config keyをcodebase全体で探す
 - 対称関係：input/output、sync/async、read/write、migration/rollbackなどの片側未追従を探す
@@ -77,20 +72,13 @@ finding冒頭へ`[同名 symbol sweep]`等の観点labelを付ける。
 
 ### Review attempt 収束性診断
 
-同種Criticalが2 attemptで再発したらroot causeを診断してescalateする。
-root causeはticketの実装詳細混入、scope肥大、reviewer prompt偏り、確定値の下流委譲を確認する。
+同種Criticalが2 attemptで再発したらroot causeを診断してescalateする。 root causeはticketの実装詳細混入、scope肥大、reviewer prompt偏り、確定値の下流委譲を確認する。
 
 rewind前の手順は`PDH-AGENTS.md`「Verification」のRewind disciplineが正。
 
-`PDH-review-2`以降で初回findingが誤検出、pre-existing、Out-of-scope、user価値非直結と判明したら、追加fixを行わない。
-Discoveryへ記録し、元のACとuser journeyだけをverifyする。
-invariant test追加やcosmetic alignmentなどのengineering aestheticsをscope拡張理由にしない。
+`PDH-review-2`以降で初回findingが誤検出、pre-existing、Out-of-scope、user価値非直結と判明したら、追加fixを行わない。 Discoveryへ記録し、元のACとuser journeyだけをverifyする。 invariant test追加やcosmetic alignmentなどのengineering aestheticsをscope拡張理由にしない。
 
-3 attempt以上のpatch loopへ入らない。
-巡回数はnoteの`### Findings (PDH-review-N)`見出しが表す。**Nが3に達した時点でescalateする。**禁止形だけでは、既に入ってしまったloopの出口を示さないため、到達時の手順をここで定める。
-scope再作成、実code factと3案以上を示すescalation、戦略転換、レビュー対象の変更のいずれかを選ぶ。
-レビュー対象の変更とは、diffを読むのをやめて実data・実挙動の監査へ切り替えることを指す。同じdiffを読み直すloopは、欠陥がdiffの外にあるとき原理的に収束しない。
-動的言語などで入口検出だけでは同種Majorが3 attempt再発する場合は、入口除外、通過遮断、最終生成物sentinelの3段防御へ転換する。
+3 attempt以上のpatch loopへ入らない。巡回数はnoteの`### Findings (PDH-review-N)`見出しが表す。**Nが3に達した時点でescalateする。**禁止形だけでは、既に入ってしまったloopの出口を示さないため、到達時の手順をここで定める。 scope再作成、実code factと3案以上を示すescalation、戦略転換、レビュー対象の変更のいずれかを選ぶ。レビュー対象の変更とは、diffを読むのをやめて実data・実挙動の監査へ切り替えることを指す。同じdiffを読み直すloopは、欠陥がdiffの外にあるとき原理的に収束しない。動的言語などで入口検出だけでは同種Majorが3 attempt再発する場合は、入口除外、通過遮断、最終生成物sentinelの3段防御へ転換する。
 
 ### 裏取りルール
 
@@ -109,20 +97,15 @@ scope再作成、実code factと3案以上を示すescalation、戦略転換、�
 
 ## Why 直結レビュー（2 レンズ）と AC 妥当性
 
-網羅探索に加えて次の2 lensを実施する。
-レンズ2は通常のreviewer（Devil's Advocate等）がdiffとともに実施する。
-レンズ1は専用の独立reviewerを別workerとしてspawnする。渡すもの・渡さないものと役割別指示は`_execution-team.md`「worker prompt の組み立て」と`_subagent-context.md`「reviewer（レンズ1）」が正。
+網羅探索に加えて次の2 lensを実施する。レンズ2は通常のreviewer（Devil's Advocate等）がdiffとともに実施する。レンズ1は専用の独立reviewerを別workerとしてspawnする。渡すもの・渡さないものと役割別指示は`_execution-team.md`「worker prompt の組み立て」と`_subagent-context.md`「reviewer（レンズ1）」が正。
 
 ### レンズ1 — Why end-to-end（無バイアス）
 
-reviewerにはWhyとrepoだけを渡し、AC、implementorの結論、検証主張を渡さない。
-ticketとnoteを閲覧対象から物理的に除外し、Whyが端から端まで成立するか追跡させる。
+reviewerにはWhyとrepoだけを渡し、AC、implementorの結論、検証主張を渡さない。 ticketとnoteを閲覧対象から物理的に除外し、Whyが端から端まで成立するか追跡させる。
 
 ### レンズ2 — AC conformance + AC 妥当性
 
-reviewerにACと完了主張を渡し、各ACに対応するroute、関数、test、doc節、config等を順方向に名指しして、完了主張が実体と一致するか確認する。
-主要diffをAC、確定判断、security、stabilityへ逆方向に対応付け、未対応変更を過剰実装判定へ送る。
-ACが緩くWhy未達なら、ユーザ承認の上でACを強化するか別ticketにする。
+reviewerにACと完了主張を渡し、各ACに対応するroute、関数、test、doc節、config等を順方向に名指しして、完了主張が実体と一致するか確認する。主要diffをAC、確定判断、security、stabilityへ逆方向に対応付け、未対応変更を過剰実装判定へ送る。 ACが緩くWhy未達なら、ユーザ承認の上でACを強化するか別ticketにする。
 
 ### persona / coverage マトリクス（両レンズに必須指定）
 
@@ -152,5 +135,4 @@ reviewer間またはlens間で結論が割れたら、unionや多数決で流さ
 
 ## レビュー品質ルール
 
-初回attemptは複数観点のunionで評価する。
-PASS後に新規finding探索だけを目的としてreviewerを再実行しない。
+初回attemptは複数観点のunionで評価する。 PASS後に新規finding探索だけを目的としてreviewerを再実行しない。

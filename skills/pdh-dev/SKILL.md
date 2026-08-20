@@ -7,8 +7,7 @@ description: "Ticket-centric 開発ワークフロー。1 ticket = 1 work unit�
 
 `Product Brief → Ticket → ticket-human-review → 実装 → review → verify → human-review → close` の順で、1 ticket を1 work unitとして処理する。
 
-実行モデルはteam前提とし、PMが各phaseをworkerへ委譲する。
-**spawnできない環境で単独実行をteamと同等に扱わない。** 制限を説明し、確信度やgateの意味に影響するならユーザへ確認する（`PDH-AGENTS.md`「Execution Model」）。headless botもCLI subprocessでworkerをspawnする。
+実行モデルはteam前提とし、PMが各phaseをworkerへ委譲する。**spawnできない環境で単独実行をteamと同等に扱わない。** 制限を説明し、確信度やgateの意味に影響するならユーザへ確認する（`PDH-AGENTS.md`「Execution Model」）。headless botもCLI subprocessでworkerをspawnする。
 
 ## この skill の読み方
 
