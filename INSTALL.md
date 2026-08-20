@@ -67,6 +67,8 @@ bash ticket.sh init
 | `tmp/pdh/skills/pdh-ticket-decision-board/SKILL.md` | `.claude/skills/pdh-ticket-decision-board/SKILL.md` | 実装前 gate（AC 承認）の判断ボードスキル — base への差分 |
 | `tmp/pdh/skills/pdh-close-decision-board/SKILL.md` | `.claude/skills/pdh-close-decision-board/SKILL.md` | close 前 gate（出荷承認）の判断ボードスキル — base への差分 |
 | `tmp/pdh/skills/common-writing/SKILL.md` | `.claude/skills/common-writing/SKILL.md` | 文章の共通規則（判断ボードの本文が従う） |
+| `tmp/pdh/skills/japanese-tech-writing/SKILL.md` | `.claude/skills/japanese-tech-writing/SKILL.md` | 日本語技術文書の文章規範（common-writing から参照） |
+| `tmp/pdh/skills/cognitive-rhythm-writing/SKILL.md` | `.claude/skills/cognitive-rhythm-writing/SKILL.md` | 説明文の認知リズム規範（common-writing から参照） |
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
 | `tmp/pdh/templates/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH 汎用 agent ルール |
 | `tmp/pdh/templates/CLAUDE.local.md.example` | `CLAUDE.local.md.example` | 環境固有 agent メモのサンプル（実体は commit しない） |
@@ -90,7 +92,7 @@ Codex CLI はプロジェクト直下の `.agents/skills/` を skill として�
 
 ```bash
 mkdir -p .agents/skills
-for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing; do
+for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing japanese-tech-writing cognitive-rhythm-writing; do
   ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done
 ```
@@ -407,7 +409,7 @@ cp -r tmp/pdh/skills/pdh-decision-board-base/ .claude/skills/pdh-decision-board-
 cp -r tmp/pdh/skills/pdh-ticket-decision-board/ .claude/skills/pdh-ticket-decision-board/
 cp -r tmp/pdh/skills/pdh-close-decision-board/ .claude/skills/pdh-close-decision-board/
 cp -r tmp/pdh/skills/common-writing/ .claude/skills/common-writing/
-for s in pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing; do
+for s in pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing japanese-tech-writing cognitive-rhythm-writing; do
   ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done
 ```
@@ -468,7 +470,7 @@ README.md 側にも INSTALL.md へのリンクを残してあるので、古い 
 
 ```bash
 # 旧 wrapper があれば撤去し、symlink に置き換える（冪等）
-for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing; do
+for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing japanese-tech-writing cognitive-rhythm-writing; do
   [ -e ".agents/skills/$s" ] && [ ! -L ".agents/skills/$s" ] && rm -rf ".agents/skills/$s"
   [ -d ".claude/skills/$s" ] && ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done
