@@ -547,8 +547,12 @@ h2.stuck{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* 貼り付
   gap: calc(var(--u) * 3);
   margin-block: calc(var(--u) * 5);
 }
-/* ⚠ 素の button にだけ効かせる。カードに掛けるとカードの見た目が消える。 */
+/* ⚠ 素の button にだけ効かせる。カードに掛けるとカードの見た目が消える。
+   送信ボタン（[data-submit-answer]。ホストが送信 hook を用意したときに board.js が足す）も
+   ここで一緒に装飾する — class ではなく属性で当てているため、board.js が class を写すだけでは
+   素の button の見た目のまま «コピー» の隣に並ぶ（実機で確認した）。 */
 button.answer-choice,
+[data-submit-answer],
 [data-copy-answer] {
   appearance: none;
   border: 1px solid var(--line);
@@ -559,6 +563,12 @@ button.answer-choice,
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+/* 送信できない状態（回答の締切を過ぎた等。ホストが disabled を指定する）は、
+   押せないことを見た目でも示す — 文言だけだと «押せば送れる» に見える。 */
+[data-submit-answer][disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 /* 選択肢のカードそのものを押せるようにする。ボタン行を別に置くと、
    読み終えたその場で押せず、下まで行って選び直すことになる。 */
