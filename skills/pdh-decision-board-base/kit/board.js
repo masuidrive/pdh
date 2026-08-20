@@ -65,6 +65,24 @@
     return lines.join('\n');
   };
 
+  // 目次の印 — 判断がある節の行末に ✓ を出す。«どこで選ぶのか» は本文を最後まで
+  // 開くまで分からないので、目次だけが «この節には決めることがある» を先に運べる。
+  // 印の «有無» が判断の有無を、色と太さが回答済みかどうかを表す（CSS は board.css の
+  // .toc a.has-q / .toc a.done）。
+  // 節と判断の対応は DOM が変わらない前提で最初に 1 回だけ作る。render は打鍵ごとに
+  // 走るので、ここで節を走査し直すと打鍵のたびに全節を読むことになる。
+  // ⚠ 目次のアンカーは «節を包む要素»（<section id>）を指す前提。見出しに id を置くと
+  //   選択肢がその中に入らないため印が付かない（page.js の現在地 spy と同じ前提）。
+  const tocMarks = [...root.querySelectorAll('.toc a[href^="#"]')].map(link => {
+    const id = link.getAttribute('href').slice(1);
+    const section = id ? root.querySelector(`#${CSS.escape(id)}`) : null;
+    if (!section) return null;
+    const qs = [...new Set([...section.querySelectorAll('[data-q]')].map(el => el.dataset.q))]
+      .filter(q => qids.includes(q));
+    return qs.length ? { link, qs } : null;
+  }).filter(Boolean);
+  tocMarks.forEach(({ link }) => link.classList.add('has-q'));
+
   const render = (source = null) => {
     qids.forEach(q => {
       const answered = Boolean(state[q].value);
@@ -87,6 +105,13 @@
     const dots = root.querySelector('[data-progress-dots]');
     if (count) count.textContent = `回答 ${done} / ${qids.length}`;
     if (dots) dots.textContent = items.map(item => item.value || item.note ? '●' : '○').join('');
+
+    // 節の判断が «全部» 埋まったときだけ済の印にする。1 件でも残っていれば未回答の色の
+    // ままにする — 一部だけで済に見せると、残りを探しに戻る手掛かりが消える。
+    // 数え方は進捗（回答 n / N）と同じ «選択またはメモ» で揃える。
+    tocMarks.forEach(({ link, qs }) => {
+      link.classList.toggle('done', qs.every(q => state[q].value || state[q].note.trim()));
+    });
 
     const output = root.querySelector('[data-answer-output]');
     if (output) output.value = answerText(items, done);

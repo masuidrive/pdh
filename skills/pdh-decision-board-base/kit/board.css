@@ -383,7 +383,15 @@ h2.stuck{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* 貼り付
    （margin が li を突き抜けて collapse するため、li の rect にも margin にも現れない — 2026-08-20 実測） */
 .toc a.sub{padding-left:calc(var(--u)*6);margin:0;line-height:inherit}
 .toc a.on{color:var(--accent);border-left-color:var(--accent);background:var(--accent-soft)}
-.toc a.done::after{content:" ✓";color:var(--ok);font-weight:700}
+/* 行末の ✓ は «その節に判断がある» の印。class は board.js が付ける
+   （has-q = 判断がある / done = その節の判断が全部埋まった）。
+   ⚠ .done を .has-q の «後» に置く — 特異度が同じなので、前へ動かすと回答済みでも薄いままになる。
+   判断の有無は印の有無で読める（色だけに載せていない）。色と太さが足すのは回答済みかどうかだけ。 */
+.toc a.has-q::after{content:"✓";margin-left:.4em;color:var(--muted);font-weight:400}
+/* 済は «形» でも違えている — 色と太さだけだと、未回答の ✓ も «済» に読める（✓ という字が
+   もともと «終わった» を運ぶため）。淡色の丸みで «印が付いた» 状態を別の形にする。 */
+.toc a.done::after{content:"✓";margin-left:.4em;color:var(--ok);font-weight:700;
+  background:var(--ok-soft);border-radius:999px;padding:0 .4em}
 .toc .toc-t{display:none}
 /* ⚠ .layout（目次レールつき）の中では h2 の背景拡張を右だけにする。
    左へ 50vw 伸ばすと、h2 と同じ高さ帯の目次項目が地の色で塗り潰される

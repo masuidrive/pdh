@@ -243,7 +243,9 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
   border-left:2px solid var(--line)}
 .toc a.sub{padding-left:calc(var(--u)*6)}
 .toc a.on{color:var(--accent);border-left-color:var(--accent);background:var(--accent-soft)}
-.toc a.done::after{content:" ✓";color:var(--ok);font-weight:700}
+.toc a.has-q::after{content:"✓";margin-left:.4em;color:var(--muted);font-weight:400}
+.toc a.done::after{content:"✓";margin-left:.4em;color:var(--ok);font-weight:700;
+  background:var(--ok-soft);border-radius:999px;padding:0 .4em}
 .toc .toc-t{display:none}
 @media (min-width:1080px){.toc{position:sticky;top:calc(var(--u)*4);align-self:start;
   max-height:calc(100vh - 2rem);overflow:auto}}
@@ -302,8 +304,8 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
     <li><a class="sub" href="#sp-compare">compare</a></li>
     <li><a class="sub" href="#sp-quote">quote</a></li>
     <li><a class="sub" href="#sp-fig">fig（画像・図）</a></li>
-    <li><a class="sub done" href="#sp-judge">判断カード（回答済の例）</a></li>
-    <li><a class="sub" href="#sp-answer">answer</a></li>
+    <li><a class="sub has-q done" href="#sp-judge">判断カード（回答済の例）</a></li>
+    <li><a class="sub has-q" href="#sp-answer">answer（未回答の例）</a></li>
     <li><a href="#sec-qa">まとめ</a></li>
   </ol>
 </nav>
@@ -346,7 +348,7 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
 
 <div class="spec" id="sp-toc">
 <p class="name">toc-rail（折りたたみ sidebar）</p>
-<p class="why">実装する規則: 読み手が現在地を失わない・未回答の判断を明示する（回答済みの判断に ✓ が付く）。広い画面では左に sticky、狭い画面では右上に浮いた「目次」ボタンだけを置き、押すと dropdown で開く — 帯を作らないので heading と高さを取り合わない。このページの左（狭ければ上）にあるのが実物 — 見出しを通過すると現在地が動く。節見出し（h2）も sticky で上に残り、いまどの節を読んでいるかが常に見える。</p>
+<p class="why">実装する規則: 読み手が現在地を失わない・判断のある節を目次から見つけられる（判断のある行の末尾に ✓ が付き、その節の判断が全部埋まると淡色の丸みが付く — この目次の 「判断カード」と「answer」の 2 行が実物。class は board.js が付ける）。広い画面では左に sticky、狭い画面では右上に浮いた「目次」ボタンだけを置き、押すと dropdown で開く — 帯を作らないので heading と高さを取り合わない。このページの左（狭ければ上）にあるのが実物 — 見出しを通過すると現在地が動く。節見出し（h2）も sticky で上に残り、いまどの節を読んでいるかが常に見える。</p>
 </div>
 
 <div class="spec" id="sp-chips">

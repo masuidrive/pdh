@@ -49,6 +49,12 @@
 
 `board.js` が、入力されたときだけ各 `[data-path]` の後ろに «開く» と «URL をコピー» を生やす。未入力・script 停止時は path の文字だけが見える。入力値は端末に保存され、次の board でも最初から入っている。保存できない環境（file:// 等）でも入力と URL 生成は動く。
 
+## 目次の印（判断のある節）
+
+`board.js` が目次の各 `a[href="#節id"]` の宛先を見て、その中に `[data-q]` があれば `has-q` を付ける。行末に ✓ が出て、**読み手は本文を開く前に «この節には決めることがある» を知る。**節の判断が全部埋まると `done` も付き、印が淡色の丸みへ変わる（1 件でも残っていれば未回答の見た目のまま）。数え方は進捗（`回答 n / N`）と同じ «選択またはメモ» で揃えてある。
+
+**アンカーの宛先は節を包む要素（`<section id>`）にする。**見出しに `id` を置くと選択肢がその中に入らず、印が付かない（現在地 spy と同じ前提）。対応付けは読み込み時に 1 回だけ作るので、後から DOM へ足した判断は印に反映されない。
+
 ## 送信 hook（`window.boardHost`）
 
 board を配信する側が `board.js` より前で `window.boardHost = { submit, label?, disabled? }` を定義すると、`[data-copy-answer]` の直前に送信ボタンが出る。押すと `board.js` 自身が組み立てた回答（`{ boardId, title, answers, text, answered, total }`）を `submit` へ渡し、resolve で「送信しました」、reject でその Error の文言を貼り戻し欄の status へ出す。
@@ -75,7 +81,7 @@ board を配信する側が `board.js` より前で `window.boardHost = { submit
 | `beautiful-mermaid.iife.js` | mermaid renderer（esbuild で依存ごと bundle 済み。global: `BeautifulMermaid`） |
 | `mermaid-render.js` | `pre.mermaid` を token 色で描画。テーマ変更で再描画。失敗時はソース表示 + console.error |
 | `check-contrast.py` | token の APCA 検査。**tokens.css を書き換えたら必ず回す**（exit 0 が合格） |
-| `ui-sample.html` | 全部品の実物見本（mermaid bundle は未挿入 — 下記の手順で差し込む） |
+| `ui-sample.html` | 全部品の実物見本（mermaid bundle は未挿入 — 下記の手順で差し込む）。⚠ **CSS を inline で «自分の写し» として持っている** — `board.css` / `primitives.css` を直したら、見本の `<style>` の同じ規則にも同じ変更を入れる。入れないと、見本だけが古い見た目を «正» として見せ続ける（2026-08-20 に目次の印で実際に起きた） |
 
 ### v2 の設計規則（部品を足すとき・値を触るとき）
 
