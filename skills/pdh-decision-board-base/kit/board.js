@@ -40,6 +40,31 @@
     return label.trim().replace(/\s+/g, ' ');
   };
 
+  // 判断 1 件ぶんの回答（選択・ラベル・メモ）を集める。貼り戻し文も送信 hook も
+  // «この 1 つ» から作る。2 か所で組み立てると、コピーした文と送った内容がいつかずれる。
+  const collect = () => qids.map(q => ({
+    q,
+    title: titleFor(q),
+    value: state[q].value,
+    label: state[q].value ? labelFor(q, state[q].value) : '',
+    note: state[q].note.trim()
+  }));
+
+  // 集めた回答から貼り戻し文を組む。見出しは board 側が data-answer-title で持つ。
+  // ここに board 固有の文字列を書くと、board ごとに board.js を分岐させることになる。
+  const answerText = (items, done) => {
+    const lines = [`# 判断ボードの回答 — ${root.dataset.answerTitle || boardId}`, ''];
+    items.forEach(item => {
+      lines.push(`## ${item.title}`);
+      lines.push(`選択: ${item.label || '（未選択）'}`);
+      if (item.note) lines.push(`メモ: ${item.note}`);
+      lines.push('');
+    });
+    lines.push('---');
+    lines.push(`回答済み ${done} / ${items.length}`);
+    return lines.join('\n');
+  };
+
   const render = (source = null) => {
     qids.forEach(q => {
       const answered = Boolean(state[q].value);
@@ -56,26 +81,15 @@
       });
     });
 
-    const done = qids.filter(q => state[q].value || state[q].note.trim()).length;
+    const items = collect();
+    const done = items.filter(item => item.value || item.note).length;
     const count = root.querySelector('[data-progress-count]');
     const dots = root.querySelector('[data-progress-dots]');
     if (count) count.textContent = `回答 ${done} / ${qids.length}`;
-    if (dots) dots.textContent = qids.map(q => state[q].value || state[q].note.trim() ? '●' : '○').join('');
+    if (dots) dots.textContent = items.map(item => item.value || item.note ? '●' : '○').join('');
 
-    // 見出しは board 側が data-answer-title で持つ。ここに書き込むと
-    // board ごとに board.js を分岐させることになる。
-    const lines = [`# 判断ボードの回答 — ${root.dataset.answerTitle || boardId}`, ''];
-    qids.forEach(q => {
-      const selected = state[q].value ? labelFor(q, state[q].value) : '（未選択）';
-      lines.push(`## ${titleFor(q)}`);
-      lines.push(`選択: ${selected}`);
-      if (state[q].note.trim()) lines.push(`メモ: ${state[q].note.trim()}`);
-      lines.push('');
-    });
-    lines.push('---');
-    lines.push(`回答済み ${done} / ${qids.length}`);
     const output = root.querySelector('[data-answer-output]');
-    if (output) output.value = lines.join('\n');
+    if (output) output.value = answerText(items, done);
   };
 
   root.addEventListener('click', event => {
@@ -150,6 +164,66 @@
   }
 
   root.querySelector('[data-copy-answer]')?.addEventListener('click', copyAnswer);
+
+  // 送信 hook — board を配信する側（ホスト）が window.boardHost.submit を用意しているときだけ、
+  // 「回答をコピー」の隣に送信ボタンを出す。board.js は送信先も送信の方法も知らない
+  // （URL・認証・成功時の表示は、ページを配信するホストが submit の中で決める）。
+  // ホストが無い環境（ファイルを直接開く・artifact）では、この節は何もせずコピーだけが残る。
+  //   window.boardHost = {
+  //     label:    '回答を送信',            // 省略可。ボタンの文字
+  //     disabled: false,                  // 省略可。true なら押せないボタンを出す（期限切れなど）
+  //     submit:   async (payload) => {}   // 必須。resolve = 送信できた / reject = その Error の文言を出す
+  //   }
+  //   payload = { boardId, title, answers: [{ q, title, value, label, note }], text, answered, total }
+  //     text = 貼り戻し文の全文（コピーで渡すものと同じ 1 つ）
+  (() => {
+    const host = window.boardHost;
+    if (!host || typeof host.submit !== 'function') return;
+    const copyButton = root.querySelector('[data-copy-answer]');
+    if (!copyButton) return;
+    const status = root.querySelector('[data-copy-status]');
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = copyButton.className;   // 見た目は「回答をコピー」と揃える
+    button.setAttribute('data-submit-answer', '');
+    button.textContent = host.label || '回答を送信';
+    if (host.disabled) button.disabled = true;
+
+    button.addEventListener('click', async () => {
+      if (button.disabled) return;
+      const items = collect();
+      const done = items.filter(item => item.value || item.note).length;
+      // 何も選ばず・何も書かずに押した送信は受けない。「回答済み」と記録されるのに
+      // 中身が全部（未選択）になり、答えた本人も受け取る agent も気づけないため。
+      if (done === 0) {
+        if (status) status.textContent = 'まだ何も選んでいません。選択（またはメモ）をしてから送信してください。';
+        return;
+      }
+      const payload = {
+        boardId,
+        title: root.dataset.answerTitle || boardId,
+        answers: items,
+        text: answerText(items, done),
+        answered: done,
+        total: items.length
+      };
+      const label = button.textContent;
+      button.disabled = true;
+      button.textContent = '送信中…';
+      try {
+        await host.submit(payload);
+        button.textContent = '送信しました';
+        if (status) status.textContent = '回答を送信しました。';
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = label;
+        if (status) status.textContent = (error && error.message) || '送信できませんでした。';
+      }
+    });
+
+    copyButton.before(button);
+  })();
 
   render();
 })();

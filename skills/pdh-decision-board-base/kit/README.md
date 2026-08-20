@@ -11,7 +11,7 @@
 | `tokens.css` | 色・面（bg / paper / fill の 3 面）・font・寸法の基準 token（明暗）。**基準はここにしか無い** |
 | `board.css` | 文書版の組版・カード・表・v2 部品（steps / tl / compare / quote / fig / mermaid-svg / details.fold / toc）・画面写真・付録・**回答フォーム**。⚠ token は定義しない — `tokens.css` を先に読み込む |
 | `deck.css` | 2 軸デッキの組版。⚠ 単独では使わない — `board.css` の後ろへ重ねる。token は定義しない |
-| `board.js` | 回答フォームの動作（選択・メモ・進捗・貼り戻し文の生成・3 段コピー）。文書とデッキで同じ 1 つ |
+| `board.js` | 回答フォームの動作（選択・メモ・進捗・貼り戻し文の生成・3 段コピー・送信 hook）。文書とデッキで同じ 1 つ |
 | `deck.js` | 面の移動・右下の地図・端の三角・押して送る・自動縮小 |
 
 ```text
@@ -48,6 +48,12 @@
 ```
 
 `board.js` が、入力されたときだけ各 `[data-path]` の後ろに «開く» と «URL をコピー» を生やす。未入力・script 停止時は path の文字だけが見える。入力値は端末に保存され、次の board でも最初から入っている。保存できない環境（file:// 等）でも入力と URL 生成は動く。
+
+## 送信 hook（`window.boardHost`）
+
+board を配信する側が `board.js` より前で `window.boardHost = { submit, label?, disabled? }` を定義すると、`[data-copy-answer]` の直前に送信ボタンが出る。押すと `board.js` 自身が組み立てた回答（`{ boardId, title, answers, text, answered, total }`）を `submit` へ渡し、resolve で「送信しました」、reject でその Error の文言を貼り戻し欄の status へ出す。
+
+**kit は送信先を持たない。**URL・認証・記録はホストが `submit` の中で決める。定義が無い環境（ファイルを直接開く・artifact）では何も起きず、コピーだけが残る。規則は `../answer-form.md`「送信できるホストに載せたときだけ、送信ボタンを出す」。
 
 ## 弱い文字
 
