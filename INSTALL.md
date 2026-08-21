@@ -448,7 +448,7 @@ ln -snf ../../.claude/skills/pdh-ticket-decision-board .agents/skills/pdh-ticket
 
 #### 導入・更新手順が README.md → INSTALL.md へ移動（2026-07 以降）
 
-以前は導入・更新手順が README.md にあり、`pdh-update` skill もそこを読んでいた。現在は本ファイル（INSTALL.md）が正で、README.md は概要とリンクだけを持つ。
+以前は導入・更新手順が README.md にあり、`pdh-update` skill もそこを読んでいた。現在は本ファイル（INSTALL.md）にあり、README.md は概要とリンクだけを持つ。
 
 **プロジェクトに配布済みの `pdh-update` skill は古い URL を読み続ける。** skill を更新しないと、次回以降も README.md を取得して手順を見失う。
 

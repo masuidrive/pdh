@@ -78,7 +78,7 @@ flowchart TD
 ## PDH-ticket-human-review. Ticket human review
 
 1. noteのStatusを`PDH-ticket-human-review`へ更新し、ticket修正点と未確定判断がnoteにあることを確認する
-2. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-ticket-human-review`側が正。ACは承認対象の文言そのままを引用し、要約に置き換えない
+2. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-ticket-human-review`側に従う。ACは承認対象の文言そのままを引用し、要約に置き換えない
 3. **ユーザの明示承認まで`PDH-implement`へ進まない。**
 4. 差し戻しは`PDH-ticket-review`へ戻し、ticket更新後にhuman reviewを再実行する
 
@@ -112,11 +112,11 @@ review前にticket frontmatterの`branch`をbase branchとしてfetchし、未�
 
 ### 独立レビュー必須トリガ
 
-trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndependent review triggersが正。該当するdiffでは独立reviewを省略しない。
+trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndependent review triggersに従う。該当するdiffでは独立reviewを省略しない。
 
 ### 実装後 review 特有 gate
 
-- Ticket不可侵：implementorがAC、Out-of-scope、Architectural Invariantsを変更していないか（規則の正は`.claude/skills/pdh-coding/SKILL.md`「Ticket immutable rule」）
+- Ticket不可侵：implementorがAC、Out-of-scope、Architectural Invariantsを変更していないか（規則は`.claude/skills/pdh-coding/SKILL.md`「Ticket immutable rule」にある）
 - scope逸脱：未記載の公開surface、破壊操作、権限変更を機械的に列挙する。見つけたらCriticalとしてhuman gateへ出す（実装済みであることを採用理由にしない）
 - commit cadence：`pdh-coding`「Commit cadence 契約」を満たすか。commit数はgateにしない
 - E2E：外部provider pathを実APIで確認したか。deferredなら明記したか
@@ -140,7 +140,7 @@ trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndepend
 
 1. ticket file（`ticket.sh start`/`restore`出力の`ticket:`パス。互換symlink: `current-ticket.md`）の各ACを1項目ずつ確認してcheckする
 2. note file（同出力の`note:`パス。互換symlink: `current-note.md`）のprocess checklistを1項目ずつ確認してcheckする
-3. UIまたはAPI verifyは`./scripts/dev-server.sh --seed`を使う。dev-server / seed hookの契約、恒久testと`ticket-local-test`の分け方と置き場所は`PDH-AGENTS.md`「Dev Server And Seed」「Verification」が正
+3. UIまたはAPI verifyは`./scripts/dev-server.sh --seed`を使う。dev-server / seed hookの契約、恒久testと`ticket-local-test`の分け方と置き場所は`PDH-AGENTS.md`「Dev Server And Seed」「Verification」に従う
    - sandbox、端末path、local login等はlocal設定または一時commandで扱い、区別できなければ確認する
 4. AC裏取りAgentが各ACの形式だけでなくWhyの実質達成を検証する。`NOT VERIFIED`の証拠を補完するまで進まない
    - user-facing Whyは、実上流data、終端user操作、反証1回の全てで確認する
@@ -153,7 +153,7 @@ trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndepend
    - 刈り込み: 自分の差分が置き換えた記述・検査を削除する（より強いゲートで守れるようになった検査の削除も含む）
 7. 最終HEADで`scripts/test-all.sh`を再実行して実出力をnoteへ貼る。後続commitまたはmergeが影響し得る古い証拠は取り直す
 8. 必要なticket noteとdocsは直接更新する
-9. human review直前に外部surfaceをconsumer視点で観察する。観察方法と証拠の要件は`PDH-AGENTS.md`「Browser And Surface Checks」が正
+9. human review直前に外部surfaceをconsumer視点で観察する。観察方法と証拠の要件は`PDH-AGENTS.md`「Browser And Surface Checks」に従う
    - 外部surfaceなしの純backendはskipできるが、理由をnoteへ1行残す
    - blockerがあれば`PDH-implement`または`PDH-review`へ戻る
 10. AC check済みticket fileを含めてcommitする
@@ -161,7 +161,7 @@ trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndepend
 ## PDH-human-review. 人間レビュー
 
 1. note Statusを`PDH-human-review`へ更新し、verifyまでの証拠がcommit済みであることを確認する
-2. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-human-review`側が正。未対応findingは、全attemptの`### Findings (PDH-review-N)`表を横断して判定が起票・記録のみ・棄却の行を抜き出して作る。ユーザ確認用のURLは`./scripts/dev-server.sh`で用意する
+2. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-human-review`側に従う。未対応findingは、全attemptの`### Findings (PDH-review-N)`表を横断して判定が起票・記録のみ・棄却の行を抜き出して作る。ユーザ確認用のURLは`./scripts/dev-server.sh`で用意する
 3. **明示承認までcloseしない。**
 4. 差し戻しはimplementへ戻し、reviewから再走する。途中blockerは直ちに確認する
 

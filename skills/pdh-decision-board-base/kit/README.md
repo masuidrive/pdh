@@ -1,6 +1,6 @@
 # 判断ボード kit
 
-判断ボード（文書版・2 軸デッキ版）の CSS と JS。**規則の実装**であって規則ではない —規則の本体は `../render-html-common.md`・`../create-doc.md`・`../create-slides.md`。食い違ったらそちらが正。
+判断ボード（文書版・2 軸デッキ版）の CSS と JS。**規則の実装**であって規則ではない。規則は `../render-html-common.md`・`../create-doc.md`・`../create-slides.md` にある。食い違ったら規則に従う。
 
 外部ツール（Node・Tailwind・CDN）に依存しない。発行先の artifact host は外部への通信を遮断するため、CSS / JS は 1 枚の HTML へ**インラインで**埋め込む。
 
@@ -67,7 +67,7 @@ board を配信する側が `board.js` より前で `window.boardHost = { submit
 
 ## 見た目を変えるとき
 
-色・面・寸法は `tokens.css` の token だけを差し替える（明暗とも。差し替えたら `check-contrast.py` を回す）。文字階調・本文幅の組版 token は `board.css` 先頭。個別部品に直接書かない。強調・選択肢カード・塗りの規則は `../render-html-common.md` が正で、kit 固有の判断（推奨は塗らない・帯は薄く・tabular-nums など）は各 CSS の該当箇所にコメントで書いてある。
+色・面・寸法は `tokens.css` の token だけを差し替える（明暗とも。差し替えたら `check-contrast.py` を回す）。文字階調・本文幅の組版 token は `board.css` 先頭。個別部品に直接書かない。強調・選択肢カード・塗りの規則は `../render-html-common.md` に従い、kit 固有の判断（推奨は塗らない・帯は薄く・tabular-nums など）は各 CSS の該当箇所にコメントで書いてある。
 
 ## v2 部品系（2026-08-19 確定 — ui-sample.html が実物見本）
 
@@ -85,7 +85,7 @@ board を配信する側が `board.js` より前で `window.boardHost = { submit
 
 ### v2 の設計規則（部品を足すとき・値を触るとき）
 
-- 幅と色は token のみ。色 literal は `grep -nE '#[0-9a-fA-F]{3,6}' primitives.css board.css deck.css`（0 件が正）、幅 literal は `grep -nE '[0-9]px' primitives.css` で検査できる形を保つ（board.css / deck.css の px は罫線幅など既存の組版値で常時ヒットするため色だけを見る）
+- 幅と色は token のみ。色 literal は `grep -nE '#[0-9a-fA-F]{3,6}' primitives.css board.css deck.css`（0 件が正しい）、幅 literal は `grep -nE '[0-9]px' primitives.css` で検査できる形を保つ（board.css / deck.css の px は罫線幅など既存の組版値で常時ヒットするため色だけを見る）
 - container は列幅いっぱいが既定。`--measure` を当てるのは散文（p / li / dd と説明テキスト）だけ。熟読される要素ほど measure に寄せ、一覧・比較する要素（表・段組・色見本）は広く使う
 - `--line` は装飾ではなく**形状の輪郭**（Lc 25〜30）。面の段差（bg/paper）は控えめのまま輪郭が形を担う
 - 表を使うのはセルが語・数値・1 句で終わる列挙だけ。語+説明は facts、案の比較は compare（セル 1 文まで）

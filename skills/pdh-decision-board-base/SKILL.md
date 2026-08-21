@@ -10,7 +10,7 @@ description: 判断ボード（PDH の human gate 用 Completed Staff Work）の
 - 実装前 gate（`PDH-ticket-human-review`）— [pdh-ticket-decision-board](../pdh-ticket-decision-board/SKILL.md)
 - close 前 gate（`PDH-human-review`）— [pdh-close-decision-board](../pdh-close-decision-board/SKILL.md)
 
-判断ボードを作るときは必ずこのファイルと該当 gate の skill を読み、媒体を選んだ後だけ該当する renderer を読む。**board の文章は [common-writing](../common-writing/SKILL.md) に従う**（主語と目的語と「正本」の規則は `CLAUDE.md` 基本方針にある）。
+判断ボードを作るときは必ずこのファイルと該当 gate の skill を読み、媒体を選んだ後だけ該当する renderer を読む。**board の文章は [common-writing](../common-writing/SKILL.md) に従う**（主語と目的語と参照先の規則は `CLAUDE.md` 基本方針にある）。
 
 日付つきの事故・実測値を調べる必要がある場合だけ [examples.md](examples.md) を読む。通常は読まない。
 

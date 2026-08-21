@@ -4,7 +4,7 @@
    色・面（bg/paper/fill）・寸法の基準 token は tokens.css にしか定義しない —
    ここで再定義すると、明暗どちらかだけ直したときに配色がズレる（v1 で実際に二重化した）。
    デッキ版は、このファイルを読み込んだ«後ろ»に deck.css を重ねる。
-   規則の本体は ../render-html-common.md と ../create-doc.md。食い違ったら規則が正。 */
+   規則は ../render-html-common.md と ../create-doc.md にある。食い違ったら規則に従う。 */
 
 /* ---------- board 固有の組版 token ----------
    tokens.css に無い文字階調と幅だけをここに置く。tokens.css と同名の token を書かない。 */

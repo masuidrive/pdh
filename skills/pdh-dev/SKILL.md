@@ -11,7 +11,7 @@ description: "Ticket-centric 開発ワークフロー。1 ticket = 1 work unit�
 
 ## この skill の読み方
 
-`product-brief.md`、`docs/product-delivery-hierarchy.md`、`PDH-AGENTS.md`、`CLAUDE.md`（と存在すれば`CLAUDE.local.md`）を先に読む順序は`PDH-AGENTS.md`「Read Order」が正。
+`product-brief.md`、`docs/product-delivery-hierarchy.md`、`PDH-AGENTS.md`、`CLAUDE.md`（と存在すれば`CLAUDE.local.md`）を先に読む順序は`PDH-AGENTS.md`「Read Order」に従う。
 
 そのうえで、この skill の分冊を必要に応じて開く。
 
@@ -25,4 +25,4 @@ description: "Ticket-centric 開発ワークフロー。1 ticket = 1 work unit�
 | `_execution-team.md` | teamの役割、engine割当、spawn機構 | worker を spawn するとき |
 | `_subagent-context.md` | 全workerに渡す共通promptと役割別指示 | 同上 |
 
-gate の意味と判定基準（stage flow、severity、scope、証拠要件）は`PDH-AGENTS.md`が正。この skill には手順を置く。
+gate の意味と判定基準（stage flow、severity、scope、証拠要件）は`PDH-AGENTS.md`に従う。この skill には手順を置く。

@@ -79,7 +79,7 @@ flowchart TD
 
 ## PDH ステップ参照（tmux-director 用クイックリファレンス）
 
-pdh-dev のステップ番号・ルールの **正式な定義** は常に `.claude/skills/pdh-dev/SKILL.md` にある。Director はフェーズ遷移を検知するたびに pdh-dev を Read して最新の定義に従うこと。以下は Director が頻繁に参照する情報のクイックリファレンスであり、pdh-dev と矛盾する場合は pdh-dev が正。
+pdh-dev のステップ番号・ルールの **正式な定義** は常に `.claude/skills/pdh-dev/SKILL.md` にある。Director はフェーズ遷移を検知するたびに pdh-dev を Read して最新の定義に従うこと。以下は Director が頻繁に参照する情報のクイックリファレンスであり、pdh-dev と矛盾する場合は pdh-dev に従う。
 
 **PDH ステージ一覧:**
 PDH-open → PDH-ticket-review → PDH-ticket-human-review → PDH-implement → PDH-review → PDH-verify → PDH-human-review → **PDH-close**
@@ -271,7 +271,7 @@ Monitor({
 
 ### 新規プロジェクトでの配線 (未配線時のみ)
 
-配線手順（`scripts/hookbus.js` の配置と `.claude/settings.json` の hooks ブロック）は **INSTALL.md「.claude/settings.json を設定する」の hookbus 版が正**。ここには複製しない。hook の command は `"$CLAUDE_PROJECT_DIR/scripts/hookbus.js"` と絶対化する（相対パスだと worker が別ディレクトリへ cd した直後の Stop hook で not found になる）。
+配線手順（`scripts/hookbus.js` の配置と `.claude/settings.json` の hooks ブロック）は **INSTALL.md「.claude/settings.json を設定する」の hookbus 版に従う**。ここには複製しない。hook の command は `"$CLAUDE_PROJECT_DIR/scripts/hookbus.js"` と絶対化する（相対パスだと worker が別ディレクトリへ cd した直後の Stop hook で not found になる）。
 
 ---
 
