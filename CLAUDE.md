@@ -4,7 +4,7 @@
 
 このリポジトリは **PDH の配布元** であり、PDH を適用される側でもある。
 
-- PDH 汎用 agent ルールは **`templates/PDH-AGENTS.md`** を正として読む。配布先プロジェクトのように root へコピーしない（この repo が原本であり、コピーすると原本が 2 つになる）
+- PDH 汎用 agent ルールは **`templates/PDH-AGENTS.md`** を読む。配布先プロジェクトのように root へコピーしない（この repo が原本であり、コピーすると原本が 2 つになる）
 - Claude Code skill の実体は **`skills/`**。配布先の `.claude/skills/` に相当する
 - Codex CLI は `.agents/skills/` から skill を読む。配布先ではそこを `.claude/skills/` への symlink にする（wrapper ファイルは廃止済み。実体を 1 つに保つため）
 
@@ -22,7 +22,7 @@ docs/
 skills/                              # Claude Code skill の実体（配布物）
   pdh-dev/  pdh-coding/  pdh-check-writing/  pdh-update/  tmux-director/  pdh-ticket-decision-board/
 templates/                           # 配布テンプレート
-  PDH-AGENTS.md                      # PDH 汎用 agent ルール（この repo でもこれを正として読む）
+  PDH-AGENTS.md                      # PDH 汎用 agent ルール（この repo でもこれを読む）
   CLAUDE.md                          # 配布先 project 固有ルールの雛形
   AGENTS.md                          # 他 agent platform 向け thin pointer
   checks/  *.sh                      # 配布 script 群
@@ -70,7 +70,7 @@ scripts/
 ## engine 中立性
 
 - **フローの記述に特定 engine を前提としない**（`AI-5`）。engine 固有の起動手順を書く場合は、セクション見出しかリード文で前提を明示して閉じ込める
-- **具体的なモデル名は「上書き例」としてのみ書く。** 役割プロファイル（`strong-judge` 等）を正とする
+- **具体的なモデル名は「上書き例」としてのみ書く。** 役割プロファイル（`strong-judge` 等）に従う
 - Claude Code 側に何かを追加したら、**Codex 側に対応が要るか必ず確認する**（`templates/AGENTS.md` の用語対応表、`INSTALL.md`「ファイルを配置する」の symlink 手順に skill 名を足すか）
 
 # テスト・検証

@@ -15,7 +15,7 @@ PMはspawn promptの冒頭にこの内容を置き、続けて該当する役割
 
 1. `product-brief.md`（全判断の基準）
 2. `docs/product-delivery-hierarchy.md`（存在すれば。Ticket immutable、branch、完了条件）
-3. `PDH-AGENTS.md`（PDH汎用ルール。severity等の判定の正）
+3. `PDH-AGENTS.md`（PDH汎用ルール。severity等の判定はここに従う）
 4. `CLAUDE.md`（project固有ルール、テスト、approval、tool/model上書き）
 5. `CLAUDE.local.md`（存在すれば。secret値を置かない環境固有メモ）
 6. `<TICKET_FILE>`（Why、AC、Invariants、確定判断、Out-of-scope）
@@ -103,7 +103,7 @@ reviewer、AC裏取り、Surface Observerはproduct code、test、doc、`<NOTE_F
 - Whyがrepoの実装で端から端まで成立するかを、現実的な分岐（権限差、tenant横断、session状態、成功と失敗、初回と再訪）で追跡する
 - Ticket不可侵の確認と、diff起点の網羅探索checklistは行わない（ticketとdiffを持たないため）
 - 対象commit SHAを結果へ明記する
-- 報告形式、severityの正、`<RESULT_FILE>`への報告、書き込み境界は通常reviewerと同じ
+- 報告形式、severityの判定、`<RESULT_FILE>`への報告、書き込み境界は通常reviewerと同じ
 - read-onlyの範囲で自由にrepoを探索してよいが、渡されていないticket/note/review結果を探して読まない
 
 ### QA Engineer
