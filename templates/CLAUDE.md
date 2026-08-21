@@ -99,7 +99,7 @@ engine 割り当ての規則（worker 既定 = main と同一、main engine の�
 - main = claude → 実装 worker = `codex exec -m gpt-5.6-sol -c model_reasoning_effort="medium"`（機械的な実装は `medium`、統合・判断を含む難しい実装は `high`）
 - main = codex → 実装 worker = `claude -p --model opus`
 
-**下表は「役割ごとに engine / model を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。PDH stage の定義と gate 条件は `PDH-AGENTS.md` と `/pdh-dev` を正とし、この表は project 固有の role / model override だけを書く。
+**下表は「役割ごとに engine / model を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。PDH stage の定義と gate 条件は `PDH-AGENTS.md` と `/pdh-dev` に従い、この表は project 固有の role / model override だけを書く。
 
 **この表は消さないこと。** どの step にどの engine / model を割り当てるかは project 依存で、skill 側の既定値では決められない。判断材料の例:
 

@@ -42,7 +42,7 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 - **engine 中立**: Claude Code / Codex CLI のどちらが main でも動くこと。特定 engine をフローにハードコードしない
 - 配布ファイル末尾の `Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/...` 行は導入時に HEAD commit へ置換される。この行の形式を壊さない
 - ticket のライフサイクルは [ticket.sh](https://github.com/masuidrive/ticket.sh) に委ねる。PDH 側で再実装しない
-- モデル名は時間で古びる。ドキュメントでは役割プロファイル（`strong-judge` 等）を正とし、具体的なモデル名は上書き例として扱う
+- モデル名は時間で古びる。ドキュメントでは役割プロファイル（`strong-judge` 等）に従い、具体的なモデル名は上書き例として扱う
 - 本文は日本語、`AGENTS.md` など他 agent platform が読む入口は英語
 
 ## Architectural Invariants

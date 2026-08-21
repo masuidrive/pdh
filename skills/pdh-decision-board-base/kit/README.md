@@ -71,7 +71,7 @@ board を配信する側が `board.js` より前で `window.boardHost = { submit
 
 ## v2 部品系（2026-08-19 確定 — ui-sample.html が実物見本）
 
-ユーザとの往復で確定した設計の第 2 版。**新しい board の見た目はこちらを正とする。** `board.css` / `deck.css`（組版と回答フォーム機構）も 2026-08-19 に v2 の token・面モデル（bg / paper / fill の 3 面）へ移行済み（ticket 260819-072511）。色・面の基準は tokens.css にしか無く、board.css / deck.css は token を定義しない。
+ユーザとの往復で確定した設計の第 2 版。**新しい board の見た目は v2 に従う。** `board.css` / `deck.css`（組版と回答フォーム機構）も 2026-08-19 に v2 の token・面モデル（bg / paper / fill の 3 面）へ移行済み（ticket 260819-072511）。色・面の基準は tokens.css にしか無く、board.css / deck.css は token を定義しない。
 
 | ファイル | 中身 |
 |---|---|

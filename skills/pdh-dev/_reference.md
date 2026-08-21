@@ -6,7 +6,7 @@
 - review attempt label：`PDH-review-1`、`PDH-review-2`等。top-level stageではなく`PDH-review`配下のlog
 - gate：次stageへ進む完了条件。`Gate Remaining`が空でなければstage未完了
 - AC：観察可能な振る舞いとして書くAcceptance Criteria
-- Architectural Invariants：`product-brief.md`に明記された不変則を正とする
+- Architectural Invariants：`product-brief.md`に明記された不変則に従う
 
 ## stage 遷移の宣言
 
