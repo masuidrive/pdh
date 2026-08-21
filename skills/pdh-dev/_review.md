@@ -24,7 +24,7 @@ flowchart TD
 
 ### Severity の運用
 
-Critical / Major / Minor の定義は`PDH-AGENTS.md`「Verification」のSeverityが正。運用上の補足だけをここに置く。
+Critical / Major / Minor の定義は`PDH-AGENTS.md`「Verification」のSeverityに従う。運用上の補足だけをここに置く。
 
 - 検出頻度は信頼度のヒントであって重要度ではない
 - Criticalはユーザが明示受容してもPASSとは記録しない
@@ -63,7 +63,7 @@ finding冒頭へ`[同名 symbol sweep]`等の観点labelを付ける。
 ### Review attempt の必須ルール
 
 1. 各reviewerは対象SHAを固定して結果へ明記する
-2. 独立review必須triggerとcross-model要件は`PDH-AGENTS.md`「Verification」が正。代替手段と理由記録もそちらに従う
+2. 独立review必須triggerとcross-model要件は`PDH-AGENTS.md`「Verification」に従う。代替手段と理由記録もそちらに従う
 3. diff全体の網羅探索は初回だけとし、修正後は採用finding、再現条件、修正diffだけを同じreviewerへ渡す
 4. reviewerは事実の再現と解消を判定し、Directorは採用、起票、記録のみ、棄却とloop終了を判定する
 5. 完了には、採用CriticalとMajorが最新SHAで解消し、非採用findingの分類と理由がnoteへ必要である。全findingの実装は要求しない
@@ -74,7 +74,7 @@ finding冒頭へ`[同名 symbol sweep]`等の観点labelを付ける。
 
 同種Criticalが2 attemptで再発したらroot causeを診断してescalateする。 root causeはticketの実装詳細混入、scope肥大、reviewer prompt偏り、確定値の下流委譲を確認する。
 
-rewind前の手順は`PDH-AGENTS.md`「Verification」のRewind disciplineが正。
+rewind前の手順は`PDH-AGENTS.md`「Verification」のRewind disciplineに従う。
 
 `PDH-review-2`以降で初回findingが誤検出、pre-existing、Out-of-scope、user価値非直結と判明したら、追加fixを行わない。 Discoveryへ記録し、元のACとuser journeyだけをverifyする。 invariant test追加やcosmetic alignmentなどのengineering aestheticsをscope拡張理由にしない。
 
@@ -97,7 +97,7 @@ rewind前の手順は`PDH-AGENTS.md`「Verification」のRewind disciplineが正
 
 ## Why 直結レビュー（2 レンズ）と AC 妥当性
 
-網羅探索に加えて次の2 lensを実施する。レンズ2は通常のreviewer（Devil's Advocate等）がdiffとともに実施する。レンズ1は専用の独立reviewerを別workerとしてspawnする。渡すもの・渡さないものと役割別指示は`_execution-team.md`「worker prompt の組み立て」と`_subagent-context.md`「reviewer（レンズ1）」が正。
+網羅探索に加えて次の2 lensを実施する。レンズ2は通常のreviewer（Devil's Advocate等）がdiffとともに実施する。レンズ1は専用の独立reviewerを別workerとしてspawnする。渡すもの・渡さないものと役割別指示は`_execution-team.md`「worker prompt の組み立て」と`_subagent-context.md`「reviewer（レンズ1）」に従う。
 
 ### レンズ1 — Why end-to-end（無バイアス）
 
@@ -117,11 +117,11 @@ reviewer間またはlens間で結論が割れたら、unionや多数決で流さ
 
 ## スコープ外問題と過剰実装の扱い
 
-**判定基準の正は`PDH-AGENTS.md`。** reviewer出力が仮説であること、severityだけでscopeを広げないこと、無関係な実在Critical/Majorは止めてユーザへ相談することは「Execution Model」、same ticketで直す4条件と例外の記録は「Verification」のScope boundary、AC外コード・dead code誤記・governance混入・reactive-fix肥大の報告は同AC traceが正。
+**判定基準は`PDH-AGENTS.md`にある。** reviewer出力が仮説であること、severityだけでscopeを広げないこと、無関係な実在Critical/Majorは止めてユーザへ相談することは「Execution Model」、same ticketで直す4条件と例外の記録は「Verification」のScope boundary、AC外コード・dead code誤記・governance混入・reactive-fix肥大の報告は同AC traceに従う。
 
 ここにはDirectorの記録手順だけを置く。
 
-- 判定は 採用 / 起票 / 記録のみ / 棄却 の4種。**実在することは起票の理由にならない。** 独立した作業単位として成立する（それ単体でスケジュールされるWhyを持つ）ものだけを起票し、成立しないが直す価値があるものは採用して現チケット内で直す。直す価値が無いものは記録のみ。false positiveや前提誤りは棄却。判定基準は`PDH-AGENTS.md`「Verification」のScope boundaryが正
+- 判定は 採用 / 起票 / 記録のみ / 棄却 の4種。**実在することは起票の理由にならない。** 独立した作業単位として成立する（それ単体でスケジュールされるWhyを持つ）ものだけを起票し、成立しないが直す価値があるものは採用して現チケット内で直す。直す価値が無いものは記録のみ。false positiveや前提誤りは棄却。判定基準は`PDH-AGENTS.md`「Verification」のScope boundaryに従う
 - findingはnoteの`### Findings (PDH-review-N)`表へ、**検出した時点で1行追加する**。判定列と理由は後で埋めてよいが、attempt終了後にまとめて書き起こさない。表の形式は次で固定する（noteテンプレートに無い場合はDirectorがこの見出しごと追加する）
 
   ```

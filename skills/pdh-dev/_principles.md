@@ -6,7 +6,7 @@
 
 判断ではuser journey動作をengineering aestheticsより優先する。 downstream ticketでの復旧予定を理由に、mainのconsumer surfaceを壊してcloseしてはならない（`_flow.md`「PDH-close」）。
 
-階層と各層の責務は`docs/product-delivery-hierarchy.md`「構造」が正。Outcome、Scope、Design Decisions、Non-goalsはticketへ直接書く。
+階層と各層の責務は`docs/product-delivery-hierarchy.md`「構造」に従う。Outcome、Scope、Design Decisions、Non-goalsはticketへ直接書く。
 
 ## 症状ではなく目的から解く
 
@@ -14,7 +14,7 @@ bugfixやfeature ticketのWhyとACは、`product-brief.md`の目的と利益か�
 
 ## YAGNI / 最小実装
 
-規則の正は`.claude/skills/pdh-coding/SKILL.md`「YAGNI / 最小実装 (絶対遵守)」。PMはticket作成とreview採否でこれを適用し、観測した問題は`_review.md`「スコープ外問題と過剰実装の扱い」に従って分類する。
+規則は`.claude/skills/pdh-coding/SKILL.md`「YAGNI / 最小実装 (絶対遵守)」にある。PMはticket作成とreview採否でこれを適用し、観測した問題は`_review.md`「スコープ外問題と過剰実装の扱い」に従って分類する。
 
 ## 核となる設計選択
 
@@ -23,5 +23,5 @@ bugfixやfeature ticketのWhyとACは、`product-brief.md`の目的と利益か�
 | 1 ticket per work | cross-cuttingな全layerを1 ticket、1作業文脈で整合させる |
 | investigate + implement | investigate、implement、testsを1つの作業文脈で完遂する |
 | 実装後review | 動く成果物をAC、Invariants、specと照合する |
-| commit cadence | 規範は`pdh-coding`「Commit cadence 契約」が正。pushは`PDH-AGENTS.md`「Execution Model」のpush規律に従う |
-| **Ticket immutable** | 規範は`pdh-coding`「Ticket immutable rule (絶対遵守)」が正。PMは変更が持ち込まれていないかをreviewで確認する |
+| commit cadence | `pdh-coding`「Commit cadence 契約」に従う。pushは`PDH-AGENTS.md`「Execution Model」のpush規律に従う |
+| **Ticket immutable** | `pdh-coding`「Ticket immutable rule (絶対遵守)」に従う。PMは変更が持ち込まれていないかをreviewで確認する |

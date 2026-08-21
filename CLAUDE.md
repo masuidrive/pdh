@@ -16,7 +16,7 @@
 product-brief.md                     # プロダクト概要・方針【変更にはユーザーの明示的な承認が必要】
 CLAUDE.md                            # このファイル（PDH repo 固有ルール）
 README.md                            # PDH の説明（何を解決するか・ワークフロー）
-INSTALL.md                           # 導入・更新手順。配布物の配置表はここが正
+INSTALL.md                           # 導入・更新手順。配布物の配置表はここにある
 docs/
   product-delivery-hierarchy.md      # PDH 運用ルール（配布物）
 skills/                              # Claude Code skill の実体（配布物）
@@ -49,15 +49,15 @@ scripts/
 
 ## 配布物の一貫性
 
-- **配布ファイルを追加・改名・削除したら、`INSTALL.md` の配置表（「ファイルを配置する」のコピー元/コピー先テーブル）と README のディレクトリ構造図を同じ commit で更新する。** 配布物一覧の正は `INSTALL.md`
+- **配布ファイルを追加・改名・削除したら、`INSTALL.md` の配置表（「ファイルを配置する」のコピー元/コピー先テーブル）と README のディレクトリ構造図を同じ commit で更新する。** 配布物の一覧は `INSTALL.md` にある
 - **配布ファイル末尾の `Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/<path>` 行を壊さない。** `XXXXXXX` はプレースホルダのまま commit する（導入時に HEAD commit へ置換される）。path 部分は自身の配布先パスと一致させる
 - **`pdh-update` skill の更新手順が、追加した配布物をカバーしているか確認する**
 
 ## どこに書くかの判断（CLAUDE.md / PDH-AGENTS.md / skill）
 
-判断の 3 問は `templates/PDH-AGENTS.md`「Where A Rule Belongs」が正。この repo 固有の適用例だけをここに置く。
+判断の 3 問は `templates/PDH-AGENTS.md`「Where A Rule Belongs」に従う。この repo 固有の適用例だけをここに置く。
 
-例: 「変更前に `git log` / `git blame` で意図を把握する」は、共通・コード変更時のみ・実装担当なので `pdh-coding` skill が正。配布テンプレートの `CLAUDE.md` に同じことを書くと、コピー先で二重管理になる。
+例: 「変更前に `git log` / `git blame` で意図を把握する」は、共通・コード変更時のみ・実装担当なので `pdh-coding` に従う。配布テンプレートの `CLAUDE.md` に同じことを書くと、コピー先で二重管理になる。
 
 **同じルールが「テンプレートでは重複、実プロジェクトでは固有情報」になることがある。** 配布先ごとに参照先が変わる場合（辿るディレクトリ構成が違う等）は、`CLAUDE.md` にその差分だけを書いてよい。
 
@@ -108,7 +108,7 @@ scripts/
 # PDH (Ticket) 運用
 
 - **`product-brief.md` が全判断の基準**
-- PDH 汎用ルールは `templates/PDH-AGENTS.md`、フローの詳細は `skills/pdh-dev/SKILL.md` が正。ここには PDH repo 固有の差分だけを書く
+- PDH 汎用ルールは `templates/PDH-AGENTS.md`、フローの詳細は `skills/pdh-dev/SKILL.md` にある。ここには PDH repo 固有の差分だけを書く
 - **Acceptance Criteria の変更（追加・削除・修正）は必ずユーザの承認を得ること**
 
 ## 影響範囲の明示（必須）

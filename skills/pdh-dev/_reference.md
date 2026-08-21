@@ -90,7 +90,7 @@ Implementation Notesはユーザが明示または会話で言及した事項だ
 | PDH-human-review | review依頼、確認手順、承認または差し戻し |
 | Discoveries | 想定外の事実 |
 
-section構成の正は`.ticket-config.yaml`の`note_content`。ここに無いsectionを前提にしない。 `PDH-ticket-human-review`のAC承認は専用sectionを持たず、Statusと`PDH-ticket-review`へ記録する。 attempt 2以降は`### Findings (PDH-review-2)`のように見出しを自分で追加する。
+section構成は`.ticket-config.yaml`の`note_content`で決まる。ここに無いsectionを前提にしない。 `PDH-ticket-human-review`のAC承認は専用sectionを持たず、Statusと`PDH-ticket-review`へ記録する。 attempt 2以降は`### Findings (PDH-review-2)`のように見出しを自分で追加する。
 
 次を守る。
 

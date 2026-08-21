@@ -208,7 +208,7 @@ project-root/
 ```
 pdh/
   README.md                          ← このファイル（PDH の説明）
-  INSTALL.md                         ← 導入・更新手順（配布物の配置表はここが正）
+  INSTALL.md                         ← 導入・更新手順（配布物の配置表はここにある）
   docs/
     product-delivery-hierarchy.md    ← PDH 本体ドキュメント
   skills/

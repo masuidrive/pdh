@@ -28,7 +28,7 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 # 実装品質ルール
 
 <!-- このプロジェクトで実際に踏んだ実装上の失敗を、再発防止ルールとしてここに書く。 -->
-<!-- 言語・フレームワークに依存しない汎用コーディング標準は pdh-coding skill が正なので、ここには書かない。 -->
+<!-- 言語・フレームワークに依存しない汎用コーディング標準は pdh-coding skill に従うので、ここには書かない。 -->
 <!-- grep 1 パターンで決定論的に検出できるものは、ルールではなく scripts/checks/*.check にする。 -->
 
 # 開発環境
@@ -41,8 +41,8 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 
 ## テスト
 
-- **完了報告前のテスト実行ルールは `PDH-AGENTS.md`「Reporting」が正**（未実行での完了報告禁止。コマンド未インストール・依存不足・環境エラーも「テスト失敗」とみなす）。ここには project 固有のテストコマンドと確認観点だけを書く
-- **完了判定に使う「動作確認」の基準は pdh-coding skill「動作確認 gate」が正。** 実データ + 終端操作で確認し、stub での pass を完了としない
+- **完了報告前のテスト実行ルールは `PDH-AGENTS.md`「Reporting」に従う**（未実行での完了報告禁止。コマンド未インストール・依存不足・環境エラーも「テスト失敗」とみなす）。ここには project 固有のテストコマンドと確認観点だけを書く
+- **完了判定に使う「動作確認」の基準は pdh-coding skill「動作確認 gate」に従う。** 実データ + 終端操作で確認し、stub での pass を完了としない
 
 <!-- プロジェクトに合わせてテストコマンドを記述すること -->
 
@@ -51,7 +51,7 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 `scripts/test-all.sh` で全テストスイートを一括実行できる。`--parallel` で並列実行可。
 
 - **段階的実行を推奨**: まず高速なテスト（例: `pytest -x -q`）で早期フィードバックを得る → 修正があれば対応 → 全スイートは `scripts/test-all.sh` で一括実行
-- **E2E 実環境確認の証拠要件は `PDH-AGENTS.md`「Browser And Surface Checks」が正**（ビルド成功・テストパスだけで完了としない）
+- **E2E 実環境確認の証拠要件は `PDH-AGENTS.md`「Browser And Surface Checks」に従う**（ビルド成功・テストパスだけで完了としない）
 
 ### テスト設計ルール
 
@@ -60,7 +60,7 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 
 # PDH (Ticket) 運用
 
-PDH 汎用ルールは `PDH-AGENTS.md`、フローの詳細・ステップ定義・レビュー構造は `/pdh-dev` SKILL.md が正。**`CLAUDE.md` には project 固有の差分だけを書く。**
+PDH 汎用ルールは `PDH-AGENTS.md`、フローの詳細・ステップ定義・レビュー構造は `/pdh-dev` SKILL.md にある。**`CLAUDE.md` には project 固有の差分だけを書く。**
 
 ## 影響範囲の明示（必須）
 
@@ -92,7 +92,7 @@ PDH 汎用ルールは `PDH-AGENTS.md`、フローの詳細・ステップ定義
 
 pdh-dev が spawn するチームメンバーの engine / モデル設定。
 
-engine 割り当ての規則（worker 既定 = main と同一、main engine の選び方、cross-delegate の適用範囲、spawn 機構）は pdh-dev `_execution-team.md`「エンジン割り当て」「spawn 機構」が正。ここには **この project 固有の上書きだけ**を書く。
+engine 割り当ての規則（worker 既定 = main と同一、main engine の選び方、cross-delegate の適用範囲、spawn 機構）は pdh-dev `_execution-team.md`「エンジン割り当て」「spawn 機構」に従う。ここには **この project 固有の上書きだけ**を書く。
 
 <!-- cross-delegate を使う場合の、この project での推奨モデル。モデル名は時間で古びるので最新に読み替えて更新すること -->
 
@@ -124,7 +124,7 @@ engine 割り当ての規則（worker 既定 = main と同一、main engine の�
 
 ### worker の起動方法
 
-engine 別の起動コマンド、並行起動、main = Claude Code のときの codex worker spawn 手順（`run_in_background` / timeout / 出力先 / worktree 時の cwd 注意）は pdh-dev `_execution-team.md`「spawn 機構」が正。
+engine 別の起動コマンド、並行起動、main = Claude Code のときの codex worker spawn 手順（`run_in_background` / timeout / 出力先 / worktree 時の cwd 注意）は pdh-dev `_execution-team.md`「spawn 機構」に従う。
 
 <!-- この project 固有の起動制約（sandbox、認証、権限ポリシー、使ってはいけない起動経路など）があればここに書く -->
 

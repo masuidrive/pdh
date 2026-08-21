@@ -1,7 +1,7 @@
 /* pdh-decision-board kit — deck.css
    2 軸デッキ（html-2d-deck）の組版。⚠ 単独では使わない — board.css を先に読み込み、
    その«後ろ»へこのファイルを重ねる。色・面・寸法の基準 token は tokens.css、組版 token は board.css が定義する。
-   規則の本体は ../create-slides.md。食い違ったら規則が正。 */
+   規則は ../create-slides.md にある。食い違ったら規則に従う。 */
 
 body { line-height: var(--lh-body); }
 

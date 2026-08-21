@@ -33,7 +33,7 @@ project-root/
       250629-131859-initial-setup/
 ```
 
-旧 flat 形式（`tickets/250711-091538-fix-something.md` 単一ファイル）も後方互換で扱える。実体のパスは `ticket.sh start`/`restore` 出力の `ticket:`/`note:` 行が正。
+旧 flat 形式（`tickets/250711-091538-fix-something.md` 単一ファイル）も後方互換で扱える。実体のパスは `ticket.sh start`/`restore` 出力の `ticket:`/`note:` 行にある。
 
 ### 命名規則
 
@@ -80,7 +80,7 @@ Ticket の状態は YAML frontmatter で判定する。
 
 - 完了時 → `closed_at` を追加し、`done/` に移動する（ticket ディレクトリごと移動する）。
 - 中止時 → `cancelled_at` を追加し、`done/` に移動する。本文に中止理由を残す。
-- `done/` への移動は整理のため。状態の正は frontmatter。
+- `done/` への移動は整理のため。状態は frontmatter で決まる。
 - `done/` 内のファイルは消さない。判断の履歴として残す。
 
 
@@ -156,7 +156,7 @@ Stage label は checklist と引き継ぎ用の安定キーであり、重い工
 
 `PDH-ticket-review` と `PDH-ticket-human-review` は分ける。前者は agent が ticket contract を整える工程、後者は実装前にユーザが全体像・達成するもの・ticket review で修正した点・AC を見て、想定と合っているかをすり合わせる人間 gate。AC 承認は `PDH-ticket-human-review` で得る。承認なしに `PDH-implement` へ進まない。
 
-Agent は `PDH-verify` までを自動で進め、そこで止まらず `PDH-human-review` として人間にレビューを依頼する。`PDH-human-review` の目的は、coding agent がやったこと・達成したことをユーザが見て、それがユーザの想定と合っているかをすり合わせること。規範は `PDH-AGENTS.md` が正: gate でユーザへ渡す材料は「Human Gate Materials」、surface 検証の証拠要件は「Browser And Surface Checks」、開発サーバと seed は「Dev Server And Seed」、承認の扱い（初期選択・timeout/default・沈黙は承認でない）は「Verification」の Human authority。`PDH-human-review` の承認があるまで `PDH-close` に進まず、チケット全体を完了と表現しない。途中で疑問・判断不能・blocker・完了見込みが立たない状態になった場合は、`PDH-human-review` を待たずにその時点でユーザに確認する。
+Agent は `PDH-verify` までを自動で進め、そこで止まらず `PDH-human-review` として人間にレビューを依頼する。`PDH-human-review` の目的は、coding agent がやったこと・達成したことをユーザが見て、それがユーザの想定と合っているかをすり合わせること。`PDH-AGENTS.md` に従う: gate でユーザへ渡す材料は「Human Gate Materials」、surface 検証の証拠要件は「Browser And Surface Checks」、開発サーバと seed は「Dev Server And Seed」、承認の扱い（初期選択・timeout/default・沈黙は承認でない）は「Verification」の Human authority。`PDH-human-review` の承認があるまで `PDH-close` に進まず、チケット全体を完了と表現しない。途中で疑問・判断不能・blocker・完了見込みが立たない状態になった場合は、`PDH-human-review` を待たずにその時点でユーザに確認する。
 
 恒久テストと `ticket-local-test` は分ける。`scripts/test-all.sh` / CI / `test/` に残すのは、Product Brief、Architectural Invariants、継続的な product contract、または一般化された regression だけとする。特定 ticket の一時的な移行確認（例: `/a` から `/b` への変更で旧 `/a` が 404 になること、特定 fixture 名がカタログに出ないこと）は `PDH-verify` の `ticket-local-test` とする。実行可能なものは `ticket.sh start` / `restore` 出力の `ticket_dir:` が示すディレクトリ配下の `tests/`（= `tickets/<ticket-name>/tests/`。ticket.sh はこのパスを出力も作成もしないので、必要時に `mkdir -p` する。旧 flat 形式は `tests/tickets/<ticket-id>/` で後方互換）に置き、`./scripts/test-ticket-local.sh [ticket-id]` で呼ぶ。seed / `tmp_dir` helper / `agent-browser` / `curl` の実行証跡は note に残す。恒久化するか迷う場合は、その期待が ticket 名や一時 fixture なしで今後も product contract として説明できるかを基準にする。
 

@@ -136,7 +136,7 @@ while IFS="$TAB" read -r file_list line; do
   if [[ "$#" -eq 2 ]] && dup_pair_allowed "$1" "$2"; then
     continue
   fi
-  fail "同一の行が複数の配布物にある（AI-1: ルールの正は 1 箇所）: $file_list
+  fail "同一の行が複数の配布物にある（AI-1: ルールは 1 箇所にある）: $file_list
     > ${line:0:70}"
 done <<< "$dup_report"
 

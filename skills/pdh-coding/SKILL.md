@@ -164,7 +164,7 @@ PDH では implementor が **論理単位の境界ごとに incremental に comm
 
 - **mega-commit 禁止**: 「全変更を 1 commit に押し込む」は事後分析不能。論理単位で割る
 - **commit early**: 最初の意味ある変更で先に commit してから長時間 gate (フルテスト等) を回す。
-- **push は明示承認時のみ**: 規範は `PDH-AGENTS.md`「Execution Model」の push 規律が正（明示要求、承認済み close 手順の `auto_push`、または `CLAUDE.md` の明示許可のみ）。
+- **push は明示承認時のみ**: `PDH-AGENTS.md`「Execution Model」の push 規律に従う（明示要求、承認済み close 手順の `auto_push`、または `CLAUDE.md` の明示許可のみ）。
 - **state 遷移は独立 commit**: blocker / 重要な設計判断 / 中断点は、コード変更や無関係な chore に同梱せず *それ単独で* commit する。commit message も state 変更を表す文言にし、`chore: ...` 等に埋もれさせない
 - 各 commit はテストパス状態を維持 (progressing 中なら明示的 WIP marker)
 - commit メッセージは `[<ticket-name>] <type>(<scope>): <summary>` 形式

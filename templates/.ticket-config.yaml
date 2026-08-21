@@ -57,7 +57,7 @@ note_content: |
 
   ### Findings (PDH-review-1)
   <!-- 記録・分類・提示の運用は pdh-dev `_review.md`
-       「スコープ外問題と過剰実装の扱い」が正。 -->
+       「スコープ外問題と過剰実装の扱い」に従う。 -->
 
   | # | 観点 | Sev | 要旨 | 判定 | 理由 |
   |---|---|---|---|---|---|
@@ -95,10 +95,10 @@ note_content: |
 
   ## Open Questions
   <!-- 実装中の可逆な迷いと採用した default 値を検出時点で append する
-       （運用は pdh-coding「Open Questions protocol」が正）。 -->
+       （運用は pdh-coding「Open Questions protocol」に従う）。 -->
 
   ## Resume Point
-  <!-- 中断時の最終 commit・理由・再開手順を記録する（pdh-coding「中断手順」が正）。 -->
+  <!-- 中断時の最終 commit・理由・再開手順を記録する（pdh-coding「中断手順」に従う）。 -->
 
 # Ticket template — pdh-dev SKILL の ticket 標準構造に準拠
 # このテンプレートには frontmatter が含まれていない。

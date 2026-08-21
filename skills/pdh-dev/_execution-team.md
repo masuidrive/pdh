@@ -24,7 +24,7 @@ PMが行うこと：
 - workerをspawnしてdispatchする
 - noteとticketの更新、commit、ユーザ報告を行う
 - ticket提出前とspawn prompt提出前に`_reference.md`の成果物self-checkを行う
-- worker結果を正典、ticket、diff、実コマンド出力、note証跡で検品し、stage遷移を判断する
+- worker結果を規則、ticket、diff、実コマンド出力、note証跡に従って検品し、遷移を判断する
 
 PMが行わないこと：
 
@@ -64,7 +64,7 @@ projectの実行profileとapproval policyを優先し、承認済みin-process s
 
 ### worker prompt の組み立て
 
-promptは「共通context + 役割別指示 + task固有依頼」で組み立てる。共通contextは`_subagent-context.md`を使い、`<TICKET_FILE>`、`<NOTE_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`、`<TESTS_DIR>`、`<TMP_DIR>`を実値で埋める。必須項目の正は`PDH-AGENTS.md`「Worker Instructions」。reviewerへはさらに`_review.md`「レビュアーへの指示ルール」の項目を含める。
+promptは「共通context + 役割別指示 + task固有依頼」で組み立てる。共通contextは`_subagent-context.md`を使い、`<TICKET_FILE>`、`<NOTE_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`、`<TESTS_DIR>`、`<TMP_DIR>`を実値で埋める。必須項目は`PDH-AGENTS.md`「Worker Instructions」にある。reviewerへはさらに`_review.md`「レビュアーへの指示ルール」の項目を含める。
 
 - `<TMP_DIR>`は`ticket.sh start`/`restore`出力の`tmp_dir:`パス、`<TESTS_DIR>`はそこには出力されないので同出力の`ticket_dir:`パス + `/tests/`（legacy flat layoutでは`tests/tickets/<id>/`）を規約で導出する。workerは`ticket.sh`を実行しないので、PMが埋めないとworkerはこのパスを知る手段がない
 - `<RESULT_FILE>`はworker自身がfile toolで書く成果物fileであり、stdout回収先とは別のパス（例: `$d/result.md`）を割り当てる。stdoutは診断用log（後述）
@@ -130,7 +130,7 @@ read-only taskは並行Review Agentへ、write taskは1人のCoding Engineerへ�
 
 ### spawn のルール
 
-workerのengineとmodelはprojectのrole規約に従い、最小能力の軽量modelへ落とさない。 spawn promptの必須項目は`PDH-AGENTS.md`「Worker Instructions」が正（レンズ1例外を含む）。
+workerのengineとmodelはprojectのrole規約に従い、最小能力の軽量modelへ落とさない。 spawn promptの必須項目は`PDH-AGENTS.md`「Worker Instructions」に従う（レンズ1例外を含む）。
 
 ### サブエージェント委譲ルール
 
@@ -163,11 +163,11 @@ PMはCoding Engineer 1人をspawnする。整合性gate後にQAをspawnして完
 
 ### PDH-review: 品質検証
 
-初回reviewは1人以上を並行起動し、同一SHAのdiff全体を見せる（レンズ1 reviewerを除く）。 finding修正はCoding Engineer、test再実行はQAへ委譲する。 attempt運用と修正確認の範囲は`_review.md`が正。
+初回reviewは1人以上を並行起動し、同一SHAのdiff全体を見せる（レンズ1 reviewerを除く）。 finding修正はCoding Engineer、test再実行はQAへ委譲する。 attempt運用と修正確認の範囲は`_review.md`に従う。
 
 ### PDH-verify: 完了検証
 
-AC裏取りAgentを1人spawnし、各ACの実達成を検証させる。 Surface Observer前に`./scripts/dev-server.sh --seed`を実行し、外部surface変更時はObserverをspawnする。観察方法と証拠要件は`PDH-AGENTS.md`「Browser And Surface Checks」が正。
+AC裏取りAgentを1人spawnし、各ACの実達成を検証させる。 Surface Observer前に`./scripts/dev-server.sh --seed`を実行し、外部surface変更時はObserverをspawnする。観察方法と証拠要件は`PDH-AGENTS.md`「Browser And Surface Checks」に従う。
 
 ### PDH-human-review: 人間レビュー
 
