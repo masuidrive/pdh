@@ -59,7 +59,7 @@
 
 board を配信する側が `board.js` より前で `window.boardHost = { submit, label?, disabled? }` を定義すると、`[data-copy-answer]` の直前に送信ボタンが出る。押すと `board.js` 自身が組み立てた回答（`{ boardId, title, answers, text, answered, total }`）を `submit` へ渡し、resolve で「送信しました」、reject でその Error の文言を貼り戻し欄の status へ出す。
 
-**kit は送信先を持たない。**URL・認証・記録はホストが `submit` の中で決める。定義が無い環境（ファイルを直接開く・artifact）では何も起きず、コピーだけが残る。規則は `../answer-form.md`「送信できるホストに載せたときだけ、送信ボタンを出す」。
+**kit は送信先を持たない。**URL・認証・記録はホストが `submit` の中で決める。定義が無い環境（ファイルを直接開く・artifact）では何も起きず、コピーだけが残る。送信ボタンを足したとき、`board.js` はコピーへ `data-copy-secondary` を付け、`board.css` がその見た目を «予備» へ落とす（送信の無い board では付かないので、コピーは元の強さのまま）。規則は `../answer-form.md`「送信できるホストに載せたときだけ、送信ボタンを出す」。
 
 ## 弱い文字
 

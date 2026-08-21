@@ -569,6 +569,24 @@ button.answer-choice,
   text-align: left;
   cursor: pointer;
 }
+/* 送信が出ている board では、コピーは «送信できないときの予備» である。同じ見た目で並べると
+   «どちらでもよい 2 つ» に見えるので、枠と地を落として控えめにする
+   （ユーザ指摘 2026-08-21「回答をコピーボタンは目立たなくして。送信とイコールではない」）。
+   ⚠ 印（data-copy-secondary）は board.js が «送信ボタンを足したときだけ» 付ける。
+   送信の無い board（ファイルとして開く・受け取れない発行先）ではコピーが唯一の返し方なので、
+   そこでは元の強さのまま残る。 */
+[data-copy-answer][data-copy-secondary] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+[data-copy-answer][data-copy-secondary]:hover,
+[data-copy-answer][data-copy-secondary]:focus-visible {
+  border-color: var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+
 /* 送信できない状態（回答の締切を過ぎた等。ホストが disabled を指定する）は、
    押せないことを見た目でも示す — 文言だけだと «押せば送れる» に見える。 */
 [data-submit-answer][disabled] {
