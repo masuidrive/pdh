@@ -338,7 +338,12 @@ ul.tl time{display:block;font-family:var(--font-head);font-size:.78rem;letter-sp
 .quote cite{display:block;font-style:normal;font-family:var(--font-head);font-size:.78rem;color:var(--muted);margin-top:var(--u)}
 
 /* fig — 画像・SVG 図・flowchart の共通枠。caption に「何を見てほしいか」を必ず書く */
-.fig{border:1px solid var(--line);border-radius:var(--r);background:var(--paper);overflow:hidden;margin:0 0 calc(var(--u)*5)}
+/* 箱は «中身の幅» に合わせる。列いっぱいに広げると、狭い画像（スマホ幅の画面写真など）の右に
+   大きな空白が残り、caption だけが箱いっぱいに伸びて «幅が揃っていない» と読める
+   （ユーザ指摘 2026-08-21）。表や図解のように中身が広いものは、これまでどおり列いっぱいになる。
+   ⚠ 狭くしすぎない — 下限を置かないと、小さな画像で caption が縦長の柱になる。 */
+.fig{border:1px solid var(--line);border-radius:var(--r);background:var(--paper);overflow:hidden;
+  margin:0 0 calc(var(--u)*5);width:fit-content;min-width:min(100%,28rem);max-width:100%}
 .fig .bar{display:flex;align-items:center;gap:calc(var(--u)*2);border-bottom:1px solid var(--line);
   background:var(--fill);padding:calc(var(--u)*1) calc(var(--u)*3);font-size:.8rem;font-family:var(--font-head)}
 .fig img,.fig svg{display:block;max-width:100%;height:auto}
