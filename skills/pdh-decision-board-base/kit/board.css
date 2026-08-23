@@ -684,7 +684,12 @@ button.answer-choice,
   background: var(--paper);
   font-size: var(--text-sm);
   box-shadow: var(--shadow);
+  /* 押すと «まだ答えていない判断» へ運ぶ（board.js）。押せることを見た目で示す。 */
+  cursor: pointer;
+  user-select: none;
 }
+.answer-progress:hover { border-color: var(--accent); }
+.answer-progress:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* 狭い画面では固定バッジが sticky な見出しに重なるので、下端へ逃がす。
    （デッキでは右下に地図があるため、deck.css が左下へ上書きする。）
    ⚠ **閾値は .toc（目次ボタン）と同じ 1079.9px にする。**目次ボタンは 1080px 未満で

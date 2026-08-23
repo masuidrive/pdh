@@ -136,6 +136,55 @@
     }
   });
 
+  // ── 進捗バッジを押したら、まだ答えていない判断へ運ぶ ──────────────────
+  // 全部答えてあれば «返す» 欄へ運ぶ。⚠ **board 側には何も書かせない** — バッジは
+  // どの board にもあるので、結び付けはここで 1 度だけ行う。board ごとに
+  // data-scroll-target を書かせると、判断を足すたびに書き手が更新することになる。
+  const progress = root.querySelector('.answer-progress');
+  if (progress) {
+    progress.setAttribute('role', 'button');
+    progress.setAttribute('tabindex', '0');
+    // ⚠ aria-label は付けない — この要素は aria-live で «回答 n / N» を読み上げる場所で、
+    //    label を付けると読み上げがその文字列に置き換わる。案内は title に置く。
+    progress.setAttribute('title', 'まだ答えていない判断へ移動する（全部答えてあれば «返す» へ）');
+
+    const move = (el, block = 'start') => {
+      if (!el) return;
+      const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      el.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block });
+    };
+    // 判断そのものではなく «その判断を含む節» の頭へ運ぶ — 見出しから読み直せる。
+    // ⚠ **選択肢のカードを先に探す。**`.answer-set` はメモ欄（補足・修正指示）の入れ物で、
+    //    選択肢より下、しばしば節の外に置かれる。そちらを先に見ると、
+    //    «まだ答えていない判断へ» と言いながらメモ欄へ運ぶことになる
+    //    （実測 2026-08-23: 選択肢は 2991px、メモ欄は 6602px の位置にあった）。
+    const hostFor = q => {
+      const sel = `[data-q="${CSS.escape(q)}"]`;
+      const card = root.querySelector(`.answer-choice${sel}`);
+      if (card) return card.closest('section') || card;
+      const other = root.querySelector(sel);
+      return other && (other.closest('section') || other);
+    };
+    const jump = () => {
+      // 数え方は進捗・目次の ✓ と同じ «選択またはメモ» で揃える。
+      const pending = qids.find(q => !state[q].value && !state[q].note.trim());
+      if (pending) { move(hostFor(pending)); return; }
+      // ⚠ **節の頭ではなく «送信できる場所» へ運ぶ**（ユーザ指示 2026-08-23「送信箇所に」）。
+      //    節の頭に止めると、返す欄も送信ボタンも画面の外に残る
+      //    （実測 2026-08-23: 節の頭 y=0 のとき、返す欄は y=552 で、その下のボタンは
+      //    高さ 800 の画面に入らなかった）。中央に寄せて、貼り戻し欄とボタンを同時に見せる。
+      const submit = root.querySelector('[data-submit-answer]')
+        || root.querySelector('[data-copy-answer]');
+      move(submit || root.querySelector('[data-answer-output]'), 'center');
+    };
+    progress.addEventListener('click', jump);
+    progress.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      jump();
+    });
+  }
+
   // カードを選択肢にすると <button> ではなくなるので、キーボードは自前で受ける。
   root.addEventListener('keydown', event => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
