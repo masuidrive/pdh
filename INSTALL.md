@@ -65,7 +65,7 @@ bash ticket.sh init
 | `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
 | `tmp/pdh/skills/pdh-decision-board-base/` | `.claude/skills/pdh-decision-board-base/` | 判断ボードの共通規則と renderer（分冊 `*.md` / `evals/` / `kit/`（CSS・JS・検査 script・見本）を**ディレクトリごと**コピーする） |
 | `tmp/pdh/skills/pdh-ticket-decision-board/SKILL.md` | `.claude/skills/pdh-ticket-decision-board/SKILL.md` | 実装前 gate（AC 承認）の判断ボードスキル — base への差分 |
-| `tmp/pdh/skills/pdh-close-decision-board/SKILL.md` | `.claude/skills/pdh-close-decision-board/SKILL.md` | close 前 gate（出荷承認）の判断ボードスキル — base への差分 |
+| `tmp/pdh/skills/pdh-close-decision-board/` | `.claude/skills/pdh-close-decision-board/` | close 前 gate（達成の確認と close 承認）の判断ボードスキル — base への差分と、当たる ticket だけ読む `ship-risk.md`（**ディレクトリごと**コピーする） |
 | `tmp/pdh/skills/common-writing/SKILL.md` | `.claude/skills/common-writing/SKILL.md` | 文章の共通規則（判断ボードの本文が従う） |
 | `tmp/pdh/skills/japanese-tech-writing/SKILL.md` | `.claude/skills/japanese-tech-writing/SKILL.md` | 日本語技術文書の文章規範（common-writing から参照） |
 | `tmp/pdh/skills/cognitive-rhythm-writing/SKILL.md` | `.claude/skills/cognitive-rhythm-writing/SKILL.md` | 説明文の認知リズム規範（common-writing から参照） |
@@ -395,6 +395,16 @@ rm -rf tmp/pdh
 
 ### 既知の移行手順
 
+#### pdh-close-decision-board が 2 ファイルになった（2026-08-26 以降）
+
+close 前 gate の skill は `SKILL.md` に加えて `ship-risk.md`（保存されている形・外部契約を変える ticket だけが読む分冊）を持つ。`SKILL.md` だけをコピーしていたプロジェクトは、ディレクトリごとコピーし直す。同時に、判断ボードの reviewer への問いが 7 問（問 2 が「推奨はゴールに届くか」）になり、判断カードに「ゴールへの効き」の欄が増えた。
+
+```bash
+cp -r tmp/pdh/skills/pdh-decision-board-base/ .claude/skills/pdh-decision-board-base/
+cp -r tmp/pdh/skills/pdh-ticket-decision-board/ .claude/skills/pdh-ticket-decision-board/
+cp -r tmp/pdh/skills/pdh-close-decision-board/ .claude/skills/pdh-close-decision-board/
+```
+
 #### pdh-ticket-decision-board の 3 分冊化 + close 前 gate の追加（2026-08-20 以降）
 
 **判断ボード skill は 3 つの構成になった。**gate と媒体に依存しない共通規則・renderer 分冊・kit（CSS/JS/検査 script）は新設の `pdh-decision-board-base` が持ち、`pdh-ticket-decision-board`（実装前 gate）と新設の `pdh-close-decision-board`（close 前 gate）は base への差分だけを持つ。本文の文章規則は新設の `common-writing` を参照する。
@@ -427,7 +437,7 @@ kit の CSS（tokens.css の palette）を変えたときは `python3 .claude/sk
 | 扱う gate | 実装前・close 前の両方 | **実装前（`PDH-ticket-human-review`）だけ** |
 | 媒体 | HTML 1 枚に固定 | Markdown / 端末に出す文章 / PR コメント / HTML 文書 / HTML 2 軸デッキ から選ぶ |
 | 作り方 | `db-*` タグを `build-board.sh` に渡す | 規則に従って組む（生成スクリプトは持たない） |
-| 検査 | 発行前の 2 段 | Completed Staff Work の 1 問 + 形・文・判断の 3 層 + 別 engine の reviewer に 6 問 |
+| 検査 | 発行前の 2 段 | Completed Staff Work の 1 問 + 形・文・判断の 3 層 + 別 engine の reviewer に 7 問 |
 
 移行手順:
 
