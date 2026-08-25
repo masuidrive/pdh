@@ -36,3 +36,4 @@
 ## 実行記録
 
 - 2026-08-26 — 旧 skill（2026-08-25 c82e2fb）: claude 4/7（主線 3 面で AC が裏付けに沈む、承認文が「出荷してよいか」、データ構造・契約の節を両方書く）。新 skill: claude 7/7、codex gpt-5.6-sol 7/7。
+- 2026-08-26 — base を 3 部に並べ直した版: claude 7/7、codex 7/7（同日、eval-1〜4 も claude で全項目 PASS、eval-3 は codex でも PASS）。
