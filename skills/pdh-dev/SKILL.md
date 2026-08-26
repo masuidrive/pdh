@@ -25,4 +25,6 @@ description: "Ticket-centric 開発ワークフロー。1 ticket = 1 work unit�
 | `_execution-team.md` | teamの役割、engine割当、spawn機構 | worker を spawn するとき |
 | `_subagent-context.md` | 全workerに渡す共通promptと役割別指示 | 同上 |
 
+**ticket と note の文章は [common-writing](../common-writing/SKILL.md) に従う。**ticket の Why と AC は承認される契約そのものなので、主語と目的語が落ちた文や、指す先の決まらない指示語を残さない。
+
 gate の意味と判定基準（stage flow、severity、scope、証拠要件）は`PDH-AGENTS.md`に従う。この skill には手順を置く。

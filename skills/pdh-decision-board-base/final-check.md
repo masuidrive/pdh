@@ -10,7 +10,7 @@
 
 ### 文
 
-成果物から次を名指しで探す（文章の規則そのものは `CLAUDE.md` 基本方針と[common-writing](../common-writing/SKILL.md) が持つ）。
+成果物から次を名指しで探す（文章の規則そのものは [common-writing](../common-writing/SKILL.md) が持つ）。
 
 - 主語または目的語がなく、何が何をするか分からない文。
 - 初出なのに単独では意味が分からない語や数。

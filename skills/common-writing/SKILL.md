@@ -1,24 +1,35 @@
 ---
 name: common-writing
-description: この repo で書く日本語の文章すべて（ユーザへの返答・報告・判断ボード・ticket・note・commit message・コード中のコメント）に適用する共通の文章規則のうち、CLAUDE.md 基本方針に無いもの — 太字強調の上限、指す内容が一意に決まらない比喩の禁止、抽象的な言い回しのその場特定、LLM っぽい表現の禁止、冗長の排除 — を定める。主語と目的語・参照先の規則は CLAUDE.md 基本方針にある。日本語の文章を書くとき・推敲するときに使う。
+description: PDH の成果物として書く日本語の文章（ticket・note・判断ボード・commit message・PDH 文書）に適用する文章規則 — 主語と目的語、参照先、太字強調の上限、指す内容が一意に決まらない比喩の禁止、抽象的な言い回しのその場特定、LLM っぽい表現の禁止、冗長の排除。ticket を書くとき・判断ボードを書くとき・それらを推敲するときに読む。
 ---
 
-# common-writing — この repo の日本語文章に共通する規則
+# common-writing — PDH の成果物に共通する文章規則
 
 ## 適用範囲
 
-この規則は、coding agent がこの repo の作業で書く日本語の文章すべてに適用する。
-会話でユーザへ返す文章、報告、判断ボード、ticket、note、commit message、コード中のコメントを含む。
+**PDH の成果物として残る日本語の文章に適用する** — ticket、note、判断ボード、commit message、PDH の文書。
 
-**主語と目的語・参照先の規則は `CLAUDE.md` の基本方針にある。ここには重ねて書かない。**
-あの 2 項は文章を書くたびに掛かるため、常時ロードされる `CLAUDE.md` に置く
-（`PDH-AGENTS.md`「Where A Rule Belongs」の 2 問目 — skill は呼ばれたときしか読まれない）。
-このファイルは、`CLAUDE.md` に無い共通規則だけを持つ。
+⚠ **会話への返答や作業報告には掛けない。**それらは残らないので、規則を掛ける相手が違う。掛けるべき文章を書く skill（[pdh-dev](../pdh-dev/SKILL.md)、[pdh-decision-board-base](../pdh-decision-board-base/SKILL.md)）が、このファイルを読めと指示する。⚠ **常時ロードされる `CLAUDE.md` へ移さない** — PDH の文章を書くときにしか要らない規則を、毎ターンの context に載せることになる。
 
-この規則の上に載る規範が 2 つある。書籍・記事の原稿には
-[japanese-tech-writing](../japanese-tech-writing/SKILL.md) を、読み物としてのリズム設計には
-[cognitive-rhythm-writing](../cognitive-rhythm-writing/SKILL.md) を追加で使う。
-判断ボードは [pdh-decision-board-base](../pdh-decision-board-base/SKILL.md) がこのファイルを参照する。
+書籍・記事の原稿には [japanese-tech-writing](../japanese-tech-writing/SKILL.md) を、読み物としてのリズム設計には [cognitive-rhythm-writing](../cognitive-rhythm-writing/SKILL.md) を追加で使う。どちらも PDH の成果物には掛からない。
+
+## 主語と目的語
+
+**何が何をするのかが、その文だけで分かるようにする。**主語または目的語が落ちていて、読み手が前の文から補わないと意味が決まらない文を書かない。
+
+- ❌ 「承認後に修正する」— 誰が何を修正するのか決まらない。
+- ✅ 「承認後に、書き手が ticket の AC を修正する」。
+
+⚠ **日本語は主語を省いても文が成立してしまう。**成立することと、読み手が復元せずに読めることは別である。
+
+## 参照先
+
+**指示語の指す先を、読み手が探さなくてよいようにする。**「これ」「それ」「上記」「同様に」「前述の」を、指す対象が段落をまたぐ位置で使わない。対象を名指しする。
+
+- ❌ 「これを承認者へ返す」— 直前の段落に候補が 3 つあると決まらない。
+- ✅ 「選んだ選択肢の記号と、メモ欄の文面を承認者へ返す」。
+
+規約や別ファイルを根拠にするときは、ファイル名だけを指さず、判断に必要な規則本文をその場で引用または要約する。
 
 ## 強調の上限
 
