@@ -25,23 +25,27 @@ description: "PDH Coding Standards: 実装担当が実装時に参照するル�
 - Implementation Notes が空でも実装できる責務を持つ (実コード詳細の調査は実装担当の責務)
 - signature 不一致を理由に止まらない。これは ticket 粒度の罠であり、escalate する（solo の場合は `<RESULT_FILE>` / Open Questions に記録、team の場合は PM に flag する）
 
-## Ticket immutable rule (絶対遵守)
+## ticket の変更は再合意で行う (絶対遵守)
 
-ticket の以下を implementor が **勝手に書き換えてはいけない**:
+**判断の基準は Why / Problem を解けるかである。**Acceptance Criteria はそのための手段であり、守り切ること自体が目的ではない。Why を解けない AC は、合意し直して変える。
+
+禁じるのは**独断で変えること**である。implementor は次を勝手に書き換えない。
 
 - **Acceptance Criteria**
 - **Architectural Invariants check**
 - **Out-of-scope**
 
-変更が必要だと判断したら、**実装を止めてエスカレーション**する（team の場合は PM に escalate、solo / bot の場合は `<RESULT_FILE>` に `STATUS: BLOCKED` を書いて中断し、ユーザーが判断できるよう記録する）。承認を得て ticket が更新されるまで実装を進めない。
+変更が必要だと判断したら、**実装を止めてエスカレーション**する（team の場合は PM に escalate、solo / bot の場合は `<RESULT_FILE>` に `STATUS: BLOCKED` を書いて中断し、ユーザーが判断できるよう記録する）。合意を得て ticket が更新されるまで実装を進めない。**合意すればいくらでも変えてよい** — 変えられないのではなく、独断では変えられない。
 
 これは「意思決定者の意思を上書きしない」ための gate。違反すると ticket が "意思決定者の意思" を持たなくなり、ticket そのものの価値が消失する。
 
-### 確定判断 (Design Decisions) は上の 3 つと同じ扱いにしない
+⚠ **同じ ticket で AC が何度も変わるなら、AC ではなく Why の理解が違う。**直し続けている状態は、解こうとしている問題を取り違えているサインである。AC の再合意を重ねる前に、Why / Problem に戻って合意し直す。
+
+### 確定判断 (Design Decisions) は再合意まで要らない
 
 解き方は実装で前提が崩れる。崩れた判断に従い続けると AC から遠ざかり、ticket は「承認された時点で正しかった解き方」を保持したまま実物と食い違う。次の 3 つを満たす限り、implementor が書き換えてよい。
 
-1. **上の 3 つを動かさない。**AC・Architectural Invariants check・Out-of-scope のどれかが動くなら、それは解き方の変更ではなく契約の変更である。実装を止めて escalate する。
+1. **上の 3 つを動かさない。**AC・Architectural Invariants check・Out-of-scope のどれかが動くなら、それは解き方の変更ではなく合意の変更である。実装を止めて escalate する。
 2. **旧判断を消さない。**該当行を新しい判断へ書き換え、**元の判断・崩れた前提・新しい判断**を 1 行残す。
 3. **close 前 gate の板に出す。**承認者は実装前 gate でこの解き方ごと承認している。変わったことを知らせずに close を承認させない。
 
