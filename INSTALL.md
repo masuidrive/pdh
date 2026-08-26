@@ -66,9 +66,6 @@ bash ticket.sh init
 | `tmp/pdh/skills/pdh-decision-board-base/` | `.claude/skills/pdh-decision-board-base/` | 判断ボードの共通規則と renderer（分冊 `*.md` / `kit/`（CSS・JS・見本）/ `tools/`（組み立てと静的検査。bash と awk だけで動く）を**ディレクトリごと**コピーする） |
 | `tmp/pdh/skills/pdh-ticket-decision-board/SKILL.md` | `.claude/skills/pdh-ticket-decision-board/SKILL.md` | 実装前 gate（AC 承認）の判断ボードスキル — base への差分 |
 | `tmp/pdh/skills/pdh-close-decision-board/` | `.claude/skills/pdh-close-decision-board/` | close 前 gate（達成の確認と close 承認）の判断ボードスキル — base への差分と、当たる ticket だけ読む `ship-risk.md`（**ディレクトリごと**コピーする） |
-| `tmp/pdh/skills/common-writing/SKILL.md` | `.claude/skills/common-writing/SKILL.md` | 文章の共通規則（判断ボードの本文が従う） |
-| `tmp/pdh/skills/japanese-tech-writing/SKILL.md` | `.claude/skills/japanese-tech-writing/SKILL.md` | 日本語技術文書の文章規範（common-writing から参照） |
-| `tmp/pdh/skills/cognitive-rhythm-writing/SKILL.md` | `.claude/skills/cognitive-rhythm-writing/SKILL.md` | 説明文の認知リズム規範（common-writing から参照） |
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
 | `tmp/pdh/templates/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH 汎用 agent ルール |
 | `tmp/pdh/templates/CLAUDE.local.md.example` | `CLAUDE.local.md.example` | 環境固有 agent メモのサンプル（実体は commit しない） |
@@ -92,7 +89,7 @@ Codex CLI はプロジェクト直下の `.agents/skills/` を skill として�
 
 ```bash
 mkdir -p .agents/skills
-for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing japanese-tech-writing cognitive-rhythm-writing; do
+for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board; do
   ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done
 ```
@@ -395,6 +392,15 @@ rm -rf tmp/pdh
 
 ### 既知の移行手順
 
+#### 文章 skill 3 本が削除された（2026-08-26 以降）
+
+`common-writing` / `japanese-tech-writing` / `cognitive-rhythm-writing` を削除した。**判断ボードと ticket に効いていたのは «承認者に復元作業をさせない» 3 項だけで、それは `pdh-decision-board-base/final-check.md` の「文」の層にある。**残りは書籍・記事の原稿向けの規範で、板の読み手にプラスにならないまま 39.6 KB が配布されていた。
+
+```bash
+rm -rf .claude/skills/common-writing .claude/skills/japanese-tech-writing .claude/skills/cognitive-rhythm-writing
+rm -f .agents/skills/common-writing .agents/skills/japanese-tech-writing .agents/skills/cognitive-rhythm-writing
+```
+
 #### 判断ボードの evals / 検査 script が配布物から外れた（2026-08-26 以降）
 
 `pdh-decision-board-base/` から次が消えた。**どれも配布先では使わないもので、残しても害だけがある。**
@@ -422,7 +428,7 @@ cp -r tmp/pdh/skills/pdh-close-decision-board/ .claude/skills/pdh-close-decision
 
 #### pdh-ticket-decision-board の 3 分冊化 + close 前 gate の追加（2026-08-20 以降）
 
-**判断ボード skill は 3 つの構成になった。**gate と媒体に依存しない共通規則・renderer 分冊・kit（CSS/JS/検査 script）は新設の `pdh-decision-board-base` が持ち、`pdh-ticket-decision-board`（実装前 gate）と新設の `pdh-close-decision-board`（close 前 gate）は base への差分だけを持つ。本文の文章規則は新設の `common-writing` を参照する。
+**判断ボード skill は 3 つの構成になった。**gate と媒体に依存しない共通規則・renderer 分冊・kit（CSS/JS/検査 script）は新設の `pdh-decision-board-base` が持ち、`pdh-ticket-decision-board`（実装前 gate）と新設の `pdh-close-decision-board`（close 前 gate）は base への差分だけを持つ。
 
 **⚠ 単なるファイル追加ではない。**旧 `pdh-ticket-decision-board/` に入っていた `render-html-common.md` / `create-doc.md` / `create-slides.md` / `examples.md` は base 側へ移動して内容も更新されているため、**旧配置のまま残すと 2 系統の規則が食い違う。**
 
@@ -433,8 +439,7 @@ rm -rf .claude/skills/pdh-ticket-decision-board
 cp -r tmp/pdh/skills/pdh-decision-board-base/ .claude/skills/pdh-decision-board-base/
 cp -r tmp/pdh/skills/pdh-ticket-decision-board/ .claude/skills/pdh-ticket-decision-board/
 cp -r tmp/pdh/skills/pdh-close-decision-board/ .claude/skills/pdh-close-decision-board/
-cp -r tmp/pdh/skills/common-writing/ .claude/skills/common-writing/
-for s in pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing japanese-tech-writing cognitive-rhythm-writing; do
+for s in pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board; do
   ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done
 ```
@@ -495,7 +500,7 @@ README.md 側にも INSTALL.md へのリンクを残してあるので、古い 
 
 ```bash
 # 旧 wrapper があれば撤去し、symlink に置き換える（冪等）
-for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing japanese-tech-writing cognitive-rhythm-writing; do
+for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board; do
   [ -e ".agents/skills/$s" ] && [ ! -L ".agents/skills/$s" ] && rm -rf ".agents/skills/$s"
   [ -d ".claude/skills/$s" ] && ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done

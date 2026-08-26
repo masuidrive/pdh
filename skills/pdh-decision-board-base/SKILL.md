@@ -10,8 +10,7 @@ description: 判断ボード（PDH の human gate 用 Completed Staff Work）の
 - 実装前 gate（`PDH-ticket-human-review`）— [pdh-ticket-decision-board](../pdh-ticket-decision-board/SKILL.md)
 - close 前 gate（`PDH-human-review`）— [pdh-close-decision-board](../pdh-close-decision-board/SKILL.md)
 
-判断ボードを作るときは必ずこのファイルと該当 gate の skill を読み、媒体を選んだ後だけ該当する renderer を読む。**board の文章は [common-writing](../common-writing/SKILL.md) に従う。**
-
+判断ボードを作るときは必ずこのファイルと該当 gate の skill を読み、媒体を選んだ後だけ該当する renderer を読む。
 ## 判断ボードとは何か
 
 **判断ボードとは、承認者に留保された判断について coding agent が作成する Completed Staff Work （CSW）である。**実装の途中で AC を変える承認は、どちらの gate の対象でもない。
@@ -65,7 +64,7 @@ flowchart TD
 | 3 | 「判断の数でモードを選ぶ」 |
 | 4 | gate skill の主線固定部、「主線の構成 — 共通則」「決定サマリー」「Acceptance Criteria の書き方」 |
 | 5 | 「判断カードの型 — approve or direct」、gate skill「選択肢と ticket を一対一にする」 |
-| 6 | 「読み手の仕事を増やさない」「数と断定の扱い」「読み手を決める」、[common-writing](../common-writing/SKILL.md) |
+| 6 | 「読み手の仕事を増やさない」「数と断定の扱い」「読み手を決める」 |
 | 7 | 「媒体を選ぶ」と、選んだ媒体の renderer 分冊 |
 | 8 | [final-check.md](final-check.md)（形・文・判断） |
 | 9 | 「発行」 |
