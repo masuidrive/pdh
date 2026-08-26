@@ -109,4 +109,25 @@ if bash "$TOOLS_DIR/../kit/check-contrast.sh" "$SELFTEST_TMP/broken-tokens.css" 
 fi
 echo 'PASS check-contrast.sh: 壊した palette を反証'
 
+# measure.sh — 境目が主線を縮めること、増加を打ち切ること
+cp "$FIXTURES_DIR/pixel.svg" "$SELFTEST_TMP/"
+sed 's|<section class="answer-set"|<section data-backing class="answer-set"|' \
+  "$FIXTURES_DIR/good.html" > "$SELFTEST_TMP/backing.html"
+"$TOOLS_DIR/build.sh" --body "$SELFTEST_TMP/backing.html" --out "$SELFTEST_TMP/backing.built.html" >/dev/null 2>&1
+whole=$(bash "$TOOLS_DIR/measure.sh" "$SELFTEST_TMP/good.html" 2>/dev/null | awk '/主線の量/ { print $2 }')
+cut=$(bash "$TOOLS_DIR/measure.sh" "$SELFTEST_TMP/backing.built.html" | awk '/主線の量/ { print $2 }')
+if [ "$cut" -ge "$whole" ]; then
+  echo "FAIL measure.sh: data-backing が主線を縮めませんでした（$whole -> $cut）" >&2
+  exit 1
+fi
+if ! bash "$TOOLS_DIR/measure.sh" "$SELFTEST_TMP/good.html" 2>/dev/null | grep -q '判断の数 N: 1'; then
+  echo 'FAIL measure.sh: data-q を 1 件と数えませんでした（埋め込み CSS/JS を拾っている）' >&2
+  exit 1
+fi
+if bash "$TOOLS_DIR/measure.sh" "$SELFTEST_TMP/good.html" --prev 1 >/dev/null 2>&1; then
+  echo 'FAIL measure.sh: 主線が増えたのに打ち切りませんでした' >&2
+  exit 1
+fi
+echo 'PASS measure.sh: 境目・判断数・打ち切り'
+
 echo 'PASS selftest'

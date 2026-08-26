@@ -58,3 +58,16 @@ build は JSON 設定を読みません。
 ## この道具が検査しないもの
 
 節・カード・AC・判断・見出しの数や有無は、検査にも出力にも入れません（板の形は案件ごとに違うため）。例外はタグの均衡だけで、それも不一致のタグ名と差しか出しません。
+
+## 読む量を測る
+
+`measure.sh` は、板の **判断の数 `N`・主線の面数・主線の量（byte）**を出します。
+
+```bash
+bash tools/measure.sh board.html
+bash tools/measure.sh board.html --prev 8900   # 増えていたら exit 1
+```
+
+主線と裏付けの境目は、HTML では**最初の `data-backing` 属性**、Markdown では**本文が「裏付け」で始まる見出し行**です。境目が無い板は全体を主線として測り、そのことを警告します。埋め込んだ kit の CSS / JS は数えません。
+
+**なぜ byte か** — 周をまたいで比べるための単位なので、awk の実装や locale で揺れないことだけが要ります。使い方は [final-check.md](../final-check.md)「量の門」が定めます。
