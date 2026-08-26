@@ -35,7 +35,7 @@ scripts/
   checks/*.check                     # この repo 用 fast-check レジストリ
 ```
 
-`scripts/` 直下のうち `hookbus.js` だけが配布物。他は PDH repo 自身の検査であり、配布先へコピーしない（`templates/` 側に配布用の同名テンプレートがある）。配布しないので `AI-4`（配布物は Markdown / bash のみ）の対象外であり、`check-links.py` のように適した言語を使ってよい。
+`scripts/` 直下のうち `hookbus.js` だけが配布物。他は PDH repo 自身の検査であり、配布先へコピーしない（`templates/` 側に配布用の同名テンプレートがある）。配布しないので `AI-4`（配布物の実行依存は標準的な Unix 環境に入っているものだけ）の対象外であり、`check-links.py` のように適した言語を使ってよい。
 
 # 基本方針
 
