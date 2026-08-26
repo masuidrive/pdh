@@ -88,19 +88,16 @@ PDH-open → PDH-ticket-review → PDH-ticket-human-review → PDH-implement →
 
 **ユーザ確認が必須の gate:**
 
-| Gate | タイミング | 報告内容 |
-|---|---|---|
-| **PDH-ticket-human-review 承認** | ticket contract check 後、実装に入る前 | ticket review で修正した点、全体概要、達成するもの、AC、Architectural Invariants check、確定判断、out-of-scope、判断ポイントを提示 |
-| **PDH-human-review 承認** | PDH-verify 完了後、close 前 | やったこと、達成したこと、テスト結果、AC 達成状況、実環境動作確認結果、ユーザ自身の確認手順、残課題。**特に「既存問題」「対応検討」「スコープ外」と記載された項目は個別に列挙し、対応方針をユーザに確認する** |
+| Gate | タイミング |
+|---|---|
+| **PDH-ticket-human-review 承認** | ticket contract check 後、実装に入る前 |
+| **PDH-human-review 承認** | PDH-verify 完了後、close 前 |
 
-**gate は毎回必ずユーザに確認すること（絶対原則）:** たとえユーザがそれまで全ての質問に「yes」「OK」「y」と答え続けていたとしても、gate（PDH-ticket-human-review / PDH-human-review）では必ず立ち止まってユーザに確認する。「前回 OK だったから今回も OK だろう」という推測で gate をスキップしてはならない。window が AskUserQuestion を出さずに止まった場合でも、Director が代わりに承認・クローズを指示するのではなく、まずユーザに状況を報告して承認を得ること。
+⚠ **何を報告するかは `PDH-AGENTS.md`「Human Gate Materials」が定める。**gate ごとの必須項目はそこにしか無い — ここへ写さない。
 
-**gate 報告時の必須アクション:** ユーザに承認を求める前に、Director は必ず `ticket.sh start`/`restore` 出力の `ticket:`/`note:` パス（互換 symlink: `current-ticket.md`/`current-note.md`）を Read し、**ユーザがこの材料だけで判断できる 1 枚の文書**を作成すること。含めるもの:
-- チケットの目的・背景（Why）
-- 実装の全体像（変更ファイル、変更規模、依存関係への影響）
-- レビューで発見・修正された重要ポイント
-- AC の変更点（あれば）
-- 懸念事項・リスク
+**gate は毎回必ずユーザに確認すること（絶対原則）:** たとえユーザがそれまで全ての質問に「yes」「OK」「y」と答え続けていたとしても、gate（PDH-ticket-human-review / PDH-human-review）だけは自動承認と見なさない。
+
+**gate 報告の前に、Director 自身が裏取りする。**`ticket.sh start`/`restore` 出力の `ticket:` / `note:` パス（互換 symlink: `current-ticket.md` / `current-note.md`）を Read し、window の報告と突き合わせてから材料を組む。窓の自己申告をそのまま流さない。
 
 ---
 
