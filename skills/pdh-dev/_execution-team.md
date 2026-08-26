@@ -101,7 +101,8 @@ Claude CodeがmainでcodexをworkerへspawnするときはBashツールで直接
 独立workerは同一Bash呼出し内でbackground並行起動し、PIDごとに`wait`してexit codeを回収する。各workerへ専用dirとresult fileを割り当て、同一fileへの同時書込みを避ける。
 
 ```bash
-declare -A PID2NAME RC
+# ⚠ 連想配列 (declare -A) を使わない — macOS 既定の bash 3.2 に無い
+pids=/tmp/wk-pids; rcs=/tmp/wk-rc; : > "$pids"; : > "$rcs"
 launch() { # launch <name> <engine> <promptfile>
   local name="$1" engine="$2" pf="$3" d="/tmp/wk-$1"
   mkdir -p "$d"
@@ -110,12 +111,12 @@ launch() { # launch <name> <engine> <promptfile>
   else
     claude -p < "$pf" > "$d/stdout.log" 2> "$d/stderr.log" &
   fi
-  PID2NAME[$!]="$name"
+  echo "$! $name" >> "$pids"
 }
-for pid in "${!PID2NAME[@]}"; do
-  wait "$pid"
-  RC[${PID2NAME[$pid]}]=$?
-done
+# …launch を worker の数だけ呼ぶ…
+while read -r pid name; do
+  wait "$pid"; echo "$name $?" >> "$rcs"
+done < "$pids"
 ```
 
 workerごとにrc、resultとstderrの`ls -l`、stderr末尾120行を診断証跡へ残す。 non-zero rcまたは空もしくは欠落resultでは、rcとstderrを併読して報告する。 spawn失敗時は単独続行しない。

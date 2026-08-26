@@ -101,14 +101,7 @@ rg -n 'AC10|pop-ac10-' <board.html>
 
 ## クラスが実在し、期待した役割かを確認する
 
-HTML の `class` 値を全部出し、同じファイルの selector に定義があるかを確認する。一般語の短いクラス名を、別部品へ再利用しない。存在するが役割が違うクラスも不正である。
-
-```bash
-rg -o 'class="[^"]+"' <board.html> | sort -u
-rg -n '\.(answer-choice|answer-note|answer-progress|<class-name>)([^a-zA-Z0-9_-]|$)' <board.html>
-```
-
-⚠ **計算値をブラウザで読んで確かめる、はここには書かない。**skill の中からブラウザは開けない。kit の class が期待どおり効くことは `kit/board.css` が保証し、`kit/README.md`「kit が保証している挙動」がその一覧を持つ。ここで確かめるのは**板が書いた class に定義があるか**だけで、それは `check-static.sh` の「未定義 class」が拾う。
+**使った class に定義があるかは `check-static.sh` の「未定義 class」が拾う。**書き手がすることは 2 つ — **一般語の短いクラス名を別部品へ再利用しない**こと、**存在するが役割が違うクラスを使わない**こと。どちらも定義の有無では検出できない。
 
 見た目のためだけに新しいクラスを増やさない。必要な役割が既存 token と素の要素で表せる場合は、新しい selector を作らない。
 

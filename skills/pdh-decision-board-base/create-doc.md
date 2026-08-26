@@ -53,18 +53,16 @@ kit v2 で確定した共有部品。CSS は `kit/board.css` にある（文書�
 - **timeline** — 経緯を時系列で。1 行 = 事実 1 つ、日付必須。 `<ul class="tl"><li class="warn|mark"><time>2026-08-12</time>事実</li></ul>` （`warn` = 問題が起きた行、`mark` = この board に関わる行）
 - **compare** — 軸を固定して案を横に比べる。軸の 1 本目は «ゴールへの効き»（Why / AC の言葉で）、続けて「利用者から見て / コスト / 取り返し」を既定にし、案ごとに違う観点で書かない。セルは 1 文まで、3 案まで（4 案以上は判断カードの縦積みへ）。 `<div class="table-wrap compare"><table><thead><tr><th></th><th class="rec">A 案<span class="tag">推奨</span></th>…</thead><tbody><tr><th>軸名</th><td class="rec">…</td>…</tbody></table></div>` （推奨列のセル全部に `class="rec"`）
 - **quote** — 報告・発言は要約で潰さず原文で引用する。出典（誰・どこ・いつ）必須。 `<blockquote class="quote"><p>原文</p><cite>誰 · どこ · いつ</cite></blockquote>`
-- **fig** — 画像・SVG 図・flowchart の共通枠。caption に「何を見てほしいか」を必ず書く。**箱は中身の幅に合わせて縮む**（表や図解のように広い中身は列いっぱいになる） — 狭い画像を列いっぱいの箱に入れると、右に大きな空白が残って «幅が揃っていない» と読める。⚠ それでも、**像は承認者が実際に見る幅で撮る**（SKILL.md「判断カードの型」）。箱が縮むことは、小さく撮ってよい理由にはならない。 `<figure class="fig"><div class="bar"><b>題</b><span class="badge">種別</span></div><div class="media">img / svg / pre.mermaid</div><figcaption>見てほしい点</figcaption></figure>` （余白が要る図は `.media.pad`。手描き SVG の色は `style="fill:var(--…)"` で token 参照 — presentation attribute では var() が効かない）
+- **fig** — 画像・SVG 図・flowchart の共通枠。caption に「何を見てほしいか」を必ず書く。⚠ **像は承認者が実際に見る幅で撮る**（SKILL.md「判断カードの型」）。箱が縮むことは、小さく撮ってよい理由にはならない。 `<figure class="fig"><div class="bar"><b>題</b><span class="badge">種別</span></div><div class="media">img / svg / pre.mermaid</div><figcaption>見てほしい点</figcaption></figure>` （余白が要る図は `.media.pad`。手描き SVG の色は `style="fill:var(--…)"` で token 参照 — presentation attribute では var() が効かない）
 - **mermaid** — 分岐・順序・依存は `pre.mermaid` に mermaid ソースで書き、`.fig` の `.media.pad` に入れる。描画機構（bundle の inline 手順・失敗時の挙動）は kit/README「mermaid の差し込み」にある。
 - **details.fold** — 根拠の詳細（確認コマンド・生出力・数え上げ・手順詳細）を 1 手で開く汎用の畳み。
   `<details class="fold"><summary>「変更無し」の追跡 — 出荷物への同梱と参照の 2 方向</summary>…</details>`
   （summary は例のように結論そのものを書く — base「作業経緯は畳む」の見出し規則と同じ。
   AC 原文専用の `.acx` とは別部品。何を主線に置き何を裏付け・畳みにするかは gate skill の主線固定部が定める）
 - **目次** — 節が 5 つを超える board に置く。`<div class="layout"><nav class="toc" id="toc"><button class="toc-t" type="button" id="toct">目次</button><ol><li><a href="#節id">節名</a></li>…</ol></nav><div class="content">…全節…</div></div>`
-  で本文を包む（節は `<section id>` 前提 — 既定どおり）。現在地・狭い画面の目次ボタン・h2 の
-  stuck 切り詰めは page.js が担う。**判断のある節の行末には ✓ が出る**（board.js が付ける。
-  規則は `answer-form.md`「判断がある節は、目次から分かるようにする」）。⚠ アンカーの宛先を
-  見出しではなく `<section id>` にすること — 見出しに向けると選択肢が宛先の中に入らず、
-  **判断のある節が «判断なし» に見える。**
+  で本文を包む。⚠ **アンカーの宛先を見出しではなく `<section id>` にすること** — 見出しに
+  向けると選択肢が宛先の中に入らず、**判断のある節が «判断なし» に見える**（`check-static.sh`
+  の「ページ内参照」が拾う）。
 
 ## 文書固有の発行前検査
 
