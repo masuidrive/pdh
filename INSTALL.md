@@ -63,7 +63,7 @@ bash ticket.sh init
 | `tmp/pdh/skills/pdh-check-writing/SKILL.md` | `.claude/skills/pdh-check-writing/SKILL.md` | 宣言型 `.check` 執筆スキル |
 | `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
 | `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
-| `tmp/pdh/skills/pdh-decision-board-base/` | `.claude/skills/pdh-decision-board-base/` | 判断ボードの共通規則と renderer（分冊 `*.md` / `evals/` / `kit/`（CSS・JS・見本）/ `tools/`（組み立て・静的検査・読む量の測定。bash と awk だけで動く）を**ディレクトリごと**コピーする） |
+| `tmp/pdh/skills/pdh-decision-board-base/` | `.claude/skills/pdh-decision-board-base/` | 判断ボードの共通規則と renderer（分冊 `*.md` / `evals/` / `kit/`（CSS・JS・見本）/ `tools/`（組み立てと静的検査。bash と awk だけで動く）を**ディレクトリごと**コピーする） |
 | `tmp/pdh/skills/pdh-ticket-decision-board/SKILL.md` | `.claude/skills/pdh-ticket-decision-board/SKILL.md` | 実装前 gate（AC 承認）の判断ボードスキル — base への差分 |
 | `tmp/pdh/skills/pdh-close-decision-board/` | `.claude/skills/pdh-close-decision-board/` | close 前 gate（達成の確認と close 承認）の判断ボードスキル — base への差分と、当たる ticket だけ読む `ship-risk.md`（**ディレクトリごと**コピーする） |
 | `tmp/pdh/skills/common-writing/SKILL.md` | `.claude/skills/common-writing/SKILL.md` | 文章の共通規則（判断ボードの本文が従う） |
