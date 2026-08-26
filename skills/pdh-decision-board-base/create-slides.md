@@ -77,110 +77,13 @@ const top = [...document.querySelectorAll('.p')]
 
 各列へ同じ数の縦面を作らない。深い列は、判断材料が重い場所を地図の形で示す。下に面がある場合は矢印だけでなく、**何を確かめられるか**を語で書く。読み手が降りる前に、降りる価値を判断できるようにする。
 
-## 入れ子の scroll-snap
+## 面に収まらないとき
 
-横の `.deck` と縦の `.deck-col` を別の scroll container にし、面 `.p` は縦の snap 点にする（実装は `kit/deck.css`）。DOM は `<div class="deck">` → `<div class="deck-col">` → `<section class="p"><div class="in">…</div></section>` の入れ子で書く。
+デッキの**移動・現在地・面の高さ・自動縮小・表の組み替え**は `kit/deck.css` と `kit/deck.js` が引き受ける（一覧は [kit/README.md](kit/README.md)「kit が保証している挙動」）。書き手が決めるのは次の 3 つだけである。
 
-面の箱全体を `--measure` へ制限しない。散文だけを制限し、見出し、表、カードは面幅を使う。 `--measure` は文字数の制約なので `em` のまま使う。
-
-横移動で離れた列は、画面外に出てから一番上へ戻す。来る列をその場で戻すと、読み手の目の前で内容が飛ぶ。戻す処理は即時にし、初回読み込みでは実行しない。初回に戻すと `#p3-2` のような直接参照を壊すため、デッキが一度横へ動いた後だけ有効にする。
-
-## キー操作
-
-入れ子の scroll container では、ブラウザ既定の矢印操作が focus 位置で変わる。次を明示的に処理する。
-
-- `ArrowRight` / `ArrowLeft` — 隣の横列へ移動する。端では何もしない。
-- `ArrowDown` / `ArrowUp` / `Space` / `PageDown` / `PageUp` — 同じ列の縦面へ移動する。端では何もしない。
-- input、textarea、select、contenteditable に focus がある場合は横取りしない。
-- Ctrl、Alt、Meta などの修飾キーが押されている場合は横取りしない。
-
-## 画面を押す操作
-
-キーボードのない端末向けに、画面座標から移動方向を決める。
-
-```text
-┌─────┬───────────────┬─────┐
-│     │   上 1/4  ▲   │     │
-│  ◀  ├───────────────┤  ▶  │
-│ 1/4 │   中央は空ける   │ 1/4 │
-│     ├───────────────┤     │
-│     │   下 1/4  ▼   │     │
-└─────┴───────────────┴─────┘
-```
-
-左 1/4 と右 1/4 は横移動、中央 2/4 の上 1/4 と下 1/4 は縦移動に使う。中央は文字選択と回答操作のために空ける。
-
-透明な hit area を重ねない。document の click を 1 つ受け、座標から方向を計算する。次の場合は移動しない。
-
-- 押した要素が `a, button, textarea, input, select, label`、⚠ **`[role="button"]`、 `.answer-choice`**、回答フォーム、地図の内側。
-- `String(getSelection())` が空でなく、文字を選択している。
-- その方向に移動先がない。
-
-⚠ **選択肢のカードを除外し忘れると、«選ぶと同時に次の面へ動く»。**カードは `<button>` ではなく `role="button"` の `div` なので、`button` だけを見る判定では素通りする。**カードは面の幅いっぱいに広がるため、左 1/4 と右 1/4 の «送り» ゾーンに必ず重なる** —つまり**カードの端を押した人だけが飛ばされる**。出荷して指摘された（「選択して勝手に次頁に行くのも駄目」）。
-
-**この検査は «外して落ちること» まで確かめる。**除外を外すと同じ操作で面が動くことを確認してから、戻す。**押しても動かないことを見るだけでは、検査が効いているのか、そもそもその座標が送りゾーンでないのかが区別できない。**
-
-hover の判定は event target ではなく `elementFromPoint` を使う。合成イベントや親要素で受けた mousemove の target が、実際にポインタ直下の要素とは限らないためである。移動可能な方向だけ三角の色と拡大率を変え、cursor を pointer にする。操作できないフォーム上で矢印を光らせない。
-
-## 現在地
-
-### 右下の地図
-
-横を列、縦を深さとする枡を作る。枡数をデッキ構造と一致させ、現在の面を塗る（`kit/deck.js` が採番済みの構造から生成する）。`IntersectionObserver` の既定は `threshold: 0.6` とする。これは移動途中に 2 面が同時選択されにくい実測由来の目安である。各枡は `<a href="#p3-2">` にし、click 処理を自前で持たないリンクとして働かせる。
-
-### 4 辺の三角
-
-移動先がある辺だけ表示する。常時 4 つを表示しない。三角は低い不透明度で置き、 `pointer-events: none` にする。click の方向判定は座標で行い、三角自体を hit area にしない。
-
-地図番号、数字カード、回答進捗へ同じ一般名の class を使わない。部品の役割を含む名前を付け、 `render-html-common.md` のクラス検査を行う。
-
-## 1 面を 1 画面へ収める
-
-`min-height: 100dvh` の要素に `scrollHeight > clientHeight` を当てると、内容に合わせて `clientHeight` も伸び、overflow を見落とす。`height: 100dvh` に固定し、面の実寸と viewport を比べる。
-
-```js
-const deck = document.getElementById('deck');
-const vh = deck.clientHeight;
-[...deck.querySelectorAll('.p')]
-  .map(p => ({ id: p.id, ratio: p.getBoundingClientRect().height / vh }))
-  .filter(item => item.ratio > 1.02);
-```
-
-狭い画面で測る。判断に使う 1 段目は `1.05` 以下を目安とする。裏付けは、読み手が降りると決めているため `1.2` 程度まで許容できる。いずれも実測由来の目安であり、内容が読めることをスクリーンショットで確認する。
-
-収まらないときは情報を削らず、判断情報なら横、裏付けなら縦へ面を分ける。
-
-## 自動縮小と fallback scroll
-
-viewport ごとの手詰めを避け、面の高さを `100dvh` に固定したうえで内容を縮小する（実装は `kit/deck.css` の `.p` / `.p > .in` / `.p.spill` と `kit/deck.js` の `fitAll`）。 kit の実装が守っていること:
-
-- `transform-origin` は `center top`。`center center` では、面より高い内容の中心を軸に縮小し、塊が下へずれる。
-- `transform: scale` を使う。`zoom` は再レイアウトで高さを変えるため、倍率計算を反復させる。
-- overflow の高さは `scrollHeight` で測る。flex item の `offsetHeight` は面の高さへ丸められうる。
-- 内容が溢れる場合は `scrollHeight` に含まれない下 padding を足す。
-- 縮小の下限（`deck.js` の `MIN`、1 か所だけで持つ）に達したら内容を切らず、その面だけ `.spill` で縦 scroll を許す。下限は最後の逃げ道で、ふだんは面を割って避ける。
-- 高さだけでなく、面と内容の上端・下端を比較する。
-
-```js
-const pageRect = p.getBoundingClientRect();
-const innerRect = p.firstElementChild.getBoundingClientRect();
-const outside = (pageRect.top - innerRect.top > 1) || (innerRect.bottom - pageRect.bottom > 1);
-```
-
-検査が働くか、十分に高い probe を一時挿入して確認する。`transform-origin` を一時的に誤った値へ戻すなど、直した欠陥を検査が検出することも確認する。
-
-## 表は横に切らない
-
-判断材料の列が画面外に隠れると、読み手は存在に気づけない。
-
-- 表を `width: 100%; max-width: 100%; table-layout: auto` にする。
-- `white-space: nowrap` を header と色分け class の両方から除く。
-- 縦へ伸びた分は、自動縮小または面の分割で処理する。
-- 狭い画面では、表を 1 行 1 カードへ組み替える。既定境界 `760px` は実測由来の目安である。
-- header の語は `kit/deck.js` が各 cell の `data-label` へ写す。手で複製しない。
-- label は cell 内の同じ行へ置く。label 専用行や固定幅の左列を増やし、縦長にしない。
-
-各表で `scrollWidth > clientWidth` の cell または wrapper がないことを、想定 viewport 全部で測る。
+- **面の箱全体を `--measure` へ制限しない。**散文だけを制限し、見出し・表・カードは面幅を使う。
+- **収まらない面は、情報を削らずに分ける。**判断に使う内容なら横（列を足す）、裏付けなら縦（段を足す）。縮小に頼り切らない。
+- **判断材料の列を、表の外へ出さない。**列が画面外に隠れると読み手は存在に気づけない。列が多いなら、判断に使う列だけを面に置き、全体は裏付けへ回す。
 
 ## 画像面の例外
 
