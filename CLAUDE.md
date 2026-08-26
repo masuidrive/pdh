@@ -26,6 +26,7 @@ templates/                           # 配布テンプレート
   CLAUDE.md                          # 配布先 project 固有ルールの雛形
   AGENTS.md                          # 他 agent platform 向け thin pointer
   checks/  *.sh                      # 配布 script 群
+evals/                               # 判断ボード skill の評価シナリオ（配布物ではない）
 scripts/
   hookbus.js                         # tmux worker hook event bus（配布物）
   test-all.sh                        # この repo 自身の検査（配布物ではない）
@@ -94,6 +95,7 @@ scripts/
 - **配布テンプレートを変更したら、実プロジェクトへの導入経路で確認する。** 最低でも、変更したファイルを実際にコピーして agent に読ませ、指示が破綻していないことを確認する
 - **`INSTALL.md` の手順を変更したら、その手順どおりにコマンドを実行して確認する**
 - **「ドキュメントを直した」だけで「正常に動作しています」と報告しない**
+- **判断ボード skill の散文規則（`skills/pdh-*decision-board*/` の `SKILL.md` と分冊）を変えたら、`evals/` の該当シナリオを回してから commit する。** どの eval がどの失敗形を見ているかは `evals/README.md` にある。回した結果は該当 eval の `実行記録` へ追記する — **旧版との比較があって初めて、その規則が振る舞いを変えたと言える**（`evals/eval-5` に 旧 4/7 → 新 7/7 の例がある）。回せなかったなら、回していないことを commit メッセージに書く
 
 ## 頻出の漏れ
 

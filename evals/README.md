@@ -4,6 +4,8 @@
 
 各シナリオは実際に起きた失敗の再現である。入力とタスクを fresh agent （この repo では claude opus と codex gpt-5.6-sol xhigh の両方）へ渡し、出力を expected_behavior と突き合わせる。
 
+path は repo root からの相対である。**この `evals/` は配布物ではない** — 配布先は skill の規則を変えないので、回す相手がいない（`scripts/` と同じ扱い）。
+
 ## 実行方法
 
 1. fresh agent に `SKILL.md`（と、シナリオが指定する分冊）を読ませる

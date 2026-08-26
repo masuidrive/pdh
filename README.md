@@ -219,12 +219,19 @@ pdh/
     pdh-check-writing/SKILL.md       ← 宣言型 `.check` 執筆スキル
     tmux-director/SKILL.md           ← tmux Director スキル
     pdh-update/SKILL.md              ← PDH アップデートスキル
-    pdh-ticket-decision-board/
-      SKILL.md                       ← 判断ボードスキル（媒体に依存しない規則。実装前 gate 用）
-      render-html-common.md          ← HTML renderer 2 種が共有する CSS・DOM・回答フォームの実装規則
+    pdh-decision-board-base/
+      SKILL.md                       ← 判断ボードの共通規則（gate と媒体に依存しない）
+      final-check.md                 ← 完成検査（形・文・判断の 3 層）
+      answer-form.md                 ← 回答フォームの DOM・状態・発行前検査
+      render-html-common.md          ← HTML renderer 2 種が共有する CSS・DOM の実装規則
       create-doc.md                  ← 1 枚の HTML 文書として組む renderer
       create-slides.md               ← 横に読み進める HTML 2 軸デッキとして組む renderer
+      risk-overlay.md                ← 基本規則を上書きする ticket の型
       examples.md                    ← 日付つきの事故・実測値（規則の根拠を確かめたいときだけ読む）
+      kit/                           ← 板が読み込む CSS・JS と見本
+      tools/                         ← 組み立てと静的検査（bash と awk だけ）
+    pdh-ticket-decision-board/SKILL.md ← 実装前 gate（AC 承認）の差分
+    pdh-close-decision-board/        ← close 前 gate の差分と ship-risk.md
   templates/
     product-brief.md                 ← Product Brief テンプレート
     technical-reference.md           ← Technical Reference テンプレート（現在の実装の How）
@@ -243,6 +250,7 @@ pdh/
     seed-pdh-verify.sh               ← PDH verify / human-review 用のローカル seed hook テンプレート
     test-ticket-local.sh             ← `ticket-local-test` 実行テンプレート
     .ticket-config.yaml              ← ticket.sh 設定テンプレート
+  evals/                             ← 判断ボード skill の評価シナリオ【配布物ではない】
   scripts/
     hookbus.js                       ← tmux Director hookbus (CLI + library + in-source vitest、1 ファイル完結)【配布物】
     test-all.sh                      ← この repo 自身の検査入口【配布物ではない】

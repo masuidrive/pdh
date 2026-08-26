@@ -63,7 +63,7 @@ bash ticket.sh init
 | `tmp/pdh/skills/pdh-check-writing/SKILL.md` | `.claude/skills/pdh-check-writing/SKILL.md` | 宣言型 `.check` 執筆スキル |
 | `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
 | `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
-| `tmp/pdh/skills/pdh-decision-board-base/` | `.claude/skills/pdh-decision-board-base/` | 判断ボードの共通規則と renderer（分冊 `*.md` / `evals/` / `kit/`（CSS・JS・見本）/ `tools/`（組み立てと静的検査。bash と awk だけで動く）を**ディレクトリごと**コピーする） |
+| `tmp/pdh/skills/pdh-decision-board-base/` | `.claude/skills/pdh-decision-board-base/` | 判断ボードの共通規則と renderer（分冊 `*.md` / `kit/`（CSS・JS・見本）/ `tools/`（組み立てと静的検査。bash と awk だけで動く）を**ディレクトリごと**コピーする） |
 | `tmp/pdh/skills/pdh-ticket-decision-board/SKILL.md` | `.claude/skills/pdh-ticket-decision-board/SKILL.md` | 実装前 gate（AC 承認）の判断ボードスキル — base への差分 |
 | `tmp/pdh/skills/pdh-close-decision-board/` | `.claude/skills/pdh-close-decision-board/` | close 前 gate（達成の確認と close 承認）の判断ボードスキル — base への差分と、当たる ticket だけ読む `ship-risk.md`（**ディレクトリごと**コピーする） |
 | `tmp/pdh/skills/common-writing/SKILL.md` | `.claude/skills/common-writing/SKILL.md` | 文章の共通規則（判断ボードの本文が従う） |
@@ -394,6 +394,20 @@ rm -rf tmp/pdh
 11. 後片付け: `rm -rf tmp/pdh`
 
 ### 既知の移行手順
+
+#### 判断ボードの evals / 検査 script が配布物から外れた（2026-08-26 以降）
+
+`pdh-decision-board-base/` から次が消えた。**どれも配布先では使わないもので、残しても害だけがある。**
+
+- `evals/` — 判断ボード skill 自身の評価シナリオ。skill の規則を変えるとき（＝ PDH repo 側）にしか回さない
+- `tools/check.js` と `tools/fixtures/broken-{a,d,h,i}.html`、`kit/check-contrast.py` — Node / Playwright / Python を要求していた。描画の確認はブラウザで、palette の検査は `kit/check-contrast.sh`（awk）で行う
+
+古い配置が残っていると、Playwright の導入を促す README や、回されない eval がプロジェクトに居座る。ディレクトリごと消してからコピーし直す。
+
+```bash
+rm -rf .claude/skills/pdh-decision-board-base
+cp -r tmp/pdh/skills/pdh-decision-board-base/ .claude/skills/pdh-decision-board-base/
+```
 
 #### pdh-close-decision-board が 2 ファイルになった（2026-08-26 以降）
 

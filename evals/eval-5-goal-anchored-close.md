@@ -1,10 +1,10 @@
 # eval-5 — close 板が、ticket のゴールへ向かう判断になっているか
 
-再現する失敗: 保存されている形も外部契約も変えない ticket の close 板で、データ構造と契約の «無し» の根拠に 2 節を使い、AC の達成は裏付けの奥に置き、判断カードの推奨を「小さい・きれい」で選んでいた。reviewer は「決められる」を返し、板は出た。発注者から「常に ticket のゴールに向けた意思決定のための文書になっているか」と問われて発覚した（examples.md 2026-08-26）。
+再現する失敗: 保存されている形も外部契約も変えない ticket の close 板で、データ構造と契約の «無し» の根拠に 2 節を使い、AC の達成は裏付けの奥に置き、判断カードの推奨を「小さい・きれい」で選んでいた。reviewer は「決められる」を返し、板は出た。発注者から「常に ticket のゴールに向けた意思決定のための文書になっているか」と問われて発覚した（`skills/pdh-decision-board-base/examples.md` 2026-08-26）。
 
 ## 読ませるもの
 
-`SKILL.md`、`final-check.md`、`../pdh-close-decision-board/SKILL.md`
+`skills/pdh-decision-board-base/SKILL.md`、`skills/pdh-decision-board-base/final-check.md`、`skills/pdh-close-decision-board/SKILL.md`
 
 ## 入力
 
