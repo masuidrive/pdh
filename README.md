@@ -256,6 +256,8 @@ pdh/
     test-all.sh                      ← この repo 自身の検査入口【配布物ではない】
     fast-checks.sh                   ← 同上（宣言的 grep 不変条件ランナー）
     check-distribution.sh            ← 同上（配布セットの一貫性検査）
+    check-board-render.sh            ← 同上（判断ボード kit の描画検査。kit を変えたときだけ回す）
+    board-check/                     ← 同上（check.js と反証 fixture）
     checks/                          ← 同上（この repo 用 fast-check レジストリ）
   product-brief.md                   ← PDH 自身の Product Brief
   CLAUDE.md                          ← PDH repo 固有の agent ルール

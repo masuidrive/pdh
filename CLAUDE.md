@@ -34,6 +34,8 @@ scripts/
   fast-checks.sh                     # 宣言的 grep 不変条件ランナー（配布物ではない）
   check-distribution.sh              # 配布セットの一貫性検査（配布物ではない）
   check-links.py                     # Markdown リンク / アンカー検査（配布物ではない）
+  check-board-render.sh              # 判断ボード kit の描画検査（配布物ではない。kit を変えたときだけ回す）
+  board-check/                       # 同上（check.js と反証 fixture）
   checks/*.check                     # この repo 用 fast-check レジストリ
 ```
 
@@ -87,6 +89,8 @@ scripts/
 - 配布 `*.sh` の構文検査
 
 **配布物を追加・改名・削除したら `./scripts/test-all.sh` が通ることを確認する。** README への追記漏れはここで落ちる。
+
+**`scripts/check-board-render.sh` は `test-all.sh` に入れない。**Node と Playwright を要る検査で、無い環境では必ず落ちるため。**判断ボードの `kit/`（`board.css` / `board.js` / `deck.css` / `deck.js` / `page.js`）を変えたときだけ回す。**`skill` の中からブラウザは開けないが、**kit を作る側は PDH repo の作業なので使ってよい**（配布しないので `AI-4` の対象外。`check-links.py` と同じ扱い）。同梱 build と環境の Chromium が食い違う場合は `CHROMIUM_EXECUTABLE=/path/to/chrome` を渡す。
 
 新しい不変条件を追加するときは、まず `.check`（1 パターンの grep で書けるか）を検討し、書けない場合だけ `check-distribution.sh` に足す。**追加した検査は、わざと違反を作って実際に落ちることを確認する。** 落ちない検査は無いのと同じ。
 

@@ -77,7 +77,7 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 - **ticket 運用はしない**（2026-07-18）。PDH repo 自身への適用は `product-brief.md` / `CLAUDE.md` / 自動検査までとし、`ticket.sh` は導入しない
 - **自動検査は持つ**（2026-07-18）。`scripts/test-all.sh` = fast-checks + check-distribution + shell 構文
 - **Markdown リンク / アンカーの検査も自動化する**（2026-07-18）。見出しの改名で他ファイルからのリンクが静かに切れるため。Unicode を含む見出しの slug 化が必要で bash では書きづらいので `scripts/check-links.py` として Python で実装した（配布物ではないため `AI-4` の対象外）
-- **配布物の実行依存は「標準的な Unix 環境に入っているもの」に限る**（2026-08-26）。判断ボード skill の `kit/` が Node・Playwright・Python を要求しており、`AI-4` を破ったまま配布されていた。**閲覧者のブラウザが実行する JS は対象外**（install を強いないため）とし、開発機に install を求める側だけを外した。`check.js`（Playwright）は削除して描画の確認をブラウザでの手動検査へ戻し、`check-contrast.py` は awk へ書き換えた。あわせて BSD / GNU 両対応を要求に加えた（`base64 -d` / `-D`、bash 3.2 に無い `declare -A` が実在の非互換だった）
+- **配布物の実行依存は「標準的な Unix 環境に入っているもの」に限る**（2026-08-26）。判断ボード skill の `kit/` が Node・Playwright・Python を要求しており、`AI-4` を破ったまま配布されていた。**閲覧者のブラウザが実行する JS は対象外**（install を強いないため）とし、開発機に install を求める側だけを外した。`check.js`（Playwright）は**配布物から外して PDH repo 側の `scripts/check-board-render.sh` へ移した** — kit を作るのは PDH repo の作業で、配布しないので `AI-4` の対象外である（`check-links.py` と同じ扱い）。`check-contrast.py` は awk へ書き換えた。あわせて BSD / GNU 両対応を要求に加えた（`base64 -d` / `-D`、bash 3.2 に無い `declare -A` が実在の非互換だった）
 - **配布物間の重複検出も自動化する**（2026-07-18）。当初は「grep で表現できない」として見送ったが、行単位の完全一致に限れば検出可能だった。`check-distribution.sh` に実装（80 バイト以上の同一行が複数の配布物に現れたら失敗、意図的な重複は理由付きで allowlist）。導入時点で 2 件の実在する重複を検出し、うち 1 件は既に内容が食い違っていた
 
 Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/product-brief.md
