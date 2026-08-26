@@ -26,7 +26,7 @@ templates/                           # 配布テンプレート
   CLAUDE.md                          # 配布先 project 固有ルールの雛形
   AGENTS.md                          # 他 agent platform 向け thin pointer
   checks/  *.sh                      # 配布 script 群
-evals/                               # 判断ボード skill の評価シナリオ（配布物ではない）
+evals/                               # 判断ボード skill を直すときの資料（eval シナリオ + examples.md）。配布物ではない
 scripts/
   hookbus.js                         # tmux worker hook event bus（配布物）
   test-all.sh                        # この repo 自身の検査（配布物ではない）

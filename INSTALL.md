@@ -400,6 +400,7 @@ rm -rf tmp/pdh
 `pdh-decision-board-base/` から次が消えた。**どれも配布先では使わないもので、残しても害だけがある。**
 
 - `evals/` — 判断ボード skill 自身の評価シナリオ。skill の規則を変えるとき（＝ PDH repo 側）にしか回さない
+- `examples.md` — 規則の由来になった日付つきの事故と実測値。**特定時点の制約を実行者に持たせるとゴールから遠ざかる**ので、skill を直すときの資料として PDH repo 側に置く。規則ファイルからも日付つきの出典を落とし、規則を現在形だけで書くようにした
 - `tools/check.js` と `tools/fixtures/broken-{a,d,h,i}.html`、`kit/check-contrast.py` — Node / Playwright / Python を要求していた。描画の確認はブラウザで、palette の検査は `kit/check-contrast.sh`（awk）で行う
 
 古い配置が残っていると、Playwright の導入を促す README や、回されない eval がプロジェクトに居座る。ディレクトリごと消してからコピーし直す。

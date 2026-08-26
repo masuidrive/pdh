@@ -20,7 +20,7 @@
 デッキ版: <style>tokens.css + board.css + deck.css</style> … body … <script>deck.js</script><script>board.js</script>
 ```
 
-組み立て（body と CSS / JS を 1 枚にまとめる手順）と、その結果の検査は kit の外（ユーザ指示 2026-08-16）。その «外» は [../tools/](../tools/README.md)。
+組み立て（body と CSS / JS を 1 枚にまとめる手順）と、その結果の検査は kit の外。その «外» は [../tools/](../tools/README.md)。
 
 ## kit が前提にする DOM
 

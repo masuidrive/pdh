@@ -250,7 +250,7 @@ pdh/
     seed-pdh-verify.sh               ← PDH verify / human-review 用のローカル seed hook テンプレート
     test-ticket-local.sh             ← `ticket-local-test` 実行テンプレート
     .ticket-config.yaml              ← ticket.sh 設定テンプレート
-  evals/                             ← 判断ボード skill の評価シナリオ【配布物ではない】
+  evals/                             ← 判断ボード skill を直すときの資料（評価シナリオ + 事故記録）【配布物ではない】
   scripts/
     hookbus.js                       ← tmux Director hookbus (CLI + library + in-source vitest、1 ファイル完結)【配布物】
     test-all.sh                      ← この repo 自身の検査入口【配布物ではない】
