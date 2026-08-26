@@ -9,7 +9,7 @@
 
 - 発行先は外部への通信を遮断するため、CSS / JS / 画像は link や CDN ではなく**インラインで** 1 枚の HTML に埋める。
 - 明るいテーマと暗いテーマの両方で読めること、狭い画面で横 overflow が無いことを、完成検査「形」で確認する。
-- 回答 form の markup と class は kit/README の契約に合わせる（`board.js` が動く前提）。
+- 回答 form の markup と class は [answer-form.md](answer-form.md)「DOM 契約」に合わせる（`board.js` が動く前提）。
 
 kit を使う場合の読み込み順: `<style>` に `tokens.css` + `board.css`（文書版はここまで）、デッキ版はさらに `deck.css`（この順。色・面の基準 token は tokens.css にしか無い）、 body の後に `<script>` で `deck.js`、続けて `board.js`。デッキの骨組み（`<nav class="map" id="map">` と 4 つの `.edge`）は kit/README が定める。
 
