@@ -122,7 +122,7 @@ skill・`PDH-AGENTS.md`・`CLAUDE.md` に置くのは**現在形の規則だけ*
 | # | カテゴリ | よくある漏れ | 対策 |
 |---|---|---|---|
 | 1 | 配置表 未同期 | 配布物を追加したが `INSTALL.md` の配置表に載せ忘れ | `./scripts/test-all.sh`（check-distribution が検出） |
-| 2 | 文言の二重化 | 同じルールを 2 箇所に書き、片方だけ更新されて食い違う | `./scripts/test-all.sh`（重複行検出）。意図的な重複は allowlist に理由付きで登録 |
+| 2 | 文言の二重化 | 同じルールを 2 箇所に書く | `./scripts/test-all.sh`（重複行検出）。意図的な重複は allowlist に理由付きで登録。⚠ **拾えるのは «同一の行» だけ = まだ食い違っていない重複である。**書き直して食い違った後は検出できないので、**移動したら移動元を `rg` で sweep する**（上「重複の禁止」）。別々の言語で別々に書かれた重複は機械では見つからない |
 | 3 | Codex 側の取り残し | skill を増減したのに `INSTALL.md` の symlink 手順や `templates/AGENTS.md` が古いまま | `INSTALL.md` の symlink ループと `templates/AGENTS.md` を確認 |
 | 4 | リンク切れ | 見出しを改名して他ファイルからのアンカーリンクが無効になる | `./scripts/test-all.sh`（check-links が検出） |
 | 5 | `Based on` 行 | 置換対象ファイルの行が無い / path が誤り / commit id が固定されている | `./scripts/test-all.sh`（fast-checks + check-distribution が検出） |
