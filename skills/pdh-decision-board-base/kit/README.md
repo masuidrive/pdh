@@ -20,7 +20,40 @@
 デッキ版: <style>tokens.css + board.css + deck.css</style> … body … <script>deck.js</script><script>board.js</script>
 ```
 
-組み立て（body と CSS / JS を 1 枚にまとめる手順）と、その結果の検査は kit の外（ユーザ指示 2026-08-16）。その «外» は [../tools/](../tools/README.md)。
+組み立て（body と CSS / JS を 1 枚にまとめる手順）と、その結果の検査は kit の外。その «外» は [../tools/](../tools/README.md)。
+
+## kit が保証している挙動
+
+**板を書く人は class と `data-*` を書くだけで、次がそうなっているかを確かめない。**書き忘れは [../tools/](../tools/README.md) の `check-static.sh` が拾う。
+
+`board.css` / `deck.css`
+
+- 選択肢カードの丸が左、バッジが右。選ばれていないカードでも丸と左帯の幅は空く
+- 塗り・太枠・左帯・塗られた丸が付くのは選択中の 1 枚だけ。同じ `data-q` の他は薄くなる
+- カードの地は文書版とデッキ版で同じ
+- 日本語の行頭禁則（`line-break: strict`）
+- ページ本体の横 overflow が起きない。表は `.table-wrap` の中だけが動く
+- `h2` が上端に固定され、貼り付き中は 1 行に切り詰まる
+- 明暗テーマが `tokens.css` の差し替えだけで成立する
+- 面の高さ・自動縮小・fallback scroll・scroll-snap（デッキ）
+
+`board.js` / `deck.js` / `page.js`
+
+- 選択とメモを `data-board-id` ごとに localStorage へ保存・復元。保存に失敗しても回答と貼り戻し文は生成される
+- 貼り戻し文を `data-label` から組み立て、未回答を `（未選択）`、進捗を `回答 n / N` で出す
+- 入力中の `<textarea>` を同期処理で書き換えない
+- カードの Enter / Space
+- コピー 3 段（`navigator.clipboard` → `execCommand` → 選択を残して案内）
+- `window.boardHost` があるときだけ送信ボタンを出し、コピーを予備の見た目へ落とす
+- 目次の行末に判断のある節の印。全部埋まると淡色の丸みへ
+- 進捗バッジを押すと、まだ答えていない最初の判断へ運ぶ
+- 面の移動・地図・端の三角・現在地（デッキ）
+
+**なぜその実装かは、各 CSS / JS の該当箇所のコメントにある。**
+
+### 保証を確かめる
+
+**`kit/` を変えたら、PDH repo 側の `scripts/check-board-render.sh` を回す。**実ブラウザで A〜J を走らせ、壊した fixture が狙った検査名だけで落ちることまで確かめる。Node と Playwright を使うが、kit を作るのは PDH repo の作業で配布しないので `product-brief.md` の `AI-4` の対象外である。
 
 ## kit が前提にする DOM
 
@@ -68,7 +101,7 @@ board を配信する側が `board.js` より前で `window.boardHost = { submit
 
 ## 見た目を変えるとき
 
-色・面・寸法は `tokens.css` の token だけを差し替える（明暗とも。差し替えたら `check-contrast.py` を回す）。文字階調・本文幅の組版 token は `board.css` 先頭。個別部品に直接書かない。強調・選択肢カード・塗りの規則は `../render-html-common.md` に従い、kit 固有の判断（推奨は塗らない・帯は薄く・tabular-nums など）は各 CSS の該当箇所にコメントで書いてある。
+色・面・寸法は `tokens.css` の token だけを差し替える（明暗とも。差し替えたら `bash check-contrast.sh` を回す）。文字階調・本文幅の組版 token は `board.css` 先頭。個別部品に直接書かない。強調・選択肢カード・塗りの規則は `../render-html-common.md` に従い、kit 固有の判断（推奨は塗らない・帯は薄く・tabular-nums など）は各 CSS の該当箇所にコメントで書いてある。
 
 ## v2 部品系（2026-08-19 確定 — ui-sample.html が実物見本）
 
@@ -81,7 +114,7 @@ board を配信する側が `board.js` より前で `window.boardHost = { submit
 | `page.js` | 文書版のページ機構（目次開閉・決定論 scroll-spy・h2 の stuck 検出）。見本専用ではなく文書版 board でも使う。picker・目次が無いページでは各機構が自動で何もしない |
 | `beautiful-mermaid.iife.js` | mermaid renderer（esbuild で依存ごと bundle 済み。global: `BeautifulMermaid`） |
 | `mermaid-render.js` | `pre.mermaid` を token 色で描画。テーマ変更で再描画。失敗時はソース表示 + console.error |
-| `check-contrast.py` | token の APCA 検査。**tokens.css を書き換えたら必ず回す**（exit 0 が合格） |
+| `check-contrast.sh` | token の APCA 検査。**tokens.css を書き換えたら必ず回す**（`bash check-contrast.sh`、exit 0 が合格） |
 | `ui-sample.html` | 全部品の実物見本（mermaid bundle は未挿入 — 下記の手順で差し込む）。⚠ **CSS を inline で «自分の写し» として持っている** — `board.css` / `primitives.css` を直したら、見本の `<style>` の同じ規則にも同じ変更を入れる。入れないと、見本だけが古い見た目を «正» として見せ続ける（2026-08-20 に目次の印で実際に起きた） |
 
 ### v2 の設計規則（部品を足すとき・値を触るとき）

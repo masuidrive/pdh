@@ -14,7 +14,7 @@ PMはspawn promptの冒頭にこの内容を置き、続けて該当する役割
 ### 最初に読む（全 worker 必須 / レビュアーも）
 
 1. `product-brief.md`（全判断の基準）
-2. `docs/product-delivery-hierarchy.md`（存在すれば。Ticket immutable、branch、完了条件）
+2. `docs/product-delivery-hierarchy.md`（存在すれば。ticketの変更は再合意、branch、完了条件）
 3. `PDH-AGENTS.md`（PDH汎用ルール。severity等の判定はここに従う）
 4. `CLAUDE.md`（project固有ルール、テスト、approval、tool/model上書き）
 5. `CLAUDE.local.md`（存在すれば。secret値を置かない環境固有メモ）
@@ -35,9 +35,9 @@ PMはspawn promptの冒頭にこの内容を置き、続けて該当する役割
 
 workerは`ticket.sh`を実行しない。`<TESTS_DIR>`と`<TMP_DIR>`はPMがspawn promptで与える。与えられていないのに必要になったら、自分で推測せず結果でPMへ報告する。
 
-### 不可侵（厳守）
+### 独断で変えない（厳守）
 
-- **ticketのAcceptance Criteria、Architectural Invariants、Out-of-scopeを変更しない。** 必要なら結果でPMへescalateする
+- **ticketのAcceptance Criteria、Architectural Invariants、Out-of-scopeを独断で変更しない。** 必要なら結果でPMへescalateし、合意を得てから進める
 - `product-brief.md`を編集しない
 
 ### 担当範囲
@@ -78,7 +78,7 @@ reviewer、AC裏取り、Surface Observerはproduct code、test、doc、`<NOTE_F
 - 関係する全suiteを通し、`scripts/test-all.sh`があれば使う
 - 外部providerまたはAPI pathは実APIで1経路以上確認し、credential不在はdeferredとしてescalateする
 - contractを変えない可逆な迷いだけdefault採用と`ASSUMPTION:`記録を許す。product、UX、security、human gate、共有repository設定、base branchはdefault決定しない
-- 即中断はAC破綻、Invariant抵触、不可侵変更必須、破壊的不可逆操作、前提崩壊に限定する
+- 即中断はAC破綻、Invariant抵触、再合意が要る変更、破壊的不可逆操作、前提崩壊に限定する
 - 実装ログとDiscoveriesを`<NOTE_FILE>`へ追記する
 
 ### reviewer（Devil's Advocate / Code Reviewer）
@@ -90,7 +90,7 @@ reviewer、AC裏取り、Surface Observerはproduct code、test、doc、`<NOTE_F
 - 最初に`.claude/skills/pdh-dev/_review.md`（Codexは`.agents/skills/pdh-dev/_review.md`）を読み、「reviewerの網羅探索チェックリスト」の8観点に従って系統的にreviewする。該当する観点は1 findingで止めず同種patternを全探索する
 - CriticalとMajorを優先し、観点label、file:location、問題、推奨対応の形式で報告する。Severityの定義は`PDH-AGENTS.md`「Verification」に従い、自己流のrubricを作らない
 - findingは`<RESULT_FILE>`へ報告するだけでよい。noteの`### Findings`表へ書くのはPMである
-- Ticket不可侵を確認する
+- ticketに独断の変更が入っていないか確認する
 - 「書き込み境界」に従う
 - severityを修正命令にしない。採否とcurrent ticketへの包含はPMが判断する
 - 修正確認では指定finding、再現条件、修正diffだけを確認し、全diffや新規findingへ広げない
@@ -101,7 +101,7 @@ reviewer、AC裏取り、Surface Observerはproduct code、test、doc、`<NOTE_F
 
 - この役はticket、note、diff、implementorの結論を渡されない。promptに転記されたWhyと、repoの現在の作業treeだけを前提とする
 - Whyがrepoの実装で端から端まで成立するかを、現実的な分岐（権限差、tenant横断、session状態、成功と失敗、初回と再訪）で追跡する
-- Ticket不可侵の確認と、diff起点の網羅探索checklistは行わない（ticketとdiffを持たないため）
+- 独断変更の確認と、diff起点の網羅探索checklistは行わない（ticketとdiffを持たないため）
 - 対象commit SHAを結果へ明記する
 - 報告形式、severityの判定、`<RESULT_FILE>`への報告、書き込み境界は通常reviewerと同じ
 - read-onlyの範囲で自由にrepoを探索してよいが、渡されていないticket/note/review結果を探して読まない

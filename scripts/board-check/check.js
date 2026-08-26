@@ -551,7 +551,11 @@ async function main() {
   const playwright = loadPlaywright(args.playwright);
   const boardUrl = pathToFileURL(boardPath).href;
   const source = fs.readFileSync(boardPath, 'utf8');
-  const browser = await playwright.chromium.launch({ headless: true });
+  // CHROMIUM_EXECUTABLE が指す実行ファイルがあればそれを使う。playwright が同梱を
+  // 期待する build と、環境に既に入っている Chromium の build が違う場合の逃げ道。
+  const launchOptions = { headless: true };
+  if (process.env.CHROMIUM_EXECUTABLE) launchOptions.executablePath = process.env.CHROMIUM_EXECUTABLE;
+  const browser = await playwright.chromium.launch(launchOptions);
   const results = {};
   try {
     results.A = await runPageErrors(browser, boardUrl, config.widths);

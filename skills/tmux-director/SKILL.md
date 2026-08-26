@@ -88,19 +88,16 @@ PDH-open → PDH-ticket-review → PDH-ticket-human-review → PDH-implement →
 
 **ユーザ確認が必須の gate:**
 
-| Gate | タイミング | 報告内容 |
-|---|---|---|
-| **PDH-ticket-human-review 承認** | ticket contract check 後、実装に入る前 | ticket review で修正した点、全体概要、達成するもの、AC、Architectural Invariants check、確定判断、out-of-scope、判断ポイントを提示 |
-| **PDH-human-review 承認** | PDH-verify 完了後、close 前 | やったこと、達成したこと、テスト結果、AC 達成状況、実環境動作確認結果、ユーザ自身の確認手順、残課題。**特に「既存問題」「対応検討」「スコープ外」と記載された項目は個別に列挙し、対応方針をユーザに確認する** |
+| Gate | タイミング |
+|---|---|
+| **PDH-ticket-human-review 承認** | ticket contract check 後、実装に入る前 |
+| **PDH-human-review 承認** | PDH-verify 完了後、close 前 |
 
-**gate は毎回必ずユーザに確認すること（絶対原則）:** たとえユーザがそれまで全ての質問に「yes」「OK」「y」と答え続けていたとしても、gate（PDH-ticket-human-review / PDH-human-review）では必ず立ち止まってユーザに確認する。「前回 OK だったから今回も OK だろう」という推測で gate をスキップしてはならない。window が AskUserQuestion を出さずに止まった場合でも、Director が代わりに承認・クローズを指示するのではなく、まずユーザに状況を報告して承認を得ること。
+⚠ **何を報告するかは `PDH-AGENTS.md`「Human Gate Materials」が定める。**gate ごとの必須項目はそこにしか無い — ここへ写さない。
 
-**gate 報告時の必須アクション:** ユーザに承認を求める前に、Director は必ず `ticket.sh start`/`restore` 出力の `ticket:`/`note:` パス（互換 symlink: `current-ticket.md`/`current-note.md`）を Read し、**ユーザがこの材料だけで判断できる 1 枚の文書**を作成すること。含めるもの:
-- チケットの目的・背景（Why）
-- 実装の全体像（変更ファイル、変更規模、依存関係への影響）
-- レビューで発見・修正された重要ポイント
-- AC の変更点（あれば）
-- 懸念事項・リスク
+**gate は毎回必ずユーザに確認すること（絶対原則）:** たとえユーザがそれまで全ての質問に「yes」「OK」「y」と答え続けていたとしても、gate（PDH-ticket-human-review / PDH-human-review）だけは自動承認と見なさない。
+
+**gate 報告の前に、Director 自身が裏取りする。**`ticket.sh start`/`restore` 出力の `ticket:` / `note:` パス（互換 symlink: `current-ticket.md` / `current-note.md`）を Read し、window の報告と突き合わせてから材料を組む。窓の自己申告をそのまま流さない。
 
 ---
 
@@ -326,7 +323,7 @@ grep -rl '<テキスト>' /home/vscode/.claude/projects/ | grep -v "$MY_SESSION_
 
 **⚠ 決め手は「worker の transcript に、単独の user メッセージとして届いているか」である。**届いていなければ、それは**送信されていない** — 画面にあるだけである。Director が引用した文章の中に現れるのは、**Director 自身が引用したから**であって、届いた証拠ではない。
 
-**2026-08-15 に実際に踏んだ。**ゴーストを 8 回「注入」と誤認し、**存在しない第三者がいるとユーザへ 8 回報告し、worker を全面停止させた。**上の「誰が打ったかを推測して人の運用を変えさせない」を破っている。**1 文字テストは一度も実行していなかった。**
+**実際に踏んだ事故がある。**ゴーストを 8 回「注入」と誤認し、**存在しない第三者がいるとユーザへ 8 回報告し、worker を全面停止させた。**上の「誰が打ったかを推測して人の運用を変えさせない」を破っている。**1 文字テストは一度も実行していなかった。**
 
 例外は 2 つ。**slash command（`/clear` `/compact` `/pdh-dev`）は buffer 経由にせず literal な `send-keys` で送る**（TD-2.2 の理由 — harness が literal な入力として受けたときだけ発火する。短いので追い越しも起きない）。**`AskUserQuestion` への数字回答も同様。**
 
@@ -439,7 +436,7 @@ tmux window {WINDOW.PANE} の画面を定期的にキャプチャし、以下の
 
 **hookbus が event を出すのは「動いた」 window だけである。**フェーズを終えて入力待ちのまま静止した window は、それ以降 1 つも event を出さない。**Director が能動的に見に行かないと、その window は存在ごと視界から消える。**
 
-2026-08-04 に 3 回踏んだ（窓 2 が close 順待ちで 1 時間以上、窓 3 が AC 承認待ちで 1 時間 50 分、窓 1 が 3.5 時間）。いずれも**こちらが別の window の議論に集中している間**に起きている。
+実際に 3 回踏んだ（窓 2 が close 順待ちで 1 時間以上、窓 3 が AC 承認待ちで 1 時間 50 分、窓 1 が 3.5 時間）。いずれも**こちらが別の window の議論に集中している間**に起きている。
 
 対策:
 
@@ -644,7 +641,7 @@ compact と違いユーザ承認が要るのは、`/clear` が「作業の連続
 
 ## ticket.sh の排他ロック（クロス OS）
 
-複数 window が同時に `ticket.sh start/close` を叩くと current-ticket symlink や branch を奪い合うため排他が要る。**`flock` は Linux (util-linux) 専用で macOS には同梱されない**。flock を前提に指示すると、macOS の worker が `brew install util-linux` 等の想定外な環境変更に走る（実測 2026-07-20）。flock があればそれを、無ければ `mkdir` の atomic 性で代替する（依存ゼロ・POSIX 共通）:
+複数 window が同時に `ticket.sh start/close` を叩くと current-ticket symlink や branch を奪い合うため排他が要る。**`flock` は Linux (util-linux) 専用で macOS には同梱されない**。flock を前提に指示すると、macOS の worker が `brew install util-linux` 等の想定外な環境変更に走る（実測あり）。flock があればそれを、無ければ `mkdir` の atomic 性で代替する（依存ゼロ・POSIX 共通）:
 
 ```sh
 lock=/tmp/<project>-ticket.lock
@@ -670,13 +667,13 @@ worker への指示は「flock か mkdir-lock で排他」とし、特定コマ�
    検証用の `http.server`、`agent-browser` のセッション、その ticket 専用の Monitor が対象。
    探し方は「kickoff・note に記録された background」と「`ss -tlnp` で worktree 由来の listen port」の 2 経路。
    ⚠ **広いパターンの `pkill -f` を使わない** — パターンが自分のシェルのコマンドライン文字列にも一致して
-   巻き添えにする（2026-08-19 に実測。exit 144 で後続コマンドごと落ちた）。**PID か port を特定して個別に kill する。**
+   巻き添えにする（exit 144 で後続コマンドごと落ちる）。**PID か port を特定して個別に kill する。**
    ⚠ 他 ticket・他 window のプロセスに触れない。誰が起動したか分からないプロセスは殺さずユーザに確認する。
 2. **window を `/clear` する**（下記「worker の /clear タイミング」の close 行。送り方は「送り方」節）。
 3. **worker に `ExitWorktree()` を実行させ、main repo（main branch）へ戻す。**pane の処理が
    終わった時点で（次の kickoff まで先送りせず）必ず実行させる。⚠ **Bash の `cd` では戻れない** —
    cd はそのコマンドの subprocess にしか効かず、Claude Code セッションの現在地（worktree 設定）は
-   `ExitWorktree()` でしか解除されない（ユーザ指摘 2026-08-19。cd で「戻った」と報告した worker の
+   `ExitWorktree()` でしか解除されない（cd で「戻った」と報告した worker の
    セッションは worktree に残ったままだった）。`/clear` も cwd を戻さない。`close --keep-worktree` で
    worktree 自体を残す場合も、**worker の現在地は main に戻す** — 前 ticket の feature branch を
    現在地にしたまま次の作業を始めると、誤 commit・誤参照の温床になる。

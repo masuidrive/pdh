@@ -1,8 +1,12 @@
-# evals — この skill の評価シナリオ
+# evals — 判断ボード skill を直すときの資料
+
+`eval-*.md` が評価シナリオ、[fixtures/](fixtures/) がシナリオが渡す入力の実体、[examples.md](examples.md) が規則の由来になった日付つきの事故と実測値である。**どちらも配布物ではない。**特定時点の制約を skill の実行者に持たせるとゴールから遠ざかるので、規則ファイルには現在形の規則だけを書き、由来はここに置く。
 
 **この skill への規則の追加・削除は、ここの評価で測ってから行う**（Anthropic 「Skill authoring best practices」の evaluation-driven development）。事故が起きたら、散文の規則を足す前に、まずその事故をシナリオとしてここへ再現する。
 
 各シナリオは実際に起きた失敗の再現である。入力とタスクを fresh agent （この repo では claude opus と codex gpt-5.6-sol xhigh の両方）へ渡し、出力を expected_behavior と突き合わせる。
+
+path は repo root からの相対である。**この `evals/` は配布物ではない** — 配布先は skill の規則を変えないので、回す相手がいない（`scripts/` と同じ扱い）。
 
 ## 実行方法
 

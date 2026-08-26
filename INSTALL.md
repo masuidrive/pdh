@@ -63,12 +63,9 @@ bash ticket.sh init
 | `tmp/pdh/skills/pdh-check-writing/SKILL.md` | `.claude/skills/pdh-check-writing/SKILL.md` | 宣言型 `.check` 執筆スキル |
 | `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
 | `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
-| `tmp/pdh/skills/pdh-decision-board-base/` | `.claude/skills/pdh-decision-board-base/` | 判断ボードの共通規則と renderer（分冊 `*.md` / `evals/` / `kit/`（CSS・JS・検査 script・見本）を**ディレクトリごと**コピーする） |
+| `tmp/pdh/skills/pdh-decision-board-base/` | `.claude/skills/pdh-decision-board-base/` | 判断ボードの共通規則と renderer（分冊 `*.md` / `kit/`（CSS・JS・見本）/ `tools/`（組み立てと静的検査。bash と awk だけで動く）を**ディレクトリごと**コピーする） |
 | `tmp/pdh/skills/pdh-ticket-decision-board/SKILL.md` | `.claude/skills/pdh-ticket-decision-board/SKILL.md` | 実装前 gate（AC 承認）の判断ボードスキル — base への差分 |
 | `tmp/pdh/skills/pdh-close-decision-board/` | `.claude/skills/pdh-close-decision-board/` | close 前 gate（達成の確認と close 承認）の判断ボードスキル — base への差分と、当たる ticket だけ読む `ship-risk.md`（**ディレクトリごと**コピーする） |
-| `tmp/pdh/skills/common-writing/SKILL.md` | `.claude/skills/common-writing/SKILL.md` | 文章の共通規則（判断ボードの本文が従う） |
-| `tmp/pdh/skills/japanese-tech-writing/SKILL.md` | `.claude/skills/japanese-tech-writing/SKILL.md` | 日本語技術文書の文章規範（common-writing から参照） |
-| `tmp/pdh/skills/cognitive-rhythm-writing/SKILL.md` | `.claude/skills/cognitive-rhythm-writing/SKILL.md` | 説明文の認知リズム規範（common-writing から参照） |
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
 | `tmp/pdh/templates/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH 汎用 agent ルール |
 | `tmp/pdh/templates/CLAUDE.local.md.example` | `CLAUDE.local.md.example` | 環境固有 agent メモのサンプル（実体は commit しない） |
@@ -92,7 +89,7 @@ Codex CLI はプロジェクト直下の `.agents/skills/` を skill として�
 
 ```bash
 mkdir -p .agents/skills
-for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing japanese-tech-writing cognitive-rhythm-writing; do
+for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board; do
   ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done
 ```
@@ -395,6 +392,30 @@ rm -rf tmp/pdh
 
 ### 既知の移行手順
 
+#### 文章 skill 3 本が削除された（2026-08-26 以降）
+
+`common-writing` / `japanese-tech-writing` / `cognitive-rhythm-writing` を削除した。**判断ボードと ticket に効いていたのは «承認者に復元作業をさせない» 3 項だけで、それは `pdh-decision-board-base/final-check.md` の「文」の層にある。**残りは書籍・記事の原稿向けの規範で、板の読み手にプラスにならないまま 39.6 KB が配布されていた。
+
+```bash
+rm -rf .claude/skills/common-writing .claude/skills/japanese-tech-writing .claude/skills/cognitive-rhythm-writing
+rm -f .agents/skills/common-writing .agents/skills/japanese-tech-writing .agents/skills/cognitive-rhythm-writing
+```
+
+#### 判断ボードの evals / 検査 script が配布物から外れた（2026-08-26 以降）
+
+`pdh-decision-board-base/` から次が消えた。**どれも配布先では使わないもので、残しても害だけがある。**
+
+- `evals/` — 判断ボード skill 自身の評価シナリオ。skill の規則を変えるとき（＝ PDH repo 側）にしか回さない
+- `examples.md` — 規則の由来になった日付つきの事故と実測値。**特定時点の制約を実行者に持たせるとゴールから遠ざかる**ので、skill を直すときの資料として PDH repo 側に置く。規則ファイルからも日付つきの出典を落とし、規則を現在形だけで書くようにした
+- `tools/check.js` と `tools/fixtures/broken-{a,d,h,i}.html`、`kit/check-contrast.py` — Node / Playwright / Python を要求していた。描画の検査は PDH repo 側へ移っており（配布先は kit を変えないので要らない）、palette の検査は `kit/check-contrast.sh`（awk）が引き継いだ
+
+古い配置が残っていると、Playwright の導入を促す README や、回されない eval がプロジェクトに居座る。ディレクトリごと消してからコピーし直す。
+
+```bash
+rm -rf .claude/skills/pdh-decision-board-base
+cp -r tmp/pdh/skills/pdh-decision-board-base/ .claude/skills/pdh-decision-board-base/
+```
+
 #### pdh-close-decision-board が 2 ファイルになった（2026-08-26 以降）
 
 close 前 gate の skill は `SKILL.md` に加えて `ship-risk.md`（保存されている形・外部契約を変える ticket だけが読む分冊）を持つ。`SKILL.md` だけをコピーしていたプロジェクトは、ディレクトリごとコピーし直す。同時に、判断ボードの reviewer への問いが 7 問（問 2 が「推奨はゴールに届くか」）になり、判断カードに「ゴールへの効き」の欄が増えた。
@@ -407,7 +428,7 @@ cp -r tmp/pdh/skills/pdh-close-decision-board/ .claude/skills/pdh-close-decision
 
 #### pdh-ticket-decision-board の 3 分冊化 + close 前 gate の追加（2026-08-20 以降）
 
-**判断ボード skill は 3 つの構成になった。**gate と媒体に依存しない共通規則・renderer 分冊・kit（CSS/JS/検査 script）は新設の `pdh-decision-board-base` が持ち、`pdh-ticket-decision-board`（実装前 gate）と新設の `pdh-close-decision-board`（close 前 gate）は base への差分だけを持つ。本文の文章規則は新設の `common-writing` を参照する。
+**判断ボード skill は 3 つの構成になった。**gate と媒体に依存しない共通規則・renderer 分冊・kit（CSS/JS/検査 script）は新設の `pdh-decision-board-base` が持ち、`pdh-ticket-decision-board`（実装前 gate）と新設の `pdh-close-decision-board`（close 前 gate）は base への差分だけを持つ。
 
 **⚠ 単なるファイル追加ではない。**旧 `pdh-ticket-decision-board/` に入っていた `render-html-common.md` / `create-doc.md` / `create-slides.md` / `examples.md` は base 側へ移動して内容も更新されているため、**旧配置のまま残すと 2 系統の規則が食い違う。**
 
@@ -418,13 +439,12 @@ rm -rf .claude/skills/pdh-ticket-decision-board
 cp -r tmp/pdh/skills/pdh-decision-board-base/ .claude/skills/pdh-decision-board-base/
 cp -r tmp/pdh/skills/pdh-ticket-decision-board/ .claude/skills/pdh-ticket-decision-board/
 cp -r tmp/pdh/skills/pdh-close-decision-board/ .claude/skills/pdh-close-decision-board/
-cp -r tmp/pdh/skills/common-writing/ .claude/skills/common-writing/
-for s in pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing japanese-tech-writing cognitive-rhythm-writing; do
+for s in pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board; do
   ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done
 ```
 
-kit の CSS（tokens.css の palette）を変えたときは `python3 .claude/skills/pdh-decision-board-base/kit/check-contrast.py` が exit 0 になることを確認する。
+kit の CSS（tokens.css の palette）を変えたときは `bash .claude/skills/pdh-decision-board-base/kit/check-contrast.sh` が exit 0 になることを確認する。
 
 
 #### decision-board → pdh-ticket-decision-board へ置き換え（2026-08-15 以降）
@@ -480,7 +500,7 @@ README.md 側にも INSTALL.md へのリンクを残してあるので、古い 
 
 ```bash
 # 旧 wrapper があれば撤去し、symlink に置き換える（冪等）
-for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board common-writing japanese-tech-writing cognitive-rhythm-writing; do
+for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board; do
   [ -e ".agents/skills/$s" ] && [ ! -L ".agents/skills/$s" ] && rm -rf ".agents/skills/$s"
   [ -d ".claude/skills/$s" ] && ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done

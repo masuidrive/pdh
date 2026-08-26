@@ -9,7 +9,7 @@
 
 - 発行先は外部への通信を遮断するため、CSS / JS / 画像は link や CDN ではなく**インラインで** 1 枚の HTML に埋める。
 - 明るいテーマと暗いテーマの両方で読めること、狭い画面で横 overflow が無いことを、完成検査「形」で確認する。
-- 回答 form の markup と class は kit/README の契約に合わせる（`board.js` が動く前提）。
+- 回答 form の markup と class は [answer-form.md](answer-form.md)「DOM 契約」に合わせる（`board.js` が動く前提）。
 
 kit を使う場合の読み込み順: `<style>` に `tokens.css` + `board.css`（文書版はここまで）、デッキ版はさらに `deck.css`（この順。色・面の基準 token は tokens.css にしか無い）、 body の後に `<script>` で `deck.js`、続けて `board.js`。デッキの骨組み（`<nav class="map" id="map">` と 4 つの `.edge`）は kit/README が定める。
 
@@ -17,11 +17,7 @@ kit を使う場合の読み込み順: `<style>` に `tokens.css` + `board.css`�
 
 ## 数値既定値の扱い
 
-このファイルと各 renderer の数値は、過去の表示確認から得た **実測由来の目安**である。プロジェクトが想定 viewport やアクセシビリティ基準を定めている場合は、その条件を優先し、変更後の値を設計トークンまたは定数の 1 か所だけで管理する。
-
-- 狭い画面の既定検査幅: `380px`
-
-`html-2d-deck` 固有の既定値は `create-slides.md` だけに置く。
+このファイルと各 renderer の数値は**目安**である。プロジェクトが想定 viewport やアクセシビリティ基準を定めている場合はそちらを優先し、変更後の値は設計トークンまたは定数の 1 か所だけで管理する。
 
 ## HTML の外枠
 
@@ -39,11 +35,11 @@ artifact host などが `<html>` を所有する場合でも、board 自身の�
 
 ## 設計トークン
 
-2 renderer は 1 つの token set を共有する。**色・面・寸法の基準の定義は `kit/tokens.css` にだけある**（`board.css` は文字階調と幅の組版 token だけを持ち、`deck.css` は token を定義しない — 2 か所にあると片方だけ直され、媒体間で配色がズレる）。個別部品に色や寸法を直接書かず、必要な変更はこの定義へ戻す。インライン `style` で値を増やさない。
+**色・面・寸法の基準の定義は `kit/tokens.css` にだけある。**個別部品に色や寸法を直接書かず、必要な変更はこの定義へ戻す。インライン `style` で値を増やさない。
 
 体裁は判断材料ではないため、装飾の作り込みを目的にしない。一方、同じ読み手が複数の board を読むときに意味を学び直さないよう、token と強調の意味は揃える。
 
-token set が満たすべきこと。
+自分で CSS を書く場合、token set が満たすべきこと。
 
 - 文字サイズは 16 を基準にした 7 段だけを使い、`14px` 相当未満を使わない。
 - 縦寸法は基準単位 `--u` の整数倍にする。
@@ -64,7 +60,7 @@ token set が満たすべきこと。
 - 記号だけで重要さを表さない。注意が必要な理由を文で書く。
 - 枠線は境界を示す場合だけ使う。閉じた折りたたみを空の箱にしない。
 - 色 token は「青」「黄」ではなく、推奨、実測、未測定のような意味で命名する。
-- 補足・脇の説明の弱い文字は `class="mut"` を使う。部品ごとに薄い色を直接書かない（未定義のまま `class="mut"` と書かれて素通りした事故がある。`examples.md` 2026-08-14）。
+- 補足・脇の説明の弱い文字は `class="mut"` を使う。部品ごとに薄い色を直接書かない（未定義のまま `class="mut"` と書かれて素通りする）。
 
 明暗両方を描画し、`--mark` などの計算値がテーマ間で実際に異なることを確認する。
 
@@ -105,34 +101,24 @@ rg -n 'AC10|pop-ac10-' <board.html>
 
 ## クラスが実在し、期待した役割かを確認する
 
-HTML の `class` 値を全部出し、同じファイルの selector に定義があるかを確認する。一般語の短いクラス名を、別部品へ再利用しない。存在するが役割が違うクラスも不正である。
-
-```bash
-rg -o 'class="[^"]+"' <board.html> | sort -u
-rg -n '\.(answer-choice|answer-note|answer-progress|<class-name>)([^a-zA-Z0-9_-]|$)' <board.html>
-```
-
-grep は定義の存在しか示さない。ブラウザで代表要素の計算値を読み、期待するレイアウトや境界が実際に効いていることを確認する。
-
-```js
-getComputedStyle(document.querySelector('.answer-progress')).position
-getComputedStyle(document.querySelector('.answer-choice')).borderTopWidth
-```
+**使った class に定義があるかは `check-static.sh` の「未定義 class」が拾う。**書き手がすることは 2 つ — **一般語の短いクラス名を別部品へ再利用しない**こと、**存在するが役割が違うクラスを使わない**こと。どちらも定義の有無では検出できない。
 
 見た目のためだけに新しいクラスを増やさない。必要な役割が既存 token と素の要素で表せる場合は、新しい selector を作らない。
 
 ## 共通の発行前検査
 
-1. プロジェクトが定める最小・最大 viewport と、このファイルの既定狭幅で描画する。
-2. 明暗テーマを描画し、token の計算値とスクリーンショットの両方を確認する。
-3. 画面の外へ右端・左端が出ている要素が無いことを、要素の矩形で確認する（`overflow-x: clip` を当てていると `scrollWidth` は育たないので、そちらだけでは見つからない）。
-4. 明示的な閉じタグが要るタグの、開始と終了の均衡を確認する。
-5. AC 番号と参照 ID を検索し、古い表示が残っていないか確認する。
-6. 使用 class の定義と `getComputedStyle` を確認する。
-7. 回答の選択、押し直し、メモ同期、再読み込み、未回答表示、移動、コピー fallback を操作する。
+⚠ **skill の中からブラウザは開けない。**だから板ごとに回すのは shell の検査だけである。
 
-検査は [tools/](tools/README.md) が持つ。板ごとは `check-static.sh`（ブラウザ不要）、描画を見る `check.js` は kit を変えたとき。組み立ては `build.sh`。
+```bash
+tools/build.sh --body body.html --out board.html
+tools/check-static.sh board.html
+```
 
-### 検査自体を反証する
+`check-static.sh` が調べるのは、タグの均衡・未定義 class・ページ内参照の宛先・画像の data URI・回答フォームの属性・`.table-wrap` に包まれていない裸の表。これに加えて、板ごとに次を確かめる。
 
-overflow、未定義 class、壊れた参照、保存失敗などを一時的に作り、検査が失敗を返すことを確認する。検査方法を変更した直後は、緑の結果だけで検査が働くと判断しない。
+1. **AC 番号と参照 ID を検索し、古い表示が残っていないか**（下記「修正後の一貫性」と同じ検索）。
+2. **選択肢が貼り戻し欄より前に出ているか**（[answer-form.md](answer-form.md)「発行前に、選択肢の位置を検査する」の awk）。
+
+**描画そのもの — 明暗テーマの見え方、狭い画面での折り返し、面に収まっているか、回答フォームの実操作 — は、kit が保証している範囲である**（[kit/README.md](kit/README.md)「kit が保証している挙動」）。**kit を変えたときだけ**、PDH repo 側の `scripts/check-board-render.sh` が実ブラウザで確かめる。
+
+⚠ **それでも板の見え方を確かめる必要が出たら、`PDH-AGENTS.md`「Browser And Surface Checks」に従う** — 回せないなら回せないと述べてユーザへ渡す。確かめずに「確認した」と書かない。

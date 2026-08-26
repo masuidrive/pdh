@@ -109,11 +109,13 @@ Ticket の状態は YAML frontmatter で判定する。
 - やめる判断も明示的に記録する。`cancelled_at` を追加し、本文に中止理由を残してから `done/` に移動する。
 - 想定外の問題が発生した場合は、影響範囲を評価し対応する。影響が大きい場合（スコープ変更・技術方針の転換が必要）はユーザに相談する。
 
-### Ticket immutable (絶対遵守)
+### ticket の変更は再合意で行う (絶対遵守)
 
-ticket の Acceptance Criteria / Architectural Invariants check / 確定判断 (Design Decisions) / Out-of-scope は、implementor が勝手に書き換えてはいけない。意思決定者の意思を上書きさせないための gate であり、破られると ticket が意思決定を保持しなくなる。
+すべての判断の基準は Why / Problem を解けるかであり、Acceptance Criteria はその手段である。AC / Architectural Invariants check / Out-of-scope は、**合意し直せば変えてよい。implementor が独断で書き換えてはいけない。**意思決定者の意思を上書きさせないための gate であり、破られると ticket が意思決定を保持しなくなる。
 
-**実装担当向けの規則は `.claude/skills/pdh-coding/SKILL.md` 「Ticket immutable rule (絶対遵守)」にある**（escalate 手順、solo / bot 実行時の中断方法を含む）。ここには重複させない。
+**確定判断 (Design Decisions) はこの 3 つと同じ扱いにしない。**解き方は実装で前提が崩れるため、合意を動かさず記録を残す限り、再合意なしで書き換えてよい。
+
+**実装担当向けの規則は `.claude/skills/pdh-coding/SKILL.md` 「ticket の変更は再合意で行う (絶対遵守)」にある**（AC が何度も変わるときの扱い、確定判断を書き換えてよい条件、escalate 手順、solo / bot 実行時の中断方法を含む）。ここには重複させない。
 
 ### ブランチ戦略
 

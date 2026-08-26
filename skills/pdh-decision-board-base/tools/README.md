@@ -2,6 +2,8 @@
 
 body 断片を自己完結 HTML に組み立て、その完成物に内容非依存の壊れがないかを調べる opt-in の道具です。`kit/README.md` の「組み立てと検査は kit の外」という境界に従い、kit は CSS / JS のまま、組み立てと検査はこの `tools/` が持ちます。
 
+**動くのに要るのは shell だけです** — `bash` / `awk` / `grep` / `sed` と、macOS・Ubuntu に既定で入っている道具。Node も Playwright も Python も使いません。
+
 ## 使い方
 
 文書版の body 断片は `<main class="board" …>…</main>`、デッキ版は `<div class="deck" …>…</div>` を含めます。
@@ -9,20 +11,17 @@ body 断片を自己完結 HTML に組み立て、その完成物に内容非依
 ```bash
 tools/build.sh --body body.html --out board.html
 tools/check-static.sh board.html
-node tools/check.js board.html --config board.json --out results.json
 ```
 
-`--config` と `--out`（check 側）は省略できます。build は埋め込んだ kit ファイル名と、data URI に変えた画像の有無を stderr に出します。相対 `img src` は `png` / `jpg` / `jpeg` / `gif` / `svg` / `webp` だけを受け、読めない画像や未対応形式では出力を止めます。
+build は埋め込んだ kit ファイル名と、data URI に変えた画像の有無を stderr に出します。相対 `img src` は `png` / `jpg` / `jpeg` / `gif` / `svg` / `webp` だけを受け、読めない画像や未対応形式では出力を止めます。
 
 `href` は画像として埋め込みません。kit の画面写真 overlay と文書部品は `href="#…"` を、script が止まっていても働くページ内移動・開閉として使うためです。
 
-全検査と反証 fixture をまとめて確かめるには次を実行します。
+道具そのものと反証 fixture をまとめて確かめるには次を実行します。
 
 ```bash
-PLAYWRIGHT_ROOT=/path/to/node_modules/playwright bash tools/selftest.sh
+bash tools/selftest.sh
 ```
-
-通常の shell から `node` が見えない場合、selftest は nvm も探します。別の Node を明示する場合は `NODE=/path/to/node` を渡せます。
 
 ## build の引数
 
@@ -37,43 +36,25 @@ build は JSON 設定を読みません。
 | `--layout` | `document` | `document` または `deck`。読み込む kit を切り替える |
 | `--title` | 最初の h1、無ければ `判断ボード` | `<title>` の文字列 |
 
-相対画像は body ファイルのディレクトリを起点に解決します。check の JSON 設定では `widths` と `layout` を指定できます。
-
-## Playwright
-
-check は Node と Playwright を使います。Playwright の解決順は次のとおりです。
-
-1. `require('playwright')`
-2. `PLAYWRIGHT_ROOT` が指す package path
-3. `--playwright <path>`
-
-どれにも無ければ exit 2 で、導入または path 指定の方法を表示します。新規に用意する場合の例です。
-
-```bash
-npm install playwright
-npx playwright install chromium
-```
+相対画像は body ファイルのディレクトリを起点に解決します。
 
 ## 検査と反証
 
-ブラウザ検査は A〜J に限定しています。B / C / E / F / G は実行中に故意の壊れを挿入し、その壊れを検出できなければ検査自体を fail にします。A / D / H / I / J は `fixtures/broken-*.html` を selftest が組み立て、狙った検査名で落ちることを確かめます。
+`check-static.sh` は `main.board` 内だけを対象に、次を調べます。ブラウザを起動しません。
 
-| 文字 | 検査 | 反証 |
-|---|---|---|
-| A | page error | `broken-a.html` |
-| B | ページ本体の横 overflow | 実行時に幅広要素を挿入 |
-| C | `.table-wrap` 内の横 scroll | 実行時に overflow 設定を壊した表を挿入 |
-| D | 明示的な閉じタグが要るタグの均衡 | `broken-d.html` |
-| E | 使用 class に対応する inline CSS selector | 実行時に未定義 class を挿入 |
-| F | 画像の読み込みと alt | 実行時に壊れた data URI 画像を挿入 |
-| G | ページ内参照の宛先 | 実行時に存在しない id への参照を挿入 |
-| H | 明暗の背景と `--bg` | `broken-h.html` |
-| I | details の内容・marker・開いた状態の overflow | `broken-i.html` |
-| J | 回答フォームの DOM 契約と実操作 | `broken-j.html` |
+| 検査 | 反証 |
+|---|---|
+| 明示的な閉じタグが要るタグの均衡 | `fixtures/broken-static-tag.html` |
+| 使用 class に対応する inline CSS selector | `good.html` の class 名を selftest が壊す |
+| ページ内参照の宛先 | `fixtures/broken-static-reference.html` |
+| 目次のアンカーが `<section id>` を指すか | `fixtures/broken-toc-anchor.html` |
+| 画像の data URI（base64 として復号できるか） | `good.html` の payload を selftest が壊す |
+| 回答フォームの属性 | `fixtures/broken-j.html` |
+| `.table-wrap` に包まれていない裸の表 | `fixtures/broken-static-table.html` |
 
-回答フォームの `[data-q]` が無い board では J を「この board には回答フォームが無い」と記録して skip します。skip は壊れではないため exit status を失敗にしません。
+`selftest.sh` は、壊した fixture が**狙った検査名だけで**落ちることを確かめます。落ちなければ selftest 自体が失敗します。あわせて `build.sh`（文書版・デッキ版の埋め込み順、画像、不要文字）と `kit/check-contrast.sh`（token の APCA 検査。正常な `tokens.css` が通り、暗くした palette が落ちること）も確かめます。
 
-`check-static.sh` は `main.board` 内だけを対象に、タグの均衡、未定義 class、ページ内参照、画像、回答フォームの属性、裸の表を調べます。ブラウザも Node も使いません。
+**描画そのものは、組み上げた板をブラウザで開いて確かめます。**横 overflow、明暗テーマ、details の開閉、回答フォームの実操作は `render-html-common.md` の共通検査が持ちます。
 
 ## この道具が検査しないもの
 

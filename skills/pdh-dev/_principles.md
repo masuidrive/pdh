@@ -24,4 +24,4 @@ bugfixやfeature ticketのWhyとACは、`product-brief.md`の目的と利益か�
 | investigate + implement | investigate、implement、testsを1つの作業文脈で完遂する |
 | 実装後review | 動く成果物をAC、Invariants、specと照合する |
 | commit cadence | `pdh-coding`「Commit cadence 契約」に従う。pushは`PDH-AGENTS.md`「Execution Model」のpush規律に従う |
-| **Ticket immutable** | `pdh-coding`「Ticket immutable rule (絶対遵守)」に従う。PMは変更が持ち込まれていないかをreviewで確認する |
+| **ticketの変更は再合意** | `pdh-coding`「ticket の変更は再合意で行う (絶対遵守)」に従う。PMは独断の変更が持ち込まれていないかをreviewで確認する |
