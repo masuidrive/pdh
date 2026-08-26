@@ -131,7 +131,7 @@ getComputedStyle(document.querySelector('.answer-choice')).borderTopWidth
 6. 使用 class の定義と `getComputedStyle` を確認する。
 7. 回答の選択、押し直し、メモ同期、再読み込み、未回答表示、移動、コピー fallback を操作する。
 
-検査は [tools/](tools/README.md) が持つ。板ごとは `check-static.sh`（ブラウザ不要）、描画を見る `check.js` は kit を変えたとき。組み立ては `build.sh`。
+検査は [tools/](tools/README.md) が持つ。板ごとは `check-static.sh`（ブラウザ不要）、組み立ては `build.sh`。上の 1〜7 は、組み上げた板をブラウザで開いて確かめる。
 
 ### 検査自体を反証する
 

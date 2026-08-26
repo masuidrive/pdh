@@ -68,7 +68,7 @@ board を配信する側が `board.js` より前で `window.boardHost = { submit
 
 ## 見た目を変えるとき
 
-色・面・寸法は `tokens.css` の token だけを差し替える（明暗とも。差し替えたら `check-contrast.py` を回す）。文字階調・本文幅の組版 token は `board.css` 先頭。個別部品に直接書かない。強調・選択肢カード・塗りの規則は `../render-html-common.md` に従い、kit 固有の判断（推奨は塗らない・帯は薄く・tabular-nums など）は各 CSS の該当箇所にコメントで書いてある。
+色・面・寸法は `tokens.css` の token だけを差し替える（明暗とも。差し替えたら `bash check-contrast.sh` を回す）。文字階調・本文幅の組版 token は `board.css` 先頭。個別部品に直接書かない。強調・選択肢カード・塗りの規則は `../render-html-common.md` に従い、kit 固有の判断（推奨は塗らない・帯は薄く・tabular-nums など）は各 CSS の該当箇所にコメントで書いてある。
 
 ## v2 部品系（2026-08-19 確定 — ui-sample.html が実物見本）
 
@@ -81,7 +81,7 @@ board を配信する側が `board.js` より前で `window.boardHost = { submit
 | `page.js` | 文書版のページ機構（目次開閉・決定論 scroll-spy・h2 の stuck 検出）。見本専用ではなく文書版 board でも使う。picker・目次が無いページでは各機構が自動で何もしない |
 | `beautiful-mermaid.iife.js` | mermaid renderer（esbuild で依存ごと bundle 済み。global: `BeautifulMermaid`） |
 | `mermaid-render.js` | `pre.mermaid` を token 色で描画。テーマ変更で再描画。失敗時はソース表示 + console.error |
-| `check-contrast.py` | token の APCA 検査。**tokens.css を書き換えたら必ず回す**（exit 0 が合格） |
+| `check-contrast.sh` | token の APCA 検査。**tokens.css を書き換えたら必ず回す**（`bash check-contrast.sh`、exit 0 が合格） |
 | `ui-sample.html` | 全部品の実物見本（mermaid bundle は未挿入 — 下記の手順で差し込む）。⚠ **CSS を inline で «自分の写し» として持っている** — `board.css` / `primitives.css` を直したら、見本の `<style>` の同じ規則にも同じ変更を入れる。入れないと、見本だけが古い見た目を «正» として見せ続ける（2026-08-20 に目次の印で実際に起きた） |
 
 ### v2 の設計規則（部品を足すとき・値を触るとき）

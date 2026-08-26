@@ -192,15 +192,20 @@ payload = { boardId, title, answers: [{ q, title, value, label, note }], text, a
 `data-q` ごとに、**その `.answer-set` が貼り戻し欄より前に出ているか**を確かめる。末尾の貼り戻し節の中にしか無い `data-q` があれば、その判断は**その場で選べない。**
 
 ```bash
-python3 - <<'PY' <board.html>
-import re, sys
-h = open(sys.argv[1], encoding="utf-8").read()
-# ⚠ 素朴に "data-answer-output" を探すと、CSS の selector に当たる。実体の textarea を探す。
-m = re.search(r'<textarea[^>]*data-answer-output', h)
-assert m, "貼り戻し欄が見つからない"
-for a in re.finditer(r'class="answer-set"[^>]*data-q="([^"]+)"', h):
-    print(("OK       " if a.start() < m.start() else "末尾のみ "), a.group(1))
-PY
+awk '{ src = src $0 "\n" }
+END {
+  # ⚠ 素朴に "data-answer-output" を探すと、CSS の selector に当たる。実体の textarea を探す。
+  if (!match(src, /<textarea[^>]*data-answer-output/)) { print "貼り戻し欄が見つからない" > "/dev/stderr"; exit 2 }
+  out = RSTART
+  rest = src; base = 0
+  while (match(rest, /class="answer-set"[^>]*data-q="[^"]+"/)) {
+    pos = base + RSTART
+    kv = substr(rest, RSTART, RLENGTH); sub(/^.*data-q="/, "", kv); sub(/".*$/, "", kv)
+    printf "%s %s\n", (pos < out ? "OK      " : "末尾のみ"), kv
+    base = base + RSTART + RLENGTH - 1
+    rest = substr(rest, RSTART + RLENGTH)
+  }
+}' <board.html>
 ```
 
 `末尾のみ` が 1 件でも出たら、その判断の選択肢を材料の直後へ移す。

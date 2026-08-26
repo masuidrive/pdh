@@ -262,12 +262,20 @@ if ! awk -v images="$images" '
   exit 2
 fi
 
+# base64 の復号 flag は GNU が -d、BSD (macOS) が -D。使えるほうを 1 度だけ選ぶ。
+if printf 'eA==' | base64 -d >/dev/null 2>&1; then b64_decode_flag=-d
+elif printf 'eA==' | base64 -D >/dev/null 2>&1; then b64_decode_flag=-D
+else
+  echo "check-static.sh: ERROR: base64 の復号に -d も -D も使えません" >&2
+  exit 2
+fi
+
 image_issues=
 if [ -f "$images" ]; then
   tab=$(printf '\t')
   while IFS="$tab" read -r where payload; do
     [ -n "$where" ] || continue
-    if ! printf '%s' "$payload" | base64 -d >/dev/null 2>&1; then
+    if ! printf '%s' "$payload" | base64 "$b64_decode_flag" >/dev/null 2>&1; then
       if [ -n "$image_issues" ]; then image_issues="$image_issues; $where: base64 decode failed"
       else image_issues="$where: base64 decode failed"
       fi

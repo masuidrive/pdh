@@ -424,7 +424,7 @@ for s in pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-bo
 done
 ```
 
-kit の CSS（tokens.css の palette）を変えたときは `python3 .claude/skills/pdh-decision-board-base/kit/check-contrast.py` が exit 0 になることを確認する。
+kit の CSS（tokens.css の palette）を変えたときは `bash .claude/skills/pdh-decision-board-base/kit/check-contrast.sh` が exit 0 になることを確認する。
 
 
 #### decision-board → pdh-ticket-decision-board へ置き換え（2026-08-15 以降）
