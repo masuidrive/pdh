@@ -74,7 +74,7 @@ kit v2 で確定した共有部品。CSS は `kit/board.css` にある（文書�
 
 ## 文書固有の発行前検査
 
-`render-html-common.md` の共通検査に、次を追加する。
+共通検査のうち機械で見られる範囲は [tools/](tools/README.md) の `check.js` が実行する。そのうえで、`render-html-common.md` の共通検査に次を追加する。
 
 1. sticky `h2` が表の上を覆い、見出しの背景拡張が横 scroll を作らないことを確認する。
 2. `<details>` を開閉し、summary marker が二重に出ないことを確認する。

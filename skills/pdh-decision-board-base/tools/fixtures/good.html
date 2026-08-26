@@ -1,0 +1,32 @@
+<main class="board" lang="ja" data-board-id="tools-selftest" data-answer-title="最小判断">
+  <section id="decision">
+    <h1><b>最小の判断ボード</b>。</h1>
+    <figure class="fig">
+      <div class="media"><img src="pixel.svg" alt="検査用の小さな正方形"></div>
+      <figcaption>画像が自己完結して表示されることを確かめる。</figcaption>
+    </figure>
+    <details class="fold">
+      <summary>根拠を開く</summary>
+      <div class="prose">開いた内容が見える。</div>
+    </details>
+    <div class="table-wrap">
+      <table><tbody><tr><td>表の内容</td></tr></tbody></table>
+    </div>
+    <div class="card answer-choice" role="button" tabindex="0" aria-pressed="false"
+         data-q="approval" data-value="approve" data-label="承認する">
+      <h4>承認する</h4>
+      <p>この形で進める。</p>
+    </div>
+    <section class="answer-set" data-q="approval" data-title="この形で進めるか">
+      <textarea class="answer-note" data-q="approval" aria-label="判断の補足"></textarea>
+    </section>
+  </section>
+  <aside class="answer-progress" aria-live="polite">
+    <span data-progress-count>回答待ち</span><span data-progress-dots aria-hidden="true">○</span>
+  </aside>
+  <section id="answer-summary">
+    <textarea data-answer-output readonly></textarea>
+    <button type="button" data-copy-answer>回答をコピー</button>
+    <p data-copy-status role="status"></p>
+  </section>
+</main>
