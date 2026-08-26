@@ -31,12 +31,21 @@ ticket の以下を implementor が **勝手に書き換えてはいけない**:
 
 - **Acceptance Criteria**
 - **Architectural Invariants check**
-- **確定判断 (Design Decisions)**
 - **Out-of-scope**
 
 変更が必要だと判断したら、**実装を止めてエスカレーション**する（team の場合は PM に escalate、solo / bot の場合は `<RESULT_FILE>` に `STATUS: BLOCKED` を書いて中断し、ユーザーが判断できるよう記録する）。承認を得て ticket が更新されるまで実装を進めない。
 
 これは「意思決定者の意思を上書きしない」ための gate。違反すると ticket が "意思決定者の意思" を持たなくなり、ticket そのものの価値が消失する。
+
+### 確定判断 (Design Decisions) は上の 3 つと同じ扱いにしない
+
+解き方は実装で前提が崩れる。崩れた判断に従い続けると AC から遠ざかり、ticket は「承認された時点で正しかった解き方」を保持したまま実物と食い違う。次の 3 つを満たす限り、implementor が書き換えてよい。
+
+1. **上の 3 つを動かさない。**AC・Architectural Invariants check・Out-of-scope のどれかが動くなら、それは解き方の変更ではなく契約の変更である。実装を止めて escalate する。
+2. **旧判断を消さない。**該当行を新しい判断へ書き換え、**元の判断・崩れた前提・新しい判断**を 1 行残す。
+3. **close 前 gate の板に出す。**承認者は実装前 gate でこの解き方ごと承認している。変わったことを知らせずに close を承認させない。
+
+⚠ **「AC は満たせるから」を理由に黙って逸脱しない。**記録の無い変更は、この規則が許した書き換えではなく違反である。
 
 ## YAGNI / 最小実装 (絶対遵守)
 
