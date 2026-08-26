@@ -13,7 +13,6 @@ fi
 if [[ -z "$NODE_BIN" ]]; then
   NVM_SCRIPT="${NVM_DIR:-${HOME}/.nvm}/nvm.sh"
   if [[ -r "$NVM_SCRIPT" ]]; then
-    # nvm is optional; sourcing it only supplies node when the parent shell did not.
     # shellcheck disable=SC1090
     source "$NVM_SCRIPT" >/dev/null 2>&1
     NODE_BIN=$(command -v node || true)
@@ -26,7 +25,7 @@ fi
 
 build_fixture() {
   local name=$1
-  PYTHONDONTWRITEBYTECODE=1 python3 "$TOOLS_DIR/build.py" \
+  "$TOOLS_DIR/build.sh" \
     --body "$FIXTURES_DIR/$name.html" \
     --out "$SELFTEST_TMP/$name.html" \
     >"$SELFTEST_TMP/$name.build.stdout" \
@@ -47,36 +46,45 @@ run_check() {
   return "$status"
 }
 
-for fixture in good broken-a broken-d broken-h broken-i broken-j; do
+for fixture in good broken-a broken-d broken-h broken-i broken-j \
+  broken-static-tag broken-static-reference broken-static-table; do
   build_fixture "$fixture"
 done
 
-PYTHONDONTWRITEBYTECODE=1 python3 - "$TOOLS_DIR/build.py" "$FIXTURES_DIR" <<'PY'
-import importlib.util
-from pathlib import Path
-import sys
-
-module_path = Path(sys.argv[1])
-spec = importlib.util.spec_from_file_location("decision_board_build", module_path)
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
-source = '<p title="A。"><b>X</b>。 A。 B&#12290;</p><code>A。</code><pre>A。</pre><img src="pixel.svg" alt="x">'
-once, _ = module.transform_body(source, Path(sys.argv[2]), True)
-twice, _ = module.transform_body(once, Path(sys.argv[2]), True)
-assert once == twice
-assert 'title="A。"' in once
-assert '<b>X</b>\u2060。' in once
-assert 'A\u2060。' in once
-assert 'B\u2060&#12290;' in once
-assert '<code>A。</code>' in once and '<pre>A。</pre>' in once
-assert 'data:image/svg+xml;base64,' in once
-PY
-echo "PASS build: 自己完結化・text node 禁則・冪等性"
+mawk '
+  { source = source $0 "\n" }
+  END {
+    if (index(source, "data-inline-source=\"tokens.css\"") == 0) exit 1
+    if (index(source, "data-inline-source=\"board.css\"") == 0) exit 1
+    if (index(source, "data-inline-source=\"page.js\"") == 0) exit 1
+    if (index(source, "data-inline-source=\"board.js\"") == 0) exit 1
+    if (index(source, "data:image/svg+xml;base64,") == 0) exit 1
+    if (index(source, "\342\201\240") != 0) exit 1
+  }
+' "$SELFTEST_TMP/good.html"
+"$TOOLS_DIR/build.sh" --body "$FIXTURES_DIR/good.html" --out "$SELFTEST_TMP/deck.html" --layout deck >/dev/null 2>&1
+mawk '
+  { source = source $0 "\n" }
+  END {
+    a = index(source, "data-inline-source=\"tokens.css\"")
+    b = index(source, "data-inline-source=\"board.css\"")
+    c = index(source, "data-inline-source=\"deck.css\"")
+    d = index(source, "data-inline-source=\"deck.js\"")
+    e = index(source, "data-inline-source=\"board.js\"")
+    exit !(a < b && b < c && c < d && d < e)
+  }
+' "$SELFTEST_TMP/deck.html"
+printf '%s\n' '<main class="board"><img src="missing.png" alt="x"></main>' > "$SELFTEST_TMP/missing-image.html"
+if "$TOOLS_DIR/build.sh" --body "$SELFTEST_TMP/missing-image.html" --out "$SELFTEST_TMP/should-not-build.html" >/dev/null 2>&1; then
+  echo 'FAIL build: 読めない相対画像を受理しました' >&2
+  exit 1
+fi
+echo 'PASS build.sh: document/deck・画像・不要文字なし'
 
 if run_check good; then
-  echo "PASS good: A〜K"
+  echo 'PASS good: check.js A〜J'
 else
-  echo "FAIL good: check.js が成功しませんでした" >&2
+  echo 'FAIL good: check.js が成功しませんでした' >&2
   cat "$SELFTEST_TMP/good.check" >&2
   exit 1
 fi
@@ -109,4 +117,46 @@ for fixture in broken-a broken-d broken-h broken-i broken-j; do
   echo "PASS $fixture: $expected を反証"
 done
 
-echo "PASS selftest"
+if "$TOOLS_DIR/check-static.sh" "$SELFTEST_TMP/good.html" > "$SELFTEST_TMP/good.static"; then
+  echo 'PASS good: check-static.sh'
+else
+  echo 'FAIL good: check-static.sh が成功しませんでした' >&2
+  cat "$SELFTEST_TMP/good.static" >&2
+  exit 1
+fi
+
+sed 's/class="fig"/class="static-undefined"/' "$SELFTEST_TMP/good.html" > "$SELFTEST_TMP/broken-static-class.html"
+sed 's|data:image/svg+xml;base64,[A-Za-z0-9+/=]*|data:image/svg+xml;base64,!|' \
+  "$SELFTEST_TMP/good.html" > "$SELFTEST_TMP/broken-static-image.html"
+
+declare -A STATIC_EXPECTED=(
+  [broken-static-tag]='タグの均衡'
+  [broken-static-class]='未定義 class'
+  [broken-static-reference]='ページ内参照'
+  [broken-static-image]='画像'
+  [broken-j]='回答フォームの属性'
+  [broken-static-table]='裸の表'
+)
+
+for fixture in broken-static-tag broken-static-class broken-static-reference \
+  broken-static-image broken-j broken-static-table; do
+  if "$TOOLS_DIR/check-static.sh" "$SELFTEST_TMP/$fixture.html" > "$SELFTEST_TMP/$fixture.static"; then
+    echo "FAIL $fixture: 壊した fixture が成功しました" >&2
+    cat "$SELFTEST_TMP/$fixture.static" >&2
+    exit 1
+  fi
+  expected=${STATIC_EXPECTED[$fixture]}
+  if ! grep -q "^FAIL $expected :: " "$SELFTEST_TMP/$fixture.static"; then
+    echo "FAIL $fixture: $expected で失敗しませんでした" >&2
+    cat "$SELFTEST_TMP/$fixture.static" >&2
+    exit 1
+  fi
+  if [[ $(grep -c '^FAIL ' "$SELFTEST_TMP/$fixture.static") -ne 1 ]]; then
+    echo "FAIL $fixture: 狙っていない静的検査も失敗しました" >&2
+    cat "$SELFTEST_TMP/$fixture.static" >&2
+    exit 1
+  fi
+  echo "PASS $fixture: static $expected を反証"
+done
+
+echo 'PASS selftest'

@@ -7,11 +7,12 @@ body 断片を自己完結 HTML に組み立て、その完成物に内容非依
 文書版の body 断片は `<main class="board" …>…</main>`、デッキ版は `<div class="deck" …>…</div>` を含めます。
 
 ```bash
-python3 tools/build.py --body body.html --out board.html --config board.json
+tools/build.sh --body body.html --out board.html
+tools/check-static.sh board.html
 node tools/check.js board.html --config board.json --out results.json
 ```
 
-`--config` と `--out`（check 側）は省略できます。build は埋め込んだ kit ファイル名と、data URI に変えた画像のファイル名を stderr に出します。相対 `img src` は `png` / `jpg` / `jpeg` / `gif` / `svg` / `webp` だけを受け、読めない画像や未対応形式では出力を止めます。
+`--config` と `--out`（check 側）は省略できます。build は埋め込んだ kit ファイル名と、data URI に変えた画像の有無を stderr に出します。相対 `img src` は `png` / `jpg` / `jpeg` / `gif` / `svg` / `webp` だけを受け、読めない画像や未対応形式では出力を止めます。
 
 `href` は画像として埋め込みません。kit の画面写真 overlay と文書部品は `href="#…"` を、script が止まっていても働くページ内移動・開閉として使うためです。
 
@@ -23,21 +24,20 @@ PLAYWRIGHT_ROOT=/path/to/node_modules/playwright bash tools/selftest.sh
 
 通常の shell から `node` が見えない場合、selftest は nvm も探します。別の Node を明示する場合は `NODE=/path/to/node` を渡せます。
 
-## 設定
+## build の引数
 
-build と check は同じ JSON を読めます。各コマンドは自分が使うキーだけを参照します。
+build は JSON 設定を読みません。
 
-| キー | 使用側 | 既定値 | 意味 |
-|---|---|---|---|
-| `lang` | build / check | `"ja"` | `<html lang>`。`ja` で始まるときだけ禁則の挿入・検査を行う |
-| `layout` | build / check | `"document"` | `"document"` または `"deck"`。読み込む kit を切り替える |
-| `title` | build | 最初の h1、無ければ `"判断ボード"` | `<title>` の文字列 |
-| `assets_dir` | build | body ファイルのディレクトリ | 相対画像を探す起点 |
-| `mermaid` | build | `false` | bundle と render script を board.js より前へ inline する |
-| `kit_dir` | build | `build.py` から見た `../kit` | kit の起点 |
-| `widths` | check | `[380, 390, 1440]` | ブラウザ検査に使う幅 |
+| 引数 | 既定値 | 意味 |
+|---|---|---|
+| `--body` | 必須 | body 断片 |
+| `--out` | 必須 | 完成 HTML の出力先 |
+| `--kit` | `build.sh` から見た `../kit` | kit の起点 |
+| `--lang` | `ja` | `<html lang>` |
+| `--layout` | `document` | `document` または `deck`。読み込む kit を切り替える |
+| `--title` | 最初の h1、無ければ `判断ボード` | `<title>` の文字列 |
 
-config に書いた相対 `assets_dir` / `kit_dir` は config ファイルのディレクトリを起点に解決します。config が無い場合、`assets_dir` は body のディレクトリです。
+相対画像は body ファイルのディレクトリを起点に解決します。check の JSON 設定では `widths` と `layout` を指定できます。
 
 ## Playwright
 
@@ -56,7 +56,7 @@ npx playwright install chromium
 
 ## 検査と反証
 
-検査は A〜K に限定しています。B / C / E / F / G / K は実行中に故意の壊れを挿入し、その壊れを検出できなければ検査自体を fail にします。A / D / H / I / J は `fixtures/broken-*.html` を selftest が組み立て、狙った検査名で落ちることを確かめます。
+ブラウザ検査は A〜J に限定しています。B / C / E / F / G は実行中に故意の壊れを挿入し、その壊れを検出できなければ検査自体を fail にします。A / D / H / I / J は `fixtures/broken-*.html` を selftest が組み立て、狙った検査名で落ちることを確かめます。
 
 | 文字 | 検査 | 反証 |
 |---|---|---|
@@ -70,12 +70,11 @@ npx playwright install chromium
 | H | 明暗の背景と `--bg` | `broken-h.html` |
 | I | details の内容・marker・開いた状態の overflow | `broken-i.html` |
 | J | 回答フォームの DOM 契約と実操作 | `broken-j.html` |
-| K | 日本語の行頭禁則 | 実行時に行頭約物を挿入 |
 
-回答フォームの `[data-q]` が無い board では J を「この board には回答フォームが無い」と記録して skip します。`lang` が `ja` で始まらない場合は K を skip します。skip は壊れではないため exit status を失敗にしません。
+回答フォームの `[data-q]` が無い board では J を「この board には回答フォームが無い」と記録して skip します。skip は壊れではないため exit status を失敗にしません。
+
+`check-static.sh` は `main.board` 内だけを対象に、タグの均衡、未定義 class、ページ内参照、画像、回答フォームの属性、裸の表を調べます。ブラウザも Node も使いません。
 
 ## この道具が検査しないもの
 
-構造・数・節の有無・行数は検査しません。判断ボードの形は案件ごとに違うので、道具が基準を持つと誤検知になるためです。節、カード、AC、判断、決定サマリー、見出しなどの個数や有無は、出力にも含めません。
-
-唯一の例外は、明示的な閉じタグが要るタグの開始・終了の均衡です。不一致の場合もタグ名と差だけを出し、タグの総数は出しません。
+節・カード・AC・判断・見出しの数や有無は、検査にも出力にも入れません（板の形は案件ごとに違うため）。例外はタグの均衡だけで、それも不一致のタグ名と差しか出しません。

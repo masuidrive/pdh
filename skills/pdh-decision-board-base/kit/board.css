@@ -37,7 +37,7 @@ body {
 }
 
 .board, .board *, .deck, .deck * { box-sizing: border-box; }
-.board, .deck { line-break: strict; overflow-wrap: anywhere; }
+.board, .deck { line-break: strict; overflow-wrap: break-word; }
 .board pre, .deck pre { line-break: strict; white-space: pre-wrap; }
 
 /* 帯は下 40% だけ。全面を塗らない（render-html-common.md「強調」）。 */
@@ -158,14 +158,6 @@ a.shot-open, a.mapcell, a.shot-zoom, .lightbox-close { color: inherit; text-deco
   font-variant-numeric: tabular-nums;
 }
 .board th { background: var(--fill); font-weight: 700; }
-/* 短い語だけが入る列は、途中で割らない（`pptx` が `ppt/x` に割れるのを防ぐ）。
-   .board 全体の overflow-wrap: anywhere がここにも効いてしまうため。 */
-.board table.keep-first td:first-child,
-.board table.keep-first th:first-child { white-space: nowrap; }
-/* rowspan を使う表には .keep-first を付けられない — 第 1 セルが «状態» 列になる行が
-   あり、nowrap にすると長い説明が 1 行に伸びて表が横へ広がる（実測 1112px → 544px）。
-   AC 名のような短いラベルだけが折り返さないよう、rowspan のセルにだけ効かせる。 */
-.board table td[rowspan]:first-child { white-space: nowrap; }
 
 /* ---------- カード ---------- */
 .card {
@@ -346,7 +338,8 @@ ul.tl time{display:block;font-family:var(--font-head);font-size:.78rem;letter-sp
   margin:0 0 calc(var(--u)*5);width:fit-content;min-width:min(100%,28rem);max-width:100%}
 .fig .bar{display:flex;align-items:center;gap:calc(var(--u)*2);border-bottom:1px solid var(--line);
   background:var(--fill);padding:calc(var(--u)*1) calc(var(--u)*3);font-size:.8rem;font-family:var(--font-head)}
-.fig img,.fig svg{display:block;max-width:100%;height:auto}
+.board img,.board svg,.board video{max-width:100%;height:auto}
+.fig img,.fig svg{display:block}
 .mermaid-svg svg{display:block;max-width:100%;height:auto}
 .fig .media{overflow-x:auto}
 .fig .media.pad{padding:calc(var(--u)*4)}

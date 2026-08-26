@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 
-const DEFAULT_CONFIG = { widths: [380, 390, 1440], lang: 'ja', layout: 'document' };
+const DEFAULT_CONFIG = { widths: [380, 390, 1440], layout: 'document' };
 const CHECK_NAMES = {
   A: 'page error',
   B: '横 overflow',
@@ -17,7 +17,6 @@ const CHECK_NAMES = {
   H: 'テーマ',
   I: 'details',
   J: '回答フォームの DOM 契約',
-  K: '日本語の行頭禁則',
 };
 
 function usageError(message) {
@@ -231,44 +230,6 @@ async function detailsFailures(page) {
       if (markerVisible && beforeVisible) failures.push(`${describe(details)}: marker と ::before が二重`);
       return failures;
     });
-  });
-}
-
-async function kinsokuFailures(page) {
-  return page.evaluate(() => {
-    const prohibited = 'ぁぃぅぇぉっゃゅょー、。・：；？！）」』】';
-    const root = document.querySelector('[data-board-id]') || document.body;
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        if (!node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-        if (node.parentElement.closest('pre, textarea, style, script')) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_ACCEPT;
-      },
-    });
-    const range = document.createRange();
-    const hits = [];
-    let previous = null;
-    let node;
-    while ((node = walker.nextNode())) {
-      const text = node.nodeValue;
-      for (let index = 0; index < text.length; index += 1) {
-        const character = text[index];
-        if (character === '\u2060' || character === '\u200b' || /\s/.test(character)) continue;
-        range.setStart(node, index);
-        range.setEnd(node, index + 1);
-        const rect = range.getBoundingClientRect();
-        if (rect.width === 0 && rect.height === 0) continue;
-        const lineStart = !previous || rect.left < previous.left - 0.5 || rect.top >= previous.bottom - 1;
-        const inCode = Boolean(node.parentElement.closest('code'));
-        if (lineStart && !inCode && prohibited.includes(character)) {
-          const owner = node.parentElement.closest('[id]');
-          hits.push(`${owner ? `#${owner.id}` : node.parentElement.tagName.toLowerCase()}: ` +
-            `${text.slice(Math.max(0, index - 10), index)}【${character}】${text.slice(index + 1, index + 11)}`);
-        }
-        previous = rect;
-      }
-    }
-    return hits;
   });
 }
 
@@ -573,35 +534,6 @@ async function runAnswerForm(browser, boardUrl, width) {
   return result(failures.length ? 'fail' : 'pass', failures, 'fixture: broken-j.html');
 }
 
-async function runKinsoku(browser, boardUrl, widths, lang) {
-  if (!String(lang).toLowerCase().startsWith('ja')) {
-    return result('skip', ['lang が ja ではないため検査しない'], 'runtime injection on ja board');
-  }
-  const failures = [];
-  let counterexampleCaught = false;
-  for (const width of widths) {
-    const handle = await newPage(browser, boardUrl, width);
-    for (const open of [false, true]) {
-      await setAllDetails(handle.page, open);
-      const hits = await kinsokuFailures(handle.page);
-      failures.push(...hits.map(hit => `幅 ${width}px / details ${open ? 'open' : 'closed'}: ${hit}`));
-    }
-    if (!counterexampleCaught) {
-      await handle.page.evaluate(() => {
-        const probe = document.createElement('p');
-        probe.id = 'pdh-check-kinsoku';
-        probe.innerHTML = 'あ<br>。い';
-        (document.querySelector('[data-board-id]') || document.body).appendChild(probe);
-      });
-      counterexampleCaught = (await kinsokuFailures(handle.page)).some(hit => hit.includes('#pdh-check-kinsoku'));
-      await handle.page.evaluate(() => document.getElementById('pdh-check-kinsoku').remove());
-    }
-    await closePage(handle);
-  }
-  if (!counterexampleCaught) failures.push('反証失敗: 故意の行頭約物を検出できない');
-  return result(failures.length ? 'fail' : 'pass', failures, 'runtime injection: #pdh-check-kinsoku');
-}
-
 function printSummary(results) {
   for (const letter of Object.keys(CHECK_NAMES)) {
     const item = results[letter];
@@ -637,7 +569,6 @@ async function main() {
     results.H = await runTheme(browser, boardUrl, config.widths[0]);
     results.I = await runDetails(browser, boardUrl, config.widths);
     results.J = await runAnswerForm(browser, boardUrl, config.widths[0]);
-    results.K = await runKinsoku(browser, boardUrl, config.widths, config.lang);
   } finally {
     await browser.close();
   }
