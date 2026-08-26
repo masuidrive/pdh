@@ -47,6 +47,7 @@ build は JSON 設定を読みません。
 | 明示的な閉じタグが要るタグの均衡 | `fixtures/broken-static-tag.html` |
 | 使用 class に対応する inline CSS selector | `good.html` の class 名を selftest が壊す |
 | ページ内参照の宛先 | `fixtures/broken-static-reference.html` |
+| 目次のアンカーが `<section id>` を指すか | `fixtures/broken-toc-anchor.html` |
 | 画像の data URI（base64 として復号できるか） | `good.html` の payload を selftest が壊す |
 | 回答フォームの属性 | `fixtures/broken-j.html` |
 | `.table-wrap` に包まれていない裸の表 | `fixtures/broken-static-table.html` |

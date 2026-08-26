@@ -17,7 +17,7 @@ build_fixture() {
     2>"$SELFTEST_TMP/$name.build.stderr"
 }
 
-for fixture in good broken-j broken-static-tag broken-static-reference broken-static-table; do
+for fixture in good broken-j broken-static-tag broken-static-reference broken-static-table broken-toc-anchor; do
   build_fixture "$fixture"
 done
 
@@ -68,6 +68,7 @@ expected_for() {
     broken-static-tag)       echo 'タグの均衡' ;;
     broken-static-class)     echo '未定義 class' ;;
     broken-static-reference) echo 'ページ内参照' ;;
+    broken-toc-anchor)       echo 'ページ内参照' ;;
     broken-static-image)     echo '画像' ;;
     broken-j)                echo '回答フォームの属性' ;;
     broken-static-table)     echo '裸の表' ;;
@@ -75,7 +76,7 @@ expected_for() {
 }
 
 for fixture in broken-static-tag broken-static-class broken-static-reference \
-  broken-static-image broken-j broken-static-table; do
+  broken-static-image broken-j broken-static-table broken-toc-anchor; do
   if "$TOOLS_DIR/check-static.sh" "$SELFTEST_TMP/$fixture.html" > "$SELFTEST_TMP/$fixture.static"; then
     echo "FAIL $fixture: 壊した fixture が成功しました" >&2
     cat "$SELFTEST_TMP/$fixture.static" >&2

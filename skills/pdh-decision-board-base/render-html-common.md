@@ -112,27 +112,24 @@ rg -o 'class="[^"]+"' <board.html> | sort -u
 rg -n '\.(answer-choice|answer-note|answer-progress|<class-name>)([^a-zA-Z0-9_-]|$)' <board.html>
 ```
 
-grep は定義の存在しか示さない。ブラウザで代表要素の計算値を読み、期待するレイアウトや境界が実際に効いていることを確認する。
-
-```js
-getComputedStyle(document.querySelector('.answer-progress')).position
-getComputedStyle(document.querySelector('.answer-choice')).borderTopWidth
-```
+⚠ **計算値をブラウザで読んで確かめる、はここには書かない。**skill の中からブラウザは開けない。kit の class が期待どおり効くことは `kit/board.css` が保証し、`kit/README.md`「kit が保証している挙動」がその一覧を持つ。ここで確かめるのは**板が書いた class に定義があるか**だけで、それは `check-static.sh` の「未定義 class」が拾う。
 
 見た目のためだけに新しいクラスを増やさない。必要な役割が既存 token と素の要素で表せる場合は、新しい selector を作らない。
 
 ## 共通の発行前検査
 
-1. プロジェクトが定める最小・最大 viewport と、このファイルの既定狭幅で描画する。
-2. 明暗テーマを描画し、token の計算値とスクリーンショットの両方を確認する。
-3. 画面の外へ右端・左端が出ている要素が無いことを、要素の矩形で確認する（`overflow-x: clip` を当てていると `scrollWidth` は育たないので、そちらだけでは見つからない）。
-4. 明示的な閉じタグが要るタグの、開始と終了の均衡を確認する。
-5. AC 番号と参照 ID を検索し、古い表示が残っていないか確認する。
-6. 使用 class の定義と `getComputedStyle` を確認する。
-7. 回答の選択、押し直し、メモ同期、再読み込み、未回答表示、移動、コピー fallback を操作する。
+⚠ **skill の中からブラウザは開けない。**だから板ごとに回すのは shell の検査だけである。
 
-検査は [tools/](tools/README.md) が持つ。板ごとは `check-static.sh`（ブラウザ不要）、組み立ては `build.sh`。上の 1〜7 は、組み上げた板をブラウザで開いて確かめる。
+```bash
+tools/build.sh --body body.html --out board.html
+tools/check-static.sh board.html
+```
 
-### 検査自体を反証する
+`check-static.sh` が調べるのは、タグの均衡・未定義 class・ページ内参照の宛先・画像の data URI・回答フォームの属性・`.table-wrap` に包まれていない裸の表。これに加えて、板ごとに次を確かめる。
 
-overflow、未定義 class、壊れた参照、保存失敗などを一時的に作り、検査が失敗を返すことを確認する。検査方法を変更した直後は、緑の結果だけで検査が働くと判断しない。
+1. **AC 番号と参照 ID を検索し、古い表示が残っていないか**（下記「修正後の一貫性」と同じ検索）。
+2. **選択肢が貼り戻し欄より前に出ているか**（[answer-form.md](answer-form.md)「発行前に、選択肢の位置を検査する」の awk）。
+
+**描画そのもの — 明暗テーマの見え方、狭い画面での折り返し、面に収まっているか、回答フォームの実操作 — は、kit が保証している範囲である**（[kit/README.md](kit/README.md)「kit が保証している挙動」）。**kit を変えたときだけ**、PDH repo 側の `scripts/check-board-render.sh` が実ブラウザで確かめる。
+
+⚠ **それでも板の見え方を確かめる必要が出たら、`PDH-AGENTS.md`「Browser And Surface Checks」に従う** — 回せないなら回せないと述べてユーザへ渡す。確かめずに「確認した」と書かない。

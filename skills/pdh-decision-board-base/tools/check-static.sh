@@ -101,6 +101,10 @@ if ! awk -v images="$images" '
     return !(tag ~ /^(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/ ||
       tag ~ /^(html|head|body|p|li|dt|dd|rt|rp|optgroup|option|colgroup|thead|tbody|tfoot|tr|td|th)$/)
   }
+  function in_toc(    i) {
+    for (i = depth; i >= 1; i--) if (has_class(stack_class[i], "toc")) return 1
+    return 0
+  }
   function wrapped_table(    i) {
     for (i = depth; i >= 1; i--) if (has_class(stack_class[i], "table-wrap") || has_class(stack_class[i], "tw")) return 1
     return 0
@@ -173,11 +177,14 @@ if ! awk -v images="$images" '
         desc = describe(name, id, classes)
         n = split(classes, parts, /[[:space:]]+/)
         for (i = 1; i <= n; i++) if (parts[i] != "") used_class[parts[i]] = 1
-        if (id != "") ids[id] = 1
+        if (id != "") { ids[id] = 1; id_tag[id] = name }
         if (has_attr(token, "data-q")) has_data_q = 1
         if (name == "a") {
           href = attr(token, "href")
-          if (substr(href, 1, 1) == "#" && href != "#") references[href] = desc
+          if (substr(href, 1, 1) == "#" && href != "#") {
+            references[href] = desc
+            if (in_toc()) toc_refs[href] = desc
+          }
         }
         if (name == "img") {
           alt = trim(attr(token, "alt"))
@@ -242,6 +249,12 @@ if ! awk -v images="$images" '
     for (href in references) {
       target = substr(href, 2)
       if (!(target in ids)) add_issue("reference", references[href] " -> " href)
+    }
+    # 目次のアンカーが見出しを指すと、選択肢が宛先の中に入らず «判断のある節» の印が消える。
+    for (href in toc_refs) {
+      target = substr(href, 2)
+      if (target in id_tag && id_tag[target] ~ /^h[1-6]$/)
+        add_issue("reference", toc_refs[href] " -> " href " (目次の宛先は <section id> にする)")
     }
     if (has_data_q) {
       if (!has_output) add_issue("answer", "textarea[data-answer-output] is missing")

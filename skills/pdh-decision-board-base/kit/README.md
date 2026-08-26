@@ -22,6 +22,33 @@
 
 組み立て（body と CSS / JS を 1 枚にまとめる手順）と、その結果の検査は kit の外。その «外» は [../tools/](../tools/README.md)。
 
+## kit が保証している挙動
+
+**次は kit が実装して保証する。板を書く人は class と `data-*` を書くだけで、そうなっているかを確かめない。**⚠ **skill の中からブラウザは開けないので、確かめようがない** — だから規則の側に「ブラウザで測れ」と書かない。書き忘れは [../tools/](../tools/README.md) の `check-static.sh` が拾う（`data-q` / `data-label` の欠落、`[data-answer-output]` / `.answer-progress` / `[data-copy-answer]` / `[data-copy-status]` の不在、未定義 class）。
+
+**見た目**（`board.css`）
+
+- 選択肢カードは**丸が左・バッジが右**（丸は `h4::before`、バッジは `float: inline-end`）。選ばれていないカードでも丸と左帯の幅は空けてある — 選んだ瞬間に本文が右へずれない。
+- **塗りは «選ばれている» だけの印。**選択中の 1 枚に太枠・左帯・塗り・塗られた丸が付き、同じ `data-q` の他のカードは薄くなる（`is-dimmed`）。カードの地は 4 枚とも回答フォームの CSS が決めるので、文書版とデッキ版で既定が食い違わない。
+- **日本語の行頭禁則**は `.board { line-break: strict }` でブラウザが守る。
+- **横 overflow は起きない作りにしてある。**表は `.table-wrap` の中だけが動き、ページ本体は動かない。
+- **明暗テーマ**は `tokens.css` の token 差し替えだけで成立する。部品の CSS は 1 行も変わらない。
+
+**動き**（`board.js`）
+
+- 状態は `data-board-id` ごとに localStorage へ保存し、再読み込みで復元する。**保存に失敗しても、回答と貼り戻し文の生成は続く。**
+- 貼り戻し文の短い名前は `data-label` から取る。未回答は `（未選択）` と出し、進捗を `回答 n / N` で更新する。
+- 入力中の `<textarea>` 自身は同期処理で書き換えない（カーソル位置が飛ばない）。
+- カードは `<button>` ではないので、Enter / Space を `board.js` が受ける。
+- **コピーは 3 段**。① `navigator.clipboard` → ② `document.execCommand('copy')`（押した操作の中で呼ぶので sandbox された iframe でも通る）→ ③ 選択を残して手でのコピーを案内。
+- **送信ボタンは `window.boardHost` があるときだけ**出て、そのときコピーは予備の見た目へ落ちる。無ければコピーだけが残る。
+- **目次の行末**に、判断のある節の印（✓）を出す。その節の判断が全部埋まると淡色の丸みへ変わる。
+- **進捗バッジは押せる。**まだ答えていない最初の判断の節へ運ぶ。
+
+### 保証を確かめる
+
+**`kit/` を変えたら、PDH repo 側の `scripts/check-board-render.sh` を回す。**A〜J の描画検査を実ブラウザで走らせ、壊した fixture が狙った検査名だけで落ちることまで確かめる。Node と Playwright を使うが、**kit を作るのは PDH repo の作業で配布しないので `product-brief.md` の `AI-4` の対象外である**（`scripts/check-links.py` と同じ扱い）。配布先は kit を変えないので、この検査は配らない。
+
 ## kit が前提にする DOM
 
 - 外枠: `<main class="board" lang="ja" data-board-id="…" data-answer-title="…">`（文書）／ `<div class="deck" id="deck" lang="ja" data-board-id="…" data-answer-title="…">`（デッキ）。⚠ `data-board-id` は 1 ページに 1 つ。**回答フォームの部品（進捗・貼り戻し欄・コピーボタン）は全部この中に置く** — `board.js` は外枠の中しか見ない。
