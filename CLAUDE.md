@@ -36,6 +36,7 @@ scripts/
   check-links.py                     # Markdown リンク / アンカー検査（配布物ではない）
   check-board-render.sh              # 判断ボード kit の描画検査（配布物ではない。kit を変えたときだけ回す）
   board-check/                       # 同上（check.js と反証 fixture）
+  bsd-shim/                          # BSD (macOS) のコマンドを Linux 上で模す（配布物ではない）
   checks/*.check                     # この repo 用 fast-check レジストリ
 ```
 
@@ -96,11 +97,12 @@ skill・`PDH-AGENTS.md`・`CLAUDE.md` に置くのは**現在形の規則だけ*
 
 ## 自動検査
 
-`./scripts/test-all.sh` を実行する。中身は 4 つ:
+`./scripts/test-all.sh` を実行する。中身は 5 つ:
 
 - `scripts/fast-checks.sh` — `scripts/checks/*.check` の宣言的 grep 不変条件（`Based on` 行の commit id 置換禁止、配布物からの `templates/` 参照禁止、merge-conflict marker）
 - `scripts/check-distribution.sh` — grep で書けない検査（`Based on` 行の存在とパス一致、`INSTALL.md` 配置表 ↔ 実ファイルの双方向一致、**配布物間の重複行検出**）
 - `scripts/check-links.py` — Markdown のリンク検査（リンク先ファイルの存在、**アンカーが実在する見出しを指すか**）。見出しの改名でリンクが静かに切れるのを防ぐ
+- **配布 kit の `selftest.sh` を 2 回** — 素の環境と、`scripts/bsd-shim/` を PATH に載せた BSD 相当。この repo も CI も GNU なので、**GNU でしか動かない書き方は素の実行では通ってしまう。**実際に `build.sh` が `base64 "$file"`（BSD が受け付けない位置引数）のまま配布され、macOS で画像を埋め込めなかった
 - 配布 `*.sh` の構文検査
 
 **配布物を追加・改名・削除したら `./scripts/test-all.sh` が通ることを確認する。** README への追記漏れはここで落ちる。

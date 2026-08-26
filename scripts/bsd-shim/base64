@@ -1,0 +1,17 @@
+#!/bin/sh
+# macOS (BSD) の base64 を Linux 上で模す。PDH repo の検査専用で、配布しない。
+#
+# BSD 版と GNU 版の実在する違いは 2 つ:
+#   - BSD はファイル名の位置引数を取らない（`-i in_file` か stdin だけ）
+#   - 復号 flag が BSD は -D、GNU は -d
+# どちらも配布 script が実際に踏んだ非互換である（build.sh が前者で落ちた）。
+args=""
+for a in "$@"; do
+  case "$a" in
+    -d) echo "base64: illegal option -- d" >&2; exit 1 ;;
+    -D) args="$args -d" ;;
+    -*) args="$args $a" ;;
+    *)  echo "base64: invalid argument $a" >&2; exit 1 ;;
+  esac
+done
+exec /usr/bin/base64 $args

@@ -40,6 +40,17 @@ else
   failed=1
 fi
 
+# 配布 kit の selftest を、素の環境と BSD を模した環境の 2 回走らせる。
+# 配布物は BSD / GNU の両方で動くことを要求している（product-brief.md AI-4）が、
+# この repo も CI も GNU なので、GNU でしか動かない書き方は素の実行では通ってしまう。
+# 実際に build.sh が `base64 "$file"`（BSD が受け付けない位置引数）のまま配布された。
+# shim は scripts/bsd-shim/ にあり、配布しない。
+kit_selftest=skills/pdh-decision-board-base/tools/selftest.sh
+if [[ -x "$kit_selftest" ]]; then
+  run "kit selftest" bash "$kit_selftest"
+  run "kit selftest (BSD 相当)" env PATH="$PWD/scripts/bsd-shim:$PATH" bash "$kit_selftest"
+fi
+
 printf '\n=== shell syntax (shipped scripts) ===\n'
 syntax_failed=0
 while IFS= read -r script; do

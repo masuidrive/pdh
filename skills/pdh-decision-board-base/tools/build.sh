@@ -120,7 +120,9 @@ while IFS="$tab" read -r token relative mime; do
     echo "build.sh: ERROR: cannot read image: $asset" >&2
     exit 1
   fi
-  if ! encoded_lines=$(base64 "$asset"); then
+  # BSD (macOS) の base64 はファイル名の位置引数を取らない（-i が要る）。
+  # stdin から読めば GNU / BSD のどちらでも同じに動く。
+  if ! encoded_lines=$(base64 < "$asset"); then
     echo "build.sh: ERROR: cannot encode image: $asset" >&2
     exit 1
   fi
