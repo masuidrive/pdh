@@ -13,10 +13,15 @@
 # that only shares the name. This script is a bash grep runner, not that library.
 #
 # Each scripts/checks/<id>.check is key=value:
-#   reason=<human explanation printed on failure>
-#   pattern=<POSIX ERE forbidden pattern>          (required)
-#   glob=<dir>/** or <dir>/**/*.<ext>[,<more>]     (required; comma-separated)
+#   reason=<human explanation printed on failure>   (required)
+#   glob=<dir>/** or <dir>/**/*.<ext>[,<more>]      (required, comma-separated;
+#                                                    not used by required_paths)
 #   exclude=<same glob forms>                       (optional)
+# Exactly one type key is required:
+#   pattern=<POSIX ERE forbidden pattern>
+#   max_lines=<positive integer line ceiling>
+#   linter_command=<command ... {{filename}}|{{filenames}}>
+#   required_paths=<exact repo-relative file paths that must exist>
 # A source line may opt out with a `checks-allow: <id>` comment (token-bounded).
 #
 # See scripts/checks/README.md for the format in full.
@@ -152,22 +157,27 @@ validate_glob_list() {
   done
 }
 
-validate_allow_list() {
+# Shared by `allow` and `required_paths`: a comma-separated list of exact
+# repo-relative file paths. No absolute paths, no parent traversal, no glob
+# metacharacters, and no trailing slash (each entry names one file, not a tree).
+validate_exact_path_list() {
   local check_file="$1"
-  local value="$2"
+  local key="$2"
+  local value="$3"
   local entry
   local entries=()
 
   if [[ "$value" == ,* || "$value" == *, || "$value" == *,,* ]]; then
-    printf 'fast-checks: %s: config error: allow entries must be exact repo-relative file paths\n' "$check_file" >&2
+    printf 'fast-checks: %s: config error: %s entries must be exact repo-relative file paths\n' "$check_file" "$key" >&2
     return 1
   fi
 
   IFS=',' read -r -a entries <<< "$value"
   for entry in "${entries[@]}"; do
     if [[ -z "$entry" || "$entry" == /* || "$entry" == ".." || "$entry" == ../* ||
-      "$entry" == */../* || "$entry" == */.. ]] || has_glob_metacharacter "$entry"; then
-      printf "fast-checks: %s: config error: invalid allow entry '%s'; expected an exact repo-relative file path\n" "$check_file" "$entry" >&2
+      "$entry" == */../* || "$entry" == */.. || "$entry" == */ ]] ||
+      has_glob_metacharacter "$entry"; then
+      printf "fast-checks: %s: config error: invalid %s entry '%s'; expected an exact repo-relative file path\n" "$check_file" "$key" "$entry" >&2
       return 1
     fi
   done
@@ -299,6 +309,7 @@ for check_file in "${check_files[@]}"; do
   pattern=""
   max_lines=""
   linter_command=""
+  required_paths=""
   glob=""
   exclude=""
   allow=""
@@ -324,6 +335,7 @@ for check_file in "${check_files[@]}"; do
       pattern) pattern="$value" ;;
       max_lines) max_lines="$value" ;;
       linter_command) linter_command="$value" ;;
+      required_paths) required_paths="$value" ;;
       glob) glob="$value" ;;
       exclude) exclude="$value" ;;
       allow) allow="$value" ;;
@@ -334,7 +346,12 @@ for check_file in "${check_files[@]}"; do
     esac
   done < "$check_file"
 
-  for required_key in reason glob; do
+  # A required_paths check names exact paths, so it has no scan scope to glob.
+  required_keys=(reason)
+  if [[ -z "$required_paths" ]]; then
+    required_keys+=(glob)
+  fi
+  for required_key in "${required_keys[@]}"; do
     case "$required_key" in
       reason) required_value="$reason" ;;
       glob) required_value="$glob" ;;
@@ -345,23 +362,26 @@ for check_file in "${check_files[@]}"; do
     fi
   done
 
+  type_key_count=0
+  for type_value in "$pattern" "$max_lines" "$linter_command" "$required_paths"; do
+    if [[ -n "$type_value" ]]; then
+      type_key_count=$((type_key_count + 1))
+    fi
+  done
+
+  if (( type_key_count > 1 )); then
+    printf 'fast-checks: %s: config error: pattern, max_lines, linter_command, and required_paths are mutually exclusive\n' "$check_file" >&2
+    config_valid=0
+  elif (( type_key_count == 0 )); then
+    printf 'fast-checks: %s: missing pattern, max_lines, linter_command, or required_paths\n' "$check_file" >&2
+    config_valid=0
+  fi
+
   linter_tokens=()
   linter_mode=""
-  if [[ -n "$linter_command" ]]; then
-    if [[ -n "$pattern" || -n "$max_lines" ]]; then
-      printf 'fast-checks: %s: config error: pattern, max_lines, and linter_command are mutually exclusive\n' "$check_file" >&2
-      config_valid=0
-    elif ! parse_linter_command "$check_file" "$linter_command"; then
-      config_valid=0
-    fi
-  else
-    if [[ -n "$pattern" && -n "$max_lines" ]]; then
-      printf 'fast-checks: %s: config error: pattern and max_lines are mutually exclusive\n' "$check_file" >&2
-      config_valid=0
-    elif [[ -z "$pattern" && -z "$max_lines" ]]; then
-      printf 'fast-checks: %s: missing pattern or max_lines\n' "$check_file" >&2
-      config_valid=0
-    fi
+  if (( type_key_count == 1 )) && [[ -n "$linter_command" ]] &&
+    ! parse_linter_command "$check_file" "$linter_command"; then
+    config_valid=0
   fi
 
   if [[ -n "$pattern" ]] && ! validate_pattern_dialect "$check_file" "$pattern"; then
@@ -373,15 +393,50 @@ for check_file in "${check_files[@]}"; do
     config_valid=0
   fi
 
-  if [[ -n "$pattern" && -n "$allow" ]]; then
-    printf 'fast-checks: %s: config error: allow is only valid with max_lines\n' "$check_file" >&2
+  if [[ -n "$allow" && ( -n "$pattern" || -n "$required_paths" ) ]]; then
+    printf 'fast-checks: %s: config error: allow is only valid with max_lines or linter_command\n' "$check_file" >&2
     config_valid=0
-  elif [[ -n "$allow" ]] && ! validate_allow_list "$check_file" "$allow"; then
+  elif [[ -n "$allow" ]] && ! validate_exact_path_list "$check_file" "allow" "$allow"; then
     config_valid=0
+  fi
+
+  if [[ -n "$required_paths" ]]; then
+    if [[ -n "$glob" || -n "$exclude" ]]; then
+      printf 'fast-checks: %s: config error: required_paths names exact paths and takes no glob or exclude\n' "$check_file" >&2
+      config_valid=0
+    fi
+    if ! validate_exact_path_list "$check_file" "required_paths" "$required_paths"; then
+      config_valid=0
+    fi
   fi
 
   if [[ "$config_valid" -eq 0 ]]; then
     failed=1
+    continue
+  fi
+
+  # required_paths asserts presence, so it consults the file universe directly
+  # rather than a glob-selected subset. Present means both: named in the scanned
+  # universe (a gitignored file on disk is not, matching every other check type)
+  # AND actually on disk (a plain `rm` leaves the path in the index, and that
+  # uncommitted deletion is exactly the state this check has to catch).
+  if [[ -n "$required_paths" ]]; then
+    IFS=',' read -r -a required_path_list <<< "$required_paths"
+    for required_path in "${required_path_list[@]}"; do
+      path_present=0
+      if (( ${#universe_files[@]} > 0 )) && [[ -e "$required_path" ]]; then
+        for file in "${universe_files[@]}"; do
+          if [[ "$file" == "$required_path" ]]; then
+            path_present=1
+            break
+          fi
+        done
+      fi
+      if [[ "$path_present" -eq 0 ]]; then
+        printf '%s: %s: required file is missing: %s\n' "$check_id" "$required_path" "$reason"
+        failed=1
+      fi
+    done
     continue
   fi
 
@@ -448,6 +503,10 @@ for check_file in "${check_files[@]}"; do
     done
   fi
 
+  # A glob that selects nothing passes on purpose: pattern, max_lines, and
+  # linter_command all assert that nothing forbidden EXISTS, and a file that is
+  # absent cannot violate that. Use a required_paths check to assert the opposite
+  # — that a named file must still be there.
   if (( ${#matched_files[@]} == 0 )); then
     continue
   fi

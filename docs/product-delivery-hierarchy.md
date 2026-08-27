@@ -174,7 +174,7 @@ Agent は `PDH-verify` までを自動で進め、そこで止まらず `PDH-hum
 
 包含関係: fast-check ⊂ `test-all`（`test-all` は fast-check を最初に含む）。ticket-local-test も先頭で fast-check を通す。mutation testing は「テストがある」ではなく「テストが欠陥を検出できる」を測る別軸で、`test-all` の外に置く。
 
-- **fast-check** は型で表せず・全体スイートでは重い・でも「この文字列パターンは禁止」と言い切れる repo 固有の不変条件（出荷済み不具合の再発防止など）を、grep で恒久検出する。汎用 linter（tsc/eslint 等）の代替ではない。仕組みは言語非依存なので `scripts/checks/README.md` の形式で各プロジェクトへ持ち込める。
+- **fast-check** は型で表せず・全体スイートでは重い・でも「この文字列パターンは禁止」「このファイルは必ず存在する」と言い切れる repo 固有の不変条件（出荷済み不具合の再発防止など）を、決定論的に恒久検出する。汎用 linter（tsc/eslint 等）の代替ではない。仕組みは言語非依存なので `scripts/checks/README.md` の形式で各プロジェクトへ持ち込める。
 - **mutation testing** の実体は言語ごとに別ツールで汎用テンプレート化しない。導入するかは各プロジェクト判断とし、入れる場合も CI ではなく定期棚卸しで回す。
 
 `PDH-verify` / `PDH-human-review` で開発サーバが必要な場合は `./scripts/dev-server.sh` を使う（option と seed hook の規範は `PDH-AGENTS.md`「Dev Server And Seed」）。`--no-localhost` では外部 URL に port が出ないことが多いため、固定 port が必要な検証以外では `--port` を省略してよい。実装はアプリごとに異なり得る（例: プロジェクト既定の tunnel / 公開手段）。agent は app/script に実装された方法を使う。sandbox・端末パス・local login 等の環境固有制約は local 設定か一時コマンドで扱う。Quick Tunnel は URL を知る人が到達できるため、露出内容を確認し、厳密な認可が必要なら named tunnel + Access 等の別設定を人間判断にする。

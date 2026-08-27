@@ -379,6 +379,7 @@ rm -rf tmp/pdh
    ```
    - **スキル（SKILL.md）**: 常にテンプレートで上書きする（プロジェクト固有のカスタマイズはスキルに入れない）
    - **CLAUDE.md**: `Based on` 行の commit ID 間の差分を取り、プロジェクト固有の設定（テストコマンド、ディレクトリ構造、チーム構成テーブル等）を保持しつつテンプレートの変更を反映する
+   - **`Based on` 行を持たない配布物 (`scripts/fast-checks.sh` / `scripts/checks/README.md` / `scripts/hookbus.js`)**: この手順では拾えない。該当する変更は[既知の移行手順](#既知の移行手順)で個別に扱う
    - **本ガイドが指定する設定 (settings.json / vitest.config.ts / scripts/test-all.sh)**: プロジェクト固有のカスタマイズが入っているので上書きしない。代わりに本ガイドの「.claude/settings.json を設定する」「scripts/test-all.sh を作成する」「vitest in-source testing を有効化」と README「tmux Director」で推奨される項目が含まれているかをレビューし、抜けていたら追加する
 6. **削除されたファイルの撤去**: 旧 commit から HEAD で `D` (削除) になったファイルがあれば、プロジェクト側から除去する。該当する設定 (settings.json / vitest.config.ts / scripts/test-all.sh) も必要なら撤去。上の表の逆手順。**過去の major refactor で `epics/` ディレクトリ / `epic-creator` skill / Light Full flow / PD-A / PD-B / PD-D / PD-C-2/3/4/5/8 phase は廃止された**。旧バージョンから upgrade する場合は project 側からこれらの参照を撤去する
 
@@ -539,3 +540,21 @@ grep -q '^worktree_copy_files:' .ticket-config.yaml && echo "適用済み" || ec
 ```
 
 「要追加」なら `tmp/pdh/templates/.ticket-config.yaml` の `# Worktree settings` ブロック（コメント含む）を `.ticket-config.yaml` にコピーし、worktree での実行に必要な gitignored ファイルに合わせてリストを編集する。
+
+#### fast-check に `required_paths` 型を追加（2026-08 以降）
+
+`scripts/fast-checks.sh` と `scripts/checks/README.md` には `Based on` footer がないため、「既存ファイルの差分マージ」の対象から漏れる。ランナー本体とレジストリ契約はプロジェクト固有のカスタマイズを持たない（カスタマイズは `scripts/checks/*.check` 側にある）ので、常に最新版で上書きしてよい。
+
+`required_paths` は「この exact path のファイルが存在すること」を宣言する 4 番目の型。`pattern` / `max_lines` / `linter_command` は「禁止されたものが存在しない」ことしか主張しないので、glob が 0 件になる — つまり守っていたファイルごと消える — と静かに通る。上流の directory 上書きや merge 事故で消える経路のあるファイルには、中身を守る check と併せてこれを置く。
+
+```bash
+grep -q 'required_paths' scripts/fast-checks.sh && echo "適用済み" || echo "要更新"
+```
+
+「要更新」なら上書きし、既存の check が通ることを確認する:
+
+```bash
+cp tmp/pdh/templates/fast-checks.sh scripts/fast-checks.sh
+cp tmp/pdh/templates/checks/README.md scripts/checks/README.md
+bash scripts/fast-checks.sh
+```

@@ -100,7 +100,7 @@ skill・`PDH-AGENTS.md`・`CLAUDE.md` に置くのは**現在形の規則だけ*
 
 `./scripts/test-all.sh` を実行する。中身は 5 つ:
 
-- `scripts/fast-checks.sh` — `scripts/checks/*.check` の宣言的 grep 不変条件（`Based on` 行の commit id 置換禁止、配布物からの `templates/` 参照禁止、merge-conflict marker）
+- `scripts/fast-checks.sh` — `scripts/checks/*.check` の宣言的不変条件（`Based on` 行の commit id 置換禁止、配布物からの `templates/` 参照禁止、merge-conflict marker、判断基準ファイル `product-brief.md` / `CLAUDE.md` の存在）
 - `scripts/check-distribution.sh` — grep で書けない検査（`Based on` 行の存在とパス一致、`INSTALL.md` 配置表 ↔ 実ファイルの双方向一致、**配布物間の重複行検出**）
 - `scripts/check-links.py` — Markdown のリンク検査（リンク先ファイルの存在、**アンカーが実在する見出しを指すか**）。見出しの改名でリンクが静かに切れるのを防ぐ
 - **配布 kit の `selftest.sh` を 2 回** — 素の環境と、`scripts/bsd-shim/` を PATH に載せた BSD 相当。この repo も CI も GNU なので、**GNU でしか動かない書き方は素の実行では通ってしまう。**実際に `build.sh` が `base64 "$file"`（BSD が受け付けない位置引数）のまま配布され、macOS で画像を埋め込めなかった

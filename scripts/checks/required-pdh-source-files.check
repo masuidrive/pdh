@@ -1,0 +1,6 @@
+# product-brief.md と CLAUDE.md はこの repo の全判断の基準だが、どちらも配布物ではないので
+# check-distribution の配置表検査は届かない。templates/CLAUDE.md の取り違えコピーや merge 事故で
+# 消えても、他の検査は何も言わない。中身を守る check は glob が 0 件になると通ってしまうため、
+# 存在そのものをここで表明する。
+reason=この repo の判断基準ファイルが失われている（上書きコピーや merge 事故で消えた可能性がある）
+required_paths=product-brief.md,CLAUDE.md

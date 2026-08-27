@@ -242,7 +242,7 @@ pdh/
     test-all.sh                      ← テスト一括実行テンプレート
     fast-checks.sh                   ← 決定論的 fast-check ランナーテンプレート
     checks/
-      README.md                      ← fast-check 3型の詳細仕様
+      README.md                      ← fast-check 4型の詳細仕様
       example-no-merge-conflict-markers.check
       example-max-source-lines.check ← source 1500行の汎用例
       example-max-test-lines.check   ← test 2500行の汎用例

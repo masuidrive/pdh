@@ -3,9 +3,9 @@
 Each `*.check` file here is one declarative, deterministic invariant check run by
 `scripts/fast-checks.sh` (wired into `scripts/test-all.sh` as a cheap first stage,
 and typically into CI). A fast-check is a **super-lightweight, language-agnostic
-lint rule**: it either greps the repo for one forbidden pattern or rejects files
-that exceed a declared line-count ceiling, or delegates the selected files to a
-project-provided linter command.
+lint rule**: it greps the repo for one forbidden pattern, rejects files that
+exceed a declared line-count ceiling, delegates the selected files to a
+project-provided linter command, or asserts that named files still exist.
 
 The registry does not define general style policy itself. A `linter_command`
 check can invoke `eslint`, `ruff`, or another project linter, while the project
@@ -14,9 +14,10 @@ for an invariant that is:
 
 - too repo-specific for a general linter, and
 - not worth — or not expressible as — a unit test, and
-- describable as either "this exact string pattern must never appear here" or
-  "files in this narrow scope must stay below this line ceiling", or
-  "this existing linter must accept the selected files".
+- describable as one of "this exact string pattern must never appear here",
+  "files in this narrow scope must stay below this line ceiling",
+  "this existing linter must accept the selected files", or
+  "these exact files must not disappear".
 
 Typical use: pin a shipped bug so it can never recur ("client-declared MIME must
 not be passed straight through"), or keep a boundary clean ("this shared skill
@@ -52,6 +53,14 @@ exclude=test/**,**/*.test.ts,**/*.test.mjs,**/*-data.mjs,**/dist/**
 allow=src/legacy-large-file.ts
 ```
 
+Required-files check:
+
+```
+reason=a required file is gone; an upstream overwrite may have removed it
+# required_paths: exact repo-relative file paths, comma-separated. No glob here.
+required_paths=config/settings.yaml,.claude/skills/pdh-dev/_flow.md
+```
+
 Linter-command check:
 
 ```
@@ -64,14 +73,25 @@ exclude=src/generated/**
 allow=src/legacy-generated.ts
 ```
 
-- `reason` and `glob` are always required. Exactly one of `pattern`, `max_lines`,
-  or `linter_command` is required; the three types are mutually exclusive.
-  `exclude` is optional for every type.
+- `reason` is always required. `glob` is required for every type except
+  `required_paths`. Exactly one of `pattern`, `max_lines`, `linter_command`, or
+  `required_paths` is required; the four types are mutually exclusive. `exclude`
+  is optional for the glob-scoped types and is a configuration error with
+  `required_paths`.
 - `max_lines` is a positive decimal integer. It uses `wc -l` semantics, including
   blank and comment lines. A file passes at the limit and fails above it.
 - `allow` is optional and valid only with `max_lines` or `linter_command`. It is a
   comma-separated list of exact repo-relative file paths; absolute paths, parent
-  traversal, and glob metacharacters are configuration errors.
+  traversal, glob metacharacters, and a trailing slash are configuration errors.
+- `required_paths` is a comma-separated list of exact repo-relative file paths
+  that must exist, under the same path rules as `allow`. It takes no `glob`,
+  `exclude`, or `allow`. A trailing slash is a configuration error: name a file
+  inside the directory rather than the directory, because existence is decided
+  per path. A path counts as present only when it is both in the scanned file set
+  described below (so a gitignored file on disk does not count) and actually on
+  disk (so a plain `rm`, which leaves the path in the index until the deletion is
+  staged, still fails the check). A symlink counts as present when its target
+  resolves, so a dangling symlink fails.
 - `linter_command` is split only on whitespace; shell quoting and escaping are not
   interpreted. Fixed arguments and the command path therefore cannot contain
   whitespace. Put such setup in a PATH-visible wrapper command instead.
@@ -105,6 +125,13 @@ allow=src/legacy-generated.ts
 - The scanned file set is `git ls-files --cached --others --exclude-standard`
   (tracked + untracked-not-ignored), so both ripgrep and the grep fallback see the
   same explicit list regardless of their ignore handling.
+- A `glob` that selects no file passes, by design. `pattern`, `max_lines`, and
+  `linter_command` each assert that nothing forbidden **exists**, and a file that
+  is not there cannot violate that. The consequence is worth stating plainly: a
+  check written to guard one file's contents falls silent once that file is
+  deleted outright. Add a `required_paths` check alongside it whenever the file
+  has a realistic way to vanish — an upstream directory overwrite, a bad merge, a
+  rename nobody propagated.
 
 ## Opting a pattern-match line out
 
