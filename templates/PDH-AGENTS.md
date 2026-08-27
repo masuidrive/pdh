@@ -171,10 +171,13 @@ the shared page shell and CSS. Record the tested commit SHA. For visual UI,
 cover light and dark color schemes when the application supports them.
 
 When capturing variants — theme, locale, permission level — confirm that each
-captured artifact really is that variant: read the state the application itself
-exposes, or show that the artifacts actually differ between variants. A
-screenshot always succeeds, so an emulation that silently failed to apply looks
-identical to one that worked.
+captured artifact really is that variant by reading the state the application
+itself exposes. A screenshot always succeeds, so an emulation that silently
+failed to apply looks identical to one that worked. Two artifacts differing is
+not that confirmation: re-rendering alone changes the bytes, so comparing files
+or hashes reports a difference for a variant that never applied. Apply the
+emulation before the page loads as well — an application that reads the setting
+once at mount keeps whichever variant it started with.
 
 HTTP-level tools (`curl`, API test scripts) verify server behavior only. They
 are never acceptable evidence for a browser surface: client-side logic (drag &
@@ -230,6 +233,15 @@ explanation, or has to be looked at rather than read, prefer the assembled
 document; a long gate report pasted into the conversation scrolls away and
 cannot be re-read at the moment the user decides.
 
+Volume is part of readability. The material's main line carries only the
+conclusions and the facts the decision turns on; verification commands, raw
+outputs, enumerations, and procedural detail belong one click away — collapsed
+sections or an appendix — so the approver can open them but is not forced
+through them. A gate report that inlines everything is not more complete: it
+buries the two or three things the approver must actually weigh. What goes in
+the main line versus behind a fold is defined per gate by the decision-board
+skills.
+
 How the document is assembled depends on what the engine can do. An engine that
 can publish a rendered artifact should do so. An engine that cannot should write
 the same structure to a file under the ticket's tmp directory and give its path.
@@ -240,6 +252,12 @@ unavailable.
 When an option defers a class of defect, list the instances of that class known
 at the time — how many and where. "There may be others" leaves the user
 approving a set whose members they cannot see.
+
+The lists below are the contract — what the approver must receive. How that
+material is organized into a decision board (main line versus folded detail,
+answer form, review loop) is defined by the decision-board skills; do not
+restate their construction rules here, and do not trim these lists because a
+skill covers them.
 
 At `PDH-ticket-human-review`, before implementation:
 
