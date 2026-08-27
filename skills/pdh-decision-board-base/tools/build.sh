@@ -120,17 +120,48 @@ while IFS="$tab" read -r token relative mime; do
     echo "build.sh: ERROR: cannot read image: $asset" >&2
     exit 1
   fi
+  payload=$tmp_base.payload
   # BSD (macOS) の base64 はファイル名の位置引数を取らない（-i が要る）。
   # stdin から読めば GNU / BSD のどちらでも同じに動く。
-  if ! encoded_lines=$(base64 < "$asset"); then
+  if ! base64 < "$asset" > "$payload"; then
     echo "build.sh: ERROR: cannot encode image: $asset" >&2
     exit 1
   fi
-  encoded=$(printf '%s' "$encoded_lines" | awk '{ printf "%s", $0 }')
   image_index=$((image_index + 1))
   next_body=$tmp_base.body.$image_index
-  sed "s|$token|data:$mime;base64,$encoded|g" "$body_work" > "$next_body"
+  # The encoded image is read from a file, never passed as an argument. A single
+  # argv string is capped well below the size of an encoded screenshot (Linux
+  # MAX_ARG_STRLEN is 128 KiB, far under ARG_MAX), and passing it as one made the
+  # replacement fail once the image grew. awk joins the wrapped base64 lines and
+  # matches the token literally, so regex metacharacters cannot change the match.
+  if ! awk -v token="$token" -v prefix="data:$mime;base64," -v payload="$payload" '
+    BEGIN {
+      while ((getline line < payload) > 0) data = data line
+      close(payload)
+      data = prefix data
+      width = length(token)
+    }
+    {
+      out = ""
+      while ((at = index($0, token)) > 0) {
+        out = out substr($0, 1, at - 1) data
+        $0 = substr($0, at + width)
+      }
+      print out $0
+    }
+  ' "$body_work" > "$next_body"; then
+    echo "build.sh: ERROR: cannot inline image: $asset" >&2
+    exit 1
+  fi
+  # A surviving token means the image was not inlined. Stopping here keeps a body
+  # that lost its images from reaching the output, where nothing else detects it:
+  # the static check only inspects the images a document still has.
+  if grep -qF "$token" "$next_body"; then
+    echo "build.sh: ERROR: image token survived inlining: $asset" >&2
+    exit 1
+  fi
   body_work=$next_body
+  rm -f "$payload"
 done < "$manifest"
 
 for required in tokens.css board.css board.js; do

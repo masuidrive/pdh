@@ -51,6 +51,43 @@ if "$TOOLS_DIR/build.sh" --body "$SELFTEST_TMP/missing-image.html" --out "$SELFT
 fi
 echo 'PASS build.sh: document/deck・画像・不要文字なし'
 
+# 埋め込みが argv の長さ上限で壊れないことを確かめる。fixture は commit せずここで作る
+# — 配布物を重くしないためで、必要なのは «大きさ» だけなので中身は何でもよい。
+large_dir=$SELFTEST_TMP/large
+mkdir -p "$large_dir"
+awk 'BEGIN {
+  for (i = 0; i < 64; i++) line = line "PDHLARGEIMAGEPAYLOAD"
+  for (n = 0; n < 100; n++) print line
+}' > "$large_dir/large.png"
+printf '%s\n' '<main class="board"><h2 id="a">大きい画像</h2><img src="large.png" alt="argv の上限を超える大きさ"></main>' \
+  > "$large_dir/body.html"
+if ! "$TOOLS_DIR/build.sh" --body "$large_dir/body.html" --out "$SELFTEST_TMP/large.html" \
+  >/dev/null 2>"$SELFTEST_TMP/large.build.stderr"; then
+  echo 'FAIL build: argv の上限を超える画像で失敗しました' >&2
+  cat "$SELFTEST_TMP/large.build.stderr" >&2
+  exit 1
+fi
+if grep -qF '__PDH_INLINE_IMAGE_' "$SELFTEST_TMP/large.html"; then
+  echo 'FAIL build: 置換前の token が出力に残りました' >&2
+  exit 1
+fi
+# BSD の base64 は位置引数を取らないので、build.sh と同じく stdin から読む
+large_expected=$(base64 < "$large_dir/large.png" | awk '{ printf "%s", $0 }')
+large_actual=$(awk '
+  {
+    at = index($0, "data:image/png;base64,")
+    if (at == 0) next
+    rest = substr($0, at + 22)
+    if (match(rest, /^[A-Za-z0-9+\/=]+/)) print substr(rest, 1, RLENGTH)
+    exit
+  }
+' "$SELFTEST_TMP/large.html")
+if [[ "$large_actual" != "$large_expected" ]]; then
+  echo 'FAIL build: 埋め込まれた base64 が元の画像と一致しません' >&2
+  exit 1
+fi
+echo 'PASS build.sh: argv の上限を超える画像を丸ごと埋め込む'
+
 if "$TOOLS_DIR/check-static.sh" "$SELFTEST_TMP/good.html" > "$SELFTEST_TMP/good.static"; then
   echo 'PASS good: check-static.sh'
 else
