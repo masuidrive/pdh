@@ -72,6 +72,24 @@ product-brief.mdとの整合を1行で宣言
 
 ACには観察可能なproduct動作を書く。 review結果やtest pass等のprocess要件は書かず、noteのchecklistへ置く。
 
+**ACの読み手はticketを承認する人である。**実装するagentではない。⚠ **「叩けば確かめられる」だけでは足りない。**確かめられることと、承認者が読んで意味が取れることは別である。
+
+判定は本文に出る語で行う。次がAC本文に現れたら、実装の言葉で書いている。
+
+| AC本文に出たら実装の言葉 | 例 |
+|---|---|
+| APIのpath、HTTP method | `GET /dispatch/namespaces/{ns}/scripts` の一覧に居るか |
+| DBの列名、設定キー | `settings` による存在判定を撤去する |
+| 内部の関数名、module名、内部状態の呼び名 | orphanの印を付けるのはPUT成功後にする |
+
+これらは`確定判断 (Design Decisions)`へ移し、ACには「終わると誰が何をできるようになるか」を残す。**約束の中身を減らさない。読み手だけを変える。**上の3例は、次のように書き直せる。
+
+- 新しいアプリを作れる。新規に作ったアプリの初回deployが成功する
+- deployが拒否されたら、そのまま作り直せる。拒否されたdeployが、アプリのデータの置き場所・前の版へ戻す手段・稼働状態のどれも壊さない
+- 状態を判断できないときは、送らずに止まる。止まったときは何が分からなかったのかが読んで分かる
+
+**この書き直しを後工程へ先送りしない。**判断ボード・human reviewの材料づくり・close報告で言い換えて辻褄を合わせると、ticketのACは実装の言葉のまま溜まり、boardを作らない場面では読めないままになる。
+
 ## Implementation Notes は自主的に書かない
 
 Implementation Notesはユーザが明示または会話で言及した事項だけを、関数名またはmodule名levelまで書く。 Design Decisionや実装詳細を自主的に書かない。実装担当は空でも実装する。
@@ -117,6 +135,7 @@ ticketまたは実行指示の提出前に次をcheckする。
 - `product-brief.md`のArchitectural Invariantsと整合するか
 - signature、行番号、内部flow、snapshot、code snippet等の実装詳細が混入していないか
 - ACが観察可能な振る舞いだけか
+- ACが承認者の読める言葉か（APIのpath、DBの列名、設定キー、内部関数名がAC本文に無いか）
 - 実行指示にhow-toが混入していないか
 - AC、実装、ticket候補に投機的拡張または将来要件向け設計がないか
 

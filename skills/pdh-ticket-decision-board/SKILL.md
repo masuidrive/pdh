@@ -11,7 +11,7 @@ description: PDH の ticket を書き終えた後・実装に入る前（PDH-tic
 
 ## この gate で承認するもの — ticket の Why → What → How
 
-**承認者が承認する契約は ticket である。**ticket の `Why / Intent`（誰の何が困っているか）から `What / Acceptance Criteria`（終わると何ができるか）が決まり、`確定判断 (Design Decisions)`（解き方）がそれを実現する。この gate の承認は**「この Why を、この AC と解き方で解いてよいか」**であり、board は ticket の別紙解説ではなく、この筋を承認者が追加調査なしで承認または指示できる形に組み直した判断面である。**board の内容を board 用に発明しない** — 語を承認者向けに書き直すだけで、約束の中身は ticket の節から取る。ticket に無い内容を board が語り始めたら、 board ではなく ticket を先に直す（下記「board と ticket の関係」）。
+**承認者が承認する契約は ticket である。**ticket の `Why / Intent`（誰の何が困っているか）から `What / Acceptance Criteria`（終わると何ができるか）が決まり、`確定判断 (Design Decisions)`（解き方）がそれを実現する。この gate の承認は**「この Why を、この AC と解き方で解いてよいか」**であり、board は ticket の別紙解説ではなく、この筋を承認者が追加調査なしで承認または指示できる形に組み直した判断面である。**board の内容を board 用に発明しない** — 並べ替えと、決めるのに要る文脈を補うだけで、約束も語も ticket の節から取る。**AC は ticket を書く時点で承認者の言葉になっているので、board で書き直さない**（ベースの「Acceptance Criteria の書き方」）。ticket に無い内容を board が語り始めたら、 board ではなく ticket を先に直す（下記「board と ticket の関係」）。
 
 ## board と ticket の関係
 

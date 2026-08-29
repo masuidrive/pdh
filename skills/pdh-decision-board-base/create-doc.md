@@ -24,7 +24,7 @@
 
 ## AC 原文と本文参照
 
-AC の言い換えの直下で、対応する原文を開けるようにする。末尾に原文をまとめない。
+board 本文が AC に触れる箇所の直下で、対応する原文を開けるようにする。末尾に原文をまとめない。
 
 - AC 一覧は `<details class="acx">` とし、`<summary>` の AC 番号から次の行へ原文を開く。
 - 本文中の AC 参照は `<button popovertarget>` と `<span popover>` を使う。
