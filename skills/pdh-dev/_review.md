@@ -64,11 +64,12 @@ finding冒頭へ`[同名 symbol sweep]`等の観点labelを付ける。
 
 1. 各reviewerは対象SHAを固定して結果へ明記する
 2. 独立review必須triggerとcross-model要件は`PDH-AGENTS.md`「Verification」に従う。代替手段と理由記録もそちらに従う
-3. diff全体の網羅探索は初回だけとし、修正後は採用finding、再現条件、修正diffだけを同じreviewerへ渡す
-4. reviewerは事実の再現と解消を判定し、Directorは採用、起票、記録のみ、棄却とloop終了を判定する
-5. 完了には、採用CriticalとMajorが最新SHAで解消し、非採用findingの分類と理由がnoteへ必要である。全findingの実装は要求しない
-6. 修正確認の新規findingを自動でloopへ加えない。修正起因CriticalまたはMajorだけscope gateへ戻し、他は起票 / 記録のみ / 棄却へ振り分ける
-7. PASS済みreviewerは次diffがその観点へ影響する場合だけ再実行する
+3. diff全体の網羅探索は初回だけとし、修正後は採用finding、再現条件、修正diff、**実装が記録した「直す前の出力」と「直したあとの同じ入力の出力」**だけを同じreviewerへ渡す
+4. **修正確認attemptでは、修正が直前の性質を壊していないかを最初に見る。**採用findingが解消したかの確認はそのあとでよい。突き合わせる材料は項目3の前後出力で、**記録が無いことそれ自体をfindingとして扱う**（実装側の規則は`pdh-coding` skill「指摘を直すとき、壊していないことを反例で固定する」）
+5. reviewerは事実の再現と解消を判定し、Directorは採用、起票、記録のみ、棄却とloop終了を判定する
+6. 完了には、採用CriticalとMajorが最新SHAで解消し、非採用findingの分類と理由がnoteへ必要である。全findingの実装は要求しない
+7. 修正確認の新規findingを自動でloopへ加えない。修正起因CriticalまたはMajorだけscope gateへ戻し、他は起票 / 記録のみ / 棄却へ振り分ける
+8. PASS済みreviewerは次diffがその観点へ影響する場合だけ再実行する
 
 ### Review attempt 収束性診断
 

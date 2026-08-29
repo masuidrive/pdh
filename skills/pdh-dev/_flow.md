@@ -131,8 +131,9 @@ trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndepend
 ### 修正ループ
 
 1. findingをseverity、scope、複雑度gateで分類し、採用findingだけを最小修正する
+   - **直す前に、そのコードが正しく扱えていた入力を1つ実行して出力を記録する**（`pdh-coding` skill「指摘を直すとき、壊していないことを反例で固定する」）。直したあと同じ入力を流し、前後の出力を報告へ載せる
 2. 中間attemptでは変更fileとimport chain上の影響testだけを実行する
-3. 元finding、再現条件、修正diffだけを同じreviewerへ渡し、対象SHA付きで確認する
+3. 元finding、再現条件、修正diff、前後の出力だけを同じreviewerへ渡し、対象SHA付きで確認する
 
 完了条件は、最新SHAで採用CriticalとMajorが解消し、非採用理由がnoteにあること。未解消をユーザが受容してもPASSにせず、risk、理由、承認文を残す。
 

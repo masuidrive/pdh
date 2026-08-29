@@ -93,7 +93,8 @@ reviewer、AC裏取り、Surface Observerはproduct code、test、doc、`<NOTE_F
 - ticketに独断の変更が入っていないか確認する
 - 「書き込み境界」に従う
 - severityを修正命令にしない。採否とcurrent ticketへの包含はPMが判断する
-- 修正確認では指定finding、再現条件、修正diffだけを確認し、全diffや新規findingへ広げない
+- 修正確認では指定finding、再現条件、修正diff、実装が記録した反例の前後出力だけを確認し、全diffや新規findingへ広げない
+- **修正確認では、修正が直前の性質を壊していないかを最初に見る**（前後出力を突き合わせる。記録が無ければ、無いことをfindingとする）。指定findingの解消判定はそのあとでよい
 - 修正が直接生んだCriticalまたはMajor regressionだけを元findingと分けて報告する
 - 問題がなければ`No Critical/Major`と明記する
 
