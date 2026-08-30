@@ -45,3 +45,4 @@
 - 2026-08-30 — **判断ボード 3 skill を `pdh-decision-board` 1 つ（router + 分冊）へ再配置した前後**で比較した。current（統合後。入口は router の `SKILL.md`）と baseline（統合前の 3 skill を `git archive` で切り出したもの）を、同じシナリオで別々の fresh agent へ渡した。**current **7/7**、baseline **7/7**。差なし**
 
 - 2026-08-30 — **close-gate の確定判断の行を «1 件ずつ そのまま / 変えた / 実装しなかった» へ広げた後**の退行確認: claude **7/7**。差なし。新しい規則も適用しており、決定サマリーに「落ちた判断は «変更» の欄では拾えないので 1 件ずつ数える」を置いた。
+- 2026-08-30 — **Human Gate Materials（PDH-AGENTS.md）の材料一覧を gate 分冊へ統合した後**（close-gate「直さなかった指摘」へ Findings 表突合を移設。PDH-AGENTS 側は分冊への参照 + flow 側 2 規則のみ）の退行確認: claude **7/7**。前回記録（7/7）と差なし。ship-risk 非該当を差分規模の 1 行で処理し、`project` 値の変化・repo 内追随済み・呼び出し元の検索条件の併記まで期待どおり。内部 id は判断にせず note へ回した（`N = 0`）。

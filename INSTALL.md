@@ -270,7 +270,7 @@ chmod +x scripts/test-ticket-local.sh
 ```
 
 `ticket-local-test` は `PDH-verify` の証跡として `current-note.md` に実行コマンドと結果を残す。
-`permanent-test` へ昇格するか迷う場合は「ticket 名や一時 fixture なしで今後も product contract として説明できるか」を基準にする。
+`application-test` へ昇格するか迷う場合は「ticket 名や一時 fixture なしで今後も product contract として説明できるか」を基準にする。
 
 #### 10. (hookbus 使用時のみ) vitest in-source testing を有効化
 
@@ -411,9 +411,9 @@ rm -rf tmp/pdh
 
 ### 既知の移行手順
 
-#### `permanent-test` / `ticket-local-test` の規則が pdh-coding skill へ移動した（2026-08-30 以降）
+#### `application-test` / `ticket-local-test` の規則が pdh-coding skill へ移動した（2026-08-30 以降）
 
-`PDH-AGENTS.md`「Verification」にあった `permanent-test`（旧称: 恒久テスト）と `ticket-local-test` の区別・置き場所・昇格判定は、`pdh-coding` skill「テスト設計ルール」へ統合された。skill と `PDH-AGENTS.md` は上書きで届くが、`CLAUDE.md` は上書きされないため、旧参照が残っていれば付け替える。
+`PDH-AGENTS.md`「Verification」にあった `application-test`（旧称: 恒久テスト）と `ticket-local-test` の区別・置き場所・昇格判定は、`pdh-coding` skill「テスト設計ルール」へ統合された。skill と `PDH-AGENTS.md` は上書きで届くが、`CLAUDE.md` は上書きされないため、旧参照が残っていれば付け替える。
 
 適用済みかの確認（冪等）:
 

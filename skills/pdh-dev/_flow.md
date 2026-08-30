@@ -147,7 +147,7 @@ trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndepend
 
 1. ticket file（`ticket.sh start`/`restore`出力の`ticket:`パス。互換symlink: `current-ticket.md`）の各ACを1項目ずつ確認してcheckする
 2. note file（同出力の`note:`パス。互換symlink: `current-note.md`）のprocess checklistを1項目ずつ確認してcheckする
-3. UIまたはAPI verifyは`./scripts/dev-server.sh --seed`を使う。dev-server / seed hookの契約は`PDH-AGENTS.md`「Dev Server And Seed」に、`permanent-test`と`ticket-local-test`の分け方と置き場所は`pdh-coding` skill「テスト設計ルール」に従う
+3. UIまたはAPI verifyは`./scripts/dev-server.sh --seed`を使う。dev-server / seed hookの契約は`PDH-AGENTS.md`「Dev Server And Seed」に、`application-test`と`ticket-local-test`の分け方と置き場所は`pdh-coding` skill「テスト設計ルール」に従う
    - sandbox、端末path、local login等はlocal設定または一時commandで扱い、区別できなければ確認する
 4. AC裏取りAgentが各ACの形式だけでなくWhyの実質達成を検証する。`NOT VERIFIED`の証拠を補完するまで進まない
    - user-facing Whyは、実上流data、終端user操作、反証1回の全てで確認する

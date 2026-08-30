@@ -151,7 +151,7 @@ Stage label は、note の Status・checklist・引き継ぎで使う安定し�
 
 **stage の «意味» は工程が何をするかで、«出口で誰が何を見るか» はその工程が守るものである。**規則を足すときは後者を先に 1 文で書く（`PDH-AGENTS.md`「Where A Rule Belongs」)。
 
-gate の規則と検証の証拠要件は `PDH-AGENTS.md`（「Stage Flow」「Verification」「Human Gate Materials」）に、`permanent-test` と `ticket-local-test` の区別・置き場所は `pdh-coding` skill「テスト設計ルール」に、各 stage の手順は `pdh-dev` skill にある。ここには重複させない。
+gate の規則と検証の証拠要件は `PDH-AGENTS.md`（「Stage Flow」「Verification」「Human Gate Materials」）に、`application-test` と `ticket-local-test` の区別・置き場所は `pdh-coding` skill「テスト設計ルール」に、各 stage の手順は `pdh-dev` skill にある。ここには重複させない。
 
 ### テストの層
 
