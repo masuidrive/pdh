@@ -15,6 +15,9 @@
 - [x] **note テンプレートの checklist を `## Checklist` へ再編** — `## Status:` の直後へ移し、stage 順に並べ替え、`require_checklist_groups` へ `Checklist` も宣言（節ごと消えたら close が止まる）。probe で確認。INSTALL に改名の移行手順を追記
 - [ ] **移行の «適用したつもり» を塞ぐ強化を配布先へ届ける** — INSTALL 手順 7.5（確認コマンドの再実行）と `pdh-update` の報告義務。**この強化自体が pdh-update で届く必要がある**
 - [x] **agent 定義を skill と同じ «常に上書き» にした** — `Based on` を足す案は採らない（thin pointer で project カスタマイズを持たないため、由来を追う相手がいない）。INSTALL 手順 5 / 既知の移行手順 / `pdh-update` skill / この repo の CLAUDE.md に明記
+- [x] **pane 1-3 へ `/pdh-update` を投入した**（ユーザ依頼 2026-08-30）。完了後に手順 7.5 を当てるのが残り
+- [x] **note へ書く版の規則を測った（eval-14）**（ユーザ依頼 2026-08-30）— 記録では判別（5 行 対 0 行）、引き継ぎでは判別せず。⚠ **note テンプレートのコメントだけでは足りず、`PDH-AGENTS.md` 側の規則があって初めて書かれた**
+- [ ] **pane 1-3 の完了後に手順 7.5 の冪等チェックを当てる**
 - [ ] **配布先 5 プロジェクトへ `pdh-update` を流す** — 判断 2-A は「ちゃんと更新する前提」で A にした。流すまでが完了。残りは ticket-board / db-codex / db-claude。
   - llmhub: `6b93ad0` 取り込み済み。**gate キー 2 つが落ちていたので手で足した**（2026-08-30）。既存 note 26 本に `## Checklist` が無く、再開して close するときに止まる
   - hanger-cloudflare: worktree `chore/pdh-update-260830` に `7fe778c` 版があるだけで **main へ未マージ**。ticket.sh も 20260827 のまま。`6b93ad0` で回し直しが要る
