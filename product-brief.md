@@ -48,7 +48,7 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 
 ## Architectural Invariants
 
-- `AI-1` PDH 汎用ルールは `templates/PDH-AGENTS.md`、project 固有ルールは `templates/CLAUDE.md`。両者の内容を重複させない
+- `AI-1` PDH 汎用ルールは `docs/PDH-AGENTS.md`、project 固有ルールは `templates/CLAUDE.md`。両者の内容を重複させない
 - `AI-2` skill の実体は 1 つだけ置く（`skills/`、配布先 `.claude/skills/`）。他 engine 向けの入口は symlink とし、内容を複製した wrapper を作らない
 - `AI-3` 配布テンプレートには、テンプレート自身の使い方説明を書かない。導入・更新手順は `INSTALL.md`、運用ルールは `docs/product-delivery-hierarchy.md` にある
 - `AI-4` 配布物の実行依存は、標準的な Unix 環境（macOS / Ubuntu）に既定で入っているものと ticket.sh に限る。BSD / GNU 両対応で書く（`hookbus.js` の Node 18+ のみ既存例外）。閲覧者のブラウザが実行する JavaScript は対象外

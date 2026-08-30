@@ -212,6 +212,7 @@ pdh/
   INSTALL.md                         ← 導入・更新手順（配布物の配置表はここにある）
   docs/
     product-delivery-hierarchy.md    ← PDH 本体ドキュメント
+    PDH-AGENTS.md                    ← PDH 汎用 agent ルール（配布先 root の PDH-AGENTS.md）
   skills/
     pdh-dev/
       SKILL.md                       ← PDH stage flow ワークフロースキル（入口）
@@ -239,7 +240,6 @@ pdh/
     product-brief.md                 ← Product Brief テンプレート
     technical-reference.md           ← Technical Reference テンプレート（現在の実装の How）
     CLAUDE.md                        ← project 固有 CLAUDE.md テンプレート
-    PDH-AGENTS.md                    ← PDH 汎用 agent ルールテンプレート
     CLAUDE.local.md.example          ← 環境固有 agent メモのサンプル
     AGENTS.md                        ← AGENTS.md テンプレート (Codex CLI 向け thin pointer)
     agents/

@@ -1,27 +1,25 @@
 # PDH-AGENTS.md — PDH 汎用 agent ルール
 
-このファイルには、project 間で共有する PDH ルールを置く。project 固有ルールは `CLAUDE.md` に置く。環境固有のメモは gitignore 済みの `CLAUDE.local.md` に置く。
-
-## Read Order
-
-PDH / ticket 中心の作業では、次を読む:
-
-1. `product-brief.md`
-2. `docs/product-delivery-hierarchy.md`
-3. `PDH-AGENTS.md`
-4. `CLAUDE.md`
-5. `CLAUDE.local.md`（存在する場合）
-6. `.agents/skills/pdh-dev/SKILL.md` または `.claude/skills/pdh-dev/SKILL.md`
-7. `.agents/skills/pdh-coding/SKILL.md` または `.claude/skills/pdh-coding/SKILL.md`
-8. `ticket.sh start`/`restore` 出力が示すパスの ticket file と note file（`ticket:`/`note:`。互換 symlink: `current-ticket.md`/`current-note.md`）。存在する場合
-
-`CLAUDE.md` は project 固有のコマンド・ファイル配置・運用制約を上書きしてよいが、汎用の PDH プロセスをそこに書き直さない。
+このファイルには、project 間で共有する PDH ルールを置く。project 固有ルールは `CLAUDE.md` に置く。環境固有のメモは gitignore 済みの `CLAUDE.local.md` に置く。`CLAUDE.md` は project 固有のコマンド・ファイル配置・運用制約を上書きしてよいが、汎用の PDH プロセスをそこに書き直さない。
 
 ## Stage Flow
 
-PDH の stage label は安定した checklist キーであり、重いプロセス番号ではない:
-
-`PDH-open` -> `PDH-ticket-review` -> `PDH-ticket-human-review` -> `PDH-implement` -> `PDH-review` -> `PDH-verify` -> `PDH-human-review` -> `PDH-close`
+```mermaid
+flowchart TD
+    new["./ticket.sh new<br/>ticket 作成"] --> write["ticket を書く<br/>Why / AC / Invariants check / Design Decisions / Out-of-scope"]
+    write --> start["./ticket.sh start<br/>branch 作成・note 生成"]
+    start --> open[PDH-open]
+    open --> treview[PDH-ticket-review]
+    treview --> probes["Required Probes を実行<br/>./ticket.sh check --require 'Required Probes' で未了確認"]
+    probes --> tgate{"PDH-ticket-human-review<br/>人間 gate: AC 承認"}
+    tgate -- 差し戻し --> treview
+    tgate -- AC 承認 --> impl[PDH-implement]
+    impl --> review[PDH-review]
+    review --> verify[PDH-verify]
+    verify --> hgate{"PDH-human-review<br/>人間 gate: close 承認"}
+    hgate -- 差し戻し --> impl
+    hgate -- close 承認 --> close["PDH-close<br/>./ticket.sh close で merge・push<br/>未了 checkbox が残ると close は拒否される（./ticket.sh check で確認）"]
+```
 
 `PDH-ticket-review` と `PDH-ticket-human-review` は別の stage である。前者は agent 側の ticket contract check である。後者は実装前の human gate であり、提示する材料は下の Human Gate Materials で定める。`PDH-ticket-human-review` で AC の明示承認を得ないまま実装を始めない。その後の Acceptance Criteria の変更 — 追加・削除・文言変更 — にも、同様に明示のユーザ承認が要る。
 
@@ -31,7 +29,7 @@ PDH の stage label は安定した checklist キーであり、重いプロセ�
 
 利用できる環境では、stage ごとの worker モデルを使う。Coding Engineer、QA、reviewer、AC 裏取り、Surface Observer は、現実的な範囲で別々の worker にする。Director / main agent にとって、worker の PASS は入力であって承認ではない。stage を進める前に、正本の docs・ticket・diff・実コマンド出力・note の証拠を確認する。
 
-Reviewer findings are hypotheses, not implementation orders（reviewer の finding は仮説であり、実装命令ではない）。各 finding を採用・保留・棄却のどれにするかは、AC、現在の diff、変更された user journey、実際に出荷された欠陥と同じ根本原因のいずれかへ結び付けて Director が決める。severity ラベルだけでは scope の拡大を正当化できない。現在の ticket と無関係な実在の Critical/Major finding は自動進行を止め、黙って保留せずユーザへ持ち込む。修正後は元の finding とその修正差分だけを再 review し、広い探索 review を繰り返し回さない。修正が永続状態や公開 surface を追加するなら、実装前に削除・棄却・制約の代替案と比較し、より単純な設計を確信を持って選べないときは escalate する。
+reviewer の finding は仮説であり、実装命令ではない。各 finding を採用・保留・棄却のどれにするかは、AC、現在の diff、変更された user journey、実際に出荷された欠陥と同じ根本原因のいずれかへ結び付けて Director が決める。severity ラベルだけでは scope の拡大を正当化できない。現在の ticket と無関係な実在の Critical/Major finding は自動進行を止め、黙って保留せずユーザへ持ち込む。修正後は元の finding とその修正差分だけを再 review し、広い探索 review を繰り返し回さない。修正が永続状態や公開 surface を追加するなら、実装前に削除・棄却・制約の代替案と比較し、より単純な設計を確信を持って選べないときは escalate する。
 
 Director は自身の engine・model・profile・reasoning effort を変更しない。その変更を許可できるのは、現在の作業に対する明示のユーザ指示だけである。worker への model 割り当ては別の話であり、project の方針に従う。
 
@@ -99,8 +97,8 @@ UI / API の検証と human review には `./scripts/dev-server.sh` を使う。
 
 - `--seed` はローカル状態をリセットし、`scripts/seed-pdh-verify.sh` を実行する。
 - `--port <port>` は固定ポートを使う。
-- `--port` なしのときは、script が空きポートを選ぶ。
-- `--no-localhost` は、project の安全な方法で localhost 以外の review URL を公開する。
+- `--port` なしのときは、script が空きポートを選ぶ。`--no-localhost` では外部 URL に port が出ないことが多いので、固定 port が要る検証以外では `--port` を省略してよい。
+- `--no-localhost` は、project の安全な方法で localhost 以外の review URL を公開する。URL を知れば到達できる公開方式（Quick Tunnel 等）では露出内容を確認し、厳密な認可が要るなら別方式（named tunnel + Access 等）を人間判断にする。
 
 UI / API 検証に再現可能なローカルデータが要るなら、`scripts/seed-pdh-verify.sh` を実装する。seed が不要なら、この hook は no-op の成功にする。現在の検証に対するユーザの明示承認がない限り、この hook から本番データやリモートデータを使わない。
 
@@ -183,3 +181,5 @@ human gate の質は、ユーザが受け取る材料の質まででしかない
 4. **何を守るルールで、それはどこで見られるか？** **どの stage の出口で、誰が何を見ることを守るのかを 1 文で書く。**その 1 文が書けないなら、それはルールではなく手順である — その stage の note checklist へ置く。ルールは**その 1 文を先に、動作を後に**書く。**動作だけで書かれたルールは、動作を省けると読んだ読み手に落とされる。**
 
 同じルールを 2 箇所に書かない。文言を移動したら、移動元に残骸がないか sweep する。
+
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/docs/PDH-AGENTS.md

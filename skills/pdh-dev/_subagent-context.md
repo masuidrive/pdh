@@ -22,7 +22,7 @@ PMはspawn promptの冒頭にこの内容を置き、続けて該当する役割
 
 **例外: レンズ1（Why end-to-end 無バイアス）の reviewer だけは 6 を読まない。** PMはこのworkerへ`<TICKET_FILE>`と`<NOTE_FILE>`を渡さず、prompt本文にWhyだけを転記する。渡していないticketやnoteを自分で探して読まない（`_review.md`「レンズ1」）。
 
-`PDH-AGENTS.md`「Read Order」のskill読了はDirector向けであり、workerはpromptと役割別指示で指定されたファイルだけ読めばよい。
+workerはpromptと役割別指示で指定されたファイルだけ読めばよい（Director向けの読み順は`pdh-dev` SKILL.md「この skill の読み方」にある）。
 
 ### 作業対象ファイルの位置
 

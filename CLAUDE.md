@@ -4,7 +4,7 @@
 
 このリポジトリは **PDH の配布元** であり、PDH を適用される側でもある。
 
-- PDH 汎用 agent ルールは **`templates/PDH-AGENTS.md`** を読む。配布先プロジェクトのように root へコピーしない（この repo が原本であり、コピーすると原本が 2 つになる）
+- PDH 汎用 agent ルールは **`docs/PDH-AGENTS.md`** を読む。配布先プロジェクトのように root へコピーしない（この repo が原本であり、コピーすると原本が 2 つになる）
 - Claude Code skill の実体は **`skills/`**。配布先の `.claude/skills/` に相当する
 - Codex CLI は `.agents/skills/` から skill を読む。配布先ではそこを `.claude/skills/` への symlink にする（wrapper ファイルは廃止済み。実体を 1 つに保つため）
 
@@ -19,11 +19,11 @@ README.md                            # PDH の説明（何を解決するか・�
 INSTALL.md                           # 導入・更新手順。配布物の配置表はここにある
 docs/
   product-delivery-hierarchy.md      # PDH 運用ルール（配布物）
+  PDH-AGENTS.md                      # PDH 汎用 agent ルール（配布物。この repo でもこれを読む）
 skills/                              # Claude Code skill の実体（配布物）
   pdh-dev/  pdh-coding/  pdh-reviewing/  pdh-check-writing/  pdh-update/  tmux-director/
   pdh-decision-board/
 templates/                           # 配布テンプレート
-  PDH-AGENTS.md                      # PDH 汎用 agent ルール（この repo でもこれを読む）
   CLAUDE.md                          # 配布先 project 固有ルールの雛形
   AGENTS.md                          # 他 agent platform 向け thin pointer
   agents/claude/  agents/codex/      # PDH worker の agent 定義（配布先 .claude/agents/ と .codex/agents/）
@@ -62,7 +62,7 @@ scripts/
 
 ## どこに書くかの判断（CLAUDE.md / PDH-AGENTS.md / skill）
 
-判断の 3 問は `templates/PDH-AGENTS.md`「Where A Rule Belongs」に従う。この repo 固有の適用例だけをここに置く。
+判断の 3 問は `docs/PDH-AGENTS.md`「Where A Rule Belongs」に従う。この repo 固有の適用例だけをここに置く。
 
 例: 「変更前に `git log` / `git blame` で意図を把握する」は、共通・コード変更時のみ・実装担当なので `pdh-coding` に従う。配布テンプレートの `CLAUDE.md` に同じことを書くと、コピー先で二重管理になる。
 
@@ -85,7 +85,7 @@ skill・`PDH-AGENTS.md`・`CLAUDE.md` に置くのは**現在形の規則だけ*
 
 ## 重複の禁止
 
-- **同じルールを 2 箇所に書かない**（`product-brief.md` の `AI-1`）。PDH 汎用は `templates/PDH-AGENTS.md`、project 固有の書き方例は `templates/CLAUDE.md`、導入・更新手順は `INSTALL.md`、運用ルールは `docs/product-delivery-hierarchy.md`
+- **同じルールを 2 箇所に書かない**（`product-brief.md` の `AI-1`）。PDH 汎用は `docs/PDH-AGENTS.md`、project 固有の書き方例は `templates/CLAUDE.md`、導入・更新手順は `INSTALL.md`、運用ルールは `docs/product-delivery-hierarchy.md`
 - **配布テンプレートに「このテンプレートの使い方」を書かない**（`AI-3`）。コピー先で読み手のいない説明文になる
 - 文言を移動したら、移動元に残骸がないか `rg '<特徴的な一文>'` で sweep する
 
@@ -154,7 +154,7 @@ rg '検査に入れない|測らない|数えない|数や有無|入力であっ
 # PDH (Ticket) 運用
 
 - **`product-brief.md` が全判断の基準**
-- PDH 汎用ルールは `templates/PDH-AGENTS.md`、フローの詳細は `skills/pdh-dev/SKILL.md` にある。ここには PDH repo 固有の差分だけを書く
+- PDH 汎用ルールは `docs/PDH-AGENTS.md`、フローの詳細は `skills/pdh-dev/SKILL.md` にある。ここには PDH repo 固有の差分だけを書く
 - **Acceptance Criteria の変更（追加・削除・修正）は必ずユーザの承認を得ること**
 
 ## 影響範囲の明示（必須）

@@ -23,6 +23,7 @@ fail() {
 # --- 1. `Based on` lines ------------------------------------------------------
 # Source-repo paths of the files INSTALL.md declares as substitution targets.
 BASED_ON_FILES=(
+  "docs/PDH-AGENTS.md"
   "templates/CLAUDE.md"
   "templates/product-brief.md"
   "templates/technical-reference.md"
@@ -100,15 +101,9 @@ DUP_MIN_BYTES=80
 
 # Pairs whose overlap is intentional. Keep this list short and justified: every
 # entry is a rule with two homes, which is what AI-1 exists to prevent.
-#   docs/product-delivery-hierarchy.md + templates/.ticket-config.yaml
-#     The config embeds the literal ticket template that ticket.sh writes into
-#     each new ticket; the doc explains that same template to the reader. The
-#     config copy is machine-consumed and cannot be replaced by a reference.
+# (Currently empty: the doc no longer embeds the ticket template — the config's
+# default_content is the single source that ticket.sh materializes.)
 dup_pair_allowed() {
-  local a="$1" b="$2"
-  case "$a|$b" in
-    "docs/product-delivery-hierarchy.md|templates/.ticket-config.yaml") return 0 ;;
-  esac
   return 1
 }
 

@@ -132,21 +132,11 @@ main ← features/250711-091538-fix-auth (Ticket ブランチ)
 ```
 
 - ticket.sh が Ticket ごとに `features/<ticket-name>` ブランチを作り、close 時にマージ先（ticket frontmatter の `branch` フィールド、default `main`）にマージする。
-- 並列で複数 ticket を進める場合は、worktree 分離 (`claude --worktree <slug>` or `EnterWorktree({name: "<slug>"})`) を使うと PM (Director) と worker が独立に動ける。詳細は `.claude/skills/tmux-director/SKILL.md` 「複数 window による並行チケット実行」参照。
-- worktree には gitignored ファイル（`.env` 等）が入らない。worktree での実行に必要なものは `.ticket-config.yaml` の `worktree_copy_files` に列挙しておくと `ticket.sh start --worktree` が作成・再開時にコピーする（単発の追加は `--copy-file <path>`）。**このコピーは ticket.sh 自身が扱う worktree にだけ働く**。engine 側の機構（`claude --worktree` / `EnterWorktree` 等）だけで作った worktree には適用されないため、その場合は必要ファイルを手動でコピーする。
-
-### Coding agent 向け
-
-- Agent は Ticket の **Why / Acceptance Criteria / Architectural Invariants check / Design Decisions / out-of-scope / Implementation Notes** を主な入力として使う。
-- 判断に迷ったら Product Brief の **Constraints / Architectural Invariants** を参照する。
-- Ticket に書かれていない仕様判断が必要な場合の対応は `.claude/skills/pdh-coding/SKILL.md` 「Open Questions protocol (batch escalate)」を参照する (デフォルト値で進め、ASSUMPTION commit + note 記録、PM に batch escalate)。
-- Ticket の Dependencies に未完了のブロッカーがある場合は、着手せずに報告する。
-- `PDH-AGENTS.md` は PDH 汎用 agent ルール、`CLAUDE.md` は repo で共有する project 固有ルール、`CLAUDE.local.md` は gitignore された環境固有メモとする。端末・sandbox・個人アカウント・一時 URL・ローカル認証状態などは `CLAUDE.local.md` に書き、secret の値そのものは書かない（取得方法や保管場所だけを書く）。
-- `.claude/skills/` は skill の実体、`.agents/skills/` はそこへの symlink とする（Codex CLI は `.agents/skills/` を読む）。実体は 1 つだけなので、skill のルールは `.claude/skills/` 側を更新すればよい。
+- 並列で複数 ticket を進める場合は worktree 分離を使うと PM (Director) と worker が独立に動ける。手順と gitignored ファイルの持ち込み（`worktree_copy_files`）は `.claude/skills/tmux-director/SKILL.md` 「複数 window による並行チケット実行」参照。
 
 ### Stage labels
 
-Stage label は checklist と引き継ぎ用の安定キーであり、重い工程番号ではない。
+Stage label は、note の Status・checklist・引き継ぎで使う安定した識別子である。工程を管理する番号ではないので、改名せず、note や報告にはこの文字列をそのまま書いて検索・照合に使う。
 
 | Label | 意味 | 出口で誰が何を見るか |
 |---|---|---|
@@ -161,13 +151,9 @@ Stage label は checklist と引き継ぎ用の安定キーであり、重い工
 
 **stage の «意味» は工程が何をするかで、«出口で誰が何を見るか» はその工程が守るものである。**規則を足すときは後者を先に 1 文で書く（`PDH-AGENTS.md`「Where A Rule Belongs」)。
 
-`PDH-review-1` / `PDH-review-2` のような実行回数ラベルは top-level stage ではなく、`current-note.md` の `PDH-review` 配下に残す attempt log とする。
+gate の規則・検証の証拠要件・恒久テストと `ticket-local-test` の区別は `PDH-AGENTS.md`（「Stage Flow」「Verification」「Human Gate Materials」）に、各 stage の手順は `pdh-dev` skill にある。ここには重複させない。
 
-`PDH-ticket-review` と `PDH-ticket-human-review` は分ける。前者は agent が ticket contract を整える工程、後者は実装前にユーザが全体像・達成するもの・ticket review で修正した点・AC を見て、想定と合っているかをすり合わせる人間 gate。AC 承認は `PDH-ticket-human-review` で得る。承認なしに `PDH-implement` へ進まない。
-
-Agent は `PDH-verify` までを自動で進め、そこで止まらず `PDH-human-review` として人間にレビューを依頼する。`PDH-human-review` の目的は、coding agent がやったこと・達成したことをユーザが見て、それがユーザの想定と合っているかをすり合わせること。`PDH-AGENTS.md` に従う: gate でユーザへ渡す材料は「Human Gate Materials」、surface 検証の証拠要件は「Browser And Surface Checks」、開発サーバと seed は「Dev Server And Seed」、承認の扱い（初期選択・timeout/default・沈黙は承認でない）は「Verification」の Human authority。`PDH-human-review` の承認があるまで `PDH-close` に進まず、チケット全体を完了と表現しない。途中で疑問・判断不能・blocker・完了見込みが立たない状態になった場合は、`PDH-human-review` を待たずにその時点でユーザに確認する。
-
-恒久テストと `ticket-local-test` は分ける。`scripts/test-all.sh` / CI / `test/` に残すのは、Product Brief、Architectural Invariants、継続的な product contract、または一般化された regression だけとする。特定 ticket の一時的な移行確認（例: `/a` から `/b` への変更で旧 `/a` が 404 になること、特定 fixture 名がカタログに出ないこと）は `PDH-verify` の `ticket-local-test` とする。実行可能なものは `ticket.sh start` / `restore` 出力の `ticket_dir:` が示すディレクトリ配下の `tests/`（= `tickets/<ticket-name>/tests/`。ticket.sh はこのパスを出力も作成もしないので、必要時に `mkdir -p` する。旧 flat 形式は `tests/tickets/<ticket-id>/` で後方互換）に置き、`./scripts/test-ticket-local.sh [ticket-id]` で呼ぶ。seed / `tmp_dir` helper / `agent-browser` / `curl` の実行証跡は note に残す。恒久化するか迷う場合は、その期待が ticket 名や一時 fixture なしで今後も product contract として説明できるかを基準にする。
+### テストの層
 
 テストは目的とコストの違う層に分ける。混ぜず、それぞれの入口を1つに保つ。
 
@@ -176,147 +162,18 @@ Agent は `PDH-verify` までを自動で進め、そこで止まらず `PDH-hum
 | fast-check（超軽量・決定論） | `scripts/fast-checks.sh` + `scripts/checks/*.check` | ミリ秒 | 毎変更。`scripts/test-all.sh` の最初のステージとして、また `ticket-local-test` の前提ゲートとして |
 | 全体スイート（重量級） | `scripts/test-all.sh`（型検査・単体・E2E 等をまとめる） | 秒〜分 | `PDH-implement` の完了時と `PDH-verify` |
 | ticket-local-test（一時） | `tickets/<ticket-name>/tests/` 配下の `test-ticket-local.sh` | 可変 | その ticket の検証中だけ。CI・`test-all` に入れず、close 時に刈る |
-| mutation testing（任意の重検査） | 言語ごとの専用ツール（JS/TS: Stryker、Python: mutmut 等） | 分〜十分超 | 定期棚卸しのみ。コストが大きいので CI・`test-all` に入れない |
+| mutation testing（任意の重検査） | 言語ごとの専用ツール（JS/TS: Stryker、Python: mutmut 等） | 分〜十分超 | 定期棚卸しのみ（導入は各プロジェクト判断）。コストが大きいので CI・`test-all` に入れない |
 
-包含関係: fast-check ⊂ `test-all`（`test-all` は fast-check を最初に含む）。ticket-local-test も先頭で fast-check を通す。mutation testing は「テストがある」ではなく「テストが欠陥を検出できる」を測る別軸で、`test-all` の外に置く。
-
-- **fast-check** は型で表せず・全体スイートでは重い・でも「この文字列パターンは禁止」「このファイルは必ず存在する」と言い切れる repo 固有の不変条件（出荷済み不具合の再発防止など）を、決定論的に恒久検出する。汎用 linter（tsc/eslint 等）の代替ではない。仕組みは言語非依存なので `scripts/checks/README.md` の形式で各プロジェクトへ持ち込める。
-- **mutation testing** の実体は言語ごとに別ツールで汎用テンプレート化しない。導入するかは各プロジェクト判断とし、入れる場合も CI ではなく定期棚卸しで回す。
-
-`PDH-verify` / `PDH-human-review` で開発サーバが必要な場合は `./scripts/dev-server.sh` を使う（option と seed hook の規範は `PDH-AGENTS.md`「Dev Server And Seed」）。`--no-localhost` では外部 URL に port が出ないことが多いため、固定 port が必要な検証以外では `--port` を省略してよい。実装はアプリごとに異なり得る（例: プロジェクト既定の tunnel / 公開手段）。agent は app/script に実装された方法を使う。sandbox・端末パス・local login 等の環境固有制約は local 設定か一時コマンドで扱う。Quick Tunnel は URL を知る人が到達できるため、露出内容を確認し、厳密な認可が必要なら named tunnel + Access 等の別設定を人間判断にする。
-
-PDH の実行は stage ごとに subagent / worker へ委譲し、Director が結果を検品して統合する（規範は `PDH-AGENTS.md`「Execution Model」）。
+包含関係: fast-check ⊂ `test-all`（`test-all` は fast-check を最初に含む）。ticket-local-test も先頭で fast-check を通す。mutation testing は「テストがある」ではなく「テストが欠陥を検出できる」を測る別軸で、`test-all` の外に置く。fast-check の役割と書き方は `pdh-check-writing` skill と `scripts/checks/README.md` に従う。
 
 
 ## テンプレート
 
-### Product Brief
+テンプレートの正本は次の 2 箇所にある。ここには複製を置かない。
 
-```md
-## Product Brief: <product name>
+- **Ticket / note** — `.ticket-config.yaml` の `default_content` / `note_content`。`./ticket.sh new` が記入ガイドのコメント付きで実体化する。YAML frontmatter（`title` / `created_at`、完了時の `closed_at`、中止時の `cancelled_at`）は ticket.sh が扱う
+- **Product Brief** — 導入時に repo root へ配置される `product-brief.md`（PDH リポジトリの Product Brief テンプレートが元。記入ガイドは本文にある）。frontmatter は持たない
 
-### Background
-<!-- いまなぜこれを作るのか。どんな状況・文脈があるか。 -->
-
-### Who
-<!-- どんな状態の人が、どんな場面で使うか。
-     一人で使うなら一人でいい。ロール名を並べるためのセクションではない。 -->
-
-### Problem
-<!-- 何が困っているか。根っこの問題を書く。
-     同じ問題の表れ方が複数あっても、無理に分けない。 -->
-
-### Solution
-<!-- どういう方向で解くか。やらない判断もここに含めてよい。
-     主要なユーザフローがあれば 1-2 個書く。
-     Ticket の Acceptance Criteria を導く素材になる。
-     例: スタッフが管理画面を開く → 在庫一覧が見える → 数量を修正 → 反映される -->
-
-### Appetite
-<!-- （任意）どこまで投資する価値があるか。時間・複雑さの上限感を 1-3 行。
-     coding agent は YAGNI 判断の較正に使う。書けなければセクションごと省略。 -->
-
-### Constraints
-<!-- すべての判断を規定する前提条件・技術的制約。
-     開発体制、技術スタック、データの形式、既存ワークフローとの関係など。
-     coding agent はここを見て技術選定・設計判断の境界を知る。
-     実装時に落とし穴になりうる既知の地雷（rabbit holes）もここ。 -->
-
-### Architectural Invariants
-<!-- 根本不変則。Ticket / 実装の全てがこれと矛盾しないこと。
-     例: - Hub stateless: API はリクエストごとに完結、サーバ側で state を持たない
-         - Process immutable: publish 後は変更不可、tag で参照を切り替える
-     ticket は実装前にこの Invariants との整合性を 1 行宣言する責務がある。
-     変更には破壊的影響があるためユーザ承認が必須。 -->
-
-### Done
-<!-- うまくいったと言える状態。自分が判断できる言葉で。
-     計測しないメトリクスは書かない。
-     フォーマットは自由。散文でも箇条書きでもよい。
-     達成した項目は消さず、日付または commit / ticket 名を添えて「達成済み」と追記する。 -->
-
-### Non-goals
-<!-- やりたくなるが、意図的にやらないこと。
-     議論にすらならないことは書かない。 -->
-
-### Open Questions
-<!-- まだ決まっていないこと。本文中の [NEEDS CLARIFICATION: 問い] マーカーの索引もここ。
-     答えが実質出ているものは書かない。
-     coding agent はここに該当する判断を勝手にしない。 -->
-```
-
-### Ticket
-
-最小構成は **Why + What/Acceptance Criteria + Architectural Invariants check + Design Decisions + Out-of-scope** で成立する。他は該当する情報がある場合のみ書く。
-
-```md
----
-title: <ticket title>
-created_at: YYYY-MM-DDTHH:MM:SSZ
-# closed_at: YYYY-MM-DDTHH:MM:SSZ     ← 完了時に追加
-# cancelled_at: YYYY-MM-DDTHH:MM:SSZ  ← 中止時に追加
----
-
-### Why
-<!-- ユーザ価値・解きたい問題を 1〜3 行で書く。
-     Product Brief の Problem / Solution のどの部分を担うか明記する。 -->
-
-### What / Acceptance Criteria
-<!-- 完了を判定できる条件。プロダクトの観察可能な振る舞いだけを書く。
-     読み手はこの ticket を承認する人であり、実装する agent ではない。
-
-     箇条書きを書き始める前に、この節の冒頭へ 1 文を書く:
-       「この ticket が終わると、〈誰〉が、いままでできなかった〈何〉をできるようになる」
-     各 AC はその 1 文の分割として書く。非退行の AC だけは例外で、〈誰〉のみ必須。
-
-     読めているかの判定は pdh-dev skill の「AC に書いてよいもの / 書いてはいけないもの」に従う。
-     例: 「新しく登録したユーザが、一覧の画面に出る」
-     例: 「画面幅 375px 以下でメニューがハンバーガーに切り替わる」
-
-     プロセス要件 (レビュー済み、テストパス等) はここには書かない。
-     ワークフロー (SKILL.md) と作業ノート (note) が保証する。
-
-     runtime で UX/Security invariant を強制する ticket では、AC に「runtime enforce の
-     保証メカニズム」を 1 行明記する (例: editor が警告するだけでなく、保存そのものが
-     拒否されること)。 -->
-- [ ] AC 1: ...
-- [ ] AC 2: ...
-
-### Architectural Invariants check
-<!-- product-brief.md の Architectural Invariants と矛盾しないことを 1 行宣言する。
-     矛盾しない場合: 「Hub stateless / Process immutable と矛盾しない」等。
-     新規 Invariant を要求する場合: 実装を止めて Product Brief 更新から始める。 -->
-
-### Design Decisions
-<!-- 既知の設計判断と理由を箇条書きで明示。
-     例: - データ保存形式: data URI (Files API は将来検討、本 ticket では不要)
-     例: - error code: 422 (validation error として扱う) -->
--
-
-### Out-of-scope
-<!-- やらないこと (scope creep 防止)。
-     「ついでにやりそう」「次の ticket でやる」を明記する。 -->
--
-
-▼ 以下は該当する情報がある場合のみ ▼
-
-### Implementation Notes
-<!-- ユーザの明示指示、またはユーザが会話で言及した事項のみ書く (関数名 / module 名レベルまで)。
-     設計判断は「Design Decisions」に書く。
-     Coding Engineer は Implementation Notes が空でも実装できる責務を持つ。
-     PM が自主的に実装詳細を書いてはならない (下流の自由度を奪う)。 -->
-
-### Dependencies
-<!-- この ticket に着手するために完了が必要な他の ticket。
-     「参考情報」ではなく「ブロッカー」だけ書く。なければ省略。
-     ブロッカー = これが未完了だと実装・テストが物理的にできない依存。
-     例: 「DB migration の ticket が先に必要」「認証 API が存在しないと結合できない」
-     参考情報 (設計の参考にした ticket 等) は書かない。
-     coding agent は未完了の依存がある場合、着手せず報告する。 -->
-```
-
----
-
-**Product Brief**: repo 全体の why + Architectural Invariants / **Ticket**: Brief を実現する実装単位 (1 ticket = 1 work)
+Ticket の最小構成は **Why + What/Acceptance Criteria + Architectural Invariants check + Design Decisions + Out-of-scope** で成立する。他の節（Implementation Notes / Dependencies）は該当する情報がある場合のみ書く。
 
 <!-- Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/docs/product-delivery-hierarchy.md -->

@@ -57,7 +57,7 @@ bash ticket.sh init
 
 | コピー元 | コピー先 | 用途 |
 |---|---|---|
-| `tmp/pdh/docs/product-delivery-hierarchy.md` | `docs/product-delivery-hierarchy.md` | PDH 運用ルール・テンプレート |
+| `tmp/pdh/docs/product-delivery-hierarchy.md` | `docs/product-delivery-hierarchy.md` | PDH 運用ルール（テンプレートの正本は `.ticket-config.yaml` / `product-brief.md` 側） |
 | `tmp/pdh/skills/pdh-dev/` | `.claude/skills/pdh-dev/` | PDH stage flow ワークフロースキル（`SKILL.md` と、そこから参照される `_*.md` を**ディレクトリごと**コピーする） |
 | `tmp/pdh/skills/pdh-coding/SKILL.md` | `.claude/skills/pdh-coding/SKILL.md` | コーディング標準スキル |
 | `tmp/pdh/skills/pdh-reviewing/SKILL.md` | `.claude/skills/pdh-reviewing/SKILL.md` | レビュー標準スキル（reviewer worker が review 開始前に読む） |
@@ -66,7 +66,7 @@ bash ticket.sh init
 | `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
 | `tmp/pdh/skills/pdh-decision-board/` | `.claude/skills/pdh-decision-board/` | 判断ボードスキル — 実装前 gate と close 前 gate の両方。`SKILL.md` が入口で、共通規則 `base.md` / gate 差分 `ticket-gate.md` `close-gate.md` / renderer 分冊 / `kit/`（CSS・JS・見本）/ `tools/`（組み立てと静的検査。bash と awk だけで動く）を**ディレクトリごと**コピーする |
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
-| `tmp/pdh/templates/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH 汎用 agent ルール |
+| `tmp/pdh/docs/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH 汎用 agent ルール |
 | `tmp/pdh/templates/CLAUDE.local.md.example` | `CLAUDE.local.md.example` | 環境固有 agent メモのサンプル（実体は commit しない） |
 | `tmp/pdh/templates/AGENTS.md` | `AGENTS.md` | Codex CLI 向け設定（CLAUDE.md / PDH-AGENTS.md への thin pointer） |
 | `tmp/pdh/templates/.ticket-config.yaml` | `.ticket-config.yaml` | ticket.sh 設定 |
@@ -105,8 +105,9 @@ grep -qxF 'CLAUDE.local.md' .gitignore || printf '\nCLAUDE.local.md\n' >> .gitig
 
 > **⚠ Grok Build を使う場合、`CLAUDE.local.md` は読まれない。** Grok は instruction file の探索で `.gitignore` を尊重するため、gitignore した時点で discovery から外れる（skill の探索は `.gitignore` を無視するので影響しない）。grok 0.2.93 の `grok inspect` で確認済み。Grok で環境固有メモを効かせたい場合は `.grok/rules/*.md` に置くなど、別の手段を検討すること。Claude Code / Codex CLI はこの制約を受けない。
 
-対象ファイル (14 個):
+対象ファイル (15 個):
 - `CLAUDE.md`
+- `PDH-AGENTS.md`
 - `product-brief.md`
 - `technical-reference.md`
 - `.ticket-config.yaml`
@@ -139,19 +140,23 @@ sed_inplace() {
 
 sed_inplace \
   CLAUDE.md \
+  PDH-AGENTS.md \
   product-brief.md \
   technical-reference.md \
   .ticket-config.yaml \
   docs/product-delivery-hierarchy.md \
   .claude/skills/pdh-reviewing/SKILL.md \
   .claude/skills/pdh-check-writing/SKILL.md \
+  .claude/skills/pdh-coding/SKILL.md \
+  .claude/skills/pdh-dev/SKILL.md \
+  .claude/skills/pdh-update/SKILL.md \
   .claude/skills/pdh-decision-board/SKILL.md \
   .claude/skills/tmux-director/SKILL.md \
   scripts/checks/example-max-source-lines.check \
   scripts/checks/example-max-test-lines.check
 ```
 
-`scripts/hookbus.js` と `pdh-dev` / `pdh-coding` / `pdh-update` の SKILL.md には `Based on` footer がないので sed 対象外。
+`scripts/hookbus.js`・`AGENTS.md`・各 script テンプレート（`test-all.sh` 等）には `Based on` footer がないので sed 対象外。
 
 #### 4. .claude/settings.json を設定する
 
@@ -406,17 +411,21 @@ rm -rf tmp/pdh
 
 ### 既知の移行手順
 
-#### Ticket テンプレートの見出し「確定判断 (Design Decisions)」が「Design Decisions」へ改名された（2026-08-30 以降）
+#### Ticket テンプレートの見出し改名と AC ガイド更新（2026-08-30 以降）
 
-Ticket の節ラベルのうち「確定判断」だけが日本語だったため、他ラベル（Why / What / Out-of-scope 等）と同じ英語へ揃えた。`.ticket-config.yaml` は上書きされないテンプレートなので、既存プロジェクトでは `default_content` の見出しと `start_success_message` の列挙を手で更新する。散文中の用語「確定判断」はそのままでよい（skill 側も日本語の用語としては使い続ける）。
+2 つの変更が `.ticket-config.yaml` の `default_content` に入った。`.ticket-config.yaml` は上書きされないテンプレートなので、既存プロジェクトでは手で更新する。
+
+1. **見出し「確定判断 (Design Decisions)」→「Design Decisions」**。節ラベルのうち「確定判断」だけが日本語だったため、他ラベル（Why / What / Out-of-scope 等）と同じ英語へ揃えた。`start_success_message` の列挙と Implementation Notes コメント内の表記も同様。散文中の用語「確定判断」はそのままでよい（skill 側も日本語の用語としては使い続ける）
+2. **AC コメントを承認者向けガイドへ更新**。「読み手は承認する人」「冒頭に『この ticket が終わると、〈誰〉が、〈何〉をできるようになる』の 1 文を書き、各 AC はその分割」を追記し、実装の言葉の例（`/api/users に GET…`）を承認者の言葉の例に差し替えた（doc のテンプレート節は廃止され、`default_content` が唯一の正本になった）
 
 適用済みかの確認（冪等）:
 
 ```bash
-grep -q '### Design Decisions' .ticket-config.yaml && echo "適用済み" || echo "要適用"
+grep -q '### Design Decisions' .ticket-config.yaml && echo "1: 適用済み" || echo "1: 要適用"
+grep -q 'この ticket が終わると' .ticket-config.yaml && echo "2: 適用済み" || echo "2: 要適用"
 ```
 
-「要適用」なら `.ticket-config.yaml` 内の `### 確定判断 (Design Decisions)` を `### Design Decisions` に、`start_success_message` と Implementation Notes コメント内の「確定判断」を「Design Decisions」に置換する。close 済みでない（todo / doing）ticket の見出しを揃えるかは更新手順 10 で確認する。`tickets/done/` は歴史記録なので触らない。
+「要適用」なら `tmp/pdh/templates/.ticket-config.yaml` の `default_content` の該当コメントを取り込む。close 済みでない（todo / doing）ticket の見出しを揃えるかは更新手順 10 で確認する。`tickets/done/` は歴史記録なので触らない。
 
 #### PDH worker の agent 定義が新設された（2026-08-30 以降）
 

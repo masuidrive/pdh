@@ -203,7 +203,7 @@ send-keys Enter
 
 したがって **2 巡目以降の window には必ず `ticket.sh start --worktree` を使わせる。**移動に失敗した場合、worker は「全コマンドで絶対パスを明示する」運用で続行できるが、**Bash の cwd は毎回元の worktree へ戻る**ので事故が起きやすい。**新しい ticket を始めるときは、可能なら新規セッションを新 worktree で立てるほうが確実。**
 - worktree path は `.worktrees/<slug>/` (ticket.sh default)
-- `.env` 等 gitignored ファイルの worktree への持ち込みは `.ticket-config.yaml` の `worktree_copy_files` で行う（適用条件は `docs/product-delivery-hierarchy.md`「ブランチ戦略」参照）
+- `.env` 等 gitignored ファイルの worktree への持ち込みは `.ticket-config.yaml` の `worktree_copy_files` で行う（`ticket.sh start --worktree` が作成・再開時にコピーする。単発の追加は `--copy-file <path>`）。⚠ **このコピーは ticket.sh 自身が扱う worktree にだけ働く。**engine 側の機構（`claude --worktree` / `EnterWorktree` 等）だけで作った worktree には適用されないため、その場合は必要ファイルを手動でコピーする
 - close 時は `ticket.sh close --keep-worktree` で worktree path 維持 (cwd dangling 防止)
 - 詳細は `docs/product-delivery-hierarchy.md`「ブランチ戦略」
 

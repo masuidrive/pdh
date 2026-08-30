@@ -11,7 +11,7 @@ description: "Ticket-centric 開発ワークフロー。1 ticket = 1 work unit�
 
 ## この skill の読み方
 
-`product-brief.md`、`docs/product-delivery-hierarchy.md`、`PDH-AGENTS.md`、`CLAUDE.md`（と存在すれば`CLAUDE.local.md`）を先に読む順序は`PDH-AGENTS.md`「Read Order」に従う。
+`product-brief.md` → `docs/product-delivery-hierarchy.md` → `PDH-AGENTS.md` → `CLAUDE.md`（と存在すれば`CLAUDE.local.md`）→ ticket file / note file（`ticket.sh start`/`restore`出力の`ticket:`/`note:`パス。互換symlink: `current-ticket.md`/`current-note.md`）の順で先に読む。engineが自動でcontextへ載せるもの（`CLAUDE.md`と、そこからimportされるファイル）は読み直さなくてよい。
 
 そのうえで、この skill の分冊を必要に応じて開く。
 
