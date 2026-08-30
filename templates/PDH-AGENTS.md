@@ -1,316 +1,174 @@
-# PDH-AGENTS.md — PDH common agent rules
+# PDH-AGENTS.md — PDH 汎用 agent ルール
 
-This file contains PDH rules that should be shared across projects.
-Project-specific rules belong in `CLAUDE.md`. Environment-local notes belong in
-gitignored `CLAUDE.local.md`.
+このファイルには、project 間で共有する PDH ルールを置く。project 固有ルールは `CLAUDE.md` に置く。環境固有のメモは gitignore 済みの `CLAUDE.local.md` に置く。
 
 ## Read Order
 
-For PDH / ticket-centric work, read:
+PDH / ticket 中心の作業では、次を読む:
 
 1. `product-brief.md`
 2. `docs/product-delivery-hierarchy.md`
 3. `PDH-AGENTS.md`
 4. `CLAUDE.md`
-5. `CLAUDE.local.md` if it exists
-6. `.agents/skills/pdh-dev/SKILL.md` or `.claude/skills/pdh-dev/SKILL.md`
-7. `.agents/skills/pdh-coding/SKILL.md` or `.claude/skills/pdh-coding/SKILL.md`
-8. The ticket and note files at the paths shown by `ticket.sh start`/`restore` output (`ticket:`/`note:`; compat symlinks: `current-ticket.md`/`current-note.md`) when they exist
+5. `CLAUDE.local.md`（存在する場合）
+6. `.agents/skills/pdh-dev/SKILL.md` または `.claude/skills/pdh-dev/SKILL.md`
+7. `.agents/skills/pdh-coding/SKILL.md` または `.claude/skills/pdh-coding/SKILL.md`
+8. `ticket.sh start`/`restore` 出力が示すパスの ticket file と note file（`ticket:`/`note:`。互換 symlink: `current-ticket.md`/`current-note.md`）。存在する場合
 
-`CLAUDE.md` may override project-specific commands, file layout, and operational constraints, but it should not restate the generic PDH process.
+`CLAUDE.md` は project 固有のコマンド・ファイル配置・運用制約を上書きしてよいが、汎用の PDH プロセスをそこに書き直さない。
 
 ## Stage Flow
 
-PDH stage labels are stable checklist keys, not heavyweight process numbers:
+PDH の stage label は安定した checklist キーであり、重いプロセス番号ではない:
 
 `PDH-open` -> `PDH-ticket-review` -> `PDH-ticket-human-review` -> `PDH-implement` -> `PDH-review` -> `PDH-verify` -> `PDH-human-review` -> `PDH-close`
 
-`PDH-ticket-review` and `PDH-ticket-human-review` are separate stages. The former is the agent-side ticket contract check. The latter is the pre-implementation human gate; the material to present is defined in Human Gate Materials below. Do not start implementation without explicit AC approval in `PDH-ticket-human-review`. Any later change to the Acceptance Criteria — adding, removing, or rewording — needs explicit user approval as well.
+`PDH-ticket-review` と `PDH-ticket-human-review` は別の stage である。前者は agent 側の ticket contract check である。後者は実装前の human gate であり、提示する材料は下の Human Gate Materials で定める。`PDH-ticket-human-review` で AC の明示承認を得ないまま実装を始めない。その後の Acceptance Criteria の変更 — 追加・削除・文言変更 — にも、同様に明示のユーザ承認が要る。
 
-`PDH-human-review` is the close-before-human gate. Its purpose is for the user to compare what the coding agent did and achieved against the user's expectation. Do not advance to `PDH-close` or describe the ticket as complete without explicit user approval.
+`PDH-human-review` は close 前の human gate である。その目的は、coding agent が何をして何を達成したかを、ユーザが自分の期待と突き合わせることにある。明示のユーザ承認なしに `PDH-close` へ進まず、ticket を完了と表現しない。
 
 ## Execution Model
 
-Use a stage-by-stage worker model when available. Coding Engineer, QA, reviewer, AC verification, and Surface Observer should be separate workers where practical. The Director / main agent must treat worker PASS as input, not approval. Before moving stages, verify the canonical docs, ticket, diff, real command output, and note evidence.
+利用できる環境では、stage ごとの worker モデルを使う。Coding Engineer、QA、reviewer、AC 裏取り、Surface Observer は、現実的な範囲で別々の worker にする。Director / main agent にとって、worker の PASS は入力であって承認ではない。stage を進める前に、正本の docs・ticket・diff・実コマンド出力・note の証拠を確認する。
 
-Reviewer findings are hypotheses, not implementation orders. The Director decides whether each finding is adopted, deferred, or rejected by tying it to the AC, the current diff, the changed user journey, or the same root cause of an actually shipped defect. A severity label alone does not authorize scope expansion. A real Critical/Major finding unrelated to the current ticket must stop automatic progress and be brought to the user instead of being silently deferred. After a fix, re-review only the original finding and its fix delta; do not repeatedly run broad discovery reviews. If a fix adds persistent state or public surface, compare it with a delete/reject/constrain alternative before implementation and escalate when the simpler design cannot be chosen confidently.
+Reviewer findings are hypotheses, not implementation orders（reviewer の finding は仮説であり、実装命令ではない）。各 finding を採用・保留・棄却のどれにするかは、AC、現在の diff、変更された user journey、実際に出荷された欠陥と同じ根本原因のいずれかへ結び付けて Director が決める。severity ラベルだけでは scope の拡大を正当化できない。現在の ticket と無関係な実在の Critical/Major finding は自動進行を止め、黙って保留せずユーザへ持ち込む。修正後は元の finding とその修正差分だけを再 review し、広い探索 review を繰り返し回さない。修正が永続状態や公開 surface を追加するなら、実装前に削除・棄却・制約の代替案と比較し、より単純な設計を確信を持って選べないときは escalate する。
 
-The Director must not change its own engine, model, profile, or reasoning effort. Only an explicit user instruction for the current work can authorize that change. Worker model assignment remains separate and follows project policy.
+Director は自身の engine・model・profile・reasoning effort を変更しない。その変更を許可できるのは、現在の作業に対する明示のユーザ指示だけである。worker への model 割り当ては別の話であり、project の方針に従う。
 
-If subagents/workers cannot be started, do not silently treat solo execution as equivalent. Explain the limitation and ask the user when it affects confidence or gate semantics.
+subagent / worker を起動できないとき、solo 実行を同等のものとして黙って扱わない。確信度や gate の意味に影響する場合は、制約を説明してユーザに確認する。
 
-Do not `git push` unless the user explicitly requested it, an approved close
-flow performs it (for example ticket.sh `auto_push` on close), or `CLAUDE.md`
-explicitly authorizes it.
+ユーザが明示的に要求した場合、承認済みの close フローが実行する場合（例: close 時の ticket.sh `auto_push`）、または `CLAUDE.md` が明示的に許可している場合を除き、`git push` しない。
 
 ## Worker Instructions
 
-Workers/subagents do not inherit the Director's full conversation state. Every worker prompt should include:
+worker / subagent は Director の会話状態全体を引き継がない。すべての worker prompt に次を含める:
 
-- The task goal and background
-- Target file paths or ownership boundaries
-- The ticket's Why, AC, Architectural Invariants check, fixed decisions, and out-of-scope items
-- The worker's exact responsibility and collision boundaries
-- For implementation workers, an instruction to read `.agents/skills/pdh-coding/SKILL.md` or `.claude/skills/pdh-coding/SKILL.md`
+- タスクの目的と背景
+- 対象ファイルパスまたは担当境界
+- ticket の Why・AC・Architectural Invariants check・確定判断・out-of-scope 項目
+- その worker の正確な責務と衝突境界
+- 実装 worker には、`.agents/skills/pdh-coding/SKILL.md` または `.claude/skills/pdh-coding/SKILL.md` を読む指示
 
-Exception: the unbiased Why-end-to-end review lens deliberately omits the
-ticket file, the AC, and the implementor's conclusions; its prompt carries only
-the Why (see the pdh-dev skill's review lens rules).
+例外: 無バイアスの Why end-to-end review lens は、ticket file・AC・implementor の結論を意図的に省く。その prompt には Why だけを載せる（pdh-dev skill の review lens 規則を参照）。
 
-Do not assign overlapping write ownership to multiple workers. Reading/review tasks may run in parallel; writing tasks should have clear ownership.
+複数の worker に重複する書き込み担当を割り当てない。読み取り / review タスクは並行してよいが、書き込みタスクには明確な担当を置く。
 
 ## Context Management
 
-When context is compacted or work resumes, preserve the current ticket id, current PDH stage, unresolved concerns, user decisions, and explicit approvals. Reset context between unrelated tasks. Delegate broad research or noisy log inspection when possible so the Director retains enough context for judgment and user communication.
+context の compact 時や作業の再開時は、現在の ticket id、現在の PDH stage、未解決の懸念、ユーザの判断、明示の承認を保持する。無関係なタスクの間では context をリセットする。広い調査やノイズの多いログ確認は可能なら委譲し、Director が判断とユーザとの対話に足る context を保てるようにする。
 
 ## Verification
 
-The review and verification rules are:
+review と検証のルールは次のとおり:
 
-- **Severity**: Critical means the ticket cannot ship unfixed because an AC
-  is unmet, security is violated, or data can be lost; Major degrades this
-  ticket's user journey. Everything else is lower priority; its disposition is
-  decided by the scope boundary below, and is not automatically a new ticket.
-- **AC trace and over-implementation**: check forward that every AC has named
-  implementation evidence and reverse-map every substantive change to the brief/AC,
-  security, or stability. Report unmapped code, dead code documented as active,
-  governance mixing, and reactive-fix growth as defects. The Director retains
-  code only for one of those three reasons and records a one-line rejection reason.
-- **Independent review triggers**: the following diffs must not skip independent
-  review — authentication, authorization, session/token/scope/ACL/group checks;
-  destructive or irreversible operations and the paths that reach them; database
-  migrations or schema changes; secrets; data deletion; billing; deploy
-  procedures; external API contracts; and newly exposed surface (new endpoint,
-  MCP tool, CLI subcommand). Reviewers on these diffs look for fail-open and
-  misuse before the happy path.
-- **Cross-model review**: for those same triggers, at least one of the reviews
-  must come from a model different from the generator. If one review wing cannot
-  complete, substitute a different-model independent reviewer plus the
-  Director's direct code read, and record why.
-- **Rewind discipline**: before rewinding implementation or review work, pin
-  every detected Critical/Major as an executable `ticket-local-test` under the
-  ticket's tests directory (see the `ticket-local-test` location rule below);
-  afterward compare the independent first review with those checks
-  and record the rewind reason.
+- **Severity**: Critical は、AC 未達・security 違反・データ喪失の可能性により、未修正のままでは ticket を出荷できないものを指す。Major はこの ticket の user journey を劣化させるものを指す。それ以外は優先度が低く、その扱いは下の Scope boundary で決める。自動的に新 ticket になるのではない。
+- **AC trace and over-implementation**: 順方向には、すべての AC に名指しの実装証拠があることを確かめる。逆方向には、すべての実質的変更を brief/AC・security・安定性のいずれかへ対応付ける。対応付かないコード、稼働中と記載された dead code、governance の混在、反応的修正による膨張は、欠陥として報告する。Director は、この 3 つの理由のいずれかに当たるコードだけを残し、棄却理由を 1 行記録する。
+- **Independent review triggers**: 次の diff では独立 review を省略してはならない — 認証・認可・session/token/scope/ACL/グループ判定。破壊的または不可逆な操作と、そこへ到達する経路。database migration・schema 変更。secret。データ削除。課金。deploy 手順。外部 API contract。新規の公開 surface（新しい endpoint・MCP tool・CLI subcommand）。これらの diff の reviewer は、happy path より先に fail-open と誤用を探す。
+- **Cross-model review**: 同じトリガに該当する diff では、review の少なくとも 1 つを生成側と異なる model が行う。一方の review 側が完遂できない場合は、別 model の独立 reviewer に Director 自身の直接コード読解を加えて代替し、その理由を記録する。
+- **Rewind discipline**: 実装や review の作業を巻き戻す前に、検出済みのすべての Critical/Major を、ticket の tests ディレクトリ配下の実行可能な `ticket-local-test` として固定する（下の `ticket-local-test` 置き場所ルールを参照）。巻き戻した後は、独立した初回 review をそれらの check と突き合わせ、巻き戻しの理由を記録する。
 
-- **Evidence freshness**: bind review, AC, test, and Surface evidence to the
-  exact commit SHA. A later change invalidates the evidence it can affect.
-  Browser verification must use the real runtime composition (dev server,
-  shared shell/styles, auth, and seed), not an isolated renderer substitute.
-  A reviewer's prompt must name the commit SHA under review, and the reviewer
-  must read that SHA. Do not commit to the ref under review while a review is
-  running; if it moves, the review result is void and must be re-run against the
-  fix delta.
-- **Scope boundary**: keep a finding in the current ticket when leaving it
-  unfixed would mean AC is unmet, the current diff caused a regression, the
-  same root cause can recreate an actually shipped defect, a Critical/Major
-  finding makes this ticket's changed/required user journey unsafe to review,
-  or the finding shares this ticket's Why — fixing it completes the ticket
-  rather than widening it. An exception requires one note line tying the fix to
-  the AC, the current diff, or that shared Why. A shared Why is a reason to fix
-  now; size and convenience are never reasons on their own to defer.
-  **Fixing now is the default.** Deferring is justified only when the finding is
-  genuinely a different problem **and** fixing it here would be expensive —
-  neither condition alone is enough. Being cheap to fix is itself a reason to do
-  it now, even when the finding could stand as its own ticket.
-  When a finding's root cause can exist in the same form in more than one place,
-  enumerate those places before close and record a disposition for each. "There
-  may be others" is not a close-ready state.
-- **A deferred ticket needs its own reason to exist.** Deferring is not free: a
-  ticket no one would schedule on its own is backlog, not a plan. Put every
-  unfixed finding into exactly one disposition — **fix now** (scope boundary
-  above), **file** (its Why stands on its own, it is worth scheduling as an
-  independent unit of work, and fixing it here would be expensive), **record
-  only** (real, but not worth a ticket and not being done now), or **reject**
-  (false positive or wrong premise). Being real is not by itself a reason to
-  file. When a finding cannot justify being an independent unit but is worth
-  doing, do it in the current ticket instead of deferring it. Record-only
-  findings live in the note, and in the repository's standing reference document
-  when they are a durable landmine. A record-only finding must carry at least
-  one anchor that can be searched for later — a symbol name, file path,
-  endpoint, or configuration key. A finding whose wording admits no anchor is
-  too vague to be usable later; rewrite it or reject it. A finding marked
-  **file** must have its ticket created before the current ticket closes, and
-  the close report must name it. When that is not possible, choose record-only
-  or fix now instead — "file it later" is not a disposition.
-- **Human authority**: a human gate or product decision requires an explicit
-  user response. A highlighted/default form option, silence, or worker output
-  is not approval. Environment-specific constraints must not be solved by
-  changing shared repository configuration or the base branch without explicit
-  approval; use local configuration or a temporary command instead.
+- **Evidence freshness**: review・AC・test・Surface の証拠は、正確な commit SHA に結び付ける。後からの変更は、それが影響しうる証拠を無効化する。ブラウザ検証は実際の実行時構成（dev server・共有 shell / styles・認証・seed）で行い、切り離した renderer の代用では行わない。reviewer の prompt には review 対象の commit SHA を明記し、reviewer はその SHA を読む。review の実行中に、review 対象の ref へ commit しない。ref が動いたら、その review 結果は無効であり、修正差分に対して再実行する。
+- **Scope boundary**: 次のいずれかに当たるとき、finding は現在の ticket に留める — 未修正のままでは AC 未達になる。現在の diff が退行を起こした。同じ根本原因が、実際に出荷された欠陥を再発させうる。Critical/Major finding のせいで、この ticket が変更した / 必要とする user journey が review に耐えない。finding がこの ticket の Why を共有していて、直すことが ticket を広げるのではなく完成させる。例外には、修正を AC・現在の diff・その共有 Why へ結び付ける note 1 行が要る。Why の共有はいま直す理由である。規模と手間は、それ単独では保留の理由にならない。**いま直すのが既定である。**保留が正当化されるのは、finding が本当に別の問題であり、**かつ**ここで直すと高くつく場合だけ — どちらか片方では足りない。安く直せることは、それ自体がいま直す理由であり、finding が単独の ticket として成立しうる場合でも変わらない。finding の根本原因が同じ形で複数箇所にありうるなら、close 前にその箇所を列挙し、それぞれの処置を記録する。「他にもあるかもしれない」は close できる状態ではない。
+- **保留した ticket には、それ自身が存在する理由が要る。**保留はタダではない: 誰も単独では予定に入れない ticket は backlog であって計画ではない。未修正の finding はすべて、ちょうど 1 つの処置へ入れる — **fix now**（いま直す。上の Scope boundary）、**file**（起票する。その Why が単独で成立し、独立した作業単位として予定する価値があり、かつここで直すと高くつく）、**record only**（記録のみ。実在するが、ticket にする価値はなく、いまやりもしない）、**reject**（棄却。誤検出または前提誤り）。実在することは、それ自体では file の理由にならない。独立した単位として正当化できないが、やる価値はある finding は、保留せず現在の ticket で直す。record-only の finding は note に残し、恒久的な地雷である場合は repository の常設リファレンス文書にも残す。record-only の finding には、後から検索できる anchor を少なくとも 1 つ付ける — シンボル名・ファイルパス・endpoint・設定キー。anchor を持てない文面の finding は、後から使うには曖昧すぎる。書き直すか、棄却する。**file** と判定した finding は、現在の ticket が close する前にその ticket を作成し、close 報告でその名前を挙げる。それができないときは record only か fix now を選ぶ — 「あとで起票する」は処置ではない。
+- **Human authority**: human gate と product 判断には、明示のユーザ回答が要る。強調表示された / 既定のフォーム選択肢、沈黙、worker の出力は承認ではない。環境固有の制約を、明示承認なしに共有 repository 設定や base branch の変更で解決しない。代わりにローカル設定か一時コマンドを使う。
 
-Permanent tests and `ticket-local-test` are different:
+恒久 test と `ticket-local-test` は別物である:
 
-- Permanent tests in `scripts/test-all.sh`, CI, or `test/` should cover product contracts, Architectural Invariants, and generalized regressions. If the repository commits generated artifacts (bundled workers, compiled assets, generated SDK models), the permanent suite must rebuild them and fail when the rebuilt output differs from the committed files, so stale artifacts are caught deterministically instead of by reviewer attention.
-- Ticket-specific temporary checks, such as confirming an old route is now 404 or a specific fixture is hidden, are `ticket-local-test`.
-- Executable `ticket-local-test` scripts live at `<ticket_dir>/tests/`, derived by convention from the `ticket_dir:` path in `ticket.sh start`/`restore` output (per-ticket layout: `tickets/<name>/tests/`; compat: legacy flat layout keeps them at `tests/tickets/<ticket-id>/test-ticket-local.sh`). ticket.sh neither prints nor creates a tests path, so `mkdir -p` it when writing the first test.
-- Run them through `./scripts/test-ticket-local.sh [ticket-id]`.
-- Record seed, `tmp_dir` helpers, `agent-browser`, `curl`, and command evidence in the note file (the `note:` path from the same output; compat symlink: `current-note.md`).
+- `scripts/test-all.sh`・CI・`test/` に置く恒久 test は、product contract・Architectural Invariants・一般化した regression をカバーする。repository が生成物（bundle 済み worker、compile 済み asset、生成された SDK model）を commit しているなら、恒久 suite はそれらを再生成し、再生成した出力が commit 済みファイルと異なるとき fail する。こうして stale な生成物を、reviewer の注意力ではなく決定論で捕まえる。
+- 旧 route が 404 になったこと、特定の fixture が隠れたことの確認のような、ticket 固有の一時 check は `ticket-local-test` である。
+- 実行可能な `ticket-local-test` script は `<ticket_dir>/tests/` に置く。パスは `ticket.sh start`/`restore` 出力の `ticket_dir:` から規約で導く（per-ticket 配置: `tickets/<name>/tests/`。互換: 旧来の flat 配置では `tests/tickets/<ticket-id>/test-ticket-local.sh` のまま）。ticket.sh は tests パスを表示も作成もしないので、最初の test を書くときに `mkdir -p` する。
+- 実行は `./scripts/test-ticket-local.sh [ticket-id]` を通す。
+- seed、`tmp_dir` の helper、`agent-browser`、`curl`、コマンドの証拠は、note file（同じ出力の `note:` パス。互換 symlink: `current-note.md`）へ記録する。
 
-When deciding whether to promote a ticket-local test into permanent coverage, ask: can this behavior be described as an ongoing product contract without naming the ticket or temporary fixture?
+ticket-local test を恒久 coverage へ昇格するか決めるときは、こう問う: この挙動を、ticket や一時 fixture の名前を出さずに、継続する product contract として記述できるか。
 
 ## Dev Server And Seed
 
-For UI / API verification and human review, use `./scripts/dev-server.sh`.
+UI / API の検証と human review には `./scripts/dev-server.sh` を使う。
 
-- `--seed` resets local state and runs `scripts/seed-pdh-verify.sh`.
-- `--port <port>` uses a fixed port.
-- With no `--port`, the script should choose an available port.
-- `--no-localhost` exposes a non-localhost review URL using the project's safe method.
+- `--seed` はローカル状態をリセットし、`scripts/seed-pdh-verify.sh` を実行する。
+- `--port <port>` は固定ポートを使う。
+- `--port` なしのときは、script が空きポートを選ぶ。
+- `--no-localhost` は、project の安全な方法で localhost 以外の review URL を公開する。
 
-If UI / API verification needs reproducible local data, implement `scripts/seed-pdh-verify.sh`. If no seed is needed, the hook should be a no-op success. Do not use production or remote data from this hook unless the user explicitly approved it for the current verification.
+UI / API 検証に再現可能なローカルデータが要るなら、`scripts/seed-pdh-verify.sh` を実装する。seed が不要なら、この hook は no-op の成功にする。現在の検証に対するユーザの明示承認がない限り、この hook から本番データやリモートデータを使わない。
 
-If the dev-server or seed behavior needed for a ticket differs from the script, update the script rather than hiding the change in one-off commands.
+ticket に必要な dev-server / seed の挙動が script と食い違うなら、変更を単発コマンドへ隠さず script を更新する。
 
 ## Browser And Surface Checks
 
-If a UI/browser surface exists, run a real user-case check after seed setup and before `PDH-human-review`. `agent-browser` is an acceptable browser automation CLI. Its CLI changes by version and environment, so run `agent-browser --help` immediately before using it and follow the help output from the current environment.
+UI / ブラウザ surface があるなら、seed 準備の後、`PDH-human-review` の前に、実際の user-case check を回す。`agent-browser` は許容されるブラウザ自動化 CLI である。その CLI は version と環境で変わるので、使う直前に `agent-browser --help` を実行し、現在の環境の help 出力に従う。
 
-The check must exercise the same composed page the user receives, including
-the shared page shell and CSS. Record the tested commit SHA. For visual UI,
-cover light and dark color schemes when the application supports them.
+check は、共有のページ shell と CSS を含めて、ユーザが受け取るのと同じ合成済みページを実際に動かす。テストした commit SHA を記録する。視覚的な UI では、アプリケーションが対応していれば light と dark の両カラースキームをカバーする。
 
-When capturing variants — theme, locale, permission level — confirm that each
-captured artifact really is that variant by reading the state the application
-itself exposes. A screenshot always succeeds, so an emulation that silently
-failed to apply looks identical to one that worked. Two artifacts differing is
-not that confirmation: re-rendering alone changes the bytes, so comparing files
-or hashes reports a difference for a variant that never applied. Apply the
-emulation before the page loads as well — an application that reads the setting
-once at mount keeps whichever variant it started with.
+変種 — theme・locale・権限レベル — を採取するときは、アプリケーション自身が公開する状態を読んで、採取した各 artifact が本当にその変種であることを確かめる。screenshot は常に成功するので、黙って適用に失敗した emulation は、成功したものと見た目が同じになる。2 つの artifact が異なることはその確認にならない: 再描画だけでバイト列は変わるので、ファイルや hash の比較は、一度も適用されなかった変種にも差を報告する。emulation はページ読み込みの前にも適用する — mount 時に一度だけ設定を読むアプリケーションは、開始時の変種を保ち続ける。
 
-HTTP-level tools (`curl`, API test scripts) verify server behavior only. They
-are never acceptable evidence for a browser surface: client-side logic (drag &
-drop, FormData construction, rendering, form submission) is exercised only by
-a real browser driving the composed page. If browser verification is
-impossible in the current environment, do not substitute `curl` and report the
-surface as verified; state the constraint and ask the user.
+HTTP レベルのツール（`curl`、API テスト script）が検証するのはサーバの挙動だけである。ブラウザ surface の証拠としては決して認められない: クライアント側のロジック（drag & drop、FormData の構築、描画、フォーム送信）は、実ブラウザが合成済みページを駆動して初めて動く。現在の環境でブラウザ検証が不可能なら、`curl` で代用して surface を検証済みと報告しない。制約を述べて、ユーザに確認する。
 
-If auth is required, explain the auth method before human review. For non-localhost exposure, protect the surface with Basic Auth, a temporary token, Access, or another project-appropriate method. Do not paste secret values into the conversation; describe where the user can get or run them.
+認証が要るなら、human review の前に認証方法を説明する。localhost 以外へ公開するときは、Basic Auth・一時 token・Access・その他 project に適した方法で surface を保護する。secret の値を会話へ貼らない。ユーザがどこで入手または実行できるかを説明する。
 
 ## Reporting
 
-When asking the user for a decision, explain:
+ユーザに判断を求めるときは、次を説明する:
 
-- What was done
-- What was achieved
-- Verification evidence
-- Judgment points
-- Options, with the recommended option first
+- 何をしたか
+- 何を達成したか
+- 検証の証拠
+- 判断点
+- 選択肢（推奨案を先頭に）
 
-This is the baseline for any decision request. At the two human gates, the
-full material list in Human Gate Materials supersedes it.
+これはあらゆる判断依頼の土台である。2 つの human gate では、Human Gate Materials の材料一覧全体がこれに優先する。
 
-Never report something as working without having run the relevant tests in
-this session. A missing command, missing dependency, or environment error
-counts as a test failure, not a skip; a single failing, unknown-skipped, or
-unrunnable test means the work is not done.
+このセッションで該当する test を実行していないのに、動作すると決して報告しない。コマンド不在・依存不足・環境エラーは skip ではなく test 失敗として数える。失敗した test、理由不明の skip、実行できない test が 1 件でもあれば、作業は完了していない。
 
-Paste the suite's own summary lines into the gate record; do not replace them
-with a claim about the outcome. If any step is not green, excusing it requires
-running that same step on the base ref and showing it fails there too. Asserting
-that the failure is unrelated is not an excuse.
+suite 自身の summary 行を gate の記録へ貼る。結果についての主張で置き換えない。green でない step を免責するには、同じ step を base ref で実行し、そこでも fail することを示すしかない。失敗は無関係だと断言することは免責にならない。
 
-A test that passed only on retry is a fourth outcome, distinct from pass, fail,
-and skip. Report retry-passes with their count and the names of the affected
-tests; never fold them into a green summary. Whether they block the close is for
-a human to decide — but they must not be invisible.
+retry でだけ pass した test は、pass・fail・skip と異なる第 4 の結果である。retry-pass は件数と該当 test 名を付けて報告し、green な summary へ決して混ぜ込まない。それが close を block するかは人間が決める — ただし見えない状態にはしない。
 
-If there is doubt, a blocker, a missing decision, or no credible path to `PDH-human-review`, ask the user immediately instead of waiting for a later gate.
+疑問・blocker・未決の判断があるとき、または `PDH-human-review` へ至る確かな道筋がないときは、後の gate を待たずに直ちにユーザへ確認する。
 
 ## Human Gate Materials
 
-A human gate is only as good as the material the user receives. The user is not
-expected to reconstruct the agent's reasoning, re-read the diff, or ask for what
-is missing.
+human gate の質は、ユーザが受け取る材料の質まででしかない。ユーザに、agent の推論の再構築、diff の読み直し、足りない材料の請求を求めない。
 
-Deliver the following in a form the user can read without reconstructing it:
-the conversation itself, or a single assembled document whose link or path is
-given in the conversation alongside a short summary. **Recording it only in the
-note file does not satisfy the gate** — the note is the agent's working record,
-not delivery. When the material spans several decisions, needs background
-explanation, or has to be looked at rather than read, prefer the assembled
-document; a long gate report pasted into the conversation scrolls away and
-cannot be re-read at the moment the user decides.
+以下を、ユーザが再構築せずに読める形で届ける: 会話そのもの、または 1 つに組み立てた文書（そのリンクかパスを、短い要約とともに会話で渡す）。**note file への記録だけでは gate を満たさない** — note は agent の作業記録であって、届け物ではない。材料が複数の判断にまたがるとき、背景の説明が要るとき、読むというより見る必要があるときは、組み立てた文書を選ぶ。会話へ貼った長い gate 報告はスクロールで流れ、ユーザが判断するその瞬間に読み返せない。
 
-Volume is part of readability. The material's main line carries only the
-conclusions and the facts the decision turns on; verification commands, raw
-outputs, enumerations, and procedural detail belong one click away — collapsed
-sections or an appendix — so the approver can open them but is not forced
-through them. A gate report that inlines everything is not more complete: it
-buries the two or three things the approver must actually weigh. What goes in
-the main line versus behind a fold is defined per gate by the decision-board
-skills.
+分量は読みやすさの一部である。材料の主線には、結論と、判断を左右する事実だけを載せる。検証コマンド・生の出力・列挙・手順の詳細は 1 クリック先 — 折りたたみセクションか付録 — に置き、承認者が開くことはできるが通読を強いられない形にする。すべてを本文へ並べた gate 報告は、より完全なのではない: 承認者が実際に量るべき 2、3 の事項を埋もれさせる。主線に載せるものと折りたたみの奥に置くものは、gate ごとに判断ボード skill が定める。
 
-How the document is assembled depends on what the engine can do. An engine that
-can publish a rendered artifact should do so. An engine that cannot should write
-the same structure to a file under the ticket's tmp directory and give its path.
-The requirement is the material and its readability, not the rendering
-mechanism; do not skip the gate material because the richer mechanism is
-unavailable.
+文書の組み立て方は、engine に何ができるかで決まる。描画された artifact を発行できる engine はそうする。できない engine は、同じ構造を ticket の tmp ディレクトリ配下のファイルへ書き、そのパスを渡す。要件は材料と、その読みやすさであって、描画の機構ではない。豊かな機構が使えないことを理由に、gate 材料を省かない。
 
-When an option defers a class of defect, list the instances of that class known
-at the time — how many and where. "There may be others" leaves the user
-approving a set whose members they cannot see.
+ある選択肢が欠陥のクラスごと保留するときは、その時点で既知のそのクラスの実例 — 件数と場所 — を列挙する。「他にもあるかもしれない」は、構成員の見えない集合をユーザに承認させることになる。
 
-The lists below are the contract — what the approver must receive. How that
-material is organized into a decision board (main line versus folded detail,
-answer form, review loop) is defined by the decision-board skills; do not
-restate their construction rules here, and do not trim these lists because a
-skill covers them.
+下の一覧が契約 — 承認者が受け取らなければならないもの — である。その材料を判断ボードへどう構成するか（主線と折りたたみ詳細、回答フォーム、review ループ）は判断ボード skill が定める。その構成規則をここへ書き直さず、skill がカバーしていることを理由にこの一覧を削らない。
 
-At `PDH-ticket-human-review`, before implementation:
+`PDH-ticket-human-review`（実装前）では:
 
-- What this ticket will make possible, in one user-journey line
-- The Why, and how it connects to the brief
-- Every Acceptance Criterion, in the exact wording being approved
-- What changed during `PDH-ticket-review`, and why
-- What is explicitly out of scope
-- Open decision points, with options and a recommendation first
-- Known risks or dependencies that could invalidate the plan
+- ticket の `What` 冒頭の 1 行 — この ticket が終わると誰が何をできるようになるか — と、その下にすべての Acceptance Criterion を承認対象の文言そのままで。**この 1 行は ticket 本文の文であって、gate 用に書き起こした要約ではない。**各 AC はその 1 行の分割である
+- Why と、それが brief へどうつながるか
+- `PDH-ticket-review` の間に何がなぜ変わったか
+- 何が明示的に out of scope か
+- 未決の判断点（選択肢を挙げ、推奨案を先頭に）
+- 計画を無効化しうる既知の risk と dependency
 
-At `PDH-human-review`, before close:
+`PDH-human-review`（close 前）では:
 
-- What was achieved, in one user-journey line
-- Each AC with its evidence, and any AC met only indirectly
-- The diff summary and the main changed files
-- Test and verification output, verbatim enough to see pass/fail counts
-- **Every review finding that was not fixed** — the filed, record-only, and
-  rejected rows of the note's `### Findings` table, with counts, one-line
-  reasons, and which of them became tickets. State
-  zero explicitly when there are none. What was deliberately left unfixed is
-  decision material of the same weight as what was fixed; the scope judgment is
-  verifiable nowhere else. Before building the material from the findings table,
-  confirm that each row's disposition matches the current decision. Where a
-  decision changed, rewrite the disposition and keep the previous one in the same
-  cell (`file → fixed in this ticket`), so the material reports what was actually
-  left undone.
-- Concrete steps for the user to check the result themselves. These
-  instructions are for the user, not the agent: browser URL and concrete
-  click/visual checks for UI, `curl` and expected status/body for API, the auth
-  method when needed. A helper script under the ticket's tmp directory (the
-  `tmp_dir:` path from `ticket.sh start`/`restore`; per-ticket layout:
-  `tickets/<name>/tmp/`) is acceptable only when manual auth/cookie/setup is
-  too awkward. Never present an `agent-browser` command list as the user's
-  review procedure.
-- Remaining known issues
+- 何を達成したかを、user journey の 1 行で
+- 各 AC とその証拠、および間接的にしか満たしていない AC
+- diff の要約と主要な変更ファイル
+- test と検証の出力。pass/fail の件数が読める程度に verbatim で
+- **修正しなかったすべての review finding** — note の `### Findings` 表のうち file・record only・reject の行を、件数、1 行理由、どれが ticket になったかとともに。0 件のときは 0 件と明示する。意図して未修正のまま残したものは、修正したものと同じ重さの判断材料である。その scope 判断は、他のどこでも検証できない。findings 表から材料を作る前に、各行の処置が現在の判断と一致していることを確かめる。判断が変わった行は処置を書き直し、前の処置を同じセルへ残す（`file → fixed in this ticket`）。こうして、実際に何を未対応のまま残したかを材料が報告する。
+- ユーザが自分で結果を確かめるための具体的な手順。この手順は agent 向けではなくユーザ向けである: UI ならブラウザ URL と具体的なクリック / 目視の確認、API なら `curl` と期待する status / body、必要なら認証方法。ticket の tmp ディレクトリ（`ticket.sh start`/`restore` の `tmp_dir:` パス。per-ticket 配置: `tickets/<name>/tmp/`）配下の helper script が許されるのは、手動の認証 / cookie / 準備が煩雑すぎる場合だけである。`agent-browser` のコマンド列を、ユーザの確認手順として決して提示しない。
+- 残っている既知の問題
 
-If a required item cannot be produced, say so and say why, rather than
-presenting the gate as complete.
+必須項目を用意できないなら、gate を完了として提示するのではなく、その旨と理由を言う。
 
 ## Where A Rule Belongs
 
-When adding a rule, decide its location with three questions. If any answer
-points to a skill, put it in the skill.
+ルールを追加するときは、次の 4 問に答える。1〜3 が置き場所を、4 が書き方を決める。1〜3 のいずれかの答えが skill を指すなら、skill に置く。
 
-1. **Project-specific, or PDH-common?** Project-specific goes to `CLAUDE.md`;
-   common goes to a skill or `PDH-AGENTS.md`.
-2. **Always needed, or only in a specific situation?** `CLAUDE.md` and
-   `PDH-AGENTS.md` are always in context; a skill loads only when invoked. Only
-   a rule that causes an accident when absent earns a place in the always-loaded
-   files.
-3. **Who reads it?** If the role is identifiable — implementer only, PM only —
-   it belongs to that role's skill.
+1. **project 固有か、PDH 共通か？** project 固有は `CLAUDE.md` へ。共通は skill か `PDH-AGENTS.md` へ。
+2. **常に要るか、特定の状況だけか？** `CLAUDE.md` と `PDH-AGENTS.md` は常に context にある。skill は呼ばれたときだけ読み込まれる。無いと事故が起きるルールだけが、常時読み込みのファイルに載る資格を持つ。
+3. **誰が読むか？** 役割を特定できるなら — 実装担当だけ、PM だけ — その役割の skill に属する。
+4. **何を守るルールで、それはどこで見られるか？** **どの stage の出口で、誰が何を見ることを守るのかを 1 文で書く。**その 1 文が書けないなら、それはルールではなく手順である — その stage の note checklist へ置く。ルールは**その 1 文を先に、動作を後に**書く。**動作だけで書かれたルールは、動作を省けると読んだ読み手に落とされる。**
 
-Do not write the same rule in two places. When you move wording, sweep the
-origin for leftovers.
+同じルールを 2 箇所に書かない。文言を移動したら、移動元に残骸がないか sweep する。
