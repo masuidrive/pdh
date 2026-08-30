@@ -48,6 +48,7 @@ worker / subagent は Director の会話状態全体を引き継がない。す�
 - ticket の Why・AC・Architectural Invariants check・確定判断・out-of-scope 項目
 - その worker の正確な責務と衝突境界
 - 実装 worker には、`.agents/skills/pdh-coding/SKILL.md` または `.claude/skills/pdh-coding/SKILL.md` を読む指示
+- review worker には、`.agents/skills/pdh-reviewing/SKILL.md` または `.claude/skills/pdh-reviewing/SKILL.md` を読む指示
 
 例外: 無バイアスの Why end-to-end review lens は、ticket file・AC・implementor の結論を意図的に省く。その prompt には Why だけを載せる（pdh-dev skill の review lens 規則を参照）。
 
