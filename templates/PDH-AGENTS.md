@@ -37,6 +37,8 @@ Director は自身の engine・model・profile・reasoning effort を変更し�
 
 **ユーザに頼まれたことは、着手より先に note の `## Checklist` へ 1 依頼 1 行で書く。**守るのは、**頼まれたことと途中で見つけた宿題が、close までに 1 つも落ちないこと**である。`require_checklist` がこの節の checkbox を数え、**未了が残っている間 close を拒否する**ので、書いた時点から機構が守る。書かなければ何も守らない。
 
+⚠ **engine の task list（Claude Code の task list、Codex の plan）で代用しない。**あちらは **context が切れると消える**が、頼まれたことは消えない。**note へ書いたものだけが compact と session をまたいで残り、close で数えられる。**engine の一覧を併用してよいが、**正本は note の `## Checklist` である。**
+
 - **3 つ頼まれたら、まず 3 行書いてから着手する。**
 - **作業中に頼まれたことも、手を止めて先に足す。**
 - **作業中に «あとでやる» を見つけたら、それも足す。**
