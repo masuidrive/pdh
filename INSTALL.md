@@ -395,8 +395,9 @@ rm -rf tmp/pdh
 
 6.5. **[既知の移行手順](#既知の移行手順)**: 下の節を読み、自分のプロジェクトが該当する項目をすべて適用する
 7. **ticket.sh のアップデート**: `bash ./ticket.sh selfupdate` を実行して ticket.sh 本体を最新化する（PDH スキル・テンプレートは ticket.sh の挙動を前提にするため、PDH 更新と同時に行う）。実行後 `./ticket.sh list` で動作確認する
+7.5. **移行手順の確認コマンドを、適用後にもう一度ぜんぶ実行する。** 出力に「要追加」「要改名」が 1 つも残っていないことを目で見る。⚠ **適用したつもりと、適用できたことは別である** — 実際に、note テンプレートの節と項目だけが入り、それを強制する `require_checklist` / `require_checklist_groups` が落ちた配布先があった（**checkbox は全部あるのに、埋めなくても close が通る**状態になる）。**残っていたら、そこで直してからもう一度実行する。**
 8. `Based on` 行の commit ID を最新に更新する
-9. 変更点をまとめてユーザに報告する (新規追加 file、削除 file、付随設定追加、削除 file と付随設定撤去、ticket.sh の更新有無 を明示)
+9. 変更点をまとめてユーザに報告する (新規追加 file、削除 file、付随設定追加、削除 file と付随設定撤去、ticket.sh の更新有無 を明示)。**手順 7.5 の再実行の出力をそのまま貼る**（「適用した」という主張ではなく、確認コマンドの出力が証拠である）
 10. AskUserQuestion で「既存の Ticket を新しいフォーマット・ルールに合わせて書き直すか？」を確認する。OK なら `tickets/` のファイルを新テンプレートに従って更新し、commit 前に変更点をユーザに伝えて確認を取る
 11. 後片付け: `rm -rf tmp/pdh`
 
@@ -611,7 +612,7 @@ grep -q 'PASSED\[@\]} > 0' scripts/test-all.sh && echo "修正済み" || echo "�
 
 ⚠ **`Required Probes` の節が無いと、AC を確かめる工程が «節ごと存在しない» まま実装へ進める**（実際にそれで未確認の仮定に基づく修正が本番へ出た）。`require_checklist` は未了の checkbox を数えるので、**節ごと無い ticket は 0 件 = 全部片付いた、と読んで通してしまう。**塞ぐのは `require_checklist_groups` の側なので、**両方入っていることを確認する。**
 
-`.ticket-config.yaml` は project カスタマイズが濃く diff マージで取りこぼされやすいので、直接確認する:
+`.ticket-config.yaml` は project カスタマイズが濃く diff マージで取りこぼされやすいので、直接確認する。⚠ **`note_content` の節や項目が入っていることを、キーが入っている証拠にしない。**節と項目は `note_content` という 1 つの大きなブロックの中にあるので diff マージでまとめて入るが、**トップレベルのキーは独立した数行なので、そこだけ落ちる。**実際にそれで落ちた配布先がある。
 
 ```bash
 grep -q '^require_checklist:' .ticket-config.yaml && echo "gate: 適用済み" || echo "gate: 要追加"

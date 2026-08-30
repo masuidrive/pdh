@@ -13,7 +13,11 @@
 - [x] **`./ticket.sh check --require "<見出し>"` が «節ごと無い» を検出できるか測る** — 測った。**`check --require` は落ちる（exit 1）が、`require_checklist` による close の拒否は通る。**同じ穴に片方だけが効く非対称。ticket.sh#5 と pdh#15 を起票
 - [x] **ticket.sh#5 の取り込み** — ticket.sh main `29f33a9` で `require_checklist_groups` が入った。配布テンプレートへ `Required Probes` を宣言し、INSTALL の移行手順に selfupdate 前提と «節が無い既存 ticket は手で足す» を明記。probe で 4 状態を測って確認（節あり未了 / 節ごと無い / 見出しだけ / `--force`）
 - [x] **note テンプレートの checklist を `## Checklist` へ再編** — `## Status:` の直後へ移し、stage 順に並べ替え、`require_checklist_groups` へ `Checklist` も宣言（節ごと消えたら close が止まる）。probe で確認。INSTALL に改名の移行手順を追記
-- [ ] **配布先 5 プロジェクトへ `pdh-update` を流す** — 判断 2-A は「ちゃんと更新する前提」で A にした。流すまでが完了。対象は llmhub / hanger-cloudflare / ticket-board（判断ボード skill あり）と db-codex / db-claude（古い版）
+- [ ] **移行の «適用したつもり» を塞ぐ強化を配布先へ届ける** — INSTALL 手順 7.5（確認コマンドの再実行）と `pdh-update` の報告義務。**この強化自体が pdh-update で届く必要がある**
+- [ ] ⚠ **agent 定義（`.claude/agents/*.md` / `.codex/agents/*.toml`）に `Based on` 行が無い** — 差分マージの対象から外れており、**次回以降の更新が届かない。**skill と同じ «常に上書き» にするか、`Based on` を足して diff マージ対象にするかを決める
+- [ ] **配布先 5 プロジェクトへ `pdh-update` を流す** — 判断 2-A は「ちゃんと更新する前提」で A にした。流すまでが完了。残りは ticket-board / db-codex / db-claude。
+  - llmhub: `6b93ad0` 取り込み済み。**gate キー 2 つが落ちていたので手で足した**（2026-08-30）。既存 note 26 本に `## Checklist` が無く、再開して close するときに止まる
+  - hanger-cloudflare: worktree `chore/pdh-update-260830` に `7fe778c` 版があるだけで **main へ未マージ**。ticket.sh も 20260827 のまま。`6b93ad0` で回し直しが要る
 - [ ] **`pdh-decision-board` の description が発火するか確かめる** — 統合で skill 名が変わった。「判断ボードを作って」で起動するかは測っていない
 - [ ] **重複 Artifact `53f86de1-46bc-49cc-91cd-6d46fad1947d` の扱い** — 判断ボードの再発行で誤って作った。中身は正の `728e8cca…` と同じ。私からは削除できない
 
