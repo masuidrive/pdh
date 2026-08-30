@@ -1,0 +1,28 @@
+# Work Notes — PDH 構造改善（判断ボード 728e8cca の承認分）
+
+判断 4 件（①-B / ②-A / ③-B / ④-A）は承認済み。実装の残りと、作業中に見つかった宿題をここで消し込む。
+
+## Checklist
+
+**フロー遷移のたびにこの節を見る。**節を stage ごとに割らない — 割ると「その stage の分だけ」を見て、他が残っていることに気づかない。
+
+- [ ] **確定判断に完了の証跡を持たせる** — 承認された «解き方» が実装されたかを誰も確かめていない。`allowed-tools` を落としたのはこの穴。案 A（確定判断を `- [ ]` に）/ B（close 前 gate の材料に「各確定判断と証拠」）/ C（手順 10 に ticket が無い場面の受け皿）のどれを採るか未決
+  - [ ] ⚠ 案 A への反論が出ている: **PDH 原則の文書を ticket.sh の checkbox 集計の都合で変えるのは向きが逆**。この反論を解いてから決める
+- [ ] **`./ticket.sh check --require "<見出し>"` が «節ごと無い» を検出できるか測る** — 未測定。通ってしまうなら #14（`Required Probes` の節が無かった）を再発させる穴が残る。ticket.sh 側に足す価値のある機能かの判断材料になる
+- [ ] **note テンプレートの checklist を `## Checklist` へ再編** — いまは `## PDH-verify. プロセスチェックリスト` の下に全 stage の項目が入っており、見出しが「verify のときに見るもの」に読める。フロー遷移のたびに見る形にする
+- [ ] **配布先 5 プロジェクトへ `pdh-update` を流す** — 判断 2-A は「ちゃんと更新する前提」で A にした。流すまでが完了。対象は llmhub / hanger-cloudflare / ticket-board（判断ボード skill あり）と db-codex / db-claude（古い版）
+- [ ] **`pdh-decision-board` の description が発火するか確かめる** — 統合で skill 名が変わった。「判断ボードを作って」で起動するかは測っていない
+- [ ] **重複 Artifact `53f86de1-46bc-49cc-91cd-6d46fad1947d` の扱い** — 判断ボードの再発行で誤って作った。中身は正の `728e8cca…` と同じ。私からは削除できない
+
+## 済み（消さずに残す）
+
+- [x] ①-B AC の 1 文からの導出 + 1 問判定 + 復元テスト（`04bf8de` / `f1232c0` / `29fd564`）
+- [x] ②-A 判断ボード統合 + `pdh-reviewing` 新設（`726f913` / `29fd564`）。eval 10 シナリオ × 新旧で差なし（`4d56a85`）
+- [x] ③-B `ticket.sh` gate + agent 定義 + `allowed-tools`（`04bf8de` / `f5dcec2` / `6b6d13c`）
+- [x] ④-A `Where A Rule Belongs` 4 問目 + Stage labels の列（`81c19f1`）
+- [x] 原文の worker 指示を `pdh-reviewing` でも対称に（`cd3a597`）
+- [x] `Based on` footer を全 skill へ揃え、検査対象へ登録（`6b6d13c`）
+
+## この note が存在する理由
+
+判断ボードの手順 10 は「回答を ticket へ反映」だが、**この repo は ticket 運用をしない**ので受け皿が無く、承認内容が板に書かれたまま転記されなかった。結果 `allowed-tools` が落ちた。**承認された内容は、板ではなく消し込める場所に置く。**
