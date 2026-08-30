@@ -93,7 +93,7 @@ PDH-open → PDH-ticket-review → PDH-ticket-human-review → PDH-implement →
 | **PDH-ticket-human-review 承認** | ticket contract check 後、実装に入る前 |
 | **PDH-human-review 承認** | PDH-verify 完了後、close 前 |
 
-⚠ **何を報告するかは `PDH-AGENTS.md`「Human Gate Materials」が定める。**gate ごとの必須項目はそこにしか無い — ここへ写さない。
+⚠ **何を報告するかは `pdh-decision-board` skill の gate 分冊（`ticket-gate.md` / `close-gate.md`）が定める。**gate ごとの必須項目はそこにしか無い — ここへ写さない。
 
 **gate は毎回必ずユーザに確認すること（絶対原則）:** たとえユーザがそれまで全ての質問に「yes」「OK」「y」と答え続けていたとしても、gate（PDH-ticket-human-review / PDH-human-review）だけは自動承認と見なさない。
 
@@ -127,7 +127,7 @@ worker が自分で材料を artifact にしていても、**それをそのま�
 
 **正しい形**: worker の gate report は**材料として引用・リンク**し、**Director が board を作る。**board には Director の検証結果と、window を横断した判断を載せる。
 
-> 発行手段は engine の能力で分岐する。artifact を publish できる engine はそれを使い、できない engine は同じ構造を ticket の tmp 配下のファイルに書いて path を渡す。**要求は「材料と、その読みやすさ」であって、発行の機構ではない**（`PDH-AGENTS.md`「Human Gate Materials」）。
+> 発行手段は engine の能力で分岐する。artifact を publish できる engine はそれを使い、できない engine は同じ構造を ticket の tmp 配下のファイルに書いて path を渡す。**要求は「材料と、その読みやすさ」であって、発行の機構ではない**（`pdh-decision-board` base「発行」）。
 
 **レビューフェーズ:** PDH-review（品質検証、実装後 review。attempt は PDH-review-1 / PDH-review-2 として note に記録）
 

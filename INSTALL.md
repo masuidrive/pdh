@@ -582,10 +582,9 @@ ln -snf ../../.claude/skills/pdh-ticket-decision-board .agents/skills/pdh-ticket
 配布されなくなった。**これらで作った過去の `board.html` はそのまま読めるが、**再 build する
 手段は無い。**必要なら旧ファイルを自プロジェクトへ退避してから更新すること。
 
-⚠ **close 前 gate（`PDH-human-review`）の board を作る手順は、現在どの skill も持たない。**
-`PDH-AGENTS.md`「Human Gate Materials」が求める材料は変わらないので、そこを直接読んで用意する。
-`pdh-ticket-decision-board` を読み替えて使ってもよいが、**主線の構成と AC の扱いは実装前 gate
-向けなので、そのままでは合わない。**
+⚠ close 前 gate（`PDH-human-review`）の board を作る手順は、この時点ではどの skill も持たなかった。
+**現在は `pdh-decision-board` の `close-gate.md` が持つ** — 前述「判断ボード 3 skill が
+`pdh-decision-board` 1 つに統合された」まで更新すれば解消する。
 
 #### 導入・更新手順が README.md → INSTALL.md へ移動（2026-07 以降）
 

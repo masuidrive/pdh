@@ -25,7 +25,7 @@ flowchart TD
     todo -. close が全 checkbox を数える .-> close
 ```
 
-`PDH-ticket-review` と `PDH-ticket-human-review` は別の stage である。前者は agent 側の ticket contract check である。後者は実装前の human gate であり、提示する材料は下の Human Gate Materials で定める。`PDH-ticket-human-review` で AC の明示承認を得ないまま実装を始めない。その後の Acceptance Criteria の変更 — 追加・削除・文言変更 — にも、同様に明示のユーザ承認が要る。
+`PDH-ticket-review` と `PDH-ticket-human-review` は別の stage である。前者は agent 側の ticket contract check である。後者は実装前の human gate であり、提示する材料は下の Human Gate Materials に従う。`PDH-ticket-human-review` で AC の明示承認を得ないまま実装を始めない。その後の Acceptance Criteria の変更 — 追加・削除・文言変更 — にも、同様に明示のユーザ承認が要る。
 
 `PDH-human-review` は close 前の human gate である。その目的は、coding agent が何をして何を達成したかを、ユーザが自分の期待と突き合わせることにある。明示のユーザ承認なしに `PDH-close` へ進まず、ticket を完了と表現しない。
 
@@ -112,15 +112,7 @@ HTTP レベルのツール（`curl`、API テスト script）が検証するの�
 
 ## Reporting
 
-ユーザに判断を求めるときは、次を説明する:
-
-- 何をしたか
-- 何を達成したか
-- 検証の証拠
-- 判断点
-- 選択肢（推奨案を先頭に）
-
-これはあらゆる判断依頼の土台である。2 つの human gate では、Human Gate Materials の材料一覧全体がこれに優先する。
+ユーザに判断を求めるときの提示形式（何をしたか・何を達成したか・検証の証拠・判断点・選択肢）は `pdh-dev` skill の `_collaboration.md` が定める。human gate の材料は上の Human Gate Materials に従う。
 
 このセッションで該当する test を実行していないのに、動作すると決して報告しない。コマンド不在・依存不足・環境エラーは skip ではなく test 失敗として数える。失敗した test、理由不明の skip、実行できない test が 1 件でもあれば、作業は完了していない。
 
@@ -132,38 +124,10 @@ retry でだけ pass した test は、pass・fail・skip と異なる第 4 の�
 
 ## Human Gate Materials
 
-human gate の質は、ユーザが受け取る材料の質まででしかない。ユーザに、agent の推論の再構築、diff の読み直し、足りない材料の請求を求めない。
+human gate の質は、ユーザが受け取る材料の質まででしかない。ユーザに、agent の推論の再構築、diff の読み直し、足りない材料の請求を求めない。2 つの human gate で承認者が受け取る材料 — 何を主線に置き、何を裏付けに畳むか、回答の返し方 — は `pdh-decision-board` skill が gate ごとに定める（実装前 gate は `ticket-gate.md`、close 前 gate は `close-gate.md`）。
 
-以下を、ユーザが再構築せずに読める形で届ける: 会話そのもの、または 1 つに組み立てた文書（そのリンクかパスを、短い要約とともに会話で渡す）。**note file への記録だけでは gate を満たさない** — note は agent の作業記録であって、届け物ではない。材料が複数の判断にまたがるとき、背景の説明が要るとき、読むというより見る必要があるときは、組み立てた文書を選ぶ。会話へ貼った長い gate 報告はスクロールで流れ、ユーザが判断するその瞬間に読み返せない。
-
-分量は読みやすさの一部である。材料の主線には、結論と、判断を左右する事実だけを載せる。検証コマンド・生の出力・列挙・手順の詳細は 1 クリック先 — 折りたたみセクションか付録 — に置き、承認者が開くことはできるが通読を強いられない形にする。すべてを本文へ並べた gate 報告は、より完全なのではない: 承認者が実際に量るべき 2、3 の事項を埋もれさせる。主線に載せるものと折りたたみの奥に置くものは、gate ごとに `pdh-decision-board` skill が定める。
-
-文書の組み立て方は、engine に何ができるかで決まる。描画された artifact を発行できる engine はそうする。できない engine は、同じ構造を ticket の tmp ディレクトリ配下のファイルへ書き、そのパスを渡す。要件は材料と、その読みやすさであって、描画の機構ではない。豊かな機構が使えないことを理由に、gate 材料を省かない。
-
-ある選択肢が欠陥のクラスごと保留するときは、その時点で既知のそのクラスの実例 — 件数と場所 — を列挙する。「他にもあるかもしれない」は、構成員の見えない集合をユーザに承認させることになる。
-
-下の一覧が契約 — 承認者が受け取らなければならないもの — である。その材料を判断ボードへどう構成するか（主線と折りたたみ詳細、回答フォーム、review ループ）は `pdh-decision-board` skill が定める。その構成規則をここへ書き直さず、skill がカバーしていることを理由にこの一覧を削らない。
-
-`PDH-ticket-human-review`（実装前）では:
-
-- ticket の `What` 冒頭の 1 行 — この ticket が終わると誰が何をできるようになるか — と、その下にすべての Acceptance Criterion を承認対象の文言そのままで。**この 1 行は ticket 本文の文であって、gate 用に書き起こした要約ではない。**各 AC はその 1 行の分割である
-- Why と、それが brief へどうつながるか
-- `PDH-ticket-review` の間に何がなぜ変わったか
-- 何が明示的に out of scope か
-- 未決の判断点（選択肢を挙げ、推奨案を先頭に）
-- 計画を無効化しうる既知の risk と dependency
-
-`PDH-human-review`（close 前）では:
-
-- 何を達成したかを、user journey の 1 行で
-- 各 AC とその証拠、および間接的にしか満たしていない AC
-- diff の要約と主要な変更ファイル
-- test と検証の出力。pass/fail の件数が読める程度に verbatim で
-- **修正しなかったすべての review finding** — note の `### Findings` 表のうち file・record only・reject の行を、件数、1 行理由、どれが ticket になったかとともに。0 件のときは 0 件と明示する。意図して未修正のまま残したものは、修正したものと同じ重さの判断材料である。その scope 判断は、他のどこでも検証できない。findings 表から材料を作る前に、各行の処置が現在の判断と一致していることを確かめる。判断が変わった行は処置を書き直し、前の処置を同じセルへ残す（`file → fixed in this ticket`）。こうして、実際に何を未対応のまま残したかを材料が報告する。
-- ユーザが自分で結果を確かめるための具体的な手順。この手順は agent 向けではなくユーザ向けである: UI ならブラウザ URL と具体的なクリック / 目視の確認、API なら `curl` と期待する status / body、必要なら認証方法。ticket の tmp ディレクトリ（`ticket.sh start`/`restore` の `tmp_dir:` パス。per-ticket 配置: `tickets/<name>/tmp/`）配下の helper script が許されるのは、手動の認証 / cookie / 準備が煩雑すぎる場合だけである。`agent-browser` のコマンド列を、ユーザの確認手順として決して提示しない。
-- 残っている既知の問題
-
-必須項目を用意できないなら、gate を完了として提示するのではなく、その旨と理由を言う。
+- **note file への記録だけでは gate を満たさない** — note は agent の作業記録であって、届け物ではない。材料は会話そのもの、または 1 つに組み立てた文書（そのリンクかパスを、短い要約とともに会話で渡す）で届ける。
+- 必須の材料を用意できないなら、gate を完了として提示するのではなく、その旨と理由を言う。
 
 ## Where A Rule Belongs
 

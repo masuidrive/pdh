@@ -83,7 +83,7 @@ flowchart TD
 
 1. **`./ticket.sh check --require "Required Probes"` を実行し、測る工程が片付いていることを確認する。**未了があれば板を出さず、先に測る（測る対象が無いなら `- [-] ... - skip: <理由>` と書いて理由を残す）
 2. noteのStatusを`PDH-ticket-human-review`へ更新し、ticket修正点と未確定判断がnoteにあることを確認する
-3. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-ticket-human-review`側に従う。ACは承認対象の文言そのままを引用し、要約に置き換えない
+3. 会話へ渡す材料は`pdh-decision-board` skill（実装前gateは`ticket-gate.md`）に従う。ACは承認対象の文言そのままを引用し、要約に置き換えない
 4. **ユーザの明示承認まで`PDH-implement`へ進まない。**
 5. 差し戻しは`PDH-ticket-review`へ戻し、ticket更新後にhuman reviewを再実行する
 
@@ -168,7 +168,7 @@ trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndepend
 ## PDH-human-review. 人間レビュー
 
 1. note Statusを`PDH-human-review`へ更新し、verifyまでの証拠がcommit済みであることを確認する
-2. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-human-review`側に従う。未対応findingは、全attemptの`### Findings (PDH-review-N)`表を横断して判定が起票・記録のみ・棄却の行を抜き出して作る。ユーザ確認用のURLは`./scripts/dev-server.sh`で用意する
+2. 会話へ渡す材料は`pdh-decision-board` skill（close前gateは`close-gate.md`）に従う。未対応findingは、全attemptの`### Findings (PDH-review-N)`表を横断して判定が起票・記録のみ・棄却の行を抜き出して作る。ユーザ確認用のURLは`./scripts/dev-server.sh`で用意する
 3. **明示承認までcloseしない。**
 4. 差し戻しはimplementへ戻し、reviewから再走する。途中blockerは直ちに確認する
 
@@ -180,7 +180,7 @@ trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndepend
 
    ### 完了報告の必須要素
 
-   土台は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-human-review`側と同じ（user journey 1行、AC別の証拠、主要file、verbatimなtest出力、残課題）。close報告では次を追加する。
+   土台は`pdh-decision-board`（`close-gate.md`）の主線4面と裏付けの一覧と同じ。close報告では次を追加する。
 
    - literalな1行目へ、user journeyで何ができるようになったかを書く
    - 各ACのdata出所を報告する。user-facing ACが合成dataのみなら実data未確認のclose blockerとする
