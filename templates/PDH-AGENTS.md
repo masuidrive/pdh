@@ -35,12 +35,6 @@ Reviewer findings are hypotheses, not implementation orders（reviewer の findi
 
 Director は自身の engine・model・profile・reasoning effort を変更しない。その変更を許可できるのは、現在の作業に対する明示のユーザ指示だけである。worker への model 割り当ては別の話であり、project の方針に従う。
 
-**やることが 2 つ以上あるなら、始める前に作業一覧を書く。**守るのは、**承認された内容と、途中で見つかった宿題が、最後まで 1 つも落ちないこと**である。1 作業 1 項目で engine の task 管理機構へ登録し（Claude Code は task list、Codex は plan。機構の無い engine では note か作業メモへ `- [ ]` で書く）、終えるたびに完了へ更新する。
-
-- ⚠ **項目を stage ごとに割らない。**割ると「その stage の分だけ」を見て、他が残っていることに気づかない。
-- ⚠ **途中で増えた作業は、その場で一覧へ足す。**「あとで覚えている」作業は落ちる。ユーザの指示・承認された判断・review で見つけた宿題も同じ。
-- ⚠ **完了報告の前に、一覧を頭から読み直す。**全項目に決着（済み / やらないと決めた / 別 ticket）が付くまで «終わった» と言わない。**やった作業を数えて報告しない** — 落ちた作業は数に出ない。
-
 subagent / worker を起動できないとき、solo 実行を同等のものとして黙って扱わない。確信度や gate の意味に影響する場合は、制約を説明してユーザに確認する。
 
 ユーザが明示的に要求した場合、承認済みの close フローが実行する場合（例: close 時の ticket.sh `auto_push`）、または `CLAUDE.md` が明示的に許可している場合を除き、`git push` しない。
