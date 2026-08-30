@@ -392,7 +392,7 @@ rm -rf tmp/pdh
    - **本ガイドが指定する設定 (settings.json / vitest.config.ts / scripts/test-all.sh)**: プロジェクト固有のカスタマイズが入っているので上書きしない。代わりに本ガイドの「.claude/settings.json を設定する」「scripts/test-all.sh を作成する」「vitest in-source testing を有効化」と README「tmux Director」で推奨される項目が含まれているかをレビューし、抜けていたら追加する
 6. **削除されたファイルの撤去**: 旧 commit から HEAD で `D` (削除) になったファイルがあれば、プロジェクト側から除去する。該当する設定 (settings.json / vitest.config.ts / scripts/test-all.sh) も必要なら撤去。上の表の逆手順。**過去の major refactor で `epics/` ディレクトリ / `epic-creator` skill / Light Full flow / PD-A / PD-B / PD-D / PD-C-2/3/4/5/8 phase は廃止された**。旧バージョンから upgrade する場合は project 側からこれらの参照を撤去する
 
-   ⚠ **`tickets/` の中で触ってよいのは進行中 ticket だけ。**`tickets/done/`（close 済み）は**その時点の運用を残した歴史記録**なので、廃止された phase 名も旧見出しもそのままにする。close 済み ticket は gate の対象外なので、直しても守るものが無い。**「参照を撤去する」を歴史記録にも適用しない。**
+   ⚠ **`tickets/` で触ってよいのは close 済みでないもの（todo / doing）だけ。**まだ閉じていない ticket はこれから gate を通るので、新しい形へ揃える意味がある。**`tickets/done/`（close 済み）はその時点の運用を残した歴史記録**なので、廃止された phase 名も旧見出しもそのままにする。**close 済み ticket は gate の対象外なので、直しても守るものが無い。**「参照を撤去する」を歴史記録にも適用しない。
 
    **⚠ 削除が「置き換え」である場合がある。** 下の[既知の移行手順](#既知の移行手順)に該当する項目があれば、単に消すのではなくそちらに従う。
 
@@ -401,7 +401,7 @@ rm -rf tmp/pdh
 7.5. **移行手順の確認コマンドを、適用後にもう一度ぜんぶ実行する。** 出力に「要追加」「要改名」が 1 つも残っていないことを目で見る。⚠ **適用したつもりと、適用できたことは別である** — 実際に、note テンプレートの節と項目だけが入り、それを強制する `require_checklist` / `require_checklist_groups` が落ちた配布先があった（**checkbox は全部あるのに、埋めなくても close が通る**状態になる）。**残っていたら、そこで直してからもう一度実行する。**
 8. `Based on` 行の commit ID を最新に更新する
 9. 変更点をまとめてユーザに報告する (新規追加 file、削除 file、付随設定追加、削除 file と付随設定撤去、ticket.sh の更新有無 を明示)。**手順 7.5 の再実行の出力をそのまま貼る**（「適用した」という主張ではなく、確認コマンドの出力が証拠である）
-10. AskUserQuestion で「**進行中の** Ticket を新しいフォーマット・ルールに合わせて書き直すか？」を確認する。OK なら**進行中 ticket の**ファイルを新テンプレートに従って更新し、commit 前に変更点をユーザに伝えて確認を取る。⚠ **`tickets/done/` は対象外**（手順 6 の歴史記録の扱い）
+10. AskUserQuestion で「**close 済みでない（todo / doing）** Ticket を新しいフォーマット・ルールに合わせて書き直すか？」を確認する。OK なら**その ticket の**ファイルを新テンプレートに従って更新し、commit 前に変更点をユーザに伝えて確認を取る。⚠ **`tickets/done/` は対象外**（手順 6 の歴史記録の扱い）
 11. 後片付け: `rm -rf tmp/pdh`
 
 ### 既知の移行手順
@@ -633,7 +633,7 @@ grep -q '確かめていない仮定' .ticket-config.yaml && echo "項目: 適�
 - `Checklist 節` — `## PDH-verify. プロセスチェックリスト` を **`## Checklist` へ改名し、`## Status:` の直後へ移す**。⚠ **見出しが「verify のときに見るもの」に読めると、他 stage の項目が終盤まで放置される。**stage ごとに節を割らないこと（割ると「その stage の分だけ」を見て、他が残っているのに気づかない）
 - `項目` — `## Checklist` の `PDH-implement:` 行 2 つと `PDH-review:` 行 2 つ
 
-**既存の進行中 ticket がある状態でこれらを入れると、その ticket の close が止まる。**止まったら未了を埋めるか、当てはまらない項目に `- [-] ... - skip: <理由>` を書く。**節そのものが無い ticket では、`## Required Probes` を手で足してから測る**（テンプレートを変えても、既にある note には反映されない）。⚠ **`Checklist` を必須グループに宣言すると、`## PDH-verify. プロセスチェックリスト` のままの進行中 note は close が止まる。**その note の見出しも `## Checklist` へ改名する。**改名するのは進行中 note だけで、`tickets/done/` は触らない**（手順 6 の歴史記録の扱い）。
+**既存の進行中 ticket がある状態でこれらを入れると、その ticket の close が止まる。**止まったら未了を埋めるか、当てはまらない項目に `- [-] ... - skip: <理由>` を書く。**節そのものが無い ticket では、`## Required Probes` を手で足してから測る**（テンプレートを変えても、既にある note には反映されない）。⚠ **`Checklist` を必須グループに宣言すると、`## PDH-verify. プロセスチェックリスト` のままの進行中 note は close が止まる。**その note の見出しも `## Checklist` へ改名する。**改名するのは close 済みでない note（todo / doing）だけで、`tickets/done/` は触らない**（手順 6 の歴史記録の扱い）。
 
 #### `.ticket-config.yaml` に `worktree_copy_files` を追加（2026-07 以降）
 
