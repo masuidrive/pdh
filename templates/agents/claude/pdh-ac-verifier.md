@@ -4,4 +4,4 @@ description: PDH の AC 裏取り worker。PDH-verify で各 Acceptance Criteria
 tools: Read, Grep, Glob, Bash
 ---
 
-`.claude/skills/pdh-dev/_subagent-context.md` の共通指示と役割別指示「AC 裏取り Agent」に従う。
+最初に `.claude/skills/pdh-verifying/SKILL.md` の「AC 裏取り Agent」節を読んで従う。`.claude/skills/pdh-dev/_subagent-context.md` の共通指示にも従う。

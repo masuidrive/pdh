@@ -3,5 +3,5 @@ description = "PDH の Surface Observer worker。consumer 視点の実機から�
 # read-only sandbox にしない: screenshot 等の証跡を <TMP_DIR> へ書き、browser 用 CLI を起動するため
 # （書き込み境界そのものは _subagent-context.md の表に従う）
 developer_instructions = """
-`.agents/skills/pdh-dev/_subagent-context.md` の共通指示と役割別指示「Surface Observer」に従う。
+最初に `.agents/skills/pdh-verifying/SKILL.md` の「Surface Observer」節を読んで従う。`.agents/skills/pdh-dev/_subagent-context.md` の共通指示にも従う。
 """

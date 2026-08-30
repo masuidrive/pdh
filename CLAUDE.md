@@ -21,8 +21,8 @@ docs/
   product-delivery-hierarchy.md      # PDH 運用ルール（配布物）
   PDH-AGENTS.md                      # PDH 汎用 agent ルール（配布物。この repo でもこれを読む）
 skills/                              # Claude Code skill の実体（配布物）
-  pdh-dev/  pdh-coding/  pdh-reviewing/  pdh-check-writing/  pdh-update/  tmux-director/
-  pdh-decision-board/
+  pdh-dev/  pdh-coding/  pdh-reviewing/  pdh-verifying/  pdh-check-writing/  pdh-update/
+  tmux-director/  pdh-decision-board/
 templates/                           # 配布テンプレート
   CLAUDE.md                          # 配布先 project 固有ルールの雛形
   AGENTS.md                          # 他 agent platform 向け thin pointer

@@ -95,27 +95,6 @@ reviewer、AC裏取り、Surface Observerはproduct code、test、doc、`<NOTE_F
 - この役はticket、note、diff、implementorの結論を渡されない。promptに転記されたWhyと、repoの現在の作業treeだけを前提とする
 - 最初に`.claude/skills/pdh-reviewing/SKILL.md`（Codexは`.agents/skills/pdh-reviewing/SKILL.md`）を読み、「レンズ1」の規則に従う
 
-### AC 読み手（復元テスト）
+### QA Engineer / AC 裏取り Agent / Surface Observer / AC 読み手（復元テスト）
 
-- この役は**`What`冒頭の1文とAC全件だけ**を渡される。ticket本体、note、diff、repo、この工程の経緯は渡されないし、探して読まない
-- **承認者として読む。**知っているのは一般的な技術語と、渡された文に出てくる語だけとする。⚠ **書かれていない前提を自分の知識で埋めない** — 埋めれば復元できてしまうが、承認者は埋められない
-- 答えるのは2つ。**(1) この1文とACから「終わると誰が何をできるようになるか」を復元できるか。(2) 復元できないACはどれで、何が足りないか**（登場人物／その人がする操作／その人が見る結果のどれが欠けているか）
-- ⚠ **ACを書き直さない。**足りないものを名指しするだけにする。書き直すのは書き手の仕事である
-- 「叩けば分かる」「実装を見れば分かる」を根拠にしない。**渡された文だけで判定する**
-
-### QA Engineer
-
-- 全テストを実行し、実出力をverbatimで結果へ貼る
-- 影響layer横断test、E2E、実環境確認を行い、失敗の再現commandとoutputを残す
-
-### AC 裏取り Agent
-
-- 各ACを1項目ずつcode、test結果、noteで実質達成か検証する
-- 各ACへ`VERIFIED`または`NOT VERIFIED`と根拠を付け、後者は不足を示す
-
-### Surface Observer
-
-- consumer視点の実機で外部surfaceを観察し、UIなら主要user caseを1本以上実行する
-- PMのseed実行を前提とし、fixture不足はcommitted seed hook不足として報告する
-- `agent-browser`利用直前に`agent-browser --help`を確認する
-- 視覚、responseまたはerror文言、型、helpの違和感を報告し、外部surfaceなしなら該当なしと書く
+各役の規則は`.claude/skills/pdh-verifying/SKILL.md`（Codexは`.agents/skills/pdh-verifying/SKILL.md`）の該当節にある。read toolを持つ役には最初にその節を読む指示をpromptへ入れる。AC 読み手のようにread toolを持たない役には、節の本文をpromptへ転記して渡す。

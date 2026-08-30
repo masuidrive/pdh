@@ -17,7 +17,8 @@ For PDH / ticket-centric work, also read:
 2. `.agents/skills/pdh-dev/SKILL.md` or `.claude/skills/pdh-dev/SKILL.md` for orchestration
 3. `.agents/skills/pdh-coding/SKILL.md` or `.claude/skills/pdh-coding/SKILL.md` for implementation workers
 4. `.agents/skills/pdh-reviewing/SKILL.md` or `.claude/skills/pdh-reviewing/SKILL.md` for review workers
-5. `current-ticket.md` and `current-note.md` when they exist
+5. `.agents/skills/pdh-verifying/SKILL.md` or `.claude/skills/pdh-verifying/SKILL.md` for verification workers
+6. `current-ticket.md` and `current-note.md` when they exist
 
 When authoring declarative fast-checks, also read `.agents/skills/pdh-check-writing/SKILL.md` or `.claude/skills/pdh-check-writing/SKILL.md`.
 

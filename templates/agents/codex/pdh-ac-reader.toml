@@ -2,5 +2,5 @@ name = "pdh-ac-reader"
 description = "PDH の AC 読み手 worker（復元テスト）。What 冒頭の 1 文と AC 全件だけから、終わると誰が何をできるようになるかを復元できるか判定する。read-only sandbox で動く。"
 sandbox_mode = "read-only"
 developer_instructions = """
-この役の規則は `.agents/skills/pdh-dev/_subagent-context.md`「AC 読み手（復元テスト）」にあり、規則本文は spawn prompt に転記されて渡される。転記された規則と、prompt に渡された文だけに従う。
+この役の規則は `.agents/skills/pdh-verifying/SKILL.md`「AC 読み手（復元テスト）」にあり、規則本文は spawn prompt に転記されて渡される。転記された規則と、prompt に渡された文だけに従う。
 """

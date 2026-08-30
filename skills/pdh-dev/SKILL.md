@@ -23,7 +23,7 @@ description: "Ticket-centric 開発ワークフロー。1 ticket = 1 work unit�
 | `_review.md` | reviewの巡回と裁定、収束診断、裏取り（reviewer自身の規則は`pdh-reviewing` skill） | `PDH-review` |
 | `_collaboration.md` | ユーザ相談と中止 | 判断不能・blocker時 |
 | `_execution-team.md` | teamの役割、engine割当、spawn機構 | worker を spawn するとき |
-| `_subagent-context.md` | 全workerに渡す共通promptと役割別指示 | 同上 |
+| `_subagent-context.md` | 全workerに渡す共通prompt土台と役割別の参照（検証workerの規則本体は`pdh-verifying` skill） | 同上 |
 
 **ticket の Why と AC は承認される契約そのものである。**主語と目的語が落ちた文や、指す先の決まらない指示語を残さない。承認者が前を読み返さないと意味が決まらない AC は、承認された約束と出荷されるものが食い違う。
 

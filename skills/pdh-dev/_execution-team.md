@@ -69,7 +69,7 @@ promptは「共通context + 役割別指示 + task固有依頼」で組み立て
 engineに配布のagent定義が配置されているとき（Claude Code: `.claude/agents/pdh-*.md`、Codex: `.codex/agents/pdh-*.toml`）は、in-process spawnで定義名を指定して起動する（実装は`pdh-coding-engineer`、reviewは`pdh-reviewer`/`pdh-reviewer-lens1`、QAは`pdh-qa`、verifyは`pdh-ac-verifier`/`pdh-surface-observer`、AC読み手は`pdh-ac-reader`）。定義が`_subagent-context.md`とskillへの参照を持つため共通contextと役割別指示の貼り付けは不要になり、promptはtask固有依頼だけでよい。ただし:
 
 - `PDH-AGENTS.md`「Worker Instructions」の必須項目と上記placeholderの実値は、従来どおりpromptへ含める
-- AC読み手（`pdh-ac-reader`）はread toolを持たないため、役割別指示「AC 読み手（復元テスト）」の本文をpromptへ転記する
+- AC読み手（`pdh-ac-reader`）はread toolを持たないため、`pdh-verifying` skillの「AC 読み手（復元テスト）」節の本文をpromptへ転記する
 - read-only sandboxの定義で動く役（Codexのreviewer / AC裏取り / AC読み手）には`<RESULT_FILE>`を割り当てず、結果を最終messageで回収する
 
 - `<TMP_DIR>`は`ticket.sh start`/`restore`出力の`tmp_dir:`パス、`<TESTS_DIR>`はそこには出力されないので同出力の`ticket_dir:`パス + `/tests/`（legacy flat layoutでは`tests/tickets/<id>/`）を規約で導出する。workerは`ticket.sh`を実行しないので、PMが埋めないとworkerはこのパスを知る手段がない

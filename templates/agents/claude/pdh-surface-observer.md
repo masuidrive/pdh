@@ -4,4 +4,4 @@ description: PDH の Surface Observer worker。PDH-verify で consumer 視点の
 tools: Read, Grep, Glob, Bash
 ---
 
-`.claude/skills/pdh-dev/_subagent-context.md` の共通指示と役割別指示「Surface Observer」に従う。
+最初に `.claude/skills/pdh-verifying/SKILL.md` の「Surface Observer」節を読んで従う。`.claude/skills/pdh-dev/_subagent-context.md` の共通指示にも従う。

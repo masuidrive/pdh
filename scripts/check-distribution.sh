@@ -36,6 +36,7 @@ BASED_ON_FILES=(
   "skills/pdh-dev/SKILL.md"
   "skills/pdh-update/SKILL.md"
   "skills/pdh-reviewing/SKILL.md"
+  "skills/pdh-verifying/SKILL.md"
   "skills/pdh-decision-board/SKILL.md"
   "skills/tmux-director/SKILL.md"
 )
