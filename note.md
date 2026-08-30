@@ -24,9 +24,9 @@
 - [x] **作業一覧の規則は撤去した** — v1 5/5、v2 8/8 で 2 回とも判別せず、**落ちる条件そのものを作れなかった。**⚠ «効かない» の証明ではない。足し直す前に落ちる条件を作ること（`evals/eval-13-work-list.md`）
 - [ ] **`pdh-decision-board` の description が発火するか確かめる** — 統合で skill 名が変わった。「判断ボードを作って」で起動するかは測っていない
 - [ ] **重複 Artifact `53f86de1-46bc-49cc-91cd-6d46fad1947d` の扱い** — 判断ボードの再発行で誤って作った。中身は正の `728e8cca…` と同じ。私からは削除できない
-- [ ] **stage=skill 化 Phase 1** — `pdh-verifying` skill 新設（QA / AC 裏取り / Surface Observer / AC 読み手の規則を `_subagent-context.md` から移す）+ agent 定義 14 ファイルの参照更新 + 配布整合（ユーザ承認 2026-08-30。Phase 3 = ticket-review の worker 化は含めない）
-- [ ] **stage=skill 化 Phase 2** — `_flow.md` を Director 専用へ（worker 手順を worker skill へ移し、移動元を sweep）
-- [ ] **stage=skill 化 Phase 4** — fresh subagent に `pdh-verifying` を読ませて 1 シナリオ確認 + test-all
+- [x] **stage=skill 化 Phase 1** — `pdh-verifying` skill 新設（QA / AC 裏取り / Surface Observer / AC 読み手の規則を `_subagent-context.md` から移す）+ agent 定義 8 ファイルの参照更新 + 配布整合（ユーザ承認 2026-08-30。Phase 3 = ticket-review の worker 化は含めない判断）
+- [x] **stage=skill 化 Phase 2** — `_flow.md` の PDH-implement / PDH-verify を Director 専用へ（整合性 gate + 完了チェックは `pdh-coding` へ移動、移動元 sweep 済み）
+- [x] **stage=skill 化 Phase 4** — fresh subagent が AC 裏取り役で `pdh-verifying` を読み、合成入力のみの AC を NOT VERIFIED・反証欠落を指摘・AC 不可侵を遵守。指示の破綻なし
 
 ## 済み（消さずに残す）
 
