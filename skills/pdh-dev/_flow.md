@@ -91,24 +91,15 @@ flowchart TD
 
 前提は`PDH-ticket-human-review`でticket contractとACが承認済みであること。
 
-investigate、implement、testsは1つの作業文脈で完遂する。別plan artifactは作らず、設計判断をnoteの実装logとcommit messageへappendする。 commitは論理単位ごとに`[<ticket-name>] <type>(<scope>): <summary>`形式で行い、各commitでtest pass状態を保つ。
+実装workerの規則は`pdh-coding` skillが正本である — 1つの作業文脈での完遂、論理単位commit、整合性gate、完了チェックを含む。PMは委譲と検品だけを行う。
 
 ### 実行指示の必須内容（worker への spawn prompt に含める）
 
 `_subagent-context.md`の共通contextと役割別指示にtask固有依頼を加える。土台を毎回書き写さない。
 
-### 整合性 gate (実装後、完了チェックに渡す前)
+### 出口検品（PM）
 
-- 変更identifier、field、API path、enum値を実装、test、公開層、生成層、doc、spec、sampleの全layerで追従させる
-- sync/async、input/output、初回/cache等の対称pairに片側未修正を残さない
-- derived type、implementation type、wrapper、facadeで内部値が公開層から落ちていないか確認する
-
-### 完了チェック
-
-- 影響layerをcoverするtestと実環境確認を行う
-- **全suiteは`scripts/test-all.sh`を1回実行し、subtestや影響なし判断で代替しない。** commandと最終合否の実出力をverbatimでnoteへ貼る。pre-existing failureにはtest名とticket無関係の根拠を添える
-- provider、wire format、data変換ticketではinputとoutputの意味関係をtestする。machine-verifiable基準をtest code化し、user journey実機を1経路通す
-- semantic verificationでは、同じpromptのinputなしとinputありを比較し、output差を確認する
+- `pdh-coding`「整合性 gate と完了チェック」の実施証跡がnoteにあるか — `scripts/test-all.sh`のcommandと最終合否の実出力がverbatimで貼られ、pre-existing failureに根拠が添えてあるか
 - 全test pass時だけ実装完了とする。1件でも失敗、未実行、環境不備なら完了扱いにしない
 
 ## PDH-review. 品質検証 (実装後 review)
@@ -149,9 +140,7 @@ trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndepend
 2. note file（同出力の`note:`パス。互換symlink: `current-note.md`）のprocess checklistを1項目ずつ確認してcheckする
 3. UIまたはAPI verifyは`./scripts/dev-server.sh --seed`を使う。dev-server / seed hookの契約は`PDH-AGENTS.md`「Dev Server And Seed」に、`application-test`と`ticket-local-test`の分け方と置き場所は`pdh-coding` skill「テスト設計ルール」に従う
    - sandbox、端末path、local login等はlocal設定または一時commandで扱い、区別できなければ確認する
-4. AC裏取りAgentが各ACの形式だけでなくWhyの実質達成を検証する。`NOT VERIFIED`の証拠を補完するまで進まない
-   - user-facing Whyは、実上流data、終端user操作、反証1回の全てで確認する
-   - 合成入力だけでcheckせず、data出所と操作をnoteへ残す
+4. AC裏取りAgentが各ACの実質達成を検証する（worker規則は`pdh-verifying`「AC 裏取り Agent」）。`NOT VERIFIED`の証拠を補完するまで進まない
 5. renameまたはdeleteがあれば全docをsweepし、旧name、path、URLの残骸を確認する
 6. **資産メンテナンス** — close前に恒久資産を現在形に保つ。この ticket の差分に因果がある範囲だけ触り、他ticket由来の記述・検査は消さず削除候補としてnoteに記録する
    - technical-reference.mdとの突合: 因果がある記述を追記・上書きする。出荷済み挙動は確定事実としてその場で書く（承認待ちで先送りしない）。該当なしならnoteに「該当なし」と1行記録
@@ -160,7 +149,7 @@ trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndepend
    - 刈り込み: 自分の差分が置き換えた記述・検査を削除する（より強いゲートで守れるようになった検査の削除も含む）
 7. 最終HEADで`scripts/test-all.sh`を再実行して実出力をnoteへ貼る。後続commitまたはmergeが影響し得る古い証拠は取り直す
 8. 必要なticket noteとdocsは直接更新する
-9. human review直前に外部surfaceをconsumer視点で観察する。観察方法と証拠の要件は`PDH-AGENTS.md`「Browser And Surface Checks」に従う
+9. human review直前に外部surfaceをconsumer視点で観察する（worker規則は`pdh-verifying`「Surface Observer」、観察方法と証拠の要件は`PDH-AGENTS.md`「Browser And Surface Checks」）
    - 外部surfaceなしの純backendはskipできるが、理由をnoteへ1行残す
    - blockerがあれば`PDH-implement`または`PDH-review`へ戻る
 10. AC check済みticket fileを含めてcommitする
