@@ -19,6 +19,10 @@ flowchart TD
     verify --> hgate{"PDH-human-review<br/>人間 gate: close 承認"}
     hgate -- 差し戻し --> impl
     hgate -- close 承認 --> close["PDH-close<br/>./ticket.sh close で merge・push<br/>未了 checkbox が残ると close は拒否される（./ticket.sh check で確認）"]
+    subgraph anytime["どの stage でも"]
+      todo["ユーザの依頼・割り込み・«あとでやる» は<br/>見つけた時点で note の ## Checklist へ 1 依頼 1 行"]
+    end
+    todo -. close が全 checkbox を数える .-> close
 ```
 
 `PDH-ticket-review` と `PDH-ticket-human-review` は別の stage である。前者は agent 側の ticket contract check である。後者は実装前の human gate であり、提示する材料は下の Human Gate Materials で定める。`PDH-ticket-human-review` で AC の明示承認を得ないまま実装を始めない。その後の Acceptance Criteria の変更 — 追加・削除・文言変更 — にも、同様に明示のユーザ承認が要る。
