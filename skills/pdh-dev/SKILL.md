@@ -28,3 +28,5 @@ description: "Ticket-centric 開発ワークフロー。1 ticket = 1 work unit�
 **ticket の Why と AC は承認される契約そのものである。**主語と目的語が落ちた文や、指す先の決まらない指示語を残さない。承認者が前を読み返さないと意味が決まらない AC は、承認された約束と出荷されるものが食い違う。
 
 gate の意味と判定基準（stage flow、severity、scope、証拠要件）は`PDH-AGENTS.md`に従う。この skill には手順を置く。
+
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/pdh-dev/SKILL.md

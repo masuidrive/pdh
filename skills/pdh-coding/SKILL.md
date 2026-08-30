@@ -282,3 +282,5 @@ DB スキーマはコードより変更コストが高い。migration は事実�
 - コンパクション時に以下を必ず保持すること: 現在のチケット名、未解決の懸念事項、ユーザから得た判断・承認
 - 関連のないタスク間では `/clear` でコンテキストをリセットする
 - 調査が大規模になる場合はサブエージェントに委譲し、メインのコンテキストを実装に集中させる
+
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/pdh-coding/SKILL.md

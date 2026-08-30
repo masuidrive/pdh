@@ -105,7 +105,7 @@ grep -qxF 'CLAUDE.local.md' .gitignore || printf '\nCLAUDE.local.md\n' >> .gitig
 
 > **⚠ Grok Build を使う場合、`CLAUDE.local.md` は読まれない。** Grok は instruction file の探索で `.gitignore` を尊重するため、gitignore した時点で discovery から外れる（skill の探索は `.gitignore` を無視するので影響しない）。grok 0.2.93 の `grok inspect` で確認済み。Grok で環境固有メモを効かせたい場合は `.grok/rules/*.md` に置くなど、別の手段を検討すること。Claude Code / Codex CLI はこの制約を受けない。
 
-対象ファイル (11 個):
+対象ファイル (14 個):
 - `CLAUDE.md`
 - `product-brief.md`
 - `technical-reference.md`
@@ -113,6 +113,9 @@ grep -qxF 'CLAUDE.local.md' .gitignore || printf '\nCLAUDE.local.md\n' >> .gitig
 - `docs/product-delivery-hierarchy.md`
 - `.claude/skills/pdh-reviewing/SKILL.md`
 - `.claude/skills/pdh-check-writing/SKILL.md`
+- `.claude/skills/pdh-coding/SKILL.md`
+- `.claude/skills/pdh-dev/SKILL.md`
+- `.claude/skills/pdh-update/SKILL.md`
 - `.claude/skills/pdh-decision-board/SKILL.md`
 - `.claude/skills/tmux-director/SKILL.md`
 - `scripts/checks/example-max-source-lines.check`

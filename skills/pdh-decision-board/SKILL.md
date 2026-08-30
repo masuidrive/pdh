@@ -1,6 +1,7 @@
 ---
 name: pdh-decision-board
 description: PDH の human gate で、承認者が追加調査なしに承認または指示できる判断ボード（Completed Staff Work）を作る。実装前 gate（PDH-ticket-human-review。AC と未確定の判断を承認する）と close 前 gate（PDH-human-review。達成が想定どおりかを見て close を承認する）の両方を扱う。「判断ボード」「board を作って」「AC 承認の材料」「close 前のレビュー材料」で使う。
+allowed-tools: Bash(tools/build.sh:*) Bash(tools/check-static.sh:*)
 ---
 
 # pdh-decision-board

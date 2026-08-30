@@ -12,3 +12,5 @@ description: "PDH アップデート: 上流 PDH リポジトリの最新版を�
 3. **INSTALL.md の「既知の移行手順」を必ず読み、該当する項目をすべて適用する。** ファイルの追加/削除の差分だけでは正しく移行できない変更（削除に見えて実は置き換えであるもの、旧 README の手順漏れに起因する欠落など）がここに列挙されている。差分に現れないため、読まないと見落とす
 4. 更新手順には `bash ./ticket.sh selfupdate`（ticket.sh 本体を upstream 最新版へ更新）が含まれる。
 5. 完了報告には、「既知の移行手順」のどの項目を適用したか（または該当なしと判断したか）を含める。
+
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/pdh-update/SKILL.md
