@@ -9,7 +9,7 @@
 - [ ] **確定判断に完了の証跡を持たせる** — 承認された «解き方» が実装されたかを誰も確かめていない。`allowed-tools` を落としたのはこの穴。案 A（確定判断を `- [ ]` に）/ B（close 前 gate の材料に「各確定判断と証拠」）/ C（手順 10 に ticket が無い場面の受け皿）のどれを採るか未決
   - [ ] ⚠ 案 A への反論が出ている: **PDH 原則の文書を ticket.sh の checkbox 集計の都合で変えるのは向きが逆**。この反論を解いてから決める
 - [x] **`./ticket.sh check --require "<見出し>"` が «節ごと無い» を検出できるか測る** — 測った。**`check --require` は落ちる（exit 1）が、`require_checklist` による close の拒否は通る。**同じ穴に片方だけが効く非対称。ticket.sh#5 と pdh#15 を起票
-- [ ] **ticket.sh#5 が入るまでの繋ぎを決める** — 節を持たない既存 ticket では `require_checklist` が何も守らない。INSTALL の移行手順にそれを明記するか（pdh#15）
+- [x] **ticket.sh#5 の取り込み** — ticket.sh main `29f33a9` で `require_checklist_groups` が入った。配布テンプレートへ `Required Probes` を宣言し、INSTALL の移行手順に selfupdate 前提と «節が無い既存 ticket は手で足す» を明記。probe で 4 状態を測って確認（節あり未了 / 節ごと無い / 見出しだけ / `--force`）
 - [ ] **note テンプレートの checklist を `## Checklist` へ再編** — いまは `## PDH-verify. プロセスチェックリスト` の下に全 stage の項目が入っており、見出しが「verify のときに見るもの」に読める。フロー遷移のたびに見る形にする
 - [ ] **配布先 5 プロジェクトへ `pdh-update` を流す** — 判断 2-A は「ちゃんと更新する前提」で A にした。流すまでが完了。対象は llmhub / hanger-cloudflare / ticket-board（判断ボード skill あり）と db-codex / db-claude（古い版）
 - [ ] **`pdh-decision-board` の description が発火するか確かめる** — 統合で skill 名が変わった。「判断ボードを作って」で起動するかは測っていない

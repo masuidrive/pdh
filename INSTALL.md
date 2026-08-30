@@ -605,14 +605,17 @@ grep -q 'PASSED\[@\]} > 0' scripts/test-all.sh && echo "修正済み" || echo "�
 
 修正後、**suite が 1 つも定義されていない状態と、失敗する suite がある状態の両方で実行して確認する**（このバグは空配列でだけ出る）。
 
-#### `.ticket-config.yaml` に `require_checklist` と `Required Probes` を追加（2026-08-30 以降）
+#### `.ticket-config.yaml` に checkbox gate と `Required Probes` を追加（2026-08-30 以降）
 
-未了の checkbox が残っている間 `close` を拒否する gate を有効にし、note に `## Required Probes` の節を足した。**`--force` では抜けられない。**当てはまらない項目は `- [-] ... - skip: <理由>` と書いて理由をファイルに残す（理由なしの `- [-]` は未了扱い）。未了の一覧は `./ticket.sh check`、特定の節だけの要求は `./ticket.sh check --require "<見出し名>"`。
+未了の checkbox が残っている間 `close` を拒否する gate を有効にし、note に `## Required Probes` の節と、その節の存在を close の必須条件にする宣言を足した。**どちらも `--force` では抜けられない。**当てはまらない項目は `- [-] ... - skip: <理由>` と書いて理由をファイルに残す（理由なしの `- [-]` は未了扱い）。未了の一覧は `./ticket.sh check`、特定の節だけの要求は `./ticket.sh check --require "<見出し名>"`。
 
-⚠ **`Required Probes` の節が無いと、AC を確かめる工程が «節ごと存在しない» まま実装へ進める**（実際にそれで未確認の仮定に基づく修正が本番へ出た）。`.ticket-config.yaml` は project カスタマイズが濃く diff マージで取りこぼされやすいので、直接確認する:
+⚠ **`Required Probes` の節が無いと、AC を確かめる工程が «節ごと存在しない» まま実装へ進める**（実際にそれで未確認の仮定に基づく修正が本番へ出た）。`require_checklist` は未了の checkbox を数えるので、**節ごと無い ticket は 0 件 = 全部片付いた、と読んで通してしまう。**塞ぐのは `require_checklist_groups` の側なので、**両方入っていることを確認する。**
+
+`.ticket-config.yaml` は project カスタマイズが濃く diff マージで取りこぼされやすいので、直接確認する:
 
 ```bash
 grep -q '^require_checklist:' .ticket-config.yaml && echo "gate: 適用済み" || echo "gate: 要追加"
+grep -q '^require_checklist_groups:' .ticket-config.yaml && echo "必須グループ: 適用済み" || echo "必須グループ: 要追加"
 grep -q '## Required Probes' .ticket-config.yaml && echo "節: 適用済み" || echo "節: 要追加"
 grep -q '確かめていない仮定' .ticket-config.yaml && echo "checklist: 適用済み" || echo "checklist: 要追加"
 ```
@@ -620,10 +623,11 @@ grep -q '確かめていない仮定' .ticket-config.yaml && echo "checklist: �
 「要追加」のものを `tmp/pdh/templates/.ticket-config.yaml` からコピーする。
 
 - `gate` — `# Automatically delete remote feature branch` ブロックの直後にある `require_checklist: true`（コメント含む）
+- `必須グループ` — その直後の `require_checklist_groups:`（コメント含む）。**ticket.sh 20260830 以降が必要**なので、手順 7 の `selfupdate` を先に済ませる（古い ticket.sh ではキーが黙って無視され、守られていないのに守られたつもりになる）
 - `節` — `note_content` の `## Required Probes` 節（`## PDH-implement. 実装ログ` の直前）
 - `checklist` — `## PDH-verify. プロセスチェックリスト` の `PDH-implement:` 行 2 つと `PDH-review:` 行 1 つ
 
-**既存の進行中 ticket がある状態で `require_checklist: true` を入れると、その ticket の close が止まる。**止まったら未了を埋めるか、当てはまらない項目に `- [-] ... - skip: <理由>` を書く。
+**既存の進行中 ticket がある状態でこれらを入れると、その ticket の close が止まる。**止まったら未了を埋めるか、当てはまらない項目に `- [-] ... - skip: <理由>` を書く。**節そのものが無い ticket では、`## Required Probes` を手で足してから測る**（テンプレートを変えても、既にある note には反映されない）。
 
 #### `.ticket-config.yaml` に `worktree_copy_files` を追加（2026-07 以降）
 

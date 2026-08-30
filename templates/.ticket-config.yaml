@@ -22,6 +22,13 @@ delete_remote_on_close: true
 # `./ticket.sh check --require "<見出し名>"`。
 require_checklist: true
 
+# 上の gate は「未了の checkbox を数える」ので、節ごと消えた ticket では 0 件 = 全部
+# 片付いた、と読めてしまう。ここに宣言した見出しは、無ければ close を拒否する
+# （見出しだけあって checkbox が 0 個の場合も同じ）。`require_checklist` とは独立に
+# 効き、`--force` では抜けられない。ticket.sh 20260830 以降が必要。
+require_checklist_groups:
+  - "Required Probes"
+
 # Worktree settings
 # `ticket.sh start --worktree` が worktree を作成・再開したとき、main repo から
 # コピーする gitignored ファイル（repo root 相対）。既存ファイルは上書きせず、
@@ -64,7 +71,8 @@ note_content: |
        PDH-ticket-human-review の前に実行して結果を書く。
        実行できないもの（実装しないと分からないこと）は、AC に結果を書かず
        「測って記録する＋この値を下回ったら止めて報告する」の形にする。
-       この節は `./ticket.sh check --require "Required Probes"` で要求できる。 -->
+       この節は close の必須グループ（`require_checklist_groups`）なので、消すと close が止まる。
+       途中で要求するときは `./ticket.sh check --require "Required Probes"`。 -->
   - [ ] 測る対象を洗い出し、書き手が測れるものは測って結果をここへ書いた（測る対象が無いなら `- [-] ... - skip: <理由>`）
 
   ## PDH-implement. 実装ログ
