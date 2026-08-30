@@ -56,6 +56,8 @@ workerは`ticket.sh`を実行しない。`<TESTS_DIR>`と`<TMP_DIR>`はPMがspaw
 
 reviewer、AC裏取り、Surface Observerはproduct code、test、doc、`<NOTE_FILE>`を変更しない。観察と判断の記録は`<RESULT_FILE>`へ書き、作業メモやscreenshot等の中間生成物は`<TMP_DIR>`へ置く。これらの役がrepoの成果物へcommitやfile変更を行ったら、PMは差し戻す。
 
+配布されたagent定義（`.claude/agents/pdh-*.md`のtools、`.codex/agents/pdh-*.toml`の`sandbox_mode`）は、この境界の一部を機構で強制する。定義の機構が無いengine（subprocess spawn等）では、この表に従う。fileへ書けないsandboxで動く役は、`<RESULT_FILE>`に書く内容を最終messageで返す。
+
 ### 出力の返し方
 
 - `<RESULT_FILE>`へ要約、結論、根拠、次actionに絞った最終結果を書く

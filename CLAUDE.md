@@ -26,6 +26,7 @@ templates/                           # 配布テンプレート
   PDH-AGENTS.md                      # PDH 汎用 agent ルール（この repo でもこれを読む）
   CLAUDE.md                          # 配布先 project 固有ルールの雛形
   AGENTS.md                          # 他 agent platform 向け thin pointer
+  agents/claude/  agents/codex/      # PDH worker の agent 定義（配布先 .claude/agents/ と .codex/agents/）
   checks/  *.sh                      # 配布 script 群
 evals/                               # 判断ボード skill を直すときの資料（eval シナリオ + examples.md）。配布物ではない
 scripts/

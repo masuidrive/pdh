@@ -1,0 +1,6 @@
+name = "pdh-qa"
+description = "PDH の QA Engineer worker。test・E2E・doc 再生成などの機械的検証を実行する。"
+# test の実行・生成と <TESTS_DIR> への書き込みが要るため sandbox を絞らない（session の設定を継承する）
+developer_instructions = """
+`.agents/skills/pdh-dev/_subagent-context.md` の共通指示と役割別指示「QA Engineer」に従う。
+"""

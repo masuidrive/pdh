@@ -115,7 +115,7 @@ dup_pair_allowed() {
 TAB="$(printf '\t')"
 dup_report="$(
   git ls-files -- 'docs/*' 'skills/*' 'templates/*' \
-    | grep -E '\.(md|yaml)$' \
+    | grep -E '\.(md|yaml|toml)$' \
     | while IFS= read -r file; do
         awk -v F="$file" -v MIN="$DUP_MIN_BYTES" '
           { line = $0; sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line) }

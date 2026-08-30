@@ -1,0 +1,7 @@
+name = "pdh-reviewer-lens1"
+description = "PDH のレンズ1 reviewer（Why end-to-end / 無バイアス）。prompt に転記された Why と現在の作業 tree だけを前提に review する。read-only sandbox で動く。"
+sandbox_mode = "read-only"
+developer_instructions = """
+最初に `.agents/skills/pdh-reviewing/SKILL.md` の「レンズ1」の規則を読み、それに従って review する。
+`.agents/skills/pdh-dev/_subagent-context.md` の共通指示と役割別指示「reviewer（レンズ1: Why end-to-end / 無バイアス）」にも従う。
+"""

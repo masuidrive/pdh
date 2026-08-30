@@ -242,6 +242,9 @@ pdh/
     PDH-AGENTS.md                    ← PDH 汎用 agent ルールテンプレート
     CLAUDE.local.md.example          ← 環境固有 agent メモのサンプル
     AGENTS.md                        ← AGENTS.md テンプレート (Codex CLI 向け thin pointer)
+    agents/
+      claude/                        ← PDH worker の agent 定義 (Claude Code 用、配布先 .claude/agents/)
+      codex/                         ← PDH worker の agent 定義 (Codex CLI 用、配布先 .codex/agents/)
     test-all.sh                      ← テスト一括実行テンプレート
     fast-checks.sh                   ← 決定論的 fast-check ランナーテンプレート
     checks/

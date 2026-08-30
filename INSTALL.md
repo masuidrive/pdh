@@ -76,6 +76,8 @@ bash ticket.sh init
 | `tmp/pdh/templates/dev-server.sh` | `scripts/dev-server.sh` | PDH verify / human-review 用の開発サーバ入口 |
 | `tmp/pdh/templates/seed-pdh-verify.sh` | `scripts/seed-pdh-verify.sh` | PDH verify / human-review 用のローカル seed hook |
 | `tmp/pdh/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | `ticket-local-test` 実行スクリプト（CI には含めない） |
+| `tmp/pdh/templates/agents/claude/` | `.claude/agents/` | PDH worker の agent 定義（Claude Code 用。read-only 役の書き込み境界を `tools` で機構化する。**ディレクトリごと**コピーする） |
+| `tmp/pdh/templates/agents/codex/` | `.codex/agents/` | PDH worker の agent 定義（Codex CLI 用。read-only 役を `sandbox_mode` で機構化する。Codex CLI を使わないなら省略してよい） |
 | `tmp/pdh/templates/product-brief.md` | `product-brief.md` | Product Brief テンプレート |
 | `tmp/pdh/templates/technical-reference.md` | `technical-reference.md` | Technical Reference テンプレート（現在の実装の How。運用は `docs/product-delivery-hierarchy.md` 参照） |
 | `tmp/pdh/scripts/hookbus.js` | `scripts/hookbus.js` | tmux worker hook event bus (実行権限 `chmod +x` 要) — README「tmux Director」参照 |
@@ -396,6 +398,27 @@ rm -rf tmp/pdh
 11. 後片付け: `rm -rf tmp/pdh`
 
 ### 既知の移行手順
+
+#### PDH worker の agent 定義が新設された（2026-08-30 以降）
+
+worker（Coding Engineer / reviewer / QA / AC 裏取り / Surface Observer / AC 読み手）の agent 定義が `agents/claude/`（`.md`）と `agents/codex/`（`.toml`）として配布に加わった。engine の agent 定義機構に配置すると PM は定義名で worker を spawn でき、read-only 役の書き込み境界が Claude Code では `tools`、Codex では `sandbox_mode` で機構的に強制される。定義が無くても従来の subprocess spawn はそのまま動く。
+
+適用済みかの確認（冪等）:
+
+```bash
+test -f .claude/agents/pdh-reviewer.md && echo "claude: 適用済み" || echo "claude: 要適用"
+test -f .codex/agents/pdh-reviewer.toml && echo "codex: 適用済み" || echo "codex: 要適用（Codex CLI を使わないなら不要）"
+```
+
+「要適用」なら「ファイルを配置する」の配置表に従いコピーする:
+
+```bash
+mkdir -p .claude/agents
+cp tmp/pdh/templates/agents/claude/*.md .claude/agents/
+# Codex CLI を使う場合のみ
+mkdir -p .codex/agents
+cp tmp/pdh/templates/agents/codex/*.toml .codex/agents/
+```
 
 #### reviewer 向け skill `pdh-reviewing` が新設された（2026-08-30 以降）
 
