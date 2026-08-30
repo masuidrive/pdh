@@ -1,6 +1,6 @@
 # PDH-AGENTS.md — PDH 汎用 agent ルール
 
-このファイルには、project 間で共有する PDH ルールを置く。project 固有ルールは `CLAUDE.md` に置く。環境固有のメモは gitignore 済みの `CLAUDE.local.md` に置く。`CLAUDE.md` は project 固有のコマンド・ファイル配置・運用制約を上書きしてよいが、汎用の PDH プロセスをそこに書き直さない。
+このファイルには、project 間で共有する PDH ルールを置く。配布物なので project 側で書き換えない — project 固有ルールは `CLAUDE.md` に置く。
 
 ## Stage Flow
 
