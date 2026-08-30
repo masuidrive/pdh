@@ -36,7 +36,8 @@ flowchart TD
 1. `./ticket.sh start`/`restore`出力の`ticket:`パス（互換symlink: `current-ticket.md`）を確認する
    - 出力が無ければ`./ticket.sh list`を実行する。新規なら`./ticket.sh new <slug>`、標準構造の記入、`./ticket.sh start <ticket-name>`の順で開始する
    - あれば内容を読んで続行する
-2. 同じ出力の`note:`パス（互換symlink: `current-note.md`）を確認する
+2. 新規記入では、ACを箇条書きで書き始める前に`What`の冒頭へ1文を書く — 「この ticket が終わると、〈誰〉が、いままでできなかった〈何〉をできるようになる」。各ACはこの1文の分割としてだけ書く。非退行のACだけは例外で、〈誰〉のみ必須とし「いままでできなかった」を求めない
+3. 同じ出力の`note:`パス（互換symlink: `current-note.md`）を確認する
    - `./ticket.sh start`が生成した構造に従う
    - ACをcopyしない。ACのsource of truthはticketだけとする
 
@@ -47,7 +48,7 @@ flowchart TD
 1. WhyとAC
    - Whyを`product-brief.md`の目的へ接続する。症状から翻訳した要求がbriefと矛盾する場合は実装せず提起する
    - 曖昧なACを具体化する。具体化とは「いま調べれば確定できることを、調べてから書く」である。次の4つはいずれも調べれば消えるので、ACへ残さない — 未測定の数値目標／可否を条件にした分岐／文面のない「◯◯が入る」／対象を列挙しない件数
-   - **ACを承認者が読める言葉にする。**APIのpath、DBの列名、設定キー、内部関数名がAC本文にあれば`確定判断`へ移し、「終わると誰が何をできるようになるか」へ書き直す。判定表と書き直しの例は[_reference.md](_reference.md)「AC に書いてよいもの / 書いてはいけないもの」にある
+   - **ACを承認者が読める言葉にする。**判定は1問 — 「承認者がこれを自分で確かめるとしたら、何をするか」。書けないACは書き直し、実装の言葉で決めた中身は`確定判断`へ移す。この工程でACを書き換えたときは、書き換え後の行にも同じ1問を当てる。定義・取り違えやすい点・書き直しの例は[_reference.md](_reference.md)「AC に書いてよいもの / 書いてはいけないもの」にある
    - **調べる対象はACだけではない。ticket全体から次を機械的に洗い出し、書き手が測れるものは測って確定させる。**記憶に頼って「もう調べ終わった」と判定しない
 
      | 調べる場所 | 確認すること |
@@ -78,10 +79,11 @@ flowchart TD
 
 ## PDH-ticket-human-review. Ticket human review
 
-1. noteのStatusを`PDH-ticket-human-review`へ更新し、ticket修正点と未確定判断がnoteにあることを確認する
-2. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-ticket-human-review`側に従う。ACは承認対象の文言そのままを引用し、要約に置き換えない
-3. **ユーザの明示承認まで`PDH-implement`へ進まない。**
-4. 差し戻しは`PDH-ticket-review`へ戻し、ticket更新後にhuman reviewを再実行する
+1. **`./ticket.sh check --require "Required Probes"` を実行し、測る工程が片付いていることを確認する。**未了があれば板を出さず、先に測る（測る対象が無いなら `- [-] ... - skip: <理由>` と書いて理由を残す）
+2. noteのStatusを`PDH-ticket-human-review`へ更新し、ticket修正点と未確定判断がnoteにあることを確認する
+3. 会話へ渡す材料は`PDH-AGENTS.md`「Human Gate Materials」の`PDH-ticket-human-review`側に従う。ACは承認対象の文言そのままを引用し、要約に置き換えない
+4. **ユーザの明示承認まで`PDH-implement`へ進まない。**
+5. 差し戻しは`PDH-ticket-review`へ戻し、ticket更新後にhuman reviewを再実行する
 
 ## PDH-implement. 実装
 

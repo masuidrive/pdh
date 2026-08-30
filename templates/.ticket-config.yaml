@@ -15,6 +15,13 @@ auto_push: true
 # Automatically delete remote feature branch after closing ticket
 delete_remote_on_close: true
 
+# note と ticket の checkbox が全部片付くまで close を拒否する。
+# `--force` では抜けられない。当てはまらない項目は `- [-] ... - skip: <理由>` と
+# 書いて理由をファイルに残す（理由なしの `- [-]` は未了として扱われる）。
+# 未了の一覧は `./ticket.sh check` で見る。特定の節だけを要求するときは
+# `./ticket.sh check --require "<見出し名>"`。
+require_checklist: true
+
 # Worktree settings
 # `ticket.sh start --worktree` が worktree を作成・再開したとき、main repo から
 # コピーする gitignored ファイル（repo root 相対）。既存ファイルは上書きせず、
@@ -52,6 +59,14 @@ note_content: |
        Design Decisions / Out-of-scope / Dependencies が実装 agent に十分か、
        Architectural Invariants と矛盾しないか、ユーザ承認が必要な未確定判断が残っていないかを記録する。 -->
 
+  ## Required Probes
+  <!-- AC ごとに「達成できると確かめたか」を判定し、確かめていなければ確かめる手段をここへ書く。
+       PDH-ticket-human-review の前に実行して結果を書く。
+       実行できないもの（実装しないと分からないこと）は、AC に結果を書かず
+       「測って記録する＋この値を下回ったら止めて報告する」の形にする。
+       この節は `./ticket.sh check --require "Required Probes"` で要求できる。 -->
+  - [ ] 測る対象を洗い出し、書き手が測れるものは測って結果をここへ書いた（測る対象が無いなら `- [-] ... - skip: <理由>`）
+
   ## PDH-implement. 実装ログ
   <!-- 1 agent が investigate + implement + tests を 1 session で完遂する。
        実コードを読みながら直接実装し、設計判断 / scope 拡張・縮小の判断 / 実コードで発見した事実をここに append する。
@@ -81,6 +96,8 @@ note_content: |
   - [ ] PDH-implement: `scripts/test-all.sh` 全スイートパス確認済み
   - [ ] PDH-implement: 外部 provider 経由 path は実 API 200 確認済み (deferred の場合は明示記録)
   - [ ] PDH-implement: ticket の AC / Architectural Invariants / out-of-scope が implementor によって書き換えられていない
+  - [ ] PDH-implement: 実装が依存する «確かめていない仮定» を書く前に列挙し、測れるものは測った
+  - [ ] PDH-review: 指摘を直すとき、壊していない側の入力を 1 つ選んで前後の出力を記録した
   - [ ] PDH-verify: AC 裏取り Agent が各 AC の実質達成を verify 済み
   - [ ] PDH-verify: Surface Observer 観察済み (純 backend ticket では skip 可、判断を 1 行記録)
   - [ ] PDH-verify: ドキュメント更新の要否を確認済み（必要なら `.agents/skills/pdh-update/SKILL.md` or `.claude/skills/pdh-update/SKILL.md`）
