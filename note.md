@@ -14,7 +14,7 @@
 - [x] **ticket.sh#5 の取り込み** — ticket.sh main `29f33a9` で `require_checklist_groups` が入った。配布テンプレートへ `Required Probes` を宣言し、INSTALL の移行手順に selfupdate 前提と «節が無い既存 ticket は手で足す» を明記。probe で 4 状態を測って確認（節あり未了 / 節ごと無い / 見出しだけ / `--force`）
 - [x] **note テンプレートの checklist を `## Checklist` へ再編** — `## Status:` の直後へ移し、stage 順に並べ替え、`require_checklist_groups` へ `Checklist` も宣言（節ごと消えたら close が止まる）。probe で確認。INSTALL に改名の移行手順を追記
 - [ ] **移行の «適用したつもり» を塞ぐ強化を配布先へ届ける** — INSTALL 手順 7.5（確認コマンドの再実行）と `pdh-update` の報告義務。**この強化自体が pdh-update で届く必要がある**
-- [ ] ⚠ **agent 定義（`.claude/agents/*.md` / `.codex/agents/*.toml`）に `Based on` 行が無い** — 差分マージの対象から外れており、**次回以降の更新が届かない。**skill と同じ «常に上書き» にするか、`Based on` を足して diff マージ対象にするかを決める
+- [x] **agent 定義を skill と同じ «常に上書き» にした** — `Based on` を足す案は採らない（thin pointer で project カスタマイズを持たないため、由来を追う相手がいない）。INSTALL 手順 5 / 既知の移行手順 / `pdh-update` skill / この repo の CLAUDE.md に明記
 - [ ] **配布先 5 プロジェクトへ `pdh-update` を流す** — 判断 2-A は「ちゃんと更新する前提」で A にした。流すまでが完了。残りは ticket-board / db-codex / db-claude。
   - llmhub: `6b93ad0` 取り込み済み。**gate キー 2 つが落ちていたので手で足した**（2026-08-30）。既存 note 26 本に `## Checklist` が無く、再開して close するときに止まる
   - hanger-cloudflare: worktree `chore/pdh-update-260830` に `7fe778c` 版があるだけで **main へ未マージ**。ticket.sh も 20260827 のまま。`6b93ad0` で回し直しが要る

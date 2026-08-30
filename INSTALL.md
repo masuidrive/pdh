@@ -385,9 +385,9 @@ rm -rf tmp/pdh
    ```bash
    cd tmp/pdh && git diff <旧commit-id> HEAD -- <テンプレートファイルパス>
    ```
-   - **スキル（SKILL.md）**: 常にテンプレートで上書きする（プロジェクト固有のカスタマイズはスキルに入れない）
+   - **スキル（`.claude/skills/` 配下すべて）と PDH worker の agent 定義（`.claude/agents/pdh-*.md` / `.codex/agents/pdh-*.toml`）**: 常にテンプレートで上書きする。**どちらもプロジェクト固有のカスタマイズを持たない**（skill は共通ルール、agent 定義は skill を指す thin pointer）ので、`Based on` 行を持たず差分マージもしない。⚠ **`pdh-` で始まらない自前の agent 定義は上書きしない。**
    - **CLAUDE.md**: `Based on` 行の commit ID 間の差分を取り、プロジェクト固有の設定（テストコマンド、ディレクトリ構造、チーム構成テーブル等）を保持しつつテンプレートの変更を反映する
-   - **`Based on` 行を持たない配布物 (`scripts/fast-checks.sh` / `scripts/checks/README.md` / `scripts/hookbus.js`)**: この手順では拾えない。該当する変更は[既知の移行手順](#既知の移行手順)で個別に扱う
+   - **`Based on` 行を持たない配布物のうち、上書きでないもの (`scripts/fast-checks.sh` / `scripts/checks/README.md` / `scripts/hookbus.js`)**: この手順では拾えない。該当する変更は[既知の移行手順](#既知の移行手順)で個別に扱う
    - **本ガイドが指定する設定 (settings.json / vitest.config.ts / scripts/test-all.sh)**: プロジェクト固有のカスタマイズが入っているので上書きしない。代わりに本ガイドの「.claude/settings.json を設定する」「scripts/test-all.sh を作成する」「vitest in-source testing を有効化」と README「tmux Director」で推奨される項目が含まれているかをレビューし、抜けていたら追加する
 6. **削除されたファイルの撤去**: 旧 commit から HEAD で `D` (削除) になったファイルがあれば、プロジェクト側から除去する。該当する設定 (settings.json / vitest.config.ts / scripts/test-all.sh) も必要なら撤去。上の表の逆手順。**過去の major refactor で `epics/` ディレクトリ / `epic-creator` skill / Light Full flow / PD-A / PD-B / PD-D / PD-C-2/3/4/5/8 phase は廃止された**。旧バージョンから upgrade する場合は project 側からこれらの参照を撤去する
 
@@ -405,7 +405,7 @@ rm -rf tmp/pdh
 
 #### PDH worker の agent 定義が新設された（2026-08-30 以降）
 
-worker（Coding Engineer / reviewer / QA / AC 裏取り / Surface Observer / AC 読み手）の agent 定義が `agents/claude/`（`.md`）と `agents/codex/`（`.toml`）として配布に加わった。engine の agent 定義機構に配置すると PM は定義名で worker を spawn でき、read-only 役の書き込み境界が Claude Code では `tools`、Codex では `sandbox_mode` で機構的に強制される。定義が無くても従来の subprocess spawn はそのまま動く。
+worker（Coding Engineer / reviewer / QA / AC 裏取り / Surface Observer / AC 読み手）の agent 定義が `agents/claude/`（`.md`）と `agents/codex/`（`.toml`）として配布に加わった。**skill と同じく毎回まるごと上書きする**（更新手順 5）。engine の agent 定義機構に配置すると PM は定義名で worker を spawn でき、read-only 役の書き込み境界が Claude Code では `tools`、Codex では `sandbox_mode` で機構的に強制される。定義が無くても従来の subprocess spawn はそのまま動く。
 
 適用済みかの確認（冪等）:
 
