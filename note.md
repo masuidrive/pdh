@@ -26,7 +26,7 @@
 - [ ] **重複 Artifact `53f86de1-46bc-49cc-91cd-6d46fad1947d` の扱い** — 判断ボードの再発行で誤って作った。中身は正の `728e8cca…` と同じ。私からは削除できない
 - [x] **stage=skill 化 Phase 1** — `pdh-verifying` skill 新設（QA / AC 裏取り / Surface Observer / AC 読み手の規則を `_subagent-context.md` から移す）+ agent 定義 8 ファイルの参照更新 + 配布整合（ユーザ承認 2026-08-30。Phase 3 = ticket-review の worker 化は含めない判断）
 - [x] **stage=skill 化 Phase 2** — `_flow.md` の PDH-implement / PDH-verify を Director 専用へ（整合性 gate + 完了チェックは `pdh-coding` へ移動、移動元 sweep 済み）
-- [x] **stage=skill 化 Phase 4** — fresh subagent が AC 裏取り役で `pdh-verifying` を読み、合成入力のみの AC を NOT VERIFIED・反証欠落を指摘・AC 不可侵を遵守。指示の破綻なし
+- [x] **stage=skill 化 Phase 4** — fresh subagent（実運用と同じ Opus。ユーザ指定）が AC 裏取り役で `pdh-verifying` を読み、合成入力のみの AC を NOT VERIFIED・反証 1 回の欠落・off-by-one の可能性まで指摘し、AC 不可侵を遵守。指示の破綻なし
 
 ## 済み（消さずに残す）
 
