@@ -58,7 +58,13 @@ finding冒頭へ`[同名 symbol sweep]`等の観点labelを付ける。
 
 ### レンズ2 — AC conformance + AC 妥当性（通常 reviewer が diff とともに実施）
 
-各ACに対応するroute、関数、test、doc節、config等を順方向に名指しして、完了主張が実体と一致するか確認する。主要diffをAC、確定判断、security、stabilityへ逆方向に対応付け、未対応変更を過剰実装判定へ送る。
+**承認者は AC だけでなく確定判断ごと承認している。**その解き方が実装に残っていることを、この lens が確かめる。
+
+各AC**と各確定判断**に対応するroute、関数、test、doc節、config等を順方向に名指しして、完了主張が実体と一致するか確認する。⚠ **確定判断を逆方向だけで見ない** — **実装されなかった判断はdiffを1行も生まない**ので、diff起点の対応付けでは拾えない。**対応する実体を名指しできない確定判断は、未実装としてfindingにする。**
+
+ticketに変更記録のある確定判断は、変更後の内容で対応づける。⚠ **確定判断の変更に再合意が無いことを欠陥にしない** — 記録を残せば書き換えてよい（再合意が要るのはAC・Architectural Invariants・Out-of-scope）。
+
+主要diffをAC、確定判断、security、stabilityへ逆方向に対応付け、未対応変更を過剰実装判定へ送る。
 
 ### persona / coverage マトリクス（両レンズ必須）
 

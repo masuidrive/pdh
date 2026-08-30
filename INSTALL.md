@@ -617,17 +617,19 @@ grep -q 'PASSED\[@\]} > 0' scripts/test-all.sh && echo "修正済み" || echo "�
 grep -q '^require_checklist:' .ticket-config.yaml && echo "gate: 適用済み" || echo "gate: 要追加"
 grep -q '^require_checklist_groups:' .ticket-config.yaml && echo "必須グループ: 適用済み" || echo "必須グループ: 要追加"
 grep -q '## Required Probes' .ticket-config.yaml && echo "節: 適用済み" || echo "節: 要追加"
-grep -q '確かめていない仮定' .ticket-config.yaml && echo "checklist: 適用済み" || echo "checklist: 要追加"
+grep -q '## Checklist' .ticket-config.yaml && echo "Checklist 節: 適用済み" || echo "Checklist 節: 要改名"
+grep -q '確かめていない仮定' .ticket-config.yaml && echo "項目: 適用済み" || echo "項目: 要追加"
 ```
 
 「要追加」のものを `tmp/pdh/templates/.ticket-config.yaml` からコピーする。
 
 - `gate` — `# Automatically delete remote feature branch` ブロックの直後にある `require_checklist: true`（コメント含む）
 - `必須グループ` — その直後の `require_checklist_groups:`（コメント含む）。**ticket.sh 20260830 以降が必要**なので、手順 7 の `selfupdate` を先に済ませる（古い ticket.sh ではキーが黙って無視され、守られていないのに守られたつもりになる）
-- `節` — `note_content` の `## Required Probes` 節（`## PDH-implement. 実装ログ` の直前）
-- `checklist` — `## PDH-verify. プロセスチェックリスト` の `PDH-implement:` 行 2 つと `PDH-review:` 行 1 つ
+- `節` — `note_content` の `## Required Probes` 節（`## PDH-ticket-review. Ticket contract check` の直後）
+- `Checklist 節` — `## PDH-verify. プロセスチェックリスト` を **`## Checklist` へ改名し、`## Status:` の直後へ移す**。⚠ **見出しが「verify のときに見るもの」に読めると、他 stage の項目が終盤まで放置される。**stage ごとに節を割らないこと（割ると「その stage の分だけ」を見て、他が残っているのに気づかない）
+- `項目` — `## Checklist` の `PDH-implement:` 行 2 つと `PDH-review:` 行 2 つ
 
-**既存の進行中 ticket がある状態でこれらを入れると、その ticket の close が止まる。**止まったら未了を埋めるか、当てはまらない項目に `- [-] ... - skip: <理由>` を書く。**節そのものが無い ticket では、`## Required Probes` を手で足してから測る**（テンプレートを変えても、既にある note には反映されない）。
+**既存の進行中 ticket がある状態でこれらを入れると、その ticket の close が止まる。**止まったら未了を埋めるか、当てはまらない項目に `- [-] ... - skip: <理由>` を書く。**節そのものが無い ticket では、`## Required Probes` を手で足してから測る**（テンプレートを変えても、既にある note には反映されない）。⚠ **`Checklist` を必須グループに宣言すると、`## PDH-verify. プロセスチェックリスト` のままの進行中 note は close が止まる。**その note の見出しも `## Checklist` へ改名する。
 
 #### `.ticket-config.yaml` に `worktree_copy_files` を追加（2026-07 以降）
 

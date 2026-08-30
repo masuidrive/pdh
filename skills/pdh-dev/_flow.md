@@ -122,7 +122,7 @@ trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndepend
 ### 実装後 review 特有 gate
 
 - 独断の変更：implementorがAC、Out-of-scope、Architectural Invariantsを再合意なく変更していないか（規則は`.claude/skills/pdh-coding/SKILL.md`「ticket の変更は再合意で行う」にある）
-- 確定判断が実装中に変わっているなら、元の判断・崩れた前提・新しい判断がticketに残っているか（記録の無い変更は差し戻す）
+- 確定判断が1件ずつ実装に落ちているか。**対応する実体を名指しできない判断は未実装として差し戻す**（脱落はdiffに現れないので、数えないと通る）。実装中に変わっているなら、元の判断・崩れた前提・新しい判断がticketに残っているか（記録の無い変更は差し戻す）
 - scope逸脱：未記載の公開surface、破壊操作、権限変更を機械的に列挙する。見つけたらCriticalとしてhuman gateへ出す（実装済みであることを採用理由にしない）
 - commit cadence：`pdh-coding`「Commit cadence 契約」を満たすか。commit数はgateにしない
 - E2E：外部provider pathを実APIで確認したか。deferredなら明記したか

@@ -28,6 +28,7 @@ require_checklist: true
 # 効き、`--force` では抜けられない。ticket.sh 20260830 以降が必要。
 require_checklist_groups:
   - "Required Probes"
+  - "Checklist"
 
 # Worktree settings
 # `ticket.sh start --worktree` が worktree を作成・再開したとき、main repo から
@@ -59,6 +60,28 @@ note_content: |
   # Work Notes: $$TICKET_NAME$$
 
   ## Status: PDH-open (Opening)
+
+  ## Checklist
+  <!-- stage を移るたびにこの節を見る。節を stage ごとに割らない —
+       割ると「その stage の分だけ」を見て、他が残っていることに気づかない。
+       当てはまらない項目は `- [-] ... - skip: <理由>` と書いて理由を残す（理由なしの `- [-]` は未了扱い）。
+       未了の一覧は `./ticket.sh check`。 -->
+  - [ ] PDH-ticket-review: Why が product-brief.md に接続し、AC が観察可能で、ユーザ承認済み
+  - [ ] PDH-ticket-review: Design Decisions / Out-of-scope / Dependencies / Architectural Invariants check が確認済み
+  - [ ] PDH-implement: 実装が依存する «確かめていない仮定» を書く前に列挙し、測れるものは測った
+  - [ ] PDH-implement: implementor が論理単位ごとに commit し、mega-commit にしていない
+  - [ ] PDH-implement: `scripts/test-all.sh` 全スイートパス確認済み
+  - [ ] PDH-implement: 外部 provider 経由 path は実 API 200 確認済み (deferred の場合は明示記録)
+  - [ ] PDH-implement: ticket の AC / Architectural Invariants / out-of-scope が implementor によって書き換えられていない
+  - [ ] PDH-review: 確定判断が 1 件ずつ実装に落ちている（対応する実体を名指しできない判断は未実装）
+  - [ ] PDH-review: 指摘を直すとき、壊していない側の入力を 1 つ選んで前後の出力を記録した
+  - [ ] PDH-review: Directorが採用したCritical/Majorが解消し、非採用findingの分類根拠を記録
+  - [ ] PDH-verify: AC 裏取り Agent が各 AC の実質達成を verify 済み
+  - [ ] PDH-verify: Surface Observer 観察済み (純 backend ticket では skip 可、判断を 1 行記録)
+  - [ ] PDH-verify: ドキュメント更新の要否を確認済み（必要なら `.agents/skills/pdh-update/SKILL.md` or `.claude/skills/pdh-update/SKILL.md`）
+  - [ ] PDH-verify: technical-reference.md 突合済み（下の「Technical reference 更新」欄に記録）
+  - [ ] PDH-human-review: ユーザに差分・検証結果・確認手順を提示し、人間レビューを依頼済み
+  - [ ] PDH-human-review: ユーザが確認手順を実施し、クローズを明示承認した
 
   ## PDH-ticket-review. Ticket contract check
   <!-- 実装前に ticket の契約を確認する。
@@ -94,24 +117,6 @@ note_content: |
   | # | 観点 | Sev | 要旨 | 判定 | 理由 |
   |---|---|---|---|---|---|
   |   |      |     |      |      |      |
-
-  ## PDH-verify. プロセスチェックリスト
-  PDH-verify 完了検証時にチェックする。
-  - [ ] PDH-ticket-review: Why が product-brief.md に接続し、AC が観察可能で、ユーザ承認済み
-  - [ ] PDH-ticket-review: Design Decisions / Out-of-scope / Dependencies / Architectural Invariants check が確認済み
-  - [ ] PDH-review: Directorが採用したCritical/Majorが解消し、非採用findingの分類根拠を記録
-  - [ ] PDH-implement: implementor が論理単位ごとに commit し、mega-commit にしていない
-  - [ ] PDH-implement: `scripts/test-all.sh` 全スイートパス確認済み
-  - [ ] PDH-implement: 外部 provider 経由 path は実 API 200 確認済み (deferred の場合は明示記録)
-  - [ ] PDH-implement: ticket の AC / Architectural Invariants / out-of-scope が implementor によって書き換えられていない
-  - [ ] PDH-implement: 実装が依存する «確かめていない仮定» を書く前に列挙し、測れるものは測った
-  - [ ] PDH-review: 指摘を直すとき、壊していない側の入力を 1 つ選んで前後の出力を記録した
-  - [ ] PDH-verify: AC 裏取り Agent が各 AC の実質達成を verify 済み
-  - [ ] PDH-verify: Surface Observer 観察済み (純 backend ticket では skip 可、判断を 1 行記録)
-  - [ ] PDH-verify: ドキュメント更新の要否を確認済み（必要なら `.agents/skills/pdh-update/SKILL.md` or `.claude/skills/pdh-update/SKILL.md`）
-  - [ ] PDH-verify: technical-reference.md 突合済み（下の「Technical reference 更新」欄に記録）
-  - [ ] PDH-human-review: ユーザに差分・検証結果・確認手順を提示し、人間レビューを依頼済み
-  - [ ] PDH-human-review: ユーザが確認手順を実施し、クローズを明示承認した
 
   ## Technical reference 更新
   <!-- この ticket の差分に因果がある追記・上書きの内容、または「該当なし」＋理由を 1 行以上必ず書く。

@@ -6,11 +6,13 @@
 
 **フロー遷移のたびにこの節を見る。**節を stage ごとに割らない — 割ると「その stage の分だけ」を見て、他が残っていることに気づかない。
 
-- [ ] **確定判断に完了の証跡を持たせる** — 承認された «解き方» が実装されたかを誰も確かめていない。`allowed-tools` を落としたのはこの穴。案 A（確定判断を `- [ ]` に）/ B（close 前 gate の材料に「各確定判断と証拠」）/ C（手順 10 に ticket が無い場面の受け皿）のどれを採るか未決
-  - [ ] ⚠ 案 A への反論が出ている: **PDH 原則の文書を ticket.sh の checkbox 集計の都合で変えるのは向きが逆**。この反論を解いてから決める
+- [x] **確定判断に完了の証跡を持たせる** — **案 A は落とした。**反論（ticket.sh の集計の都合で PDH 文書を変えるのは向きが逆）に加え、`docs/product-delivery-hierarchy.md:120` が「確定判断は記録を残せば再合意なしに書き換えてよい」と決めており、**書き換わることが正常な項目に «済／未» の checkbox は付けられない。**採ったのは B + C + 対応づけの向きの修正:
+  - [x] `pdh-reviewing` / `PDH-AGENTS` / `_flow` / `_review` — 順方向の対応づけに確定判断を入れる（従来は AC だけ）。eval-12 で baseline 4/6 → current 6/6
+  - [x] `close-gate` — 確定判断を 1 件ずつ «そのまま / 変えた / 実装しなかった»。eval-5 退行なし 7/7
+  - [x] `pdh-decision-board/SKILL.md` — ticket を持たない運用では反映先を先に決める
 - [x] **`./ticket.sh check --require "<見出し>"` が «節ごと無い» を検出できるか測る** — 測った。**`check --require` は落ちる（exit 1）が、`require_checklist` による close の拒否は通る。**同じ穴に片方だけが効く非対称。ticket.sh#5 と pdh#15 を起票
 - [x] **ticket.sh#5 の取り込み** — ticket.sh main `29f33a9` で `require_checklist_groups` が入った。配布テンプレートへ `Required Probes` を宣言し、INSTALL の移行手順に selfupdate 前提と «節が無い既存 ticket は手で足す» を明記。probe で 4 状態を測って確認（節あり未了 / 節ごと無い / 見出しだけ / `--force`）
-- [ ] **note テンプレートの checklist を `## Checklist` へ再編** — いまは `## PDH-verify. プロセスチェックリスト` の下に全 stage の項目が入っており、見出しが「verify のときに見るもの」に読める。フロー遷移のたびに見る形にする
+- [x] **note テンプレートの checklist を `## Checklist` へ再編** — `## Status:` の直後へ移し、stage 順に並べ替え、`require_checklist_groups` へ `Checklist` も宣言（節ごと消えたら close が止まる）。probe で確認。INSTALL に改名の移行手順を追記
 - [ ] **配布先 5 プロジェクトへ `pdh-update` を流す** — 判断 2-A は「ちゃんと更新する前提」で A にした。流すまでが完了。対象は llmhub / hanger-cloudflare / ticket-board（判断ボード skill あり）と db-codex / db-claude（古い版）
 - [ ] **`pdh-decision-board` の description が発火するか確かめる** — 統合で skill 名が変わった。「判断ボードを作って」で起動するかは測っていない
 - [ ] **重複 Artifact `53f86de1-46bc-49cc-91cd-6d46fad1947d` の扱い** — 判断ボードの再発行で誤って作った。中身は正の `728e8cca…` と同じ。私からは削除できない

@@ -93,7 +93,7 @@ reviewerにはWhyとrepoだけを渡し、AC、implementorの結論、検証主�
 
 ### レンズ2 — AC conformance + AC 妥当性
 
-reviewerにACと完了主張を渡す。確認の内容は`pdh-reviewing`「レンズ2」に従う。 ACが緩くWhy未達なら、ユーザ承認の上でACを強化するか別ticketにする。
+reviewerにAC・確定判断・完了主張を渡す。確認の内容は`pdh-reviewing`「レンズ2」に従う。 ACが緩くWhy未達なら、ユーザ承認の上でACを強化するか別ticketにする。
 
 ### 矛盾の裁定
 
