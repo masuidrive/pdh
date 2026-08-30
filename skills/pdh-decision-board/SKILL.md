@@ -65,4 +65,4 @@ board のすべての段落に、次の 1 問を当てる。
 
 [kit/README.md](kit/README.md)（CSS・JS・見本）と [tools/README.md](tools/README.md)（組み立てと静的検査）にある。HTML を選んだときだけ読む。
 
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/.claude/skills/pdh-decision-board/SKILL.md
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/pdh-decision-board/SKILL.md
