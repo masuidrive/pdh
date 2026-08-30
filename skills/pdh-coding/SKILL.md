@@ -281,8 +281,11 @@ DB スキーマはコードより変更コストが高い。migration は事実�
 ## テスト設計ルール
 
 - **テストは「アプリがこう動くべき」 (desired state) を記述する**。現在の仕様における正しい振る舞いを定義するもの
-- **変更の動作確認テストはコードに含めない**。変更が正しく適用されたかの検証 (例: API リネーム後に旧 URL が 404 を返す) は一時的な確認であり、テストスイートにコミットしない
-- テスト項目の判断基準: 「このテストはアプリの望ましい状態を記述しているか？」→ Yes ならコミット対象、No (変更の副作用確認など) なら一時確認のみ
+- **`permanent-test` と `ticket-local-test` は別物である**。`scripts/test-all.sh`・CI・`test/` に置く `permanent-test` は、product contract・Architectural Invariants・一般化した regression をカバーする。変更が正しく適用されたかの検証 (例: API リネーム後に旧 URL が 404 を返す、特定の fixture が隠れた) は ticket 固有の一時確認 = `ticket-local-test` であり、テストスイートにコミットしない
+- **昇格判定は 1 問**: この挙動を、ticket や一時 fixture の名前を出さずに、継続する product contract (アプリの望ましい状態) として記述できるか。Yes なら `permanent-test` へコミット、No なら ticket-local のまま close 時に刈る
+- **repository が生成物 (bundle 済み worker、compile 済み asset、生成された SDK model 等) を commit しているなら、`permanent-test` スイートでそれらを再生成して突き合わせる**。再生成した出力が commit 済みファイルと異なるとき fail させ、stale な生成物を reviewer の注意力ではなく決定論で捕まえる
+- 実行可能な `ticket-local-test` script は `<ticket_dir>/tests/` に置き、`./scripts/test-ticket-local.sh [ticket-id]` で実行する。パスは `ticket.sh start`/`restore` 出力の `ticket_dir:` から規約で導く (per-ticket 配置: `tickets/<name>/tests/`。ticket.sh は tests パスを表示も作成もしないので、最初の test を書くときに `mkdir -p` する。旧 flat 配置は `tests/tickets/<ticket-id>/test-ticket-local.sh` のまま)
+- seed、`tmp_dir` の helper、`agent-browser`、`curl`、コマンドの実行証跡は note file へ記録する
 
 ## コンテキスト管理
 

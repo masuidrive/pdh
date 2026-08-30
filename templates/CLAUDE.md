@@ -56,7 +56,7 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 ### テスト設計ルール
 
 - **テストは「アプリがこう動くべき」（desired state）を記述する**。現在の仕様における正しい振る舞いを定義するもの
-- チケット固有の一時確認は `PDH-AGENTS.md` の `ticket-local-test` ルールに従う
+- チケット固有の一時確認は pdh-coding skill「テスト設計ルール」の `ticket-local-test` ルールに従う
 
 # PDH (Ticket) 運用
 
