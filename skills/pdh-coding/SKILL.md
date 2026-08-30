@@ -60,6 +60,13 @@ description: "PDH Coding Standards: 実装担当が実装時に参照するル�
 - 拡張余地が要ると判断したら、自前で作り込まず **Open Questions / 完了報告に1行で記録**して意思決定者に委ねる（その場で実装しない）。
 - *理由*: 投機的拡張は未使用コードを負債化させ、実装が AC から乖離し、レビューと修正を長引かせる。
 
+## 後回しにするタスクを note の checklist に残す
+
+**守るのは、実装中に生まれた宿題が close までに 1 件も落ちないことである。**note の `## Checklist` に書いた行だけが session と compact をまたいで残り、close 時に ticket.sh が未了を数える（機構と、engine の task list / plan で代用してはならない理由は `PDH-AGENTS.md`「Execution Model」）。
+
+- **次のタスクが 2 つ以上発生し、うち 1 つ以上を «いまやらず後でやる» と決めたら、作業を続ける前に、後回しにする全件を note の `## Checklist` へ 1 タスク 1 行で追記する。**頭の中とレスポンスの文章だけに残したタスクは、次の session には存在しない
+- 追記するのは「この ticket 内で後でやる」タスクである。current ticket の外に出すべき観測問題は checklist ではなく、上の記録・分類（起票 / 記録のみ / 棄却。判断は PM）へ回す
+
 ## 曖昧な判断委譲の拒否
 
 実行指示（spawn プロンプト / bot 指示）に「Coding Engineer 判断」「下流で決めて」「よしなに」等の判断委譲表現があった場合、**確定値を聞き返す**（team: PM に確認 / solo / bot: Open Questions に記録）。意思決定者が決めるべき判断を下流に投げる pattern は anti-pattern であり、許容しない。下記の default 続行は、ticket contract を変えない実装ローカルで可逆な選択だけに適用する。
