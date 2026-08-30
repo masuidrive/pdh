@@ -35,6 +35,14 @@ Reviewer findings are hypotheses, not implementation orders（reviewer の findi
 
 Director は自身の engine・model・profile・reasoning effort を変更しない。その変更を許可できるのは、現在の作業に対する明示のユーザ指示だけである。worker への model 割り当ては別の話であり、project の方針に従う。
 
+**ユーザに頼まれたことは、着手より先に note の `## Checklist` へ 1 依頼 1 行で書く。**守るのは、**頼まれたことと途中で見つけた宿題が、close までに 1 つも落ちないこと**である。`require_checklist` がこの節の checkbox を数え、**未了が残っている間 close を拒否する**ので、書いた時点から機構が守る。書かなければ何も守らない。
+
+- **3 つ頼まれたら、まず 3 行書いてから着手する。**
+- **作業中に頼まれたことも、手を止めて先に足す。**
+- **作業中に «あとでやる» を見つけたら、それも足す。**
+- ⚠ **やらないと決めたものを消さない。**`- [-] ... - skip: <理由>` にする。消すと、**判断したのか落としたのかが区別できない。**
+- ticket を持たない運用では、同じ形の checklist を持つファイル（repo 直下の `note.md` 等）へ書く。
+
 subagent / worker を起動できないとき、solo 実行を同等のものとして黙って扱わない。確信度や gate の意味に影響する場合は、制約を説明してユーザに確認する。
 
 ユーザが明示的に要求した場合、承認済みの close フローが実行する場合（例: close 時の ticket.sh `auto_push`）、または `CLAUDE.md` が明示的に許可している場合を除き、`git push` しない。

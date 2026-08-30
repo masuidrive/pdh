@@ -64,6 +64,8 @@ note_content: |
   ## Checklist
   <!-- stage を移るたびにこの節を見る。節を stage ごとに割らない —
        割ると「その stage の分だけ」を見て、他が残っていることに気づかない。
+       ユーザに頼まれたことと、作業中に見つけた «あとでやる» もここへ足す
+       （着手より先に書く。規則は PDH-AGENTS.md「Execution Model」）。
        当てはまらない項目は `- [-] ... - skip: <理由>` と書いて理由を残す（理由なしの `- [-]` は未了扱い）。
        未了の一覧は `./ticket.sh check`。 -->
   - [ ] PDH-ticket-review: Why が product-brief.md に接続し、AC が観察可能で、ユーザ承認済み
