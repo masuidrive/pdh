@@ -1,5 +1,7 @@
 # PDH Dev — レビューパターンと観点
 
+このファイルにはDirector（PM）側の運用だけを置く。reviewer自身がreview時に従う規則（網羅探索チェックリスト、レンズごとの確認内容、修正確認、報告形式）は`pdh-reviewing` skill（`.claude/skills/pdh-reviewing/SKILL.md`）にある。
+
 ## レビューパターン
 
 reviewは、初回結果のunionと事実確認、scope gate、複雑度比較、採用findingの最小修正、影響test、finding限定確認の順で行う。 attemptは`PDH-review-1`、`PDH-review-2`のようにnote file（`ticket.sh start`/`restore`出力の`note:`パス。互換symlink: `current-note.md`）の子ログへ記録する。
@@ -43,22 +45,7 @@ reviewer promptには次を含める。
 - 対象commit SHAとdiff範囲（レンズ1を除く）
 - 役割ごとのreview観点
 - Severity rubricに従いCriticalとMajorを優先する指示
-- 後述の網羅探索checklistを参照する指示
-
-### reviewer の網羅探索チェックリスト
-
-reviewerは1 findingに止まらず、該当観点で同種patternを系統的に全探索する。非該当観点はskipできる。
-
-- 同名symbol sweep：変更identifier、field、endpoint、config keyをcodebase全体で探す
-- 対称関係：input/output、sync/async、read/write、migration/rollbackなどの片側未追従を探す
-- 継承と派生：base type、interface、schema変更時にsubclass、implementation、derived schemaを確認する
-- 境界層の伝搬：internal、facade、wrapper、adapter、generated layer、public docsへの必要な伝搬を確認する
-- test追従：test、mock、fixture、stub、hardcoded expectationを確認する
-- test到達可能性：client JS、generated string、template内logicをtestからimportできるか確認する
-- doc sweep：old identifier、path、enumがdoc、spec、README、comment、sample、changelogに残っていないか確認する。technical-reference.mdがある場合はdiffと突合し、更新漏れや虚偽の「該当なし」がないか確認する
-- domain固有対称性：state transition、concurrency、locking、retry、idempotency、error、cleanup、observability、auth boundaryを必要に応じ確認する
-
-finding冒頭へ`[同名 symbol sweep]`等の観点labelを付ける。
+- 最初に`pdh-reviewing` skill（`.claude/skills/pdh-reviewing/SKILL.md`。Codexは`.agents/skills/pdh-reviewing/SKILL.md`）を読む指示
 
 ### Review attempt の必須ルール
 
@@ -106,11 +93,7 @@ reviewerにはWhyとrepoだけを渡し、AC、implementorの結論、検証主�
 
 ### レンズ2 — AC conformance + AC 妥当性
 
-reviewerにACと完了主張を渡し、各ACに対応するroute、関数、test、doc節、config等を順方向に名指しして、完了主張が実体と一致するか確認する。主要diffをAC、確定判断、security、stabilityへ逆方向に対応付け、未対応変更を過剰実装判定へ送る。 ACが緩くWhy未達なら、ユーザ承認の上でACを強化するか別ticketにする。
-
-### persona / coverage マトリクス（両レンズに必須指定）
-
-両lensは、権限差、tenant横断、session状態、成功と失敗、初回と再訪など、現実的な全分岐で確認する。
+reviewerにACと完了主張を渡す。確認の内容は`pdh-reviewing`「レンズ2」に従う。 ACが緩くWhy未達なら、ユーザ承認の上でACを強化するか別ticketにする。
 
 ### 矛盾の裁定
 
@@ -130,7 +113,7 @@ reviewer間またはlens間で結論が割れたら、unionや多数決で流さ
   |---|---|---|---|---|---|
   ```
 
-  観点は網羅探索チェックリストのlabel、Sevは Critical / Major / Minor、判定は 採用 / 起票 / 記録のみ / 棄却。
+  観点は`pdh-reviewing`「網羅探索チェックリスト」のlabel、Sevは Critical / Major / Minor、判定は 採用 / 起票 / 記録のみ / 棄却。
 - attempt 2以降は`### Findings (PDH-review-2)`のように見出しを自分で追加する
 - 修正確認attemptで出た新規findingも、起票 / 記録のみ / 棄却にしたものを含めて同じ表へ1行追加する（`PDH-human-review`はこの表から提示分を抜き出すため、載せないと報告漏れになる）
 

@@ -31,6 +31,7 @@ BASED_ON_FILES=(
   "templates/checks/example-max-test-lines.check"
   "docs/product-delivery-hierarchy.md"
   "skills/pdh-check-writing/SKILL.md"
+  "skills/pdh-reviewing/SKILL.md"
   "skills/pdh-decision-board/SKILL.md"
   "skills/tmux-director/SKILL.md"
 )

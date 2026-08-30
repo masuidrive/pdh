@@ -20,7 +20,7 @@ description: "Ticket-centric 開発ワークフロー。1 ticket = 1 work unit�
 | `_principles.md` | 最重要原則と設計選択 | 判断に迷ったとき |
 | `_reference.md` | 用語、stage遷移、ticket/note構造、責務境界 | 記録先や用語を確認するとき |
 | `_flow.md` | 8つの`PDH-*` stageとchecklist | 各stageの実行時（中心的な分冊） |
-| `_review.md` | review、網羅探索、収束診断、裏取り | `PDH-review` |
+| `_review.md` | reviewの巡回と裁定、収束診断、裏取り（reviewer自身の規則は`pdh-reviewing` skill） | `PDH-review` |
 | `_collaboration.md` | ユーザ相談と中止 | 判断不能・blocker時 |
 | `_execution-team.md` | teamの役割、engine割当、spawn機構 | worker を spawn するとき |
 | `_subagent-context.md` | 全workerに渡す共通promptと役割別指示 | 同上 |

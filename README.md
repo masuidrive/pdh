@@ -197,6 +197,7 @@ project-root/
     skills/
       pdh-dev/              ← PDH stage flow ワークフロースキル (SKILL.md + _*.md)
       pdh-coding/SKILL.md   ← コーディング標準スキル
+      pdh-reviewing/SKILL.md ← レビュー標準スキル
       pdh-check-writing/SKILL.md ← 宣言型 `.check` 執筆スキル
       tmux-director/SKILL.md ← tmux Director スキル
       pdh-update/SKILL.md    ← PDH アップデートスキル
@@ -216,6 +217,7 @@ pdh/
       SKILL.md                       ← PDH stage flow ワークフロースキル（入口）
       _*.md                          ← SKILL.md から参照される分冊（flow / review / execution-team 等）
     pdh-coding/SKILL.md              ← コーディング標準スキル
+    pdh-reviewing/SKILL.md           ← レビュー標準スキル
     pdh-check-writing/SKILL.md       ← 宣言型 `.check` 執筆スキル
     tmux-director/SKILL.md           ← tmux Director スキル
     pdh-update/SKILL.md              ← PDH アップデートスキル

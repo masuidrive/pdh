@@ -69,8 +69,10 @@ flowchart TD
    - runtimeでUXまたはSecurity invariantを強制するticketは、runtime enforceの保証mechanismをACへ1行明記する
    - ACが触るconsumer surfaceをnoteへ列挙する。カテゴリと具体項目：UI（画面・component・form・modal・navigation）、HTTP API（endpoint path・request/response schema・status code・error message）、SDK（class/method/type・例外・README example。複数言語ある場合は全言語）、CLI（command名・option/flag・help・exit code・出力フォーマット）、Config（設定キー・環境変数・default値・validation message）、生成物（OpenAPI・自動生成SDK model・docsページ・migration script）、観測surface（logフォーマット・metrics名・event payload・trace span属性）
    - Surface Observerは列挙surfaceを最低限すべて観察し、追加の違和感も報告する。surfaceなしなら該当なしを1行記録する
+   - **ACが確定したら、読めるかを«書いていないagent»に測らせる。**`What`冒頭の1文とAC全件だけを渡し（ticket本体・note・実装・この工程の経緯は渡さない）、**「終わると誰が何をできるようになるか」を復元させる。**復元できないACが出たら書き直し、書き直した分だけをもう一度渡す。役割別指示は[_subagent-context.md](_subagent-context.md)「AC 読み手（復元テスト）」にある
+     - ⚠ **書き手が自分に1問を当てるのとは別の検査である。**実装の言葉へ寄せるのはこの工程で書き換えた本人なので、同じ人が「読める」と判定すると寄りが残る
 2. User journeyとregression
-   - close直後にuserができることを1文で宣言する
+   - **`What`冒頭の1文が、close直後にuserができることになっているかを確認する。**別の1文を新しく立てない — 立てると読める1行と読めないACが並び、承認者は1行を読んでACを承認することになる
    - main HEAD比で失われるuser-observable機能を1行判定する。ある場合はmigrationを本ticketへ含めるか、別ticketを同一close gateへbundleする
 3. `product-brief.md`のArchitectural Invariantsと矛盾しないことをticketへ1行宣言する
 4. Design DecisionsとOut-of-scopeが実装workerに十分か確認し、未確定判断は実装前にユーザへ確認する
@@ -128,7 +130,7 @@ trigger一覧とcross-model要件は`PDH-AGENTS.md`「Verification」のIndepend
 
 ### review 観点
 
-`_review.md`の網羅探索checklistに加え、product brief整合、AC、security、error handling、影響layer、検証手法を確認する。 Why E2E無バイアスlensとAC conformanceおよび妥当性lensをpersona matrix込みで実施し、結論の矛盾は前提差を確認して裁定する。
+`pdh-reviewing` skillの網羅探索チェックリストに加え、product brief整合、AC、security、error handling、影響layer、検証手法を確認する。 Why E2E無バイアスlensとAC conformanceおよび妥当性lensをpersona matrix込みで実施し、結論の矛盾は前提差を確認して裁定する。
 
 ### 修正ループ
 

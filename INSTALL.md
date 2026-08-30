@@ -60,6 +60,7 @@ bash ticket.sh init
 | `tmp/pdh/docs/product-delivery-hierarchy.md` | `docs/product-delivery-hierarchy.md` | PDH 運用ルール・テンプレート |
 | `tmp/pdh/skills/pdh-dev/` | `.claude/skills/pdh-dev/` | PDH stage flow ワークフロースキル（`SKILL.md` と、そこから参照される `_*.md` を**ディレクトリごと**コピーする） |
 | `tmp/pdh/skills/pdh-coding/SKILL.md` | `.claude/skills/pdh-coding/SKILL.md` | コーディング標準スキル |
+| `tmp/pdh/skills/pdh-reviewing/SKILL.md` | `.claude/skills/pdh-reviewing/SKILL.md` | レビュー標準スキル（reviewer worker が review 開始前に読む） |
 | `tmp/pdh/skills/pdh-check-writing/SKILL.md` | `.claude/skills/pdh-check-writing/SKILL.md` | 宣言型 `.check` 執筆スキル |
 | `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
 | `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
@@ -87,7 +88,7 @@ Codex CLI はプロジェクト直下の `.agents/skills/` を skill として�
 
 ```bash
 mkdir -p .agents/skills
-for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board; do
+for s in pdh-dev pdh-coding pdh-reviewing pdh-check-writing pdh-update tmux-director pdh-decision-board; do
   ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done
 ```
@@ -102,12 +103,13 @@ grep -qxF 'CLAUDE.local.md' .gitignore || printf '\nCLAUDE.local.md\n' >> .gitig
 
 > **⚠ Grok Build を使う場合、`CLAUDE.local.md` は読まれない。** Grok は instruction file の探索で `.gitignore` を尊重するため、gitignore した時点で discovery から外れる（skill の探索は `.gitignore` を無視するので影響しない）。grok 0.2.93 の `grok inspect` で確認済み。Grok で環境固有メモを効かせたい場合は `.grok/rules/*.md` に置くなど、別の手段を検討すること。Claude Code / Codex CLI はこの制約を受けない。
 
-対象ファイル (10 個):
+対象ファイル (11 個):
 - `CLAUDE.md`
 - `product-brief.md`
 - `technical-reference.md`
 - `.ticket-config.yaml`
 - `docs/product-delivery-hierarchy.md`
+- `.claude/skills/pdh-reviewing/SKILL.md`
 - `.claude/skills/pdh-check-writing/SKILL.md`
 - `.claude/skills/pdh-decision-board/SKILL.md`
 - `.claude/skills/tmux-director/SKILL.md`
@@ -136,6 +138,7 @@ sed_inplace \
   technical-reference.md \
   .ticket-config.yaml \
   docs/product-delivery-hierarchy.md \
+  .claude/skills/pdh-reviewing/SKILL.md \
   .claude/skills/pdh-check-writing/SKILL.md \
   .claude/skills/pdh-decision-board/SKILL.md \
   .claude/skills/tmux-director/SKILL.md \
@@ -314,7 +317,7 @@ test -f CLAUDE.md && echo "OK CLAUDE.md"
 test -f .ticket-config.yaml && echo "OK ticket-config"
 test -f ticket.sh && echo "OK ticket.sh"
 test -f .claude/settings.json && echo "OK settings.json"
-ls .claude/skills/{pdh-dev,pdh-coding,pdh-check-writing,tmux-director,pdh-update}/SKILL.md
+ls .claude/skills/{pdh-dev,pdh-coding,pdh-reviewing,pdh-check-writing,tmux-director,pdh-update}/SKILL.md
 
 # Based on の commit ID が XXXXXXX から置換されたか
 grep -l XXXXXXX CLAUDE.md product-brief.md technical-reference.md .ticket-config.yaml .claude/skills/*/SKILL.md scripts/checks/*.check 2>&1
@@ -393,6 +396,27 @@ rm -rf tmp/pdh
 11. 後片付け: `rm -rf tmp/pdh`
 
 ### 既知の移行手順
+
+#### reviewer 向け skill `pdh-reviewing` が新設された（2026-08-30 以降）
+
+reviewer worker が review 時に従う規則（網羅探索チェックリスト、レンズごとの確認内容、修正確認、報告形式）が、`pdh-dev` の `_review.md` / `_subagent-context.md` から新設の `pdh-reviewing` skill へ移った。`pdh-dev` 側には Director（PM）側の運用だけが残り、reviewer の spawn prompt は `pdh-reviewing` を読ませる形になっている。**`pdh-dev` だけ更新して `pdh-reviewing` を配置しないと、spawn prompt が存在しない skill を指す。**
+
+適用済みかの確認（冪等）:
+
+```bash
+test -f .claude/skills/pdh-reviewing/SKILL.md && echo "適用済み" || echo "要適用"
+```
+
+「要適用」なら:
+
+```bash
+mkdir -p .claude/skills/pdh-reviewing .agents/skills
+cp tmp/pdh/skills/pdh-reviewing/SKILL.md .claude/skills/pdh-reviewing/SKILL.md
+cp -R tmp/pdh/skills/pdh-dev/. .claude/skills/pdh-dev/
+ln -snf ../../.claude/skills/pdh-reviewing .agents/skills/pdh-reviewing
+```
+
+配置後、「ファイルを配置する」の sed 置換（`Based on` 行）を `.claude/skills/pdh-reviewing/SKILL.md` にも適用する。
 
 #### 判断ボード 3 skill が `pdh-decision-board` 1 つに統合された（2026-08-30 以降）
 

@@ -85,27 +85,21 @@ reviewer、AC裏取り、Surface Observerはproduct code、test、doc、`<NOTE_F
 
 レンズ1として起動された場合はこのblockではなく、次の「reviewer（レンズ1）」を受け取る。
 
-- promptとticketから変更目的とdiff scopeを把握する
-- 対象commit SHAを結果へ明記し、その後のcommitをreview済み扱いしない
-- 最初に`.claude/skills/pdh-dev/_review.md`（Codexは`.agents/skills/pdh-dev/_review.md`）を読み、「reviewerの網羅探索チェックリスト」の8観点に従って系統的にreviewする。該当する観点は1 findingで止めず同種patternを全探索する
-- CriticalとMajorを優先し、観点label、file:location、問題、推奨対応の形式で報告する。Severityの定義は`PDH-AGENTS.md`「Verification」に従い、自己流のrubricを作らない
-- findingは`<RESULT_FILE>`へ報告するだけでよい。noteの`### Findings`表へ書くのはPMである
-- ticketに独断の変更が入っていないか確認する
+- 最初に`.claude/skills/pdh-reviewing/SKILL.md`（Codexは`.agents/skills/pdh-reviewing/SKILL.md`）を読み、その規則に従ってreviewする
 - 「書き込み境界」に従う
-- severityを修正命令にしない。採否とcurrent ticketへの包含はPMが判断する
-- 修正確認では指定finding、再現条件、修正diff、実装が記録した反例の前後出力だけを確認し、全diffや新規findingへ広げない
-- **修正確認では、修正が直前の性質を壊していないかを最初に見る**（前後出力を突き合わせる。記録が無ければ、無いことをfindingとする）。指定findingの解消判定はそのあとでよい
-- 修正が直接生んだCriticalまたはMajor regressionだけを元findingと分けて報告する
-- 問題がなければ`No Critical/Major`と明記する
 
 ### reviewer（レンズ1: Why end-to-end / 無バイアス）
 
 - この役はticket、note、diff、implementorの結論を渡されない。promptに転記されたWhyと、repoの現在の作業treeだけを前提とする
-- Whyがrepoの実装で端から端まで成立するかを、現実的な分岐（権限差、tenant横断、session状態、成功と失敗、初回と再訪）で追跡する
-- 独断変更の確認と、diff起点の網羅探索checklistは行わない（ticketとdiffを持たないため）
-- 対象commit SHAを結果へ明記する
-- 報告形式、severityの判定、`<RESULT_FILE>`への報告、書き込み境界は通常reviewerと同じ
-- read-onlyの範囲で自由にrepoを探索してよいが、渡されていないticket/note/review結果を探して読まない
+- 最初に`.claude/skills/pdh-reviewing/SKILL.md`（Codexは`.agents/skills/pdh-reviewing/SKILL.md`）を読み、「レンズ1」の規則に従う
+
+### AC 読み手（復元テスト）
+
+- この役は**`What`冒頭の1文とAC全件だけ**を渡される。ticket本体、note、diff、repo、この工程の経緯は渡されないし、探して読まない
+- **承認者として読む。**知っているのは一般的な技術語と、渡された文に出てくる語だけとする。⚠ **書かれていない前提を自分の知識で埋めない** — 埋めれば復元できてしまうが、承認者は埋められない
+- 答えるのは2つ。**(1) この1文とACから「終わると誰が何をできるようになるか」を復元できるか。(2) 復元できないACはどれで、何が足りないか**（登場人物／その人がする操作／その人が見る結果のどれが欠けているか）
+- ⚠ **ACを書き直さない。**足りないものを名指しするだけにする。書き直すのは書き手の仕事である
+- 「叩けば分かる」「実装を見れば分かる」を根拠にしない。**渡された文だけで判定する**
 
 ### QA Engineer
 
