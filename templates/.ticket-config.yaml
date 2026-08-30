@@ -45,7 +45,7 @@ new_success_message: |
 
 start_success_message: |
   `docs/product-delivery-hierarchy.md` のプロセスの一部として処理するチケットを開始しました。
-  `current-ticket.md` の Why / Acceptance Criteria / Architectural Invariants check / 確定判断 / Out-of-scope を確認してから作業を開始してください。
+  `current-ticket.md` の Why / Acceptance Criteria / Architectural Invariants check / Design Decisions / Out-of-scope を確認してから作業を開始してください。
   判断に迷ったら `product-brief.md` の Constraints / Architectural Invariants を確認。
   PDH labels: PDH-open → PDH-ticket-review → PDH-ticket-human-review → PDH-implement → PDH-review → PDH-verify → PDH-human-review → PDH-close
 
@@ -174,7 +174,7 @@ default_content: |
        矛盾しない場合: 「Hub stateless / Process immutable と矛盾しない」等。
        新規 Invariant を要求する場合: 実装を止めて Product Brief 更新から始める。 -->
 
-  ### 確定判断 (Design Decisions)
+  ### Design Decisions
   <!-- 既知の設計判断と理由を箇条書きで明示。
        例: - データ保存形式: data URI (Files API は将来 ticket、本 ticket では不要)
        例: - 423 reject ではなく 422: validation error として扱う -->
@@ -189,7 +189,7 @@ default_content: |
 
   ### Implementation Notes
   <!-- ユーザの明示指示、またはユーザが会話で言及した事項のみ書く (関数名 / module 名レベルまで)。
-       設計判断は「確定判断 (Design Decisions)」に書く。
+       設計判断は「Design Decisions」に書く。
        Coding Engineer は Implementation Notes が空でも実装できる責務を持つ。
        PM が自主的に実装詳細を書いてはならない (下流の自由度を奪う)。 -->
 

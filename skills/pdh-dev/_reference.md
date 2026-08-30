@@ -41,7 +41,7 @@ ticket file / note file の実パスは`./ticket.sh start`または`./ticket.sh 
 
 | file | 役割 | 残す情報 |
 |---|---|---|
-| ticket file (`ticket:`) | 後世への記録 | Why、AC、Invariants check、確定判断、Out-of-scope、任意のImplementation Notes |
+| ticket file (`ticket:`) | 後世への記録 | Why、AC、Invariants check、Design Decisions、Out-of-scope、任意のImplementation Notes |
 | note file (`note:`) | session間の引継ぎ | Status、実装log、review結果、process check、Discoveries |
 
 ## ticket 標準構造
@@ -58,7 +58,7 @@ ticketは次の構造で、1 page、約20行以内を目安にする。
 # Architectural Invariants check
 product-brief.mdとの整合を1行で宣言
 
-# 確定判断 (Design Decisions)
+# Design Decisions
 - 既知の判断と理由
 
 # Out-of-scope
@@ -74,7 +74,7 @@ ACには観察可能なproduct動作を書く。 review結果やtest pass等のp
 
 **ACの読み手はticketを承認する人である。**実装するagentではない。読めるACとは、承認者がその1行だけを読んで「満たされた場面」を頭の中で再生できるACをいう。要るのは3つ — 登場人物、その人がする操作、その人が見る結果。
 
-判定は1問で行う。**「承認者がこれを自分で確かめるとしたら、何をするか。」**答えが書けなければ、そのACは承認者の言葉になっていない。実装の言葉で決めた中身は`確定判断 (Design Decisions)`へ移し、ACには場面を残す。**約束の中身を減らさない。読み手だけを変える。**
+判定は1問で行う。**「承認者がこれを自分で確かめるとしたら、何をするか。」**答えが書けなければ、そのACは承認者の言葉になっていない。実装の言葉で決めた中身は`Design Decisions`へ移し、ACには場面を残す。**約束の中身を減らさない。読み手だけを変える。**
 
 ⚠ 取り違えやすい3点。
 
@@ -127,7 +127,7 @@ section構成は`.ticket-config.yaml`の`note_content`で決まる。ここに�
 | layer | 意思決定者の領域 | 実装担当の領域 |
 |---|---|---|
 | Product Brief | ユーザの意思 | なし |
-| Ticket | Why、AC、Invariants check、確定判断、Out-of-scope、任意のImplementation Notes | 実code details |
+| Ticket | Why、AC、Invariants check、Design Decisions、Out-of-scope、任意のImplementation Notes | 実code details |
 | Subagentまたは実行指示 | 目的、背景、AC、担当範囲、確定判断 | how-to、実装手順、command |
 
 ## 成果物セルフチェック（内容品質チェック）

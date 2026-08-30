@@ -216,7 +216,7 @@ Agent Teams を使うために、`.claude/settings.json` に以下を配置す�
 - `branch_prefix`: feature ブランチのプレフィックス（default: `features/`）
 - `auto_push`: close 時に自動 push するか
 - `worktree_copy_files`: `ticket.sh start --worktree` 時に main repo からコピーする gitignored ファイルのリスト（template default: `.env`）。worktree で動くために必要なファイルに合わせて編集する
-- `default_content`: Ticket テンプレート（Why / What+AC / Architectural Invariants check / 確定判断 / Out-of-scope + 任意: Implementation Notes / Dependencies）
+- `default_content`: Ticket テンプレート（Why / What+AC / Architectural Invariants check / Design Decisions / Out-of-scope + 任意: Implementation Notes / Dependencies）
 - `note_content`: 作業メモテンプレート（PDH-ticket-review / PDH-implement / PDH-review + Findings 表 / PDH-verify / Technical reference 更新 / PDH-human-review / Discoveries / Open Questions / Resume Point）
 
 #### 7. scripts/test-all.sh を作成する
@@ -405,6 +405,18 @@ rm -rf tmp/pdh
 11. 後片付け: `rm -rf tmp/pdh`
 
 ### 既知の移行手順
+
+#### Ticket テンプレートの見出し「確定判断 (Design Decisions)」が「Design Decisions」へ改名された（2026-08-30 以降）
+
+Ticket の節ラベルのうち「確定判断」だけが日本語だったため、他ラベル（Why / What / Out-of-scope 等）と同じ英語へ揃えた。`.ticket-config.yaml` は上書きされないテンプレートなので、既存プロジェクトでは `default_content` の見出しと `start_success_message` の列挙を手で更新する。散文中の用語「確定判断」はそのままでよい（skill 側も日本語の用語としては使い続ける）。
+
+適用済みかの確認（冪等）:
+
+```bash
+grep -q '### Design Decisions' .ticket-config.yaml && echo "適用済み" || echo "要適用"
+```
+
+「要適用」なら `.ticket-config.yaml` 内の `### 確定判断 (Design Decisions)` を `### Design Decisions` に、`start_success_message` と Implementation Notes コメント内の「確定判断」を「Design Decisions」に置換する。close 済みでない（todo / doing）ticket の見出しを揃えるかは更新手順 10 で確認する。`tickets/done/` は歴史記録なので触らない。
 
 #### PDH worker の agent 定義が新設された（2026-08-30 以降）
 

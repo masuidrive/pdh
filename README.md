@@ -49,7 +49,7 @@ https://github.com/masuidrive/pdh の INSTALL.md を読んで、このプロジ�
 ```
 Product Brief を書く
     ↓
-Ticket を作成 (Why / AC / Architectural Invariants check / 確定判断 / Out-of-scope を埋める)
+Ticket を作成 (Why / AC / Architectural Invariants check / Design Decisions / Out-of-scope を埋める)
     ↓
 PDH-open: 対象 ticket / note / brief を読む
     ↓

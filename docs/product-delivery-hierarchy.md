@@ -11,7 +11,7 @@ Product Brief / Ticket の 2 層で開発を構造化する。各層は上位の
 | レイヤ | 何を表すか | 書くこと | 閉じる条件 |
 |---|---|---|---|
 | **Product Brief** | 人間の意思。解きたい問題と目指す状態 | なぜ作るか、誰のどんな問題か、Architectural Invariants | この問題が解けたと言える状態 |
-| **Ticket** | Brief を実現する実装単位。1 ticket = 1 work unit | Why / AC / Architectural Invariants check / 確定判断 / out-of-scope | AC を満たし、レビュー通過し、テスト全件パス、実環境で動作確認できた |
+| **Ticket** | Brief を実現する実装単位。1 ticket = 1 work unit | Why / AC / Architectural Invariants check / Design Decisions / out-of-scope | AC を満たし、レビュー通過し、テスト全件パス、実環境で動作確認できた |
 
 上位ほど「達成した状態」を、下位ほど「確認できる動作」を書く。
 
@@ -137,7 +137,7 @@ main ← features/250711-091538-fix-auth (Ticket ブランチ)
 
 ### Coding agent 向け
 
-- Agent は Ticket の **Why / Acceptance Criteria / Architectural Invariants check / 確定判断 / out-of-scope / Implementation Notes** を主な入力として使う。
+- Agent は Ticket の **Why / Acceptance Criteria / Architectural Invariants check / Design Decisions / out-of-scope / Implementation Notes** を主な入力として使う。
 - 判断に迷ったら Product Brief の **Constraints / Architectural Invariants** を参照する。
 - Ticket に書かれていない仕様判断が必要な場合の対応は `.claude/skills/pdh-coding/SKILL.md` 「Open Questions protocol (batch escalate)」を参照する (デフォルト値で進め、ASSUMPTION commit + note 記録、PM に batch escalate)。
 - Ticket の Dependencies に未完了のブロッカーがある場合は、着手せずに報告する。
@@ -247,7 +247,7 @@ PDH の実行は stage ごとに subagent / worker へ委譲し、Director が�
 
 ### Ticket
 
-最小構成は **Why + What/Acceptance Criteria + Architectural Invariants check + 確定判断 + Out-of-scope** で成立する。他は該当する情報がある場合のみ書く。
+最小構成は **Why + What/Acceptance Criteria + Architectural Invariants check + Design Decisions + Out-of-scope** で成立する。他は該当する情報がある場合のみ書く。
 
 ```md
 ---
@@ -287,7 +287,7 @@ created_at: YYYY-MM-DDTHH:MM:SSZ
      矛盾しない場合: 「Hub stateless / Process immutable と矛盾しない」等。
      新規 Invariant を要求する場合: 実装を止めて Product Brief 更新から始める。 -->
 
-### 確定判断 (Design Decisions)
+### Design Decisions
 <!-- 既知の設計判断と理由を箇条書きで明示。
      例: - データ保存形式: data URI (Files API は将来検討、本 ticket では不要)
      例: - error code: 422 (validation error として扱う) -->
@@ -302,7 +302,7 @@ created_at: YYYY-MM-DDTHH:MM:SSZ
 
 ### Implementation Notes
 <!-- ユーザの明示指示、またはユーザが会話で言及した事項のみ書く (関数名 / module 名レベルまで)。
-     設計判断は「確定判断 (Design Decisions)」に書く。
+     設計判断は「Design Decisions」に書く。
      Coding Engineer は Implementation Notes が空でも実装できる責務を持つ。
      PM が自主的に実装詳細を書いてはならない (下流の自由度を奪う)。 -->
 
