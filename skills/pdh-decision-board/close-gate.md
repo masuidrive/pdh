@@ -1,22 +1,11 @@
----
-name: pdh-close-decision-board
-description: PDH の実装・レビュー・検証を終えた後・close する前（PDH-human-review）に、承認者が「達成したものは想定どおりか。この達成で ticket を閉じてよいか」を追加調査なしで承認または指示できる判断ボードを作る。
----
-
-# pdh-close-decision-board
-
-このファイルは、**close 前 gate（`PDH-human-review`）の判断ボードだけを扱う。**
-
-**先に [pdh-decision-board-base](../pdh-decision-board-base/SKILL.md) を全文読む。**
-
-⚠ **継承の範囲は «ベースの全部» とする。**節を列挙して絞らない — 列挙は漏れるし、ベースに節が増えたときにここが古くなる。**このファイルは、ベースへ足す差分だけ**を書く。実装前 gate の差分（[pdh-ticket-decision-board](../pdh-ticket-decision-board/SKILL.md)）はこの gate では使わない。下の比較表は、何が違うかを示すためだけに実装前 gate を参照する。
+# close 前 gate（`PDH-human-review`）の判断ボード
 
 ⚠ **同じ主題についてベースと両方に規則があるときは、この skill が優先する。**ベースが gate 側に委ねている 2 つを、この gate では次のとおり定める。
 
 - ベースの `N = 0` は、何の承認を求めるかを gate 側に委ねる。**この gate の承認文は «この達成で ticket を閉じてよいか» であり、AC の承認は求めない**（下記「実装前 gate と何が違うか」）。
 - ベースの「主線の構成 — 共通則」は、固定部を gate 側に委ねる。**この gate の固定部は 4 面（決定サマリー / 出来上がりの像 / AC ごとの達成 / 返す）**で、それ以外は裏付けとして「返す」の後ろに置く（下記「主線は 4 面 — 残りは裏付け」）。
 
-媒体を HTML にする場合の renderer も、ベースの[render-html-common.md](../pdh-decision-board-base/render-html-common.md) と[create-doc.md](../pdh-decision-board-base/create-doc.md) /[create-slides.md](../pdh-decision-board-base/create-slides.md) を使う。
+媒体を HTML にする場合の renderer も、ベースの[render-html-common.md](render-html-common.md) と[create-doc.md](create-doc.md) /[create-slides.md](create-slides.md) を使う。
 
 ## この gate で承認者が見るもの — 想定と出来上がりのずれ
 

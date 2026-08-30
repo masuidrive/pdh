@@ -63,9 +63,7 @@ bash ticket.sh init
 | `tmp/pdh/skills/pdh-check-writing/SKILL.md` | `.claude/skills/pdh-check-writing/SKILL.md` | 宣言型 `.check` 執筆スキル |
 | `tmp/pdh/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
 | `tmp/pdh/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
-| `tmp/pdh/skills/pdh-decision-board-base/` | `.claude/skills/pdh-decision-board-base/` | 判断ボードの共通規則と renderer（分冊 `*.md` / `kit/`（CSS・JS・見本）/ `tools/`（組み立てと静的検査。bash と awk だけで動く）を**ディレクトリごと**コピーする） |
-| `tmp/pdh/skills/pdh-ticket-decision-board/SKILL.md` | `.claude/skills/pdh-ticket-decision-board/SKILL.md` | 実装前 gate（AC 承認）の判断ボードスキル — base への差分 |
-| `tmp/pdh/skills/pdh-close-decision-board/` | `.claude/skills/pdh-close-decision-board/` | close 前 gate（達成の確認と close 承認）の判断ボードスキル — base への差分と、当たる ticket だけ読む `ship-risk.md`（**ディレクトリごと**コピーする） |
+| `tmp/pdh/skills/pdh-decision-board/` | `.claude/skills/pdh-decision-board/` | 判断ボードスキル — 実装前 gate と close 前 gate の両方。`SKILL.md` が入口で、共通規則 `base.md` / gate 差分 `ticket-gate.md` `close-gate.md` / renderer 分冊 / `kit/`（CSS・JS・見本）/ `tools/`（組み立てと静的検査。bash と awk だけで動く）を**ディレクトリごと**コピーする |
 | `tmp/pdh/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
 | `tmp/pdh/templates/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH 汎用 agent ルール |
 | `tmp/pdh/templates/CLAUDE.local.md.example` | `CLAUDE.local.md.example` | 環境固有 agent メモのサンプル（実体は commit しない） |
@@ -89,7 +87,7 @@ Codex CLI はプロジェクト直下の `.agents/skills/` を skill として�
 
 ```bash
 mkdir -p .agents/skills
-for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board; do
+for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board; do
   ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
 done
 ```
@@ -104,13 +102,14 @@ grep -qxF 'CLAUDE.local.md' .gitignore || printf '\nCLAUDE.local.md\n' >> .gitig
 
 > **⚠ Grok Build を使う場合、`CLAUDE.local.md` は読まれない。** Grok は instruction file の探索で `.gitignore` を尊重するため、gitignore した時点で discovery から外れる（skill の探索は `.gitignore` を無視するので影響しない）。grok 0.2.93 の `grok inspect` で確認済み。Grok で環境固有メモを効かせたい場合は `.grok/rules/*.md` に置くなど、別の手段を検討すること。Claude Code / Codex CLI はこの制約を受けない。
 
-対象ファイル (9 つ):
+対象ファイル (10 個):
 - `CLAUDE.md`
 - `product-brief.md`
 - `technical-reference.md`
 - `.ticket-config.yaml`
 - `docs/product-delivery-hierarchy.md`
 - `.claude/skills/pdh-check-writing/SKILL.md`
+- `.claude/skills/pdh-decision-board/SKILL.md`
 - `.claude/skills/tmux-director/SKILL.md`
 - `scripts/checks/example-max-source-lines.check`
 - `scripts/checks/example-max-test-lines.check`
@@ -138,6 +137,7 @@ sed_inplace \
   .ticket-config.yaml \
   docs/product-delivery-hierarchy.md \
   .claude/skills/pdh-check-writing/SKILL.md \
+  .claude/skills/pdh-decision-board/SKILL.md \
   .claude/skills/tmux-director/SKILL.md \
   scripts/checks/example-max-source-lines.check \
   scripts/checks/example-max-test-lines.check
@@ -394,6 +394,30 @@ rm -rf tmp/pdh
 
 ### 既知の移行手順
 
+#### 判断ボード 3 skill が `pdh-decision-board` 1 つに統合された（2026-08-30 以降）
+
+`pdh-decision-board-base` / `pdh-ticket-decision-board` / `pdh-close-decision-board` は `pdh-decision-board` 1 つになった。入口は `SKILL.md`（gate の選び方と、手順ごとに読む分冊を持つ router）で、旧 base の `SKILL.md` は `base.md`、実装前 gate の差分は `ticket-gate.md`、close 前 gate の差分は `close-gate.md` になり、`ship-risk.md`・renderer 分冊・`kit/`・`tools/` もすべて `pdh-decision-board/` 直下にある。
+
+**⚠ 旧 3 ディレクトリは必ず削除する。**残すと skill の実体が 2 系統になり（`AI-2`: skill の実体は 1 つだけ置く、に違反）、どちらが正か agent には判定できない。`.agents/skills/` の古い symlink 3 本も削除する。
+
+適用済みかの確認（冪等）:
+
+```bash
+test -d .claude/skills/pdh-decision-board && ! test -e .claude/skills/pdh-decision-board-base && echo "適用済み" || echo "要適用"
+```
+
+「要適用」なら:
+
+```bash
+rm -rf .claude/skills/pdh-decision-board-base .claude/skills/pdh-ticket-decision-board .claude/skills/pdh-close-decision-board .claude/skills/pdh-decision-board
+rm -f .agents/skills/pdh-decision-board-base .agents/skills/pdh-ticket-decision-board .agents/skills/pdh-close-decision-board
+cp -r tmp/pdh/skills/pdh-decision-board/ .claude/skills/pdh-decision-board/
+mkdir -p .agents/skills
+ln -snf ../../.claude/skills/pdh-decision-board .agents/skills/pdh-decision-board
+```
+
+これより下の節にある判断ボード関連の移行手順（3 分冊化・2 ファイル化・evals の分離）は、この統合で置き換えられている。未適用でもこの節だけを適用すればよい（旧 commit の `tmp/pdh` にしか無いパスをコピーする手順は、現在の `tmp/pdh` では実行できない）。
+
 #### 文章 skill 3 本が削除された（2026-08-26 以降）
 
 `common-writing` / `japanese-tech-writing` / `cognitive-rhythm-writing` を削除した。**判断ボードと ticket に効いていたのは «承認者に復元作業をさせない» 3 項だけで、それは `pdh-decision-board-base/final-check.md` の「文」の層にある。**残りは書籍・記事の原稿向けの規範で、板の読み手にプラスにならないまま 39.6 KB が配布されていた。
@@ -530,6 +554,26 @@ grep -q 'PASSED\[@\]} > 0' scripts/test-all.sh && echo "修正済み" || echo "�
 「要修正」なら、`tmp/pdh/templates/test-all.sh` の Summary ブロック（`(( ${#PASSED[@]} > 0 ))` / `(( ${#FAILED[@]} > 0 ))` の要素数ガード）を該当箇所に反映する。suite 定義（`run "..."` 行）は自分のものを残すこと。
 
 修正後、**suite が 1 つも定義されていない状態と、失敗する suite がある状態の両方で実行して確認する**（このバグは空配列でだけ出る）。
+
+#### `.ticket-config.yaml` に `require_checklist` と `Required Probes` を追加（2026-08-30 以降）
+
+未了の checkbox が残っている間 `close` を拒否する gate を有効にし、note に `## Required Probes` の節を足した。**`--force` では抜けられない。**当てはまらない項目は `- [-] ... - skip: <理由>` と書いて理由をファイルに残す（理由なしの `- [-]` は未了扱い）。未了の一覧は `./ticket.sh check`、特定の節だけの要求は `./ticket.sh check --require "<見出し名>"`。
+
+⚠ **`Required Probes` の節が無いと、AC を確かめる工程が «節ごと存在しない» まま実装へ進める**（実際にそれで未確認の仮定に基づく修正が本番へ出た）。`.ticket-config.yaml` は project カスタマイズが濃く diff マージで取りこぼされやすいので、直接確認する:
+
+```bash
+grep -q '^require_checklist:' .ticket-config.yaml && echo "gate: 適用済み" || echo "gate: 要追加"
+grep -q '## Required Probes' .ticket-config.yaml && echo "節: 適用済み" || echo "節: 要追加"
+grep -q '確かめていない仮定' .ticket-config.yaml && echo "checklist: 適用済み" || echo "checklist: 要追加"
+```
+
+「要追加」のものを `tmp/pdh/templates/.ticket-config.yaml` からコピーする。
+
+- `gate` — `# Automatically delete remote feature branch` ブロックの直後にある `require_checklist: true`（コメント含む）
+- `節` — `note_content` の `## Required Probes` 節（`## PDH-implement. 実装ログ` の直前）
+- `checklist` — `## PDH-verify. プロセスチェックリスト` の `PDH-implement:` 行 2 つと `PDH-review:` 行 1 つ
+
+**既存の進行中 ticket がある状態で `require_checklist: true` を入れると、その ticket の close が止まる。**止まったら未了を埋めるか、当てはまらない項目に `- [-] ... - skip: <理由>` を書く。
 
 #### `.ticket-config.yaml` に `worktree_copy_files` を追加（2026-07 以降）
 

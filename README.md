@@ -200,7 +200,7 @@ project-root/
       pdh-check-writing/SKILL.md ← 宣言型 `.check` 執筆スキル
       tmux-director/SKILL.md ← tmux Director スキル
       pdh-update/SKILL.md    ← PDH アップデートスキル
-      pdh-ticket-decision-board/ ← 判断ボードスキル (SKILL.md + renderer 分冊)
+      pdh-decision-board/      ← 判断ボードスキル (SKILL.md + 分冊 + kit/ + tools/)
 ```
 
 ## このリポジトリの構成
@@ -219,19 +219,20 @@ pdh/
     pdh-check-writing/SKILL.md       ← 宣言型 `.check` 執筆スキル
     tmux-director/SKILL.md           ← tmux Director スキル
     pdh-update/SKILL.md              ← PDH アップデートスキル
-    pdh-decision-board-base/
-      SKILL.md                       ← 判断ボードの共通規則（gate と媒体に依存しない）
+    pdh-decision-board/
+      SKILL.md                       ← 判断ボードスキルの入口（gate の選び方と、手順ごとに読む分冊）
+      base.md                        ← 判断ボードの共通規則（gate と媒体に依存しない）
+      ticket-gate.md                 ← 実装前 gate（AC 承認）の差分
+      close-gate.md                  ← close 前 gate（達成の確認と close 承認）の差分
+      ship-risk.md                   ← 保存されている形・外部契約を変える ticket だけ読む分冊
       final-check.md                 ← 完成検査（形・文・判断の 3 層）
       answer-form.md                 ← 回答フォームの DOM・状態・発行前検査
       render-html-common.md          ← HTML renderer 2 種が共有する CSS・DOM の実装規則
       create-doc.md                  ← 1 枚の HTML 文書として組む renderer
       create-slides.md               ← 横に読み進める HTML 2 軸デッキとして組む renderer
       risk-overlay.md                ← 基本規則を上書きする ticket の型
-      examples.md                    ← 日付つきの事故・実測値（規則の根拠を確かめたいときだけ読む）
       kit/                           ← 板が読み込む CSS・JS と見本
       tools/                         ← 組み立てと静的検査（bash と awk だけ）
-    pdh-ticket-decision-board/SKILL.md ← 実装前 gate（AC 承認）の差分
-    pdh-close-decision-board/        ← close 前 gate の差分と ship-risk.md
   templates/
     product-brief.md                 ← Product Brief テンプレート
     technical-reference.md           ← Technical Reference テンプレート（現在の実装の How）

@@ -45,7 +45,7 @@ fi
 # この repo も CI も GNU なので、GNU でしか動かない書き方は素の実行では通ってしまう。
 # 実際に build.sh が `base64 "$file"`（BSD が受け付けない位置引数）のまま配布された。
 # shim は scripts/bsd-shim/ にあり、配布しない。
-kit_selftest=skills/pdh-decision-board-base/tools/selftest.sh
+kit_selftest=skills/pdh-decision-board/tools/selftest.sh
 if [[ -x "$kit_selftest" ]]; then
   run "kit selftest" bash "$kit_selftest"
   run "kit selftest (BSD 相当)" env PATH="$PWD/scripts/bsd-shim:$PATH" bash "$kit_selftest"

@@ -4,7 +4,7 @@
 
 ## 読ませるもの
 
-`skills/pdh-decision-board-base/final-check.md`
+`skills/pdh-decision-board/final-check.md`
 
 baseline は削除した 3 skill（`git show b211e5a^:skills/common-writing/SKILL.md` ほか）を読ませて同じタスクを渡す。
 

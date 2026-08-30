@@ -1,13 +1,4 @@
----
-name: pdh-ticket-decision-board
-description: PDH の ticket を書き終えた後・実装に入る前（PDH-ticket-human-review）に、承認者が Acceptance Criteria と未確定の判断を追加調査なしで承認または指示できる判断ボードを作る。
----
-
-# pdh-ticket-decision-board
-
-このファイルは、**実装前 gate（`PDH-ticket-human-review`）の判断ボードだけ**を扱う。
-
-**先に [pdh-decision-board-base](../pdh-decision-board-base/SKILL.md) を全文読む。** CSW の考え方、判断の数え方、決定サマリー、判断カードの型、媒体の選び方、renderer、完成検査は、すべてあちらが持つ。このファイルは、実装前 gate に固有の差分だけを書く。 close 前 gate（`PDH-human-review`）は[pdh-close-decision-board](../pdh-close-decision-board/SKILL.md) が扱う。
+# 実装前 gate（`PDH-ticket-human-review`）の判断ボード
 
 ## この gate で承認するもの — ticket の Why → What → How
 
@@ -21,11 +12,11 @@ description: PDH の ticket を書き終えた後・実装に入る前（PDH-tic
 - board に表示する AC は、承認対象となる ticket の最新文面と一致させる。
 - ticket へ書き戻せない事情がある場合は gate を止める。「承認後に直す」と約束して進めない。
 
-機微な情報を扱う ticket だけは、自己完結を無条件に適用しない。詳細はベースの[risk-overlay.md](../pdh-decision-board-base/risk-overlay.md) を使う。
+機微な情報を扱う ticket だけは、自己完結を無条件に適用しない。詳細はベースの[risk-overlay.md](risk-overlay.md) を使う。
 
 ## 書き始める前に — 未確定の洗い出しは `PDH-ticket-review` の仕事〔手順 1〕
 
-**未確定の洗い出し（`Open Questions` の全件確認・未確認を表す語の検索・断定の裏取り・影響範囲・合意された添付）は、[pdh-dev の `PDH-ticket-review`](../pdh-dev/_flow.md) が調べる場所と確認内容の表を持っている。**board を書く前に、その洗い出しが済んでいて結果が note にあることを確認する。残っていたら board で判断を求めず、`PDH-ticket-review` へ戻って ticket を先に直す。**表をここへ写さない** — 2 箇所に持つと片方だけが更新される。
+**未確定の洗い出し（`Open Questions` の全件確認・未確認を表す語の検索・断定の裏取り・影響範囲・合意された添付）は、[pdh-dev skill の `PDH-ticket-review`](../pdh-dev/SKILL.md) が調べる場所と確認内容の表を持っている。**board を書く前に、その洗い出しが済んでいて結果が note にあることを確認する。残っていたら board で判断を求めず、`PDH-ticket-review` へ戻って ticket を先に直す。**表をここへ写さない** — 2 箇所に持つと片方だけが更新される。
 
 あちらの表に無い検索だけ、この gate が足す。
 
@@ -74,7 +65,7 @@ description: PDH の ticket を書き終えた後・実装に入る前（PDH-tic
 - 計画を崩しうる既知のリスクと依存。
 - ticket review 中に変えた内容と理由。**復元できないなら「変更なし」と書かず、「記録が無いため復元できない」と書く。**
 
-⚠ **この 2 つのリストに無いものを主線へ置かない。**書き手の裏取りの経緯、測定ログ、どの reviewer の指摘で何を足したか、板の数についての宣言は、どれも**承認者が «実装に入ってよいか» を決めるのに使わない。**置き場所の引き方はベースの[final-check.md](../pdh-decision-board-base/final-check.md)「指摘への応じ方」に従う。
+⚠ **この 2 つのリストに無いものを主線へ置かない。**書き手の裏取りの経緯、測定ログ、どの reviewer の指摘で何を足したか、板の数についての宣言は、どれも**承認者が «実装に入ってよいか» を決めるのに使わない。**置き場所の引き方はベースの[final-check.md](final-check.md)「指摘への応じ方」に従う。
 
 ⚠ **該当しない項目は、書かない。**「無し」「該当なし」の根拠を節で書かせない。書かないことで承認者が取り違える項目だけ、1 行で「無い」と書く。
 

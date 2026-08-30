@@ -72,7 +72,7 @@ artifact host などが `<html>` を所有する場合でも、board 自身の�
 
 ## 画面写真は押すと原寸で開く
 
-mockup・変更前後の比較は、合意した文章と同じ重さで扱う（`SKILL.md`「合意済みの画像」）。縮小のままでは文言・色・導線が読めないため、画面写真は押すと原寸で開けるようにする（実装は `kit/board.css` の `.shot-open` / `.shot-zoom`。DOM は `kit/README.md`）。
+mockup・変更前後の比較は、合意した文章と同じ重さで扱う（`base.md`「合意済みの画像」）。縮小のままでは文言・色・導線が読めないため、画面写真は押すと原寸で開けるようにする（実装は `kit/board.css` の `.shot-open` / `.shot-zoom`。DOM は `kit/README.md`）。
 
 - 開く・閉じるは `:target` と `<a href="#…">` だけで成立させる。**script を止めるビューアで開かれても、本文と原寸表示が壊れない**ためである。Esc で閉じるのは `kit/board.js` の上乗せ。
 - 閉じる手段を必ず置く。overlay のどこを押しても閉じ、元の画面写真の位置へ戻る。

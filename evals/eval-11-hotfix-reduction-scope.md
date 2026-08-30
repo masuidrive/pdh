@@ -4,7 +4,7 @@
 
 ## 読ませるもの
 
-`skills/pdh-decision-board-base/SKILL.md`、`skills/pdh-decision-board-base/risk-overlay.md`、`skills/pdh-ticket-decision-board/SKILL.md`
+`skills/pdh-decision-board/base.md`、`skills/pdh-decision-board/risk-overlay.md`、`skills/pdh-decision-board/ticket-gate.md`
 
 ## 入力
 

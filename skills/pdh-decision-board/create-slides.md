@@ -1,5 +1,5 @@
 # 横に読み進める HTML の 2 軸デッキ renderer
-これは **`html-2d-deck` renderer** であり、PowerPoint、Google Slides、PDF には適用しない。この媒体を選んだときだけ、先に `SKILL.md` と `render-html-common.md` を読んで使う。
+これは **`html-2d-deck` renderer** であり、PowerPoint、Google Slides、PDF には適用しない。この媒体を選んだときだけ、先に `base.md` と `render-html-common.md` を読んで使う。
 
 **CSS / JS は自分で書かない。**`kit/tokens.css` + `kit/board.css` + `kit/deck.css`（この順）と、 `kit/deck.js` + `kit/board.js`（この順）をそのまま埋め込む（`render-html-common.md`「CSS と JS は自分で書かない — kit を埋め込む」）。 kit に無い部品が必要になったら、継ぎ足さずに «何が足りなかったか» を報告する。
 
@@ -29,7 +29,7 @@
 | 図 | 分岐、順序、依存を示し、つながらない矢印を発見する |
 | 数字カード | 症状や影響の大きさを本文から分離する |
 
-見出しと結論行は、面へ縮める過程で主語と目的語が落ちやすい。両者だけを抜き出し、単独で意味が閉じるかを `SKILL.md` の文の検査で確認する。
+見出しと結論行は、面へ縮める過程で主語と目的語が落ちやすい。両者だけを抜き出し、単独で意味が閉じるかを `base.md` の文の検査で確認する。
 
 ## 2 軸の意味
 

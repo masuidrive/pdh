@@ -11,7 +11,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-KIT_TOOLS="$ROOT/skills/pdh-decision-board-base/tools"
+KIT_TOOLS="$ROOT/skills/pdh-decision-board/tools"
 SHIPPED_FIXTURES="$KIT_TOOLS/fixtures"
 OWN_FIXTURES="$ROOT/scripts/board-check/fixtures"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
