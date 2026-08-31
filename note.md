@@ -20,9 +20,10 @@
 - [ ] **pane 1-3 へ `/pdh-update` を再投入する**（ユーザ依頼 2026-08-30 その 2。`PDH-AGENTS.md` の docs 移動 + `pdh-verifying` 新設が入った後の版を取り込ませる）
 - [ ] **pane 1-3 の完了後に手順 7.5 の冪等チェックを当てる**
 - [x] **#18 を測った** — `required_paths` は**壊れた symlink を検出する**（`-e` が symlink を辿る）。4 状態すべて exit 1。懸念は空振りで、設計待ちではなく作るだけ
-- [ ] **#17: worktree の制約を `pdh-coding` へ（engine 中立に書き直して）**（ユーザ依頼 2026-08-31）
-- [ ] **#16: 「正」で優先関係を示さない規則を PDH 側へ + 検査を配る + 再混入 8 箇所を直す**（ユーザ依頼 2026-08-31）
-- [ ] **#18: `templates/checks/` へ PDH 配布物の `required_paths` check を配る**（ユーザ依頼 2026-08-31）
+- [x] **#17 worktree の制約** — `pdh-coding` へ。⚠ 提案文は `EnterWorktree`/`ExitWorktree` を直書きで `AI-5` 違反だったので、一般の言葉で書き engine 固有は例示に留めた（`f8e8b39`）
+- [x] **#16 「正」の再混入** — ⚠ 報告 2 箇所に対し実際は **9 箇所**（1 つは今日こちらが書いた行）。検査を `templates/checks/` と `scripts/checks/` へ配り、9 箇所とも直して 0 件（`f8e8b39`）
+- [x] **#18 配布物の消失検出** — check を配り、維持の規律を `CLAUDE.md` と `INSTALL.md` 配置表へ繋いだ（`f8e8b39`）
+- [x] **4 issue へ返信し、16 / 17 / 18 / 19 をすべて close した**
 - [ ] **4 issue へ返信する**（ユーザ依頼 2026-08-31）
 - [-] **#19（ticket に Constraints 節）** - skip: ユーザ判断でやらない（2026-08-31）。5 か月運用で実害ゼロ、Appetite「小さく保つ」に照らして節も語も増やさない
 - [ ] **配布先 5 プロジェクトへ `pdh-update` を流す** — 判断 2-A は「ちゃんと更新する前提」で A にした。流すまでが完了。残りは ticket-board / db-codex / db-claude。
