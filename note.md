@@ -19,7 +19,8 @@
 - [x] **note へ書く版の規則を測った（eval-14）**（ユーザ依頼 2026-08-30）— 記録では判別（5 行 対 0 行）、引き継ぎでは判別せず。⚠ **note テンプレートのコメントだけでは足りず、`PDH-AGENTS.md` 側の規則があって初めて書かれた**
 - [x] **pane 1-3 へ `/pdh-update` を再投入した** — 3 repo とも `34e0e98` まで取り込み完了（適用と commit の承認待ちで停止中。その判断は各 session のユーザのもの）
 - [x] **手順 7.5 を 5 repo すべてに当てた** — 壊れた symlink 0 件、`.agents/skills/` は 8 skill とも symlink で `AI-2` を満たす。`D .agents/skills/pdh-coding/SKILL.md` は実体コピーが symlink へ張り替わった痕跡で、正しい方向
-- [ ] **`pdh-decision-board` の description が発火するか、使わなくなった repo で測る**（壊してよいので試験台に使える）
+- [x] **`pdh-decision-board` の description は発火する** — 当てる 5 件すべて命中、`pdh-reviewing` に取られない。誤爆も 1 件のみ（測定は «description が正しい 1 つを選ばせるか» までで、実機の発火機構そのものではない）
+- [-] **`pdh-coding` の description を直す** - skip: **直す理由が測定で消えた。**6 問（バグ修正 / 指摘の反映 / リファクタ / テスト / 規則の参照 / チケット開始）で **6/6 正解**。`pdh-coding` は «実際にコードを書く» 場面で選ばれ、ticket フローは `pdh-dev` に譲っている。⚠ **前回「実装して」で外れたと報告したのはこちらの期待違い** — `pdh-dev` の description が『実装して』を自分の起動語として明記しており、あの選択は仕様どおり。⚠ **1 問の結果だけで欠陥と断定した**のが誤りで、判断ボードのときは「当てる／当てない」の対を作っていたのに、こちらでは作らなかった
 - [x] **#18 を測った** — `required_paths` は**壊れた symlink を検出する**（`-e` が symlink を辿る）。4 状態すべて exit 1。懸念は空振りで、設計待ちではなく作るだけ
 - [x] **#17 worktree の制約** — `pdh-coding` へ。⚠ 提案文は `EnterWorktree`/`ExitWorktree` を直書きで `AI-5` 違反だったので、一般の言葉で書き engine 固有は例示に留めた（`f8e8b39`）
 - [x] **#16 「正」の再混入** — ⚠ 報告 2 箇所に対し実際は **9 箇所**（1 つは今日こちらが書いた行）。検査を `templates/checks/` と `scripts/checks/` へ配り、9 箇所とも直して 0 件（`f8e8b39`）
