@@ -169,7 +169,7 @@ gate の規則と検証の証拠要件は `PDH-AGENTS.md`（「Stage Flow」「V
 
 ## テンプレート
 
-テンプレートの正本は次の 2 箇所にある。ここには複製を置かない。
+テンプレートは次の 2 箇所にある。ここには複製を置かない。
 
 - **Ticket / note** — `.ticket-config.yaml` の `default_content` / `note_content`。`./ticket.sh new` が記入ガイドのコメント付きで実体化する。YAML frontmatter（`title` / `created_at`、完了時の `closed_at`、中止時の `cancelled_at`）は ticket.sh が扱う
 - **Product Brief** — 導入時に repo root へ配置される `product-brief.md`（PDH リポジトリの Product Brief テンプレートが元。記入ガイドは本文にある）。frontmatter は持たない

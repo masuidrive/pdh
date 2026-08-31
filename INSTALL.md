@@ -57,7 +57,7 @@ bash ticket.sh init
 
 | コピー元 | コピー先 | 用途 |
 |---|---|---|
-| `tmp/pdh/docs/product-delivery-hierarchy.md` | `docs/product-delivery-hierarchy.md` | PDH 運用ルール（テンプレートの正本は `.ticket-config.yaml` / `product-brief.md` 側） |
+| `tmp/pdh/docs/product-delivery-hierarchy.md` | `docs/product-delivery-hierarchy.md` | PDH 運用ルール（テンプレートは `.ticket-config.yaml` / `product-brief.md` 側にある） |
 | `tmp/pdh/skills/pdh-dev/` | `.claude/skills/pdh-dev/` | PDH stage flow ワークフロースキル（`SKILL.md` と、そこから参照される `_*.md` を**ディレクトリごと**コピーする） |
 | `tmp/pdh/skills/pdh-coding/SKILL.md` | `.claude/skills/pdh-coding/SKILL.md` | コーディング標準スキル |
 | `tmp/pdh/skills/pdh-reviewing/SKILL.md` | `.claude/skills/pdh-reviewing/SKILL.md` | レビュー標準スキル（reviewer worker が review 開始前に読む） |
@@ -73,7 +73,7 @@ bash ticket.sh init
 | `tmp/pdh/templates/.ticket-config.yaml` | `.ticket-config.yaml` | ticket.sh 設定 |
 | `tmp/pdh/templates/test-all.sh` | `scripts/test-all.sh` | テスト一括実行スクリプト |
 | `tmp/pdh/templates/fast-checks.sh` | `scripts/fast-checks.sh` | 決定論的 fast-check ランナー（宣言形式の grep 不変条件。test-all の最初の軽量ステージ） |
-| `tmp/pdh/templates/checks/` | `scripts/checks/` | fast-check レジストリ（README、汎用pattern例、source 1500行/test 2500行の例。プロジェクトに合わせて調整/削除） |
+| `tmp/pdh/templates/checks/` | `scripts/checks/` | fast-check レジストリ（README、汎用pattern例、source 1500行/test 2500行の例。プロジェクトに合わせて調整/削除）。⚠ **`example-required-pdh-files.check` だけは «調整して残す» もの** — PDH 配布物の消失を検出する唯一の手段で、使わない skill の行を外して使う |
 | `tmp/pdh/templates/dev-server.sh` | `scripts/dev-server.sh` | PDH verify / human-review 用の開発サーバ入口 |
 | `tmp/pdh/templates/seed-pdh-verify.sh` | `scripts/seed-pdh-verify.sh` | PDH verify / human-review 用のローカル seed hook |
 | `tmp/pdh/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | `ticket-local-test` 実行スクリプト（CI には含めない） |
@@ -442,7 +442,7 @@ grep -q 'pdh-coding skill「テスト設計ルール」' CLAUDE.md && echo "適�
 2 つの変更が `.ticket-config.yaml` の `default_content` に入った。`.ticket-config.yaml` は上書きされないテンプレートなので、既存プロジェクトでは手で更新する。
 
 1. **見出し「確定判断 (Design Decisions)」→「Design Decisions」**。節ラベルのうち「確定判断」だけが日本語だったため、他ラベル（Why / What / Out-of-scope 等）と同じ英語へ揃えた。`start_success_message` の列挙と Implementation Notes コメント内の表記も同様。散文中の用語「確定判断」はそのままでよい（skill 側も日本語の用語としては使い続ける）
-2. **AC コメントを承認者向けガイドへ更新**。「読み手は承認する人」「冒頭に『この ticket が終わると、〈誰〉が、〈何〉をできるようになる』の 1 文を書き、各 AC はその分割」を追記し、実装の言葉の例（`/api/users に GET…`）を承認者の言葉の例に差し替えた（doc のテンプレート節は廃止され、`default_content` が唯一の正本になった）
+2. **AC コメントを承認者向けガイドへ更新**。「読み手は承認する人」「冒頭に『この ticket が終わると、〈誰〉が、〈何〉をできるようになる』の 1 文を書き、各 AC はその分割」を追記し、実装の言葉の例（`/api/users に GET…`）を承認者の言葉の例に差し替えた（doc のテンプレート節は廃止され、テンプレートは `default_content` だけになった）
 
 適用済みかの確認（冪等）:
 
@@ -499,7 +499,7 @@ ln -snf ../../.claude/skills/pdh-reviewing .agents/skills/pdh-reviewing
 
 `pdh-decision-board-base` / `pdh-ticket-decision-board` / `pdh-close-decision-board` は `pdh-decision-board` 1 つになった。入口は `SKILL.md`（gate の選び方と、手順ごとに読む分冊を持つ router）で、旧 base の `SKILL.md` は `base.md`、実装前 gate の差分は `ticket-gate.md`、close 前 gate の差分は `close-gate.md` になり、`ship-risk.md`・renderer 分冊・`kit/`・`tools/` もすべて `pdh-decision-board/` 直下にある。
 
-**⚠ 旧 3 ディレクトリは必ず削除する。**残すと skill の実体が 2 系統になり（`AI-2`: skill の実体は 1 つだけ置く、に違反）、どちらが正か agent には判定できない。`.agents/skills/` の古い symlink 3 本も削除する。
+**⚠ 旧 3 ディレクトリは必ず削除する。**残すと skill の実体が 2 系統になり（`AI-2`: skill の実体は 1 つだけ置く、に違反）、どちらに従うか agent には判定できない。`.agents/skills/` の古い symlink 3 本も削除する。
 
 適用済みかの確認（冪等）:
 

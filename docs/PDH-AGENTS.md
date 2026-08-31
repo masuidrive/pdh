@@ -31,7 +31,7 @@ flowchart TD
 
 ## Execution Model
 
-利用できる環境では、stage ごとの worker モデルを使う。Coding Engineer、QA、reviewer、AC 裏取り、Surface Observer は、現実的な範囲で別々の worker にする。Director / main agent にとって、worker の PASS は入力であって承認ではない。stage を進める前に、正本の docs・ticket・diff・実コマンド出力・note の証拠を確認する。
+利用できる環境では、stage ごとの worker モデルを使う。Coding Engineer、QA、reviewer、AC 裏取り、Surface Observer は、現実的な範囲で別々の worker にする。Director / main agent にとって、worker の PASS は入力であって承認ではない。stage を進める前に、docs・ticket・diff・実コマンド出力・note の証拠を自分で確認する。
 
 reviewer の finding は仮説であり、実装命令ではない。各 finding を採用・保留・棄却のどれにするかは、AC、現在の diff、変更された user journey、実際に出荷された欠陥と同じ根本原因のいずれかへ結び付けて Director が決める。severity ラベルだけでは scope の拡大を正当化できない。現在の ticket と無関係な実在の Critical/Major finding は自動進行を止め、黙って保留せずユーザへ持ち込む。修正後は元の finding とその修正差分だけを再 review し、広い探索 review を繰り返し回さない。修正が永続状態や公開 surface を追加するなら、実装前に削除・棄却・制約の代替案と比較し、より単純な設計を確信を持って選べないときは escalate する。
 
@@ -39,7 +39,7 @@ Director は自身の engine・model・profile・reasoning effort を変更し�
 
 **ユーザに頼まれたことは、着手より先に note の `## Checklist` へ 1 依頼 1 行で書く。**守るのは、**頼まれたことと途中で見つけた宿題が、close までに 1 つも落ちないこと**である。`require_checklist` がこの節の checkbox を数え、**未了が残っている間 close を拒否する**ので、書いた時点から機構が守る。書かなければ何も守らない。
 
-⚠ **engine の task list（Claude Code の task list、Codex の plan）で代用しない。**あちらは **context が切れると消える**が、頼まれたことは消えない。**note へ書いたものだけが compact と session をまたいで残り、close で数えられる。**engine の一覧を併用してよいが、**正本は note の `## Checklist` である。**
+⚠ **engine の task list（Claude Code の task list、Codex の plan）で代用しない。**あちらは **context が切れると消える**が、頼まれたことは消えない。**note へ書いたものだけが compact と session をまたいで残り、close で数えられる。**engine の一覧を併用してよいが、**数えられるのは note の `## Checklist` だけである。**
 
 - **3 つ頼まれたら、まず 3 行書いてから着手する。**
 - **作業中に頼まれたことも、手を止めて先に足す。**

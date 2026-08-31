@@ -7,7 +7,7 @@ description: "PDH 検証 worker の規則: QA Engineer / AC 裏取り / Surface 
 
 **この skill は executor-neutral です。**PM から spawn された worker でも、solo / bot で自分が検証も兼ねる場合でも、同じ内容を使用してください。
 
-worker として spawn された場合は、`.claude/skills/pdh-dev/_subagent-context.md`（Codex は `.agents/skills/pdh-dev/_subagent-context.md`）の共通指示（読むもの・書き込み境界・独断で変えない・出力の返し方）に従った上で、自分の役割の節だけを適用する。書き込み境界の機構強制は配布 agent 定義（`.claude/agents/pdh-*.md` の `tools`、`.codex/agents/pdh-*.toml` の `sandbox_mode`）が正本である。
+worker として spawn された場合は、`.claude/skills/pdh-dev/_subagent-context.md`（Codex は `.agents/skills/pdh-dev/_subagent-context.md`）の共通指示（読むもの・書き込み境界・独断で変えない・出力の返し方）に従った上で、自分の役割の節だけを適用する。書き込み境界は配布 agent 定義（`.claude/agents/pdh-*.md` の `tools`、`.codex/agents/pdh-*.toml` の `sandbox_mode`）が機構で強制する。
 
 ## QA Engineer
 

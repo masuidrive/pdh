@@ -91,7 +91,7 @@ flowchart TD
 
 前提は`PDH-ticket-human-review`でticket contractとACが承認済みであること。
 
-実装workerの規則は`pdh-coding` skillが正本である — 1つの作業文脈での完遂、論理単位commit、整合性gate、完了チェックを含む。PMは委譲と検品だけを行う。
+実装workerの規則は`pdh-coding` skillにある — 1つの作業文脈での完遂、論理単位commit、整合性gate、完了チェックを含む。PMは委譲と検品だけを行う。
 
 ### 実行指示の必須内容（worker への spawn prompt に含める）
 
