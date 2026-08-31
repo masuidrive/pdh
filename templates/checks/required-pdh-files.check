@@ -1,0 +1,20 @@
+# pdh-update は skill と `pdh-*` の agent 定義を毎回まるごと上書きする（差分マージ
+# しない）ため、配置表の取り違え・上流側の削除・merge 事故が、そのまま導入先からの
+# 消失になる。pattern / max_lines / linter_command 型は glob が 0 件になると沈黙する
+# ので、消失は「合格」として通る。存在を表明できるのは required_paths だけである。
+#
+# `.agents/skills/` は `.claude/skills/` への symlink だが、これも列挙してよい。
+# required_paths の判定は `-e` で symlink を辿るので、実体が消えれば symlink 側も
+# 「無い」と判定される（測定済み: 実体削除・symlink 削除・index に残る rm の 3 状態
+# すべてで exit 1）。壊れた symlink が「存在」として通ることはない。
+#
+# ⚠ 既定は「全部入れる」である。Codex CLI を使うかは導入先ごとに変わり、あとから
+# 変わることもある。入れておけば使い始めた日から守られ、使わないなら 1 度落ちて
+# 行を外すという見える判断になる。外しておくと、使い始めても守られないまま気づけない。
+# 使わないものは、この行から該当 path を外す変更を同じ差分に入れる。
+#
+# ⚠ この check は列挙した path しか守らない。足し忘れたものは消えても落ちない。
+# 列挙の更新は pdh-update が行う（`pdh-update` skill 手順 2）。手で skill を
+# 増減したときは、この行も同じ commit で直す。
+reason=PDH 配布物が消えている。pdh-update は上書きコピーなので、消失は差分マージでは検出できない
+required_paths=.claude/skills/pdh-check-writing/SKILL.md,.claude/skills/pdh-coding/SKILL.md,.claude/skills/pdh-decision-board/SKILL.md,.claude/skills/pdh-dev/SKILL.md,.claude/skills/pdh-reviewing/SKILL.md,.claude/skills/pdh-update/SKILL.md,.claude/skills/pdh-verifying/SKILL.md,.claude/skills/tmux-director/SKILL.md,.agents/skills/pdh-check-writing,.agents/skills/pdh-coding,.agents/skills/pdh-decision-board,.agents/skills/pdh-dev,.agents/skills/pdh-reviewing,.agents/skills/pdh-update,.agents/skills/pdh-verifying,.agents/skills/tmux-director,.claude/agents/pdh-ac-reader.md,.claude/agents/pdh-ac-verifier.md,.claude/agents/pdh-coding-engineer.md,.claude/agents/pdh-qa.md,.claude/agents/pdh-reviewer-lens1.md,.claude/agents/pdh-reviewer.md,.claude/agents/pdh-surface-observer.md,.codex/agents/pdh-ac-reader.toml,.codex/agents/pdh-ac-verifier.toml,.codex/agents/pdh-coding-engineer.toml,.codex/agents/pdh-qa.toml,.codex/agents/pdh-reviewer-lens1.toml,.codex/agents/pdh-reviewer.toml,.codex/agents/pdh-surface-observer.toml

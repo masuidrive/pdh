@@ -58,7 +58,7 @@ scripts/
 - **配布ファイルを追加・改名・削除したら、`INSTALL.md` の配置表（「ファイルを配置する」のコピー元/コピー先テーブル）と README のディレクトリ構造図を同じ commit で更新する。** 配布物の一覧は `INSTALL.md` にある
 - **配布ファイル末尾の `Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/<path>` 行を壊さない。** `XXXXXXX` はプレースホルダのまま commit する（導入時に HEAD commit へ置換される）。path 部分は **この repo 内でのソースパス**と一致させる（URL が pdh repo への permalink なので、配布先の `.claude/...` ではない）。`scripts/check-distribution.sh` の `BASED_ON_FILES` へ登録して初めて検査される。⚠ **skill の分冊と `templates/agents/` の agent 定義には `Based on` を足さない** — どちらも配布先で毎回まるごと上書きされるので、由来を追う相手がいない
 - **`pdh-update` skill の更新手順が、追加した配布物をカバーしているか確認する**
-- **skill か `pdh-*` の agent 定義を増減したら、`templates/checks/example-required-pdh-files.check` の `required_paths` を同じ commit で直す。** pdh-update はこれらを毎回まるごと上書きするので、**消失は差分マージでは検出できない**（この check だけが検出する）
+- **skill か `pdh-*` の agent 定義を増減したら、`templates/checks/required-pdh-files.check` の `required_paths` を同じ commit で直す。** pdh-update はこれらを毎回まるごと上書きするので、**消失は差分マージでは検出できない**（この check だけが検出する）。⚠ **この check は列挙した path しか守らないので、足し忘れたものは消えても落ちない。**対象は `.claude/skills/` の実体・`.agents/skills/` の symlink・`.claude/agents/` と `.codex/agents/` の定義の 4 か所すべて
 - **上書きされないテンプレート（`.ticket-config.yaml` / `CLAUDE.md` / `test-all.sh` 等、project カスタマイズを保持するファイル）に項目を追加・変更したら、`INSTALL.md`「既知の移行手順」に冪等な確認コマンド付きで追記する。** これらは pdh-update の diff マージ任せで、既存プロジェクトに確実には届かない。skill（常に上書き）だけが diff 伝播を信用してよい
 
 ## どこに書くかの判断（CLAUDE.md / PDH-AGENTS.md / skill）

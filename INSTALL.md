@@ -73,7 +73,7 @@ bash ticket.sh init
 | `tmp/pdh/templates/.ticket-config.yaml` | `.ticket-config.yaml` | ticket.sh 設定 |
 | `tmp/pdh/templates/test-all.sh` | `scripts/test-all.sh` | テスト一括実行スクリプト |
 | `tmp/pdh/templates/fast-checks.sh` | `scripts/fast-checks.sh` | 決定論的 fast-check ランナー（宣言形式の grep 不変条件。test-all の最初の軽量ステージ） |
-| `tmp/pdh/templates/checks/` | `scripts/checks/` | fast-check レジストリ（README、汎用pattern例、source 1500行/test 2500行の例。プロジェクトに合わせて調整/削除）。⚠ **`example-required-pdh-files.check` だけは «調整して残す» もの** — PDH 配布物の消失を検出する唯一の手段で、使わない skill の行を外して使う |
+| `tmp/pdh/templates/checks/` | `scripts/checks/` | fast-check レジストリ（README、汎用pattern例、source 1500行/test 2500行の例。プロジェクトに合わせて調整/削除）。⚠ **`required-pdh-files.check` は `example-` を持たない** — 見本ではなく、**残して使うもの**である（PDH 配布物の消失を検出する唯一の手段）。既定で全部入っているので、使わないもの（Codex CLI を使わないなら `.agents/skills/` と `.codex/agents/`、tmux Director を使わないなら `tmux-director`）の行を外して使う |
 | `tmp/pdh/templates/dev-server.sh` | `scripts/dev-server.sh` | PDH verify / human-review 用の開発サーバ入口 |
 | `tmp/pdh/templates/seed-pdh-verify.sh` | `scripts/seed-pdh-verify.sh` | PDH verify / human-review 用のローカル seed hook |
 | `tmp/pdh/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | `ticket-local-test` 実行スクリプト（CI には含めない） |
