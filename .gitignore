@@ -10,3 +10,7 @@ CLAUDE.local.md
 # Do not let this outer pdh repo track its files (causes nested-repo
 # diff noise on every status). Treat it as an opaque sub-checkout.
 pdh-flow/
+
+# decision.hanger の発行 client（git 管理外）
+decision-board.sh
+.decision-board.yaml
