@@ -121,10 +121,13 @@ fresh agent（claude opus）を腕ごと・巡ごとに別個体で 4 回。
 | claude opus | ✓ | ✓ | ✓ | **✗** | 誤検出なし | 1 |
 | codex `gpt-5.6-luna` / max | ✓ | **✗** | ✓ | ✓ | 誤検出なし | 1 |
 | claude sonnet | ✓ | **✗** | ✓ | ✓ | 誤検出なし | 1 |
+| codex `gpt-5.6-sol` / max | ✓ | **✗** | ✓ | ✓ | 誤検出なし | 1 |
+| codex `gpt-5.6-luna` / high | ✓ | **✗** | ✓ | **✗** | 誤検出なし | **2** |
+| codex `gpt-5.6-luna` / xhigh | ✓ | **✗** | ✓ | **✗** | 誤検出なし | **2** |
 
 ⚠ **opus と luna は別々の fixture で落とした。**「上ほど良い」は成り立たない。**1 つの fixture で model を語ると逆の結論が出る** — 図書館だけを見れば opus が強く、`calc` だけを見れば luna が強い。
 
-⚠ **effort を上げると悪くなる。**`gpt-5.6-sol` は high で 4/4、max で AC 7 を落とした。
+⚠ **effort の効く向きも model ごとに逆である。**`gpt-5.6-sol` は high で 4/4、max で AC 7 を落とす。`gpt-5.6-luna` は逆で、high と xhigh がどちらも 2 見逃し、**max でだけ `calc` AC 4 を拾う。**xhigh は high と同じ結果で、間が効いていない。
 
 1 本あたりの消費は sol/high ≈ 10.6k tok、luna/max ≈ 12.1k tok で、**仕事量に差はない**（max は思考量が増えるぶん多い）。差は単価だけである。
 
