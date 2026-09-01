@@ -40,6 +40,7 @@
 - [x] **発行前の手動確認の文面を hanger-cloudflare へ渡した**（こちらから書き込めないため。skill には置けない — skill からブラウザは開けない）
 - [x] **今日の 3 件を `evals/examples.md` へ記録**
 - [x] **`check-board-render.sh`（A〜K 全 PASS）と `tools/selftest.sh` と `test-all.sh` を回した**。⚠ 途中で `check-board-render.sh` 自身の bash 3.2 バグ（空配列展開）を見つけて直した
+- [x] **#21 AC 読み手の巡回の止め時** — `_flow.md` へ 1 文（全件の初見は 1 回 / 同じ AC が 2 巡続けて復元できなければ承認者へ渡す）。提案の «最大巡回数» は採らない — 止め時の半分（書き直した分だけを渡す）は既に `_flow.md:72` にあり、欠けていたのは «書き直しでも閉じないときの出口» だけだった。数は `_review.md` の «2 attempt で再発したら escalate» から引いた。置き場所は Director 側 — worker は自分の 1 回分しか知らない。⚠ **実測の 3 巡目（AC 全件を渡し直して出た指摘）が役の範囲内だったかは未確認**。llmhub 側の ticket を読めないため、issue に書いて渡した
 
 ## 済み（消さずに残す）
 
