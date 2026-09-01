@@ -139,8 +139,6 @@ read-only taskは並行Review Agentへ、write taskは1人のCoding Engineerへ�
 
 workerのengineとmodelはprojectのrole規約に従い、最小能力の軽量modelへ落とさない。 spawn promptの必須項目は`PDH-AGENTS.md`「Worker Instructions」に従う（レンズ1例外を含む）。
 
-⚠ **AC読み手（`pdh-ac-reader`）は、見逃す欠落もreasoning effortの効く向きもmodelごとに違う**（`gpt-5.6-sol`はhighからmaxへ上げると検出が落ち、`gpt-5.6-luna`はmaxでだけ拾った）。**測った範囲で見逃しが最少だったのは`gpt-5.6-sol`の既定effort。**
-
 ### サブエージェント委譲ルール
 
 - review系workerはread-onlyにする
