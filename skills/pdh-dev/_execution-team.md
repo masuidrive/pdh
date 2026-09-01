@@ -139,7 +139,7 @@ read-only taskは並行Review Agentへ、write taskは1人のCoding Engineerへ�
 
 workerのengineとmodelはprojectのrole規約に従い、最小能力の軽量modelへ落とさない。 spawn promptの必須項目は`PDH-AGENTS.md`「Worker Instructions」に従う（レンズ1例外を含む）。
 
-⚠ **AC読み手（`pdh-ac-reader`）だけは «上を選べば良くなる» が成り立たない。**この役の仕事は書かれていない前提を埋めないことなので、**推論を伸ばすほど欠落を自分の知識で埋めて «復元できた» と判定する。最上位modelや最大reasoning effortを割り当てない。**（上書き例: claude opus か codex gpt-5.6-sol の既定effortでは仕込んだ欠落3件を全件検出したが、gpt-5.6-solのeffortをmaxへ上げた腕とgpt-5.6-lunaの両effortは同じ1件を取りこぼした。⚠ 各条件1個体の測定であり、model名は時間で古びる。**判断の根拠はmodel名ではなく «推論を伸ばす方向は不利» の向きである。**）
+⚠ **AC読み手（`pdh-ac-reader`）だけは «上を選べば良くなる» が成り立たない。**この役の仕事は書かれていない前提を埋めないことなので、**推論を伸ばすほど欠落を自分の知識で埋めて «復元できた» と判定する。最上位modelや最大reasoning effortを割り当てない。**⚠ **軽量modelへ落とす話ではない** — 上の «最小能力の軽量modelへ落とさない» はこの役にも効く。**外すのは上端だけで、下端は測っていない。**（上書き例: claude opus か codex gpt-5.6-sol の既定effortでは仕込んだ欠落3件を全件検出したが、gpt-5.6-solのeffortをmaxへ上げた腕とgpt-5.6-lunaの両effortは同じ1件を取りこぼした。⚠ 各条件1個体の測定であり、model名は時間で古びる。**判断の根拠はmodel名ではなく «推論を伸ばす方向は不利» の向きである。**）
 
 ### サブエージェント委譲ルール
 
