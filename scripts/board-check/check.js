@@ -17,6 +17,7 @@ const CHECK_NAMES = {
   H: 'テーマ',
   I: 'details',
   J: '回答フォームの DOM 契約',
+  K: '像の注記',
 };
 
 function usageError(message) {
@@ -423,6 +424,56 @@ async function runDetails(browser, boardUrl, widths) {
   return result(failures.length ? 'fail' : 'pass', failures, 'fixture: broken-i.html');
 }
 
+// 像の注記（.fig-mark）は、承認者が «どこを見るか» を示す部品である。位置と札は
+// 静的検査では判定できない — class は正しく、属性も揃っていても、札が対象を覆えば
+// 意味が反転する。実際に描画して幾何で見る。
+async function runFigMark(browser, boardUrl, width) {
+  const handle = await newPage(browser, boardUrl, width);
+  const page = handle.page;
+  const marks = await page.evaluate(() => document.querySelectorAll('.fig-mark').length);
+  if (!marks) {
+    await closePage(handle);
+    return result('skip', ['この board には .fig-mark が無い'], 'fixture: broken-k.html');
+  }
+  const failures = await page.evaluate(() => {
+    const issues = [];
+    const wraps = [...document.querySelectorAll('.fig-mark-wrap')];
+    wraps.forEach((wrap, wi) => {
+      const img = wrap.querySelector('img');
+      const list = [...wrap.querySelectorAll('.fig-mark')];
+      if (!img) { issues.push(`像 ${wi + 1}: .fig-mark-wrap に img が無い`); return; }
+      const ir = img.getBoundingClientRect();
+      list.forEach((mark, mi) => {
+        const mr = mark.getBoundingClientRect();
+        const label = `像 ${wi + 1} の枠 ${mi + 1}`;
+        // 枠が像の外へ出ていれば、指している場所が像の中に無い。
+        if (mr.left < ir.left - 1 || mr.top < ir.top - 1 ||
+            mr.right > ir.right + 1 || mr.bottom > ir.bottom + 1)
+          issues.push(`${label}: 像の外へはみ出している`);
+        if (mr.width < 4 || mr.height < 4) issues.push(`${label}: 枠が小さすぎて見えない`);
+        // ⚠ 札は枠の «外» に出す。中に入ると、見せたい対象を札が覆う。
+        const b = mark.querySelector('b');
+        if (b) {
+          const br = b.getBoundingClientRect();
+          const insideX = br.left >= mr.left - 1 && br.right <= mr.right + 1;
+          const insideY = br.top >= mr.top - 1 && br.bottom <= mr.bottom + 1;
+          if (insideX && insideY) issues.push(`${label}: 札が枠の内側にあり、対象を覆う`);
+          if (br.width > mr.width + 1 && br.height > mr.height + 1)
+            issues.push(`${label}: 札が枠より大きい`);
+        }
+        // ⚠ 周囲を暗くする影は、枠が 2 つ以上あると重なって別の枠の中まで暗くする。
+        const shadow = getComputedStyle(mark).boxShadow;
+        if (list.length > 1 && shadow && shadow !== 'none')
+          issues.push(`${label}: 枠が複数あるのに box-shadow を使っている（影が重なる）`);
+      });
+    });
+    return issues;
+  });
+  if (handle.errors.length) failures.push(...handle.errors.map(error => `注記の描画中: ${error}`));
+  await closePage(handle);
+  return result(failures.length ? 'fail' : 'pass', failures, `幅 ${width}px`);
+}
+
 async function runAnswerForm(browser, boardUrl, width) {
   const handle = await newPage(browser, boardUrl, width);
   const page = handle.page;
@@ -573,6 +624,7 @@ async function main() {
     results.H = await runTheme(browser, boardUrl, config.widths[0]);
     results.I = await runDetails(browser, boardUrl, config.widths);
     results.J = await runAnswerForm(browser, boardUrl, config.widths[0]);
+    results.K = await runFigMark(browser, boardUrl, config.widths[0]);
   } finally {
     await browser.close();
   }

@@ -196,6 +196,14 @@ if ! awk -v images="$images" '
             else print desc "\t" substr(src, comma + 1) >> images
           }
         }
+        if ((has_class(classes, "board") || has_class(classes, "deck")) && has_attr(token, "data-board-id") && trim(attr(token, "data-board-id")) != "")
+          has_board_id = 1
+        if (has_class(classes, "deck")) {
+          has_deck = 1
+          if (trim(attr(token, "id")) == "deck") deck_id_ok = 1
+        }
+        if (has_attr(token, "data-path")) has_path = 1
+        if (has_attr(token, "data-host-input")) has_host_input = 1
         if (has_class(classes, "answer-choice")) {
           if (!has_attr(token, "data-q") || trim(attr(token, "data-q")) == "") add_issue("answer", desc ": data-q is missing")
           if (!has_attr(token, "data-label") || trim(attr(token, "data-label")) == "") add_issue("answer", desc ": data-label is missing")
@@ -257,6 +265,13 @@ if ! awk -v images="$images" '
         add_issue("reference", toc_refs[href] " -> " href " (目次の宛先は <section id> にする)")
     }
     if (has_data_q) {
+      # board.js は [data-board-id] を起点に探す。無いと最初の 2 行で return するので、
+      # 選択も進捗も貼り戻し文も «静かに» 動かない。属性が揃っていても死ぬ唯一の形。
+      if (!has_board_id) add_issue("answer", "[data-board-id] is missing on the board root (board.js does nothing without it)")
+      # deck.js は getElementById("deck") を前提にする。class だけでは動かない。
+      if (has_deck && !deck_id_ok) add_issue("answer", ".deck needs id=\"deck\" (deck.js looks it up by id)")
+      # host-setup は [data-host-input] が無いと確認 URL を作らず、path だけが残る。
+      if (has_path && !has_host_input) add_issue("answer", "[data-path] exists but [data-host-input] is missing (the URL is never built)")
       if (!has_output) add_issue("answer", "textarea[data-answer-output] is missing")
       if (!has_progress) add_issue("answer", ".answer-progress is missing")
       if (!has_copy) add_issue("answer", "[data-copy-answer] is missing")

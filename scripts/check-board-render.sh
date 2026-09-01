@@ -39,7 +39,9 @@ run_check() {   # $1 = fixture 名, $2 = --config を付けるか
   local args=()
   [ "$2" = "config" ] && args=(--config "$OWN_FIXTURES/selftest.json")
   set +e
-  "$NODE_BIN" "$ROOT/scripts/board-check/check.js" "$TMP/$1.html" "${args[@]}" \
+  # bash 3.2 (macOS) は set -u のもとで空配列の ${a[@]} 展開が unbound variable になる。
+  # ${#a[@]} は 0 を返して問題ないので、展開だけを ${a[@]+"${a[@]}"} で守る。
+  "$NODE_BIN" "$ROOT/scripts/board-check/check.js" "$TMP/$1.html" ${args[@]+"${args[@]}"} \
     >"$TMP/$1.out" 2>&1
   local st=$?
   set -e
@@ -50,11 +52,11 @@ run_check() {   # $1 = fixture 名, $2 = --config を付けるか
 cp "$SHIPPED_FIXTURES/pixel.svg" "$OWN_FIXTURES/" 2>/dev/null || true
 build good "$SHIPPED_FIXTURES"
 build broken-j "$SHIPPED_FIXTURES"
-for f in broken-a broken-d broken-h broken-i; do build "$f" "$OWN_FIXTURES"; done
+for f in broken-a broken-d broken-h broken-i broken-k; do build "$f" "$OWN_FIXTURES"; done
 rm -f "$OWN_FIXTURES/pixel.svg"
 
 if run_check good plain; then
-  echo 'PASS good: check.js A〜J'
+  echo 'PASS good: check.js A〜K'
 else
   echo 'FAIL good: check.js が成功しませんでした' >&2; cat "$TMP/good.out" >&2; exit 1
 fi
@@ -66,9 +68,10 @@ expected_for() {
     broken-h) echo 'H. テーマ' ;;
     broken-i) echo 'I. details' ;;
     broken-j) echo 'J. 回答フォームの DOM 契約' ;;
+    broken-k) echo 'K. 像の注記' ;;
   esac
 }
-for f in broken-a broken-d broken-h broken-i broken-j; do
+for f in broken-a broken-d broken-h broken-i broken-j broken-k; do
   if run_check "$f" config; then
     echo "FAIL $f: 壊した fixture が成功しました" >&2; cat "$TMP/$f.out" >&2; exit 1
   fi

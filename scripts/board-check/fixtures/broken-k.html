@@ -1,0 +1,17 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>broken-k</title>
+<style>
+  .fig-mark-wrap{position:relative;display:block}
+  .fig-mark{position:absolute;box-sizing:border-box;left:var(--x);top:var(--y);width:var(--w);height:var(--h);
+    border:2px solid #17657f;box-shadow:0 0 0 9999px rgba(0,0,0,.18)}
+  /* ⚠ わざと壊す: 札を枠の «内側» に置く（対象を覆う形） */
+  .fig-mark>b{position:absolute;top:2px;left:2px;background:#17657f;color:#fff;font-size:.72rem;padding:0 .4rem}
+</style></head><body>
+<main class="board" data-board-id="broken-k">
+  <figure class="fig" id="shot-x">
+    <a class="fig-mark-wrap" href="#shot-x">
+      <img src="data:image/gif;base64,R0lGODlhZABkAIAAAMzMzP///yH5BAAAAAAALAAAAABkAGQAAAIhhI+py+0Po5y02ouz3rz7D4biSJbmiabqyrbuC8fyTNcFADs=" alt="試験用の像" width="300" height="300">
+      <span class="fig-mark" style="--x:10%;--y:10%;--w:20%;--h:8%"><b>1 覆う札</b></span>
+      <span class="fig-mark" style="--x:10%;--y:60%;--w:20%;--h:8%"><b>2 影が重なる</b></span>
+    </a>
+  </figure>
+</main></body></html>

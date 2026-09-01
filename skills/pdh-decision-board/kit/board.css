@@ -443,6 +443,31 @@ h2.stuck{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* 貼り付
    閉じるのは overlay のどこを押してもよい（href が元の figure へ戻す）。Esc は board.js の上乗せ。
    ⚠ デッキでは .shot-zoom を .deck の «外» に置く。面の中身（.p > .in）には自動縮小の
    transform が掛かるため、その中の fixed は viewport ではなく面に張り付く。 */
+/* 像の上に «見るべき場所» を四角で重ねる。画像は加工しない — 加工すると原寸
+   overlay 側と食い違い、板の外へ持ち出された像だけが注記入りになる。
+   位置は % で書く。像の実寸が変わっても、同じ場所を指したままになる。 */
+.fig-mark-wrap { position: relative; display: block; }
+.fig-mark {
+  position: absolute; box-sizing: border-box;
+  left: var(--x); top: var(--y); width: var(--w); height: var(--h);
+  border: 2px solid var(--accent); border-radius: 4px;
+  /* ⚠ 周囲を暗くする影は使わない。枠が 2 つ以上あると影が重なり、
+     «見せたい» はずの別の枠の中まで暗くなる（実測して外した）。 */
+  pointer-events: none;
+}
+/* 番号の札。枠の «外» の上に出す。⚠ 枠の中へ入れない — 小さい対象では札が
+   対象そのものを覆う（実測: Delete Project ボタンが札で塗り潰された）。
+   札は折り返さない。折り返すと高さが増えて、やはり像へかぶる。 */
+.fig-mark > b {
+  position: absolute; bottom: 100%; left: -2px; margin-bottom: 2px;
+  background: var(--accent); color: var(--paper);
+  font-size: .72rem; line-height: 1.6; font-weight: 700;
+  padding: 0 .4rem; border-radius: 3px;
+  white-space: nowrap;
+}
+/* 枠が像の上端に近くて札が像の外へ出るときだけ、下へ回す。 */
+.fig-mark.fig-mark-below > b { bottom: auto; top: 100%; margin: 2px 0 0; }
+
 .shot-open { display: block; cursor: zoom-in; }
 .shot-zoom {
   display: none;

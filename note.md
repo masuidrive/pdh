@@ -35,6 +35,12 @@
 - [x] **stage=skill 化 Phase 2** — `_flow.md` の PDH-implement / PDH-verify を Director 専用へ（整合性 gate + 完了チェックは `pdh-coding` へ移動、移動元 sweep 済み）
 - [x] **stage=skill 化 Phase 4** — fresh subagent（実運用と同じ Opus。ユーザ指定）が AC 裏取り役で `pdh-verifying` を読み、合成入力のみの AC を NOT VERIFIED・反証 1 回の欠落・off-by-one の可能性まで指摘し、AC 不可侵を遵守。指示の破綻なし
 
+- [x] **kit の «無ければ静かに return» を `check-static.sh` へ** — 3 件（`[data-board-id]` / `.deck` の id / `[data-path]` と `[data-host-input]` の対）。反例で落ちることを確認
+- [x] **描画検査に `K. 像の注記` を新設** — 枠のはみ出し・札の位置と大きさ・影の重なり。反例 fixture `broken-k.html` つき。⚠ **実物の板の欠陥（札が枠より大きい）を実際に捕まえた**
+- [x] **発行前の手動確認の文面を hanger-cloudflare へ渡した**（こちらから書き込めないため。skill には置けない — skill からブラウザは開けない）
+- [x] **今日の 3 件を `evals/examples.md` へ記録**
+- [x] **`check-board-render.sh`（A〜K 全 PASS）と `tools/selftest.sh` と `test-all.sh` を回した**。⚠ 途中で `check-board-render.sh` 自身の bash 3.2 バグ（空配列展開）を見つけて直した
+
 ## 済み（消さずに残す）
 
 - [x] ①-B AC の 1 文からの導出 + 1 問判定 + 復元テスト（`04bf8de` / `f1232c0` / `29fd564`）
