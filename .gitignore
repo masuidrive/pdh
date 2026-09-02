@@ -14,3 +14,4 @@ pdh-flow/
 # decision.hanger の発行 client（git 管理外）
 decision-board.sh
 .decision-board.yaml
+evals/private/
