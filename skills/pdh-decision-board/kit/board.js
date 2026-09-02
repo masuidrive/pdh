@@ -1,7 +1,7 @@
 /* pdh-decision-board kit — board.js
    回答フォームの動作（選択・メモ・進捗・貼り戻し文の生成・コピー）。
    文書版とデッキ版で «同じ 1 つ» を使う。board ごとにロジックを書き換えない。
-   規則の本体は ../render-html-common.md「状態と同期」「コピーは 3 段で受ける」。 */
+   規則の本体は ../html.md「状態と同期」「コピーは 3 段で受ける」。 */
 (() => {
   const root = document.querySelector('[data-board-id]');
   if (!root) return;

@@ -4,7 +4,7 @@
    色・面（bg/paper/fill）・寸法の基準 token は tokens.css にしか定義しない —
    ここで再定義すると、明暗どちらかだけ直したときに配色がズレる（v1 で実際に二重化した）。
    デッキ版は、このファイルを読み込んだ«後ろ»に deck.css を重ねる。
-   規則は ../render-html-common.md と ../create-doc.md にある。食い違ったら規則に従う。 */
+   規則は ../html.md にある。食い違ったら規則に従う。 */
 
 /* ---------- board 固有の組版 token ----------
    tokens.css に無い文字階調と幅だけをここに置く。tokens.css と同名の token を書かない。 */
@@ -40,7 +40,7 @@ body {
 .board, .deck { line-break: strict; overflow-wrap: break-word; }
 .board pre, .deck pre { line-break: strict; white-space: pre-wrap; }
 
-/* 帯は下 40% だけ。全面を塗らない（render-html-common.md「強調」）。 */
+/* 帯は下 40% だけ。全面を塗らない（html.md「強調」）。 */
 mark.k {
   color: inherit;
   background: linear-gradient(transparent 60%, var(--mark) 60%);
@@ -77,7 +77,7 @@ mark.k {
   margin-block: 0 calc(var(--u) * 8);
 }
 /* h2 だけ上端へ固定する。表が裏を通っても scroll 範囲を増やさない box-shadow で
-   背景を左右へ伸ばす（create-doc.md）。h3 まで固定すると狭い画面の本文が減る。 */
+   背景を左右へ伸ばす（html.md）。h3 まで固定すると狭い画面の本文が減る。 */
 .board h2 {
   position: sticky;
   top: 0;
@@ -168,7 +168,7 @@ a.shot-open, a.mapcell, a.shot-zoom, .lightbox-close { color: inherit; text-deco
   background: var(--paper);
 }
 /* 推奨・注意は «枠と小さなバッジ» で示し、塗らない。
-   塗り（背景色）は «選ばれている» だけの印（render-html-common.md）。
+   塗り（背景色）は «選ばれている» だけの印（html.md）。
    ここで塗ると、回答フォームで選択中のカードと見分けが付かなくなる。 */
 .card.rec { border-color: var(--accent); }
 .card.care { border-color: var(--warn); }
@@ -251,7 +251,7 @@ a.shot-open, a.mapcell, a.shot-zoom, .lightbox-close { color: inherit; text-deco
   font-weight: 700;
 }
 
-/* 本文中の AC 参照は <button popovertarget> + <span popover>（create-doc.md）。
+/* 本文中の AC 参照は <button popovertarget> + <span popover>（html.md）。
    popover 非対応環境では参照が開かないだけで、本文は壊れない。 */
 .acref {
   appearance: none;
@@ -280,7 +280,7 @@ a.shot-open, a.mapcell, a.shot-zoom, .lightbox-close { color: inherit; text-deco
 
 /* ---------- v2 部品（steps / timeline / compare / quote / fig / mermaid） ----------
    primitives.css（見本ページ）から移動した共有部品。色・幅は token のみで書く。
-   使い方の規則は ../create-doc.md「v2 部品」。 */
+   使い方の規則は ../html.md「v2 部品」。 */
 /* steps — 順番が意味を持つ列挙（依存順・段階承認・確認手順） */
 ol.steps{list-style:none;margin:0 0 calc(var(--u)*5);padding:0;max-width:var(--measure);counter-reset:step}
 ol.steps>li{position:relative;margin:0;padding:0 0 calc(var(--u)*5) calc(var(--u)*10);counter-increment:step}

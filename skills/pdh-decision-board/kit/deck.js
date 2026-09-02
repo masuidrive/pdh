@@ -1,6 +1,6 @@
 /* pdh-decision-board kit — deck.js
    2 軸デッキの動作（採番・面の移動・右下の地図・端の三角・押して送る・自動縮小）。
-   規則の本体は ../create-slides.md。列は .deck-col、面は .p、地図は #map を前提にする。 */
+   規則の本体は ../html.md。列は .deck-col、面は .p、地図は #map を前提にする。 */
 (function () {
   var deck = document.getElementById("deck");
   var cols = Array.prototype.slice.call(deck.querySelectorAll(".deck-col"));
@@ -83,7 +83,7 @@
     cells[a.dataset.for] = a;
   });
 
-  // threshold 0.6 は移動途中に 2 面が同時選択されにくい実測由来の目安（create-slides.md）。
+  // threshold 0.6 は移動途中に 2 面が同時選択されにくい実測由来の目安（html.md）。
   var current = panes[0];
   var io = new IntersectionObserver(function (entries) {
     entries.forEach(function (e) {
@@ -118,7 +118,7 @@
   }
 
   // 横に動いたら、離れた列を一番上へ戻す。来る列をその場で戻すと目の前で内容が飛ぶ。
-  // 初回読み込みでは戻さない — #p3-2 のような直接参照を壊すため（create-slides.md）。
+  // 初回読み込みでは戻さない — #p3-2 のような直接参照を壊すため（html.md）。
   var lastCol = 0, movedOnce = false;
   deck.addEventListener("scroll", function () {
     var ci = Math.round(deck.scrollLeft / deck.clientWidth);

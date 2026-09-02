@@ -1,7 +1,7 @@
 /* pdh-decision-board kit — deck.css
    2 軸デッキ（html-2d-deck）の組版。⚠ 単独では使わない — board.css を先に読み込み、
    その«後ろ»へこのファイルを重ねる。色・面・寸法の基準 token は tokens.css、組版 token は board.css が定義する。
-   規則は ../create-slides.md にある。食い違ったら規則に従う。 */
+   規則は ../html.md にある。食い違ったら規則に従う。 */
 
 body { line-height: var(--lh-body); }
 
@@ -12,7 +12,7 @@ body { line-height: var(--lh-body); }
 .deck { --deck-measure: 62em; }
 
 /* ---------- 2 軸の scroll 構造 ---------- */
-/* 横 = 決めるための主線、縦 = 確かめるための裏付け（create-slides.md「2 軸の意味」）。 */
+/* 横 = 決めるための主線、縦 = 確かめるための裏付け（html.md「2 軸の意味」）。 */
 .deck {
   display: flex;
   height: 100dvh;
@@ -147,7 +147,7 @@ body { line-height: var(--lh-body); }
 }
 
 /* 推奨のかたまり。推奨は «枠とバッジ» で示し、塗らない — 塗り（背景色）は
-   回答フォームで «選ばれている» だけの印（render-html-common.md）。 */
+   回答フォームで «選ばれている» だけの印（html.md）。 */
 .rec {
   border: 1px solid var(--accent);
   border-radius: calc(var(--u) * 2);
@@ -216,7 +216,7 @@ body { line-height: var(--lh-body); }
 .acrow { border-bottom: 1px solid var(--line); padding: calc(var(--u) * 3) 0; max-width: var(--deck-measure); }
 .acrow .id { color: var(--accent); font-weight: 700; margin-right: .5em; }
 
-/* 下に面がある案内。矢印だけでなく «何を確かめられるか» を語で書く（create-slides.md）。 */
+/* 下に面がある案内。矢印だけでなく «何を確かめられるか» を語で書く（html.md）。 */
 .down {
   color: var(--muted);
   font-size: var(--text-sm);
@@ -249,7 +249,7 @@ figure.shot { margin: 0 0 calc(var(--u) * 4); }
   /* ⚠ class 名を `aside` にしているのは、汎用の `.side`（退けた案の枠）と
      衝突したため。`figure.shot.side` と書いたら `.side { border: 1px;
      padding: 16px 20px }` も当たり、図の «外側» に枠と余白が付いて、その内側で
-     図がさらに縮んでいた（2026-08-18）。create-slides.md「同じ一般名の class を
+     図がさらに縮んでいた（2026-08-18）。html.md「同じ一般名の class を
      使わない。部品の役割を含む名前を付ける」のとおり。 */
   figure.shot.aside {
     float: inline-end;
@@ -398,7 +398,7 @@ figure.shot figcaption {
   .nums { gap: calc(var(--u) * 3); }
 
   /* 表は横に切らず、1 行を 1 枚のカードにする。見出しの語は deck.js が
-     各セルの data-label へ写す（手で複製しない — create-slides.md）。 */
+     各セルの data-label へ写す（手で複製しない — html.md）。 */
   .tw { overflow-x: visible; }
   .tw table, .tw tbody, .tw tr, .tw td { display: block; width: auto; max-width: 100%; }
   .tw thead { display: none; }
@@ -423,7 +423,7 @@ figure.shot figcaption {
 
 /* ---------- 4 辺の三角 — 押せる向きだけ出す ---------- */
 /* 三角は低い不透明度 + pointer-events: none。click の方向判定は座標で行い、
-   三角自体を hit area にしない（create-slides.md「4 辺の三角」）。 */
+   三角自体を hit area にしない（html.md「4 辺の三角」）。 */
 .edge {
   box-sizing: border-box;
   position: fixed;

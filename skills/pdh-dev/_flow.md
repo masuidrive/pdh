@@ -2,143 +2,71 @@
 
 ## 前提
 
-- 最初に`./ticket.sh help`を実行してticket操作を確認する
-- 仕様変更時はcodeやreviewを続ける前にticket file（`ticket.sh start`/`restore`出力の`ticket:`パス。互換symlink: `current-ticket.md`）のACと確定判断を最新化する
-- local contextで解ける論点を先に洗い出し、localでは解けないblockerだけを短く相談する
+`./ticket.sh help` を最初に実行する。各 stage の入口で note の Status をその stage 名へ更新する。仕様が変わったら、code と review を続ける前に ticket の AC と確定判断を更新する。
 
----
+## PDH-open
 
-## PDH-open. Ticket を開く
+1. `./ticket.sh start`/`restore` 出力の `ticket:` と `note:` パスを確認する。無ければ `list`、新規なら `new <slug>` → 標準構造の記入 → `start <ticket-name>`
+2. `What` の冒頭へ 1 文を書く — 「この ticket が終わると、〈誰〉が、いままでできなかった〈何〉をできるようになる」
+3. 各 AC はこの 1 文の分割としてだけ書く
+4. AC を note へ copy しない
 
-1. `./ticket.sh start`/`restore`出力の`ticket:`パス（互換symlink: `current-ticket.md`）を確認する
-   - 出力が無ければ`./ticket.sh list`を実行する。新規なら`./ticket.sh new <slug>`、標準構造の記入、`./ticket.sh start <ticket-name>`の順で開始する
-   - あれば内容を読んで続行する
-2. 新規記入では、ACを箇条書きで書き始める前に`What`の冒頭へ1文を書く — 「この ticket が終わると、〈誰〉が、いままでできなかった〈何〉をできるようになる」。各ACはこの1文の分割としてだけ書く。非退行のACだけは例外で、〈誰〉のみ必須とし「いままでできなかった」を求めない
-3. 同じ出力の`note:`パス（互換symlink: `current-note.md`）を確認する
-   - `./ticket.sh start`が生成した構造に従う
-   - ACをcopyしない。ACのsource of truthはticketだけとする
+## PDH-ticket-review
 
-## PDH-ticket-review. Ticket contract check
+1. Why を `product-brief.md` の目的へ接続する。矛盾する要求は実装せず提起する
+2. 未測定の数値目標・可否を条件にした分岐・文面のない「◯◯が入る」・対象を列挙しない件数は、調べて確定させてから AC に書く
+3. [_reference.md](_reference.md)「AC に書いてよいもの / 書いてはいけないもの」を AC 全件に当てる。書き換えた行にも当て直す
+4. 次を実体に当たって確定させる
+   - `Open Questions` 全件。残すのは承認者にしか決められないものと、実装しないと分からないものだけ
+   - 「未確認」「要確認」「見込み」「はず」「思われる」「かもしれない」の grep
+   - 「変更なし」「不変の見込み」と書いた contract / data model の行
+   - 影響レイヤーの grep。挙げなかったレイヤーが無関係かも確かめる
+   - 断定しているフィールド名・関数名・呼び出し元の数・件数
+   - 合意に使われた画像。決めている文言・色・導線・並び順を文字にも起こす
+5. 達成を確かめていない AC は、確かめる手段を note の `Required Probes` へ書き、次 stage の前に実行して結果を note へ書く
+6. 実装しないと分からない AC は「測って記録する＋この値を下回ったら止めて報告する」の形にする
+7. AC が触る consumer surface を note へ列挙する — UI、HTTP API、SDK、CLI、Config、生成物、観測 surface
+8. `What` 冒頭の 1 文と AC 全件だけを «書いていない agent» へ渡し、「終わると誰が何をできるようになるか」を復元させる（`pdh-verifying`「AC 読み手」）。復元できない AC を書き直し、書き直した分だけをもう一度渡す。指摘に応じて AC を足さない
+9. 未確定判断と未完了 Dependency は、着手前にユーザへ確認する
 
-1. WhyとAC
-   - Whyを`product-brief.md`の目的へ接続する。症状から翻訳した要求がbriefと矛盾する場合は実装せず提起する
-   - 曖昧なACを具体化する。具体化とは「いま調べれば確定できることを、調べてから書く」である。次の4つはいずれも調べれば消えるので、ACへ残さない — 未測定の数値目標／可否を条件にした分岐／文面のない「◯◯が入る」／対象を列挙しない件数
-   - **ACを承認者が読める言葉にする。**[_reference.md](_reference.md)「AC に書いてよいもの / 書いてはいけないもの」の判定を、**AC全件に当てる。**⚠ **この工程でACを書き換えたら、書き換え後の行にも当て直す**
-   - **調べる対象はACだけではない。ticket全体から次を機械的に洗い出し、書き手が測れるものは測って確定させる。**記憶に頼って「もう調べ終わった」と判定しない
+## PDH-ticket-human-review
 
-     | 調べる場所 | 確認すること |
-     |---|---|
-     | `Open Questions` | 全件出す。**書き手が測れるものは測って消す。**残すのは承認者にしか決められないものと、実装しないと分からないものだけ |
-     | 未確認を表す語 | 「未確認」「要確認」「見込み」「はず」「思われる」「かもしれない」をgrepする |
-     | contract / data model の記述 | 「変更なし」「不変の見込み」と書いた行を、実体を開いて確かめる |
-     | 影響レイヤーの列挙 | 挙げた各レイヤーをgrepする。**挙げなかったレイヤーが本当に無関係かも確かめる** |
-     | **ticketが事実として断定する文** | フィールド名・関数名・呼び出し元の数・件数を**元の実体に当たる。** |
-     | 合意に使われた画像 | **開く。**完成形のmockup・試作・変更前後の比較は、合意した文章と同じ重さで扱い、決めている文言・色・導線・並び順を文字にも起こす |
+1. `./ticket.sh check --require "Required Probes"` を実行する。未了があれば板を出さず先に測る（対象が無ければ `- [-] ... - skip: <理由>`）
+2. 会話へ渡す材料は `pdh-decision-board`（`ticket-gate.md`）に従う。AC は承認対象の文言そのままを引用する
 
-     **この洗い出しを`PDH-ticket-human-review`の材料づくりまで先送りしない。**
-   - ACごとに「この判定は、実装が対象を取り違えても満たせてしまわないか」を確認する
-   - ACごとに「達成できると確かめたか」を判定する。確かめていなければ、確かめる手段をnoteの`Required Probes`へ書き、**PDH-ticket-human-reviewの前に実行して結果をnoteへ書く**。実行できないもの（実装しないと分からないこと）は、ACに結果を書かず「測って記録する＋この値を下回ったら止めて報告する」の形にする。**未確認の結果をACの達成条件にしない**
-   - review済みやtest pass等のprocess要件はnote checklistへ移し、ACには観察可能なproduct動作だけを書く
-   - runtimeでUXまたはSecurity invariantを強制するticketは、runtime enforceの保証mechanismをACへ1行明記する
-   - ACが触るconsumer surfaceをnoteへ列挙する。カテゴリと具体項目：UI（画面・component・form・modal・navigation）、HTTP API（endpoint path・request/response schema・status code・error message）、SDK（class/method/type・例外・README example。複数言語ある場合は全言語）、CLI（command名・option/flag・help・exit code・出力フォーマット）、Config（設定キー・環境変数・default値・validation message）、生成物（OpenAPI・自動生成SDK model・docsページ・migration script）、観測surface（logフォーマット・metrics名・event payload・trace span属性）
-   - **ACが確定したら、読めるかを«書いていないagent»に測らせる。**`What`冒頭の1文とAC全件だけを渡し（ticket本体・note・実装・この工程の経緯は渡さない）、**「終わると誰が何をできるようになるか」を復元させる。**復元できないACが出たら書き直し、書き直した分だけをもう一度渡す。役割別指示は`pdh-verifying` skill「AC 読み手（復元テスト）」にある
-     - ⚠ **合格は«指摘ゼロ»ではない。**全ACが復元できれば合格で、そこで止める。**指摘へACを足して応えない** — ACを増やす必要が見えたら、それは復元テストの結果ではなく上の洗い出しの漏れなので、そちらへ戻す
-2. User journeyとregression
-   - **`What`冒頭の1文が、close直後にuserができることになっているかを確認する。**別の1文を新しく立てない
-   - main HEAD比で失われるuser-observable機能を1行判定する。ある場合はmigrationを本ticketへ含めるか、別ticketを同一close gateへbundleする
-3. `product-brief.md`のArchitectural Invariantsと矛盾しないことをticketへ1行宣言する
-4. Design DecisionsとOut-of-scopeが実装workerに十分か確認し、未確定判断は実装前にユーザへ確認する
-5. 未完了Dependencyがあれば着手せず報告する
+## PDH-implement
 
-## PDH-ticket-human-review. Ticket human review
+- 実装 worker の規則は `pdh-coding` skill にある。PM は委譲と検品だけを行う
+- 出口検品では、`scripts/test-all.sh` の command と最終合否の実出力が note へ verbatim で貼られ、pre-existing failure に根拠が添えてあることを確認する
 
-1. **`./ticket.sh check --require "Required Probes"` を実行し、測る工程が片付いていることを確認する。**未了があれば板を出さず、先に測る（測る対象が無いなら `- [-] ... - skip: <理由>` と書いて理由を残す）
-2. noteのStatusを`PDH-ticket-human-review`へ更新し、ticket修正点と未確定判断がnoteにあることを確認する
-3. 会話へ渡す材料は`pdh-decision-board` skill（実装前gateは`ticket-gate.md`）に従う。ACは承認対象の文言そのままを引用し、要約に置き換えない
-4. **ユーザの明示承認まで`PDH-implement`へ進まない。**
-5. 差し戻しは`PDH-ticket-review`へ戻し、ticket更新後にhuman reviewを再実行する
+## PDH-review
 
-## PDH-implement. 実装
+review 前に `git merge-base --is-ancestor origin/<base> HEAD` を確認し、false なら `git merge origin/<base> --no-edit` してから review する（base は ticket frontmatter の `branch`、未指定なら default branch）。
 
-前提は`PDH-ticket-human-review`でticket contractとACが承認済みであること。
+- 未記載の公開 surface、破壊操作、権限変更を機械的に列挙する。見つけたら Critical として human gate へ出す
+- 中間 attempt では、変更 file と import chain 上の影響 test だけを実行する
+- 完了条件は、最新 SHA で採用 Critical と Major が解消し、非採用理由が note にあること
 
-実装workerの規則は`pdh-coding` skillにある — 1つの作業文脈での完遂、論理単位commit、整合性gate、完了チェックを含む。PMは委譲と検品だけを行う。
+## PDH-verify
 
-### 実行指示の必須内容（worker への spawn prompt に含める）
+1. ticket の各 AC と note の process checklist を、1 項目ずつ確認して check する
+2. UI / API verify は `./scripts/dev-server.sh --seed` を使う（test の分け方は `pdh-coding`「テスト設計ルール」）
+3. AC 裏取り Agent が各 AC の実質達成を検証する。`NOT VERIFIED` の証拠を補完するまで進まない
+4. この ticket の差分に因果がある範囲で technical-reference.md を更新し、置き換えた記述・検査を削除する。該当なしなら note に 1 行残す。他 ticket 由来の記述・検査は消さず、削除候補として note に記録する
+5. 最終 HEAD で `scripts/test-all.sh` を再実行して実出力を note へ貼る。後続 commit や merge が影響し得る古い証拠は取り直す
+6. 外部 surface を consumer 視点で観察する（`pdh-verifying`「Surface Observer」）。純 backend は理由を note へ 1 行残して skip する
+7. AC check 済み ticket file を含めて commit する
 
-`_subagent-context.md`の共通contextと役割別指示にtask固有依頼を加える。土台を毎回書き写さない。
+## PDH-human-review
 
-### 出口検品（PM）
+1. verify までの証拠が commit 済みであることを確認する
+2. 会話へ渡す材料は `pdh-decision-board`（`close-gate.md`）に従う。未対応 finding は、全 attempt の `### Findings (PDH-review-N)` 表から判定が起票・記録のみ・棄却の行を抜き出す。確認用 URL は `./scripts/dev-server.sh` で用意する
 
-- `pdh-coding`「整合性 gate と完了チェック」の実施証跡がnoteにあるか — `scripts/test-all.sh`のcommandと最終合否の実出力がverbatimで貼られ、pre-existing failureに根拠が添えてあるか
-- 全test pass時だけ実装完了とする。1件でも失敗、未実行、環境不備なら完了扱いにしない
+## PDH-close
 
-## PDH-review. 品質検証 (実装後 review)
-
-review前にticket frontmatterの`branch`をbase branchとしてfetchし、未指定ならrepoのdefault branchへfallbackして、`git merge-base --is-ancestor origin/<base> HEAD`を確認する。 falseなら`git merge origin/<base> --no-edit`で取り込み、conflict解消後にreviewする。
-
-### 実装後 review 特有 gate
-
-- 独断の変更：implementorがAC、Out-of-scope、Architectural Invariantsを再合意なく変更していないか（規則は`.claude/skills/pdh-coding/SKILL.md`「ticket の変更は再合意で行う」にある）
-- scope逸脱：未記載の公開surface、破壊操作、権限変更を機械的に列挙する。見つけたらCriticalとしてhuman gateへ出す（実装済みであることを採用理由にしない）
-- commit cadence：`pdh-coding`「Commit cadence 契約」を満たすか。commit数はgateにしない
-- E2E：外部provider pathを実APIで確認したか。deferredなら明記したか
-
-### review 観点
-
-`pdh-reviewing` skillの網羅探索チェックリストに加え、product brief整合、AC、security、error handling、影響layer、検証手法を確認する。 Why E2E無バイアスlensとAC conformanceおよび妥当性lensをpersona matrix込みで実施し、結論の矛盾は前提差を確認して裁定する。
-
-### 修正ループ
-
-1. **直す前に、そのコードが正しく扱えていた入力を1つ実行して出力を記録する**（`pdh-coding` skill「指摘を直すとき、壊していないことを反例で固定する」）。直したあと同じ入力を流し、前後の出力を報告へ載せる
-2. 中間attemptでは変更fileとimport chain上の影響testだけを実行する
-
-完了条件は、最新SHAで採用CriticalとMajorが解消し、非採用理由がnoteにあること。未解消をユーザが受容してもPASSにせず、risk、理由、承認文を残す。
-## PDH-verify. 完了検証
-
-`VERIFIED`、`PASS`、AC check済みを報告する前に、対応stateがticket、note、git historyへ実在しcommit済みでなければならない。
-
-1. ticket file（`ticket.sh start`/`restore`出力の`ticket:`パス。互換symlink: `current-ticket.md`）の各ACを1項目ずつ確認してcheckする
-2. note file（同出力の`note:`パス。互換symlink: `current-note.md`）のprocess checklistを1項目ずつ確認してcheckする
-3. UIまたはAPI verifyは`./scripts/dev-server.sh --seed`を使う。dev-server / seed hookの契約は`PDH-AGENTS.md`「Dev Server And Seed」に、`application-test`と`ticket-local-test`の分け方と置き場所は`pdh-coding` skill「テスト設計ルール」に従う
-   - sandbox、端末path、local login等はlocal設定または一時commandで扱い、区別できなければ確認する
-4. AC裏取りAgentが各ACの実質達成を検証する（worker規則は`pdh-verifying`「AC 裏取り Agent」）。`NOT VERIFIED`の証拠を補完するまで進まない
-5. renameまたはdeleteがあれば全docをsweepし、旧name、path、URLの残骸を確認する
-6. **資産メンテナンス** — close前に恒久資産を現在形に保つ。この ticket の差分に因果がある範囲だけ触り、他ticket由来の記述・検査は消さず削除候補としてnoteに記録する
-   - technical-reference.mdとの突合: 因果がある記述を追記・上書きする。出荷済み挙動は確定事実としてその場で書く（承認待ちで先送りしない）。該当なしならnoteに「該当なし」と1行記録
-   - 再発の恒久検査化: 出荷済み不具合の修正なら、決定論検査（fast-check/lint/テスト）で再発を恒久検出できるか1回問う。追加できないなら理由をnoteに1行
-   - briefへの事実追記: 達成したDone項目・解消したOpen Questionsを反映する（方針変更はしない）
-   - 刈り込み: 自分の差分が置き換えた記述・検査を削除する（より強いゲートで守れるようになった検査の削除も含む）
-7. 最終HEADで`scripts/test-all.sh`を再実行して実出力をnoteへ貼る。後続commitまたはmergeが影響し得る古い証拠は取り直す
-8. 必要なticket noteとdocsは直接更新する
-9. human review直前に外部surfaceをconsumer視点で観察する（worker規則は`pdh-verifying`「Surface Observer」、観察方法と証拠の要件は`PDH-AGENTS.md`「Browser And Surface Checks」）
-   - 外部surfaceなしの純backendはskipできるが、理由をnoteへ1行残す
-   - blockerがあれば`PDH-implement`または`PDH-review`へ戻る
-10. AC check済みticket fileを含めてcommitする
-
-## PDH-human-review. 人間レビュー
-
-1. note Statusを`PDH-human-review`へ更新し、verifyまでの証拠がcommit済みであることを確認する
-2. 会話へ渡す材料は`pdh-decision-board` skill（close前gateは`close-gate.md`）に従う。未対応findingは、全attemptの`### Findings (PDH-review-N)`表を横断して判定が起票・記録のみ・棄却の行を抜き出して作る。ユーザ確認用のURLは`./scripts/dev-server.sh`で用意する
-3. **明示承認までcloseしない。**
-4. 差し戻しはimplementへ戻し、reviewから再走する。途中blockerは直ちに確認する
-
-## PDH-close. クローズ
-
-前提は`PDH-human-review`でのユーザ明示承認である。
-
-1. 承認内容とclose時点のmerge、push、deploy状態を記録する
-
-   ### 完了報告の必須要素
-
-   土台は`pdh-decision-board`（`close-gate.md`）の主線4面と裏付けの一覧と同じ。close報告では次を追加する。
-
-   - literalな1行目へ、user journeyで何ができるようになったかを書く
-   - 各ACのdata出所を報告する。user-facing ACが合成dataのみなら実data未確認のclose blockerとする
-   - main想定状態のuser journey実機証拠をUI screenshot、API response、SDK sample、CLI output等のsurface相応の形で示す
-   - merge直後に失うuser-observable機能をyesまたはnoで判定する。yesはdownstream復旧予定でもclose blockerとする
-   - 何がどう変わり何ができるかを専門語なしで1〜2行にする
-   - commit数等の内部mechanicsを価値要約へ並べず、注意事項だけNotesへ書く
-   - ticket候補は既定ゼロとする。実際に触れて見つけた欠陥、gap、deferredだけを、diff、note、test証拠とともに挙げる
-2. 差し戻し理由をDiscoveriesへ記録して`PDH-implement`へ戻り、修正後は`PDH-review`から再走する
-3. 承認後に`./ticket.sh close`を実行する
+1. 承認内容と、close 時点の merge、push、deploy 状態を記録する
+2. 完了報告は `pdh-decision-board`（`close-gate.md`）に次を加える
+   - 各 AC の data 出所。user-facing AC が合成 data のみなら close blocker とする
+   - merge 直後に失う user-observable 機能の yes / no。yes は downstream 復旧予定でも close blocker とする
+   - ticket 候補は既定ゼロとし、実際に触れて見つけた欠陥・gap・deferred だけを証拠とともに挙げる
+3. 承認後に `./ticket.sh close` を実行する

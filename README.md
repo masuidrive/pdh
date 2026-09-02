@@ -231,10 +231,7 @@ pdh/
       close-gate.md                  ← close 前 gate（達成の確認と close 承認）の差分
       ship-risk.md                   ← 保存されている形・外部契約を変える ticket だけ読む分冊
       final-check.md                 ← 完成検査（形・文・判断の 3 層）
-      answer-form.md                 ← 回答フォームの DOM・状態・発行前検査
-      render-html-common.md          ← HTML renderer 2 種が共有する CSS・DOM の実装規則
-      create-doc.md                  ← 1 枚の HTML 文書として組む renderer
-      create-slides.md               ← 横に読み進める HTML 2 軸デッキとして組む renderer
+      html.md                        ← HTML として組む規則（文書・回答フォーム・2 軸デッキ・発行前検査）
       risk-overlay.md                ← 基本規則を上書きする ticket の型
       kit/                           ← 板が読み込む CSS・JS と見本
       tools/                         ← 組み立てと静的検査（bash と awk だけ）
