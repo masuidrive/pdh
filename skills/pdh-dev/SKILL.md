@@ -14,6 +14,5 @@ description: "ticket を作る・開始する・進める開発ワークフロ�
 | `_reference.md` | 記録先・用語・AC の判定 |
 | `_execution-team.md` / `_subagent-context.md` | worker を spawn するとき |
 | `_collaboration.md` | blocker 時 |
-| `_principles.md` | 判断に迷ったとき |
 
 Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/pdh-dev/SKILL.md

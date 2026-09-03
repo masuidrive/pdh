@@ -1,110 +1,64 @@
 # PDH Dev — 実行モデル: Team (multi-agent CLI)
 
-このファイルはteamの役割と実行方法だけを定義する。フローとgateは`_principles.md`、`_reference.md`、`_flow.md`、`_review.md`、`_collaboration.md`を参照する。
+## 役割
 
----
+spawn する役は PM (Director)、Coding Engineer、QA Engineer、Devil's Advocate、Code Reviewer、AC 裏取り Agent、Surface Observer。各役の規則は `_subagent-context.md` が指す skill にある。
 
-## 役割定義
-
-- PM (Director)：進行管理、判断、統合、ユーザ報告を担い、判断とdispatchに専念する
-- Coding Engineer：`pdh-coding`に従い、1 agentでinvestigate、implement、testsを完遂する
-- QA Engineer：test、E2E、doc再生成などの機械的検証を担う
-- Devil's Advocate：実装後にuser視点の厳しいreviewを担う
-- Code Reviewer：実装後に品質、regression、認可漏れ、整合性をreviewする
-- AC裏取りAgent：`PDH-verify`で各ACの実達成をcode、test、noteから検証する
-- Surface Observer：consumer視点の実機で外部surfaceを観察する。純backendで外部変更なしならskipできる
-
-## PM の責務と禁止事項
-
-PMが行うこと：
-
-- review結果をtriageし、採否と修正方針を決める
-- severityだけで修正せず、AC、current diff、user journeyとの因果で採用、起票、記録のみ、棄却を決める
-- 修正前に複雑度差分を確認し、永続stateまたは公開surface追加案を削除、拒否、制約案と比較する
-- workerをspawnしてdispatchする
-- noteとticketの更新、commit、ユーザ報告を行う
-- ticket提出前とspawn prompt提出前に`_reference.md`の成果物self-checkを行う
-- worker結果を規則、ticket、diff、実コマンド出力、note証跡に従って検品し、遷移を判断する
-
-PMが行わないこと：
-
-- source codeの直接編集。Coding Engineerへ委譲する
-- testの直接実行。QAへ委譲する
-- doc再生成。QAへ委譲する
-- review後のcode修正。Coding Engineerへ委譲する
-- reviewer findingを未分類のままCoding Engineerへ渡すこと
-- 修正確認ごとに全diffを再reviewし、新規findingを掘り続けること
-
-### Director のモデル固定
-
-Directorは自分のengine、model、profile、reasoning effortを自律変更しない。当該作業でユーザが明示指定した場合だけ変更できる。実行基盤が自動変更した場合は事実を記録して報告し、Directorの要求または追認扱いしない。 worker割当変更をDirector自身のmodel変更の代用にしない。
+PM は source code の編集・test の実行・doc 再生成・review 後の修正を行わず、担当 worker へ委譲する。reviewer finding は判定（採用 / 起票 / 記録のみ / 棄却）を付けてから Coding Engineer へ渡す。ticket 提出前と spawn prompt 提出前に `_reference.md`「成果物セルフチェック」を行う。
 
 ## エンジン割り当て（既定 = main と同一 / プロジェクト規約で上書き）
 
-- worker engineは既定でmainと同一にする
-- per-role engineまたはmodelの上書きと混在は、project規約で明示された場合だけ許す
-- cross-model必須triggerでは、最低1 reviewを生成modelと異なるmodelへ割り当てる。不能時は`_review.md`の代替と理由をnoteへ残す
-- cross-delegateはCoding Engineerだけに許す。逆engine CLIの存在を確認し、session初回implement時に1回だけユーザへ確認し、その回答を以後のticketへ適用する
-- cross-delegate時もCoding Engineer以外はmainと同一engineを使う
-- 特定engineをworkflowへhardcodeしない
-- main engineが未指定で曖昧なときだけ、利用可能なCLIを確認してユーザへ「どちらで進めるか」を聞く。既指定なら聞かず、session中は同じengineを継続する。headless / CI文脈では、その実行系が定義する環境変数をmain engineとする
-
-### worker の reasoning effort
-
-- **Coding Engineer（実装 worker）を Opus 5 で動かすときは reasoning effort を `medium` にする。** 実装タスクの大半は「仕様が確定した機械的な変換」であり、そこに `high` 以上を充てても品質は上がらず所要時間とコストだけが増える。設計判断が要る場合は effort を上げるのではなく、実装前に ticket 側で判断を確定させる（`_flow.md` の ticket-review / human-review がその場）
-- 上げるのは**探索・判断・レビュー**の役割。architecture 検討、root cause の切り分け、review / verify は既定の effort（または明示的に高い effort）を使う
-- **Director 自身の effort は対象外**。上記「Director のモデル固定」が優先し、ユーザの明示指定なしに変更しない
-- モデル名は時間で古びる。ここで言う Opus 5 は「その時点で最上位の汎用 coding モデル」を指し、世代が変わったら読み替えて本節を更新する
+- worker engine は既定で main と同一にする。per-role の engine / model 上書きと混在は project 規約に明示された場合だけ許す
+- worker の model を最小能力の軽量 model へ落とさない
+- cross-delegate は Coding Engineer だけに許す。逆 engine CLI の存在を確認し、session 初回 implement 時に 1 回だけユーザへ確認して、その回答を以後の ticket へ適用する
+- main engine が未指定で曖昧なときだけ、利用可能な CLI を確認してユーザへ聞く。既指定なら聞かず session 中は継続する。headless / CI では、その実行系が定義する環境変数を main engine とする
+- Coding Engineer（実装 worker）を最上位クラスの汎用 coding モデルで動かすときは reasoning effort を `medium` にする。探索・判断・review の役（architecture 検討、root cause 切り分け、review / verify）は既定の effort を使う
 
 ## spawn 機構（engine 中立 = subprocess / 結果はファイル）
 
-workerはCLI subprocessで起動し、結果を専用fileで回収する。 workerが起動できない場合はDirector単独でstage完了扱いせず、中止、報告、またはユーザ確認へ切り替える。
-
-projectの実行profileとapproval policyを優先し、承認済みin-process subagent機構があれば優先する。**`--dangerously-*`系bypass flagは、ユーザまたはsessionが明示許可した場合だけ使う。**
+worker は CLI subprocess で起動し、結果を専用 file で回収する。承認済み in-process subagent 機構があれば優先する。**`--dangerously-*` 系 bypass flag は、ユーザまたは session が明示許可した場合だけ使う。**承認待ちが発生したら bypass せず、承認を得るか in-process 機構へ切り替える。
 
 ### worker prompt の組み立て
 
-promptは「共通context + 役割別指示 + task固有依頼」で組み立てる。共通contextは`_subagent-context.md`を使い、`<TICKET_FILE>`、`<NOTE_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`、`<TESTS_DIR>`、`<TMP_DIR>`を実値で埋める。必須項目は`PDH-AGENTS.md`「Worker Instructions」にある。reviewerへはさらに`_review.md`「レビュアーへの指示ルール」の項目を含める。
+prompt は「共通 context + 役割別指示 + task 固有依頼」で組み立てる。共通 context は `_subagent-context.md` を使い、`<TICKET_FILE>`、`<NOTE_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`、`<TESTS_DIR>`、`<TMP_DIR>` を実値で埋める。必須項目は `PDH-AGENTS.md`「Worker Instructions」にある。
 
-engineに配布のagent定義が配置されているとき（Claude Code: `.claude/agents/pdh-*.md`、Codex: `.codex/agents/pdh-*.toml`）は、in-process spawnで定義名を指定して起動する（実装は`pdh-coding-engineer`、reviewは`pdh-reviewer`/`pdh-reviewer-lens1`、QAは`pdh-qa`、verifyは`pdh-ac-verifier`/`pdh-surface-observer`、AC読み手は`pdh-ac-reader`）。定義が`_subagent-context.md`とskillへの参照を持つため共通contextと役割別指示の貼り付けは不要になり、promptはtask固有依頼だけでよい。ただし:
+- `<TMP_DIR>` は `ticket.sh start`/`restore` 出力の `tmp_dir:` パス、`<TESTS_DIR>` は同出力の `ticket_dir:` パス + `/tests/`（legacy flat layout では `tests/tickets/<id>/`）で導出する
+- `<RESULT_FILE>` は worker が file tool で書く成果物 file であり、stdout とは別のパス（例: `$d/result.md`）を worker ごとに割り当てる
+- レンズ1 reviewer には `<TICKET_FILE>`・`<NOTE_FILE>`・diff を渡さない。共通 context の該当 2 行は `(レンズ1のため非提供)` へ置き換え、役割別指示は「reviewer（レンズ1）」block を使い、Why の原文を prompt 本文へ転記する
+- ユーザ指定の reviewer 構成を省略・短縮・統合で代替しない。複数 reviewer 指定時は各 reviewer が同じ diff 全体を見る（レンズ1 を除く）
 
-- `PDH-AGENTS.md`「Worker Instructions」の必須項目と上記placeholderの実値は、従来どおりpromptへ含める
-- AC読み手（`pdh-ac-reader`）はread toolを持たないため、`pdh-verifying` skillの「AC 読み手（復元テスト）」節の本文をpromptへ転記する
-- read-only sandboxの定義で動く役（Codexのreviewer / AC裏取り / AC読み手）には`<RESULT_FILE>`を割り当てず、結果を最終messageで回収する
+配布の agent 定義が配置されているとき（Claude Code: `.claude/agents/pdh-*.md`、Codex: `.codex/agents/pdh-*.toml`）は、in-process spawn で定義名を指定して起動する（実装は `pdh-coding-engineer`、review は `pdh-reviewer`/`pdh-reviewer-lens1`、QA は `pdh-qa`、verify は `pdh-ac-verifier`/`pdh-surface-observer`、AC 読み手は `pdh-ac-reader`）。prompt は task 固有依頼だけでよいが、次は従来どおり含める。
 
-- `<TMP_DIR>`は`ticket.sh start`/`restore`出力の`tmp_dir:`パス、`<TESTS_DIR>`はそこには出力されないので同出力の`ticket_dir:`パス + `/tests/`（legacy flat layoutでは`tests/tickets/<id>/`）を規約で導出する。workerは`ticket.sh`を実行しないので、PMが埋めないとworkerはこのパスを知る手段がない
-- `<RESULT_FILE>`はworker自身がfile toolで書く成果物fileであり、stdout回収先とは別のパス（例: `$d/result.md`）を割り当てる。stdoutは診断用log（後述）
-- レンズ1 reviewerには`<TICKET_FILE>`と`<NOTE_FILE>`を渡さない。共通contextの該当2行は`(レンズ1のため非提供)`へ置き換え、役割別指示は「reviewer（レンズ1）」blockを使い、Whyの原文をprompt本文へ転記する。diffも渡さない
+- `PDH-AGENTS.md`「Worker Instructions」の必須項目と上記 placeholder の実値
+- AC 読み手（`pdh-ac-reader`）は read tool を持たないので、`pdh-verifying`「AC 読み手（復元テスト）」節の本文を prompt へ転記する
+- read-only sandbox の定義で動く役（Codex の reviewer / AC 裏取り / AC 読み手）には `<RESULT_FILE>` を割り当てず、結果を最終 message で回収する
 
-promptはfileへ書き出し、stdinでworkerへ渡す。
+prompt は file へ書き出し、stdin で worker へ渡す。
 
 ### 起動コマンド（engine 別・権限は環境規約に従う）
 
-承認待ちが発生したらbypassせず、ユーザ承認を得るか承認済みin-process機構へ切り替える。起動commandは割当engineに従い、run環境の認証を継承する。
-
 ```bash
-# claude（stdoutは診断log。成果物はworkerが<RESULT_FILE>=$d/result.mdへ書く）
+# claude（stdout は診断 log。成果物は worker が <RESULT_FILE>=$d/result.md へ書く）
 claude -p < "$promptfile" > "$d/stdout.log" 2> "$d/stderr.log"
 
-# codex（-oは最終messageの控え。成果物は同上）
+# codex（-o は最終 message の控え。成果物は同上）
 codex exec -o "$d/last-message.txt" < "$promptfile" > "$d/stdout.log" 2> "$d/stderr.log"
 ```
 
-回収は`<RESULT_FILE>`を読む。無ければ無言終了として扱い、`stdout.log`/`last-message.txt`/`stderr.log`の末尾から原因を診断する。
+回収は `<RESULT_FILE>` を読む。無ければ無言終了として扱い、`stdout.log`/`last-message.txt`/`stderr.log` の末尾から原因を診断する。
 
 ### main = Claude Code のときの codex worker 起動
 
-Claude CodeがmainでcodexをworkerへspawnするときはBashツールで直接実行する。codex plugin等の別経路があっても使わない。
+Bash ツールで直接実行する。codex plugin 等の別経路があっても使わない。
 
-- `run_in_background: true`で非同期にし、`timeout`は7200000（120分）にする
-- `-o <dir>/last-message.txt`で最終messageの控えをfileへ出し、stderrは`2> <dir>/stderr.log`へ分離する
-- **promptの渡し方は2通り。** 長文・複数段落・特殊文字・日本語主体ならshell quoting失敗を避けてfileへ書き出し`< <dir>/prompt.txt`で渡す。短くquotingが安全なものだけ引数で渡してよく、その場合だけstdinを`< /dev/null`で即EOFにする
-- worktree中のticketへ実行するときは`cd <worktree> && codex exec ...`の形にする（custom statusLineがある環境でcwdが毎回resetされる既知bug [anthropics/claude-code#31471](https://github.com/anthropics/claude-code/issues/31471) の回避）
-- 完了通知は軽量messageで届くので、`<RESULT_FILE>`だけReadする（通常~2KB）。stderr.logは失敗時に`tail -50`程度で部分読みし、`cat`で全部流し込まない
+- `run_in_background: true` で非同期にし、`timeout` は 7200000（120 分）にする
+- 長文・複数段落・特殊文字・日本語主体の prompt は file へ書き出し `< <dir>/prompt.txt` で渡す。短く quoting が安全なものだけ引数で渡してよく、その場合だけ stdin を `< /dev/null` にする
+- worktree 中の ticket へ実行するときは `cd <worktree> && codex exec ...` の形にする
+- 完了通知後は `<RESULT_FILE>` だけ Read する。stderr.log は失敗時に `tail -50` 程度で部分読みする
 
 ### 並行起動（必須パターン: `&` background + PID 配列 + wait + exit code）
 
-独立workerは同一Bash呼出し内でbackground並行起動し、PIDごとに`wait`してexit codeを回収する。各workerへ専用dirとresult fileを割り当て、同一fileへの同時書込みを避ける。
+独立 worker は同一 Bash 呼出し内で background 並行起動し、PID ごとに `wait` して exit code を回収する。
 
 ```bash
 # ⚠ 連想配列 (declare -A) を使わない — macOS 既定の bash 3.2 に無い
@@ -125,65 +79,13 @@ while read -r pid name; do
 done < "$pids"
 ```
 
-workerごとにrc、resultとstderrの`ls -l`、stderr末尾120行を診断証跡へ残す。 non-zero rcまたは空もしくは欠落resultでは、rcとstderrを併読して報告する。 spawn失敗時は単独続行しない。
+worker ごとに rc と stderr 末尾を診断証跡へ残す。non-zero rc または空・欠落 result では、rc と stderr を併読して報告する。
 
-同時worker数が多い場合はbatch分割して起動上限を設ける。 mainとworkerが同じengineならin-process並行spawnを使える。 cross-engineとheadless CIはsubprocessを使う。
-
-## チーム運用・サブエージェント運用
-
-### 原則
-
-read-only taskは並行Review Agentへ、write taskは1人のCoding Engineerへ割り当てる。 PMはsource codeを直接編集しない。
-
-### spawn のルール
-
-workerのengineとmodelはprojectのrole規約に従い、最小能力の軽量modelへ落とさない。 spawn promptの必須項目は`PDH-AGENTS.md`「Worker Instructions」に従う（レンズ1例外を含む）。
-
-### サブエージェント委譲ルール
-
-- review系workerはread-onlyにする
-- ユーザ指定reviewer構成を省略、短縮、統合で代替しない
-- 複数reviewer指定時は各reviewerが同じdiff全体を見て、担当分けだけで代替しない（レンズ1 reviewerは例外で、diffを渡さない）
-- 大規模検索、history調査、品質review、全test、doc再生成、実動確認はsubagentを優先する
-- subagent結果は要約、結論、失敗点、次actionだけに絞る
-- 並行reviewerに同じ`<RESULT_FILE>`を書かせず、workerごとに専用のresult fileを割り当てて各responseをPMが統合する
-
----
+同時worker数が多い場合はbatch分割して起動上限を設ける。
 
 ## team での各 PDH stage 実行手順
 
-### PDH-open: ticket を開く (PM が担当)
-
-PMは`_flow.md`の`PDH-open`に従い、ticketとnoteを確定する。
-
-### PDH-ticket-review: ticket contract check (PM が担当)
-
-PMはticket contractを整える。 AC承認は次のhuman reviewまで得ない。
-
-### PDH-ticket-human-review: 実装前の人間レビュー (PM が担当)
-
-PMが担当し、提示内容は`_flow.md`の`PDH-ticket-human-review`に従う。明示承認までimplementへ進まない。
-
-### PDH-implement: 実装
-
-PMはCoding Engineer 1人をspawnする。整合性gate後にQAをspawnして完了checkし、失敗はCoding Engineerへ戻す。
-
-### PDH-review: 品質検証
-
-初回reviewは1人以上を並行起動し、同一SHAのdiff全体を見せる（レンズ1 reviewerを除く）。 finding修正はCoding Engineer、test再実行はQAへ委譲する。 attempt運用と修正確認の範囲は`_review.md`に従う。
-
-### PDH-verify: 完了検証
-
-AC裏取りAgentを1人spawnし、各ACの実達成を検証させる。 Surface Observer前に`./scripts/dev-server.sh --seed`を実行し、外部surface変更時はObserverをspawnする。観察方法と証拠要件は`PDH-AGENTS.md`「Browser And Surface Checks」に従う。
-
-### PDH-human-review: 人間レビュー
-
-PMが担当し、提示内容は`_flow.md`の`PDH-human-review`に従う。明示承認までcloseへ進まない。
-
-### PDH-close: クローズ
-
-`PDH-human-review`承認後に`_flow.md`へ従い`./ticket.sh close`を実行する。
-
-### stage 遷移の宣言
-
-stageを移るたびにユーザへ宣言する（`_reference.md`「stage 遷移の宣言」）。
+- **PDH-implement**：Coding Engineer 1 人を spawn する。整合性 gate 後に QA を spawn して完了 check し、失敗は Coding Engineer へ戻す
+- **PDH-review**：初回 review は 1 人以上を並行起動し、同一 SHA の diff 全体を見せる（レンズ1 を除く）。finding 修正は Coding Engineer、test 再実行は QA へ委譲する。attempt 運用と修正確認の範囲は `_review.md` に従う
+- **PDH-verify**：AC 裏取り Agent を 1 人 spawn する。Surface Observer 前に `./scripts/dev-server.sh --seed` を実行し、外部 surface 変更時は Observer を spawn する
+- 上記以外の stage は PM が担当し、`_flow.md` に従う

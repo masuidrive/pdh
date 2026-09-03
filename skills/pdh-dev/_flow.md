@@ -2,7 +2,7 @@
 
 ## 前提
 
-`./ticket.sh help` を最初に実行する。各 stage の入口で note の Status をその stage 名へ更新する。仕様が変わったら、code と review を続ける前に ticket の AC と確定判断を更新する。
+`./ticket.sh help` を最初に実行する。各 stage の入口で note の Status をその stage 名へ更新する。仕様が変わったら、code と review を続ける前に ticket の AC と確定判断を更新する。通常は`PDH-review`と`PDH-verify`まで自動で進める。
 
 ## PDH-open
 
@@ -31,13 +31,13 @@
 
 ## PDH-ticket-human-review
 
-1. `./ticket.sh check --require "Required Probes"` を実行する。未了があれば板を出さず先に測る（対象が無ければ `- [-] ... - skip: <理由>`）
+1. `./ticket.sh check --require "Required Probes"` を実行する。未了があれば板を出さず先に測る
 2. 会話へ渡す材料は `pdh-decision-board`（`ticket-gate.md`）に従う。AC は承認対象の文言そのままを引用する
 
 ## PDH-implement
 
-- 実装 worker の規則は `pdh-coding` skill にある。PM は委譲と検品だけを行う
-- 出口検品では、`scripts/test-all.sh` の command と最終合否の実出力が note へ verbatim で貼られ、pre-existing failure に根拠が添えてあることを確認する
+- 実装 worker の規則は `pdh-coding` skill にある
+- 出口検品では、`scripts/test-all.sh` の command と最終合否の実出力が note へ verbatim で貼られていることを確認する
 
 ## PDH-review
 
@@ -50,17 +50,16 @@ review 前に `git merge-base --is-ancestor origin/<base> HEAD` を確認し、f
 ## PDH-verify
 
 1. ticket の各 AC と note の process checklist を、1 項目ずつ確認して check する
-2. UI / API verify は `./scripts/dev-server.sh --seed` を使う（test の分け方は `pdh-coding`「テスト設計ルール」）
-3. AC 裏取り Agent が各 AC の実質達成を検証する。`NOT VERIFIED` の証拠を補完するまで進まない
-4. この ticket の差分に因果がある範囲で technical-reference.md を更新し、置き換えた記述・検査を削除する。該当なしなら note に 1 行残す。他 ticket 由来の記述・検査は消さず、削除候補として note に記録する
-5. 最終 HEAD で `scripts/test-all.sh` を再実行して実出力を note へ貼る。後続 commit や merge が影響し得る古い証拠は取り直す
-6. 外部 surface を consumer 視点で観察する（`pdh-verifying`「Surface Observer」）。純 backend は理由を note へ 1 行残して skip する
-7. AC check 済み ticket file を含めて commit する
+2. AC 裏取り Agent が各 AC の実質達成を検証する。`NOT VERIFIED` の証拠を補完するまで進まない
+3. この ticket の差分に因果がある範囲で technical-reference.md を更新し、置き換えた記述・検査を削除する。該当なしなら note に 1 行残す。他 ticket 由来の記述・検査は消さず、削除候補として note に記録する
+4. 最終 HEAD で `scripts/test-all.sh` を再実行して実出力を note へ貼る
+5. 外部 surface を consumer 視点で観察する（`pdh-verifying`「Surface Observer」）。純 backend は note に 1 行残して skip する
+6. AC check 済み ticket file を含めて commit する
 
 ## PDH-human-review
 
 1. verify までの証拠が commit 済みであることを確認する
-2. 会話へ渡す材料は `pdh-decision-board`（`close-gate.md`）に従う。未対応 finding は、全 attempt の `### Findings (PDH-review-N)` 表から判定が起票・記録のみ・棄却の行を抜き出す。確認用 URL は `./scripts/dev-server.sh` で用意する
+2. 会話へ渡す材料は `pdh-decision-board`（`close-gate.md`）に従う。未対応 finding は、全 attempt の `### Findings (PDH-review-N)` 表から判定が起票・記録のみ・棄却の行を抜き出す
 
 ## PDH-close
 
@@ -68,5 +67,10 @@ review 前に `git merge-base --is-ancestor origin/<base> HEAD` を確認し、f
 2. 完了報告は `pdh-decision-board`（`close-gate.md`）に次を加える
    - 各 AC の data 出所。user-facing AC が合成 data のみなら close blocker とする
    - merge 直後に失う user-observable 機能の yes / no。yes は downstream 復旧予定でも close blocker とする
-   - ticket 候補は既定ゼロとし、実際に触れて見つけた欠陥・gap・deferred だけを証拠とともに挙げる
 3. 承認後に `./ticket.sh close` を実行する
+
+## 中止フロー
+
+- 中止理由をticketとnoteへ記録してから`./ticket.sh cancel`を実行する
+- cancel済みticketは`tickets/done/`へ保存し、判断履歴として削除しない
+- Product Briefの前提が崩れたら下位作業を止め、上位を先に更新する
