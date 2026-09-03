@@ -59,7 +59,6 @@ file へ書けない sandbox で動く役は、`<RESULT_FILE>` に書く内容�
 ### Coding Engineer
 
 - 最初に `.claude/skills/pdh-coding/SKILL.md` を読んでから実装する
-- investigate、implement、testsを1つの作業文脈で完遂する
 - 実装ログと Discoveries を `<NOTE_FILE>` へ追記する
 
 ### reviewer（Devil's Advocate / Code Reviewer）

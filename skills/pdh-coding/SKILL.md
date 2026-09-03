@@ -76,7 +76,6 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 ## 整合性 gate（完了報告の前）
 
 - 変更した identifier、field、API path、enum 値を、実装・test・公開層・生成層・doc・spec・sample の全 layer で追従させる
-- entity に属性を足したら、その entity を複製・削除・export / import する既存の経路（`clone` / `copy` / `delete` / `export` を grep する）を全数で引き、新しい属性を引き継ぐか捨てるかを自分で決めずに `## Open Questions` へ出す
 - sync/async、input/output、初回/cache の対称 pair に片側未修正を残さない。derived type、wrapper、facade で内部値が公開層から落ちていないか確認する
 - provider、wire format、data変換ticketではinputとoutputの意味関係をtestする。machine-verifiable基準をtest code化し、user journey実機を1経路通す
 - semantic verificationでは、同じpromptのinputなしとinputありを比較し、output差を確認する
