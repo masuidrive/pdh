@@ -58,7 +58,7 @@ AC を満たす最小の変更で止める。AC に無い機能、オプショ�
 
 ## spawn された実装担当として
 
-`./ticket.sh` の実行とチケットファイルの作成・編集を行わない。チケット作成や仕様変更が要るならレスポンスで依頼する。完了報告ファイルを repository root に書かず、spawn prompt で指定された repo 外の出力先だけに書く。
+`./ticket.sh` の実行とチケットファイルの作成・編集を行わない。チケット作成や仕様変更が要るならレスポンスで依頼する。
 
 ## 実装
 
@@ -72,11 +72,11 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 - 報告できるのは `PDH-implement` の担当範囲までである。「ticket 完了」「close 可能」と断定しない
 - 別の plan 文書を作らない。investigate・implement・tests を 1 つの作業文脈で完遂し、設計判断は note の実装ログと commit message へ append する
 - テスト実行前に `similarity-ts`（TS/JS）、`similarity-py`（Python）、`similarity-generic`（`--language <lang>`、単一ファイル単位）を `-t 0.7` で回し、変更ファイル間の構造的重複を検出する。閾値超過は共通化を検討してから進む。test setup 等の意図的な重複はそのままでよい。install できない環境では skip し、note へ「重複検出 skip: 環境制約（理由）」と記録する。install は https://github.com/mizchi/similarity/releases の prebuilt archive（OS/arch 別。全 CLI 同梱）を PATH の通った dir へ置く。prebuilt が無い arch だけ `cargo install similarity-ts similarity-py similarity-generic` でビルドする
-- `CLAUDE.md` の「テスト」セクションのコマンドで全 suite を 1 回実行して all passed にし、subtest や影響なし判断で代替せず、結果をレスポンスに含める
 
 ## 整合性 gate（完了報告の前）
 
 - 変更した identifier、field、API path、enum 値を、実装・test・公開層・生成層・doc・spec・sample の全 layer で追従させる
+- entity に属性を足したら、その entity を複製・削除・export / import する既存の経路（`clone` / `copy` / `delete` / `export` を grep する）を全数で引き、新しい属性を引き継ぐか捨てるかを自分で決めずに `## Open Questions` へ出す
 - sync/async、input/output、初回/cache の対称 pair に片側未修正を残さない。derived type、wrapper、facade で内部値が公開層から落ちていないか確認する
 - provider、wire format、data変換ticketではinputとoutputの意味関係をtestする。machine-verifiable基準をtest code化し、user journey実機を1経路通す
 - semantic verificationでは、同じpromptのinputなしとinputありを比較し、output差を確認する
