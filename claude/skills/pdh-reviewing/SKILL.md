@@ -31,4 +31,4 @@ AC・Architectural Invariants・Out-of-scope が再合意なく変更されて�
 
 対象 commit SHA を明記し、Critical と Major を 観点 label / file:location / 問題 / 推奨対応 で書く。無ければ `No Critical/Major`、失敗時も理由を `<RESULT_FILE>` へ書く。
 
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/pdh-reviewing/SKILL.md
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/skills/pdh-reviewing/SKILL.md

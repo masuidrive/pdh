@@ -6,6 +6,8 @@
 
 各シナリオは実際に起きた失敗の再現である。入力とタスクを fresh agent （この repo では claude opus と codex gpt-5.6-sol xhigh の両方）へ渡し、出力を expected_behavior と突き合わせる。
 
+実案件から取った切り出し再生のデータセットと harness は private repo [masuidrive/pdh-eval](https://github.com/masuidrive/pdh-eval) にあり、この repo では `evals/private/`（git 管理外）として checkout する。`claude/` と `codex/` の両方の配布セットを同じ切り出しで測る。
+
 path は repo root からの相対である。**この `evals/` は配布物ではない** — 配布先は skill の規則を変えないので、回す相手がいない（`scripts/` と同じ扱い）。
 
 ## 実行方法

@@ -32,16 +32,16 @@ Product Brief / Ticket の 2 層で、**なぜ作るか**・**いま何をやる
 
 ## セットアップ・アップデート
 
-導入手順と更新手順は **[INSTALL.md](INSTALL.md)** にある。
+導入手順と更新手順は **[INSTALL.md](claude/INSTALL.md)** にある。
 
-- **新規導入**: [INSTALL.md「新規導入」](INSTALL.md#新規導入) — coding agent に任せる方法と手動手順の両方
-- **導入済みの更新**: [INSTALL.md「既存プロジェクトのアップデート」](INSTALL.md#既存プロジェクトのアップデート)。`pdh-update` skill を使う場合も内部でこの手順を辿る
-- **バージョン間の移行**: [INSTALL.md「既知の移行手順」](INSTALL.md#既知の移行手順)。差分だけでは移行できない変更はここに集約している
+- **新規導入**: [INSTALL.md「新規導入」](claude/INSTALL.md#新規導入) — coding agent に任せる方法と手動手順の両方
+- **導入済みの更新**: [INSTALL.md「既存プロジェクトのアップデート」](claude/INSTALL.md#既存プロジェクトのアップデート)。`pdh-update` skill を使う場合も内部でこの手順を辿る
+- **バージョン間の移行**: [INSTALL.md「既知の移行手順」](claude/INSTALL.md#既知の移行手順)。差分だけでは移行できない変更はここに集約している
 
 最短の導入は、プロジェクトのルートで coding agent にこう指示する:
 
 ```
-https://github.com/masuidrive/pdh の INSTALL.md を読んで、このプロジェクトに PDH を導入して。
+https://github.com/masuidrive/pdh の claude/INSTALL.md を読んで、このプロジェクトに PDH を導入して。
 ```
 
 ## ワークフロー (PDH stage flow)
@@ -68,7 +68,7 @@ PDH-human-review: やったこと・達成したことをユーザが確認す�
 PDH-close: human-review 承認後に close
 ```
 
-詳細は `docs/product-delivery-hierarchy.md` と `skills/pdh-dev/SKILL.md` を参照。
+詳細は `docs/product-delivery-hierarchy.md` と `claude/skills/pdh-dev/SKILL.md` を参照。
 
 ## main engine の選択
 
@@ -82,7 +82,7 @@ PDH のフローは engine 中立で、特定の engine を前提にしない。
 
 役割ごとの engine / model を既定から変えたい場合は `CLAUDE.md` のチーム構成テーブルで上書きする。特定 engine をフローにハードコードしないこと（`product-brief.md` の `AI-5`）。ただし **cross-model review が必須の変更**（認証・認可・DB スキーマ・secret・データ削除・課金）では、生成したモデルとは別のモデルによる独立レビューを最低 1 つ入れる。これは engine の指定ではなく「生成者と検証者を分ける」という要件で、同一 engine 内の別モデルでも満たせる。
 
-詳細は `skills/pdh-dev/_execution-team.md`「エンジン割り当て」「spawn 機構」を参照。
+詳細は `claude/skills/pdh-dev/_execution-team.md`「エンジン割り当て」「spawn 機構」を参照。
 
 ### 対応している coding agent
 
@@ -95,7 +95,7 @@ PDH が engine に要求するのは 2 つだけ。
 |---|---|
 | **Claude Code** | first-class。PDH の開発自体がここで回っている |
 | **Codex CLI** | first-class。`AGENTS.md` の自動ロードと `.agents/skills/`（`.claude/skills/` への symlink）からの skill 探索を実測確認済み |
-| Grok Build | 動く。`AGENTS.md` / `CLAUDE.md` を両方読み、`.claude/skills/` と `.agents/skills/` の両方を走査する。ただし **gitignore した `CLAUDE.local.md` は読まれない**（[INSTALL.md](INSTALL.md#新規導入) の注記を参照） |
+| Grok Build | 動く。`AGENTS.md` / `CLAUDE.md` を両方読み、`.claude/skills/` と `.agents/skills/` の両方を走査する。ただし **gitignore した `CLAUDE.local.md` は読まれない**（[INSTALL.md](claude/INSTALL.md#新規導入) の注記を参照） |
 | opencode ほか | 未検証だが、上の 2 条件を満たすなら動くはず |
 
 2 の skill 機構が無い agent でも、`AGENTS.md` から `.claude/skills/pdh-dev/SKILL.md` を明示的に読ませれば動作する。skill 機構は遅延ロードの最適化であって、PDH の前提ではない。
@@ -207,68 +207,44 @@ project-root/
 
 ## このリポジトリの構成
 
+配布セットは engine ごとに分かれ（`claude/` / `codex/`）、契約（`docs/`）と評価データ（`evals/`）を共有する。同じ規則文でも engine で振る舞いが逆になることが実測で出たため、skill の文面・agent 定義・起動手順は engine ごとに最適化し、stage flow・gate・AC の扱いは 1 つに保つ（`product-brief.md` の決定事項 2026-09-06）。
+
 ```
 pdh/
   README.md                          ← このファイル（PDH の説明）
-  INSTALL.md                         ← 導入・更新手順（配布物の配置表はここにある）
-  docs/
-    product-delivery-hierarchy.md    ← PDH 本体ドキュメント
-    PDH-AGENTS.md                    ← PDH 汎用 agent ルール（配布先 root の PDH-AGENTS.md）
-  skills/
-    pdh-dev/
-      SKILL.md                       ← PDH stage flow ワークフロースキル（入口）
-      _*.md                          ← SKILL.md から参照される分冊（flow / review / execution-team 等）
-    pdh-coding/SKILL.md              ← コーディング標準スキル
-    pdh-reviewing/SKILL.md           ← レビュー標準スキル
-    pdh-verifying/SKILL.md           ← 検証標準スキル（verify worker 群の規則）
-    pdh-check-writing/SKILL.md       ← 宣言型 `.check` 執筆スキル
-    tmux-director/SKILL.md           ← tmux Director スキル
-    pdh-update/SKILL.md              ← PDH アップデートスキル
-    pdh-decision-board/
-      SKILL.md                       ← 判断ボードスキルの入口（gate の選び方と、手順ごとに読む分冊）
-      base.md                        ← 判断ボードの共通規則（gate と媒体に依存しない）
-      ticket-gate.md                 ← 実装前 gate（AC 承認）の差分
-      close-gate.md                  ← close 前 gate（達成の確認と close 承認）の差分
-      ship-risk.md                   ← 保存されている形・外部契約を変える ticket だけ読む分冊
-      final-check.md                 ← 完成検査（形・文・判断の 3 層）
-      html.md                        ← HTML として組む規則（文書・回答フォーム・2 軸デッキ・発行前検査）
-      risk-overlay.md                ← 基本規則を上書きする ticket の型
-      kit/                           ← 板が読み込む CSS・JS と見本
-      tools/                         ← 組み立てと静的検査（bash と awk だけ）
-  templates/
-    product-brief.md                 ← Product Brief テンプレート
-    technical-reference.md           ← Technical Reference テンプレート（現在の実装の How）
-    CLAUDE.md                        ← project 固有 CLAUDE.md テンプレート
-    CLAUDE.local.md.example          ← 環境固有 agent メモのサンプル
-    AGENTS.md                        ← AGENTS.md テンプレート (Codex CLI 向け thin pointer)
-    agents/
-      claude/                        ← PDH worker の agent 定義 (Claude Code 用、配布先 .claude/agents/)
-      codex/                         ← PDH worker の agent 定義 (Codex CLI 用、配布先 .codex/agents/)
-    test-all.sh                      ← テスト一括実行テンプレート
-    fast-checks.sh                   ← 決定論的 fast-check ランナーテンプレート
-    checks/
-      README.md                      ← fast-check 4型の詳細仕様
-      example-no-merge-conflict-markers.check
-      example-max-source-lines.check ← source 1500行の汎用例
-      example-max-test-lines.check   ← test 2500行の汎用例
-    dev-server.sh                    ← PDH verify / human-review 用の開発サーバ入口テンプレート
-    seed-pdh-verify.sh               ← PDH verify / human-review 用のローカル seed hook テンプレート
-    test-ticket-local.sh             ← `ticket-local-test` 実行テンプレート
-    .ticket-config.yaml              ← ticket.sh 設定テンプレート
-  evals/                             ← 判断ボード skill を直すときの資料（評価シナリオ + 事故記録）【配布物ではない】
-  scripts/
-    hookbus.js                       ← tmux Director hookbus (CLI + library + in-source vitest、1 ファイル完結)【配布物】
-    test-all.sh                      ← この repo 自身の検査入口【配布物ではない】
-    fast-checks.sh                   ← 同上（宣言的 grep 不変条件ランナー）
-    check-distribution.sh            ← 同上（配布セットの一貫性検査）
-    check-board-render.sh            ← 同上（判断ボード kit の描画検査。kit を変えたときだけ回す）
-    board-check/                     ← 同上（check.js と反証 fixture）
-    checks/                          ← 同上（この repo 用 fast-check レジストリ）
+  INSTALL.md                         ← engine ごとの INSTALL.md への入口
   product-brief.md                   ← PDH 自身の Product Brief
-  CLAUDE.md                          ← PDH repo 固有の agent ルール
+  CLAUDE.md                          ← PDH repo 固有の agent ルール（AGENTS.md はここへの pointer）
+  docs/                              ← 契約【配布物。両セット共通】
+    product-delivery-hierarchy.md    ← PDH 運用ルール
+    PDH-AGENTS.md                    ← PDH 汎用 agent ルール（配布先 root の PDH-AGENTS.md）
+  claude/                            ← Claude Code 用の配布セット
+    INSTALL.md                       ← 導入・更新手順（配布物の配置表はここにある）
+    skills/
+      pdh-dev/                       ← PDH stage flow ワークフロースキル（SKILL.md + 分冊 _*.md）
+      pdh-coding/SKILL.md            ← コーディング標準スキル
+      pdh-reviewing/SKILL.md         ← レビュー標準スキル
+      pdh-verifying/SKILL.md         ← 検証標準スキル（verify worker 群の規則）
+      pdh-check-writing/SKILL.md     ← 宣言型 `.check` 執筆スキル
+      tmux-director/SKILL.md         ← tmux Director スキル
+      pdh-update/SKILL.md            ← PDH アップデートスキル
+      pdh-decision-board/            ← 判断ボードスキル（SKILL.md + 分冊 + kit/ + tools/）
+    templates/
+      CLAUDE.md                      ← project 固有ルールの雛形（入口ファイル）
+      CLAUDE.local.md.example        ← 環境固有 agent メモのサンプル
+      AGENTS.md                      ← Codex を worker に使うときの thin pointer
+      agents/claude/  agents/codex/  ← PDH worker の agent 定義（配布先 .claude/agents/ と .codex/agents/）
+      product-brief.md  technical-reference.md  .ticket-config.yaml
+      test-all.sh  fast-checks.sh  checks/  dev-server.sh  seed-pdh-verify.sh  test-ticket-local.sh
+    scripts/hookbus.js               ← tmux Director hookbus（CLI + library + in-source vitest）
+  codex/                             ← Codex CLI 用の配布セット（同じ構成。入口は AGENTS.md、agent 定義は .codex/agents/*.toml）
+  evals/                             ← 評価【配布物ではない。両セット共通】
+    eval-*.md  fixtures/  examples.md
+    private/                         ← 実案件の切り出し再生（private repo pdh-eval の checkout。git 管理外）
+  scripts/                           ← この repo 自身の検査【配布物ではない】
+    test-all.sh  fast-checks.sh  check-distribution.sh  check-links.py  checks/
+    check-board-render.sh  board-check/  bsd-shim/
 ```
-
-`scripts/` 直下で配布されるのは `hookbus.js` のみ。他は PDH repo 自身の検査で、配布先へはコピーしない（配布用テンプレートは `templates/` 側にある）。
 
 ## 関連ツール
 

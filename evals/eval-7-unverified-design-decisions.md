@@ -4,7 +4,7 @@
 
 ## 読ませるもの
 
-`skills/pdh-decision-board/base.md`、`skills/pdh-decision-board/final-check.md`、`skills/pdh-decision-board/ticket-gate.md`
+`claude/skills/pdh-decision-board/base.md`、`claude/skills/pdh-decision-board/final-check.md`、`claude/skills/pdh-decision-board/ticket-gate.md`
 
 ## 入力
 

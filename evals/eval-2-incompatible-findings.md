@@ -6,7 +6,7 @@
 
 ## 読ませるもの
 
-`skills/pdh-decision-board/base.md` と `skills/pdh-decision-board/final-check.md`
+`claude/skills/pdh-decision-board/base.md` と `claude/skills/pdh-decision-board/final-check.md`
 
 ## 入力
 

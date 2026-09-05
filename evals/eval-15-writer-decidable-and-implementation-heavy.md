@@ -6,7 +6,7 @@
 
 ## 読ませるもの
 
-`skills/pdh-decision-board/SKILL.md`（router）と、そこが指す `base.md` / `ticket-gate.md` / `final-check.md`。
+`claude/skills/pdh-decision-board/SKILL.md`（router）と、そこが指す `base.md` / `ticket-gate.md` / `final-check.md`。
 
 ## 入力
 

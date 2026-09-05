@@ -8,9 +8,9 @@
 # 弾く。`正典` `正本` は後続に関係なく拾う。「は」を外すと `X は正。` を逃す。
 reason=優先関係を `正` で示さない。「に従う」「にある」「で決まる」のような普通の動詞にする
 pattern=正典|正本|[がのはを]正($|[^し確常規当直義解方式面味誤答体攻す門社の])
-glob=docs/**,skills/**,templates/**,**/*.md
+glob=docs/**,claude/**,codex/**,**/*.md
 # check 自身の reason とコメントが pattern に当たるので、レジストリは対象外にする。
-exclude=templates/checks/**,scripts/checks/**
+exclude=claude/templates/checks/**,codex/templates/checks/**,scripts/checks/**
 #
 # ⚠ この check は配布しない（`templates/checks/` に置かない）。守っているのは
 # PDH 自身の配布テキストの書き方であって、導入先の文書ではない。導入先へ配ると、

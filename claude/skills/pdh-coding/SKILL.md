@@ -147,4 +147,4 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 - 実行可能な `ticket-local-test` script は `tickets/<name>/tests/` に置き、`./scripts/test-ticket-local.sh [ticket-id]` で実行する。ticket.sh は作成しないので、最初の test を書くときに `mkdir -p` する
 - seed、`tmp_dir` の helper、`agent-browser`、`curl`、コマンドの実行証跡は note file へ記録する
 
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/pdh-coding/SKILL.md
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/skills/pdh-coding/SKILL.md

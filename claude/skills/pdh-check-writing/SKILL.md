@@ -5,7 +5,7 @@ description: "Declarative fast-check authoring workflow. Use when adding or edit
 
 # PDH Check Writing
 
-`scripts/checks/*.check`を追加・変更するときは、先に配布版の[fast-check registry contract](https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/checks/README.md)を読む。導入先では同じ仕様が`scripts/checks/README.md`にある。field、glob、exclude、allow、placeholder、安全なcommand実行の詳細はそのREADMEに従い、このskillへ複製しない。
+`scripts/checks/*.check`を追加・変更するときは、先に配布版の[fast-check registry contract](https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/templates/checks/README.md)を読む。導入先では同じ仕様が`scripts/checks/README.md`にある。field、glob、exclude、allow、placeholder、安全なcommand実行の詳細はそのREADMEに従い、このskillへ複製しない。
 
 ## 型を選ぶ
 
@@ -50,4 +50,4 @@ required_paths=config/settings.yaml
 5. 一時的に違反を作って非0と診断を確認し、違反を戻して再び成功させる。`required_paths`なら対象fileを一時的に退避して落ちることを確かめる。
 6. projectの全test入口を実行する。
 
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/pdh-check-writing/SKILL.md
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/skills/pdh-check-writing/SKILL.md

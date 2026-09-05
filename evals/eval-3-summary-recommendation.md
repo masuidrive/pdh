@@ -4,7 +4,7 @@
 
 ## 読ませるもの
 
-`skills/pdh-decision-board/base.md`
+`claude/skills/pdh-decision-board/base.md`
 
 ## 入力
 

@@ -52,4 +52,4 @@ board のすべての段落に、次の 1 問を当てる。
 
 手順 10 で回答を反映したら、**追加質問・修正指示・未回答が残るなら**、直した ticket に合わせて board を直し、8〜9 を再走して**同じ発行先へ再発行する**（新しい URL・新しいファイルを作らない）。**全判断が決まったら gate 通過**で、ticket は次の stage へ進む。
 
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/pdh-decision-board/SKILL.md
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/skills/pdh-decision-board/SKILL.md

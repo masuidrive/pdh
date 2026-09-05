@@ -1,6 +1,6 @@
 # eval-17 — 「合成入力だけで check しない」は振る舞いを変えるか
 
-測る対象: `skills/pdh-verifying/SKILL.md`「AC 裏取り Agent」の 3 行目 — **user-facing の Why は、実上流 data・終端 user 操作・反証 1 回の全てで確認する。合成入力だけで check せず、data の出所と操作を結果へ残す。**
+測る対象: `claude/skills/pdh-verifying/SKILL.md`「AC 裏取り Agent」の 3 行目 — **user-facing の Why は、実上流 data・終端 user 操作・反証 1 回の全てで確認する。合成入力だけで check せず、data の出所と操作を結果へ残す。**
 
 この役の出力は `VERIFIED` / `NOT VERIFIED` の二値なので採点しやすい。既知のリスクは **甘く出る**こと（テストが green なら通してしまう）。
 

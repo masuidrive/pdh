@@ -128,4 +128,4 @@ engine 別の起動コマンド、並行起動、main = Claude Code のときの
 
 <!-- この project 固有の起動制約（sandbox、認証、権限ポリシー、使ってはいけない起動経路など）があればここに書く -->
 
-# Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/CLAUDE.md
+# Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/templates/CLAUDE.md

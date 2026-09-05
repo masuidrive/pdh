@@ -427,4 +427,4 @@ active / idle の判断は毎回行い、全 worker の状態が変わったタ�
 - tmux capture で worker の入力欄に見える灰色のテキストは無視する。Tab で確定する補完候補であり、ユーザの書きかけ入力ではない
 - PDH ワークフローから大きく外れる場合は、window への指示を止め、ユーザにその旨を伝えて判断を仰ぐ
 
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/tmux-director/SKILL.md
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/skills/tmux-director/SKILL.md

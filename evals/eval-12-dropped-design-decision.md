@@ -6,7 +6,7 @@
 
 ## 読ませるもの
 
-`skills/pdh-reviewing/SKILL.md`
+`claude/skills/pdh-reviewing/SKILL.md`
 
 ## 入力
 

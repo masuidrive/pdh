@@ -7,4 +7,4 @@
 # pattern is POSIX ERE only (no \d \s \w \b \p{...} or (?...); use [[:space:]] etc).
 reason=do not capture `node -p` output in a shell: FORCE_COLOR makes it ANSI-colorized, which breaks arithmetic and numeric comparisons. Use `node -e 'process.stdout.write(String(...))'`
 pattern=\$\(node (-p|--print)[[:space:]]
-glob=scripts/**,templates/**
+glob=scripts/**,claude/**,codex/**

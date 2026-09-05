@@ -1,6 +1,6 @@
 # Technical Reference: <product name>
 
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/technical-reference.md
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/templates/technical-reference.md
 
 このファイルは常に「現在の姿」だけを書く。過去の経緯・置き換えられた判断は削除する（履歴は git が持つ）。
 残す基準は「将来の ticket の判断を今も拘束するか」。拘束しなくなった記述は消す。

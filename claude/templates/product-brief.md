@@ -1,6 +1,6 @@
 # Product Brief: <product name>
 
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/product-brief.md
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/templates/product-brief.md
 
 本文中で「まだ決められない・確認が必要」な箇所には `[NEEDS CLARIFICATION: 具体的な問い]` を埋め込む。
 coding agent はこのマーカーに触れる判断を推測で埋めず、実装を止めて確認する。解消したらマーカーを決定内容に置き換える。

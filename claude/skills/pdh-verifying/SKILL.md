@@ -29,4 +29,4 @@ description: "QA / AC 裏取り / Surface Observer / AC 読み手が、検証の
 - 登場人物は `What` 冒頭の 1 文から補う。AC 1 件ごとに書かれている必要はない
 - 復元できた AC には «復元できた» だけを返す。書き直し・改善案・AC の追加を挙げない
 
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/pdh-verifying/SKILL.md
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/skills/pdh-verifying/SKILL.md

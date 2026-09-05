@@ -5,5 +5,5 @@
 # (The `Based on .../blob/XXXXXXX/templates/...` URLs are source-repo links, not
 # local paths, and are not backtick-quoted, so they do not match.)
 reason=配布される文書がローカルパスとして `templates/...` を参照している。導入先に templates/ は存在しない（配布先での実パスを書く）
-pattern=`templates/
-glob=docs/**,skills/**,templates/**
+pattern=`(claude/|codex/)?templates/
+glob=docs/**,claude/skills/**,claude/templates/**,codex/skills/**,codex/templates/**

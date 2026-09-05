@@ -1,6 +1,6 @@
 # PDH-AGENTS.md — PDH 汎用 agent ルール
 
-このファイルには、project 間で共有する PDH ルールを置く。配布物なので project 側で書き換えない — project 固有ルールは `CLAUDE.md` に置く。
+このファイルには、project 間で共有する PDH ルールを置く。配布物なので project 側で書き換えない — project 固有ルールは project の入口ファイル（`CLAUDE.md` または `AGENTS.md`。以下「project ルール」）に置く。
 
 ## Stage Flow
 
@@ -49,7 +49,7 @@ Director は自身の engine・model・profile・reasoning effort を変更し�
 
 subagent / worker を起動できないとき、solo 実行を同等のものとして黙って扱わない。確信度や gate の意味に影響する場合は、制約を説明してユーザに確認する。
 
-ユーザが明示的に要求した場合、承認済みの close フローが実行する場合（例: close 時の ticket.sh `auto_push`）、または `CLAUDE.md` が明示的に許可している場合を除き、`git push` しない。
+ユーザが明示的に要求した場合、承認済みの close フローが実行する場合（例: close 時の ticket.sh `auto_push`）、または project ルールが明示的に許可している場合を除き、`git push` しない。
 
 ## Worker Instructions
 
@@ -133,8 +133,8 @@ human gate の質は、ユーザが受け取る材料の質まででしかない
 
 ルールを追加するときは、次の 4 問に答える。1〜3 が置き場所を、4 が書き方を決める。1〜3 のいずれかの答えが skill を指すなら、skill に置く。
 
-1. **project 固有か、PDH 共通か？** project 固有は `CLAUDE.md` へ。共通は skill か `PDH-AGENTS.md` へ。
-2. **常に要るか、特定の状況だけか？** `CLAUDE.md` と `PDH-AGENTS.md` は常に context にある。skill は呼ばれたときだけ読み込まれる。無いと事故が起きるルールだけが、常時読み込みのファイルに載る資格を持つ。
+1. **project 固有か、PDH 共通か？** project 固有は project ルールへ。共通は skill か `PDH-AGENTS.md` へ。
+2. **常に要るか、特定の状況だけか？** project ルールと `PDH-AGENTS.md` は常に context にある。skill は呼ばれたときだけ読み込まれる。無いと事故が起きるルールだけが、常時読み込みのファイルに載る資格を持つ。
 3. **誰が読むか？** 役割を特定できるなら — 実装担当だけ、PM だけ — その役割の skill に属する。
 4. **何を守るルールで、それはどこで見られるか？** **どの stage の出口で、誰が何を見ることを守るのかを 1 文で書く。**その 1 文が書けないなら、それはルールではなく手順である — その stage の note checklist へ置く。ルールは**その 1 文を先に、動作を後に**書く。**動作だけで書かれたルールは、動作を省けると読んだ読み手に落とされる。**
 

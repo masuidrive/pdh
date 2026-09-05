@@ -24,7 +24,7 @@ import unicodedata
 REPO = pathlib.Path(__file__).resolve().parent.parent
 
 # Files whose links describe a consuming project's layout, not this repo's.
-SKIP_PREFIXES = ("templates/",)
+SKIP_PREFIXES = ("claude/templates/", "codex/templates/")
 
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 FENCE = re.compile(r"^\s*(```|~~~)")

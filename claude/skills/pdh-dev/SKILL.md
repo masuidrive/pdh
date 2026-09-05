@@ -15,4 +15,4 @@ description: "ticket を作る・開始する・進める開発ワークフロ�
 | `_execution-team.md` / `_subagent-context.md` | worker を spawn するとき |
 | `_collaboration.md` | blocker 時 |
 
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/pdh-dev/SKILL.md
+Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/skills/pdh-dev/SKILL.md
