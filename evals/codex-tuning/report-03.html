@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PDH Codex チューニング — 配布文面への反映</title>
+<style>body{font-family:system-ui,sans-serif;line-height:1.8;color:#18242e;background:#f5f7fa;max-width:960px;margin:auto;padding:24px}main{background:white;padding:clamp(20px,4vw,48px);border-radius:16px}h1{line-height:1.4;font-size:clamp(25px,4vw,38px)}h2{margin-top:2em;font-size:22px}a{color:#0758a5}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{padding:10px;text-align:left;border-bottom:1px solid #ccd5dd}.status{padding:16px;background:#e7f1ff;border-left:4px solid #2462a0}.muted{color:#52616f}li{margin:.7em 0}code{overflow-wrap:anywhere}footer{margin-top:2em}</style>
+<main>
+<p class="muted">2026-09-05 · 途中報告 03 · 開発中の worktree</p>
+<h1>PDHの目的を保つ指示を、配布するスキルに反映しています</h1>
+<p class="status">配布文面の改修と追加計測を進めています。Codex専用化の導入・更新検証、実案件での比較、最終評価はまだ完了していません。</p>
+<h2>今回のゴール</h2>
+<p>依頼の目的と合意を実装まで保ち、必要な作業を実行し、達成したことと未確認の範囲を根拠付きで利用者へ渡せるPDHにすることです。プロンプトとフローは、この仕事を実行できる手法として整えます。モデルは品質を保てる構成から選び、再試行も含めた余計な使用量を減らします。</p>
+<h2>実際に変えた指示</h2>
+<ul>
+<li>具体的な変更と期待結果を示した実行依頼は、その範囲の許可として引き継ぐ。同じ内容をAC承認という名目で聞き直さない。</li>
+<li>合成データを一律に失格とせず、主張に必要な契約と実際の処理経路を確認する。外部システムとの互換性には、その上流の確認を求める。</li>
+<li>期待仕様や他の項目の成功から、記録のない観測を補わない。今回の実測・過去の記録・推論・未確認を区別する。</li>
+<li>今回の目的達成に必要な既存不具合は直す。無関係な問題を、安く直せるという理由だけで加えない。</li>
+<li>検証後の変更は影響範囲で判断する。記録だけの変更で検証済みの挙動が変わらなければ、版の対応を残して証拠を利用する。</li>
+</ul>
+<h2>計測から分かったこと</h2>
+<p>先の診断は、8状況をまとめた課題を各3回、Sol/highを指定して実行しました。Astraが候補名とモデル名を伏せて採点しました。</p>
+<table><thead><tr><th>指標</th><th>旧配布文面</th><th>短い評価用候補</th></tr></thead><tbody>
+<tr><td>元の採点条件でのPASS</td><td>20 / 24</td><td>24 / 24</td></tr>
+<tr><td>無関係な安価な修正を追加</td><td>3 / 3 回</td><td>0 / 3 回</td></tr>
+<tr><td>実行時間の中央値</td><td>115.100秒</td><td>39.977秒</td></tr>
+<tr><td>入力トークン合計</td><td>119,625</td><td>39,614</td></tr>
+<tr><td>出力トークン合計</td><td>14,392</td><td>5,013</td></tr>
+</tbody></table>
+<p>これは指示の解釈を測った診断であり、実案件の完遂率ではありません。候補の1回答には、記録のない空本文まで確認済みとする補完がありました。元の採点条件では検出対象外だったため、満点をそのまま採用根拠にしていません。</p>
+<p>現在は、改修した実際の配布文面を再計測しています。加えて「本文まで観測済み」と「本文は未測定」を分け、独立レビュー未実施、旧版の録画、通知の受理と利用者の到達の違いも対照課題にしました。新しい回答の採点はまだです。</p>
+<h2>Codex専用化とモデル</h2>
+<p>Claude用の起動分岐とtmux監督の配布を外し、<code>.agents/skills</code>と<code>.codex/agents</code>を中心とした構成へ移行中です。通常の担当ではモデルと推論強度を明示し、親のAstraを全担当へ引き継がないようにします。Astraは今回の独立評価や困難な判断に使います。役割ごとの既定値は、導入検証と計測を経て確定します。</p>
+<h2>検証と残作業</h2>
+<p>最初の配布文面修正後に既存の全チェックが通りました。その後のCodex専用化は作業中なので、最終状態の全チェックは改めて実行します。計測記録の完全性を確認する8テストは成功しています。</p>
+<p>元checkoutの非公開ベンチマークは6,877ファイルをコピーし、SHA256一致とgitignoreを確認済みです。今は実案件の切り出し時点の入力と後続の正解を隔離しています。非公開資料の原文はこのサイトへ掲載していません。</p>
+<p>残る作業は、追加診断の独立採点、実案件での比較、新規導入・再実行・旧構成からの移行検証、重大指摘の解消です。評価者を含む総費用はまだ集計できていません。この環境ではブラウザが利用できず、HTMLの視覚確認も未実施です。</p>
+<footer><a href="report-02.html">前回の計測報告</a> · <a href="report-01.html">初期評価</a></footer>
+</main></html>

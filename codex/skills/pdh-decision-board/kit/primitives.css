@@ -1,0 +1,137 @@
+/* 判断ボード kit v2 — primitives.css（tokens.css の後に読み込む）
+   部品は幅と色を必ず token から導く（literal hex / px 禁止 — grep で検査可能）。
+   container は列幅いっぱいが既定。measure を当てるのは散文（p/li/dd と説明テキスト）だけ。
+   表を使うのはセルが語・数値・1 句で終わる列挙だけ — 語+説明は facts、案の比較は compare。 */
+/* ============================================================
+   層 2: primitives — 部品。幅と色は必ず token から導く。
+   ============================================================ */
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:var(--font-body);
+  line-height:1.85;font-feature-settings:"palt" 1}
+.page{max-width:calc(var(--measure) + 24rem);margin-inline:auto;padding:calc(var(--u)*10) calc(var(--u)*6) calc(var(--u)*24)}
+p,li,dd{max-width:var(--measure)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--fill);padding:.08em .35em;border-radius:3px}
+
+/* 見出しと UI 操作系はゴシック、散文は明朝 */
+h1,h2,h3,h4,.eyebrow,.toc,.chips a,.btn,.theme-pick button,.badge,.mock .bar,
+.summary .lab,.callout .lab,.spec>.name,.opt .name,.memo,.progress,.judge .q{font-family:var(--font-head)}
+
+/* 見出しと導入 */
+.eyebrow{color:var(--accent);font-size:.78rem;letter-spacing:.12em;font-weight:700;margin:0 0 calc(var(--u)*2)}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+.theme-pick{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;vertical-align:middle;margin-left:calc(var(--u)*2)}
+.theme-pick button{font:inherit;letter-spacing:inherit;color:var(--muted);background:var(--paper);border:0;
+  padding:calc(var(--u)*0.5) calc(var(--u)*3);cursor:pointer}
+.theme-pick button+button{border-left:1px solid var(--line)}
+.theme-pick button.on{background:var(--accent);color:var(--on-accent)}
+h1{font-size:clamp(1.6rem,4.2vw,2.3rem);line-height:1.35;letter-spacing:-.01em;margin:0 0 calc(var(--u)*3);text-wrap:balance}
+.lede{color:var(--muted);margin:0 0 calc(var(--u)*2)}
+.spec,#sec-qa{scroll-margin-top:3.5rem}
+h2{font-size:1.25rem;margin:calc(var(--u)*16) 0 calc(var(--u)*4);padding:calc(var(--u)*2) 0;border-bottom:2px solid var(--ink);
+  position:sticky;top:0;background:var(--bg);z-index:4}
+/* h2.stuck の切り詰めは board.css へ移動した（2026-08-19）。 */
+
+h3{font-size:1rem;margin:calc(var(--u)*8) 0 calc(var(--u)*2)}
+
+/* summary-grid — 決定サマリー 5 行 */
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:calc(var(--u)*3);margin:0 0 calc(var(--u)*6)}
+@media (max-width:980px){.summary{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:640px){.summary{grid-template-columns:1fr}}
+.summary>div{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:calc(var(--u)*3) calc(var(--u)*4)}
+.summary>.lead{grid-column:1/-1;border-color:var(--accent)}
+.summary .lab{display:block;font-size:.75rem;letter-spacing:.08em;color:var(--muted);margin-bottom:var(--u)}
+.summary>.lead .lab{color:var(--accent)}
+
+/* chips — 主線の面へ跳ぶ */
+.chips{display:flex;flex-wrap:wrap;gap:calc(var(--u)*2);margin:0 0 calc(var(--u)*6);padding:0;list-style:none}
+.chips a{display:inline-block;border:1px solid var(--line);border-radius:999px;background:var(--paper);
+  padding:calc(var(--u)*1) calc(var(--u)*4);text-decoration:none;color:var(--ink);font-size:.9rem}
+.chips a:hover{border-color:var(--accent);color:var(--accent)}
+
+/* facts — 語 + 説明。dt は太字の行、dd はその下に 1 段下げる */
+.facts{margin:0 0 calc(var(--u)*5)}
+.facts dt{font-weight:700;font-family:var(--font-head)}
+.facts dt:not(:first-child){margin-top:calc(var(--u)*3)}
+.facts dd{margin:0 0 0 calc(var(--u)*6)}
+
+/* card-grid — 端数を伸ばして右端を揃える */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(var(--u)*3);margin:0 0 calc(var(--u)*5)}
+.cards>*{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:calc(var(--u)*3) calc(var(--u)*4)}
+.cards>*:last-child:nth-child(3n+1){grid-column:1/-1}
+.cards>*:last-child:nth-child(3n+2){grid-column:span 2}
+@media (max-width:980px){.cards{grid-template-columns:repeat(2,1fr)}
+  .cards>*{grid-column:auto}
+  .cards>*:last-child:nth-child(odd){grid-column:1/-1}}
+@media (max-width:640px){.cards{grid-template-columns:1fr}.cards>*{grid-column:auto!important}}
+.cards h4{margin:0 0 var(--u);font-size:.95rem}
+
+/* callout — 意味は tone で */
+.callout{border-left:3px solid var(--line);background:var(--paper);border-radius:0 var(--r) var(--r) 0;
+  padding:calc(var(--u)*3) calc(var(--u)*4);margin:0 0 calc(var(--u)*5);max-width:var(--measure)}
+.callout .lab{display:block;font-size:.75rem;letter-spacing:.1em;margin-bottom:var(--u);color:var(--muted)}
+.callout.warn{border-color:var(--warn);background:var(--warn-soft)}.callout.warn .lab{color:var(--warn)}
+.callout.ok{border-color:var(--ok);background:var(--ok-soft)}.callout.ok .lab{color:var(--ok)}
+.callout.accent{border-color:var(--accent);background:var(--accent-soft)}.callout.accent .lab{color:var(--accent)}
+.callout p{margin:0}
+
+/* tw — 表は自分の枠の中でだけ横に逃がす */
+.tw{overflow-x:auto;background:var(--paper);border:1px solid var(--line);border-radius:var(--r);margin:0 0 calc(var(--u)*5)}
+.tw table{border-collapse:collapse;width:100%;font-size:.9rem}
+.tw th,.tw td{border-bottom:1px solid var(--line);padding:calc(var(--u)*2) calc(var(--u)*3);text-align:left;vertical-align:top}
+.tw thead th{background:var(--fill);font-weight:700}
+.tw tr:last-child td{border-bottom:0}
+.tw .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* acrow — AC の書き換えの隣に原文 */
+.acrow{display:grid;grid-template-columns:max-content 1fr;gap:calc(var(--u)*4);border:1px solid var(--line);
+  border-radius:var(--r);background:var(--paper);padding:calc(var(--u)*3) calc(var(--u)*4);margin:0 0 calc(var(--u)*2)}
+.acrow .id{font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.acrow details{margin-top:var(--u)}
+.acrow .orig{font-size:.85rem;color:var(--muted);border-left:2px solid var(--line);padding-left:calc(var(--u)*3);margin-top:var(--u)}
+
+/* mock-frame — 出来上がりの像。案名・試作バッジ・同一入力の表記を部品が持つ */
+.mockrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(17rem,1fr));gap:calc(var(--u)*3);margin:0 0 calc(var(--u)*2)}
+.mock{border:1px solid var(--line);border-radius:var(--r);background:var(--paper);overflow:hidden}
+.mock .bar{display:flex;align-items:center;gap:calc(var(--u)*2);border-bottom:1px solid var(--line);
+  background:var(--fill);padding:calc(var(--u)*1) calc(var(--u)*3);font-size:.8rem}
+.mock .bar b{color:var(--ink)}
+.mock .badge{margin-left:auto;font-size:.7rem;letter-spacing:.08em;color:var(--warn);border:1px solid var(--warn);
+  border-radius:999px;padding:0 calc(var(--u)*2)}  /* .fig .badge は board.css（部品の移動先）にある */
+.mock.base .bar b{color:var(--muted)}
+.mock .body{padding:calc(var(--u)*3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem;line-height:1.7;overflow-x:auto}
+.mock .k{color:var(--accent)} .mock .s{color:var(--ok)} .mock .n{color:var(--warn)}
+.mockinput{font-size:.8rem;color:var(--muted);margin:0 0 calc(var(--u)*5)}
+
+/* steps / timeline(.tl) / compare / quote / fig / mermaid-svg の 6 部品は
+   board.css へ移動した（2026-08-19、kit v2 移行）。定義はあちらにしか無い —
+   ここへ書き戻すと二重定義になる。見本 ui-sample.html は inline コピーなので影響しない。 */
+
+/* details.fold（汎用の畳み）は board.css へ移動した（2026-08-19）。定義はあちらにしか無い。 */
+
+/* 判断カードと選択肢 — 回答 form は kit/board.js の契約(name/value)に合わせる */
+.judge{border:1px solid var(--accent);border-radius:var(--r);background:var(--paper);
+  padding:calc(var(--u)*4) calc(var(--u)*5);margin:0 0 calc(var(--u)*6)}
+.judge .q{font-size:1.05rem;font-weight:700;margin:0 0 calc(var(--u)*2)}
+.judge .rec{margin:0 0 calc(var(--u)*3)} /* 推奨は装飾しない — 印は先頭配置と選択肢のバッジだけ。
+   地を塗ると選択状態と見分けが付かない */
+.opt{position:relative;border:1px solid var(--line);border-radius:var(--r);padding:calc(var(--u)*3) calc(var(--u)*4) calc(var(--u)*3) calc(var(--u)*10);margin:0 0 calc(var(--u)*2);cursor:pointer;display:block}
+.opt:hover{border-color:var(--accent)}
+.opt input{position:absolute;left:calc(var(--u)*3);top:calc(var(--u)*4);accent-color:var(--accent)}
+.opt:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.opt .name{font-weight:700}
+.opt .tag{font-size:.7rem;font-family:var(--font-head);font-weight:400;letter-spacing:.08em;color:var(--ok);border:1px solid var(--ok);border-radius:999px;padding:0 calc(var(--u)*2);margin-left:calc(var(--u)*2);vertical-align:2px}  /* .compare の tag は board.css にある */
+.opt .row>span:last-child{max-width:var(--measure)}
+.opt .row{display:grid;grid-template-columns:max-content 1fr;gap:calc(var(--u)*4);font-size:.9rem;margin-top:var(--u)}
+.opt .row b{color:var(--muted);font-weight:700;white-space:nowrap}
+.memo{width:100%;min-height:4.5rem;border:1px solid var(--line);border-radius:var(--r);
+  padding:calc(var(--u)*2) calc(var(--u)*3);font:inherit;background:var(--paper);color:var(--ink)}
+.answer{border:1px solid var(--line);border-radius:var(--r);background:var(--paper);padding:calc(var(--u)*4);margin:calc(var(--u)*4) 0}
+.answer textarea{width:100%;min-height:6rem;border:1px solid var(--line);border-radius:var(--r);background:var(--fill);
+  font-family:ui-monospace,Menlo,monospace;font-size:.85rem;padding:calc(var(--u)*2);color:var(--ink)}
+.btn{display:inline-block;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);border-radius:var(--r);
+  padding:calc(var(--u)*2) calc(var(--u)*5);font:inherit;cursor:pointer}
+.btn:focus-visible,.opt input:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.progress{font-size:.85rem;color:var(--muted)}
+
+/* toc-rail（.layout / .content / .toc / 狭幅の目次ボタン / h2.stuck の逃げ）は board.css へ移動した（2026-08-19）。 */

@@ -1,0 +1,66 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PDH チューニング途中報告 02 | 最初の比較結果</title><style>
+:root{color-scheme:light;--ink:#192c30;--muted:#526569;--line:#d5dedc;--accent:#11644f;--paper:#f5f6f1;--white:#fff;--warm:#795515}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.85 -apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif}
+main{max-width:1060px;margin:auto;padding:48px 32px 70px}header{border-top:5px solid var(--accent);padding-top:25px}.eyebrow{color:var(--accent);font-size:13px;font-weight:700;letter-spacing:.08em}
+h1{font-size:clamp(29px,5vw,45px);line-height:1.35;margin:12px 0 20px}h2{font-size:25px;line-height:1.5;margin:0 0 18px}h3{font-size:18px;margin:0 0 9px}p{margin:0 0 16px}.lead{font-size:21px;line-height:1.85;max-width:860px}.meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+nav{display:flex;flex-wrap:wrap;gap:8px 22px;margin:26px 0 36px}a{color:var(--accent);text-underline-offset:4px}section{border-top:1px solid var(--line);padding-top:30px;margin-top:35px;scroll-margin-top:20px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{padding:22px;background:var(--white);border:1px solid var(--line);border-radius:9px}.num{color:var(--accent);font:700 13px/1.5 ui-monospace,monospace}
+ul,ol{padding-left:24px;margin:12px 0}li{margin:9px 0}.notice{border-left:4px solid var(--accent);padding:16px 20px;background:#e8f1eb;margin:25px 0}.pending{background:#f5eddc;border-color:#9b751f}
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;list-style:none;padding:0}.flow li{margin:0;padding:17px;background:white;border-top:3px solid var(--accent);font-size:14px}.flow strong{display:block;font-size:17px;margin:6px 0}
+.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:13px 12px}th{background:#e9eeea;font-weight:700}td:first-child{min-width:135px}
+.tag{display:inline-block;border:1px solid var(--line);border-radius:30px;padding:1px 10px;font-size:12px;background:white}.done{color:var(--accent)}.todo{color:var(--warm)}
+details{margin:18px 0;background:white;border:1px solid var(--line);padding:16px 20px;border-radius:8px}summary{cursor:pointer;font-weight:700}code{font:13px/1.7 ui-monospace,SFMono-Regular,monospace;overflow-wrap:anywhere}footer{margin-top:45px;padding-top:20px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+@media(max-width:650px){main{padding:28px 20px 45px}.grid,.flow{grid-template-columns:1fr}.lead{font-size:18px}h2{font-size:22px}.card{padding:18px}}
+@media print{body{background:white}main{max-width:none;padding:0}nav{display:none}.card,table,.flow{break-inside:avoid}details{display:block}}
+</style></head><body><main>
+<header><div class="eyebrow">PDH / CODEX TUNING / REPORT 02</div><h1>判断規則の書き直しを<br>最初の診断で比較</h1>
+<p class="lead">同じ状況を与えたとき、不要な確認や無関係な修正を避けられるか。現行の指示と書き直した候補を Sol/high で各 3 回実行し、Astra が候補名を伏せた回答を採点しました。</p>
+<p class="meta">2026年9月5日 / 最初の合成診断が完了<br>ブランチ：<code>codex/pdh-codex-tuning</code> / 比較元：<code>37f1763</code></p>
+<div class="notice"><strong>目的は PDH の達成です。</strong>プロンプトとフローは、そのための正しい手法を記述し、実行できる形へ変えます。モデルは必要な能力を確保し、余計な費用を抑えます。</div>
+</header>
+<nav aria-label="報告内の目次"><a href="#findings">分かったこと</a><a href="#results">診断結果</a><a href="#limits">残る問題</a><a href="#work">実施した作業</a><a href="#next">次の検証</a><a href="report-01.html">前回の方針報告</a></nav>
+<section id="findings"><h2>二つの判断に違いが出た</h2>
+<div class="grid"><article class="card"><div class="num">SCOPE</div><h3>無関係な修正を増やさない</h3><p>検索機能の修正中に見つけた別機能のログ誤字について、現行は 3 回とも「安く直せる」を理由に今回の作業へ追加しました。候補は 3 回とも、本題への影響と今回の退行の有無で処置を決め、追加しませんでした。</p></article>
+<article class="card"><div class="num">AUTHORITY</div><h3>同じ依頼を再承認させない</h3><p>ユーザーが置換内容と不変条件を示して依頼した可逆修正について、現行は 3 回中 1 回、AC 承認という名目で作業を止めました。候補は 3 回とも、依頼された範囲の実装へ進む判断でした。</p></article></div>
+<p style="margin-top:20px">Astra の事前の静的評価では、承認の境界、証拠の条件、レビュー指摘の処置が文書間で競合すると指摘されました。候補は、目的と合意、実行手段、主張を支える証拠を対応づけて判断する形へ書き直しています。</p>
+</section>
+<section id="results"><h2>8 状況を各 3 回診断した結果</h2>
+<p>採点条件に適合した回答は、現行が <strong>20 / 24</strong>、候補が <strong>24 / 24</strong> でした。8 状況を一つの依頼文にまとめた実行を各 3 回行っています。24 本の独立した実案件を完遂した数ではありません。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">判断する状況</th><th scope="col">現行の PASS</th><th scope="col">候補の PASS</th></tr></thead><tbody><tr><td>D1 明示された修正依頼</td><td>2 / 3</td><td>3 / 3</td></tr><tr><td>D2 合意済みの表記変更</td><td>3 / 3</td><td>3 / 3</td></tr><tr><td>D3 seed と正常な 204 応答</td><td>3 / 3</td><td>3 / 3</td></tr><tr><td>D4 外部 CSV との不一致</td><td>3 / 3</td><td>3 / 3</td></tr><tr><td>D5 無関係な安い修正</td><td>0 / 3</td><td>3 / 3</td></tr><tr><td>D6 目的達成に必要な既存バグ</td><td>3 / 3</td><td>3 / 3</td></tr><tr><td>D7 検証後の記録だけの更新</td><td>3 / 3</td><td>3 / 3</td></tr><tr><td>D8 AC は通るが目的が未達</td><td>3 / 3</td><td>3 / 3</td></tr></tbody></table></div>
+<p style="margin-top:16px">D3 は入力に曖昧さがあり、下記の留保があります。採点値だけで候補の採用を決めていません。</p>
+<details><summary>実行時間とトークンの実測</summary><div class="table-wrap"><table><thead><tr><th>指標</th><th>現行</th><th>候補</th></tr></thead><tbody>
+<tr><td>所要時間の中央値</td><td>115.100 秒</td><td>39.977 秒</td></tr>
+<tr><td>所要時間の範囲</td><td>85.086〜118.405 秒</td><td>33.505〜41.750 秒</td></tr>
+<tr><td>入力トークン合計（3 回）</td><td>119,625</td><td>39,614</td></tr>
+<tr><td>うちキャッシュ入力</td><td>9,344</td><td>0</td></tr>
+<tr><td>出力トークン合計（3 回）</td><td>14,392</td><td>5,013</td></tr>
+</tbody></table></div><p>両方とも Sol/high を明示指定しました。現行は関連する配布指示 9 ファイルの原文、候補は書き直した実行契約です。文脈量が異なり、候補は将来の配布物一式をまだ含みません。この診断の差を、実際の開発全体の短縮率には換算できません。</p>
+<p>Astra の静的評価と採点の使用量は取得できておらず、評価者を含む総費用は未確定です。</p></details>
+</section>
+<section id="limits"><h2>満点でも、証拠の扱いには問題が残る</h2>
+<div class="notice pending"><strong>候補は配布版へ未採用です。</strong>候補にも、入力に書かれていない確認済み事実を補った回答がありました。</div>
+<p>D3 の課題は、削除 API が成功時に 204 と空本文を返す契約を示し、status と DB の実出力が記録済みと説明していました。空本文の確認記録は明示していませんでした。</p>
+<p>候補の 1 回は、本文まで確認済みと補いました。現行の 2 回も受け入れ条件全体の達成を断定しており、同じ留保があります。Astra は「本番データがないことと 204 だけを理由に未達にするか」という元の採点条件では PASS としましたが、その断定を実測証拠としては認めていません。</p>
+<p>この課題は、本文の確認が済んでいる場合と、済んでいない場合を明記した対にして測り直します。さらに、実行ログに存在する事実だけで完了報告を組めるかを、実際のツールを使う課題で確認します。</p>
+<p>今回測ったのは文章を読んだ後の判断です。実装、レビューの実起動、テスト、実案件の目的達成、Codex 専用の導入経路は、まだ評価していません。</p>
+</section>
+<section id="work"><h2>今回進めた作業</h2>
+<ul><li>Astra による現行指示の独立した静的評価を実施。</li>
+<li>目的、権限、証拠、修正範囲を揃えた実行契約の候補と、8 状況の合成診断課題を作成。</li>
+<li>実行 ID、依頼文のハッシュ、モデル指定、JSONL、最終応答、終了状態、時間、使用量を実行ごとに保存する計測ランナーを追加。</li>
+<li>使用量の欠落を 0 にせず、失敗、空応答、ツール使用を成功に混ぜない処理を検証。8 件のテストが成功。</li>
+<li>Sol/high による比較を 6 回実行。すべて最終応答と使用量を回収。</li>
+<li>匿名化した 6 応答について、Astra が 48 項目を採点。採点根拠と課題への懸念を保存。</li>
+<li>既存の配布物検査は全件成功。配布スキル本文の変更はまだ行っていません。</li></ul>
+<details><summary>実行証跡と検証範囲</summary><p>入力、応答、JSONL、採点、匿名化の対応表は worktree の <code>evals/private/codex-tuning/</code> に保存しています。公開用の原稿と評価計画は <code>evals/codex-tuning/</code> にあります。</p>
+<p>比較には公開配布用の現行指示と新規の合成課題を使いました。コピー済みの非公開ベンチマーク原文は今回の 6 実行には含めていません。</p>
+<p>CLI の JSONL から確認できるのは実行 ID と応答、使用量です。モデル名と推論強度は明示した要求値として記録し、提供側の実モデル名の証明とは区別しています。</p></details>
+</section>
+<section id="next"><h2>次に確かめること</h2><ol>
+<li>確認済みと未確認を明記した対の課題で、証拠不足への判断を診断する。</li>
+<li>非公開データの切り出しと隔離を確認し、実行ログに基づく報告、独立レビューの起動、合意の保持を実案件で検証する。</li>
+<li>候補を工程と役割の指示へ落とし込み、Codex 専用の配置、導入、更新手順と合わせて試す。</li>
+<li>目的達成を維持できた構成について、通常担当と評価担当のモデル、推論強度、再試行を含む費用を比較する。</li></ol>
+<p>これらを確認してから配布版へ採用します。判断課題での改善と、PDH 全体の達成を段階ごとに報告します。</p></section>
+<footer>この報告は初回診断の実測と、その限界を記録しています。サイトは所有者と管理者に限定して公開。前回の方針は <a href="report-01.html">報告 01</a> に保存しています。</footer>
+</main></body></html>

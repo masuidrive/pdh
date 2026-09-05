@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PDH Codex 専用化 | チューニング途中報告 01</title>
+<style>
+:root{color-scheme:light;--ink:#192c30;--muted:#526569;--line:#d5dedc;--accent:#11644f;--paper:#f5f6f1;--white:#fff;--warm:#795515}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.85 -apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif}
+main{max-width:1060px;margin:auto;padding:48px 32px 70px}header{border-top:5px solid var(--accent);padding-top:25px}.eyebrow{color:var(--accent);font-size:13px;font-weight:700;letter-spacing:.08em}
+h1{font-size:clamp(29px,5vw,45px);line-height:1.35;margin:12px 0 20px}h2{font-size:25px;line-height:1.5;margin:0 0 18px}h3{font-size:18px;margin:0 0 9px}p{margin:0 0 16px}.lead{font-size:21px;line-height:1.85;max-width:860px}.meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+nav{display:flex;flex-wrap:wrap;gap:8px 22px;margin:26px 0 36px}a{color:var(--accent);text-underline-offset:4px}section{border-top:1px solid var(--line);padding-top:30px;margin-top:35px;scroll-margin-top:20px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{padding:22px;background:var(--white);border:1px solid var(--line);border-radius:9px}.num{color:var(--accent);font:700 13px/1.5 ui-monospace,monospace}
+ul,ol{padding-left:24px;margin:12px 0}li{margin:9px 0}.notice{border-left:4px solid var(--accent);padding:16px 20px;background:#e8f1eb;margin:25px 0}.pending{background:#f5eddc;border-color:#9b751f}
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;list-style:none;padding:0}.flow li{margin:0;padding:17px;background:white;border-top:3px solid var(--accent);font-size:14px}.flow strong{display:block;font-size:17px;margin:6px 0}
+.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:13px 12px}th{background:#e9eeea;font-weight:700}td:first-child{min-width:135px}
+.tag{display:inline-block;border:1px solid var(--line);border-radius:30px;padding:1px 10px;font-size:12px;background:white}.done{color:var(--accent)}.todo{color:var(--warm)}
+details{margin:18px 0;background:white;border:1px solid var(--line);padding:16px 20px;border-radius:8px}summary{cursor:pointer;font-weight:700}code{font:13px/1.7 ui-monospace,SFMono-Regular,monospace;overflow-wrap:anywhere}footer{margin-top:45px;padding-top:20px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+@media(max-width:650px){main{padding:28px 20px 45px}.grid,.flow{grid-template-columns:1fr}.lead{font-size:18px}h2{font-size:22px}.card{padding:18px}}
+@media print{body{background:white}main{max-width:none;padding:0}nav{display:none}.card,table,.flow{break-inside:avoid}details{display:block}}
+</style>
+</head>
+<body><main>
+<header>
+<div class="eyebrow">PDH / CODEX TUNING / REPORT 01</div>
+<h1>目的を実行できる<br>PDH へ</h1>
+<p class="lead">「なぜ作るか」を保ち、人が必要な判断を行い、合意した成果を実装と検証で確かめられるようにする。その達成を基準に、Codex 向けのプロンプトと開発フローを見直します。</p>
+<p class="meta">2026年9月5日 / 方針整理と現状調査<br>作業ブランチ：<code>codex/pdh-codex-tuning</code> / 比較元：<code>37f1763</code></p>
+<div class="notice">ユーザーと合意した優先順位：<strong>PDH の目的の達成 → 正しい手法の記述と実行可能性 → 余計なモデル費用の抑制</strong>。</div>
+</header>
+<nav aria-label="報告内の目次"><a href="#purpose">達成すること</a><a href="#design">変更の方針</a><a href="#evaluation">評価の方法</a><a href="#status">実施状況</a><a href="#next">次の作業</a></nav>
+<section id="purpose"><h2>達成すること</h2>
+<div class="grid">
+<article class="card"><div class="num">01 / INTENT</div><h3>目的と合意を保つ</h3><p>依頼の背景、対象者、受け入れ条件、確定した判断を実装まで引き継ぎます。担当や会話が変わっても、合意を勝手に変えずに進められることを確かめます。</p></article>
+<article class="card"><div class="num">02 / EXECUTION</div><h3>必要な作業を実行する</h3><p>調査、実装、レビュー、検証について、担当、入力、利用できる手段、完了条件を揃えます。指示が具体的な行動につながるかを実行ログで確かめます。</p></article>
+<article class="card"><div class="num">03 / DECISION</div><h3>人が必要な判断をできる</h3><p>承認者に、選択肢と影響、推奨の根拠、未確定事項を提示します。人の選好は人が決め、合意済みの範囲の実行は agent が進めます。</p></article>
+<article class="card"><div class="num">04 / EVIDENCE</div><h3>達成を根拠で確かめる</h3><p>今回実行した検証、以前の記録、推論、未確認事項を区別します。残った問題とその影響まで含め、成果を受け入れられるか判断できるようにします。</p></article>
+</div></section>
+<section id="design"><h2>プロンプトとフローを見直す方針</h2>
+<p>既存の工程、役割分担、ファイル構成、プロンプト本文は大幅に変更できます。各指示について「何を達成するために、誰が、何を使って、どの行動を取り、何をもって完了とするか」を対応づけます。</p>
+<ol class="flow">
+<li><span class="num">1</span><strong>目的</strong>守るべき合意と達成条件を定める</li>
+<li><span class="num">2</span><strong>手法</strong>目的に必要な判断と作業を記述する</li>
+<li><span class="num">3</span><strong>実行</strong>入力、ツール、権限、結果の回収を揃える</li>
+<li><span class="num">4</span><strong>検証</strong>成果物とログから達成を判定する</li>
+</ol>
+<p>重複や矛盾を削り、必要な手順が欠けていれば書き直します。読み込み量、役割数、レビュー回数の変更は、目的の達成に与える効果と実行負担を測って採用します。</p>
+<details><summary>確認する指示と変更範囲</summary>
+<p>常駐する指示、スキル本文、役割定義、実際の worker 依頼文、評価タスク、採点プロンプトを一続きで確認します。</p>
+<p><code>docs / skills / templates / scripts / evals / README / INSTALL / product-brief.md</code> が対象です。Codex 専用化に合わせ、既存の engine 中立方針と導入、更新手順も整合させます。</p>
+</details></section>
+<section id="evaluation"><h2>目的に沿って評価する方法</h2>
+<p>今回のチューニングの主評価者には <strong>Astra</strong> を使います。モデル名と候補名を伏せた成果物、入力、実行証跡を渡し、評価項目ごとに根拠を求めます。機械的に確認できる起動、終了、テスト結果、ファイルの一致はスクリプトでも確認します。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">評価対象</th><th scope="col">確認すること</th><th scope="col">根拠</th></tr></thead><tbody>
+<tr><td>目的と合意</td><td>要望の保持、勝手な変更、判断の取りこぼし</td><td>時点を固定した依頼と仕様、変更後の成果物</td></tr>
+<tr><td>実行可能性</td><td>指示された作業を実際に遂行できたか</td><td>実行ログ、ツール結果、終了状態</td></tr>
+<tr><td>検証の正確さ</td><td>見逃し、誤指摘、根拠のない実施報告</td><td>反証ケース、実行証跡、成果物との対応</td></tr>
+<tr><td>人の判断</td><td>選択肢と影響を示し、必要な承認を待てたか</td><td>判断資料と作業の停止位置</td></tr>
+<tr><td>実行負担</td><td>再試行、不要な質問や作業、時間、トークン</td><td>実行ごとの記録。評価者の使用量も別記</td></tr>
+</tbody></table></div>
+<p style="margin-top:18px">既存の実案件を案件単位で調整用と最終確認用に分けます。正解と後続時点の情報を実行側から隔離し、同じ入力と環境で現行版、候補版、必要に応じてスキルなしを比較します。採点プロンプトは正しい成果物と欠陥のある成果物で事前に確認します。</p>
+<p>モデルはタスクに十分な能力を持つものを使います。プロンプトやフローの効果を測る比較ではモデルを揃え、次にモデルと推論強度を比較します。Astra の利用は主に候補比較と最終評価へ集中させます。</p>
+<div class="notice pending">現時点では、このチューニングによる品質向上、費用削減、新しいモデル別の優劣は未計測です。下記のテスト成功は配布物の構造検査であり、PDH 全体の実行品質を保証する結果ではありません。</div>
+</section>
+<section id="status"><h2>ここまでに確認したこと</h2>
+<div class="table-wrap"><table><thead><tr><th scope="col">項目</th><th scope="col">状態</th><th scope="col">結果</th></tr></thead><tbody>
+<tr><td>作業用 worktree</td><td><span class="tag done">実施済み</span></td><td>比較元 37f1763 から専用ブランチを作成</td></tr>
+<tr><td>変更前の自動検査</td><td><span class="tag done">実測</span></td><td>scripts/test-all.sh 成功。終了コード 0、所要時間 2.89 秒</td></tr>
+<tr><td>非公開データのコピー</td><td><span class="tag done">照合済み</span></td><td>6,877 ファイル、654,611,973 bytes。コピー元と先の SHA-256 が全件一致。gitignore を維持</td></tr>
+<tr><td>既存の合成評価</td><td><span class="tag done">所在確認</span></td><td>17 シナリオ。実案件の入力、過去の結果、依頼文、採点基準、集計ツールも存在</td></tr>
+<tr><td>プロンプトと実行系</td><td><span class="tag done">初期調査</span></td><td>下記の比較を歪める問題を確認</td></tr>
+<tr><td>新しい候補の比較</td><td><span class="tag todo">未実施</span></td><td>評価方法と実行環境を整えてから開始</td></tr>
+</tbody></table></div>
+<details><summary>初期調査で見つかった問題</summary><ul>
+<li>既存ランナーの通常の Codex 起動はモデルを明示せず、環境設定を継承します。推論強度は xhigh に固定されています。</li>
+<li>snapshot 作成元の既定値と一部の採点プロンプトが元ディレクトリを参照しており、worktree の変更を取り込めない経路があります。</li>
+<li>使用量集計は同じ作業場所の最新セッションを採用します。実行 ID との対応がなく、使用量の欠落を 0 と扱うため、比較値の取り違えや過小計上が起こり得ます。</li>
+<li>評価タスクに network 禁止と依存インストールの案内が同居しています。利用可能な手段と要求する行動を揃える必要があります。</li>
+<li>評価設計では入力の隔離を要求していますが、既存ランナーには sandbox を無効化する指定があります。新しい評価で必要な読み取り境界を別途検証します。</li>
+</ul><p>これらはファイルを読んで確認した問題です。このチューニングでの失敗率はまだ測っていません。</p></details>
+</section>
+<section id="next"><h2>次に進める作業</h2><ol>
+<li>PDH の目的と、工程ごとの達成条件に既存の評価項目を対応づける。</li>
+<li>実行ごとの入力、モデル、推論強度、終了状態、使用量を保存し、評価データの隔離を検証する。</li>
+<li>プロンプトとフローの候補を作り、比較可能な条件で実行する。</li>
+<li>Astra に根拠付きで比較評価させ、改善した点、退行した点、未判定の点を報告する。</li>
+<li>採用候補を未使用の案件と実際の導入経路で確かめ、必要なモデル費用を比較する。</li>
+</ol></section>
+<footer>この報告は現状調査と合意した方針を記録しています。非公開ベンチマークの原文や顧客情報は掲載していません。新しい評価の実行後に結果と証拠を追記します。</footer>
+</main></body></html>

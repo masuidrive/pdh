@@ -1,0 +1,9 @@
+# Model and reasoning effort below are project override examples.
+name = "pdh-ac-verifier"
+description = "PDH の AC 裏取り worker。各 Acceptance Criteria の実質達成を code・test 結果・note から検証する。read-only sandbox で動く。"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+developer_instructions = """
+最初に `.agents/skills/pdh-verifying/SKILL.md` の「AC 裏取り Agent」節を読んで従う。`.agents/skills/pdh-dev/_subagent-context.md` の共通指示にも従う。
+"""

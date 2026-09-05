@@ -1,0 +1,489 @@
+/* pdh-decision-board kit — deck.css
+   2 軸デッキ（html-2d-deck）の組版。⚠ 単独では使わない — board.css を先に読み込み、
+   その«後ろ»へこのファイルを重ねる。色・面・寸法の基準 token は tokens.css、組版 token は board.css が定義する。
+   規則は ../html.md にある。食い違ったら規則に従う。 */
+
+body { line-height: var(--lh-body); }
+
+/* デッキの散文の 1 行の長さ。⚠ 1 か所で持つ — 12 か所に散らすと片方だけ直る。
+   上限なしにしたら 1920px で 1 行 117 文字になり読みにくいと実測（2026-08-18）。
+   文書版の --measure（44rem ＝ 約 44 文字）はスライドには狭すぎたので、中間を取る。
+   表・カード・図は面の幅を使うので、この上限は散文にだけ掛ける。 */
+.deck { --deck-measure: 62em; }
+
+/* ---------- 2 軸の scroll 構造 ---------- */
+/* 横 = 決めるための主線、縦 = 確かめるための裏付け（html.md「2 軸の意味」）。 */
+.deck {
+  display: flex;
+  height: 100dvh;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.deck::-webkit-scrollbar { display: none; }
+.deck-col {
+  flex: 0 0 100%;
+  height: 100dvh;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  scrollbar-width: none;
+}
+.deck-col::-webkit-scrollbar { display: none; }
+.p {
+  height: 100dvh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+/* 縮小の下限に当たった面 — 切らずにスクロールさせる */
+.p.spill { overflow-y: auto; scrollbar-width: thin; }
+/* ⚠ spill 面は縦へ送れるので、«最後まで送った状態» で進捗バッジ（左下）と
+   地図（右下）に文字が隠れる。逃がす余白は «面» に置く — .in に置くと
+   自動縮小の transform: scale で一緒に縮み、狙った高さの半分ほどしか効かない。
+   検査は «p.scrollTop = p.scrollHeight にしてから» 矩形を比べること。
+   途中の重なりを見ると、ただ通過しただけのものまで拾う。 */
+.p.spill > .in { margin: 0 auto; }
+/* ⚠ spill 面の下端へ逃がす高さが要るときは、面の最後に «実体のある要素»
+   <div class="tailpad" style="height:…"> を置いて作る。CSS では作れない:
+   ① .in の padding は総高を増やさない — .in は flex で引き伸ばされ box-sizing: border-box。
+   ② 最後の子の margin-bottom はスクロール領域に入らない（scrollHeight が動かない）。
+   ③ .p 側の ::after は «横» に並ぶ — .p は flex row。 */
+.tailpad { flex: 0 0 auto; }
+/* ⚠ 下の余白は «進捗バッジ（左下）と地図（右下）が本文に被らない» ために要る。
+   狭い画面で 1 面目の «↓ 下に 1 段» が隠れた実例がある。減らすときは両方の上を確かめる。 */
+.p > .in {
+  /* ⚠ 面の幅は止めない（1024px で止めていた頃は 1920px で左右に 448px ずつ余っていた）。
+     代わりに «左右の余白を画面幅に比例させる» — 画面が広いほど余白も広がるので、
+     行が伸びきらない。⚠ 上限を 1 つの数字で決めると、狭い画面では余白が足りず、
+     広い画面では余りが全部余白になる。 */
+  max-width: none;
+  /* ⚠ 横は 0。縦だけ auto で中央に置く。幅を 1/s へ広げた箱に横 auto を効かせると、
+     箱の中心が面の中心より右へ寄り、縮めても右へずれたまま残る（2026-08-18 実測。
+     右端が切れた）。 */
+  margin: auto 0;
+  padding-block: calc(var(--u) * 10) calc(var(--u) * 18);
+  padding-inline: clamp(calc(var(--u) * 6), 7vw, 12rem);
+  position: relative;
+  z-index: 1;
+  /* ⚠ 原点は «top»。中身が面より高いと margin:auto が効かず上端から始まるので、
+     center を原点にすると縮めた塊ごと下へずれる（実測 172px はみ出した）。 */
+  /* ⚠ 先に幅を 1/s へ広げてから scale で戻す。scale は縦と横を同じ倍率で縮めるので、
+     «入りきらないのは縦» なのに横まで縮み、面の左右が空いていた（1440px で 147px、
+     390px では横の 43%。2026-08-18 実測）。広げてから戻すと、描かれる幅は面の幅に
+     戻り、文字が小さくなったぶん 1 行に入る量が増える。
+     ⚠ 折り返しが変わるので高さも変わる。倍率は deck.js が数回測り直して決める。 */
+  width: calc(100% / var(--s, 1));
+  /* ⚠ .p は display:flex なので、既定の flex-shrink: 1 が上の «広げた幅» を
+     押し戻してしまう（2026-08-18 実測。余りが 34% のまま変わらなかった）。 */
+  flex: 0 0 auto;
+  transform: scale(var(--s, 1));
+  /* ⚠ 原点は «左上»。幅を 1/s へ広げてあるので、左上を原点に縮めると右端が面の右端に
+     ちょうど揃う。center にすると中心が右へずれる。
+     ⚠ 縦を top にしているのは、中身が面より高いと margin:auto が効かず上端から始まり、
+     center 原点だと縮めた塊ごと下へずれるため（実測 172px はみ出した）。 */
+  transform-origin: left top;
+}
+/* 面の箱全体ではなく、散文だけを --measure へ制限する。表・カードは面幅を使う。 */
+/* ⚠ 1 行の長さの上限は «ゆるく» 戻す。上限なしにしたら 1920px で 1 行 117 文字になり、
+   読みにくいと実測で出た（2026-08-18）。46em（約 45 文字）はスライドには狭すぎたので、
+   その中間を取る。表・カード・図は面の幅を使うので、この上限は散文にだけ掛ける。 */
+/* ⚠ 直接の子だけを指すと届かない。段落は .prose や .card の中に入ることがあり、
+   実際 1 か所（.in > .prose > p）が 2560px で 1 行 138 文字になっていた。 */
+.p > .in p, .p > .in li, .p > .in dd { max-width: var(--deck-measure); }
+.p > .in > p, .p > .in > ul, .p > .in > ol { margin: 0 0 calc(var(--u) * 4); }
+.p > .in > ul, .p > .in > ol { padding-left: calc(var(--u) * 5); }
+/* v2 部品の steps / timeline は自前の番号・線を持つため、面の汎用リスト字下げを受けない。 */
+.p > .in > ol.steps, .p > .in > ul.tl { padding-left: 0; }
+.deck ol.steps, .deck ul.tl { max-width: var(--deck-measure); }
+.deck li { margin: 0 0 calc(var(--u) * 2); }
+
+/* ---------- 面の見出しと本文 ---------- */
+.eyebrow {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+  letter-spacing: .1em;
+  margin: 0 0 calc(var(--u) * 2);
+}
+.deck h1 { font-size: var(--text-2xl); line-height: var(--lh-2xl); margin: 0 0 calc(var(--u) * 5); text-wrap: balance; }
+.deck h2 { font-size: var(--text-xl); line-height: var(--lh-xl); margin: 0 0 calc(var(--u) * 5); text-wrap: balance; }
+.deck h3 { font-size: var(--text-lg); line-height: var(--lh-lg); margin: calc(var(--u) * 6) 0 calc(var(--u) * 3); text-wrap: balance; }
+.lede { font-size: var(--text-md); line-height: var(--lh-lg); }
+
+.deck code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .92em;
+  background: var(--fill);
+  padding: .1em .35em;
+  border-radius: 3px;
+  white-space: pre-wrap;   /* 理由は board.css の .board code と同じ */
+}
+
+/* ---------- 面のための部品 ---------- */
+.sum {
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+  background: var(--paper);
+  padding: calc(var(--u) * 5);
+  margin: 0 0 calc(var(--u) * 5);
+}
+.sum dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: calc(var(--u) * 3) calc(var(--u) * 5);
+  align-items: start;
+}
+.sum dt { color: var(--muted); font-size: var(--text-sm); line-height: var(--lh-body); white-space: nowrap; }
+.sum dd { margin: 0; max-width: var(--deck-measure); }
+@media (max-width: 700px) {
+  .sum dl { grid-template-columns: 1fr; gap: calc(var(--u) * 1) 0; }
+  .sum dd { margin: 0 0 calc(var(--u) * 3); }
+}
+
+/* 推奨のかたまり。推奨は «枠とバッジ» で示し、塗らない — 塗り（背景色）は
+   回答フォームで «選ばれている» だけの印（html.md）。 */
+.rec {
+  border: 1px solid var(--accent);
+  border-radius: calc(var(--u) * 2);
+  background: var(--paper);
+  padding: calc(var(--u) * 5);
+  margin: 0 0 calc(var(--u) * 5);
+}
+.rec > :last-child { margin-bottom: 0; }
+.rec p { max-width: var(--deck-measure); margin: 0 0 calc(var(--u) * 4); }
+.deck .tag {
+  display: inline-block;
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+  color: var(--accent);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0 calc(var(--u) * 2);
+  margin: 0 0 calc(var(--u) * 3);
+}
+
+.callout {
+  border-left: 3px solid var(--warn);
+  background: var(--paper);
+  padding: calc(var(--u) * 4) calc(var(--u) * 5);
+  margin: 0 0 calc(var(--u) * 5);
+}
+.callout > :last-child { margin-bottom: 0; }
+.callout p { max-width: var(--deck-measure); margin: 0 0 calc(var(--u) * 3); }
+
+.orig {
+  border-left: 2px solid var(--line);
+  padding: calc(var(--u) * 2) 0 calc(var(--u) * 2) calc(var(--u) * 4);
+  margin: 0 0 calc(var(--u) * 4);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
+  max-width: var(--deck-measure);
+  line-break: strict;
+}
+.orig .lab { display: block; letter-spacing: .06em; margin-bottom: calc(var(--u) * 1); }
+
+/* 面の中の表は «横に切れない» ことを最優先にする。縦に伸びたぶんは自動縮小が受ける。 */
+.tw { overflow-x: auto; margin: 0 0 calc(var(--u) * 5); }
+.deck table {
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+  width: 100%;
+  max-width: 100%;
+  table-layout: auto;
+}
+.deck th, .deck td {
+  border: 1px solid var(--line);
+  padding: calc(var(--u) * 2) calc(var(--u) * 3);
+  text-align: left;
+  vertical-align: top;
+  white-space: normal;
+  /* 数が並ぶ列で桁を縦に揃える。 */
+  font-variant-numeric: tabular-nums;
+}
+.deck th { background: var(--fill); font-weight: 700; }
+.deck td.idx { white-space: nowrap; width: 3.2rem; }
+.chk { color: var(--ok); font-weight: 700; }
+.unk { color: var(--warn); font-weight: 700; }
+
+.acrow { border-bottom: 1px solid var(--line); padding: calc(var(--u) * 3) 0; max-width: var(--deck-measure); }
+.acrow .id { color: var(--accent); font-weight: 700; margin-right: .5em; }
+
+/* 下に面がある案内。矢印だけでなく «何を確かめられるか» を語で書く（html.md）。 */
+.down {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
+  border-top: 1px solid var(--line);
+  padding-top: calc(var(--u) * 3);
+  margin-top: calc(var(--u) * 6);
+  max-width: var(--deck-measure);
+}
+.down b { color: var(--accent); font-weight: 700; }
+
+.ans {
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+  padding: calc(var(--u) * 5);
+  margin: 0 0 calc(var(--u) * 4);
+}
+.ans > :last-child { margin-bottom: 0; }
+.ans p { max-width: var(--deck-measure); margin: 0 0 calc(var(--u) * 4); }
+
+.spaced { margin-top: calc(var(--u) * 6); }
+figure.shot { margin: 0 0 calc(var(--u) * 4); }
+/* 広い画面では画像を散文の «脇» へ置く。1 列・上から下だけだと、Fold や PC で
+   面の右半分と下半分が空いたまま残る（2026-08-18 に実測）。狭い画面では float を
+   やめて下へ落とす — .two と同じ 760px を境にする。 */
+/* ⚠ 横に並べ始める幅。761px にしていたが、Fold の外側画面（約 660px）で
+   «図が中央に置かれ、文が下» になり、左右が空いていた（2026-08-18 実測）。
+   ⚠ 560px まで下げると文が 13 全角まで細るので、640px を境にする。 */
+@media (min-width: 640px) {
+  /* ⚠ class 名を `aside` にしているのは、汎用の `.side`（退けた案の枠）と
+     衝突したため。`figure.shot.side` と書いたら `.side { border: 1px;
+     padding: 16px 20px }` も当たり、図の «外側» に枠と余白が付いて、その内側で
+     図がさらに縮んでいた（2026-08-18）。html.md「同じ一般名の class を
+     使わない。部品の役割を含む名前を付ける」のとおり。 */
+  figure.shot.aside {
+    float: inline-end;
+    /* 画面の横半分までを図に使う。図の実寸がそれより小さければ、その幅で止まる。 */
+    width: max-content;
+    max-width: 50vw;
+    margin: 0 0 calc(var(--u) * 4) calc(var(--u) * 6);
+  }
+  /* 面の «中で使える縦» いっぱいに出す。
+     ⚠ 100dvh にすると必ずはみ出す — 面には上下 padding と見出しがあるため。
+     はみ出すと自動縮小が働き、面ごと（＝本文の文字も幅も）小さくなる。1920px で
+     fit 0.817・本文 13.1px まで落ちた（2026-08-18 実測）。
+     引く 240px = 上下 padding 112 + 見出し 約 88 + 余白。見出しがこれより高い面は
+     自動縮小が受ける。
+     ⚠ width / height を auto のままにするのは «拡大しない» ため — 元の画像より
+     大きくすると粗くなる。max-* だけを置けば、小さい図はその実寸で止まる。
+     ⚠ 高さだけで止めると縦長の図が «列の幅より細く» なる（788×1498 を 40dvh で
+     止めて幅 190px まで縮み、列の 352px を使い切れなかった）。 */
+  figure.shot.aside img {
+    width: auto;
+    height: auto;
+    max-width: 50vw;
+    max-height: calc(100dvh - var(--u) * 60);
+    border: 0;
+  }
+}
+/* ⚠ 狭めの横並び（Fold の外側画面など）では図を細くする。50vw のままだと文が
+   16 全角まで細り、1 行に 1 語しか入らない（660px で実測、2026-08-18）。
+   図を 38vw に落とすと文が 20 全角前後まで戻る。 */
+@media (min-width: 640px) and (max-width: 900px) {
+  figure.shot.aside { max-width: 38vw; }
+  figure.shot.aside img { max-width: 38vw; }
+}
+figure.shot img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 56dvh;
+  height: auto;
+  margin: 0 auto;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+}
+figure.shot figcaption {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
+  margin-top: calc(var(--u) * 2);
+  max-width: var(--deck-measure);
+}
+.docref { display: inline-block; margin-top: calc(var(--u) * 2); color: var(--accent); font-size: var(--text-sm); }
+
+.claim { font-size: var(--text-md); line-height: var(--lh-lg); max-width: var(--deck-measure); margin: 0 0 calc(var(--u) * 6); }
+
+.nums { display: flex; gap: calc(var(--u) * 4); flex-wrap: wrap; margin: 0 0 calc(var(--u) * 6); }
+.numcard {
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+  padding: calc(var(--u) * 4) calc(var(--u) * 5);
+  min-width: 8.5rem;
+}
+.numcard b {
+  display: block;
+  font-size: var(--text-2xl);
+  line-height: var(--lh-2xl);
+  font-variant-numeric: tabular-nums;
+}
+.numcard span { display: block; color: var(--muted); font-size: var(--text-sm); line-height: var(--lh-sm); }
+.numcard.hot { border-color: var(--warn); }
+.numcard.hot b { color: var(--warn); }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u) * 5); margin: 0 0 calc(var(--u) * 6); }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+.side { border: 1px solid var(--line); border-radius: calc(var(--u) * 2); padding: calc(var(--u) * 4) calc(var(--u) * 5); }
+.side h4 { margin: 0 0 calc(var(--u) * 3); font-size: var(--text-base); line-height: var(--lh-body); }
+.side ul { margin: 0; padding-left: calc(var(--u) * 5); }
+.side li { margin: 0 0 calc(var(--u) * 2); font-size: var(--text-sm); line-height: var(--lh-body); }
+.side.keep { border-color: var(--ok); } .side.keep h4 { color: var(--ok); }
+.side.drop { border-color: var(--warn); } .side.drop h4 { color: var(--warn); }
+
+.flow { display: flex; align-items: center; gap: calc(var(--u) * 3); flex-wrap: wrap; margin: 0 0 calc(var(--u) * 4); }
+.fstack { display: grid; gap: calc(var(--u) * 2); }
+.fbox {
+  border: 1px solid var(--line);
+  border-radius: calc(var(--u) * 2);
+  padding: calc(var(--u) * 2) calc(var(--u) * 4);
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+  white-space: nowrap;
+}
+.fbox.mark { border-color: var(--accent); color: var(--accent); white-space: normal; }
+.farrow { color: var(--muted); font-size: var(--text-lg); }
+.fcap { color: var(--muted); font-size: var(--text-sm); line-height: var(--lh-body); max-width: var(--deck-measure); margin: 0 0 calc(var(--u) * 5); }
+
+/* 承認者への問い。枠で示し、塗らない（推奨と同じ理由）。 */
+.asks { display: grid; gap: calc(var(--u) * 4); margin: 0 0 calc(var(--u) * 6); }
+.ask {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr;
+  gap: calc(var(--u) * 4);
+  border: 1px solid var(--accent);
+  border-radius: calc(var(--u) * 2);
+  padding: calc(var(--u) * 4) calc(var(--u) * 5);
+}
+.ask .no { font-size: var(--text-xl); line-height: var(--lh-xl); color: var(--accent); font-weight: 700; }
+.ask p { margin: 0; max-width: var(--deck-measure); }
+
+/* 選択肢カードの 3 軸。文書版と同じ «左に軸名・右に本文» にする。
+   これが無いと、軸名と本文が続けて読まれて «横に比較する» 形にならない。 */
+.deck .axis { margin: calc(var(--u) * 3) 0 0; padding: 0; list-style: none; }
+.deck .axis > li {
+  display: grid;
+  grid-template-columns: minmax(0, 7.5rem) minmax(0, 1fr);
+  gap: calc(var(--u) * 1) calc(var(--u) * 3);
+  padding-block: calc(var(--u) * 2);
+  border-top: 1px dashed var(--line);
+}
+.deck .axis .lbl { color: var(--muted); font-weight: 700; font-size: var(--text-sm); }
+@media (max-width: 560px) {
+  .deck .axis > li { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- 狭い画面 — 面が 1 画面に収まるように縦の余白を詰める ---------- */
+@media (max-width: 760px) {
+  /* ⚠ 下だけ広く取る。進捗バッジ（左下）と地図（右下）が本文に被るため。
+     広い画面側の .p > .in と 2 か所あるので、片方だけ直しても効かない。 */
+  .p > .in { padding: calc(var(--u) * 6) calc(var(--u) * 5) calc(var(--u) * 16); }
+  .deck h1 { font-size: 1.75rem; line-height: calc(var(--u) * 10); margin-bottom: calc(var(--u) * 4); }
+  .deck h2 { font-size: var(--text-lg); line-height: var(--lh-lg); margin-bottom: calc(var(--u) * 4); }
+  .deck h3 { margin: calc(var(--u) * 5) 0 calc(var(--u) * 2); }
+  .claim { margin-bottom: calc(var(--u) * 4); }
+  .p > .in > p, .p > .in > ul, .p > .in > ol { margin-bottom: calc(var(--u) * 3); }
+  .acrow { padding: calc(var(--u) * 2) 0; }
+  .down { margin-top: calc(var(--u) * 4); padding-top: calc(var(--u) * 2); }
+  .sum, .rec, .callout, .ans, .side { padding: calc(var(--u) * 4); }
+  .two, .nums, .tw, .orig { margin-bottom: calc(var(--u) * 4); }
+  .ask { padding: calc(var(--u) * 3) calc(var(--u) * 4); gap: calc(var(--u) * 3); }
+  .side h4 { margin-bottom: calc(var(--u) * 2); font-size: var(--text-sm); }
+  .side li { line-height: calc(var(--u) * 5); margin-bottom: calc(var(--u) * 1); }
+  .side ul { padding-left: calc(var(--u) * 4); }
+  .two { gap: calc(var(--u) * 3); }
+  .ans p, .rec p, .callout p { margin-bottom: calc(var(--u) * 3); }
+  .orig { padding-left: calc(var(--u) * 3); margin-bottom: calc(var(--u) * 3); }
+  .numcard { padding: calc(var(--u) * 3) calc(var(--u) * 4); min-width: 6.5rem; }
+  .nums { gap: calc(var(--u) * 3); }
+
+  /* 表は横に切らず、1 行を 1 枚のカードにする。見出しの語は deck.js が
+     各セルの data-label へ写す（手で複製しない — html.md）。 */
+  .tw { overflow-x: visible; }
+  .tw table, .tw tbody, .tw tr, .tw td { display: block; width: auto; max-width: 100%; }
+  .tw thead { display: none; }
+  .tw tr {
+    border: 1px solid var(--line);
+    border-radius: calc(var(--u) * 2);
+    padding: calc(var(--u) * 3);
+    margin: 0 0 calc(var(--u) * 2);
+  }
+  /* 見出しの語は «同じ行に» 流し込む。別の行にすると 1 セルが 2 行になり面の高さが倍、
+     左に列を立てると本文の幅がその分だけ狭くなって折り返しが増える。どちらも縦を伸ばす。 */
+  .tw td { border: 0; padding: calc(var(--u) * 1) 0; display: block; }
+  .tw td::before {
+    content: attr(data-label) "：";
+    color: var(--muted);
+    font-size: .82em;
+    letter-spacing: .04em;
+  }
+  .tw td:not([data-label])::before, .tw td[data-label=""]::before { content: none; }
+  .tw td.idx { width: auto; }
+}
+
+/* ---------- 4 辺の三角 — 押せる向きだけ出す ---------- */
+/* 三角は低い不透明度 + pointer-events: none。click の方向判定は座標で行い、
+   三角自体を hit area にしない（html.md「4 辺の三角」）。 */
+.edge {
+  box-sizing: border-box;
+  position: fixed;
+  z-index: 4;
+  pointer-events: none;
+  opacity: .14;
+  color: var(--ink);
+  font-size: 28px;
+  line-height: 1;
+  display: none;
+  transition: opacity .15s ease, color .15s ease, transform .15s ease;
+}
+.edge.on { display: block; }
+.edge.hot { opacity: 1; color: var(--accent); }
+.edge-l.hot { transform: translateY(-50%) scale(1.35); }
+.edge-r.hot { transform: translateY(-50%) scale(1.35); }
+.edge-u.hot { transform: translateX(-50%) scale(1.35); }
+.edge-d.hot { transform: translateX(-50%) scale(1.35); }
+@media (prefers-reduced-motion: reduce) { .edge { transition: none; } }
+.edge-l { left: 6px;  top: 50%; transform: translateY(-50%); }
+.edge-r { right: 6px; top: 50%; transform: translateY(-50%); }
+.edge-u { top: 6px;    left: 50%; transform: translateX(-50%); }
+.edge-d { bottom: 40px; left: 50%; transform: translateX(-50%); }
+
+/* ---------- 右下の地図 — 横 = 面、縦 = 深さ ---------- */
+.map {
+  box-sizing: border-box;
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  z-index: 3;
+  display: grid;
+  grid-auto-flow: column;
+  gap: 3px;
+  padding: 5px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.mapcol { display: grid; gap: 3px; align-content: start; }
+.mapcell {
+  box-sizing: border-box;
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  display: block;
+  background: transparent;
+}
+.mapcell.here { background: var(--accent); border-color: var(--accent); }
+@media (max-width: 760px) {
+  .map { transform: scale(.72); transform-origin: 100% 100%; }
+  /* 地図の下に案内文が潜らないよう、右を空ける */
+  .p > .in > .down { padding-right: 7.5rem; }
+}
+
+/* 進捗バッジは文書版では右上／右下だが、deck では右下に «地図» がある。
+   狭い画面で重ねると地図が完全に隠れ、読み手は現在地を失う（2026-08-15 実測）。
+   deck 側だけ左下へ逃がす（.p > .in の下余白は左下・右下の両方を見込んである）。 */
+.deck ~ .answer-progress, .deck .answer-progress { inset: calc(var(--u) * 3) calc(var(--u) * 3) auto auto; }
+@media (max-width: 700px) {
+  .deck ~ .answer-progress, .deck .answer-progress { inset: auto auto calc(var(--u) * 3) calc(var(--u) * 3); }
+}

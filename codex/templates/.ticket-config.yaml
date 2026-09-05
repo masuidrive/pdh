@@ -1,0 +1,213 @@
+# Ticket system configuration
+# https://github.com/masuidrive/ticket.sh
+
+# Directory settings
+tickets_dir: "tickets"
+
+# Git settings
+default_branch: "main"
+branch_prefix: "features/"
+repository: "origin"
+
+# Automatically push changes to remote repository during close command
+auto_push: true
+
+# Automatically delete remote feature branch after closing ticket
+delete_remote_on_close: true
+
+# note と ticket の checkbox が全部片付くまで close を拒否する。
+# `--force` では抜けられない。当てはまらない項目は `- [-] ... - skip: <理由>` と
+# 書いて理由をファイルに残す（理由なしの `- [-]` は未了として扱われる）。
+# 未了の一覧は `./ticket.sh check` で見る。特定の節だけを要求するときは
+# `./ticket.sh check --require "<見出し名>"`。
+require_checklist: true
+
+# 上の gate は「未了の checkbox を数える」ので、節ごと消えた ticket では 0 件 = 全部
+# 片付いた、と読めてしまう。ここに宣言した見出しは、無ければ close を拒否する
+# （見出しだけあって checkbox が 0 個の場合も同じ）。`require_checklist` とは独立に
+# 効き、`--force` では抜けられない。ticket.sh 20260830 以降が必要。
+require_checklist_groups:
+  - "Required Probes"
+  - "Checklist"
+
+# Worktree settings
+# `ticket.sh start --worktree` が worktree を作成・再開したとき、main repo から
+# コピーする gitignored ファイル（repo root 相対）。既存ファイルは上書きせず、
+# source が無ければ warning のみで続行する。一時的な追加は
+# `./ticket.sh start --worktree --copy-file <path>`（繰り返し可）。
+# worktree での実行に必要な gitignored ファイルをプロジェクトに合わせて列挙する。
+worktree_copy_files:
+  - .env
+
+# Success messages
+new_success_message: |
+  Ticket を作成しました。内容を編集してから `./ticket.sh start <ticket_name>` で作業を開始してください。
+
+start_success_message: |
+  `docs/product-delivery-hierarchy.md` のプロセスの一部として処理するチケットを開始しました。
+  `current-ticket.md` の Why / Acceptance Criteria / Architectural Invariants check / Design Decisions / Out-of-scope を確認してから作業を開始してください。
+  判断に迷ったら `product-brief.md` の Constraints / Architectural Invariants を確認。
+  PDH labels: PDH-open → PDH-ticket-review → PDH-ticket-human-review → PDH-implement → PDH-review → PDH-verify → PDH-human-review → PDH-close
+
+restore_success_message: |
+
+close_success_message: |
+  Ticket をクローズしました。
+  `./ticket.sh list` で残りの TODO ticket を確認してください。
+
+# Note template — 作業記録用。プロセス通過の証跡はセクション構造が担う
+note_content: |
+  # Work Notes: $$TICKET_NAME$$
+
+  ## Status: PDH-open (Opening)
+
+  ## Checklist
+  <!-- stage を移るたびにこの節を見る。節を stage ごとに割らない —
+       割ると「その stage の分だけ」を見て、他が残っていることに気づかない。
+       ユーザに頼まれたことと、作業中に見つけた «あとでやる» もここへ足す
+       （着手より先に書く。規則は PDH-AGENTS.md「Execution Model」）。
+       当てはまらない項目は `- [-] ... - skip: <理由>` と書いて理由を残す（理由なしの `- [-]` は未了扱い）。
+       未了の一覧は `./ticket.sh check`。 -->
+  - [ ] PDH-ticket-review: Why が product-brief.md に接続し、AC が観察可能で、ユーザ承認済み
+  - [ ] PDH-ticket-review: Design Decisions / Out-of-scope / Dependencies / Architectural Invariants check が確認済み
+  - [ ] PDH-implement: 実装が依存する «確かめていない仮定» を書く前に列挙し、測れるものは測った
+  - [ ] PDH-implement: implementor が論理単位ごとに commit し、mega-commit にしていない
+  - [ ] PDH-implement: `scripts/test-all.sh` 全スイートパス確認済み
+  - [ ] PDH-implement: 外部 provider 経由 path は実 API 200 確認済み (deferred の場合は明示記録)
+  - [ ] PDH-implement: ticket の AC / Architectural Invariants / out-of-scope が implementor によって書き換えられていない
+  - [ ] PDH-review: 確定判断が 1 件ずつ実装に落ちている（対応する実体を名指しできない判断は未実装）
+  - [ ] PDH-review: 指摘を直すとき、壊していない側の入力を 1 つ選んで前後の出力を記録した
+  - [ ] PDH-review: Directorが採用したCritical/Majorが解消し、非採用findingの分類根拠を記録
+  - [ ] PDH-verify: AC 裏取り Agent が各 AC の実質達成を verify 済み
+  - [ ] PDH-verify: Surface Observer 観察済み (純 backend ticket では skip 可、判断を 1 行記録)
+  - [ ] PDH-verify: ドキュメント更新の要否を確認済み（必要なら `.agents/skills/pdh-update/SKILL.md` or `.claude/skills/pdh-update/SKILL.md`）
+  - [ ] PDH-verify: technical-reference.md 突合済み（下の「Technical reference 更新」欄に記録）
+  - [ ] PDH-human-review: ユーザに差分・検証結果・確認手順を提示し、人間レビューを依頼済み
+  - [ ] PDH-human-review: ユーザが確認手順を実施し、クローズを明示承認した
+
+  ## PDH-ticket-review. Ticket contract check
+  <!-- 実装前に ticket の契約を確認する。
+       Why が product-brief.md に接続しているか、AC が観察可能か、
+       Design Decisions / Out-of-scope / Dependencies が実装 agent に十分か、
+       Architectural Invariants と矛盾しないか、ユーザ承認が必要な未確定判断が残っていないかを記録する。 -->
+
+  ## Required Probes
+  <!-- AC ごとに「達成できると確かめたか」を判定し、確かめていなければ確かめる手段をここへ書く。
+       PDH-ticket-human-review の前に実行して結果を書く。
+       実行できないもの（実装しないと分からないこと）は、AC に結果を書かず
+       「測って記録する＋この値を下回ったら止めて報告する」の形にする。
+       この節は close の必須グループ（`require_checklist_groups`）なので、消すと close が止まる。
+       途中で要求するときは `./ticket.sh check --require "Required Probes"`。 -->
+  - [ ] 測る対象を洗い出し、書き手が測れるものは測って結果をここへ書いた（測る対象が無いなら `- [-] ... - skip: <理由>`）
+
+  ## PDH-implement. 実装ログ
+  <!-- 1 agent が investigate + implement + tests を 1 session で完遂する。
+       実コードを読みながら直接実装し、設計判断 / scope 拡張・縮小の判断 / 実コードで発見した事実をここに append する。
+       論理単位ごとの commit hash 一覧も記録する (mega-commit 禁止。commit 数は gate ではない)。 -->
+
+  ## PDH-review. 品質検証結果
+  <!-- PDH-review-1 / PDH-review-2 のように attempt ごとに記録する。
+       独立 reviewer（1 人以上。構成と model は CLAUDE.md「チーム構成・モデル設定」）の
+       実装後 review 結果を統合。
+       2 attempt 同種 Critical 再発で root cause 診断 → escalation。
+       実装後 review 特有 gate: Ticket 不可侵 / logical commit cadence / E2E real API / テスト全件 PASS -->
+
+  ### Findings (PDH-review-1)
+  <!-- 記録・分類・提示の運用は pdh-dev `_review.md`
+       「スコープ外問題と過剰実装の扱い」に従う。 -->
+
+  | # | 観点 | Sev | 要旨 | 判定 | 理由 |
+  |---|---|---|---|---|---|
+  |   |      |     |      |      |      |
+
+  ## Technical reference 更新
+  <!-- この ticket の差分に因果がある追記・上書きの内容、または「該当なし」＋理由を 1 行以上必ず書く。
+       他 ticket 由来の記述を消したくなったら、消さずにここへ削除候補として記録する。 -->
+
+  ## PDH-human-review. 人間レビュー
+  <!-- agent は PDH-verify まで自動で進め、この stage で人間レビューを依頼する。
+       ユーザの明示承認なしに PDH-close へ進まない。
+       途中で疑問・判断不能・blocker・完了見込みなしが出た場合は、この stage まで待たずユーザに確認する。 -->
+
+  ## Discoveries
+  <!-- 実装中に発見した想定外の事実を記録する。
+       例: API の未文書化の挙動、ライブラリの制約、既存コードの隠れた依存関係。
+       Implementation で対応した場合は実装ログに合わせて、ticket に書き戻しが必要な場合は PM に flag する。 -->
+
+  ## Open Questions
+  <!-- 実装中の可逆な迷いと採用した default 値を検出時点で append する
+       （運用は pdh-coding「Open Questions protocol」に従う）。 -->
+
+  ## Resume Point
+  <!-- 中断時の最終 commit・理由・再開手順を記録する（pdh-coding「中断手順」に従う）。 -->
+
+# Ticket template — pdh-dev SKILL の ticket 標準構造に準拠
+# このテンプレートには frontmatter が含まれていない。
+# YAML frontmatter (created_at, started_at, closed_at) は ticket.sh が自動挿入する。
+#
+# Acceptance Criteria にはプロダクトの観察可能な振る舞いだけを書く。
+# プロセス要件 (レビュー済み、テストパス等) は SKILL.md のワークフローが保証し、
+# note のセクション構造が通過証跡になるので、ticket の Acceptance Criteria には書かない。
+default_content: |
+  ## $$TICKET_NAME$$
+
+  ### Why
+  <!-- ユーザ価値・解きたい問題を 1〜3 行で書く。
+       Product Brief の Problem / Solution のどの部分を担うか明記する。 -->
+
+  ### What / Acceptance Criteria
+  <!-- 完了を判定できる条件。プロダクトの観察可能な振る舞いだけを書く。
+       読み手はこの ticket を承認する人であり、実装する agent ではない。
+
+       箇条書きを書き始める前に、この節の冒頭へ 1 文を書く:
+         「この ticket が終わると、〈誰〉が、いままでできなかった〈何〉をできるようになる」
+       各 AC はその 1 文の分割として書く。非退行の AC だけは例外で、〈誰〉のみ必須。
+       読めているかの判定は pdh-dev skill の「AC に書いてよいもの / 書いてはいけないもの」に従う。
+
+       例: 「新しく登録したユーザが、一覧の画面に出る」
+       例: 「画面幅 375px 以下でメニューがハンバーガーに切り替わる」
+
+       プロセス要件 (レビュー済み、テストパス等) はここには書かない。
+       ワークフロー (SKILL.md) と作業ノート (note) が保証する。
+
+       runtime で UX/Security invariant を強制する ticket では、AC に「runtime enforce の
+       保証メカニズム」を 1 行明記する (例: editor 警告だけでなく 422 reject されること)。 -->
+  - [ ] AC 1: ...
+  - [ ] AC 2: ...
+
+  ### Architectural Invariants check
+  <!-- product-brief.md の Architectural Invariants と矛盾しないことを 1 行宣言する。
+       矛盾しない場合: 「Hub stateless / Process immutable と矛盾しない」等。
+       新規 Invariant を要求する場合: 実装を止めて Product Brief 更新から始める。 -->
+
+  ### Design Decisions
+  <!-- 既知の設計判断と理由を箇条書きで明示。
+       例: - データ保存形式: data URI (Files API は将来 ticket、本 ticket では不要)
+       例: - 423 reject ではなく 422: validation error として扱う -->
+  -
+
+  ### Out-of-scope
+  <!-- やらないこと (scope creep 防止)。
+       「ついでにやりそう」「次の ticket でやる」を明記する。 -->
+  -
+
+  ▼ 以下は該当する情報がある場合のみ ▼
+
+  ### Implementation Notes
+  <!-- ユーザの明示指示、またはユーザが会話で言及した事項のみ書く (関数名 / module 名レベルまで)。
+       設計判断は「Design Decisions」に書く。
+       Coding Engineer は Implementation Notes が空でも実装できる責務を持つ。
+       PM が自主的に実装詳細を書いてはならない (下流の自由度を奪う)。 -->
+
+  ### Dependencies
+  <!-- この ticket に着手するために完了が必要な他の ticket。
+       「参考情報」ではなく「ブロッカー」だけ書く。なければ省略。
+       ブロッカー = これが未完了だと実装・テストが物理的にできない依存。
+       例: 「DB migration の ticket が先に必要」「認証 API が存在しないと結合できない」
+       参考情報 (設計の参考にした ticket 等) は書かない。
+       coding agent は未完了の依存がある場合、着手せず報告する。 -->
+
+  ---
+  Work notes: `$$NOTE_PATH$$`
+
+# Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/codex/templates/.ticket-config.yaml

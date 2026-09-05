@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PDH Codex チューニング — 改修と検証</title>
+<style>body{font-family:system-ui,sans-serif;line-height:1.8;color:#18242e;background:#f5f7fa;max-width:960px;margin:auto;padding:24px}main{background:white;padding:clamp(20px,4vw,48px);border-radius:16px}h1{line-height:1.4;font-size:clamp(25px,4vw,38px)}h2{margin-top:2em;font-size:22px}a{color:#0758a5}.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{padding:10px;text-align:left;border-bottom:1px solid #ccd5dd}.status{padding:16px;background:#fff3d8;border-left:4px solid #b87308}.muted{color:#52616f}li{margin:.7em 0}code{overflow-wrap:anywhere}footer{margin-top:2em}</style>
+<main>
+<p class="muted">2026-09-05 · 途中報告 04 · worktree: codex/pdh-codex-tuning</p>
+<h1>Codex専用の構成と指示を改修し、導入・回帰検証を進めました</h1>
+<p class="status">配布構成と主要な指示の改修はworktreeに反映済みです。非公開ベンチマークのモデル送信は自動承認レビューに拒否され、未実行です。PDH全体のチューニング完了、実案件での品質改善、最適な推論強度の確定はまだ主張できません。</p>
+<h2>チューニングのゴール</h2>
+<p>依頼の目的と合意を実装まで保ち、必要な作業を実行し、達成と残る制約を根拠付きで利用者へ渡せるPDHにすることです。プロンプトはその仕事を実行できる手法として整え、モデルは品質を保ちながら余計な使用量を減らすために選びます。</p>
+<h2>配布に反映した変更</h2>
+<ul>
+<li>プロジェクトの指示をAGENTS.md、スキルの実体を.agents/skills、担当定義を.codex/agentsへ統一。Claude用の担当定義、tmux監督、hookbusの配布を退役。</li>
+<li>通常の担当モデルをSolに明示。実装・レビュー・AC確認はhigh、QAとSurface Observerはmediumを初期設定にし、親のAstraを意図せず継承しない。これは比較を待つ初期設定で、役割ごとの最適値を実証したものではない。</li>
+<li>既存の具体的な実行依頼を許可として引き継ぎ、合意を保つ実装裁量と、利用者への約束を変える判断を区別。</li>
+<li>合成データ・本番不在・HTTP 200以外を一律失格にする指示を廃止。主張に必要な契約・入力・実行経路・観測結果で判定。</li>
+<li>必要な既存不具合は修正し、無関係な安価な修正は自動追加しない。記録だけの変更で有効な証拠を捨てない。</li>
+<li>未確認の結果を期待仕様から補わず、AC全体の裏付けと部分的な試験結果を分ける。未確認を残す場合は、その影響を人間判断へ渡す。</li>
+</ul>
+<h2>配布文面を使った実測</h2>
+<p>同じ8状況をまとめた課題をSol/highで実行し、モデル名と版を伏せてAstraが採点しました。旧版は3実行、変更した配布文面は2実行です。短い評価用候補とは別の比較です。</p>
+<div class="scroll"><table><thead><tr><th>指標</th><th>旧配布文面</th><th>変更した配布文面</th></tr></thead><tbody>
+<tr><td>元の採点条件でのPASS</td><td>20 / 24</td><td>16 / 16</td></tr>
+<tr><td>無関係な安価な修正を自動追加</td><td>3 / 3 実行</td><td>0 / 2 実行</td></tr>
+<tr><td>実行時間の中央値</td><td>115.100秒</td><td>67.754秒</td></tr>
+<tr><td>1実行あたり平均入力トークン</td><td>39,875</td><td>39,449</td></tr>
+<tr><td>1実行あたり平均出力トークン</td><td>4,797.3</td><td>2,829.5</td></tr>
+</tbody></table></div>
+<p>少数の指示解釈診断で、実案件の完遂率や統計的に確かな費用削減を示すものではありません。変更版の1回答には、本文の観測記録が曖昧なままAC全体を達成とする留保があります。元の採点条件では検出対象外なので、満点を根拠にこの問題まで解消したとはしていません。</p>
+<p>証拠の既知・未知を明示した6つの対照課題は、旧版・変更版とも6/6でした。ここでは差が出ていません。</p>
+<h2>回帰課題で見つけて直したこと</h2>
+<p>既存eval-17の入力では、変更版が「サンプルの金額が整数になる」ことをAC全体のVERIFIEDにする退行を検出しました。Why / Whatに含まれる利用者・入力・操作まで裏付ける判定へ修正し、再実行した2回答とも「全体はNOT VERIFIED、サンプル内は部分確認あり」と区別できました。</p>
+<p id="trace-result">既存eval-12では、未実装の確定判断D3を旧版・変更版とも検出しました。一方、D1/D2を実装ファイルへ対応付けて返す項目は両版に不足がありました。報告指示を修正した再確認では対応表が出力されましたが、D2の対応先ファイル名が欠け、固定した採点条件の1項目は未達のままです。最終回答は7項目中6項目がPASSで、完全解消とはしていません。</p>
+<p>これらは凍結入力に対する文章レビューです。今回テストを実行したという虚偽主張は、採点済みの回答にはありません。実ツールを使う工程の検証とは分けて集計しています。</p>
+<h2>導入・更新の検証</h2>
+<ul>
+<li>実際のticket.shを取得し、init、新規配置、commit IDの置換、導入先のtest-allまで実行して成功。</li>
+<li>同じ更新の再実行で、プロジェクト固有AGENTS、独自スキル、独自agentが保持されることを確認。</li>
+<li>旧.claude実体と.agentsのsymlinkをCodex用の実ディレクトリへ移行。既存の設定・独自ファイルを保持し、バックアップを保存。</li>
+<li>旧ローカル指示だけがある場合はコピーし、新しいローカル指示が既存なら上書きしない分岐を確認。</li>
+<li>Codex 0.153.4のdebug prompt-inputで、導入先AGENTSと7つのPDHスキルの読み込みを確認。担当の実タスク遂行までを確認したものではない。</li>
+</ul>
+<p>リポジトリの全チェックとdiff検査は成功しました。計測記録の8テストも成功しています。削除済みファイルを内容検査へ渡す不具合も直し、必須ファイルの欠落と新規ファイル内の違反は引き続き検出することを反例で確認しました。</p>
+<h2>非公開ベンチマークで次に測ること</h2>
+<p>元checkoutの6,877ファイルはコピー済みで、SHA256一致とgitignoreを確認しています。人間の回答直後という切り出しが成立する3案件すべてについて、当時のticket・note・回答と、後続の正解を分離しました。成立しない2案件は理由付きで除外しています。</p>
+<p>比較計画は3案件×「旧版Sol/high・変更版Sol/high・変更版Sol/medium」の9実行です。入力は固定し、ツール・MCP・ネット検索を無効化した空の作業領域で、ChatGPT認証だけを使います。各実行は最大300秒。Astraは匿名化した回答を案件ごとに採点します。モデルへ渡す情報と採点基準の対応も確認します。</p>
+<p>ここで測るのは、人の回答をticket・noteの変更案と次工程へ正しく反映できるかです。ファイルを実際に編集する能力やPDH全体の完遂とは区別します。</p>
+<p class="status">自動承認レビューは、非公開のticket・note・回答をChatGPTモデルサービスへ9回送信することについて、この具体的な入力・送信先・回数への明示承認がないとして拒否しました。非公開の原文を含む送信は行っていません。ユーザーの明示承認後に実行する計画です。</p>
+<p>評価者を含む総費用は未集計です。この環境ではブラウザが利用できず、レポートの視覚確認は未実施です。HTMLのタグの均衡、IDの重複、リンク先を検査しました。公開先の保存内容もローカルと照合します。</p>
+<footer><a href="report-03.html">配布文面への反映</a> · <a href="report-02.html">最初の比較計測</a> · <a href="report-01.html">初期評価</a></footer>
+</main></html>

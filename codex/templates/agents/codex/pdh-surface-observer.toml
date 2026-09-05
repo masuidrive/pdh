@@ -1,0 +1,10 @@
+# Model and reasoning effort below are project override examples.
+name = "pdh-surface-observer"
+description = "PDH の Surface Observer worker。consumer 視点の実機から外部 surface を観察する。"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "medium"
+# read-only sandbox にしない: screenshot 等の証跡を <TMP_DIR> へ書き、browser 用 CLI を起動するため
+# （書き込み境界そのものは _subagent-context.md の表に従う）
+developer_instructions = """
+最初に `.agents/skills/pdh-verifying/SKILL.md` の「Surface Observer」節を読んで従う。`.agents/skills/pdh-dev/_subagent-context.md` の共通指示にも従う。
+"""

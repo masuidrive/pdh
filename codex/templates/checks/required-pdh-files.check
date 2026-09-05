@@ -1,0 +1,10 @@
+# pdh-update は PDH skill と `pdh-*` custom agent 定義を上書きする。directory copy
+# の一部が上流で消えた場合や配置表を取り違えた場合、pattern / max_lines /
+# linter_command 型では glob 0 件を検出できないため、required_paths で全件を表明する。
+#
+# `.agents/skills/` は実ディレクトリであり、各 skill の SKILL.md を直接検査する。
+# user が導入先で意図的に外す path は、この行から削除する変更を同じ差分に入れる。
+# skill または agent 定義を増減したときは、この一覧と上流の
+# `scripts/checks/required-distribution-set.check` を同じ変更で更新する。
+reason=PDH 配布物が消えている。pdh-update の上書きや配置表の取り違えを確認する
+required_paths=.agents/skills/pdh-check-writing/SKILL.md,.agents/skills/pdh-coding/SKILL.md,.agents/skills/pdh-decision-board/SKILL.md,.agents/skills/pdh-dev/SKILL.md,.agents/skills/pdh-reviewing/SKILL.md,.agents/skills/pdh-update/SKILL.md,.agents/skills/pdh-verifying/SKILL.md,.codex/agents/pdh-ac-reader.toml,.codex/agents/pdh-ac-verifier.toml,.codex/agents/pdh-coding-engineer.toml,.codex/agents/pdh-qa.toml,.codex/agents/pdh-reviewer-lens1.toml,.codex/agents/pdh-reviewer.toml,.codex/agents/pdh-surface-observer.toml

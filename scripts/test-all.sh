@@ -40,16 +40,24 @@ else
   failed=1
 fi
 
+if command -v python3 >/dev/null 2>&1; then
+  run "Codex evaluation evidence" python3 scripts/test-codex-eval.py
+else
+  printf 'Codex evaluation evidence: skipped (python3 unavailable)\n'
+fi
+
 # 配布 kit の selftest を、素の環境と BSD を模した環境の 2 回走らせる。
 # 配布物は BSD / GNU の両方で動くことを要求している（product-brief.md AI-4）が、
 # この repo も CI も GNU なので、GNU でしか動かない書き方は素の実行では通ってしまう。
 # 実際に build.sh が `base64 "$file"`（BSD が受け付けない位置引数）のまま配布された。
 # shim は scripts/bsd-shim/ にあり、配布しない。
-kit_selftest=claude/skills/pdh-decision-board/tools/selftest.sh
-if [[ -x "$kit_selftest" ]]; then
-  run "kit selftest" bash "$kit_selftest"
-  run "kit selftest (BSD 相当)" env PATH="$PWD/scripts/bsd-shim:$PATH" bash "$kit_selftest"
-fi
+for distribution_set in claude codex; do
+  kit_selftest="$distribution_set/skills/pdh-decision-board/tools/selftest.sh"
+  if [[ -x "$kit_selftest" ]]; then
+    run "$distribution_set kit selftest" bash "$kit_selftest"
+    run "$distribution_set kit selftest (BSD 相当)" env PATH="$PWD/scripts/bsd-shim:$PATH" bash "$kit_selftest"
+  fi
+done
 
 printf '\n=== shell syntax (shipped scripts) ===\n'
 syntax_failed=0

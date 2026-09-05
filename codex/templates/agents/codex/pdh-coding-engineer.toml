@@ -1,0 +1,10 @@
+# Model and reasoning effort below are project override examples.
+name = "pdh-coding-engineer"
+description = "PDH の実装 worker。担当 scope 内の investigate・implement・tests を 1 つの作業文脈で完遂する。"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+# 実装役は code・test へ書き込むため sandbox を絞らない（session の設定を継承する）
+developer_instructions = """
+最初に `.agents/skills/pdh-coding/SKILL.md` を読み、その規則に従って実装する。
+`.agents/skills/pdh-dev/_subagent-context.md` の共通指示と役割別指示「Coding Engineer」にも従う。
+"""

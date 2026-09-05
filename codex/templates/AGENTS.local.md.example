@@ -1,0 +1,15 @@
+# AGENTS.local.md.example
+
+環境固有の Codex 向け context が必要な場合、このファイルを `AGENTS.local.md` としてコピーする。
+
+`AGENTS.local.md` は commit しない。secret の値は書かず、取得方法、credential file の場所、user が実行するコマンドだけを書く。
+
+適した内容:
+
+- 利用できる local tool と path
+- local port や tunnel の制約
+- dummy login と fixture reset command
+- sandbox の制約と承認済み workaround
+- 一時 review URL と cleanup 手順
+
+project 全員に適用する規則は root `AGENTS.md` に書く。
