@@ -66,3 +66,25 @@ worker の commit は sandbox の制約で失敗し、未実施として正し�
 
 [HTML 報告](https://5uhod24n.aboutme.style/) は Hanger Sites MCP 経由で更新する。
 ブラウザを利用できず視覚確認は未実施。HTML の構造と公開先の内容一致を検査する。
+
+## 2026-09-05: 5案件の実作業検証（進行中）
+
+文章評価とは別に、開始時点のソースを独立Gitコピーへ復元し、実装・実テスト・独立レビューを実行している。元のPDH checkoutと実装リポジトリは変更していない。後続の正解、元リポジトリ、他案件はworkerの読み取り対象から隔離した。5案件のcutoff・実行依存と境界を固定している。
+
+| 案件 | 固定した修正版と確認範囲 | 未完了 |
+|---|---|---|
+| R01 ラベル | 832d00e7。Astra採用3件は修正確認で解消。新しい回帰テストを旧実装へ適用すると実PGで2件失敗、修正後はAPIを含め104成功・SQLite専用2スキップ。実ブラウザの両一覧・AND絞り込み、実CLI出力、両タグのpublish/rollbackも成功 | 最終版の全体QAと独立AC確認、承認済み合流時migration |
+| R02 会話集計 | 78d5a8c4。Astraと同じSol reviewerが採用3件の解消を確認。実PG集計6件、Ruby3.2 SDK230件成功。実ブラウザ/APIで集計・ゼロ/不明・明暗・service表示を確認 | providerはローカルstub。実paid provider、full QA、独立AC確認は完了としない |
+| R03 抽出診断 | 初回4be0fd64。AstraがPPTX画像欠落、DOCX表内の印、mixed failure説明等8項目を採用しSol/highで修正中 | 実PDF/OCR受入、出荷前caller調査と連絡、修正後検証 |
+| R04 E2E診断 | 2add7adb。Vitest1139成功、Playwright174件のdiscovery。Astra修正確認で3件解消、readinessの外側timeout時に試行履歴が失われるMajorが残り修正中 | 追加修正、最終QA、実CI、AC文言の明示確認、上流連絡 |
+| R05 Excel | ローカルの決定的な測定のみ保存 | 自動承認レビューが具体的添付のモデル送信を拒否。許可を質問済みで、未送信 |
+
+R02修正版とR03初回版のtest-allは14区分中10区分成功、全体exit 1。R03のPostgreSQL区分は成功した。環境のRuby3.0はSDK要求を満たさず、別のRuby3.2・固定依存・実SDK fixtureで検証した。未設定providerによるE2E失敗は、stubの成功で代替しない。
+
+QAコンテナのPID1が子プロセスを回収しない問題は、--initで既存テストを変えず7件成功した。MockTransportが参照する公開DNSだけを隔離コンテナへ補い、R03の対象18件が成功した。R04の2add7adb全体QAではSQLite3686件が成功したが、別コンテナのPGテストと共有DBの古いPID削除処理が競合した。影響したPG結果は無効とし、R04のDBインスタンスを分離して再検証する。環境修正を製品修正や全体成功へ数えない。
+
+通常の独立レビューはSol/high。Why視点の指摘には目的達成に必要な修正と新しい機能の提案が混ざり、Astraが契約と実装に照らして裁定した。単純にunionしたり件数で達成率を作ったりしない。合流時migration、実PDF確認、caller調査・通知、実CIなどの未了条件を保持する。
+
+project規則と今回の明示許可の引き継ぎ不足から、初回workerが単なるcwd修正にも確認を求めて停止した。Worker Instructionsへ許可済み・未承認操作とproject規則の明示的な上書きを渡す一文を追加し、配布元test-allは成功。権限packetを明記したR01/R02修正担当は再確認で停止せず完遂した。これは対象別の観測であり、独立した一般化評価や改善率ではない。
+
+記録はignored `evals/private/codex-tuning/lifecycle/`。各runのprompt/events/responseと実QAログを保存し、sessionとturnを固定して使用量を集計する。初期中断3回のusageは不明として残す。要求modelと実際に返されたmodel名も区別し、取得できない実model名を要求値で埋めない。[途中報告10](https://5uhod24n.aboutme.style/)を公開し、HTMLの保存SHA256と全量readbackの一致を確認した。アプリの実ブラウザ画像は確認したが、報告サイト自体のブラウザ視覚確認は未実施。

@@ -59,6 +59,7 @@ worker / subagent は Director の会話状態全体を引き継がない。す�
 - 対象ファイルパスまたは担当境界
 - ticket の Why・AC・Architectural Invariants check・確定判断・out-of-scope 項目
 - その worker の正確な責務と衝突境界
+- 今回のユーザ指示に基づく許可済み操作、未承認の操作、project 規則への明示的な上書き。会話で得た許可を worker に推測させず、タスクの委譲を権限の拡張と扱わない
 - 実装 worker には、`.agents/skills/pdh-coding/SKILL.md` を読む指示
 - review worker には、`.agents/skills/pdh-reviewing/SKILL.md` を読む指示
 
