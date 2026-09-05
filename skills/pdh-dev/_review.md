@@ -12,7 +12,7 @@
 ## 収束
 
 - 同種 Critical が 2 attempt で再発したら escalate し、ticket への実装詳細混入、scope 肥大、reviewer prompt 偏り、確定値の下流委譲を root cause として確認する
-- `PDH-review-2` 以降で初回 finding が誤検出、pre-existing、Out-of-scope、user 価値非直結と判明したら、追加 fix をせず Discovery へ記録し、元の AC と user journey だけを verify する
+- 初回 finding が誤検出なら棄却し、今回と無関係なら Discovery へ記録する。既存問題や 2 巡目以降の発見でも、承認された目的の達成に必要な修正は継続する。範囲の判断は `PDH-AGENTS.md`「Verification」に従う
 - `### Findings (PDH-review-N)` の N が 3 に達したら escalate し、scope 再作成、3 案以上の提示、戦略転換、レビュー対象の変更（diff をやめ実 data・実挙動の監査へ切り替える）のいずれかを選ぶ
 
 ## 裏取り

@@ -9,8 +9,8 @@ PM から委譲された 1 つの subtask だけを実行する。会話履歴�
 1. `product-brief.md`（全判断の基準）
 2. `docs/product-delivery-hierarchy.md`（存在すれば）
 3. `PDH-AGENTS.md`（PDH 汎用ルール。severity 等の判定はここに従う）
-4. `CLAUDE.md`（project 固有ルール、テスト、approval、tool/model 上書き）
-5. `CLAUDE.local.md`（存在すれば）
+4. `AGENTS.md`（project 固有ルール、テスト、approval、tool/model 上書き）
+5. `AGENTS.local.md`（存在すれば）
 6. `<TICKET_FILE>`（Why、AC、Invariants、確定判断、Out-of-scope）
 
 **例外: レンズ1（Why end-to-end 無バイアス）の reviewer だけは 6 を読まない。**渡されていない ticket や note を自分で探して読まない。
@@ -58,12 +58,12 @@ file へ書けない sandbox で動く役は、`<RESULT_FILE>` に書く内容�
 
 ### Coding Engineer
 
-- 最初に `.claude/skills/pdh-coding/SKILL.md` を読んでから実装する
+- 最初に `.agents/skills/pdh-coding/SKILL.md` を読んでから実装する
 - 実装ログと Discoveries を `<NOTE_FILE>` へ追記する
 
 ### reviewer（Devil's Advocate / Code Reviewer）
 
-最初に `.claude/skills/pdh-reviewing/SKILL.md`（Codex は `.agents/skills/pdh-reviewing/SKILL.md`）を読み、その規則に従って review する。レンズ1 として起動された場合は、次のブロックを受け取る。
+最初に `.agents/skills/pdh-reviewing/SKILL.md`を読み、その規則に従って review する。レンズ1 として起動された場合は、次のブロックを受け取る。
 
 ### reviewer（レンズ1: Why end-to-end / 無バイアス）
 
@@ -71,4 +71,4 @@ ticket、note、diff、implementor の結論は渡されない。prompt に転�
 
 ### QA Engineer / AC 裏取り Agent / Surface Observer / AC 読み手（復元テスト）
 
-各役の規則は `.claude/skills/pdh-verifying/SKILL.md`（Codex は `.agents/skills/pdh-verifying/SKILL.md`）の該当節にある。read tool を持つ役は最初にその節を読む。
+各役の規則は `.agents/skills/pdh-verifying/SKILL.md`の該当節にある。read tool を持つ役は最初にその節を読む。

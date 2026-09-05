@@ -50,3 +50,23 @@ fixture を読み、AC 1 と AC 2 それぞれに `VERIFIED` / `NOT VERIFIED` �
 - ⚠ **当初 «自分で反証を実行したか» を判別条件に据えたが、誤りだった。**opus は current だけが実行し、**sonnet は baseline だけが実行した**（逆相関）。**腕をまたいで一貫しないものを判別条件にしない。**
 - ⚠ **対照群に欠陥があった。**note.md の «`uv run pytest` は 1 passed» が再現せず（`ModuleNotFoundError: No module named 'src'`）、`PYTHONPATH=.` が要る。sonnet baseline と codex 両腕の 3 個体が独立に指摘した。note の記述を実際のコマンドへ直した。**`evals/` の対照群は、作った直後は必ず汚れていると思ってよい**（`eval-10` の `v0-clean` は 3 回直している）。
 - ⚠ 各構成 1 個体ずつである。
+
+
+### 2026-09-05 — Codex 専用化の回帰確認
+
+公開 fixture の ticket・note・code・test を凍結して本文へ渡し、Sol/high の prompt-only 実行で旧版 `37f1763` と変更版を比較した。
+実行者には answer-key を渡さず、ツールを無効化した。Astra が版を伏せた回答を採点した。
+この実行ではテストコマンドの実行能力を測っていない。
+
+| 文面 | 実行数 | AC2 |
+|---|---:|---|
+| 旧版 | 1 | NOT VERIFIED |
+| 証拠契約へ変更した初版 | 1 | VERIFIED（サンプル形式の範囲という留保付き） |
+| 条件全体の判定を明確にした修正版 | 2 | 両方 NOT VERIFIED |
+| review 報告の修正後 | 1 | NOT VERIFIED |
+
+初版は部分的な試験結果を AC 全体の VERIFIED とする退行だった。
+修正版は Why / What にある利用者・入力・操作を含む条件全体と、サンプル内の部分確認を分けるよう既存の判定指示を書き換えた。
+各実行で今回テストを実行したという虚偽主張はなかった。
+少数の判断診断であり、実案件の互換性検証や全工程の成功を示す結果ではない。
+匿名採点と実行 ID は `evals/private/codex-tuning/` の regression 系ファイルに保存した。

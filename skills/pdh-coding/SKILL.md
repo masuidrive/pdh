@@ -7,7 +7,7 @@ description: "実装担当が実装を始める前に読む規則。"
 
 ## 作業開始
 
-1. `product-brief.md`、`PDH-AGENTS.md`、`CLAUDE.md`、`CLAUDE.local.md`（あれば）を読む
+1. `product-brief.md`、`PDH-AGENTS.md`、`AGENTS.md`、`AGENTS.local.md`（あれば）を読む
 2. `ticket.sh start`/`restore` 出力の `ticket:` パスで Why / Acceptance Criteria / Architectural Invariants check / 確定判断 / out-of-scope を確認する
 3. 同じ出力の `note:` パスで過去の Discoveries と実装ログを把握する
 
@@ -15,17 +15,15 @@ ticket の signature 詳細（関数 signature、行番号、現状 snapshot）�
 
 ## 隔離された作業ツリー
 
-worktree で隔離された session では、共有 checkout へ届きうる形が実行前に拒否される。1 コマンド 1 目的に割って書く。拒否される形は、`&&` や改行でつないだもの、出力リダイレクト、`git -C <path>`、文字列を渡す `eval`、`setsid` / `nohup`。
-
-隔離は session の状態なので `cd` では出られない。出る手段が分からないなら、コマンドを実行できないと報告する前にユーザへ確認する。
+作業開始時に cwd、worktree、branch と書き込み可能な範囲を確認する。共有 checkout と他担当の変更を保護し、割り当てられた worktree で実装・検証する。利用環境の実際の権限とツールに従い、実行できなかった操作と理由を記録する。
 
 ## ticket の変更は再合意で行う
 
-Acceptance Criteria、Architectural Invariants check、Out-of-scope を独断で書き換えない。変更が必要だと判断したら実装を止めて escalate し（solo は `<RESULT_FILE>` に `STATUS: BLOCKED`）、ticket が更新されるまで実装を進めない。合意すれば変えてよい。
+Acceptance Criteria、Architectural Invariants check、Out-of-scope を独断で書き換えない。変更が必要だと判断したら、その変更に依存する作業を止めて Director へ変更案と影響を報告し、合意が反映されるまで該当部分を実装しない。合意すれば変えてよい。
 
 同じ ticket で AC が何度も変わるなら、AC を再合意する前に Why / Problem へ戻って合意し直す。
 
-確定判断（Design Decisions）は、上の 3 つを動かさない限り書き換えてよい。旧判断を消さず、元の判断・崩れた前提・新しい判断を 1 行残し、close 前 gate の板に出す。
+ユーザーが選んだ確定判断を変えるときは、変更案と影響を示して合意する。合意された結果を保つ実装方法は担当が選ぶ。判断を更新する場合、元の判断・崩れた前提・新しい判断を報告する。ticket の編集権限がない worker は Director に更新を依頼する。
 
 ## YAGNI
 
@@ -35,17 +33,17 @@ AC を満たす最小の変更で止める。AC に無い機能、オプショ�
 
 ## 曖昧な判断委譲の拒否
 
-実行指示に「Coding Engineer 判断」「下流で決めて」「よしなに」等があったら確定値を聞き返す（solo は Open Questions に記録）。下の default 続行は、ticket contract を変えない実装ローカルで可逆な選択にだけ適用する。
+指示の不足が利用者への約束や作業範囲を変えるなら、調査で確定できる事実を調べてから、必要な判断を Director へ渡す。「よしなに」等の表現だけを理由に止まらず、合意を保つ実装上の選択は根拠を記録して進める。
 
 ## Open Questions
 
-実装ローカルで可逆な迷いは、止めずに default 値を選んで進め、同時に記録する。product / UX / security、AC、確定判断、out-of-scope、human gate、共有 repository 設定、base branch の判断には default を使わず、明示回答まで止める。
+実装ローカルで可逆な迷いは、合意済みの結果を保つ値を選んで進め、根拠を記録する。利用者への約束、AC、ユーザーが選んだ設計判断、out-of-scope、権限境界を変える必要があるときは、該当する変更を止めて明示回答を得る。回答を待つ間も、判断に依存しない承認済みの作業は続ける。
 
 1. note の `## Open Questions` へ、なぜ迷ったか / 試した解釈と却下理由 / 採用した default 値と根拠 / 上位への要請 を append する
 2. commit message に `ASSUMPTION:` prefix で、採用した値と一意に決まらなかった理由を書く
 3. 完了時と中断時に `<RESULT_FILE>` 末尾へ `## Open Questions Summary` を列挙する
 
-次のときだけ、push せず即中断する。
+次の場合は、影響する経路の作業を止めて必要な判断を報告する。依存しない承認済み作業は続行する。
 
 - default を選ぶと AC のいずれかが達成不能になる
 - Architectural Invariants を踏まない選択肢が存在しない
@@ -54,7 +52,7 @@ AC を満たす最小の変更で止める。AC に無い機能、オプショ�
 - 本 ticket の変更で既存テストが失敗し、fix 方針が立たない
 - ticket に無い破壊的・不可逆操作、新規公開 endpoint / MCP tool / CLI subcommand、権限・認可の変更が AC 達成に要ると判断した。default で新設して進めない
 
-中断するときは直近の作業を 1 commit に切り、note の `## Resume Point` へ 最後の commit hash / 該当した trigger / 試した方法と却下理由 / 上位への質問 / 再開時に読み始めるファイル を記録し、`<RESULT_FILE>` に `STATUS: BLOCKED - <reason>` を書いて exit する。
+継続できる担当作業がなくなったら、変更と検証結果を保全し、note の `## Resume Point` に現在の版・未コミット変更・停止理由・試した方法・必要な回答・再開時の参照先を残す。最終結果に `STATUS: BLOCKED - <reason>` と完了済みの範囲を返す。
 
 ## spawn された実装担当として
 
@@ -64,7 +62,7 @@ AC を満たす最小の変更で止める。AC に無い機能、オプショ�
 
 AC を満たすコードを書き、out-of-scope と実行指示で指定された担当範囲の外は触らない。
 
-- 変更前に、対象ファイルの `git log`（複数世代）と変更する行の `git blame` を読み、なぜ今その形なのか、過去の変更意図、命名とスタイルの慣習、既知の落とし穴を把握する。なお不明なら コミットメッセージの ticket 名 → `tickets/done/` → `product-brief.md` を辿る（辿り先は `CLAUDE.md` を優先）。推測で変更しない
+- 変更前に、対象ファイルの `git log`（複数世代）と変更する行の `git blame` を読み、なぜ今その形なのか、過去の変更意図、命名とスタイルの慣習、既知の落とし穴を把握する。なお不明なら コミットメッセージの ticket 名 → `tickets/done/` → `product-brief.md` を辿る（辿り先は `AGENTS.md` を優先）。推測で変更しない
 - 既存の規約と pattern に従い、新しい pattern を導入しない
 - 新規 class / helper / utility を増やす前に同型 pattern を grep する。新規導入するなら justification を note へ記録する
 - 生成文字列内の script（サーバが返す HTML 内のインライン JS 等）、heredoc、テンプレート埋め込みコードに条件分岐やデータ変換を書かない。テストランナーが import して叩ける関数へ切り出し、埋め込み側にはイベント登録と呼び出しの糊だけを残す
@@ -109,12 +107,9 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 
 ## 動作確認 gate
 
-ビルド成功やテストパスは完了判定ではない。実装後は実環境で動作確認する。
+検証の証拠は `PDH-AGENTS.md`「Verification」に従う。実装した経路を動かし、各 AC の期待結果と実出力を note へ対応づける。外部連携を置き換えたテストでは、置き換えた先の互換性まで確認済みにしない。
 
-- stub は外部 API の mock だけを指さない。自分が手で組み立てて系に流し込む入力すべて（合成ログ entry、手で set した context や DB 行、上流が本来生成するデータを迂回する fixture）が stub であり、完了判定には使わない
-- 他所が生成するログ、イベント、payload、DB 行を読む機能は、検証前に実上流が実際に何を出すかを実データで観測する。上流が必要フィールドを出していなければ、その機能は未完成であって pass ではない
-- 「描画された」「生成された」で完了としない。リンク、通知、画面遷移、外部副作用が目的なら、終端のユーザ操作を実際に行って着地まで確認する。実トランスポートを実データと取り違えない（実 Slack に合成ログを流すのは実データ確認ではない）
-- 外部 provider、API、webhook、SDK、認証を経由する path は、実 API で 1 経路以上 200 確認する。credential があるなら実行が必須。無いなら deferred として明示 escalate し、自己判断で skip も「stub で十分」の判断もしない。結果は note へ記録する（response status、body 抜粋、cost）
+リンク、通知、画面遷移、外部副作用が目的なら、承認された環境で終端のユーザー操作と結果まで確認する。実行権限や credential が不足する経路は未確認として報告し、補完に必要な手段を示す。credential の存在だけでは、本番への書き込みや新たな費用を伴う操作の許可にならない。
 
 ## コミットに含めてよいコード
 

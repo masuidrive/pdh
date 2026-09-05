@@ -24,7 +24,7 @@ fail() {
 # Source-repo paths of the files INSTALL.md declares as substitution targets.
 BASED_ON_FILES=(
   "docs/PDH-AGENTS.md"
-  "templates/CLAUDE.md"
+  "templates/AGENTS.md"
   "templates/product-brief.md"
   "templates/technical-reference.md"
   "templates/.ticket-config.yaml"
@@ -38,7 +38,6 @@ BASED_ON_FILES=(
   "skills/pdh-reviewing/SKILL.md"
   "skills/pdh-verifying/SKILL.md"
   "skills/pdh-decision-board/SKILL.md"
-  "skills/tmux-director/SKILL.md"
 )
 
 for file in "${BASED_ON_FILES[@]}"; do
@@ -87,7 +86,10 @@ while IFS= read -r dist; do
     fi
   done <<< "$install_sources"
   [[ "$listed" -eq 1 ]] || fail "$dist is distributable but is not listed in INSTALL.md's placement table"
-done < <(git ls-files -- 'templates/*' 'skills/*' 'docs/*' 'scripts/hookbus.js')
+done < <(
+  git ls-files --cached --others --exclude-standard -- 'templates/*' 'skills/*' 'docs/*' \
+    | while IFS= read -r file; do [[ -e "$file" ]] && printf '%s\n' "$file"; done
+)
 
 # --- 4. no rule duplicated verbatim across distributed files ------------------
 # AI-1: a rule has exactly one home. The failure mode is copy-paste — the same
@@ -113,7 +115,8 @@ dup_pair_allowed() {
 # seen as one contiguous run.
 TAB="$(printf '\t')"
 dup_report="$(
-  git ls-files -- 'docs/*' 'skills/*' 'templates/*' \
+  git ls-files --cached --others --exclude-standard -- 'docs/*' 'skills/*' 'templates/*' \
+    | while IFS= read -r file; do [[ -e "$file" ]] && printf '%s\n' "$file"; done \
     | grep -E '\.(md|yaml|toml)$' \
     | while IFS= read -r file; do
         awk -v F="$file" -v MIN="$DUP_MIN_BYTES" '

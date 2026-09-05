@@ -16,7 +16,7 @@
 # PDH integration:
 # - PDH-implement: Engineers run individual test commands for fast feedback
 # - PDH-verify: Run this script to confirm all suites pass
-# - Referenced in CLAUDE.md and pdh-dev SKILL.md
+# - Referenced in AGENTS.md and pdh-dev SKILL.md
 #
 # Customize the `run` calls below for your project's test suites.
 # Each `run "label" command args...` entry defines one suite.

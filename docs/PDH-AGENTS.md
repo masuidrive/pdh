@@ -1,6 +1,6 @@
 # PDH-AGENTS.md — PDH 汎用 agent ルール
 
-このファイルには、project 間で共有する PDH ルールを置く。配布物なので project 側で書き換えない — project 固有ルールは `CLAUDE.md` に置く。
+このファイルには、project 間で共有する PDH ルールを置く。配布物なので project 側で書き換えない — project 固有ルールは `AGENTS.md` に置く。
 
 ## Stage Flow
 
@@ -25,7 +25,7 @@ flowchart TD
     todo -. close が全 checkbox を数える .-> close
 ```
 
-`PDH-ticket-review` と `PDH-ticket-human-review` は別の stage である。前者は agent 側の ticket contract check である。後者は実装前の human gate であり、提示する材料は下の Human Gate Materials に従う。`PDH-ticket-human-review` で AC の明示承認を得ないまま実装を始めない。その後の Acceptance Criteria の変更 — 追加・削除・文言変更 — にも、同様に明示のユーザ承認が要る。
+`PDH-ticket-review` と `PDH-ticket-human-review` は別の stage である。前者は agent 側の ticket contract check である。後者は実装前の human gate であり、提示する材料は下の Human Gate Materials に従う。現在の依頼でユーザーが具体的な変更と期待結果を示して実行を指示していれば、その範囲の実装許可として記録し、同じ内容の再承認を求めない。調査や案の提示だけの依頼は実装許可とみなさない。新たな受け入れ条件や利用者への約束、合意した範囲を変える場合は、影響と変更案を示して明示承認を得る。
 
 `PDH-human-review` は close 前の human gate である。その目的は、coding agent が何をして何を達成したかを、ユーザが自分の期待と突き合わせることにある。明示のユーザ承認なしに `PDH-close` へ進まず、ticket を完了と表現しない。
 
@@ -39,7 +39,7 @@ Director は自身の engine・model・profile・reasoning effort を変更し�
 
 **ユーザに頼まれたことは、着手より先に note の `## Checklist` へ 1 依頼 1 行で書く。**守るのは、**頼まれたことと途中で見つけた宿題が、close までに 1 つも落ちないこと**である。`require_checklist` がこの節の checkbox を数え、**未了が残っている間 close を拒否する**ので、書いた時点から機構が守る。書かなければ何も守らない。
 
-⚠ **engine の task list（Claude Code の task list、Codex の plan）で代用しない。**あちらは **context が切れると消える**が、頼まれたことは消えない。**note へ書いたものだけが compact と session をまたいで残り、close で数えられる。**engine の一覧を併用してよいが、**数えられるのは note の `## Checklist` だけである。**
+Codex の plan を併用しても、依頼と未完了事項は note の `## Checklist` に残す。再開時と close 時には、この記録と現在の依頼を照合する。
 
 - **3 つ頼まれたら、まず 3 行書いてから着手する。**
 - **作業中に頼まれたことも、手を止めて先に足す。**
@@ -49,7 +49,7 @@ Director は自身の engine・model・profile・reasoning effort を変更し�
 
 subagent / worker を起動できないとき、solo 実行を同等のものとして黙って扱わない。確信度や gate の意味に影響する場合は、制約を説明してユーザに確認する。
 
-ユーザが明示的に要求した場合、承認済みの close フローが実行する場合（例: close 時の ticket.sh `auto_push`）、または `CLAUDE.md` が明示的に許可している場合を除き、`git push` しない。
+ユーザが明示的に要求した場合、承認済みの close フローが実行する場合（例: close 時の ticket.sh `auto_push`）、または `AGENTS.md` が明示的に許可している場合を除き、`git push` しない。
 
 ## Worker Instructions
 
@@ -59,8 +59,8 @@ worker / subagent は Director の会話状態全体を引き継がない。す�
 - 対象ファイルパスまたは担当境界
 - ticket の Why・AC・Architectural Invariants check・確定判断・out-of-scope 項目
 - その worker の正確な責務と衝突境界
-- 実装 worker には、`.agents/skills/pdh-coding/SKILL.md` または `.claude/skills/pdh-coding/SKILL.md` を読む指示
-- review worker には、`.agents/skills/pdh-reviewing/SKILL.md` または `.claude/skills/pdh-reviewing/SKILL.md` を読む指示
+- 実装 worker には、`.agents/skills/pdh-coding/SKILL.md` を読む指示
+- review worker には、`.agents/skills/pdh-reviewing/SKILL.md` を読む指示
 
 例外: 無バイアスの Why end-to-end review lens は、ticket file・AC・implementor の結論を意図的に省く。その prompt には Why だけを載せる（pdh-dev skill の review lens 規則を参照）。
 
@@ -80,9 +80,10 @@ review と検証のルールは次のとおり:
 - **Cross-model review**: 同じトリガに該当する diff では、review の少なくとも 1 つを生成側と異なる model が行う。一方の review 側が完遂できない場合は、別 model の独立 reviewer に Director 自身の直接コード読解を加えて代替し、その理由を記録する。
 - **Rewind discipline**: 実装や review の作業を巻き戻す前に、検出済みのすべての Critical/Major を、ticket の tests ディレクトリ配下の実行可能な `ticket-local-test` として固定する（区別と置き場所は `pdh-coding` skill「テスト設計ルール」）。巻き戻した後は、独立した初回 review をそれらの check と突き合わせ、巻き戻しの理由を記録する。
 
+- **Evidence contract**: 主張ごとに対象の版・環境・入力の由来・実行経路・期待結果・実出力を対応づける。今回の実測、過去の記録、推論、未確認を区別する。再現用データは、必要な契約と実装経路を通す主張の証拠に使える。実上流との互換性には、その上流の契約と出力の確認が要る。本番での成立を条件にしている場合は本番の証拠が要る。HTTP は契約に定めた status・本文・副作用で判定する。記録のない観測項目を、他の項目の成功や期待仕様から補って検証済みにしない。必要な証拠が不足する条件は未確認とし、補完する。
 - **Evidence freshness**: review・AC・test・Surface の証拠は、正確な commit SHA に結び付ける。後からの変更は、それが影響しうる証拠を無効化する。ブラウザ検証は実際の実行時構成（dev server・共有 shell / styles・認証・seed）で行い、切り離した renderer の代用では行わない。reviewer の prompt には review 対象の commit SHA を明記し、reviewer はその SHA を読む。review の実行中に、review 対象の ref へ commit しない。ref が動いたら、その review 結果は無効であり、修正差分に対して再実行する。
-- **Scope boundary**: 次のいずれかに当たるとき、finding は現在の ticket に留める — 未修正のままでは AC 未達になる。現在の diff が退行を起こした。同じ根本原因が、実際に出荷された欠陥を再発させうる。Critical/Major finding のせいで、この ticket が変更した / 必要とする user journey が review に耐えない。finding がこの ticket の Why を共有していて、直すことが ticket を広げるのではなく完成させる。例外には、修正を AC・現在の diff・その共有 Why へ結び付ける note 1 行が要る。Why の共有はいま直す理由である。規模と手間は、それ単独では保留の理由にならない。**いま直すのが既定である。**保留が正当化されるのは、finding が本当に別の問題であり、**かつ**ここで直すと高くつく場合だけ — どちらか片方では足りない。安く直せることは、それ自体がいま直す理由であり、finding が単独の ticket として成立しうる場合でも変わらない。finding の根本原因が同じ形で複数箇所にありうるなら、close 前にその箇所を列挙し、それぞれの処置を記録する。「他にもあるかもしれない」は close できる状態ではない。
-- **保留した ticket には、それ自身が存在する理由が要る。**保留はタダではない: 誰も単独では予定に入れない ticket は backlog であって計画ではない。未修正の finding はすべて、ちょうど 1 つの処置へ入れる — **fix now**（いま直す。上の Scope boundary）、**file**（起票する。その Why が単独で成立し、独立した作業単位として予定する価値があり、かつここで直すと高くつく）、**record only**（記録のみ。実在するが、ticket にする価値はなく、いまやりもしない）、**reject**（棄却。誤検出または前提誤り）。実在することは、それ自体では file の理由にならない。独立した単位として正当化できないが、やる価値はある finding は、保留せず現在の ticket で直す。record-only の finding は note に残し、恒久的な地雷である場合は repository の常設リファレンス文書にも残す。record-only の finding には、後から検索できる anchor を少なくとも 1 つ付ける — シンボル名・ファイルパス・endpoint・設定キー。anchor を持てない文面の finding は、後から使うには曖昧すぎる。書き直すか、棄却する。**file** と判定した finding は、現在の ticket が close する前にその ticket を作成し、close 報告でその名前を挙げる。それができないときは record only か fix now を選ぶ — 「あとで起票する」は処置ではない。
+- **Scope boundary**: 承認された目的や AC の達成に必要な問題、今回の変更が生んだ退行、同じ原因による出荷済み欠陥の再発を修正する。既存問題であることやレビューの巡回数だけでは、必要な修正を打ち切らない。修正が合意した結果や範囲を変えるなら先に合意する。無関係な問題は、安く直せることだけを理由に加えない。同じ原因が影響範囲内の別箇所にもある場合は、その箇所と処置を確認する。
+- **Finding disposition**: 指摘を fix now（今回必要な修正）、file（独立した目的と作業価値があり起票する）、record only（事実と影響を記録する）、reject（誤検出または前提誤り）に振り分け、理由を残す。file は close 前に作成して参照する。record only は対象のシンボル・パス・設定など検索できる手がかりを残す。直ちに判断が必要な重大リスクはユーザーへ伝える。
 - **Human authority**: human gate と product 判断には、明示のユーザ回答が要る。強調表示された / 既定のフォーム選択肢、沈黙、worker の出力は承認ではない。環境固有の制約を、明示承認なしに共有 repository 設定や base branch の変更で解決しない。代わりにローカル設定か一時コマンドを使う。
 
 ## Dev Server And Seed
@@ -114,7 +115,7 @@ HTTP レベルのツール（`curl`、API テスト script）が検証するの�
 
 ユーザに判断を求めるときの提示形式（何をしたか・何を達成したか・検証の証拠・判断点・選択肢）は `pdh-dev` skill の `_collaboration.md` が定める。human gate の材料は上の Human Gate Materials に従う。
 
-このセッションで該当する test を実行していないのに、動作すると決して報告しない。コマンド不在・依存不足・環境エラーは skip ではなく test 失敗として数える。失敗した test、理由不明の skip、実行できない test が 1 件でもあれば、作業は完了していない。
+実行していない test を今回実行したと報告しない。既存の証拠を利用するときは、検証の版・環境・実行記録と、現在も有効な理由を示す。コマンド不在・依存不足・環境エラーは実行不能として、実行して失敗した test と区別する。必要な確認の失敗、理由不明の省略、実行不能を残したまま、全条件を達成したとは報告しない。補完できない場合は残る影響を示し、人間に扱いを求める。
 
 suite 自身の summary 行を gate の記録へ貼る。結果についての主張で置き換えない。green でない step を免責するには、同じ step を base ref で実行し、そこでも fail することを示すしかない。失敗は無関係だと断言することは免責にならない。
 
@@ -133,8 +134,8 @@ human gate の質は、ユーザが受け取る材料の質まででしかない
 
 ルールを追加するときは、次の 4 問に答える。1〜3 が置き場所を、4 が書き方を決める。1〜3 のいずれかの答えが skill を指すなら、skill に置く。
 
-1. **project 固有か、PDH 共通か？** project 固有は `CLAUDE.md` へ。共通は skill か `PDH-AGENTS.md` へ。
-2. **常に要るか、特定の状況だけか？** `CLAUDE.md` と `PDH-AGENTS.md` は常に context にある。skill は呼ばれたときだけ読み込まれる。無いと事故が起きるルールだけが、常時読み込みのファイルに載る資格を持つ。
+1. **project 固有か、PDH 共通か？** project 固有は `AGENTS.md` へ。共通は skill か `PDH-AGENTS.md` へ。
+2. **常に要るか、特定の状況だけか？** `AGENTS.md` と `PDH-AGENTS.md` は常に context にある。skill は呼ばれたときだけ読み込まれる。無いと事故が起きるルールだけが、常時読み込みのファイルに載る資格を持つ。
 3. **誰が読むか？** 役割を特定できるなら — 実装担当だけ、PM だけ — その役割の skill に属する。
 4. **何を守るルールで、それはどこで見られるか？** **どの stage の出口で、誰が何を見ることを守るのかを 1 文で書く。**その 1 文が書けないなら、それはルールではなく手順である — その stage の note checklist へ置く。ルールは**その 1 文を先に、動作を後に**書く。**動作だけで書かれたルールは、動作を省けると読んだ読み手に落とされる。**
 

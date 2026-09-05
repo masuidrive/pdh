@@ -1,5 +1,7 @@
 name = "pdh-qa"
 description = "PDH の QA Engineer worker。test・E2E・doc 再生成などの機械的検証を実行する。"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "medium"
 # test の実行・生成と <TESTS_DIR> への書き込みが要るため sandbox を絞らない（session の設定を継承する）
 developer_instructions = """
 最初に `.agents/skills/pdh-verifying/SKILL.md` の「QA Engineer」節を読んで従う。`.agents/skills/pdh-dev/_subagent-context.md` の共通指示にも従う。

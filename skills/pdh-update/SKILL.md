@@ -1,17 +1,24 @@
 ---
 name: pdh-update
-description: "PDH アップデート: 上流 PDH リポジトリの最新版を取り込み、プロジェクトのスキル・テンプレートを更新する。「pdh-update」とだけ言われた時のみ起動する。他のキーワードでは起動しない。"
+description: "PDH アップデート: 上流 PDH リポジトリの最新版を取り込み、プロジェクト固有設定を保持して配布物を更新する。「pdh-update」と明示された時だけ起動する。"
 ---
 
-# PDH Update — 上流 PDH の取り込み
+# PDH Update
 
-利用可能な subagent / delegation 機構で更新作業用 worker を起動し、その worker 内で以下を実行する（メインコンテキストでは実行しない）。worker を起動できない場合は単独続行せず、制限を報告してユーザに確認する。
+次を最後まで実行する。
 
-1. https://raw.githubusercontent.com/masuidrive/pdh/refs/heads/main/INSTALL.md を読む（README.md しか無い古い記述を見た場合も INSTALL.md を読む）
-2. INSTALL.md の「既存プロジェクトのアップデート」の手順に従い、このプロジェクトの PDH を最新版にアップデートする。配置表へ追加されたskillと、directory copy配下に追加された`scripts/checks/*.check`も取り込み、Codex用symlink一覧を現行skill一式へ揃える。**skillと`pdh-*`のagent定義は毎回まるごと上書きする**（差分マージしない）。あわせて`scripts/checks/required-pdh-files.check`の`required_paths`を、いま配置した skill / agent 定義の一式へ揃える（導入先が使わないと決めて外した行は復活させない）
-3. **INSTALL.md の「既知の移行手順」を必ず読み、該当する項目をすべて適用する。**
-4. 更新手順には `bash ./ticket.sh selfupdate`（ticket.sh 本体を upstream 最新版へ更新）が含まれる。
-5. **「既知の移行手順」の確認コマンドを、適用後にもう一度ぜんぶ実行する**（INSTALL.md 手順 7.5）。「要追加」「要改名」が残っていたら直してから次へ進む。
-6. 完了報告には、どの項目を適用したか（または該当なしと判断したか）に加えて、**手順 5 の再実行の出力をそのまま貼る。**
+1. 上流の `INSTALL.md` を取得して「既存プロジェクトのアップデート」と「Claude 併用版からの移行」を読む。
+2. 更新前に `INSTALL.md` の手順で timestamp 付き backup を作る。backup path を記録する。
+3. `.agents/skills/pdh-*` と `.codex/agents/pdh-*` は上流定義で置き換える。列挙された PDH path だけを対象にし、user が追加した skill / agent は触らない。
+4. `PDH-AGENTS.md` と `docs/product-delivery-hierarchy.md` を更新する。
+5. `AGENTS.md`、`product-brief.md`、`technical-reference.md`、`.ticket-config.yaml`、`scripts/` の project 固有ファイルは上書きしない。template との差分を読み、必要な上流変更だけをマージする。
+6. `INSTALL.md` の配置表に追加された `.check` を取り込み、project 固有の `.check` を残す。`required-pdh-files.check` は現行の skill / agent 定義一式に合わせる。
+7. `bash ./ticket.sh selfupdate` で ticket.sh を更新する。
+8. `Based on` の commit ID を上流 HEAD に更新し、`INSTALL.md` の導入結果検査と project の `scripts/test-all.sh` を実行する。
+9. 同じ更新をもう一度実行し、PDH 配布物に 2 回目の差分が出ないことを確認する。
+
+旧 `.claude/skills/`、`.claude/agents/`、`CLAUDE.md` がある場合は、`INSTALL.md` の migration に従う。先に内容を backup し、project 固有ルールを `AGENTS.md` へ統合する。`.claude/` 全体や user のファイルをまとめて削除しない。
+
+完了報告には、上流 commit、backup path、更新した配布物、マージした project 固有ファイル、適用した migration、テスト結果、2 回目の冪等性確認を含める。
 
 Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/skills/pdh-update/SKILL.md

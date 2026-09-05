@@ -5,6 +5,7 @@ tmp/
 *.bak
 *.swp
 CLAUDE.local.md
+AGENTS.local.md
 
 # pdh-flow is an independent repo at github.com/masuidrive/pdh-flow.
 # Do not let this outer pdh repo track its files (causes nested-repo

@@ -1,12 +1,12 @@
 # 配布セットの消失を、この repo の側でも検出する。導入先へ配る
 # templates/checks/required-pdh-files.check の «上流版» であり、守る対象は同じだが
-# path が違う（配布元は skills/ と templates/agents/、配布先は .claude/ と .codex/）。
+# path が違う（配布元は skills/ と templates/agents/、配布先は .agents/ と .codex/）。
 #
 # check-distribution.sh は INSTALL.md の配置表と実ファイルの双方向一致を見るが、
 # 配置表が directory copy（templates/agents/ ごと）で書かれている範囲は、
 # 中の 1 ファイルが消えても気づけない。そこをここで表明する。
 #
 # ⚠ skill か agent 定義を増減したら、この行と templates/checks/required-pdh-files.check
-# の両方を同じ commit で直す（CLAUDE.md「配布物の一貫性」）。
+# の両方を同じ commit で直す（AGENTS.md「配布物の一貫性」）。
 reason=配布セットのファイルが消えている（配布先の required-pdh-files.check も同じ commit で直す）
-required_paths=skills/pdh-check-writing/SKILL.md,skills/pdh-coding/SKILL.md,skills/pdh-decision-board/SKILL.md,skills/pdh-dev/SKILL.md,skills/pdh-reviewing/SKILL.md,skills/pdh-update/SKILL.md,skills/pdh-verifying/SKILL.md,skills/tmux-director/SKILL.md,templates/agents/claude/pdh-ac-reader.md,templates/agents/claude/pdh-ac-verifier.md,templates/agents/claude/pdh-coding-engineer.md,templates/agents/claude/pdh-qa.md,templates/agents/claude/pdh-reviewer-lens1.md,templates/agents/claude/pdh-reviewer.md,templates/agents/claude/pdh-surface-observer.md,templates/agents/codex/pdh-ac-reader.toml,templates/agents/codex/pdh-ac-verifier.toml,templates/agents/codex/pdh-coding-engineer.toml,templates/agents/codex/pdh-qa.toml,templates/agents/codex/pdh-reviewer-lens1.toml,templates/agents/codex/pdh-reviewer.toml,templates/agents/codex/pdh-surface-observer.toml,templates/checks/required-pdh-files.check
+required_paths=skills/pdh-check-writing/SKILL.md,skills/pdh-coding/SKILL.md,skills/pdh-decision-board/SKILL.md,skills/pdh-dev/SKILL.md,skills/pdh-reviewing/SKILL.md,skills/pdh-update/SKILL.md,skills/pdh-verifying/SKILL.md,templates/agents/codex/pdh-ac-reader.toml,templates/agents/codex/pdh-ac-verifier.toml,templates/agents/codex/pdh-coding-engineer.toml,templates/agents/codex/pdh-qa.toml,templates/agents/codex/pdh-reviewer-lens1.toml,templates/agents/codex/pdh-reviewer.toml,templates/agents/codex/pdh-surface-observer.toml,templates/checks/required-pdh-files.check

@@ -119,7 +119,7 @@ Ticket の状態は YAML frontmatter で判定する。
 
 **確定判断 (Design Decisions) はこの 3 つと同じ扱いにしない。**解き方は実装で前提が崩れるため、合意を動かさず記録を残す限り、再合意なしで書き換えてよい。
 
-**実装担当向けの規則は `.claude/skills/pdh-coding/SKILL.md` 「ticket の変更は再合意で行う (絶対遵守)」にある**（AC が何度も変わるときの扱い、確定判断を書き換えてよい条件、escalate 手順、solo / bot 実行時の中断方法を含む）。ここには重複させない。
+**実装担当向けの規則は `.agents/skills/pdh-coding/SKILL.md` 「ticket の変更は再合意で行う (絶対遵守)」にある**（AC が何度も変わるときの扱い、確定判断を書き換えてよい条件、escalate 手順、solo / bot 実行時の中断方法を含む）。ここには重複させない。
 
 ### ブランチ戦略
 
@@ -132,7 +132,7 @@ main ← features/250711-091538-fix-auth (Ticket ブランチ)
 ```
 
 - ticket.sh が Ticket ごとに `features/<ticket-name>` ブランチを作り、close 時にマージ先（ticket frontmatter の `branch` フィールド、default `main`）にマージする。
-- 並列で複数 ticket を進める場合は worktree 分離を使うと PM (Director) と worker が独立に動ける。手順と gitignored ファイルの持ち込み（`worktree_copy_files`）は `.claude/skills/tmux-director/SKILL.md` 「複数 window による並行チケット実行」参照。
+- 並列で複数 ticket を進める場合は worktree 分離を使うと PM (Director) と worker が独立に動ける。作業開始時に worktree の branch と cwd を確認し、必要な gitignored ファイルだけをコピーする。コピー元の変更を避け、コピー先の ignore 状態と内容を確かめる。
 
 ### Stage labels
 

@@ -9,7 +9,7 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 ## Who
 
 - **PDH を自分のプロジェクトへ導入する開発者**: 既存リポジトリで coding agent を使い始め、ticket 運用の型が欲しい場面。README を agent に読ませて導入する。
-- **PDH 導入済プロジェクトで日々開発する開発者 + その coding agent**: ticket を開き、実装し、review / verify を通して閉じる場面。読むのは配布先にコピーされた `PDH-AGENTS.md` / `CLAUDE.md` / skills であって、この repo ではない。
+- **PDH 導入済プロジェクトで日々開発する開発者 + Codex**: ticket を開き、実装し、review / verify を通して閉じる場面。読むのは配布先にコピーされた `AGENTS.md` / `PDH-AGENTS.md` / `.agents/skills/` であって、この repo ではない。
 - **PDH 自体をメンテナンスする人**: 実プロジェクトで得た知見を templates / skills に還流させる場面。読み手は上の 2 者。
 
 ## Problem
@@ -24,8 +24,8 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 
 - **2 層構造**: Product Brief (why) → Ticket (what + how)
 - **PDH stage flow**: `PDH-open` → `PDH-ticket-review` → `PDH-ticket-human-review` → `PDH-implement` → `PDH-review` → `PDH-verify` → `PDH-human-review` → `PDH-close`。実装前と close 前に人間の gate を置く
-- **配布テンプレート**: `templates/`（`PDH-AGENTS.md` = PDH 汎用ルール、`CLAUDE.md` = project 固有ルールの雛形、各種 script）
-- **skills**: `skills/` に skill の実体を置く。配布先では `.claude/skills/` が実体、`.agents/skills/` はそこへの symlink（Codex CLI 用）
+- **配布テンプレート**: `templates/`（`PDH-AGENTS.md` = PDH 汎用ルール、`AGENTS.md` = project 固有ルールの雛形、Codex custom agent 定義、各種 script）
+- **skills**: `skills/` に skill の実体を置き、配布先の `.agents/skills/` へディレクトリとしてコピーする
 - **導入・更新経路**: `INSTALL.md` を coding agent に読ませて導入。更新は `pdh-update` skill（内部で `INSTALL.md` を辿る）
 
 主要フロー:
@@ -38,34 +38,34 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 
 ## Constraints
 
-- 配布物が動くのに要るのは、**標準的な Unix 環境（macOS / Ubuntu）に既定で入っているもの**だけ。具体的には `bash` / `git` / `awk` / `grep` / `sed` と、その周辺の標準コマンド。BSD 系と GNU 系の両方で動くこと（例外: tmux Director の `scripts/hookbus.js` が Node 18+ を要求する。これ以上増やさない）
+- 配布物が動くのに要るのは、**標準的な Unix 環境（macOS / Ubuntu）に既定で入っているもの**だけ。具体的には `bash` / `git` / `awk` / `grep` / `sed` と、その周辺の標準コマンド。BSD 系と GNU 系の両方で動くこと
 - **閲覧者のブラウザが実行する JavaScript は、この制限の対象外。**判断ボードに埋め込む JS は、閲覧者にも配布先にも install を強いないため
-- **engine 中立**: Claude Code / Codex CLI のどちらが main でも動くこと。特定 engine をフローにハードコードしない
+- **Codex 専用**: `AGENTS.md`、`.agents/skills/`、`.codex/agents/`を配布先の標準配置とする
 - 配布ファイル末尾の `Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/...` 行は導入時に HEAD commit へ置換される。この行の形式を壊さない
 - ticket のライフサイクルは [ticket.sh](https://github.com/masuidrive/ticket.sh) に委ねる。PDH 側で再実装しない
-- モデル名は時間で古びる。ドキュメントでは役割プロファイル（`strong-judge` 等）に従い、具体的なモデル名は上書き例として扱う
-- 本文は日本語、`AGENTS.md` など他 agent platform が読む入口は英語
+- 通常 worker は Sol を使い、軽量モデルへ自動 downgrade しない。Astra は通常モデルで解けない問題や最高水準の判断へ escalation するときだけ使う
+- 本文と `AGENTS.md` は日本語で書く
 
 ## Architectural Invariants
 
-- `AI-1` PDH 汎用ルールは `docs/PDH-AGENTS.md`、project 固有ルールは `templates/CLAUDE.md`。両者の内容を重複させない
-- `AI-2` skill の実体は 1 つだけ置く（`skills/`、配布先 `.claude/skills/`）。他 engine 向けの入口は symlink とし、内容を複製した wrapper を作らない
+- `AI-1` PDH 汎用ルールは `docs/PDH-AGENTS.md`、project 固有ルールは `templates/AGENTS.md`。両者の内容を重複させない
+- `AI-2` skill の実体は 1 つだけ置く（配布元 `skills/`、配布先 `.agents/skills/`）。symlink や wrapper を作らない
 - `AI-3` 配布テンプレートには、テンプレート自身の使い方説明を書かない。導入・更新手順は `INSTALL.md`、運用ルールは `docs/product-delivery-hierarchy.md` にある
-- `AI-4` 配布物の実行依存は、標準的な Unix 環境（macOS / Ubuntu）に既定で入っているものと ticket.sh に限る。BSD / GNU 両対応で書く（`hookbus.js` の Node 18+ のみ既存例外）。閲覧者のブラウザが実行する JavaScript は対象外
-- `AI-5` フローは engine 中立に記述する。特定 engine 固有の起動手順は、その前提を明示したセクションに閉じ込める
+- `AI-4` 配布物の実行依存は、標準的な Unix 環境（macOS / Ubuntu）に既定で入っているものと ticket.sh に限る。BSD / GNU 両対応で書く。閲覧者のブラウザが実行する JavaScript は対象外
+- `AI-5` フローと配布物は Codex の instruction・skill・custom agent 機構を直接使う
 
 ## Done
 
 - 新規プロジェクトで `INSTALL.md` を agent に読ませるだけで導入が完了する
-- Claude Code / Codex CLI のどちらを main にしても stage flow が回る
+- Codex を main にして stage flow が回り、worker は `.codex/agents/` の定義で起動できる
 - 実プロジェクトで得た改善が `pdh-update` で他プロジェクトへ伝播する
-- PDH repo 自身が PDH で運用されている（2026-07-18 着手: root `product-brief.md` / `CLAUDE.md` を追加）
+- PDH repo 自身が PDH で運用されている（root `product-brief.md` / `AGENTS.md` と自動検査を持つ）
 
 ## Non-goals
 
 - Web UI / SaaS / ダッシュボードを持つこと。Git + Markdown で完結させる
 - ticket のライフサイクル管理を自前実装すること（ticket.sh に委ねる）
-- Claude Code 専用にすること。engine 中立を保つ
+- Claude Code や他の coding agent へ配布する互換レイヤーを持つこと
 - Product Brief と Ticket の間に中間層を挟むこと。1 user + AI 体制では同期・調整のコストが価値を上回ると実証済み（経緯は Background）
 
 ## Open Questions
@@ -74,7 +74,7 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 
 決定済み:
 
-- **ticket 運用はしない**（2026-07-18）。PDH repo 自身への適用は `product-brief.md` / `CLAUDE.md` / 自動検査までとし、`ticket.sh` は導入しない
+- **ticket 運用はしない**（2026-07-18）。PDH repo 自身への適用は `product-brief.md` / `AGENTS.md` / 自動検査までとし、`ticket.sh` は導入しない
 - **自動検査は持つ**（2026-07-18）。`scripts/test-all.sh` = fast-checks + check-distribution + shell 構文
 - **Markdown リンク / アンカーの検査も自動化する**（2026-07-18）。見出しの改名で他ファイルからのリンクが静かに切れるため。Unicode を含む見出しの slug 化が必要で bash では書きづらいので `scripts/check-links.py` として Python で実装した（配布物ではないため `AI-4` の対象外）
 - **配布物の実行依存は「標準的な Unix 環境に入っているもの」に限る**（2026-08-26）。判断ボード skill の `kit/` が Node・Playwright・Python を要求しており、`AI-4` を破ったまま配布されていた。**閲覧者のブラウザが実行する JS は対象外**（install を強いないため）とし、開発機に install を求める側だけを外した。`check.js`（Playwright）は**配布物から外して PDH repo 側の `scripts/check-board-render.sh` へ移した** — kit を作るのは PDH repo の作業で、配布しないので `AI-4` の対象外である（`check-links.py` と同じ扱い）。`check-contrast.py` は awk へ書き換えた。あわせて BSD / GNU 両対応を要求に加えた（`base64 -d` / `-D`、bash 3.2 に無い `declare -A` が実在の非互換だった）

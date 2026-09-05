@@ -4,7 +4,7 @@
 # This repo ships text, not a running product, so "tests" here mean: the
 # distribution set is internally consistent, and the shipped shell scripts parse.
 # Real verification (does a consuming project still work after this change?) is
-# not automatable here — see CLAUDE.md「テスト・検証」.
+# not automatable here — see AGENTS.md「テスト・検証」.
 #
 # This is NOT the distributed template; that is templates/test-all.sh.
 set -uo pipefail
@@ -35,6 +35,7 @@ if command -v python3 >/dev/null 2>&1; then
   if ! python3 scripts/check-links.py; then
     failed=1
   fi
+  run "Codex evaluation evidence" python3 scripts/test-codex-eval.py
 else
   printf 'check-links: python3 not found; cannot verify Markdown links\n' >&2
   failed=1

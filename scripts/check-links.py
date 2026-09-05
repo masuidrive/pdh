@@ -83,10 +83,11 @@ def links(path: pathlib.Path):
 
 def main() -> int:
     tracked = subprocess.run(
-        ["git", "-C", str(REPO), "ls-files", "*.md"],
+        ["git", "-C", str(REPO), "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.md"],
         capture_output=True, text=True, check=True,
-    ).stdout.split()
-    files = [f for f in tracked if not f.startswith(SKIP_PREFIXES)]
+    ).stdout.split("\0")
+    files = sorted({f for f in tracked if f and not f.startswith(SKIP_PREFIXES)
+                    and (REPO / f).is_file()})
 
     anchor_cache = {}
 

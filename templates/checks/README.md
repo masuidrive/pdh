@@ -58,7 +58,7 @@ Required-files check:
 ```
 reason=a required file is gone; an upstream overwrite may have removed it
 # required_paths: exact repo-relative file paths, comma-separated. No glob here.
-required_paths=config/settings.yaml,.claude/skills/pdh-dev/_flow.md
+required_paths=config/settings.yaml,.agents/skills/pdh-dev/_flow.md
 ```
 
 Linter-command check:

@@ -293,6 +293,8 @@ fi
 
 universe_files=()
 while IFS= read -r -d '' file; do
+  # Deleted tracked paths have no content to scan; required_paths checks absence.
+  [[ -f "$file" ]] || continue
   universe_files+=("$file")
 done < <(git ls-files -z --cached --others --exclude-standard)
 

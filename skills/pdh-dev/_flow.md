@@ -2,7 +2,7 @@
 
 ## 前提
 
-`./ticket.sh help` を最初に実行する。各 stage の入口で note の Status をその stage 名へ更新する。仕様が変わったら、code と review を続ける前に ticket の AC と確定判断を更新する。通常は`PDH-review`と`PDH-verify`まで自動で進める。
+`./ticket.sh help` を最初に実行する。各 stage の入口で note の Status の現在段階を示す行だけを更新し、同じ節にある経緯・証拠・合意の記録は保持する。仕様変更に合意したら、code と review を続ける前に ticket の AC と確定判断を更新する。通常は`PDH-review`と`PDH-verify`まで自動で進める。
 
 ## PDH-open
 
@@ -31,7 +31,7 @@
 
 ## PDH-ticket-human-review
 
-1. `./ticket.sh check --require "Required Probes"` を実行する。未了があれば板を出さず先に測る
+1. `./ticket.sh check --require "Required Probes"` を実行する。未了があれば必要な事実を先に測る。実装許可の有無は `PDH-AGENTS.md`「Stage Flow」で判断し、既存の明示依頼を同じ内容の承認待ちに置き換えない
 2. 会話へ渡す材料は `pdh-decision-board`（`ticket-gate.md`）に従う。AC は承認対象の文言そのままを引用する
 
 ## PDH-implement
@@ -50,9 +50,9 @@ review 前に `git merge-base --is-ancestor origin/<base> HEAD` を確認し、f
 ## PDH-verify
 
 1. ticket の各 AC と note の process checklist を、1 項目ずつ確認して check する
-2. AC 裏取り Agent が各 AC の実質達成を検証する。`NOT VERIFIED` の証拠を補完するまで進まない
+2. AC 裏取り Agent が各 AC の実質達成を検証する。`NOT VERIFIED` は不足を補完する。権限・環境の制約で補完できない場合は、その条件を未確認のまま明示し、影響と補完方法を人間判断へ渡す。未確認を達成済みに変えない
 3. この ticket の差分に因果がある範囲で technical-reference.md を更新し、置き換えた記述・検査を削除する。該当なしなら note に 1 行残す。他 ticket 由来の記述・検査は消さず、削除候補として note に記録する
-4. 最終 HEAD で `scripts/test-all.sh` を再実行して実出力を note へ貼る
+4. 最終の実装に対する `scripts/test-all.sh` の実出力を note へ貼る。既存の実行結果を使えるかは `PDH-AGENTS.md`「Verification」の鮮度条件で判断する
 5. 外部 surface を consumer 視点で観察する（`pdh-verifying`「Surface Observer」）。純 backend は note に 1 行残して skip する
 6. AC check 済み ticket file を含めて commit する
 
@@ -65,8 +65,8 @@ review 前に `git merge-base --is-ancestor origin/<base> HEAD` を確認し、f
 
 1. 承認内容と、close 時点の merge、push、deploy 状態を記録する
 2. 完了報告は `pdh-decision-board`（`close-gate.md`）に次を加える
-   - 各 AC の data 出所。user-facing AC が合成 data のみなら close blocker とする
-   - merge 直後に失う user-observable 機能の yes / no。yes は downstream 復旧予定でも close blocker とする
+   - 各 AC のデータ出所、検証した経路と未確認の範囲。合成データかどうかではなく、主張に必要な証拠が揃っているかを確認する
+   - merge 直後に失う利用者機能と、その削除が承認された目的かを確認する。意図しない機能喪失は downstream 復旧予定でも blocker とする。承認済みの廃止は影響と合意を報告する
 3. 承認後に `./ticket.sh close` を実行する
 
 ## 中止フロー

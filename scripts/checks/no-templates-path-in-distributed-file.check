@@ -1,5 +1,5 @@
 # Files under docs/, skills/, and templates/ are copied INTO a consuming project,
-# where no `templates/` directory exists — templates/CLAUDE.md lands as CLAUDE.md,
+# where no `templates/` directory exists — templates/AGENTS.md lands as AGENTS.md,
 # templates/technical-reference.md as technical-reference.md, and so on. A
 # `templates/...` path reference therefore points at nothing once distributed.
 # (The `Based on .../blob/XXXXXXX/templates/...` URLs are source-repo links, not
