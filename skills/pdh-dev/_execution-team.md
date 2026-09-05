@@ -14,7 +14,7 @@ Astra は困難な判断の再評価や明示された評価担当に限定す�
 
 - `<TMP_DIR>` は `ticket.sh start`/`restore` 出力の `tmp_dir:`、`<TESTS_DIR>` は `ticket_dir:` に `/tests/` を足す。legacy flat layout は `tests/tickets/<id>/` を使う。
 - レンズ1 reviewer には Why の原文と対象の作業 tree を渡し、ticket・note・diff・実装者の結論は渡さない。共通指示の該当参照も除く。
-- AC 読み手には該当規則、What の冒頭文、AC だけを転記する。repo を探索させない。
+- AC 読み手は親の会話履歴・project context を継承しない新規 context で起動し、該当規則、What の冒頭文、AC 全件だけを転記する。`_subagent-context.md` の共通コンテキストは渡さず、repo を探索させない。in-process でこの入力境界を保証できない場合は、下記の隔離した CLI 起動を使う。
 - 書き込み担当と実行環境を明示する。read-only の担当は最終 message で結果を返し、結果ファイルへの書き込みを要求しない。
 - 指定された reviewer 構成を省略・統合しない。各担当の起動、完了、結果の回収までを確認する。
 
@@ -22,7 +22,7 @@ Astra は困難な判断の再評価や明示された評価担当に限定す�
 
 利用可能な Codex の in-process subagent 機構を優先する。配布の定義名は実装 `pdh-coding-engineer`、レビュー `pdh-reviewer` / `pdh-reviewer-lens1`、検証 `pdh-qa` / `pdh-ac-verifier` / `pdh-surface-observer`、AC 読み手 `pdh-ac-reader`。
 
-CLI が必要な場合は、担当ごとに固有の出力ディレクトリと prompt ファイルを用意し、対象 worktree を cwd として実行する。現在の `codex exec --help` とプロジェクトの権限規約を確認する。次の変数には選定済みの値と絶対パスを入れる。
+CLI が必要な場合は、担当ごとに固有の出力ディレクトリと prompt ファイルを用意し、通常は対象 worktree を cwd とする。AC 読み手の `$worker_worktree` は application の外にある中立な隔離 cwd とし、祖先ディレクトリからの自動読込も含め application の AGENTS・project context が入らないようにする。空の Git repo は CLI が要求する場合だけ初期化する。現在の `codex exec --help` とプロジェクトの権限規約を確認する。次の変数には選定済みの値と絶対パスを入れる。
 
 ```bash
 codex exec --json --model "$worker_model" \

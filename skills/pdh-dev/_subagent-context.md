@@ -1,10 +1,12 @@
-# PDH worker 共通コンテキスト（全 worker の spawn prompt 冒頭に必ず渡す）
+# PDH worker 共通コンテキスト（AC 読み手を除く全 worker の spawn prompt 冒頭に必ず渡す）
 
 ## あなた（worker）への共通指示
 
 PM から委譲された 1 つの subtask だけを実行する。会話履歴を前提にせず、prompt と指定ファイルを自分で読む。
 
-### 最初に読む（全 worker 必須 / レビュアーも）
+### 最初に読む（AC 読み手を除く全 worker 必須 / レビュアーも）
+
+AC 読み手への入力と起動は `_execution-team.md` に従う。
 
 1. `product-brief.md`（全判断の基準）
 2. `docs/product-delivery-hierarchy.md`（存在すれば）
@@ -69,6 +71,6 @@ file へ書けない sandbox で動く役は、`<RESULT_FILE>` に書く内容�
 
 ticket、note、diff、implementor の結論は渡されない。prompt に転記された Why と repo の現在の作業 tree だけを前提に、`pdh-reviewing`（Codex は `.agents/skills/pdh-reviewing/SKILL.md`）の「レンズ」節のレンズ1 に従う。
 
-### QA Engineer / AC 裏取り Agent / Surface Observer / AC 読み手（復元テスト）
+### QA Engineer / AC 裏取り Agent / Surface Observer
 
 各役の規則は `.agents/skills/pdh-verifying/SKILL.md`の該当節にある。read tool を持つ役は最初にその節を読む。

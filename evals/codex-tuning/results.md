@@ -129,3 +129,38 @@ R04の終端surfaceは同じAC担当が最終test-allの同一runで確認し、
 実案件workerと限定Astra評価のみ。初期3実行とGit前提不足で起動前に終了したAstra1回のusageは不明。既知usageだけの小計であり、Directorの調整・実行transport・準備agent・前段の文章評価は含まない。並列のwall timeを足した値で、実経過時間ではない。キャッシュは入力の内数、JSON/rolloutの同じturnを二重加算しない。実提供モデル名と金額は取得できず、要求モデル名やtoken数から費用削減を断定しない。
 
 最終報告12をHanger Sitesへ公開し、HTML7,819bytes・SHA256 `f051802e5edbce37819e17bfa94acc1d8b9ca94a04898e7656268ec39be72848` と全量readbackの一致を確認した。視認性の修正前後は新規合成データの実ブラウザ画像を掲載。報告サイト自体のブラウザ視覚検査は未実施。
+
+## 2026-09-06: 推奨5案件の実作業検証を終了
+
+ここまでの9月5日の状態は履歴であり、R05の添付送信承認待ちは解消した。ユーザーの「いいよ」で具体的添付をSol/highへ渡す許可を受領し、5件目も切り出しで指定されたticket-reviewの調査・提案・検証を実行した。R01〜R04は上記の実装・検証、R05は実装前レビューであり、5製品すべてのAC承認・出荷・closeを意味しない。
+
+R05はarchive source b0273636、独立Git baseline 442749b8、初回candidate 941de73、修正probe c1e45c6、明確化した提案437bdea、最終note635ba8f。production sourceはbaselineから不変。67,067 bytesの添付はignoredで保持し、commit・HTML掲載をしていない。Astraの追加評価へも送っていない。
+
+実添付は1 worksheet、1,016行×27列、formula cells 0。11候補を比較し、空行・数式行だけの削除は0行で効果なし。同一の数値0と特定errorの末尾反復を除く候補は884行、111,707→30,379 UTF-8 bytes（72.805%減）。ただしnumeric zero 884 cellsとerror 884 cellsを削除し、正当な同形反復も失う。無損失、自動で業務上不要な行を判定できる、一般的な削減率とはしない。
+
+独立Sol/high reviewerは、worksheet単位と100,000行上限の扱い、zero/errorを除外した損失指標の誤解をMajorとして指摘。両方を採用し、上限到達時はfilterを適用しない候補へ修正した。複数worksheet、Boolean False、100,000行ちょうど、100,001行目の有効値を合成XLSXで実行し、上限2例では現行全文と一致。保持する内容と順序も直接比較した。既存XLSX tests 2成功62 deselected、Ruff・diff検査成功。同じreviewerが両Majorの解消を確認した。
+
+Directorも凍結probeを実添付と新規生成した境界XLSXで再実行しexit0。実extractor5回中央値0.091151秒。時間と合成XLSXのZIP/core metadata以外の測定値はwriterと一致し、生成worksheet XMLも一致。候補のproduction経路・LLM token/費用は未測定。
+
+変更後7 proposed ACの独立読み手は、保持範囲、上限前提、複数sheet入力、truncation表示を文面から復元できなかった。既存proposalの条件と結果だけを明記し、同じ読み手が7件とも復元。同じreviewerも意味が変わらず引き継ぎのfreeze記録が解消したと確認した。読みやすさは承認・実装達成と区別する。Q1〜Q4は製品作業の次段階で決める事項として残す。
+
+### AC読み手の入力境界を修正
+
+実起動では、application cwdへの全読取を禁止するとモデル開始前のAGENTS読込で失敗した。別の中立cwdでの起動は成功した。配布指示にも「ACの文面だけ」と「全workerがproject文書を読む」の矛盾があった。
+
+非公開案件情報を含まない指示と観測だけをAstra/highへ渡した限定評価は、2ファイルの最小修正を採用した。`_execution-team.md`では親会話・project contextを継承しない新規入力を要求し、CLIの場合の中立cwdと祖先からの自動読込を明記。`_subagent-context.md`の共通入力・読込からAC読み手を除外した。役割・モデル・AC判定規則は増やしていない。
+
+これは実際の回答汚染、Git初期化の必要性、全実行環境での入力隔離を立証したものではない。先の4案件評価で追加ルール不要とされた部分判定・古いhandoffとは別の観測である。配布元 `./scripts/test-all.sh` は全成功。独立読み手の起動と変更AC再読も成功したが、未使用案件による一般化評価は未実施。
+
+### 全5案件終了時のCLI使用量
+
+| 要求モデル | 起動/usage取得 | 入力 | うちcache | 出力 | wall timeの和 |
+|---|---:|---:|---:|---:|---:|
+| gpt-5.6-sol | 50/46 | 166,642,027 | 159,445,888 | 899,369 | 26896.693秒 |
+| gpt-6-astra | 14/13 | 11,391,196 | 10,137,600 | 49,136 | 2360.389秒 |
+
+初期3実行と起動前失敗2回のusageは不明。取得できた同一thread/turnだけを集計し、JSONとrolloutを二重加算しない。Director調整・transport・準備agent・以前の文章評価は除外。並列wall timeの和は実経過時間ではない。金額、実提供モデル名、役割別最適値、費用削減率は未確定。要求モデルは通常Sol/high、観察Sol/medium、限定評価Astraとした。
+
+最新HTMLは [報告14](https://5uhod24n.aboutme.style/report-14.html)。報告サイトのブラウザ視覚検査は未実施で、構造・保存hash・全量readbackを検査する。変更は専用worktreeへ保存し、元mainの別作業によるd1463d4への更新を上書き・自動合流しない。
+
+報告14をHanger Sitesへ保存し、indexと版付きHTMLの全量readbackがローカルと一致。9,640 bytes、SHA256 `5848116b4f663c1e5d3ed32e87e20482fcf6e5abcce7ee617cc9dc54c279517d`。HTMLのタグ対応とローカルリンクも成功。
