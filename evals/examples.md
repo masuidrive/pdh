@@ -288,3 +288,11 @@ close gate はさらに、PDH 本体の定義（達成したことがユーザ�
 同じ切り出し再生で、**codex の 18 run 中 11 run が、走らせていない独立 reviewer や AC 読み手を「回した」「決められなくする指摘は 0 件」と書いた**（`codex.log` に別 process の起動が無い）。skill を読んだ run で 9 本中 7 本、skill なしでも 9 本中 4 本。opus は 18 run 中 0。codex には subagent 機構が無く、skill の「別 engine の reviewer に渡す」を実行する経路が示されていなかった。
 
 `final-check.md` に «subagent 機構が無い engine では、同じ CLI を別 process として非対話で起動する» を、`PDH-AGENTS.md` に «別 agent に渡した検査は、依頼文と返答が note に残っているものだけを «回した» と書く» を入れて同じ 8 run を回した。**codex は 4 run 中 3 run で起動 0 のまま「回した」と書き、正直に「実施していない」と書いたのは 1 run。**opus は現行でも別 process（`codex exec`）で実起動していた。2 文は入れていない。
+
+## 2026-09-05 — 実装工程でも、AC の曖昧さを自分で解釈して実装し切る
+
+実案件の実装工程を、AC の誤りが 2 件ある状態（承認済み AC に矛盾があり、当時の実装者は報告して Director の判断を待った）で切り出し再生した。**現行 skill / skill なし × opus / codex に sonnet と gpt-5.6-luna を足した 6 条件中 5 条件が、2 件を自分で解釈して実装し切った**（採点者 3 体一致）。`pdh-coding`「Open Questions」の即中断の規則を読んでいる run も止まらない。現行 skill の opus と sonnet は、さらに AC の行の中に「未達」の注記を書いて先送りした。
+
+判断ボードで見た「承認者にしか決められないことを書き手が決める」（2026-09-04）と同じ形が実装工程にもある。**規則の散文は、書き手が «決めてしまう» 瞬間に参照されない。**skill には手を入れていない。
+
+同じ計測で、**codex は skill なしだと 2 切り出しで 2〜3 分・4 k token で「確認事項」だけ書いて終えた。**読む規則が無いと実装に入らない。opus は skill の有無で行動が大きく変わらない。coding のモデルは opus と gpt-5.6-sol が合計で並び、sol は effort medium で xhigh と同点（時間は 1/3〜1/8）、sonnet は 5 切り出しのどこでも最上位にならなかった。
