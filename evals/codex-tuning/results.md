@@ -88,3 +88,44 @@ QAコンテナのPID1が子プロセスを回収しない問題は、--initで�
 project規則と今回の明示許可の引き継ぎ不足から、初回workerが単なるcwd修正にも確認を求めて停止した。Worker Instructionsへ許可済み・未承認操作とproject規則の明示的な上書きを渡す一文を追加し、配布元test-allは成功。権限packetを明記したR01/R02修正担当は再確認で停止せず完遂した。これは対象別の観測であり、独立した一般化評価や改善率ではない。
 
 記録はignored `evals/private/codex-tuning/lifecycle/`。各runのprompt/events/responseと実QAログを保存し、sessionとturnを固定して使用量を集計する。初期中断3回のusageは不明として残す。要求modelと実際に返されたmodel名も区別し、取得できない実model名を要求値で埋めない。[途中報告10](https://5uhod24n.aboutme.style/)を公開し、HTMLの保存SHA256と全量readbackの一致を確認した。アプリの実ブラウザ画像は確認したが、報告サイト自体のブラウザ視覚確認は未実施。
+
+## 2026-09-05: 実作業の独立検証と最終状態
+
+4案件で実装・独立レビュー・採用指摘修正・実DB/API/ブラウザまたはterminal観察・独立AC確認を行った。5件目のExcelは具体的添付のモデル送信が承認待ちで、全5件を完遂したとは報告しない。通常実装とレビュー/ACはSol/high、Surfaceは4案件すべてSol/mediumを実際に用いた。Astraは難しい採否裁定と修正確認、PDH全体の評価へ限定した。
+
+| 案件 | 最終コードと実測 | 未了と制約 |
+|---|---|---|
+| R01 ラベル | 832d00e7。採用3件の修正確認済み。実PG/API104成功2skip、両一覧とCLI・初期page外AND・publish/rollbackを実測。独立Surfaceは12画像で問題なし | 全体10/14。合流時migration。Surfaceの操作は成功したがglobal console assertionでexit1（外部font DNS8件/pre-auth401）。fallback font。ラベルSQLは1→20行で1回、既存service集計fallbackは全SELECT7→26のまま |
+| R02 会話集計 | bb8fdd6f。3件修正後、実PG3565/SQLite3562、Ruby230成功。独立Surfaceが小さく薄いlabelを発見し、12px/alpha.60へ修正。同じ実ブラウザ試験と同じ観察担当が解消確認 | 全体10/14を個別再試験でgreenへ変えない。実provider未確認。元AC verifierのAC1 VERIFIEDは過大判定と同じ担当が認め、NOT VERIFIEDへ訂正済み |
+| R03 抽出診断 | e22adbf9。採用8件とfollow-up2件を修正確認。新規合成PDFの上限0/過大画像/OCR失敗、copy/focus/明暗、最終見出しを実測。独立Surfaceは重大問題なし。全体11/14、PG2109成功 | SQLite未変更timing test失敗は単独1成功、Ruby標準環境とprovider不足。実OCR成功、元PDF2件、mockup、caller90日調査/所有者/承認後予告未了。Minorの「上の」位置文言は承認済みACなので独断変更しない |
+| R04 E2E診断 | 62d66179。採用指摘解消、実HTTP4methods+child出力+外側timeout前の履歴6成功、実E2Eでserver名と原因が対応。独立terminal観察で重大な実装問題なし。全体10/14、PG2141成功 | 未変更SQLite/frontendタイミング失敗は単独1/8成功。Ruby環境/provider、実CI、AC3定義/4methods・Functions2/1serverの明示確認、上流連絡とhuman gate。最終probeを未変更test-allへ追加した同一runで500→201と同じrequest/worker/tracebackをstdout確認。追加run12/14（PG2141/SQLite3686/frontend成功） |
+| R05 Excel | 隔離コピーとローカルの決定的測定のみ | 具体的な非公開添付のモデル送信承認待ち。モデル実作業を未実施とする |
+
+実コードのSHAと後続のnoteだけのcommitを区別した。R01/R02/R03のcurrent Status・commit checklist・現在の証拠を更新し、過去の実行不能/未commitは履歴として残した。Ruby3.2の古い実行結果を使う場合はSDK全blob/lockの不変を記録し、現在の全体QAが成功したとは言わない。R02のobserver JSON内sourceが初回SHAの固定文字列のままという記録不備も保持し、実行brokerの最終SHA/入力hash/build記録へ結び付けた。
+
+Surfaceの実行はDirector transportを用いた。R01/R02は観察担当がシナリオ作成し、Directorが実行、同じ担当が画像/値/traceを観察。初回のtheme移動/selector不備はharnessとして記録。R03はDirectorがシナリオ作成・実行し別担当が観察、R04は保存済み実terminal出力を別担当が観察した。完全に独立した実行とは称しない。
+
+実測で有効だったのは、実DB並行更新、実package入口、既存全体test entry、実画面を含めて確認し、採用指摘を同じreviewerへ返す手順だった。一方、既に「条件全体が揃って初めてVERIFIED」と明記した規則でもR02の過大な部分判定が残った。規則の存在だけで遵守を保証せず、Directorが条件/証拠/未了を照合する必要がある。古いcurrent Statusの放置も同様に実行上の課題として残した。
+
+これらは調整に使った同じ案件であり、未使用案件による最終一般化評価ではない。モデル比較のための同条件反復もなく、役割別最適値・金額削減率・完遂率の主張はしない。
+
+### Astraによる実作業・引き継ぎ評価
+
+限定パケットを読むAstra評価は、PDH配布へ追加の重大なルール欠陥を認めず、評価限界を明示した配布は支持できると判断した。採用指摘はR02のAC1過大判定とR03/R04等の古い現在Status/Resume Point。既存の条件全体・履歴保持の規則で扱えるため、案件別規則の追加は不要とした。
+
+同じAC担当がR02を訂正し、4案件の現在Status/Resume Point・最終コード・収集結果・次手を照合した。過去のcommit失敗や旧Resumeは履歴として残し、現在指示として参照させない。同じAstraの限定修正確認では2件とも解消、合意・履歴・残る義務への重大な退行なし、追加の修正巡回は不要と確認した。これはベンチマーク製品のcloseではなく、引き継ぎ指摘の解消である。
+
+次の有用な評価は、規則を凍結して未使用の小案件を中断/再開し、既存の明示許可と利用不能な検証条件を含む引き継ぎを確認するもの。今回は全5案件中4件の実施とR05承認待ちであり、その未使用案件評価まで済ませたとは報告しない。
+
+R04の終端surfaceは同じAC担当が最終test-allの同一runで確認し、AC7をVERIFIEDへ訂正した。未変更script、本番Playwright設定、temporary import-only adapterと実probeのhashを保存し、adapterは終了時除去した。追加run12/14の未完条件は保持する。
+
+### 実作業CLI使用量（取得できた範囲）
+
+| 要求モデル | 起動/使用量あり | 入力 | うちキャッシュ | 出力 | 実行時間の和 |
+|---|---:|---:|---:|---:|---:|
+| gpt-5.6-sol | 41/38 | 149,732,731 | 143,177,472 | 749,579 | 23490.502秒 |
+| gpt-6-astra | 13/12 | 11,340,878 | 10,107,776 | 47,804 | 2274.019秒 |
+
+実案件workerと限定Astra評価のみ。初期3実行とGit前提不足で起動前に終了したAstra1回のusageは不明。既知usageだけの小計であり、Directorの調整・実行transport・準備agent・前段の文章評価は含まない。並列のwall timeを足した値で、実経過時間ではない。キャッシュは入力の内数、JSON/rolloutの同じturnを二重加算しない。実提供モデル名と金額は取得できず、要求モデル名やtoken数から費用削減を断定しない。
+
+最終報告12をHanger Sitesへ公開し、HTML7,819bytes・SHA256 `f051802e5edbce37819e17bfa94acc1d8b9ca94a04898e7656268ec39be72848` と全量readbackの一致を確認した。視認性の修正前後は新規合成データの実ブラウザ画像を掲載。報告サイト自体のブラウザ視覚検査は未実施。
