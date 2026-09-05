@@ -9,7 +9,7 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 ## Who
 
 - **PDH を自分のプロジェクトへ導入する開発者**: 既存リポジトリで coding agent を使い始め、ticket 運用の型が欲しい場面。README を agent に読ませて導入する。
-- **PDH 導入済プロジェクトで日々開発する開発者 + その coding agent**: ticket を開き、実装し、review / verify を通して閉じる場面。読むのは配布先にコピーされた `PDH-AGENTS.md` / `CLAUDE.md` / skills であって、この repo ではない。
+- **PDH 導入済プロジェクトで日々開発する開発者 + その coding agent**: ticket を開き、実装し、review / verify を通して閉じる場面。読むのは配布先にコピーされた `PDH-AGENTS.md`、project ルール（`CLAUDE.md` か `AGENTS.md`）、skills であって、この repo ではない。
 - **PDH 自体をメンテナンスする人**: 実プロジェクトで得た知見を templates / skills に還流させる場面。読み手は上の 2 者。
 
 ## Problem
@@ -24,12 +24,13 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 
 - **2 層構造**: Product Brief (why) → Ticket (what + how)
 - **PDH stage flow**: `PDH-open` → `PDH-ticket-review` → `PDH-ticket-human-review` → `PDH-implement` → `PDH-review` → `PDH-verify` → `PDH-human-review` → `PDH-close`。実装前と close 前に人間の gate を置く
-- **配布テンプレート**: `templates/`（`PDH-AGENTS.md` = PDH 汎用ルール、`CLAUDE.md` = project 固有ルールの雛形、各種 script）
-- **skills**: `skills/` に skill の実体を置く。配布先では `.claude/skills/` が実体、`.agents/skills/` はそこへの symlink（Codex CLI 用）
-- **導入・更新経路**: `INSTALL.md` を coding agent に読ませて導入。更新は `pdh-update` skill（内部で `INSTALL.md` を辿る）
+- **契約（engine 共通）**: `docs/product-delivery-hierarchy.md`（運用ルール）と `docs/PDH-AGENTS.md`（PDH 汎用 agent ルール）。stage flow・gate・AC の扱い・検証の証拠要件はここにあり、engine で変えない
+- **配布セット（engine ごと）**: `claude/`（Claude Code 用）と `codex/`（Codex CLI 用）。それぞれ `skills/`・`templates/`（入口ファイルの雛形、agent 定義、script）・`INSTALL.md` を持つ。同じ規則文でも engine で振る舞いが逆になることが実測で出たため、skill の文面・agent 定義・起動手順は engine ごとに最適化する
+- **評価データ（engine 共通）**: 実案件の切り出し再生と harness は private repo `masuidrive/pdh-eval`（この repo では `evals/private/` として checkout）。どちらの配布セットの規則変更も、同じ切り出しで両 engine を測ってから入れる
+- **導入・更新経路**: 使う engine の `INSTALL.md`（`claude/INSTALL.md` / `codex/INSTALL.md`）を coding agent に読ませて導入。更新は `pdh-update` skill（内部で同じ `INSTALL.md` を辿る）
 
 主要フロー:
-1. 開発者が自プロジェクトで agent に「PDH の INSTALL.md を読んで導入して」と指示 → ticket.sh 導入 + ファイル配置 + Product Brief 雛形作成まで完了する
+1. 開発者が自プロジェクトで agent に「PDH の `claude/INSTALL.md`（または `codex/INSTALL.md`）を読んで導入して」と指示 → ticket.sh 導入 + ファイル配置 + Product Brief 雛形作成まで完了する
 2. 実プロジェクトで得た改善を PDH repo に還流 → 各プロジェクトが `pdh-update` で取り込む
 
 ## Appetite
@@ -38,9 +39,9 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 
 ## Constraints
 
-- 配布物が動くのに要るのは、**標準的な Unix 環境（macOS / Ubuntu）に既定で入っているもの**だけ。具体的には `bash` / `git` / `awk` / `grep` / `sed` と、その周辺の標準コマンド。BSD 系と GNU 系の両方で動くこと（例外: tmux Director の `scripts/hookbus.js` が Node 18+ を要求する。これ以上増やさない）
+- 配布物が動くのに要るのは、**標準的な Unix 環境（macOS / Ubuntu）に既定で入っているもの**だけ。具体的には `bash` / `git` / `awk` / `grep` / `sed` と、その周辺の標準コマンド。BSD 系と GNU 系の両方で動くこと（例外: tmux Director の `claude/scripts/hookbus.js` が Node 18+ を要求する。これ以上増やさない）
 - **閲覧者のブラウザが実行する JavaScript は、この制限の対象外。**判断ボードに埋め込む JS は、閲覧者にも配布先にも install を強いないため
-- **engine 中立**: Claude Code / Codex CLI のどちらが main でも動くこと。特定 engine をフローにハードコードしない
+- **契約は engine 中立、配布は engine ごと**: `docs/` の契約は Claude Code / Codex CLI のどちらでも同じに読めること。engine 固有の起動手順・model 指定は配布セットの中に置き、`docs/` に書かない
 - 配布ファイル末尾の `Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/...` 行は導入時に HEAD commit へ置換される。この行の形式を壊さない
 - ticket のライフサイクルは [ticket.sh](https://github.com/masuidrive/ticket.sh) に委ねる。PDH 側で再実装しない
 - モデル名は時間で古びる。ドキュメントでは役割プロファイル（`strong-judge` 等）に従い、具体的なモデル名は上書き例として扱う
@@ -48,16 +49,17 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 
 ## Architectural Invariants
 
-- `AI-1` PDH 汎用ルールは `docs/PDH-AGENTS.md`、project 固有ルールは `templates/CLAUDE.md`。両者の内容を重複させない
-- `AI-2` skill の実体は 1 つだけ置く（`skills/`、配布先 `.claude/skills/`）。他 engine 向けの入口は symlink とし、内容を複製した wrapper を作らない
+- `AI-1` PDH 汎用ルールは `docs/PDH-AGENTS.md`、project 固有ルールは配布セットの入口テンプレート（`claude/templates/CLAUDE.md` / `codex/templates/AGENTS.md`）。両者の内容を重複させない
+- `AI-2` skill の実体は配布セットごとに 1 つ置く（`claude/skills/` / `codex/skills/`）。1 つの配布セットの中で別 engine 向けの入口を作るなら symlink とし、内容を複製した wrapper を作らない
 - `AI-3` 配布テンプレートには、テンプレート自身の使い方説明を書かない。導入・更新手順は `INSTALL.md`、運用ルールは `docs/product-delivery-hierarchy.md` にある
-- `AI-4` 配布物の実行依存は、標準的な Unix 環境（macOS / Ubuntu）に既定で入っているものと ticket.sh に限る。BSD / GNU 両対応で書く（`hookbus.js` の Node 18+ のみ既存例外）。閲覧者のブラウザが実行する JavaScript は対象外
-- `AI-5` フローは engine 中立に記述する。特定 engine 固有の起動手順は、その前提を明示したセクションに閉じ込める
+- `AI-4` 配布物の実行依存は、標準的な Unix 環境（macOS / Ubuntu）に既定で入っているものと ticket.sh に限る。BSD / GNU 両対応で書く（`claude/scripts/hookbus.js` の Node 18+ のみ既存例外）。閲覧者のブラウザが実行する JavaScript は対象外
+- `AI-5` `docs/` の契約（`product-delivery-hierarchy.md` / `PDH-AGENTS.md`）は engine 中立に記述し、入口ファイルや subagent 機構を engine の名前で指定しない。engine 固有の起動手順・model 指定は配布セットの skill と agent 定義に置く
 
 ## Done
 
 - 新規プロジェクトで `INSTALL.md` を agent に読ませるだけで導入が完了する
-- Claude Code / Codex CLI のどちらを main にしても stage flow が回る
+- `claude/` と `codex/` のどちらの配布セットを導入しても、同じ `docs/` の契約で stage flow が回る
+- 配布セットの規則変更は、共有の評価データ（`pdh-eval`）で両 engine を測ってから入る
 - 実プロジェクトで得た改善が `pdh-update` で他プロジェクトへ伝播する
 - PDH repo 自身が PDH で運用されている（2026-07-18 着手: root `product-brief.md` / `CLAUDE.md` を追加）
 
@@ -65,7 +67,7 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 
 - Web UI / SaaS / ダッシュボードを持つこと。Git + Markdown で完結させる
 - ticket のライフサイクル管理を自前実装すること（ticket.sh に委ねる）
-- Claude Code 専用にすること。engine 中立を保つ
+- どちらかの engine 専用にすること。契約（`docs/`）を engine ごとに分けること
 - Product Brief と Ticket の間に中間層を挟むこと。1 user + AI 体制では同期・調整のコストが価値を上回ると実証済み（経緯は Background）
 
 ## Open Questions
@@ -74,6 +76,7 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 
 決定済み:
 
+- **配布セットを engine ごとに分け、契約と評価データを共有する**（2026-09-06）。切り出し再生で、同じ規則文に対して Claude Code と Codex の振る舞いが逆になる例が複数出た（codex は reviewer を回さずに「回した」と書く、gpt-5.6-sol は委譲された判断で止まり opus は default で進む）。「両方に効く 1 文」を 2 回試してどちらも外れたため、skill・agent 定義・起動手順は `claude/` と `codex/` に分けて engine ごとに最適化する。stage flow・gate・AC の扱いは `docs/` に 1 つだけ置き、規則変更は `pdh-eval` の同じ切り出しで両 engine を測ってから入れる。Codex 側の初版は `codex/pdh-codex-tuning` branch（Codex 専用に作り直したもの）を `codex/` に移して作る
 - **ticket 運用はしない**（2026-07-18）。PDH repo 自身への適用は `product-brief.md` / `CLAUDE.md` / 自動検査までとし、`ticket.sh` は導入しない
 - **自動検査は持つ**（2026-07-18）。`scripts/test-all.sh` = fast-checks + check-distribution + shell 構文
 - **Markdown リンク / アンカーの検査も自動化する**（2026-07-18）。見出しの改名で他ファイルからのリンクが静かに切れるため。Unicode を含む見出しの slug 化が必要で bash では書きづらいので `scripts/check-links.py` として Python で実装した（配布物ではないため `AI-4` の対象外）
