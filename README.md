@@ -32,16 +32,20 @@ Product Brief / Ticket の 2 層で、**なぜ作るか**・**いま何をやる
 
 ## セットアップ・アップデート
 
-導入手順と更新手順は **[INSTALL.md](claude/INSTALL.md)** にある。
+導入手順と更新手順は engine ごとの INSTALL.md にある。**使う coding agent の方を読ませる。**
 
-- **新規導入**: [INSTALL.md「新規導入」](claude/INSTALL.md#新規導入) — coding agent に任せる方法と手動手順の両方
-- **導入済みの更新**: [INSTALL.md「既存プロジェクトのアップデート」](claude/INSTALL.md#既存プロジェクトのアップデート)。`pdh-update` skill を使う場合も内部でこの手順を辿る
-- **バージョン間の移行**: [INSTALL.md「既知の移行手順」](claude/INSTALL.md#既知の移行手順)。差分だけでは移行できない変更はここに集約している
+- **Claude Code**: [claude/INSTALL.md](claude/INSTALL.md)（[新規導入](claude/INSTALL.md#新規導入) / [既存プロジェクトのアップデート](claude/INSTALL.md#既存プロジェクトのアップデート) / [既知の移行手順](claude/INSTALL.md#既知の移行手順)）
+- **Codex CLI**: [codex/INSTALL.md](codex/INSTALL.md)（[新規導入](codex/INSTALL.md#新規導入) / [既存プロジェクトのアップデート](codex/INSTALL.md#既存プロジェクトのアップデート)）
+- 導入済みの更新は `pdh-update` skill を使う場合も内部でこの手順を辿る。差分だけでは移行できない変更は各 INSTALL.md の移行手順に集約している
 
-最短の導入は、プロジェクトのルートで coding agent にこう指示する:
+最短の導入は、プロジェクトのルートで coding agent にこう指示する（使う engine の INSTALL.md を指す）:
 
 ```
+# Claude Code
 https://github.com/masuidrive/pdh の claude/INSTALL.md を読んで、このプロジェクトに PDH を導入して。
+
+# Codex CLI
+https://github.com/masuidrive/pdh の codex/INSTALL.md を読んで、このプロジェクトに PDH を導入して。
 ```
 
 ## ワークフロー (PDH stage flow)
