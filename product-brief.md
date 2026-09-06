@@ -77,6 +77,8 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 決定済み:
 
 - **配布セットを engine ごとに分け、契約と評価データを共有する**（2026-09-06）。切り出し再生で、同じ規則文に対して Claude Code と Codex の振る舞いが逆になる例が複数出た（codex は reviewer を回さずに「回した」と書く、gpt-5.6-sol は委譲された判断で止まり opus は default で進む）。「両方に効く 1 文」を 2 回試してどちらも外れたため、skill・agent 定義・起動手順は `claude/` と `codex/` に分けて engine ごとに最適化する。stage flow・gate・AC の扱いは `docs/` に 1 つだけ置き、規則変更は `pdh-eval` の同じ切り出しで両 engine を測ってから入れる。Codex 側の初版は `codex/pdh-codex-tuning` branch（Codex 専用に作り直したもの）を `codex/` に移して作る
+
+  **改訂（2026-09-06、測定後）**: Astra が書いた `codex/` の «中身» を split ベンチ（26 run、`evals/private/results/2026-09-06-split.md`）で測ったところ、共通版を越えず、判断ルールを緩めた箇所で共通版が踏まなかった禁止操作（F2）を踏んだ。独立検討（Astra 反証パス + Fable）でも芯は変わらず、次のように分割の «粒度» を是正した。**engine ごとに分けるのは «起動機構（worker spawn / agent 定義）» と «model / effort 選択» だけ**。**停止条件・実装許可・禁止操作・AC 承認・証拠要件などの判断/契約ルールは engine で変えない «利用者との契約» であり、両セットで同一に保つ**（同じ依頼が model 違いで許される操作を変えてはならない）。共通化は宣言だけでは drift するため（`scripts/check-guard-parity.sh` が両セットの guard 同一を検査）機構で守る。model / effort の «逆符号» は配布内容の分岐ではなく switch（実装工程で役割 profile を選ぶ。`pdh-dev/_execution-team.md`）で扱う。skills の物理 1 本化（overlay 化）はより根治的だが appetite 超のため見送り、当面は 2 セット + guard-parity 検査で運用する。codex/ の個別規則は `evals/private/variants/codex-branch-candidates/` に Tier B 候補として保存し、単独で測ってから採用する。
 - **ticket 運用はしない**（2026-07-18）。PDH repo 自身への適用は `product-brief.md` / `CLAUDE.md` / 自動検査までとし、`ticket.sh` は導入しない
 - **自動検査は持つ**（2026-07-18）。`scripts/test-all.sh` = fast-checks + check-distribution + shell 構文
 - **Markdown リンク / アンカーの検査も自動化する**（2026-07-18）。見出しの改名で他ファイルからのリンクが静かに切れるため。Unicode を含む見出しの slug 化が必要で bash では書きづらいので `scripts/check-links.py` として Python で実装した（配布物ではないため `AI-4` の対象外）

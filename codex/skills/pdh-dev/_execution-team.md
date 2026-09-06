@@ -8,6 +8,8 @@ Director は目的、合意、担当範囲、結果を管理する。調査・�
 
 高コストの評価用モデルは困難な判断の再評価や明示された評価担当に限定する。通常の named agent 定義に固定された model は spawn 引数より優先されるため、異モデル評価には必要な規則と model を指定した別の実行を使う。起動できない model を別名で代用したり、要求した model を実測した model と称したりしない。
 
+実装 worker の profile は、委譲された product / UX / AC 判断を «自分で決めて進む» のではなく «止めて差し戻す» 側を既定にする（pdh-coding の停止条件どおり）。判断が残る ticket は実装前 gate（PDH-ticket-human-review）で解消してから起動する。判断を埋めさせるために強い model を当てて «進ませ» ない — 書き手が決める失敗になる。model / effort は agent 定義の上書き例で、切り替えは役割 profile（«止まる worker» / «決めて進む worker»）で選ぶ。
+
 ## worker prompt の組み立て
 
 `PDH-AGENTS.md`「Worker Instructions」の入力と、`_subagent-context.md` の該当役の指示を渡す。`<TICKET_FILE>`、`<NOTE_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`、`<TESTS_DIR>`、`<TMP_DIR>` は実値へ置き換える。
