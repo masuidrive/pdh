@@ -2,7 +2,7 @@
 set -eu
 
 usage() {
-  echo 'usage: build.sh --body <fragment> --out <html> [--kit <dir>] [--lang <lang>] [--layout document|deck] [--title <title>]' >&2
+  echo 'usage: build.sh --body <fragment> --out <html> [--kit <dir>] [--lang <lang>] [--layout document|deck|combined] [--title <title>]' >&2
   exit 2
 }
 
@@ -33,7 +33,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ -n "$body" ] && [ -n "$out" ] || usage
-case $layout in document|deck) ;; *) echo 'build.sh: ERROR: layout must be document or deck' >&2; exit 2 ;; esac
+case $layout in document|deck|combined) ;; *) echo 'build.sh: ERROR: layout must be document, deck, or combined' >&2; exit 2 ;; esac
 
 case $0 in */*) script_parent=${0%/*} ;; *) script_parent=. ;; esac
 script_dir=$(CDPATH= cd -- "$script_parent" && pwd)
@@ -171,6 +171,14 @@ if [ "$layout" = document ]; then
   [ -r "$kit/page.js" ] || { echo "build.sh: ERROR: cannot read kit file: $kit/page.js" >&2; exit 1; }
   css_files='tokens.css board.css'
   js_files='page.js board.js'
+elif [ "$layout" = combined ]; then
+  # 1 枚に文書とスライドを持ち、上のトグルで切り替える。文書(page.js)・デッキ(deck.js)・
+  # 回答(board.js)の全部を積み、view.css/view.js がトグルと «デッキ表示時に再 fit» を受ける。
+  for required in page.js deck.css deck.js view.css view.js; do
+    [ -r "$kit/$required" ] || { echo "build.sh: ERROR: cannot read kit file: $kit/$required" >&2; exit 1; }
+  done
+  css_files='tokens.css board.css deck.css view.css'
+  js_files='page.js deck.js board.js view.js'
 else
   for required in deck.css deck.js; do
     [ -r "$kit/$required" ] || { echo "build.sh: ERROR: cannot read kit file: $kit/$required" >&2; exit 1; }

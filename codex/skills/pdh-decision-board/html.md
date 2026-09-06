@@ -1,6 +1,6 @@
 # HTML の board を組む〔手順 7〕
 
-HTML を選んだときだけ読む。HTML では文書と 2 軸デッキの両方を作る（[base.md](base.md)「媒体を選ぶ」）。
+HTML を選んだときだけ読む。**HTML は 1 枚に文書とスライド（2 軸デッキ）を持ち、上のトグルで切り替える**（`--layout combined`。[base.md](base.md)「媒体を選ぶ」）。既定表示は文書、スライドは狭い画面のとき開く。
 
 ## kit を埋め込む
 
@@ -17,6 +17,31 @@ HTML を選んだときだけ読む。HTML では文書と 2 軸デッキの両�
 ```
 
 デッキは `<div class="deck" id="deck" lang="ja" data-board-id="…" data-answer-title="…">`。**`data-board-id` は 1 ページに 1 つ。回答フォームの部品（進捗・貼り戻し欄・コピーボタン）は全部この中に置く** — `board.js` は外枠の中しか見ない。デッキの地図 `<nav class="map" id="map">`、4 つの `.edge`、原寸 overlay は deck の**外**に置く。
+
+## 1 枚に文書とスライドを持つ（combined）
+
+**`data-board-id` の外枠は 1 つ**で、その中に文書とスライドの両方を入れる。回答は同じ `data-q` を両方に書けば `board.js` が両ビューを同期する（`window.__fitAll` の再測は `view.js` が切替時に呼ぶ）。
+
+```html
+<main class="board" lang="ja" data-board-id="…" data-answer-title="…" data-view="document">
+  <div class="viewswitch">
+    <button type="button" data-view-btn="document" class="on" aria-pressed="true">文書</button>
+    <button type="button" data-view-btn="deck" aria-pressed="false">スライド</button>
+  </div>
+  <div class="view-doc"> …文書の節（目次・現在地は page.js）… </div>
+  <div class="view-deck-wrap">
+    <div class="deck" id="deck"> …deck-col / section.p … </div>
+    <nav class="map" id="map"></nav>
+    <div class="edge edge-l"></div><div class="edge edge-r"></div>
+    <div class="edge edge-u"></div><div class="edge edge-d"></div>
+  </div>
+  … 回答フォームの部品（進捗・貼り戻し欄・コピー）を 1 組だけ、外枠の «中» に置く …
+</main>
+```
+
+- **`data-view` の既定は `document`**。`view.js` がトグルを受け、`deck` へ切り替えた瞬間に `window.__fitAll` を呼んで «隠れている間 0 高さで測れない» を直す。
+- **回答フォームの部品は 1 組だけ**（外枠直下）。文書・スライドの `.answer-choice` は同じ `data-q` を持たせる。`board.js` が両方を同期し、進捗の N は判断 ID で重複排除する。
+- スライドの地図・`.edge`・原寸 overlay は `.view-deck-wrap` の中に置く（文書表示のとき隠れる）。
 
 ## 回答フォーム
 
@@ -102,7 +127,7 @@ CSS は `kit/board.css` にある。**色・枠を style 属性で足さない**
 ## 発行前検査
 
 ```bash
-tools/build.sh --body body.html --out board.html   # --layout deck でデッキ版
+tools/build.sh --body body.html --out board.html --layout combined   # 文書+スライドを 1 枚に
 tools/check-static.sh board.html
 ```
 

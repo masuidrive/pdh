@@ -53,12 +53,20 @@ cp "$SHIPPED_FIXTURES/pixel.svg" "$OWN_FIXTURES/" 2>/dev/null || true
 build good "$SHIPPED_FIXTURES"
 build broken-j "$SHIPPED_FIXTURES"
 for f in broken-a broken-d broken-h broken-i broken-k; do build "$f" "$OWN_FIXTURES"; done
+# combined layout（文書とスライドを 1 枚に持つトグル）は --layout combined で組む。
+"$KIT_TOOLS/build.sh" --body "$OWN_FIXTURES/combined.html" --out "$TMP/combined.html" --layout combined >/dev/null 2>&1
 rm -f "$OWN_FIXTURES/pixel.svg"
 
 if run_check good plain; then
   echo 'PASS good: check.js A〜K'
 else
   echo 'FAIL good: check.js が成功しませんでした' >&2; cat "$TMP/good.out" >&2; exit 1
+fi
+
+if run_check combined plain; then
+  echo 'PASS combined: 文書/スライド 1 枚トグル — check.js A〜K'
+else
+  echo 'FAIL combined: check.js が成功しませんでした' >&2; cat "$TMP/combined.out" >&2; exit 1
 fi
 
 expected_for() {
