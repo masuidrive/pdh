@@ -15,3 +15,8 @@ pdh-flow/
 decision-board.sh
 .decision-board.yaml
 evals/private/
+
+# board-check render check の local 依存（scripts/check-board-render.sh 用。配布しない）
+scripts/board-check/node_modules/
+scripts/board-check/package.json
+scripts/board-check/package-lock.json
