@@ -28,6 +28,7 @@ human gate では判断ボード（`pdh-decision-board` の Completed Staff Work
   - ⚠ **畳んではならない**: 代償・リスク・不可逆操作・機微情報・(close gate では) AC 達成の証拠。判断に load-bearing なので開いたまま（`base.md` / `risk-overlay.md` の «承認・証拠・機微・不可逆は de-emphasize しない»）。**«推奨で行ける» は «判断を隠す» ではない** — 承認者が代償を見た上で軽く諾否できることが条件。
 - **図表・画像**: **mermaid は使える** — GitHub が ` ```mermaid ` を issue でネイティブ描画し、bot はテキストで author できる（ブラウザ不要。HTML kit の mermaid と同じ役割）。フロー/構成図で判断が明確になるなら使う。
   - **スクリーンショットは «devcontainer にブラウザが入っているか» で決まる**（«skill の掟» ではない）。**既定の vendored devcontainer は claude/codex CLI だけでブラウザが無いので撮れない。**Dockerfile に headless ブラウザ（Chromium/Playwright 等）を足せば、cloud bot は描画・スクショ・**実 surface 検証**ができる — 対話 skill が人へ回す視覚確認を cloud は自前で回せる余地がある。
+  - **ブラウザがあるなら積極的に撮る**（`base.md`「出来上がりの像」の作法どおり: 変更前後・mock・同じ入力/画角/幅・実 DOM に差し込んで撮る）。**切り抜き・強調（annotation）は歓迎。**ただし **board のレイアウトそのものを詰めるのに時間をかけない** — 像は判断の証拠であって見た目の作品ではない。
   - ただし **撮れても «表示» は別問題**: private repo では画像のインライン描画が不安定（認証付き URL）。commit して参照しても viewer 次第。
   - **ブラウザが無い、または表示が当てにできない場合は «回せない» として人へ渡す**（`PDH-AGENTS.md`「Browser And Surface Checks」）。撮れない事実を伏せて «確認した» と書かない。
 - **local 対話フロー（bot を使わない）** は従来どおり HTML kit / artifact / decision.hanger でよい。この markdown 版は cloud（と `pdh-gh-pull` で取り込む local）だけ。
