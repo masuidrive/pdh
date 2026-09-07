@@ -42,6 +42,24 @@ for f in github-bot/_pdh.md github-bot/_github-issue.md; do
   fi
 done
 
+# --- 配線: gate 停止句が «実際に agent の prompt に載る» ことを保証する ---
+# run-action.sh は system prompt へ _pdh.md «だけ» を append する（_github-issue.md は
+# agent が Read する前提で append しない）。よって「gate 停止句が _pdh.md に在る」かつ
+# 「run-action.sh が PDH project で _pdh.md を append する」の 2 つが揃って初めて、停止指示
+# が agent に必ず届く。上で前者を検査済み。ここで後者（vendored 機構がその append を今も
+# するか）を検査する。upstream の再同期で detection/append が変わればここが落ちて気づける。
+ra="github-bot/vendor/.github/coding-robot/run-action.sh"
+if [ -f "$ra" ]; then
+  if ! grep -q 'product-brief.md' "$ra" || ! grep -q -- '-d tickets' "$ra"; then
+    printf 'github-bot: run-action.sh の PDH 検出（product-brief.md && tickets/）が見当たらない\n' >&2
+    failed=1
+  fi
+  if ! grep -q 'append_prompt "\$SCRIPT_DIR/_pdh.md"' "$ra"; then
+    printf 'github-bot: run-action.sh が _pdh.md を system prompt へ append していない（gate 停止句が agent に届かない恐れ）\n' >&2
+    failed=1
+  fi
+fi
+
 # --- vendor の出どころ commit が VENDOR.md に固定されているか ---
 if [ -f github-bot/vendor/VENDOR.md ] && ! grep -qE 'commit.*[0-9a-f]{40}' github-bot/vendor/VENDOR.md; then
   printf 'github-bot: vendor/VENDOR.md に取り込み元 commit（40 hex）が無い\n' >&2
@@ -58,4 +76,4 @@ if [ "$failed" -ne 0 ]; then
   printf 'check-github-bot: FAILED\n' >&2
   exit 1
 fi
-printf 'check-github-bot: layer files present, gate-stop guard present, vendor pinned\n'
+printf 'check-github-bot: files present, gate-stop guard present & wired into prompt, vendor pinned\n'

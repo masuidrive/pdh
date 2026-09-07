@@ -24,7 +24,10 @@ import unicodedata
 REPO = pathlib.Path(__file__).resolve().parent.parent
 
 # Files whose links describe a consuming project's layout, not this repo's.
-SKIP_PREFIXES = ("claude/templates/", "codex/templates/")
+# github-bot/vendor/ is upstream text vendored from github-bots; its links are
+# relative to that repo's layout, not this one's (and PDH maintains its own layer
+# files at github-bot/, not the vendored machinery). Same rationale as templates.
+SKIP_PREFIXES = ("claude/templates/", "codex/templates/", "github-bot/vendor/")
 
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 FENCE = re.compile(r"^\s*(```|~~~)")
