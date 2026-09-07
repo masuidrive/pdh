@@ -15,6 +15,13 @@ PDH の human gate は **`PDH-ticket-human-review`（実装前）** と **`PDH-h
 
 この停止は engine で変えない契約であり、`docs/PDH-AGENTS.md` の gate 規則を Actions 実行に写したもの。緩めない。
 
+## gate の判断ボードは «issue コメントの markdown» で出す
+
+human gate では判断ボード（`pdh-decision-board` の Completed Staff Work）を作る。**cloud の出力先は HTML kit ではなく issue コメントの markdown** にする:
+- **理由**: (a) skill からブラウザを開けない（board を描画・検証できない）、(b) HTML board は GitHub issue にインライン描画されない（ソース表示になる）。→ **deck / document トグルや `build.sh`・decision.hanger は cloud では使わない**（作っても読めない）。
+- **守るのは board の «規律»**: 承認者が追加調査なしに求められた判断を下せる／その判断に使わないものを読ませない。同一入力の前後比較・対象外・代償を **markdown（表・`<details>`・コードブロック）** で出す。GitHub がそのまま描画する。
+- **local 対話フロー（bot を使わない）** は従来どおり HTML kit / artifact / decision.hanger でよい。この markdown 版は cloud（と `pdh-gh-pull` で取り込む local）だけ。
+
 ## 進捗コメントを無意味に増やさない
 
 - run 中の「🤖 **作業中...**」コメントは **1 個を編集し続ける**（machinery の `PROGRESS_COMMENT_ID` が担う）。stage が進むたびに新規コメントを立てない。
