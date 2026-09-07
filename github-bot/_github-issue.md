@@ -21,6 +21,7 @@ human gate では判断ボード（`pdh-decision-board` の Completed Staff Work
 - **分けている理由は «届け先の面» の 1 点だけ**: GitHub issue コメントは **markdown は描画するが HTML はインライン描画しない**（ソース表示になる）。一方 local 対話は board を **HTML ファイル / artifact / decision.hanger** ＝«ブラウザで開ける面» に届けるので HTML kit が生きる。cloud の届け先は issue なので markdown。→ **deck / document トグルや `build.sh`・decision.hanger は cloud では使わない**（届け先で読めない）。
 - ⚠ **«skill からブラウザを開けない（board を自分で描画・検証できない）» は cloud / local の別ではなく全環境で同じ**。board の見た目はどこでも skill では機械検証されない。これは媒体選択の理由ではない別の普遍的事実なので、混同しない。
 - **守るのは board の «規律»**: 承認者が追加調査なしに求められた判断を下せる／その判断に使わないものを読ませない。同一入力の前後比較・対象外・代償を **markdown（表・`<details>`・コードブロック）** で出す。GitHub がそのまま描画する。
+- **skill の手順との橋渡し**（`pdh-decision-board` は HTML/artifact/decision.hanger 前提で書かれている。cloud はここで上書きする）: 手順 **«媒体を選ぶ» では issue コメントの markdown を選ぶ**（`build.sh` を走らせない）。手順 **«発行» は、board を最終レポート（gate コメント本文）として markdown で書くこと**＝それを machinery（`run-action.sh`）が issue コメントとして投稿する。board 専用の発行先（URL・ファイル）は cloud では作らない。
 - **local 対話フロー（bot を使わない）** は従来どおり HTML kit / artifact / decision.hanger でよい。この markdown 版は cloud（と `pdh-gh-pull` で取り込む local）だけ。
 
 ## 進捗コメントを無意味に増やさない
