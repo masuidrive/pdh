@@ -68,6 +68,7 @@ issue とのやり取りは、同じディレクトリの **`.github/coding-robo
 
 - **human gate では自己承認しない。** `PDH-ticket-human-review` と `PDH-human-review` に達したら、Actions には対話できる人間がいないので、**gate の要点を issue にコメントして run を停止**する。承認は **🤖 を含むコメント**（例「🤖 承認」。Actions は reaction では起動しないので 👍 だけでは再開しない）、変更希望は 🤖 付きで返信。«よしなに» で gate を越えない。
 - **進捗コメントは増やさない。** run 中の「🤖 作業中...」は 1 個を編集し続ける（machinery が担う）。人間の注意が要るとき（gate・質問・blocker）だけ新規コメントを立てる。
+- **stage をラベルで出す。** run の終わりに issue の PDH stage ラベルを到達 stage に更新する（既存の PDH-* を外し現在のものだけ付ける。詳細は `_github-issue.md`）。ラベルが無ければ skip して続行。Projects は使わない。
 - **PR は `Refs #N`**（`Closes #N` にしない）。ticket.md に従い・issue は会話面なので、close は PDH の close 手順で行う。
 
 ## 不可侵 / 承認

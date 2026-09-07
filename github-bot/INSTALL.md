@@ -49,12 +49,28 @@ project 固有の env が要るテストがあるなら、まとめて 1 つの 
 gh secret set ENV_JSON --body '{"SOME_API_KEY":"...","BASE_URL":"..."}'
 ```
 
-## 3. 使い方
+## 3. stage ラベルを作る
+
+bot は stage 遷移で issue に PDH stage ラベルを付ける（status を Issues 一覧で見るため。Projects は使わない）。8 段のラベルを作っておく（gate の 2 つは amber で目立たせる）:
+
+```bash
+R=<owner/repo>
+for s in open ticket-review implement review verify close; do
+  gh label create "PDH-$s" --repo "$R" --color c5def5 --force
+done
+for s in ticket-human-review human-review; do          # gate は amber
+  gh label create "PDH-$s" --repo "$R" --color fbca04 --force
+done
+```
+
+未作成でも致命的ではない（bot はラベル更新を skip して本作業を続ける）が、gate 待ちの可視化には作っておく。
+
+## 4. 使い方
 
 - Issue / PR のコメントに **🤖**（または `:robot:`）を含めると Actions が発火し、coding-robot が PDH フローで動く。
 - **human gate（`PDH-ticket-human-review` / `PDH-human-review`）では bot は自己承認せず、要点を issue にコメントして停止する。** 承認は **「🤖 承認」など 🤖 を含むコメント**で再開（⚠ Actions は reaction では起動しないので 👍 だけでは動かない。👍 は任意の印）。変更希望は 🤖 付きで返信。
 - 端末で issue のコメントを拾いたいときは「issue 読んで」等と言えば `pdh-gh-pull` skill が取り込む。
 
-## 4. 更新（再同期）
+## 5. 更新（再同期）
 
 machinery（vendor/）が github-bots 側で更新されたら、`github-bot/vendor/VENDOR.md` の手順で再同期し、commit id を更新する。`_pdh.md` / `_github-issue.md` / `pdh-gh-pull` は PDH 側で保守するので、この repo の版を再配置する。

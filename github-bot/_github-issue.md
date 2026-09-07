@@ -39,6 +39,20 @@ human gate では判断ボード（`pdh-decision-board` の Completed Staff Work
 - **新規コメントを立てるのは «人間の注意が要る» ときだけ** — gate・質問・blocker。それ以外（stage 遷移・commit・テスト結果）は作業コメントの編集か、ticket.md / note.md への記録で済ませる。
 - 通知を撒かないことを優先する。人間が読む必要のない途中経過でコメント欄と通知を埋めない。
 
+## stage をラベルで可視化する
+
+bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する**（Projects は使わない。ラベルだけで status を出す）。
+
+- ラベルは 8 段: `PDH-open` / `PDH-ticket-review` / `PDH-ticket-human-review` / `PDH-implement` / `PDH-review` / `PDH-verify` / `PDH-human-review` / `PDH-close`。**ticket は常に 1 stage** なので、既存の PDH-* を外して現在のものだけ付ける:
+  ```bash
+  gh issue edit "$N" --repo "$R" \
+    --remove-label PDH-open,PDH-ticket-review,PDH-ticket-human-review,PDH-implement,PDH-review,PDH-verify,PDH-human-review,PDH-close \
+    --add-label "PDH-<current-stage>"
+  ```
+- 1 回の run は複数 stage を跨ぐので、**run の終わりに到達 stage を反映**すればよい（多くは gate 待ちか close）。
+- 特に **gate 待ちラベル（`PDH-ticket-human-review` / `PDH-human-review`）**で溜まると、Issues 一覧のラベルフィルタで «あなたが承認すべき issue» が一目で分かる。これがラベルの主目的。
+- ラベルは INSTALL で作成済みが前提。無い repo では `--add-label` が失敗するので、その run では**ラベル更新を skip して本作業は続ける**（ラベルの失敗で gate や実装を止めない）。
+
 ## issue の作り方（on-gate）
 
 - **cloud**: issue が起点なので既にある。何もしない。
