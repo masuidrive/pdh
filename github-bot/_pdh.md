@@ -52,7 +52,10 @@ fi
 ## checklist gate と close（bot のブランチ模型に注意）
 bot は `agent/issue-N` で作業し、ticket.sh の feature-branch 模型（`{branch_prefix}<ticket-name>`）を使わない。そのため **`ticket.sh check` の «ticket/branch 同期» 判定は構造的に不一致を出す**（checklist の合否ではなく、branch が `agent/issue-N` で `{branch_prefix}<name>` と違うことを報告している）。これは想定内で、フローを止める失敗ではない。
 - **checklist の充足は ticket 本体・note を直接読んで確認する** — required グループ（`.ticket-config.yaml` の `require_checklist_groups`）が両ファイルに在り、未了 checkbox が無いか。branch 同期の警告そのものは無視してよい。
-- **close は PR が merge された後に `ticket.sh close --no-merge <ticket-name>`** で行う（ticket.sh に merge させない。merge は PR で行う）。`--no-merge` は feature-branch 模型に依存しないので `agent/issue-N` でも通る。checklist gate（`require_checklist` / `require_checklist_groups`）はここでも効くので、close 前に上記を満たしておく。
+- **close 段階（PDH-close、close 承認後）の手順** — PR を «誰が作るか» を曖昧にしない。次の順で行う:
+  1. **bot が PR を作る**（`agent/issue-N` → default branch、本文に **`Refs #N`**。`Closes`/`Fixes` にしない）。作ったら «PR #M を merge したら 🤖 で最終 close します» と issue にコメントして**停止する**（merge は人間の操作）。
+  2. 人間が PR を merge する。
+  3. 次の 🤖 で bot が **`ticket.sh close --no-merge <ticket-name>`**（ticket.sh に merge させない。`--no-merge` は feature-branch 模型に依存しないので `agent/issue-N` でも通る）を実行し、`gh issue close #N` する。checklist gate（`require_checklist` / `require_checklist_groups`）はここで効くので、その前に上記の checklist 充足を満たしておく。
 
 ## worker spawn（team 実行）
 **あなた（bot の main agent）は PM として team フローを実行する。** worker（Coding Engineer / reviewer / AC 裏取り 等）は **CLI subprocess で spawn** する（`_execution-team.md`「spawn 機構」）。

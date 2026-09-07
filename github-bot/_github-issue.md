@@ -33,7 +33,8 @@ PDH の human gate は **`PDH-ticket-human-review`（実装前）** と **`PDH-h
 ## PR は `Refs`、close は PDH の手順で
 
 - PR 本文は **`Refs #N`**（`Closes #N` / `Fixes #N` にしない）。`Closes` は PR merge で issue を自動 close するが、**PDH では close は `PDH-close` の手順**（checklist gate・close 判断ボード）を通す。issue の自動 close はそれを飛ばすので使わない。
-- ticket を close したら、その手順の中で issue を閉じる（`gh issue close #N`）。作業中の「🤖 作業中...」コメントは close 時に消すか、最終結果へ置き換える。
+- **PR を作るのは bot（close 段階）。** close 承認後、bot が `agent/issue-N` → default branch の PR（`Refs #N`）を作り、«merge したら 🤖 で最終 close» と伝えて停止する。人間が merge → 次の 🤖 で bot が `ticket.sh close --no-merge <name>` + `gh issue close #N`。**「PR merge 後に close」だけ書いて誰が PR を作るか書かないと、bot は PR 待ちで止まる**（実測）。
+- 作業中の「🤖 作業中...」コメントは close 時に消すか、最終結果へ置き換える。
 
 ## local: issue を読みに行く
 
