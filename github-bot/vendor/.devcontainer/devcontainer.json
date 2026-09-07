@@ -2,7 +2,7 @@
   "name": "${localWorkspaceFolderBasename} Dev Container",
   "dockerComposeFile": "docker-compose.yml",
   "service": "app",
-  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "workspaceFolder": "/workspaces/project",
 
   "overrideCommand": true,
 

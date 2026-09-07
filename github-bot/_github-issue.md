@@ -10,7 +10,8 @@ PDH の human gate は **`PDH-ticket-human-review`（実装前）** と **`PDH-h
 
 - **cloud（Actions）**: 対話できる人間がいない。gate に達したら、**gate の要点（何を承認してほしいか・判断の分岐・影響レイヤー）を issue にコメントして run を停止する。** 実装や close に進まない。«よしなに» で越えない。次回の 🤖 トリガーで再開する。
 - **local（端末）**: 通常どおり人間に確認する。issue にも同じ gate コメントを残すと、他の人が経緯を追える。
-- **承認 = gate コメントへの 👍。** 変更希望は gate コメントへの返信。承認が来るまで gate の先へ進まない。
+- **承認は «🤖 を含むコメント»**（例「🤖 承認」）。⚠ **GitHub Actions は reaction では起動しない**（coding-robot.yml の trigger は 🤖 コメントだけ）ので、**👍 リアクションだけでは bot は再開しない。**👍 は人間向けの印として任意で付けてよいが trigger にしない。変更希望は 🤖 付きで「修正して：…」、差し戻しは「差し戻す：…」。承認が来るまで gate の先へ進まない。
+  - **local（`pdh-gh-pull` で取り込む場合）だけは reaction を読める**ので、👍 を承認の印として扱ってよい。cloud との差はこの 1 点。
 
 この停止は engine で変えない契約であり、`docs/PDH-AGENTS.md` の gate 規則を Actions 実行に写したもの。緩めない。
 

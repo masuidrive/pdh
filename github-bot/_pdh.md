@@ -49,6 +49,11 @@ fi
 
 生成後、本体の各セクション（Why / What + Acceptance Criteria / Architectural Invariants check / Design Decisions / Out-of-scope）を Issue・`product-brief.md` から埋める。`started_at` / `closed_at` は `start`/`close` を使わないので、必要なタイミングで frontmatter を直接更新する。
 
+## checklist gate と close（bot のブランチ模型に注意）
+bot は `agent/issue-N` で作業し、ticket.sh の feature-branch 模型（`{branch_prefix}<ticket-name>`）を使わない。そのため **`ticket.sh check` の «ticket/branch 同期» 判定は構造的に不一致を出す**（checklist の合否ではなく、branch が `agent/issue-N` で `{branch_prefix}<name>` と違うことを報告している）。これは想定内で、フローを止める失敗ではない。
+- **checklist の充足は ticket 本体・note を直接読んで確認する** — required グループ（`.ticket-config.yaml` の `require_checklist_groups`）が両ファイルに在り、未了 checkbox が無いか。branch 同期の警告そのものは無視してよい。
+- **close は PR が merge された後に `ticket.sh close --no-merge <ticket-name>`** で行う（ticket.sh に merge させない。merge は PR で行う）。`--no-merge` は feature-branch 模型に依存しないので `agent/issue-N` でも通る。checklist gate（`require_checklist` / `require_checklist_groups`）はここでも効くので、close 前に上記を満たしておく。
+
 ## worker spawn（team 実行）
 **あなた（bot の main agent）は PM として team フローを実行する。** worker（Coding Engineer / reviewer / AC 裏取り 等）は **CLI subprocess で spawn** する（`_execution-team.md`「spawn 機構」）。
 - **main engine** = `CODING_ROBOT_ENGINE`（この run の engine）。**worker は既定で main と同じ engine**。起動コマンド（claude / codex、**bypass 権限**）と並行起動・結果回収は `_execution-team.md` に self-contained に書いてある。**それをそのまま使う**。
@@ -58,7 +63,7 @@ fi
 ## GitHub Issue プロトコル（gate・進捗・PR）
 issue とのやり取りは、同じディレクトリの **`.github/coding-robot/_github-issue.md`** に従う。**そのファイルを Read すること。** 要点だけ再掲する（詳細は同ファイル）:
 
-- **human gate では自己承認しない。** `PDH-ticket-human-review` と `PDH-human-review` に達したら、Actions には対話できる人間がいないので、**gate の要点を issue にコメントして run を停止**する。承認は **gate コメントへの 👍**、変更希望は返信。次回 🤖 で再開する。«よしなに» で gate を越えない。
+- **human gate では自己承認しない。** `PDH-ticket-human-review` と `PDH-human-review` に達したら、Actions には対話できる人間がいないので、**gate の要点を issue にコメントして run を停止**する。承認は **🤖 を含むコメント**（例「🤖 承認」。Actions は reaction では起動しないので 👍 だけでは再開しない）、変更希望は 🤖 付きで返信。«よしなに» で gate を越えない。
 - **進捗コメントは増やさない。** run 中の「🤖 作業中...」は 1 個を編集し続ける（machinery が担う）。人間の注意が要るとき（gate・質問・blocker）だけ新規コメントを立てる。
 - **PR は `Refs #N`**（`Closes #N` にしない）。ticket.md に従い・issue は会話面なので、close は PDH の close 手順で行う。
 

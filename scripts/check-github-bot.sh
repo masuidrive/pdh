@@ -66,6 +66,34 @@ if [ -f github-bot/vendor/VENDOR.md ] && ! grep -qE 'commit.*[0-9a-f]{40}' githu
   failed=1
 fi
 
+# --- 認証切れ UX: 両 engine script が auth エラーを検出してコメントする処理を持つか ---
+# missing/expired の credential で、bot が汎用エラーではなく «再ログインして secret 更新» を
+# 案内できることが利用体験の要。machinery 側に既存（_claude.sh / _codex.sh の Authentication
+# Error）。re-sync で消えると «認証切れが分かりにくい失敗» に戻るので、存在を守る。
+for e in _claude _codex; do
+  f="github-bot/vendor/.github/coding-robot/engines/${e}.sh"
+  if [ -f "$f" ]; then
+    if ! grep -q 'Authentication Error' "$f"; then
+      printf 'github-bot: %s に認証エラーコメント（Authentication Error）が無い\n' "$f" >&2
+      failed=1
+    fi
+    # run 中の expired/invalid 検出（missing だけでなく «切れた» も拾うヒューリスティック）
+    if ! grep -qi 'unauthorized\|invalid.*token\|invalid.*api.*key\|expired' "$f"; then
+      printf 'github-bot: %s に run 中の認証失敗（expired/unauthorized）検出が無い\n' "$f" >&2
+      failed=1
+    fi
+  fi
+done
+
+# --- 移植性パッチ: devcontainer の workspaceFolder が固定パスか（re-sync で戻ると任意 repo で落ちる）---
+# upstream は repo 名依存の ${localWorkspaceFolderBasename} で、compose の既定(/workspaces/project)と
+# 食い違い devcontainer exec が落ちる（smoke 実測。VENDOR.md「PDH 側の移植性パッチ」）。固定形を守る。
+dc="github-bot/vendor/.devcontainer/devcontainer.json"
+if [ -f "$dc" ] && grep -q 'workspaceFolder.*localWorkspaceFolderBasename' "$dc"; then
+  printf 'github-bot: devcontainer.json の workspaceFolder が repo 名依存に戻っている（compose mount と食い違い任意 repo で落ちる。VENDOR.md 参照）\n' >&2
+  failed=1
+fi
+
 # --- stale の再混入検出: vendor の古い _pdh.md を取り込んでいないか ---
 if [ -f github-bot/vendor/.github/coding-robot/_pdh.md ]; then
   printf 'github-bot: vendor に _pdh.md がある（古い版。PDH は github-bot/_pdh.md を正とし vendor には置かない）\n' >&2
