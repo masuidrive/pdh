@@ -242,11 +242,14 @@ pdh/
       test-all.sh  fast-checks.sh  checks/  dev-server.sh  seed-pdh-verify.sh  test-ticket-local.sh
     scripts/hookbus.js               ← tmux Director hookbus（CLI + library + in-source vitest）
   codex/                             ← Codex CLI 用の配布セット（同じ構成。入口は AGENTS.md、agent 定義は .codex/agents/*.toml）
+  github-bot/                        ← GitHub Issues + Actions bot レイヤー【任意・engine 中立。有効化した人だけが配置】
+    INSTALL.md  _pdh.md  _github-issue.md  pdh-gh-pull/  .ticket-config.snippet.yaml
+    vendor/                          ← github-bots から取り込んだ machinery（workflow / devcontainer。VENDOR.md に取り込み元 commit）
   evals/                             ← 評価【配布物ではない。両セット共通】
     eval-*.md  fixtures/  examples.md
     private/                         ← 実案件の切り出し再生（private repo pdh-eval の checkout。git 管理外）
   scripts/                           ← この repo 自身の検査【配布物ではない】
-    test-all.sh  fast-checks.sh  check-distribution.sh  check-links.py  checks/
+    test-all.sh  fast-checks.sh  check-distribution.sh  check-guard-parity.sh  check-github-bot.sh  check-links.py  checks/
     check-board-render.sh  board-check/  bsd-shim/
 ```
 

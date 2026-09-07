@@ -1,0 +1,17 @@
+# --- GitHub bot レイヤー（任意）---
+# PDH github-bot を有効化したときだけ、プロジェクトの .ticket-config.yaml に追記する。
+# 無効なら追記しない（core の挙動は一切変わらない）。
+github_bot:
+  enabled: true
+
+  # issue をいつ作るか。
+  #   on-gate : 最初の human gate に達して初めて作る（既定・推奨）。gate まで来ていない
+  #             ticket に issue を作らないので、通知と issue 数を無駄に増やさない。
+  #   always  : ticket.sh new のたびに作る。
+  create_issue: on-gate
+
+  # PR と issue の紐付け方。
+  #   refs   : PR 本文に `Refs #N` を書く（既定）。close は PDH-close の手順で行う。
+  #   closes : `Closes #N`（PR merge で issue を自動 close）。PDH の close gate を飛ばすので
+  #            非推奨。checklist gate / close 判断ボードを通したい場合は refs のままにする。
+  pr_link: refs

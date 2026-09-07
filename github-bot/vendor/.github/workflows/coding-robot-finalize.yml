@@ -1,0 +1,84 @@
+name: Coding Robot — Finalize Ticket
+
+# agent/issue-<N> ブランチの PR がマージされたら、対応する PDH チケットを
+# tickets/done/ へ移し closed_at(= マージ時刻)を記録する。
+# PR マージは Action を起動しない問題への対応（人が PR をマージする行為 = 受け入れ = close）。
+# devcontainer / agent は使わない決定的な軽量ジョブ。
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  finalize:
+    # マージされた agent/issue-* の PR だけに反応する（close だけ=未マージは無視）
+    if: >
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'agent/issue-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      # マージ後の base ブランチ（通常 main）を取得
+      - name: Checkout base branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Finalize ticket (move to done/ + closed_at)
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          MERGED_AT: ${{ github.event.pull_request.merged_at }}
+        run: |
+          set -euo pipefail
+
+          # PDH 構成でなければ何もしない
+          if [ ! -f product-brief.md ] || [ ! -d tickets ]; then
+            echo "Not a PDH repo (product-brief.md / tickets/ missing); skipping."
+            exit 0
+          fi
+          if [ ! -f ticket.sh ]; then
+            echo "ticket.sh not found; skipping."
+            exit 0
+          fi
+
+          # head ref 'agent/issue-<N>' から Issue 番号を取り出す
+          ISSUE_NUMBER="${HEAD_REF##*issue-}"
+          if ! printf '%s' "$ISSUE_NUMBER" | grep -qE '^[0-9]+$'; then
+            echo "Could not parse issue number from head ref '$HEAD_REF'; skipping."
+            exit 0
+          fi
+          echo "Issue #$ISSUE_NUMBER (head: $HEAD_REF, base: $BASE_REF, merged_at: $MERGED_AT)"
+
+          # チケット本体を tickets/ または tickets/done/ から特定（note は除外）
+          TICKET_FILE=$(ls tickets/*issue-"${ISSUE_NUMBER}".md tickets/done/*issue-"${ISSUE_NUMBER}".md 2>/dev/null | head -1 || true)
+          if [ -z "$TICKET_FILE" ]; then
+            echo "No ticket file matching '*issue-${ISSUE_NUMBER}.md'; nothing to finalize."
+            exit 0
+          fi
+          TICKET_NAME=$(basename "$TICKET_FILE" .md)
+          echo "Ticket: $TICKET_NAME ($TICKET_FILE)"
+
+          # commit するための git identity
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # close --no-merge: closed_at(= マージ時刻) を入れて done/ へ移動。
+          # --no-push: ここではコミットだけ作らせ、push は下で行う。
+          # 既に done/ にある場合は冪等にコミットを作らず exit 0。
+          BEFORE_SHA=$(git rev-parse HEAD)
+          bash ticket.sh close --no-merge --no-push --closed-at "$MERGED_AT" "$TICKET_NAME"
+          AFTER_SHA=$(git rev-parse HEAD)
+
+          # ticket.sh がコミットを作った場合だけ、メッセージを release-notes 向けの
+          # 一貫した形式に書き換えてから push する。コミットがなければ何もしない（冪等）。
+          if [ "$BEFORE_SHA" != "$AFTER_SHA" ]; then
+            git commit --amend -m "chore(pdh): close #${ISSUE_NUMBER} ${TICKET_NAME} (post-merge finalize)"
+            git push origin "HEAD:${BASE_REF}"
+          else
+            echo "No commit created by ticket.sh (already finalized); nothing to push."
+          fi

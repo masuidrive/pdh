@@ -25,6 +25,10 @@ claude/                              # Claude Code 用の配布セット
   templates/                         # 配布テンプレート（CLAUDE.md、AGENTS.md、agents/、checks/、*.sh）
   scripts/hookbus.js                 # tmux worker hook event bus（配布物）
 codex/                               # Codex CLI 用の配布セット（同じ構成。入口は AGENTS.md）
+github-bot/                          # GitHub Issues + Actions bot レイヤー（任意・engine 中立）
+  _pdh.md _github-issue.md           # PDH 側で保守する層（PDH mode 定義・gate→issue プロトコル）
+  pdh-gh-pull/ INSTALL.md            # 「issue 読みに行く」skill と opt-in 導入手順
+  vendor/                            # github-bots から取り込んだ machinery（VENDOR.md に取り込み元 commit）
 evals/                               # 評価。両セット共通。配布物ではない
   eval-*.md  examples.md  fixtures/  # 判断ボード skill の eval シナリオと、規則の由来になった事故・実測
   private/                           # 実案件の切り出し再生（private repo pdh-eval の checkout。git 管理外）

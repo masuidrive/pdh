@@ -1,0 +1,157 @@
+name: Coding Robot
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  agent:
+    # トリガー条件: :robot: または 🤖 を含むコメント・Issue・Pull Request
+    # ただし bot 自身（github.event.sender.type == 'Bot'）のコメントでは起動しない。
+    # bot の進捗コメント「🤖 作業中...」が自己再トリガーして二重起動するのを防ぐため。
+    if: |
+      github.event.sender.type != 'Bot' && (
+      (github.event_name == 'issue_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||
+      (github.event_name == 'pull_request_review_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||
+      (github.event_name == 'pull_request_review' && (contains(github.event.review.body, ':robot:') || contains(github.event.review.body, '🤖'))) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, ':robot:') || contains(github.event.issue.body, '🤖') || contains(github.event.issue.title, ':robot:') || contains(github.event.issue.title, '🤖')))
+      )
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      packages: write
+      actions: read
+
+    steps:
+      # ステップ1: 即座に 👀 リアクションを追加
+      - name: Add eyes reaction to comment
+        run: |
+          # イベントタイプに応じてコメントIDとURLを設定
+          if [ "${{ github.event_name }}" = "issue_comment" ] || [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
+            COMMENT_ID="${{ github.event.comment.id }}"
+            REACTION_URL="https://api.github.com/repos/${{ github.repository }}/issues/comments/$COMMENT_ID/reactions"
+          elif [ "${{ github.event_name }}" = "pull_request_review" ]; then
+            COMMENT_ID="${{ github.event.review.id }}"
+            REACTION_URL="https://api.github.com/repos/${{ github.repository }}/pulls/comments/$COMMENT_ID/reactions"
+          elif [ "${{ github.event_name }}" = "issues" ]; then
+            COMMENT_ID="${{ github.event.issue.number }}"
+            REACTION_URL="https://api.github.com/repos/${{ github.repository }}/issues/$COMMENT_ID/reactions"
+          fi
+
+          if [ -n "$COMMENT_ID" ]; then
+            echo "Adding 👀 reaction (event: ${{ github.event_name }}, id: $COMMENT_ID)"
+            curl -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "$REACTION_URL" \
+              -d '{"content":"eyes"}'
+          fi
+
+      # ステップ2: コードチェックアウト
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ステップ3: GHCR にログイン（イメージキャッシュ用）
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ステップ4: devcontainer で実行
+      - name: Run Agent in devcontainer
+        id: run_claude
+        uses: devcontainers/ci@v0.3
+        with:
+          configFile: .devcontainer/devcontainer.json
+          imageName: ghcr.io/${{ github.repository }}/devcontainer-ci
+          push: always
+          cacheFrom: |
+            ghcr.io/${{ github.repository }}/devcontainer-ci:latest
+          env: |
+            CODING_ROBOT_ENGINE=${{ vars.CODING_ROBOT_ENGINE }}
+            CLAUDE_CODE_OAUTH_TOKEN=${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+            CODEX_AUTH_JSON=${{ secrets.CODEX_AUTH_JSON }}
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            CODEX_MODEL=${{ vars.CODEX_MODEL }}
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            FIREBASE_TOKEN=${{ secrets.FIREBASE_TOKEN }}
+            ENV_JSON=${{ secrets.ENV_JSON }}
+            GITHUB_REPOSITORY=${{ github.repository }}
+            GITHUB_RUN_ID=${{ github.run_id }}
+            ISSUE_NUMBER=${{ github.event.issue.number || github.event.pull_request.number }}
+            EVENT_TYPE=${{ github.event_name }}
+            COMMENT_ID=${{ github.event.comment.id }}
+            DEVCONTAINER_CONFIG_PATH=.devcontainer/devcontainer.json
+            CLAUDE_TIMEOUT=5400
+          runCmd: |
+            # Run Agent
+            ./.github/coding-robot/run-action.sh
+
+      # エラー時の処理: 👀 を削除して 😟 を追加
+      - name: Handle error - Remove eyes and add confused reaction
+        if: failure()
+        run: |
+          # イベントタイプに応じてコメントIDとURLを設定
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            COMMENT_ID="${{ github.event.comment.id }}"
+            REACTIONS_URL="https://api.github.com/repos/${{ github.repository }}/issues/comments/$COMMENT_ID/reactions"
+            DELETE_URL_PREFIX="https://api.github.com/repos/${{ github.repository }}/issues/comments/$COMMENT_ID/reactions"
+          elif [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
+            COMMENT_ID="${{ github.event.comment.id }}"
+            REACTIONS_URL="https://api.github.com/repos/${{ github.repository }}/pulls/comments/$COMMENT_ID/reactions"
+            DELETE_URL_PREFIX="https://api.github.com/repos/${{ github.repository }}/pulls/comments/$COMMENT_ID/reactions"
+          elif [ "${{ github.event_name }}" = "pull_request_review" ]; then
+            COMMENT_ID="${{ github.event.review.id }}"
+            REACTIONS_URL="https://api.github.com/repos/${{ github.repository }}/pulls/comments/$COMMENT_ID/reactions"
+            DELETE_URL_PREFIX="https://api.github.com/repos/${{ github.repository }}/pulls/comments/$COMMENT_ID/reactions"
+          elif [ "${{ github.event_name }}" = "issues" ]; then
+            COMMENT_ID="${{ github.event.issue.number }}"
+            REACTIONS_URL="https://api.github.com/repos/${{ github.repository }}/issues/$COMMENT_ID/reactions"
+            DELETE_URL_PREFIX="https://api.github.com/repos/${{ github.repository }}/issues/$COMMENT_ID/reactions"
+          fi
+
+          if [ -n "$COMMENT_ID" ]; then
+            echo "Handling error (event: ${{ github.event_name }}, id: $COMMENT_ID)"
+
+            # 既存のリアクションを取得して 👀 を見つける
+            REACTIONS=$(curl -s \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "$REACTIONS_URL")
+
+            echo "Reactions response:"
+            echo "$REACTIONS" | jq .
+
+            # 👀 (eyes) リアクションのIDを抽出して削除
+            echo "$REACTIONS" | jq -r '.[] | select(.content == "eyes") | .id' | while read REACTION_ID; do
+              if [ -n "$REACTION_ID" ]; then
+                echo "Removing eyes reaction $REACTION_ID from $DELETE_URL_PREFIX/$REACTION_ID"
+                curl -X DELETE \
+                  -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  "$DELETE_URL_PREFIX/$REACTION_ID"
+              fi
+            done
+
+            # 😟 (confused) リアクションを追加
+            echo "Adding 😟 reaction"
+            curl -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "$REACTIONS_URL" \
+              -d '{"content":"confused"}'
+          fi

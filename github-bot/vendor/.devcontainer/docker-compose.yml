@@ -1,0 +1,14 @@
+name: coding-robot
+
+services:
+  app:
+    container_name: coding-robot-app
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      - ..:/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-project}:cached
+    environment:
+      WORKSPACE_FOLDER: /workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-project}
+    working_dir: /workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-project}
+    command: sleep infinity
