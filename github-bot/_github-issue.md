@@ -22,6 +22,10 @@ human gate では判断ボード（`pdh-decision-board` の Completed Staff Work
 - ⚠ **«skill からブラウザを開けない（board を自分で描画・検証できない）» は cloud / local の別ではなく全環境で同じ**。board の見た目はどこでも skill では機械検証されない。これは媒体選択の理由ではない別の普遍的事実なので、混同しない。
 - **守るのは board の «規律»**: 承認者が追加調査なしに求められた判断を下せる／その判断に使わないものを読ませない。同一入力の前後比較・対象外・代償を **markdown（表・`<details>`・コードブロック）** で出す。GitHub がそのまま描画する。
 - **skill の手順との橋渡し**（`pdh-decision-board` は HTML/artifact/decision.hanger 前提で書かれている。cloud はここで上書きする）: 手順 **«媒体を選ぶ» では issue コメントの markdown を選ぶ**（`build.sh` を走らせない）。手順 **«発行» は、board を最終レポート（gate コメント本文）として markdown で書くこと**＝それを machinery（`run-action.sh`）が issue コメントとして投稿する。board 専用の発行先（URL・ファイル）は cloud では作らない。
+- **長くしない — 推奨を先頭に、説明は畳む**（issue コメントは長いと読まれない。折りたたみは GitHub で効く）:
+  - **開いたまま（先頭・短く）**: 何を決めるか・**推奨する解き方 / AC**・**代償と対象外**・承認導線（🤖 承認）。承認者がこれだけで諾否を決められる長さに保つ（推奨に乗るだけで済むように）。
+  - **`<details>` に畳む**: 裏付け（実測ログ・既存コード確認・方法論・ticket/note リンク）。«あれば効くが、要るときだけ開く» もの。
+  - ⚠ **畳んではならない**: 代償・リスク・不可逆操作・機微情報・(close gate では) AC 達成の証拠。判断に load-bearing なので開いたまま（`base.md` / `risk-overlay.md` の «承認・証拠・機微・不可逆は de-emphasize しない»）。**«推奨で行ける» は «判断を隠す» ではない** — 承認者が代償を見た上で軽く諾否できることが条件。
 - **local 対話フロー（bot を使わない）** は従来どおり HTML kit / artifact / decision.hanger でよい。この markdown 版は cloud（と `pdh-gh-pull` で取り込む local）だけ。
 
 ## 進捗コメントを無意味に増やさない
