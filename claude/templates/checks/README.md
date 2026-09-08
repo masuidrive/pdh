@@ -153,6 +153,25 @@ here in the same change that fixes the bug. If it cannot be expressed as a grep,
 record why in the ticket note instead. Keep patterns narrow: a fast-check that
 false-positives on legitimate code trains people to ignore it.
 
+## Removing a check
+
+Checks are not append-only. Delete a check, in the same change that makes it
+obsolete, when any of these holds:
+
+- the invariant it pinned no longer exists — the guarded code path, entity, or
+  configuration was removed, so the forbidden pattern can no longer mean the bug;
+- the invariant got generalized into a permanent test, a type, or a linter rule
+  that fails deterministically — keeping both means two things to update on
+  every rename;
+- the pattern has accumulated `checks-allow:` exceptions or `allow=` entries to
+  the point where legitimate code hits it more often than the bug would — a
+  check that mostly cries wolf trains people to ignore the registry.
+
+When deleting, record in the ticket note one line naming what the check
+guarded and why that is no longer needed — the same discipline as adding one.
+Narrowing a too-broad pattern is preferred over deleting when the bug it pins
+can still recur.
+
 ## Examples
 
 The registry ships three examples. Adjust their globs and excludes for the
