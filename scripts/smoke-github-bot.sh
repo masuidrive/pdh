@@ -37,7 +37,9 @@ trap '[ -n "$orig_engine" ] && gh variable set CODING_ROBOT_ENGINE --repo "$R" -
 
 echo "== smoke ($ENGINE) on $R"
 T=$(now)
-gh issue create --repo "$R" --title "smoke $SUFFIX: greet に --shout で末尾に ! を 3 つ付けたい 🤖" --body "$(printf '## 要望\n`--shout` を付けると挨拶の末尾の `!` を `!!!` にしてほしい。無ければ従来どおり。既存の言語・オプションと組み合わせても破綻しないこと。\n\nPython 標準ライブラリのみ・`src/greet.py` の 1 ファイルで。\n\n🤖')" >/dev/null
+# 要望は run ごとに新しい option 名にする。同じ要望を 2 度出すと bot が «実装済みの重複» と判断して ticket を作らない（正しい振る舞い）。
+OPT="--mark-$SUFFIX"
+gh issue create --repo "$R" --title "smoke $SUFFIX: greet に $OPT で末尾に [$SUFFIX] を付けたい 🤖" --body "$(printf '## 要望\n`%s` を付けると挨拶の末尾に ` [%s]` を付けてほしい。無ければ従来どおり。既存の言語・オプションと組み合わせても破綻しないこと。\n\nPython 標準ライブラリのみ・`src/greet.py` の 1 ファイルで。\n\n🤖' "$OPT" "$SUFFIX")" >/dev/null
 N=$(gh issue list --repo "$R" --limit 1 --json number -q '.[0].number'); B="agent/issue-$N"
 echo "issue #$N"
 
