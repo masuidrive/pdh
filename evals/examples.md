@@ -334,3 +334,11 @@ smoke 自体の穴も 1 つ: 毎回同じ要望を出していたので、claude
 副産物: bot は `ticket.sh start` を使えない（base branch に ticket が無いと動かない。ticket.sh #9 で起票済み）。codex の `auth.json` を手元と共用すると手元で `codex exec` を回した時点で Actions 側の refresh token が失効する（`github-bot/INSTALL.md` に注意書き）。
 
 追記（ticket.sh 20260914.144516）: `start` が ticket 自身の branch 上でも動くようになり（ticket.sh #9）、bot の手順を `new` → commit → `start` に戻して `started_at` の手書きをやめた。claude（#22、3 run・計 41 分）で 14 項目すべて PASS。branch には `[start] agent/issue-22` の commit があり、`started_at` は ticket.sh が入れた。gate の待ち行は claude が URL 無しで書いたぶんを hook が補った（想定どおりの吸収）。
+
+## 2026-09-14 — «人の答えは progress に 1 行» を入れて、両 engine で smoke 全 PASS
+
+`PDH-AGENTS.md`「Handover Routes」に「人の答えは gate でも相談でも progress に 1 行追記し、ticket を変えるなら ticket 本体も直す。note は gate の待ち行だけ」を足した版（`e145792`）で `scripts/smoke-github-bot.sh` を回した。codex（#23）と claude（#24）のどちらも 14 項目すべて PASS。
+
+- どちらの engine も progress に「承認受領 / AC 承認を受領」の見出しで Issue の `🤖 承認` を記録した（散文の規則だが、gate の答えは既に progress の役割分担表に載っていたので、書く場所を変えただけ）。
+- codex は待ち行を URL 付きで自分で書き、hook の補正なし。claude は両 gate とも URL 無しで書き、hook が補った。hook が揺れを吸収する形は変わらない。
+- claude の progress の entry は見出しの UTC が前後した（23:10 の entry の後に 23:05）。追記のみは守っているので `close` は通る。時刻の正確さは検査していない。
