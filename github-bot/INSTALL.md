@@ -44,6 +44,7 @@ engine 別の認証 secret:
   ```bash
   codex login && jq -c . ~/.codex/auth.json | gh secret set CODEX_AUTH_JSON
   ```
+  ⚠ 同じアカウントの `auth.json` を手元の `codex` でも使うと、片方が refresh した時点でもう片方の refresh token が失効する（Actions 側が `refresh token was already used` で落ちる。smoke 実測）。落ちたら上のコマンドで secret を入れ直す。
   `OPENAI_API_KEY`（API 課金）という別路も machinery は受け付けるが、**この運用では使わない**。サブスク運用では `OPENAI_API_KEY` secret は設定しない（vendored workflow が空で渡すのは無害）。
 
 project 固有の env が要るテストがあるなら、まとめて 1 つの secret に:
