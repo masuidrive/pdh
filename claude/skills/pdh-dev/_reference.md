@@ -30,7 +30,7 @@ Next Stage:
 |---|---|---|
 | ticket file (`ticket:`) | ゴール。後世への記録 | Why、AC、Invariants check、Design Decisions、Out-of-scope、任意の Implementation Notes |
 | note file (`note:`) | 現在値。session 間の引継ぎ | Status、Checklist、Required Probes、process check、Technical reference 更新、Open Questions、Resume Point |
-| progress file（同じ dir の `progress.md`） | 経緯。close 後に工程を追える唯一の記録 | stage 遷移、実装ログ、`### Findings (PDH-review-N)` 表、gate で返った答え、Discoveries、検証の実 command と実 output |
+| progress file（同じ dir の `progress.md`） | 経緯。close 後に工程を追える唯一の記録 | stage 遷移、実装ログ、`### Findings (PDH-review-N)` 表、人から返った答え（gate・相談とも。ticket を変えるものは ticket 本体も直す）、Discoveries、検証の実 command と実 output |
 
 節構成は `.ticket-config.yaml` の `default_content` / `note_content` が決める。`./ticket.sh new` が出した節と記入ガイドに従い、そこに無い section を前提にしない。次を守る。
 
