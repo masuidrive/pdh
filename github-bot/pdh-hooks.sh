@@ -3,13 +3,11 @@
 # ときだけ run-action.sh が最終レポートの投稿直前に呼ぶ。
 #
 # 人との受け渡し経路（GitHub Issue）で、agent の申告に依らず runner が保証するもの:
-#   1. ticket dir に progress.md が無ければ作る
-#   2. note の `## Status: PDH-*` を issue の stage ラベルに写す
-#   3. Status が human gate なら、最終レポートにその gate の承認語（🤖 承認 / 🤖 クローズ承認）が無ければ導線を足す
-#   4. Status が human gate なら、note の Checklist に «発行先:» + URL か path の未了行が無ければ足す
+#   1. note の `## Status: PDH-*` を issue の stage ラベルに写す
+#   2. Status が human gate なら、最終レポートにその gate の承認語（🤖 承認 / 🤖 クローズ承認）が無ければ導線を足す
+#   3. Status が human gate なら、note の Checklist に «発行先:» + URL か path の未了行が無ければ足す
 #      （URL は今回の gate コメント）
-#   5. progress.md に削除行があれば報告に警告を足す
-#   6. 導入検査（stage ラベル・Actions の PR 作成許可）で要追加があれば報告に足す
+#   4. 導入検査（stage ラベル・Actions の PR 作成許可）で要追加があれば報告に足す
 #
 # usage:
 #   pdh-hooks.sh final <issue> <branch> <comment-id>   # stdin: 最終レポート → stdout: 補正後の本文
@@ -64,20 +62,14 @@ if [ -z "$dir" ]; then
   log "issue #$ISSUE の ticket dir が無い（done 済みか未作成）。補正なし"
   printf '%s' "$report"; exit 0
 fi
-name=$(basename "$dir"); note="$dir/note.md"; changed=0
-
-# --- 1. progress.md ---
-if [ ! -f "$dir/progress.md" ]; then
-  printf '# Progress: %s\n\n' "$name" > "$dir/progress.md"
-  log "$dir/progress.md を作った（agent は作っていなかった）"; changed=1
-fi
+note="$dir/note.md"; changed=0
 
 # --- Status ---
 status=""
 [ -f "$note" ] && status=$(grep -m1 '^## Status:' "$note" | sed -E 's/^## Status:[[:space:]]*(PDH-[a-z-]+).*/\1/')
 gate=0; case "$status" in PDH-ticket-human-review|PDH-human-review) gate=1 ;; esac
 
-# --- 2. stage ラベル ---
+# --- 1. stage ラベル ---
 if [ -n "$status" ] && printf '%s\n' $STAGES | grep -qx "$status"; then
   have=$(gh label list --repo "$REPO" --limit 200 --json name -q '.[].name' 2>/dev/null || true)
   if printf '%s\n' "$have" | grep -qx "$status"; then
@@ -90,7 +82,7 @@ if [ -n "$status" ] && printf '%s\n' $STAGES | grep -qx "$status"; then
   fi
 fi
 
-# --- 3. 承認導線 ---
+# --- 2. 承認導線 ---
 if [ "$status" = "PDH-ticket-human-review" ]; then word="🤖 承認"; else word="🤖 クローズ承認"; fi
 if [ "$gate" -eq 1 ] && ! printf '%s' "$report" | grep -qF "$word"; then
   report="$report
@@ -100,7 +92,7 @@ if [ "$gate" -eq 1 ] && ! printf '%s' "$report" | grep -qF "$word"; then
   log "承認導線を足した（agent の報告に無かった）"
 fi
 
-# --- 4. 待ち行 ---
+# --- 3. 待ち行 ---
 if [ "$gate" -eq 1 ] && [ -f "$note" ]; then
   if ! awk '/^## Checklist/{f=1;next} /^## /{f=0} f' "$note" | grep -Eq '^- \[ \].*発行先:.*(https?://|/)'; then
     url="https://github.com/$REPO/issues/$ISSUE"; [ -n "$CID" ] && url="$url#issuecomment-$CID"
@@ -116,26 +108,15 @@ if [ "$gate" -eq 1 ] && [ -f "$note" ]; then
   fi
 fi
 
-# --- commit / push（1〜4 でファイルが変わったとき） ---
+# --- commit / push（待ち行を足したとき） ---
 if [ "$changed" -eq 1 ]; then
-  git add "$dir/progress.md" "$note" 2>/dev/null
+  git add "$note" 2>/dev/null
   if git -c user.name="pdh-hooks" -c user.email="pdh-hooks@users.noreply.github.com" commit -q -m "chore(pdh-hooks): progress.md / 待ち行を補う（issue #${ISSUE}）" 2>/dev/null; then
     git push -q origin "$BRANCH" 2>/dev/null || log "push に失敗（ローカルには commit 済み）"
   fi
 fi
 
-# --- 5. progress の削除行 ---
-base=$(awk -F'"' '/^default_branch:/{print $2}' .ticket-config.yaml 2>/dev/null); base=${base:-main}
-if git rev-parse --verify -q "origin/$base" >/dev/null 2>&1; then
-  del=$(git log "origin/$base..HEAD" -p --format= -- "$dir/progress.md" 2>/dev/null | grep -c '^-[^-]' || true)
-  if [ "${del:-0}" -gt 0 ]; then
-    report="$report
-
-⚠ \`$dir/progress.md\` を削る commit が branch にあります（削除行 ${del}）。progress は追記のみです。"
-  fi
-fi
-
-# --- 6. 導入検査 ---
+# --- 4. 導入検査 ---
 setup=$(setup_check "$REPO")
 if [ -n "$setup" ]; then
   report="$report

@@ -15,3 +15,10 @@ github_bot:
   #   closes : `Closes #N`（PR merge で issue を自動 close）。PDH の close gate を飛ばすので
   #            非推奨。checklist gate / close 判断ボードを通したい場合は refs のままにする。
   pr_link: refs
+
+  # close の仕方。
+  #   merge : bot が ticket.sh close で default branch へ squash merge して push し、issue を閉じる（既定）。
+  #           1 run で終わる。PR は作らない。close 承認は issue で得ているので PR の承認は二重になる。
+  #   pr    : bot は tickets/done/ へ移した状態で PR（Refs #N）を作って停止し、人間が merge → 次の 🤖 で issue を閉じる。
+  #           branch protection で Actions が push できない / 外部コードを受け入れる / 別の人に review させたい repo 向け。
+  close: merge

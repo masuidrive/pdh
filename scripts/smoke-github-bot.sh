@@ -5,8 +5,8 @@
 # 人間役を自動で演じ、各 run の後に次を assert する:
 #   - 実装前 gate: progress.md がある / note の Checklist に «発行先:» 付き未了行 / ラベル PDH-ticket-human-review / 承認導線
 #   - close gate:  待ち行が [x] と新しい待ち行 / progress に削除行なし / ラベル PDH-human-review / 承認導線
-#   - close 承認後: PR が Refs #N / tickets/done/ への移動が PR に含まれる
-#   - merge 後:    issue CLOSED、main に tickets/done/<name>/progress.md
+#   - close 承認後（既定 merge）: PR を作らず issue CLOSED、main に tickets/done/<name>/progress.md
+#   - SMOKE_CLOSE=pr: PR が Refs #N / done の移動を含む → merge → 🤖 → issue CLOSED
 #
 # Actions の分数と時間（engine により 30〜60 分）を使うので test-all.sh には入れない。
 # usage: scripts/smoke-github-bot.sh <owner/repo> <claude|codex> [title-suffix]
@@ -61,17 +61,22 @@ last_comment | grep -q '🤖 クローズ承認' && ok "close の承認導線" |
 del=$(gh api "repos/$R/compare/main...$B" -q '.files[] | select(.filename | endswith("progress.md")) | .deletions' | awk '{s+=$1} END{print s+0}')
 [ "$del" = "0" ] && ok "progress に削除行なし" || ng "progress に削除行 $del"
 
-echo "-- run 3: close 承認 → done 移動 → PR"; T=$(now); gh issue comment "$N" --repo "$R" --body "🤖 クローズ承認" >/dev/null
-wait_run "$T" || ng "run 3 が失敗"
-PR=$(gh pr list --repo "$R" --head "$B" --state open --json number -q '.[0].number')
-[ -n "$PR" ] && ok "PR #$PR" || ng "PR が無い"
-[ -n "$PR" ] && gh pr view "$PR" --repo "$R" --json body -q .body | grep -q "Refs #$N" && ok "PR 本文に Refs #$N" || ng "Refs #$N が無い"
-[ -n "$PR" ] && gh pr view "$PR" --repo "$R" --json files -q '.files[].path' | grep -q "^tickets/done/" && ok "PR に tickets/done/ の移動を含む" || ng "PR に done 移動が無い"
-
-echo "-- merge → run 4: issue close"
-[ -n "$PR" ] && gh pr merge "$PR" --repo "$R" --merge --delete-branch=false >/dev/null && sleep 15
-T=$(now); gh issue comment "$N" --repo "$R" --body "🤖 続行（PR を merge しました）" >/dev/null
-wait_run "$T" || ng "run 4 が失敗"
+if [ "${SMOKE_CLOSE:-merge}" = "pr" ]; then
+  echo "-- run 3: close 承認 → done 移動 → PR（github_bot.close: pr）"; T=$(now); gh issue comment "$N" --repo "$R" --body "🤖 クローズ承認" >/dev/null
+  wait_run "$T" || ng "run 3 が失敗"
+  PR=$(gh pr list --repo "$R" --head "$B" --state open --json number -q '.[0].number')
+  [ -n "$PR" ] && ok "PR #$PR" || ng "PR が無い"
+  [ -n "$PR" ] && gh pr view "$PR" --repo "$R" --json body -q .body | grep -q "Refs #$N" && ok "PR 本文に Refs #$N" || ng "Refs #$N が無い"
+  [ -n "$PR" ] && gh pr view "$PR" --repo "$R" --json files -q '.files[].path' | grep -q "^tickets/done/" && ok "PR に tickets/done/ の移動を含む" || ng "PR に done 移動が無い"
+  echo "-- merge → run 4: issue close"
+  [ -n "$PR" ] && gh pr merge "$PR" --repo "$R" --merge --delete-branch=false >/dev/null && sleep 15
+  T=$(now); gh issue comment "$N" --repo "$R" --body "🤖 続行（PR を merge しました）" >/dev/null
+  wait_run "$T" || ng "run 4 が失敗"
+else
+  echo "-- run 3: close 承認 → ticket.sh close（squash merge）→ issue close（github_bot.close: merge）"; T=$(now); gh issue comment "$N" --repo "$R" --body "🤖 クローズ承認" >/dev/null
+  wait_run "$T" || ng "run 3 が失敗"
+  [ -z "$(gh pr list --repo "$R" --head "$B" --state all --json number -q '.[0].number')" ] && ok "PR を作っていない" || ng "PR が作られた"
+fi
 [ "$(gh issue view "$N" --repo "$R" --json state -q .state)" = "CLOSED" ] && ok "issue CLOSED" || ng "issue が閉じていない"
 gh api "repos/$R/git/trees/main?recursive=1" -q '.tree[].path' | grep -q "^tickets/done/[^/]*-issue-$N/progress.md$" && ok "main に tickets/done/…/progress.md" || ng "main に done が無い"
 

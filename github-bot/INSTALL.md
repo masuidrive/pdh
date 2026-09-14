@@ -8,6 +8,7 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 
 - PDH core が導入済み（`.claude/skills/pdh-dev/` か `.codex/skills/pdh-dev/` がある）。無ければ先に core を入れる。
 - `gh` CLI が使えて、対象が GitHub repo であること。**このレイヤーでは `gh` を必須にする。**
+- ticket.sh が 20260914 以降であること（`new --branch` / `ticket_files` / `append_only_files`。`bash ./ticket.sh selfupdate`）。
 - project root に `product-brief.md` と `tickets/` がある（bot はこれで PDH mode を判定する）。
 
 ## 1. ファイルを配置する
@@ -87,6 +88,7 @@ done
 
 - Issue / PR のコメントに **🤖**（または `:robot:`）を含めると Actions が発火し、coding-robot が PDH フローで動く。
 - **human gate（`PDH-ticket-human-review` / `PDH-human-review`）では bot は自己承認せず、要点を issue にコメントして停止する。** 承認は **「🤖 承認」など 🤖 を含むコメント**で再開（⚠ Actions は reaction では起動しないので 👍 だけでは動かない。👍 は任意の印）。変更希望は 🤖 付きで返信。
+- close 承認後は既定で bot が `ticket.sh close` で squash merge して issue を閉じる（PR は作らない）。PR を通したい repo は `.ticket-config.yaml` の `github_bot.close: pr`（snippet のコメント参照）。
 - 端末で issue のコメントを拾いたいときは「issue 読んで」等と言えば `pdh-gh-pull` skill が取り込む。
 
 ## 5. 更新（再同期）

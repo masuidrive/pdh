@@ -2,7 +2,7 @@
 
 ## 前提
 
-`./ticket.sh help` を最初に実行する。各 stage の入口で note の Status をその stage 名へ更新する。仕様が変わったら、code と review を続ける前に ticket の AC と確定判断を更新する。各 stage の入口で、ticket と同じ dir に `progress.md` が無ければ作る（1 行目は `# Progress: <ticket-name>`、以後は追記のみ。[_reference.md](_reference.md)「ticket / note / progress の役割分担」）。stage 遷移の宣言（[_reference.md](_reference.md)「報告」）は progress へ追記する。通常は`PDH-review`と`PDH-verify`まで自動で進める。
+`./ticket.sh help` を最初に実行する。各 stage の入口で note の Status をその stage 名へ更新する。仕様が変わったら、code と review を続ける前に ticket の AC と確定判断を更新する。`progress.md` は `ticket.sh new` が `ticket_files` から作る。旧 ticket.sh で作られて無い ticket は stage の入口で作る（1 行目は `# Progress: <ticket-name>`。[_reference.md](_reference.md)「ticket / note / progress の役割分担」）。stage 遷移の宣言（[_reference.md](_reference.md)「報告」）は progress へ追記する。通常は`PDH-review`と`PDH-verify`まで自動で進める。
 
 ## PDH-open
 

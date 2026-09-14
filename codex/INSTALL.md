@@ -247,7 +247,7 @@ git diff --no-index -- .ticket-config.yaml tmp/pdh/codex/templates/.ticket-confi
 git diff --no-index -- scripts/test-all.sh tmp/pdh/codex/templates/test-all.sh || true
 ```
 
-`.ticket-config.yaml` の `note_content` は 2026-09-14 以降、現在値の節だけを持つ（実装ログ / 品質検証結果 / 人間レビュー / Discoveries の 4 節は `progress.md` へ移った）。`grep -q '## PDH-implement. 実装ログ' .ticket-config.yaml && echo "要適用" || echo "適用済み"` で確認し、「要適用」なら template に合わせて 4 節を外す。あわせて `scripts/check-pdh-ticket.sh` を配置し、`scripts/test-all.sh` の `run "fast-checks"` の次に `run "pdh-ticket" bash scripts/check-pdh-ticket.sh` を足す（`grep -q check-pdh-ticket.sh scripts/test-all.sh` で確認）。
+`.ticket-config.yaml` の `note_content` は 2026-09-14 以降、現在値の節だけを持つ（実装ログ / 品質検証結果 / 人間レビュー / Discoveries の 4 節は `progress.md` へ移った）。`grep -q '## PDH-implement. 実装ログ' .ticket-config.yaml && echo "要適用" || echo "適用済み"` で確認し、「要適用」なら template に合わせて 4 節を外し、`ticket_files` と `append_only_files` を足す（ticket.sh 20260914 以降。`selfupdate` を先に）。あわせて `scripts/check-pdh-ticket.sh` を配置し、`scripts/test-all.sh` の `run "fast-checks"` の次に `run "pdh-ticket" bash scripts/check-pdh-ticket.sh` を足す（`grep -q check-pdh-ticket.sh scripts/test-all.sh` で確認）。
 
 新しい `codex/templates/checks/*.check` は追加し、既存の project 固有 `.check` は残す。`required-pdh-files.check` の `required_paths` は、実際に配置した PDH skill と Codex agent 定義の全件に合わせる。
 

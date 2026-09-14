@@ -30,6 +30,17 @@ require_checklist_groups:
   - "Required Probes"
   - "Checklist"
 
+# ticket dir に note.md 以外の付属ファイルを作る（ticket.sh 20260914 以降）。
+# progress.md は経緯（何をして、何が起き、何を決めたか）の追記だけの記録。現在値は note.md。
+ticket_files:
+  - path: progress.md
+    content: |
+      # Progress: $$TICKET_NAME$$
+
+# 一度書いた行を消す・書き換えると close が拒否するファイル（ticket.sh 20260914 以降）。
+append_only_files:
+  - progress.md
+
 # Worktree settings
 # `ticket.sh start --worktree` が worktree を作成・再開したとき、main repo から
 # コピーする gitignored ファイル（repo root 相対）。既存ファイルは上書きせず、

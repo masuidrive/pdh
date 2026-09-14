@@ -418,17 +418,20 @@ rm -rf tmp/pdh
 
 #### note の時系列の節が `progress.md` へ移った（2026-09-14 以降）
 
-ticket dir に `progress.md`（経緯。追記のみ）が加わり、note は現在値（Status / Checklist / Required Probes / process check / Technical reference 更新 / Open Questions / Resume Point）だけになった。`.ticket-config.yaml` の `note_content` から「PDH-implement. 実装ログ」「PDH-review. 品質検証結果」「PDH-human-review. 人間レビュー」「Discoveries」の 4 節が消えている。`.ticket-config.yaml` は上書きされないテンプレートなので、既存プロジェクトでは手で外す。`progress.md` は agent が作るので ticket.sh の変更は無い。作り忘れ・削除・human gate の待ち行の欠落は、自己申告の checkbox ではなく `scripts/check-pdh-ticket.sh`（`scripts/test-all.sh` の 1 段）が確かめる。
+ticket dir に `progress.md`（経緯。追記のみ）が加わり、note は現在値（Status / Checklist / Required Probes / process check / Technical reference 更新 / Open Questions / Resume Point）だけになった。`.ticket-config.yaml` の `note_content` から「PDH-implement. 実装ログ」「PDH-review. 品質検証結果」「PDH-human-review. 人間レビュー」「Discoveries」の 4 節が消えている。`.ticket-config.yaml` は上書きされないテンプレートなので、既存プロジェクトでは手で外す。`progress.md` は `ticket.sh new` が `ticket_files` から作り、行の削除は `ticket.sh close` が `append_only_files` で拒否する（**ticket.sh 20260914 以降が必要**。手順 7 の `selfupdate` を先に）。human gate の待ち行の欠落は `scripts/check-pdh-ticket.sh`（`scripts/test-all.sh` の 1 段）が確かめる。
 
 適用済みかの確認（冪等）:
 
 ```bash
 grep -q '## PDH-implement. 実装ログ' .ticket-config.yaml && echo "節: 要適用" || echo "節: 適用済み"
+grep -q '^ticket_files:' .ticket-config.yaml && echo "ticket_files: 適用済み" || echo "ticket_files: 要適用"
+grep -q '^append_only_files:' .ticket-config.yaml && echo "append_only_files: 適用済み" || echo "append_only_files: 要適用"
+[ "$(bash ./ticket.sh version | sed -n 's/^Version: \([0-9]*\).*/\1/p')" -ge 20260914 ] 2>/dev/null && echo "ticket.sh: 適用済み" || echo "ticket.sh: 要 selfupdate（20260914 以降）"
 test -f scripts/check-pdh-ticket.sh && echo "検査: 適用済み" || echo "検査: 要適用"
 grep -q 'check-pdh-ticket.sh' scripts/test-all.sh && echo "test-all: 適用済み" || echo "test-all: 要適用"
 ```
 
-「要適用」なら `tmp/pdh/claude/templates/.ticket-config.yaml` の `note_content` に合わせて 4 節を外し、`tmp/pdh/claude/templates/check-pdh-ticket.sh` を `scripts/` にコピーして `scripts/test-all.sh` の `run "fast-checks"` の次に `run "pdh-ticket" bash scripts/check-pdh-ticket.sh` を足す。close 済みでない（todo / doing）ticket は、次の stage に入るときに agent が `progress.md` を作り、以後の記録をそちらへ書く。既存 note の記録は移さない。`tickets/done/` は歴史記録なので触らない。
+「要適用」なら `tmp/pdh/claude/templates/.ticket-config.yaml` の `note_content` に合わせて 4 節を外し、同 template の `ticket_files` と `append_only_files` を足し、`tmp/pdh/claude/templates/check-pdh-ticket.sh` を `scripts/` にコピーして `scripts/test-all.sh` の `run "fast-checks"` の次に `run "pdh-ticket" bash scripts/check-pdh-ticket.sh` を足す。close 済みでない（todo / doing）ticket は、次の stage に入るときに agent が `progress.md` を作り、以後の記録をそちらへ書く。既存 note の記録は移さない。`tickets/done/` は歴史記録なので触らない。
 
 #### 検証 worker 向け skill `pdh-verifying` が新設された（2026-08-30 以降）
 

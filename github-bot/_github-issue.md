@@ -61,10 +61,12 @@ bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する*
   ```
   作った issue 番号を ticket.md の frontmatter（`issue:` 等）に控え、以降の紐付けに使う。
 
-## PR は `Refs`、close は PDH の手順で
+## close は `github_bot.close` で分岐する（既定は PR を使わない）
 
-- PR 本文は **`Refs #N`**（`Closes #N` / `Fixes #N` にしない）。`Closes` は PR merge で issue を自動 close するが、**PDH では close は `PDH-close` の手順**（checklist gate・close 判断ボード）を通す。issue の自動 close はそれを飛ばすので使わない。
-- **PR を作るのは bot（close 段階）。** close 承認後、bot は **先に `ticket.sh close --no-merge <name>`** を実行して `closed_at` を設定し ticket を `tickets/done/` へ移し（checklist gate はここで効く）、その commit を含めて `agent/issue-N` → default branch の PR（`Refs #N`）を作り、«merge したら 🤖 で issue を閉じる» と伝えて停止する。人間が merge → 次の 🤖 で bot が `gh issue close #N` だけを行う。**done への移動を PR の後にすると、その commit が agent branch に取り残されて main に届かない**（smoke 実測）。**「PR merge 後に close」だけ書いて誰が PR を作るか書かないと、bot は PR 待ちで止まる**（実測）。
+close 承認は issue で得ているので、同じ人が PR でもう一度承認する二重 gate は既定では置かない。`.ticket-config.yaml` の `github_bot.close`:
+
+- **`merge`（既定）**: bot が `bash ticket.sh close --no-delete-remote` で default branch へ squash merge して push し、`gh issue close #N` する。1 run で終わる。
+- **`pr`**: bot は `ticket.sh close --no-merge <name>` で `tickets/done/` へ移した commit を含めて PR（本文に **`Refs #N`**。`Closes` / `Fixes` は issue を自動 close して PDH の close 手順を飛ばすので使わない）を作り、«merge したら 🤖 で issue を閉じます» と伝えて停止する。人間が merge → 次の 🤖 で `gh issue close #N` だけを行う。**done への移動を PR の後にすると、その commit が agent branch に取り残されて main に届かない**（smoke 実測）。選ぶのは、branch protection で Actions が default branch へ push できない、外部のコードを受け入れる、close 承認とは別の人にコードレビューさせたい、のどれかに当たる repo。
 - 作業中の「🤖 作業中...」コメントは close 時に消すか、最終結果へ置き換える。
 
 ## local: issue を読みに行く

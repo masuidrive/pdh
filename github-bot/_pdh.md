@@ -39,37 +39,35 @@ PDH フローの手順は `.claude/skills/pdh-dev/`（Codex 構成では `.codex
   ```
   （`date -d` は GNU、`date -jf` は BSD/macOS。両対応で書く。）
 
-## チケットは `ticket.sh new` で作る（`start`/`close` は使わない）
-ファイル本体は `ticket.sh new` で生成する（テンプレ・frontmatter・ノートを正しく作るため）。ブランチは `agent/issue-N`・作業ビューは自分で張るので `start` / `close` は使わない。
+## チケットは `ticket.sh new --branch` で作り、`start` / `check` / `close` も ticket.sh で行う
+ファイル本体は `ticket.sh new` で生成する。**bot の branch `agent/issue-N` は machinery が先に作るので、`--branch` で ticket に書く**（ticket.sh 20260914 以降）。以後 `start` / `check` / `restore` / `close` はその branch と ticket を対応付けて動く。
 
 ```bash
-bash ticket.sh new "issue-${ISSUE_NUMBER}" --created-at "$TS"
+bash ticket.sh new "issue-${ISSUE_NUMBER}" --created-at "$TS" --branch "agent/issue-${ISSUE_NUMBER}"
+bash ticket.sh start "$TICKET_NAME"   # 既存の branch を checkout し started_at を入れ、Active ticket paths を出す
 ```
 
-**配置は ticket.sh の版に従う。** 現行の ticket.sh は **per-ticket dir**（`tickets/<TICKET_NAME>/ticket.md` と `note.md`）、旧版は **flat**（`tickets/<TICKET_NAME>.md` と `-note.md`）。実パスは `ticket.sh new` の出力（`ticket:` / `note:` 行）が示す。**その行を読んで以降の参照に使う**（パスをハードコードしない）。
+**配置は ticket.sh の版に従う。** 現行の ticket.sh は **per-ticket dir**（`tickets/<TICKET_NAME>/ticket.md`・`note.md`・`progress.md`）、旧版は **flat**。実パスは `start` / `restore` の `Active ticket paths:` が示す。**その行を読んで以降の参照に使う**（パスをハードコードしない）。
 
-**find-or-create（重複させない）**: チケット名は決定的なので、`new` の前に既存を確認し、**無い時だけ `new`** する。per-dir と flat、`tickets/done/` の両方を見る:
+**find-or-create（重複させない）**: チケット名は決定的なので、`new` の前に既存を確認し、**無い時だけ `new`** する。既存なら `restore` で作業ビューを張る:
 ```bash
 if ls "tickets/${TICKET_NAME}/ticket.md" "tickets/${TICKET_NAME}.md" \
       "tickets/done/${TICKET_NAME}/ticket.md" "tickets/done/${TICKET_NAME}.md" 2>/dev/null | head -1 | grep -q .; then
-  echo "既存チケットを使う"          # 既にあればそれを使う
+  bash ticket.sh restore                 # 既にあればそれを使う
 else
-  bash ticket.sh new "issue-${ISSUE_NUMBER}" --created-at "$TS"
+  bash ticket.sh new "issue-${ISSUE_NUMBER}" --created-at "$TS" --branch "agent/issue-${ISSUE_NUMBER}"
+  bash ticket.sh start "$TICKET_NAME"
 fi
 ```
 
-**作業ビュー**: `ticket.sh` が示す `ticket:` / `note:` 実パスへ compat symlink を張る（`current-ticket.md` を参照する指示がそのまま機能するように）。symlink は `.gitignore` 済・毎回張り直す（揮発）。
+生成後、本体の各セクション（Why / What + Acceptance Criteria / Architectural Invariants check / Design Decisions / Out-of-scope）を Issue・`product-brief.md` から埋める。`progress.md` は `ticket_files` により `new` が作る。経緯はここへ追記し、note は現在値だけにする（`_reference.md`「ticket / note / progress の役割分担」）。旧 ticket.sh で作られて `progress.md` が無い ticket は、stage の入口で作る。
 
-生成後、本体の各セクション（Why / What + Acceptance Criteria / Architectural Invariants check / Design Decisions / Out-of-scope）を Issue・`product-brief.md` から埋める。**同じ dir に `progress.md` を作る**（1 行目 `# Progress: <TICKET_NAME>`。ticket.sh は作らない。無ければどの stage の入口でも作る）。経緯はここへ追記し、note は現在値だけにする（`_reference.md`「ticket / note / progress の役割分担」）。`started_at` / `closed_at` は `start`/`close` を使わないので、必要なタイミングで frontmatter を直接更新する。
-
-## checklist gate と close（bot のブランチ模型に注意）
-bot は `agent/issue-N` で作業し、ticket.sh の feature-branch 模型（`{branch_prefix}<ticket-name>`）を使わない。そのため **`ticket.sh check` の «ticket/branch 同期» 判定は構造的に不一致を出す**（checklist の合否ではなく、branch が `agent/issue-N` で `{branch_prefix}<name>` と違うことを報告している）。これは想定内で、フローを止める失敗ではない。
-- **checklist の充足は ticket 本体・note を直接読んで確認する** — required グループ（`.ticket-config.yaml` の `require_checklist_groups`）が両ファイルに在り、未了 checkbox が無いか。branch 同期の警告そのものは無視してよい。
-- **close 段階（PDH-close、close 承認後）の手順** — PR を «誰が作るか» を曖昧にしない。次の順で行う:
-  1. **bot が `ticket.sh close --no-merge <ticket-name>` を実行する**（ticket.sh に merge させない。`--no-merge` は feature-branch 模型に依存しないので `agent/issue-N` でも通る）。`closed_at` が入り ticket が `tickets/done/` へ移る。checklist gate（`require_checklist` / `require_checklist_groups`）はここで効くので、その前に上記の checklist 充足を満たしておく。
-  2. **bot が PR を作る**（`agent/issue-N` → default branch、本文に **`Refs #N`**。`Closes`/`Fixes` にしない）。done への移動の commit を含める。作ったら «PR #M を merge したら 🤖 で issue を閉じます» と issue にコメントして**停止する**（merge は人間の操作）。
-  3. 人間が PR を merge する。
-  4. 次の 🤖 で bot が `gh issue close #N` する。
+## checklist gate と close
+- **checklist の充足は `bash ticket.sh check` で確認する。**required グループ（`require_checklist_groups`）、未了 checkbox、`append_only_files` の欠落行を出す。ticket は `branch:` を持つので同期判定も通る。
+- **close 段階（PDH-close、close 承認後）** は `.ticket-config.yaml` の `github_bot.close` で分岐する:
+  - **`merge`（既定）**: bot が `bash ticket.sh close --no-delete-remote` を実行する（squash merge → default branch へ push、ticket は `tickets/done/` へ）。続けて `gh issue close #N`。**1 run で終わり、PR は作らない。**
+  - **`pr`**: bot が `bash ticket.sh close --no-merge "$TICKET_NAME"` で done へ移し、その commit を含む PR（`Refs #N`。`Closes` にしない）を作り、«merge したら 🤖 で issue を閉じます» と伝えて**停止する**。人間が merge → 次の 🤖 で `gh issue close #N`。
+  - checklist gate（`require_checklist` / `require_checklist_groups` / `append_only_files`）はどちらでも `close` で効く。
 
 ## worker spawn（team 実行）
 **あなた（bot の main agent）は PM として team フローを実行する。** worker（Coding Engineer / reviewer / AC 裏取り 等）は **CLI subprocess で spawn** する（`_execution-team.md`「spawn 機構」）。
@@ -83,7 +81,7 @@ issue とのやり取りは、同じディレクトリの **`.github/coding-robo
 - **human gate では自己承認しない。** `PDH-ticket-human-review` と `PDH-human-review` に達したら、Actions には対話できる人間がいないので、**gate の要点を判断ボード（`_github-issue.md`）として issue にコメントし、note の Checklist に待ち行を書いて run を停止**する。承認は **🤖 を含むコメント**（例「🤖 承認」。Actions は reaction では起動しないので 👍 だけでは再開しない）、変更希望は 🤖 付きで返信。«よしなに» で gate を越えない。
 - **進捗コメントは増やさない。** run 中の「🤖 作業中...」は 1 個を編集し続ける（machinery が担う）。人間の注意が要るとき（gate・質問・blocker）だけ新規コメントを立てる。
 - **stage をラベルで出す。** ラベルは runner が note の `## Status:` から付ける。agent は Status を到達 stage に保つ。Projects は使わない。
-- **PR は `Refs #N`**（`Closes #N` にしない）。ticket.md に従い・issue は会話面なので、close は PDH の close 手順で行う。
+- **close は `github_bot.close` の設定に従う**（既定 `merge`: `ticket.sh close` で squash merge して issue を閉じる。`pr`: PR は `Refs #N`、`Closes #N` にしない）。
 
 ## 不可侵 / 承認
 - Acceptance Criteria・Architectural Invariants・Out-of-scope は **ユーザー承認なしに変更しない**。
