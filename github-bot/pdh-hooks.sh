@@ -5,7 +5,7 @@
 # 人との受け渡し経路（GitHub Issue）で、agent の申告に依らず runner が保証するもの:
 #   1. ticket dir に progress.md が無ければ作る
 #   2. note の `## Status: PDH-*` を issue の stage ラベルに写す
-#   3. Status が human gate なら、最終レポートに承認導線が無ければ足す
+#   3. Status が human gate なら、最終レポートにその gate の承認語（🤖 承認 / 🤖 クローズ承認）が無ければ導線を足す
 #   4. Status が human gate なら、note の Checklist に «発行先:» 付きの未了行が無ければ足す
 #      （URL は今回の gate コメント）
 #   5. progress.md に削除行があれば報告に警告を足す
@@ -91,8 +91,8 @@ if [ -n "$status" ] && printf '%s\n' $STAGES | grep -qx "$status"; then
 fi
 
 # --- 3. 承認導線 ---
-if [ "$gate" -eq 1 ] && ! printf '%s' "$report" | grep -q '🤖 承認\|🤖 クローズ承認'; then
-  if [ "$status" = "PDH-ticket-human-review" ]; then word="🤖 承認"; else word="🤖 クローズ承認"; fi
+if [ "$status" = "PDH-ticket-human-review" ]; then word="🤖 承認"; else word="🤖 クローズ承認"; fi
+if [ "$gate" -eq 1 ] && ! printf '%s' "$report" | grep -qF "$word"; then
   report="$report
 
 ### 回答のしかた
