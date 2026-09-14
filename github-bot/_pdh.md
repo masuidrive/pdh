@@ -39,16 +39,16 @@ PDH フローの手順は `.claude/skills/pdh-dev/`（Codex 構成では `.codex
   ```
   （`date -d` は GNU、`date -jf` は BSD/macOS。両対応で書く。）
 
-## チケットは `ticket.sh new --branch` で作り、`restore` / `check` / `close` も ticket.sh で行う
-ファイル本体は `ticket.sh new` で生成する。**bot の branch `agent/issue-N` は machinery が先に作るので、`--branch` で ticket に書く**（ticket.sh 20260914 以降）。以後 `restore` / `check` / `close` はその branch と ticket を対応付けて動く。**`start` は使わない**（ticket が base branch に無いと動かない。ticket は agent branch にだけある）。`started_at` は実装に入るときに frontmatter へ直接書く。
+## チケットは `ticket.sh new --branch` で作り、`start` / `restore` / `check` / `close` も ticket.sh で行う
+ファイル本体は `ticket.sh new` で生成する。**bot の branch `agent/issue-N` は machinery が先に作るので、`--branch` で ticket に書く**（ticket.sh 20260914.144516 以降）。以後 `start` / `restore` / `check` / `close` はその branch と ticket を対応付けて動く（ticket は agent branch にだけあり、base branch には無い。`start` はその旨を 1 行出して fast-forward を省く）。
 
 ```bash
 bash ticket.sh new "issue-${ISSUE_NUMBER}" --created-at "$TS" --branch "agent/issue-${ISSUE_NUMBER}"
 git add tickets && git commit -m "ticket: issue-${ISSUE_NUMBER}"
-bash ticket.sh restore                # 作業ビュー（current-ticket.md 等）を張り、Active ticket paths を出す
+bash ticket.sh start "$TICKET_NAME"   # started_at を入れて commit し、作業ビュー（current-ticket.md 等）を張り、Active ticket paths を出す
 ```
 
-**配置は ticket.sh の版に従う。** 現行の ticket.sh は **per-ticket dir**（`tickets/<TICKET_NAME>/ticket.md`・`note.md`・`progress.md`）、旧版は **flat**。実パスは `restore` の `Active ticket paths:` が示す。**その行を読んで以降の参照に使う**（パスをハードコードしない）。
+**配置は ticket.sh の版に従う。** 現行の ticket.sh は **per-ticket dir**（`tickets/<TICKET_NAME>/ticket.md`・`note.md`・`progress.md`）、旧版は **flat**。実パスは `start` / `restore` の `Active ticket paths:` が示す。**その行を読んで以降の参照に使う**（パスをハードコードしない）。
 
 **find-or-create（重複させない）**: チケット名は決定的なので、`new` の前に既存を確認し、**無い時だけ `new`** する。既存なら `restore` で作業ビューを張る:
 ```bash
@@ -58,11 +58,11 @@ if ls "tickets/${TICKET_NAME}/ticket.md" "tickets/${TICKET_NAME}.md" \
 else
   bash ticket.sh new "issue-${ISSUE_NUMBER}" --created-at "$TS" --branch "agent/issue-${ISSUE_NUMBER}"
   git add tickets && git commit -m "ticket: issue-${ISSUE_NUMBER}"
-  bash ticket.sh restore
+  bash ticket.sh start "$TICKET_NAME"
 fi
 ```
 
-生成後、本体の各セクション（Why / What + Acceptance Criteria / Architectural Invariants check / Design Decisions / Out-of-scope）を Issue・`product-brief.md` から埋める。`progress.md` は `ticket_files` により `new` が作る。経緯はここへ追記し、note は現在値だけにする（`_reference.md`「ticket / note / progress の役割分担」）。旧 ticket.sh で作られて `progress.md` が無い ticket は、stage の入口で作る。`started_at` / `closed_at` のうち `closed_at` は `close` が入れる。
+生成後、本体の各セクション（Why / What + Acceptance Criteria / Architectural Invariants check / Design Decisions / Out-of-scope）を Issue・`product-brief.md` から埋める。`progress.md` は `ticket_files` により `new` が作る。経緯はここへ追記し、note は現在値だけにする（`_reference.md`「ticket / note / progress の役割分担」）。旧 ticket.sh で作られて `progress.md` が無い ticket は、stage の入口で作る。`started_at` は `start` が、`closed_at` は `close` が入れる。
 
 ## checklist gate と close
 - **checklist の充足は `bash ticket.sh check` で確認する。**required グループ（`require_checklist_groups`）、未了 checkbox、`append_only_files` の欠落行を出す。ticket は `branch:` を持つので同期判定も通る。
