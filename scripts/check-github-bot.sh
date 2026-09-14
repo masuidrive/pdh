@@ -18,6 +18,7 @@ failed=0
 required=(
   github-bot/_pdh.md
   github-bot/_github-issue.md
+  github-bot/pdh-hooks.sh
   github-bot/INSTALL.md
   github-bot/.ticket-config.snippet.yaml
   github-bot/pdh-gh-pull/SKILL.md
@@ -70,6 +71,11 @@ ra="github-bot/vendor/.github/coding-robot/run-action.sh"
 if [ -f "$ra" ]; then
   if ! grep -q 'product-brief.md' "$ra" || ! grep -q -- '-d tickets' "$ra"; then
     printf 'github-bot: run-action.sh の PDH 検出（product-brief.md && tickets/）が見当たらない\n' >&2
+    failed=1
+  fi
+  # PDH 側パッチ: 最終レポート投稿前に pdh-hooks.sh を通す（VENDOR.md）。消えると agent の申告頼みに戻る
+  if ! grep -q 'pdh-hooks.sh" final' "$ra"; then
+    printf 'github-bot: run-action.sh が pdh-hooks.sh final を呼んでいない（VENDOR.md の PDH 側パッチ）\n' >&2
     failed=1
   fi
   if ! grep -q 'append_prompt "\$SCRIPT_DIR/_pdh.md"' "$ra"; then

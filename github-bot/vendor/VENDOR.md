@@ -28,6 +28,7 @@
 ## PDH 側の移植性パッチ（upstream から意図的に 1 行ずらしている）
 
 - **`.devcontainer/devcontainer.json`**: `workspaceFolder` を `/workspaces/${localWorkspaceFolderBasename}`（repo 名依存）から **`/workspaces/project`**（固定）へ変更。upstream は compose 側が `/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-project}` で、その env が未設定だと `project` にフォールバックし、devcontainer.json の chdir 先（repo 名）と食い違って `devcontainer exec` が «no such file or directory» で落ちる（任意 repo に落とすと踏む）。固定パスで両者を一致させた。**実測**: smoke（`pdh-ghbot-smoke`）の 1 回目がこの mismatch で失敗、この修正で 2 回目が成功。
+- **`.github/coding-robot/run-action.sh`**: 最終レポートを投稿する直前に、PDH mode（`product-brief.md` と `tickets/` がある）なら `$SCRIPT_DIR/pdh-hooks.sh final` を通す 5 行を挿入。hook は PDH 側の `github-bot/pdh-hooks.sh`（progress.md の作成・stage ラベル・承認導線・待ち行・導入検査）で、無ければ何もしない。`scripts/check-github-bot.sh` がこの呼び出し行の存在を守る。
 - **再同期時は再適用する。** github-bots が devcontainer/compose の workspace 解決を直したら、このパッチは不要になるので突き合わせる。upstream へ報告する価値がある。
 
 ## 再同期（github-bots が machinery を更新したとき）

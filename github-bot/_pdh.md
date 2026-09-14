@@ -7,12 +7,12 @@
 <Human-Agent-Interface>
 この run の人との受け渡し経路は GitHub Issue のコメントである。`PDH-AGENTS.md`「Handover Routes」の 6 項目を次のとおり定める。これ以外の規則（human gate の停止・AC の承認・証拠・note の Checklist）はこの囲いで変わらない。
 
-- **渡す場所**: issue コメント（最終レポートを machinery（`run-action.sh`）が投稿する）と、issue の stage ラベル（run の終わりに到達 stage へ更新する。`_github-issue.md`「stage をラベルで可視化する」）。gate で停止する run の最終レポートは `_github-issue.md` の判断ボードで、承認導線（`🤖 承認` / `🤖 クローズ承認`）を含める。`_issue.md` の «Create Pull Request» で終わる形式は PDH では使わない — PR は close 承認後に bot が作る。
+- **渡す場所**: issue コメント（最終レポートを machinery（`run-action.sh`）が投稿する）と、issue の stage ラベル（runner が run の終わりに note の `## Status:` から付ける。agent は Status を到達 stage に保つ）。gate で停止する run の最終レポートは `_github-issue.md` の判断ボードで、承認導線（`🤖 承認` / `🤖 クローズ承認`）を含める。`_issue.md` の «Create Pull Request» で終わる形式は PDH では使わない — PR は close 承認後に bot が作る。
 - **答えが戻る場所**: 🤖 を含む issue コメント。HTML の板を出したときは、人が板の「回答をコピー」で出た貼り戻し文をそのまま貼る。
 - **表現の上限**: Markdown（表・`<details>`・mermaid 可。HTML はソース表示になるので不可）。
 - **発行先**: Markdown で足りる板は issue コメント本文。足りない板は project ルールに登録された発行先へ HTML を置き、issue には決定サマリーと URL だけを書く。登録が無ければ Markdown で出し、像は «回せない» と書く。
 - **答えの戻し方**: トリガーコメントを答えとして解釈し、ticket へ反映して note の Checklist の行を `[x]` にする。
-- **再開時に読む場所**: note の `## Checklist`（何を待っていたか）、`progress.md`（経緯）、issue のコメント列（答え）。gate で停止するときは、停止する同じ commit で note の `## Checklist` に「何の答えを待つか」と gate コメントの URL を 1 行書く。machinery の状態ファイルは同じコメントを二度処理しないための印にだけ使う。
+- **再開時に読む場所**: note の `## Checklist`（何を待っていたか）、`progress.md`（経緯）、issue のコメント列（答え）。gate で停止するときは、停止する同じ commit で note の `## Checklist` に「何の答えを待つか」と `発行先:` に続けて URL か path を 1 行書く。machinery の状態ファイルは同じコメントを二度処理しないための印にだけ使う。
 </Human-Agent-Interface>
 
 ## フローの定義は共有 core にある（必ず順に Read）
@@ -66,9 +66,10 @@ fi
 bot は `agent/issue-N` で作業し、ticket.sh の feature-branch 模型（`{branch_prefix}<ticket-name>`）を使わない。そのため **`ticket.sh check` の «ticket/branch 同期» 判定は構造的に不一致を出す**（checklist の合否ではなく、branch が `agent/issue-N` で `{branch_prefix}<name>` と違うことを報告している）。これは想定内で、フローを止める失敗ではない。
 - **checklist の充足は ticket 本体・note を直接読んで確認する** — required グループ（`.ticket-config.yaml` の `require_checklist_groups`）が両ファイルに在り、未了 checkbox が無いか。branch 同期の警告そのものは無視してよい。
 - **close 段階（PDH-close、close 承認後）の手順** — PR を «誰が作るか» を曖昧にしない。次の順で行う:
-  1. **bot が PR を作る**（`agent/issue-N` → default branch、本文に **`Refs #N`**。`Closes`/`Fixes` にしない）。作ったら «PR #M を merge したら 🤖 で最終 close します» と issue にコメントして**停止する**（merge は人間の操作）。
-  2. 人間が PR を merge する。
-  3. 次の 🤖 で bot が **`ticket.sh close --no-merge <ticket-name>`**（ticket.sh に merge させない。`--no-merge` は feature-branch 模型に依存しないので `agent/issue-N` でも通る）を実行し、`gh issue close #N` する。checklist gate（`require_checklist` / `require_checklist_groups`）はここで効くので、その前に上記の checklist 充足を満たしておく。
+  1. **bot が `ticket.sh close --no-merge <ticket-name>` を実行する**（ticket.sh に merge させない。`--no-merge` は feature-branch 模型に依存しないので `agent/issue-N` でも通る）。`closed_at` が入り ticket が `tickets/done/` へ移る。checklist gate（`require_checklist` / `require_checklist_groups`）はここで効くので、その前に上記の checklist 充足を満たしておく。
+  2. **bot が PR を作る**（`agent/issue-N` → default branch、本文に **`Refs #N`**。`Closes`/`Fixes` にしない）。done への移動の commit を含める。作ったら «PR #M を merge したら 🤖 で issue を閉じます» と issue にコメントして**停止する**（merge は人間の操作）。
+  3. 人間が PR を merge する。
+  4. 次の 🤖 で bot が `gh issue close #N` する。
 
 ## worker spawn（team 実行）
 **あなた（bot の main agent）は PM として team フローを実行する。** worker（Coding Engineer / reviewer / AC 裏取り 等）は **CLI subprocess で spawn** する（`_execution-team.md`「spawn 機構」）。
@@ -81,7 +82,7 @@ issue とのやり取りは、同じディレクトリの **`.github/coding-robo
 
 - **human gate では自己承認しない。** `PDH-ticket-human-review` と `PDH-human-review` に達したら、Actions には対話できる人間がいないので、**gate の要点を判断ボード（`_github-issue.md`）として issue にコメントし、note の Checklist に待ち行を書いて run を停止**する。承認は **🤖 を含むコメント**（例「🤖 承認」。Actions は reaction では起動しないので 👍 だけでは再開しない）、変更希望は 🤖 付きで返信。«よしなに» で gate を越えない。
 - **進捗コメントは増やさない。** run 中の「🤖 作業中...」は 1 個を編集し続ける（machinery が担う）。人間の注意が要るとき（gate・質問・blocker）だけ新規コメントを立てる。
-- **stage をラベルで出す。** run の終わりに issue の PDH stage ラベルを到達 stage に更新する（既存の PDH-* を外し現在のものだけ付ける。詳細は `_github-issue.md`）。ラベルが無ければ skip して続行。Projects は使わない。
+- **stage をラベルで出す。** ラベルは runner が note の `## Status:` から付ける。agent は Status を到達 stage に保つ。Projects は使わない。
 - **PR は `Refs #N`**（`Closes #N` にしない）。ticket.md に従い・issue は会話面なので、close は PDH の close 手順で行う。
 
 ## 不可侵 / 承認

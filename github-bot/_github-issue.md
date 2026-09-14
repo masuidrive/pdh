@@ -47,15 +47,10 @@ Actions の run は 1 回ごとに記憶を失う。gate や質問で停止す�
 
 bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する**（Projects は使わない。ラベルだけで status を出す）。
 
-- ラベルは 8 段: `PDH-open` / `PDH-ticket-review` / `PDH-ticket-human-review` / `PDH-implement` / `PDH-review` / `PDH-verify` / `PDH-human-review` / `PDH-close`。**ticket は常に 1 stage** なので、現在の stage 以外の PDH-* を外して現在のものを付ける。⚠ `--remove-label` に現在の stage を含めない — gh の版によっては add の後に remove が走り、付けたラベルがその場で消える（smoke 実測）:
-  ```bash
-  cur="PDH-<current-stage>"
-  others=$(printf '%s\n' PDH-open PDH-ticket-review PDH-ticket-human-review PDH-implement PDH-review PDH-verify PDH-human-review PDH-close | grep -vx "$cur" | paste -sd, -)
-  gh issue edit "$N" --repo "$R" --remove-label "$others" --add-label "$cur"
-  ```
-- 1 回の run は複数 stage を跨ぐので、**run の終わりに到達 stage を反映**すればよい（多くは gate 待ちか close）。
+- ラベルは 8 段: `PDH-open` / `PDH-ticket-review` / `PDH-ticket-human-review` / `PDH-implement` / `PDH-review` / `PDH-verify` / `PDH-human-review` / `PDH-close`。**ticket は常に 1 stage**。
+- **ラベルは runner（`pdh-hooks.sh`）が run の終わりに note の `## Status:` から付ける。**agent は note の Status を到達 stage に保つだけでよく、`gh issue edit` でラベルを触らない。同じ hook が、human gate で停止する run の最終レポートに承認導線が無ければ足し、note の Checklist に `発行先:` 付きの待ち行が無ければ gate コメントの URL で足し、`progress.md` が無ければ作る。**hook が補うのは落ちたときの保険であり、agent が書く規則は変わらない。**
 - 特に **gate 待ちラベル（`PDH-ticket-human-review` / `PDH-human-review`）**で溜まると、Issues 一覧のラベルフィルタで «あなたが承認すべき issue» が一目で分かる。これがラベルの主目的。
-- ラベルは INSTALL で作成済みが前提。無い repo では `--add-label` が失敗するので、その run では**ラベル更新を skip して本作業は続ける**（ラベルの失敗で gate や実装を止めない）。
+- ラベルは INSTALL で作成済みが前提。無い repo では hook が skip し、最終レポートの「導入検査で要追加」に出る（gate や実装は止めない）。
 
 ## issue の作り方（on-gate）
 
@@ -69,7 +64,7 @@ bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する*
 ## PR は `Refs`、close は PDH の手順で
 
 - PR 本文は **`Refs #N`**（`Closes #N` / `Fixes #N` にしない）。`Closes` は PR merge で issue を自動 close するが、**PDH では close は `PDH-close` の手順**（checklist gate・close 判断ボード）を通す。issue の自動 close はそれを飛ばすので使わない。
-- **PR を作るのは bot（close 段階）。** close 承認後、bot が `agent/issue-N` → default branch の PR（`Refs #N`）を作り、«merge したら 🤖 で最終 close» と伝えて停止する。人間が merge → 次の 🤖 で bot が `ticket.sh close --no-merge <name>` + `gh issue close #N`。**「PR merge 後に close」だけ書いて誰が PR を作るか書かないと、bot は PR 待ちで止まる**（実測）。
+- **PR を作るのは bot（close 段階）。** close 承認後、bot は **先に `ticket.sh close --no-merge <name>`** を実行して `closed_at` を設定し ticket を `tickets/done/` へ移し（checklist gate はここで効く）、その commit を含めて `agent/issue-N` → default branch の PR（`Refs #N`）を作り、«merge したら 🤖 で issue を閉じる» と伝えて停止する。人間が merge → 次の 🤖 で bot が `gh issue close #N` だけを行う。**done への移動を PR の後にすると、その commit が agent branch に取り残されて main に届かない**（smoke 実測）。**「PR merge 後に close」だけ書いて誰が PR を作るか書かないと、bot は PR 待ちで止まる**（実測）。
 - 作業中の「🤖 作業中...」コメントは close 時に消すか、最終結果へ置き換える。
 
 ## local: issue を読みに行く

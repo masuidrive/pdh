@@ -191,6 +191,7 @@ project-root/
     dev-server.sh           ← PDH verify / human-review 用の開発サーバ入口
     seed-pdh-verify.sh      ← PDH verify / human-review 用のローカル seed hook
     test-ticket-local.sh    ← `ticket-local-test` 実行
+    check-pdh-ticket.sh     ← ticket dir の progress.md と human gate の待ち行の検査（test-all の 1 段）
     hookbus.js              ← (任意) tmux Director hookbus event bus
   tests/
     tickets/
@@ -239,17 +240,18 @@ pdh/
       AGENTS.md                      ← Codex を worker に使うときの thin pointer
       agents/claude/  agents/codex/  ← PDH worker の agent 定義（配布先 .claude/agents/ と .codex/agents/）
       product-brief.md  technical-reference.md  .ticket-config.yaml
-      test-all.sh  fast-checks.sh  checks/  dev-server.sh  seed-pdh-verify.sh  test-ticket-local.sh
+      test-all.sh  fast-checks.sh  checks/  dev-server.sh  seed-pdh-verify.sh  test-ticket-local.sh  check-pdh-ticket.sh
     scripts/hookbus.js               ← tmux Director hookbus（CLI + library + in-source vitest）
   codex/                             ← Codex CLI 用の配布セット（同じ構成。入口は AGENTS.md、agent 定義は .codex/agents/*.toml）
   github-bot/                        ← GitHub Issues + Actions bot レイヤー【任意・engine 中立。有効化した人だけが配置】
-    INSTALL.md  _pdh.md  _github-issue.md  pdh-gh-pull/  .ticket-config.snippet.yaml
+    INSTALL.md  _pdh.md  _github-issue.md  pdh-hooks.sh  pdh-gh-pull/  .ticket-config.snippet.yaml
     vendor/                          ← github-bots から取り込んだ machinery（workflow / devcontainer。VENDOR.md に取り込み元 commit）
   evals/                             ← 評価【配布物ではない。両セット共通】
     eval-*.md  fixtures/  examples.md
     private/                         ← 実案件の切り出し再生（private repo pdh-eval の checkout。git 管理外）
   scripts/                           ← この repo 自身の検査【配布物ではない】
     test-all.sh  fast-checks.sh  check-distribution.sh  check-guard-parity.sh  check-github-bot.sh  check-links.py  checks/
+    smoke-github-bot.sh              ← github-bot 層を実 repo で両 engine 実走する（Actions を使うので手で回す）
     check-board-render.sh  board-check/  bsd-shim/
 ```
 

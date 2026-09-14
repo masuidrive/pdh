@@ -2,7 +2,7 @@
 
 PDH の **オプション**。GitHub Issue を «エンジニアとの会話面» にし、🤖 コメントで続きの処理を GitHub Actions 上の agent（[github-bots](https://github.com/masuidrive/github-bots) の coding-robot）に回す。**このレイヤーを入れなくても PDH core は完全に動く。** 入れるかは任意で、入れたプロジェクトだけが GitHub Actions を要求する。
 
-これは core の `claude/INSTALL.md` / `codex/INSTALL.md` とは別経路。導入後は `pdh-update` が PDH 保守分（`_pdh.md` / `_github-issue.md` / `pdh-gh-pull/`）を毎回上流の版で置き換える。vendor の machinery は「5. 更新」で再同期する。
+これは core の `claude/INSTALL.md` / `codex/INSTALL.md` とは別経路。導入後は `pdh-update` が PDH 保守分（`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/`）を毎回上流の版で置き換える。vendor の machinery は「5. 更新」で再同期する。
 
 ## 前提
 
@@ -18,6 +18,7 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 | `github-bot/vendor/.devcontainer/` | `.devcontainer/` | Actions が使う devcontainer。**既存の devcontainer があればマージ**（上書き前に diff を確認） |
 | `github-bot/_pdh.md` | `.github/coding-robot/_pdh.md` | **PDH mode を定義する**（vendor の古い `_pdh.md` は使わない） |
 | `github-bot/_github-issue.md` | `.github/coding-robot/_github-issue.md` | gate→issue プロトコル（cloud / local 共通） |
+| `github-bot/pdh-hooks.sh` | `.github/coding-robot/pdh-hooks.sh` | runner hook。progress.md の作成・stage ラベル・承認導線・待ち行・導入検査を、agent の申告に依らず run の終わりに保証する（vendor の `run-action.sh` が呼ぶ） |
 | `github-bot/pdh-gh-pull/` | `.claude/skills/pdh-gh-pull/`（Codex は `.codex/skills/pdh-gh-pull/`） | 「issue 読みに行く」skill。core skill と同じ流儀で symlink する場合はそれに合わせる |
 | `github-bot/.ticket-config.snippet.yaml` の中身 | `.ticket-config.yaml` の末尾へ追記 | `github_bot:` 設定 |
 
@@ -60,6 +61,12 @@ gh api repos/<owner/repo>/actions/permissions/workflow   # can_approve_pull_requ
 
 組織ポリシーで固定されている場合は管理者に依頼する。無効のままでも bot は blocker として停止し、人間が PR を作る手順を issue に書く。
 
+ラベル（次節）と合わせて、導入検査を 1 回実行して「要追加」が無いことを確かめる（bot も run の終わりに同じ検査を行い、要追加があれば最終レポートに出す）:
+
+```bash
+bash .github/coding-robot/pdh-hooks.sh setup <owner/repo>
+```
+
 ## 3. stage ラベルを作る
 
 bot は stage 遷移で issue に PDH stage ラベルを付ける（status を Issues 一覧で見るため。Projects は使わない）。8 段のラベルを作っておく（gate の 2 つは amber で目立たせる）:
@@ -84,4 +91,4 @@ done
 
 ## 5. 更新（再同期）
 
-machinery（vendor/）が github-bots 側で更新されたら、`github-bot/vendor/VENDOR.md` の手順で再同期し、commit id を更新する。`_pdh.md` / `_github-issue.md` / `pdh-gh-pull` は PDH 側で保守するので、`pdh-update` がこの repo の版を再配置する（手動なら「1. ファイルを配置する」の該当 3 行をコピーし直す）。
+machinery（vendor/）が github-bots 側で更新されたら、`github-bot/vendor/VENDOR.md` の手順で再同期し、commit id を更新する。`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull` は PDH 側で保守するので、`pdh-update` がこの repo の版を再配置する（手動なら「1. ファイルを配置する」の該当 4 行をコピーし直す）。vendor の `run-action.sh` には PDH 側の 5 行パッチ（`pdh-hooks.sh` の呼び出し）があり、再同期後に `VENDOR.md`「PDH 側の移植性パッチ」を再適用する。

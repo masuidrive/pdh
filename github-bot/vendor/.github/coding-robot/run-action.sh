@@ -798,6 +798,12 @@ ${SCREENSHOTS_BLOCK}"
     fi
   fi
 
+  # PDH 側パッチ: 受け渡し経路（issue）の保証を runner が担う（github-bot/pdh-hooks.sh。PDH mode のみ。VENDOR.md）
+  if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
+    HOOKED=$(printf '%s' "$CLAUDE_OUTPUT_CLEAN" | bash "$SCRIPT_DIR/pdh-hooks.sh" final "$ISSUE_NUMBER" "$BRANCH_NAME" "$PROGRESS_COMMENT_ID") \
+      && [ -n "$HOOKED" ] && CLAUDE_OUTPUT_CLEAN="$HOOKED" || echo "Warning: pdh-hooks.sh failed; posting report unchanged"
+  fi
+
   # 最終結果を投稿（ブランチ情報付き）
   gh api -X PATCH repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID \
     -f body="$CLAUDE_OUTPUT_CLEAN

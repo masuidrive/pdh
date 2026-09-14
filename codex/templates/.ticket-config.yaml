@@ -68,10 +68,8 @@ note_content: |
        （着手より先に書く。規則は PDH-AGENTS.md「Execution Model」）。
        当てはまらない項目は `- [-] ... - skip: <理由>` と書いて理由を残す（理由なしの `- [-]` は未了扱い）。
        未了の一覧は `./ticket.sh check`。 -->
-  - [ ] PDH-open: ticket と同じ dir に `progress.md` を作った（1 行目 `# Progress: <ticket-name>`。以後は追記のみで、1 出来事 1 見出し `## <UTC 日時> [<stage>] <題>`。経緯はここ、note は現在値だけ）
   - [ ] PDH-ticket-review: Why が product-brief.md に接続し、AC が観察可能で、ユーザ承認済み
   - [ ] PDH-ticket-review: Design Decisions / Out-of-scope / Dependencies / Architectural Invariants check が確認済み
-  - [ ] PDH-ticket-human-review: 判断ボードを発行し、この Checklist に「何の答えを待つか」と発行先の URL か path の行を書いた（答えを ticket へ反映した手でその行を `[x]`）
   - [ ] PDH-implement: 実装が依存する «確かめていない仮定» を書く前に列挙し、測れるものは測った
   - [ ] PDH-implement: implementor が論理単位ごとに commit し、mega-commit にしていない
   - [ ] PDH-implement: `scripts/test-all.sh` 全スイートパス確認済み
@@ -84,7 +82,6 @@ note_content: |
   - [ ] PDH-verify: Surface Observer 観察済み (純 backend ticket では skip 可、判断を 1 行記録)
   - [ ] PDH-verify: ドキュメント更新の要否を確認済み（必要なら `.agents/skills/pdh-update/SKILL.md` or `.claude/skills/pdh-update/SKILL.md`）
   - [ ] PDH-verify: technical-reference.md 突合済み（下の「Technical reference 更新」欄に記録）
-  - [ ] PDH-human-review: 判断ボードを発行し、この Checklist に「何の答えを待つか」と発行先の URL か path の行を書いた（答えを反映した手でその行を `[x]`）
   - [ ] PDH-human-review: ユーザに差分・検証結果・確認手順を提示し、人間レビューを依頼済み
   - [ ] PDH-human-review: ユーザが確認手順を実施し、クローズを明示承認した
 

@@ -54,8 +54,7 @@ review 前に `git merge-base --is-ancestor origin/<base> HEAD` を確認し、f
 3. この ticket の差分に因果がある範囲で technical-reference.md を更新し、置き換えた記述・検査を削除する。該当なしなら note に 1 行残す。他 ticket 由来の記述・検査は消さず、削除候補として note に記録する
 4. 最終 HEAD で `scripts/test-all.sh` を再実行して実出力を progress へ貼る
 5. 外部 surface を consumer 視点で観察する（`pdh-verifying`「Surface Observer」）。純 backend は progress に 1 行残して skip する
-6. progress.md の差分に削除行が無いことを確認する（`git diff origin/<base>...HEAD -- <ticket dir>/progress.md | grep -c '^-[^-]'` が 0）
-7. AC check 済み ticket file を含めて commit する
+6. AC check 済み ticket file を含めて commit する
 
 ## PDH-human-review
 

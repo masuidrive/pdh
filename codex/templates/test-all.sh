@@ -25,6 +25,8 @@
 # invariants, run every change in the same gate as the type checker). See
 # scripts/fast-checks.sh and scripts/checks/README.md.
 #   run "fast-checks" bash scripts/fast-checks.sh
+# PDH: ticket dir の progress.md（存在・追記のみ）と human gate の待ち行を、申告に依らず確かめる
+run "pdh-ticket" bash scripts/check-pdh-ticket.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -98,6 +100,8 @@ fi
 # Deterministic fast-check registry. Cheap and language-agnostic, so it is enabled
 # by default as the first stage; everything below is a commented-out example.
 run "fast-checks" bash scripts/fast-checks.sh
+# PDH: ticket dir の progress.md（存在・追記のみ）と human gate の待ち行を、申告に依らず確かめる
+run "pdh-ticket" bash scripts/check-pdh-ticket.sh
 
 # Example: Backend (Python pytest)
 # run "backend (SQLite)" uv run pytest -x -q
