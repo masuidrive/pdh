@@ -47,11 +47,11 @@ Actions の run は 1 回ごとに記憶を失う。gate や質問で停止す�
 
 bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する**（Projects は使わない。ラベルだけで status を出す）。
 
-- ラベルは 8 段: `PDH-open` / `PDH-ticket-review` / `PDH-ticket-human-review` / `PDH-implement` / `PDH-review` / `PDH-verify` / `PDH-human-review` / `PDH-close`。**ticket は常に 1 stage** なので、既存の PDH-* を外して現在のものだけ付ける:
+- ラベルは 8 段: `PDH-open` / `PDH-ticket-review` / `PDH-ticket-human-review` / `PDH-implement` / `PDH-review` / `PDH-verify` / `PDH-human-review` / `PDH-close`。**ticket は常に 1 stage** なので、現在の stage 以外の PDH-* を外して現在のものを付ける。⚠ `--remove-label` に現在の stage を含めない — gh の版によっては add の後に remove が走り、付けたラベルがその場で消える（smoke 実測）:
   ```bash
-  gh issue edit "$N" --repo "$R" \
-    --remove-label PDH-open,PDH-ticket-review,PDH-ticket-human-review,PDH-implement,PDH-review,PDH-verify,PDH-human-review,PDH-close \
-    --add-label "PDH-<current-stage>"
+  cur="PDH-<current-stage>"
+  others=$(printf '%s\n' PDH-open PDH-ticket-review PDH-ticket-human-review PDH-implement PDH-review PDH-verify PDH-human-review PDH-close | grep -vx "$cur" | paste -sd, -)
+  gh issue edit "$N" --repo "$R" --remove-label "$others" --add-label "$cur"
   ```
 - 1 回の run は複数 stage を跨ぐので、**run の終わりに到達 stage を反映**すればよい（多くは gate 待ちか close）。
 - 特に **gate 待ちラベル（`PDH-ticket-human-review` / `PDH-human-review`）**で溜まると、Issues 一覧のラベルフィルタで «あなたが承認すべき issue» が一目で分かる。これがラベルの主目的。
