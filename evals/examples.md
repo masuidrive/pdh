@@ -324,3 +324,11 @@ coding worker のモデルを切り替えるなら、条件は ticket の種類�
 `scripts/smoke-github-bot.sh` で codex（#9）と claude（#12 → #14 → #16）を回した。codex は 1 回目で 17 項目すべて PASS。claude は 2 回落ちて 3 回目で PASS。落ちた 2 つはどちらも hook の判定の穴だった — close gate の報告が「`🤖 承認` で close 承認」と書き、hook が 🤖 承認 を含むので導線ありと見た（gate ごとの語で判定するよう修正）／「発行先: 今回の完了コメント」のように URL 無しの待ち行が通り、hook が URL を補わなかった（`発行先:` + URL か path を要求）。agent の書き方の揺れは残るが、hook がその揺れを吸収する側になった。
 
 smoke 自体の穴も 1 つ: 毎回同じ要望を出していたので、claude が «#9 で実装済みの重複» と判断して ticket を作らなかった（正しい振る舞い）。要望の option 名を run ごとに変えた。
+
+## 2026-09-14 — progress.md の作成と追記のみを ticket.sh へ移し、close を PR 無しにしても両 engine で通った
+
+上の機構のうち «progress.md を作る» と «追記のみ» は、runner hook と配布検査で見るより ticket.sh 本体の方が近いので、ticket.sh 側に `ticket_files`（`new` が ticket dir に置く追加ファイル）・`append_only_files`（欠落行があれば `close` が拒否）・`new --branch`（frontmatter の `branch:` を bot の `agent/issue-N` に合わせる）を GH issue #6 / #7 / #8 で起票し、20260914 版で入った。PDH 側は hook の progress 作成と検査の削除行判定を消し、`.ticket-config.yaml` の `ticket_files` / `append_only_files` に置き換えた。`branch:` が一致するので `ticket.sh close` がそのまま squash merge でき、close の既定を «PR を作らない»（`github_bot.close: merge`）にした。PR 経路（`close: pr`）は残す。
+
+`scripts/smoke-github-bot.sh` を新版で回した結果は codex（#19、3 run・計 45 分）と claude（#20、3 run・計 40 分）のどちらも 14 項目すべて PASS。close 承認のあと bot が `ticket.sh close --no-delete-remote` で main へ squash merge し、PR を作らずに issue を閉じ、main に `tickets/done/…/progress.md` が残った。先の «done の移動が main に届かない» はこれで解消した。
+
+副産物: bot は `ticket.sh start` を使えない（base branch に ticket が無いと動かない。ticket.sh #9 で起票済み）。codex の `auth.json` を手元と共用すると手元で `codex exec` を回した時点で Actions 側の refresh token が失効する（`github-bot/INSTALL.md` に注意書き）。
