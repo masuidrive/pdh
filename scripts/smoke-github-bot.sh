@@ -47,15 +47,15 @@ echo "-- run 1: open → 実装前 gate"; wait_run "$T" || ng "run 1 が失敗"
 D=$(gh api "repos/$R/git/trees/$B?recursive=1" -q '.tree[].path' | grep -E "^tickets/[^/]+-issue-$N/ticket.md$" | sed 's#/ticket.md##' | head -1)
 [ -n "$D" ] && ok "ticket dir $D" || ng "ticket dir が無い"
 [ -n "$(file_on "$B" "$D/progress.md")" ] && ok "progress.md あり" || ng "progress.md が無い"
-file_on "$B" "$D/note.md" | awk '/^## Checklist/{f=1;next} /^## /{f=0} f' | grep -q '^- \[ \].*発行先:' && ok "待ち行（発行先:）" || ng "待ち行が無い"
+file_on "$B" "$D/note.md" | awk '/^## Checklist/{f=1;next} /^## /{f=0} f' | grep -Eq '^- \[ \].*発行先:.*(https?://|/)' && ok "待ち行（発行先: + URL）" || ng "待ち行が無い"
 [ "$(labels)" = "PDH-ticket-human-review" ] && ok "ラベル PDH-ticket-human-review" || ng "ラベル: $(labels)"
 last_comment | grep -q '🤖 承認' && ok "承認導線" || ng "承認導線が無い"
 
 echo "-- run 2: 承認 → 実装 → close gate"; T=$(now); gh issue comment "$N" --repo "$R" --body "🤖 承認" >/dev/null
 wait_run "$T" || ng "run 2 が失敗"
 note=$(file_on "$B" "$D/note.md")
-printf '%s' "$note" | grep -q '^- \[x\] PDH-ticket-human-review.*発行先:' && ok "実装前 gate の待ち行が [x]" || ng "実装前 gate の待ち行が [x] でない"
-printf '%s' "$note" | awk '/^## Checklist/{f=1;next} /^## /{f=0} f' | grep -q '^- \[ \] PDH-human-review.*発行先:' && ok "close gate の待ち行" || ng "close gate の待ち行が無い"
+printf '%s' "$note" | grep -q '^- \[x\] PDH-ticket-human-review' && ! printf '%s' "$note" | grep -q '^- \[ \] PDH-ticket-human-review' && ok "実装前 gate の待ち行が [x]" || ng "実装前 gate の待ち行が [x] でない"
+printf '%s' "$note" | awk '/^## Checklist/{f=1;next} /^## /{f=0} f' | grep -Eq '^- \[ \] PDH-human-review.*発行先:.*(https?://|/)' && ok "close gate の待ち行（URL 付き）" || ng "close gate の待ち行が無い"
 [ "$(labels)" = "PDH-human-review" ] && ok "ラベル PDH-human-review" || ng "ラベル: $(labels)"
 last_comment | grep -q '🤖 クローズ承認' && ok "close の承認導線" || ng "close の承認導線が無い"
 del=$(gh api "repos/$R/compare/main...$B" -q '.files[] | select(.filename | endswith("progress.md")) | .deletions' | awk '{s+=$1} END{print s+0}')

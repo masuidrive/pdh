@@ -6,7 +6,7 @@
 #   1. ticket dir に progress.md が無ければ作る
 #   2. note の `## Status: PDH-*` を issue の stage ラベルに写す
 #   3. Status が human gate なら、最終レポートにその gate の承認語（🤖 承認 / 🤖 クローズ承認）が無ければ導線を足す
-#   4. Status が human gate なら、note の Checklist に «発行先:» 付きの未了行が無ければ足す
+#   4. Status が human gate なら、note の Checklist に «発行先:» + URL か path の未了行が無ければ足す
 #      （URL は今回の gate コメント）
 #   5. progress.md に削除行があれば報告に警告を足す
 #   6. 導入検査（stage ラベル・Actions の PR 作成許可）で要追加があれば報告に足す
@@ -102,7 +102,7 @@ fi
 
 # --- 4. 待ち行 ---
 if [ "$gate" -eq 1 ] && [ -f "$note" ]; then
-  if ! awk '/^## Checklist/{f=1;next} /^## /{f=0} f' "$note" | grep -q '^- \[ \].*発行先:'; then
+  if ! awk '/^## Checklist/{f=1;next} /^## /{f=0} f' "$note" | grep -Eq '^- \[ \].*発行先:.*(https?://|/)'; then
     url="https://github.com/$REPO/issues/$ISSUE"; [ -n "$CID" ] && url="$url#issuecomment-$CID"
     line="- [ ] $status: 回答待ち。発行先: ${url}（答えを ticket へ反映した手で [x]）"
     tmp=$(mktemp)

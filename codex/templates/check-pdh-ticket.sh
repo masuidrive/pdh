@@ -37,8 +37,8 @@ for t in tickets/*/ticket.md; do
   st=$(grep -m1 '^## Status:' "$n" | sed -E 's/^## Status:[[:space:]]*(PDH-[a-z-]+).*/\1/')
   case "$st" in
     PDH-ticket-human-review|PDH-human-review)
-      if ! awk '/^## Checklist/{f=1;next} /^## /{f=0} f' "$n" | grep -q '^- \[ \].*発行先:'; then
-        printf 'check-pdh-ticket: %s は %s なのに、Checklist に «発行先:» を含む未了行が無い（何の答えを待つかと発行先の URL か path を 1 行書く）\n' "$n" "$st" >&2
+      if ! awk '/^## Checklist/{f=1;next} /^## /{f=0} f' "$n" | grep -Eq '^- \[ \].*発行先:.*(https?://|/)'; then
+        printf 'check-pdh-ticket: %s は %s なのに、Checklist に «発行先:» + URL か path の未了行が無い（何の答えを待つかと発行先の URL か path を 1 行書く）\n' "$n" "$st" >&2
         failed=1
       fi ;;
   esac
