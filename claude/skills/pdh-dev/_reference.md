@@ -22,14 +22,15 @@ Next Stage:
 
 `Gate Remaining` が空でなければ stage は未完了である。
 
-## ticket と note の役割分担
+## ticket / note / progress の役割分担
 
 実パスは `./ticket.sh start` または `./ticket.sh restore` 出力の `ticket:`/`note:` 行が示す（互換 symlink: `current-ticket.md`/`current-note.md`）。
 
 | file | 役割 | 残す情報 |
 |---|---|---|
-| ticket file (`ticket:`) | 後世への記録 | Why、AC、Invariants check、Design Decisions、Out-of-scope、任意の Implementation Notes |
-| note file (`note:`) | session 間の引継ぎ | Status、実装 log、review 結果、process check、Discoveries |
+| ticket file (`ticket:`) | ゴール。後世への記録 | Why、AC、Invariants check、Design Decisions、Out-of-scope、任意の Implementation Notes |
+| note file (`note:`) | 現在値。session 間の引継ぎ | Status、Checklist、Required Probes、process check、Technical reference 更新、Open Questions、Resume Point |
+| progress file（同じ dir の `progress.md`） | 経緯。close 後に工程を追える唯一の記録 | stage 遷移、実装ログ、`### Findings (PDH-review-N)` 表、gate で返った答え、Discoveries、検証の実 command と実 output |
 
 節構成は `.ticket-config.yaml` の `default_content` / `note_content` が決める。`./ticket.sh new` が出した節と記入ガイドに従い、そこに無い section を前提にしない。次を守る。
 
@@ -39,9 +40,10 @@ Next Stage:
 - Status行を冒頭に維持し、timestampを必須とする
 - 空 section には skip 理由を 1 行書く
 - gate 未達のまま次 stage 名へ Status を進めない
-- attempt 2 以降は `### Findings (PDH-review-2)` のように見出しを自分で追加する
+- progress は追記のみ。1 出来事 1 見出しで `## <UTC 日時> [<stage>] <題>` の形にし、書いた後は編集しない。書くのは diff を生まない出来事だけ（diff を生む変更は commit が持つ）
+- attempt 2 以降は progress に `### Findings (PDH-review-2)` のように見出しを自分で追加する
 - session 終了時に作業途中なら、現在状態と次 action を note へ残す
-- 検証checkは対象SHA、実command、実outputをnoteへ貼ってからcheckする
+- 検証checkは対象SHA、実command、実outputをprogressへ貼ってからnoteのcheckboxをcheckする
 
 ## AC に書いてよいもの / 書いてはいけないもの
 

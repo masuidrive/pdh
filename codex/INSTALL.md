@@ -210,6 +210,16 @@ cp tmp/pdh/docs/product-delivery-hierarchy.md docs/product-delivery-hierarchy.md
 
 上の `rm -rf` は名前を列挙した PDH skill だけを置き換える。`.agents/skills/` 全体や、`pdh-` で始まらない user skill / agent 定義は削除しない。
 
+github-bot レイヤーを導入済み（`.github/coding-robot/_pdh.md` がある）なら、PDH 保守分も同じく上流の版で置き換える。vendor 由来の `.github/workflows/` と `.devcontainer/` は触らない（`github-bot/INSTALL.md`「更新」）:
+
+```bash
+if [ -f .github/coding-robot/_pdh.md ]; then
+  cp tmp/pdh/github-bot/_pdh.md .github/coding-robot/_pdh.md
+  cp tmp/pdh/github-bot/_github-issue.md .github/coding-robot/_github-issue.md
+  rm -rf .codex/skills/pdh-gh-pull && cp -R tmp/pdh/github-bot/pdh-gh-pull .codex/skills/pdh-gh-pull
+fi
+```
+
 ### 3. project 固有ファイルを差分マージする
 
 次のファイルは上書きしない。`git diff --no-index` で template と比較し、必要な上流変更だけを既存ファイルへ反映する。
@@ -232,6 +242,8 @@ git diff --no-index -- AGENTS.md tmp/pdh/codex/templates/AGENTS.md || true
 git diff --no-index -- .ticket-config.yaml tmp/pdh/codex/templates/.ticket-config.yaml || true
 git diff --no-index -- scripts/test-all.sh tmp/pdh/codex/templates/test-all.sh || true
 ```
+
+`.ticket-config.yaml` の `note_content` は 2026-09-14 以降、現在値の節だけを持つ（実装ログ / 品質検証結果 / 人間レビュー / Discoveries の 4 節は `progress.md` へ移った）。`grep -q '## PDH-implement. 実装ログ' .ticket-config.yaml && echo "要適用" || echo "適用済み"` で確認し、「要適用」なら template に合わせて 4 節を外す。
 
 新しい `codex/templates/checks/*.check` は追加し、既存の project 固有 `.check` は残す。`required-pdh-files.check` の `required_paths` は、実際に配置した PDH skill と Codex agent 定義の全件に合わせる。
 

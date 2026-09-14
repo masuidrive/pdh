@@ -26,7 +26,7 @@
 
 ## Findings 表
 
-finding は検出した時点で note の `### Findings (PDH-review-N)` 表へ 1 行追加する。判定列と理由は後で埋めてよい。attempt 2 以降と、修正確認で出た新規 finding も同じ形式で足す。
+finding は検出した時点で progress の `### Findings (PDH-review-N)` 表へ 1 行追加する。判定列と理由は後で埋めてよい。attempt 2 以降と、修正確認で出た新規 finding も同じ形式で足す。
 
 ```
 | # | 観点 | Sev | 要旨 | 判定 | 理由 |

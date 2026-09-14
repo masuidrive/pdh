@@ -292,12 +292,12 @@ tmux send-keys -t WINDOW.PANE Enter
 **Step 1: window にセルフチェックを送信し、結果を待つ**
 
 ```
-次のフェーズに進む前に、pdh-dev ワークフロー（.claude/skills/pdh-dev/SKILL.md）の現在のステージの完了条件を読み直し、`ticket.sh start`/`restore` 出力の `note:` パス（互換 symlink: `current-note.md`）のログと照合して、全てのステージを正しく踏んだか確認してください。ステージ遷移宣言（[PDH-*] -> [PDH-*] の形式）が抜けていれば補完してください。確認結果を報告してください。
+次のフェーズに進む前に、pdh-dev ワークフロー（.claude/skills/pdh-dev/SKILL.md）の現在のステージの完了条件を読み直し、`ticket.sh start`/`restore` 出力の `note:` パスと同じ dir の `progress.md` と照合して、全てのステージを正しく踏んだか確認してください。ステージ遷移宣言（[PDH-*] -> [PDH-*] の形式）が抜けていれば補完してください。確認結果を報告してください。
 ```
 
 **Step 2: Director が裏取りする**
 
-`ticket.sh start`/`restore` 出力の `note:`/`ticket:` パス（互換 symlink: `current-note.md`/`current-ticket.md`）を Read し、次を確認する。チケットの規模に関わらず省略しない。
+`ticket.sh start`/`restore` 出力の `note:`/`ticket:` パス（互換 symlink: `current-note.md`/`current-ticket.md`）と同じ dir の `progress.md` を Read し、次を確認する。チケットの規模に関わらず省略しない。
 
 | 検証観点 | 確認方法 |
 |---|---|
@@ -305,7 +305,7 @@ tmux send-keys -t WINDOW.PANE Enter
 | テスト完了 | CLAUDE.md に定義されたテスト種別が全て実行され全件パスしているか |
 | 実環境確認 | サーバー起動 + curl/Playwright での動作確認が実施されているか |
 | AC 達成 | 形式的な達成ではなく、AC の意図（Why）を満たす実質的な達成か |
-| 既存問題・残課題 | note に「対応検討」「スコープ外」「別チケット」等と記載された項目がないか。あればユーザに個別に提示し対応方針の判断を仰ぐ |
+| 既存問題・残課題 | note と progress に「対応検討」「スコープ外」「別チケット」等と記載された項目がないか。あればユーザに個別に提示し対応方針の判断を仰ぐ |
 
 **Step 3: gate ならユーザに報告し承認を得る**
 

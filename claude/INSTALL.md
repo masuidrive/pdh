@@ -394,6 +394,7 @@ rm -rf tmp/pdh
    cd tmp/pdh && git diff <旧commit-id> HEAD -- <テンプレートファイルパス>
    ```
    - **スキル（`.claude/skills/` 配下すべて）と PDH worker の agent 定義（`.claude/agents/pdh-*.md` / `.codex/agents/pdh-*.toml`）**: 常にテンプレートで上書きする。**どちらもプロジェクト固有のカスタマイズを持たない**（skill は共通ルール、agent 定義は skill を指す thin pointer）ので、`Based on` 行を持たず差分マージもしない。⚠ **`pdh-` で始まらない自前の agent 定義は上書きしない。**
+   - **github-bot レイヤー（`.github/coding-robot/_pdh.md` がある場合）**: `_pdh.md` / `_github-issue.md` / `.claude/skills/pdh-gh-pull/` は skill と同じく毎回まるごと上書きする（`github-bot/INSTALL.md`「更新」）。vendor 由来の `.github/workflows/` と `.devcontainer/` はこの手順で触らない
    - **CLAUDE.md**: `Based on` 行の commit ID 間の差分を取り、プロジェクト固有の設定（テストコマンド、ディレクトリ構造、チーム構成テーブル等）を保持しつつテンプレートの変更を反映する
    - **`Based on` 行を持たない配布物のうち、上書きでないもの (`scripts/fast-checks.sh` / `scripts/checks/README.md` / `scripts/hookbus.js`)**: この手順では拾えない。該当する変更は[既知の移行手順](#既知の移行手順)で個別に扱う
    - **`.ticket-config.yaml`**: ⚠ **`note_content` を独自化していないなら、差分マージより «テンプレートで全置換してから固有設定を戻す» ほうが確実。**戻すのは `tickets_dir` / `default_branch` / `branch_prefix` / `repository` / `auto_push` / `delete_remote_on_close` / `worktree_copy_files` / 各 `*_success_message`。⚠ **`note_content` に独自の節を足しているなら全置換してはならない** — その節がまるごと消える。その場合は差分マージにし、下の[既知の移行手順](#既知の移行手順)の確認コマンドで**トップレベルのキーを 1 つずつ見る。**大きなブロック（`note_content`）と数行のキーが同居するファイルを行単位で diff マージすると、**ブロックだけが入ってキーが落ちる**（実際に落ちた配布先がある）
@@ -413,6 +414,18 @@ rm -rf tmp/pdh
 11. 後片付け: `rm -rf tmp/pdh`
 
 ### 既知の移行手順
+
+#### note の時系列の節が `progress.md` へ移った（2026-09-14 以降）
+
+ticket dir に `progress.md`（経緯。追記のみ）が加わり、note は現在値（Status / Checklist / Required Probes / process check / Technical reference 更新 / Open Questions / Resume Point）だけになった。`.ticket-config.yaml` の `note_content` から「PDH-implement. 実装ログ」「PDH-review. 品質検証結果」「PDH-human-review. 人間レビュー」「Discoveries」の 4 節が消えている。`.ticket-config.yaml` は上書きされないテンプレートなので、既存プロジェクトでは手で外す。`progress.md` は agent が `PDH-open` で作るので ticket.sh の変更は無い。
+
+適用済みかの確認（冪等）:
+
+```bash
+grep -q '## PDH-implement. 実装ログ' .ticket-config.yaml && echo "要適用" || echo "適用済み"
+```
+
+「要適用」なら `tmp/pdh/claude/templates/.ticket-config.yaml` の `note_content` に合わせて 4 節を外す。close 済みでない（todo / doing）ticket は、次の stage に入るときに agent が `progress.md` を作り、以後の記録をそちらへ書く。既存 note の記録は移さない。`tickets/done/` は歴史記録なので触らない。
 
 #### 検証 worker 向け skill `pdh-verifying` が新設された（2026-08-30 以降）
 

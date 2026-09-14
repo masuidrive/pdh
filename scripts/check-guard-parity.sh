@@ -18,6 +18,9 @@ guards=(
   "実 API で 1 経路以上 200 確認"      # 外部 path は実 API で検証（stub で完了としない）
   "product / UX / security"            # 実装が独断で決めず明示回答まで止める判断の列挙
   "確定値を聞き返す"                    # 「よしなに」等の曖昧委譲を拒否して確定値を得る
+  'Human-Agent-Interface'               # 発行先は起動側の囲い → project ルール → 既定の順（経路の上書き口）
+  'Checklist` へ 1 行書く'              # 板を発行したら note の Checklist に待ちの行を書く（close が数える）
+  'progress.md'                         # 経緯は progress.md（追記のみ）。note は現在値だけ
   "完了判定には使わない"                # 手で組んだ入力（stub）を完了判定に使わない
 )
 

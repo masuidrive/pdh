@@ -11,7 +11,7 @@ description: "QA / AC 裏取り / Surface Observer / AC 読み手が、検証の
 
 ## AC 裏取り Agent
 
-- 各 AC を code、test 結果、note で 1 件ずつ検証し、形式ではなく Why の実質達成を見る
+- 各 AC を code、test 結果、note と progress で 1 件ずつ検証し、形式ではなく Why の実質達成を見る
 - 各 AC へ `VERIFIED` / `NOT VERIFIED` と根拠を付け、後者は不足を示す
 - user-facing の Why は実上流 data・終端 user 操作・反証 1 回の全てで確認し、data の出所を残す
 

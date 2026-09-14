@@ -9,7 +9,7 @@ description: "実装担当が実装を始める前に読む規則。"
 
 1. `product-brief.md`、`PDH-AGENTS.md`、`AGENTS.md`、`AGENTS.local.md`（あれば）を読む
 2. `ticket.sh start`/`restore` 出力の `ticket:` パスで Why / Acceptance Criteria / Architectural Invariants check / 確定判断 / out-of-scope を確認する
-3. 同じ出力の `note:` パスで過去の Discoveries と実装ログを把握する
+3. 同じ dir の `progress.md` で過去の Discoveries と実装ログを、`note:` パスで Open Questions と Resume Point を把握する
 
 ticket の signature 詳細（関数 signature、行番号、現状 snapshot）が実コードと一致しないときは、ticket の意図に従って実コードに合わせて実装する。不一致を理由に止まらず escalate する。Implementation Notes が空でも、実コード詳細の調査は実装担当の責務である。
 
@@ -64,12 +64,12 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 
 - 変更前に、対象ファイルの `git log`（複数世代）と変更する行の `git blame` を読み、なぜ今その形なのか、過去の変更意図、命名とスタイルの慣習、既知の落とし穴を把握する。なお不明なら コミットメッセージの ticket 名 → `tickets/done/` → `product-brief.md` を辿る（辿り先は `AGENTS.md` を優先）。推測で変更しない
 - 既存の規約と pattern に従い、新しい pattern を導入しない
-- 新規 class / helper / utility を増やす前に同型 pattern を grep する。新規導入するなら justification を note へ記録する
+- 新規 class / helper / utility を増やす前に同型 pattern を grep する。新規導入するなら justification を progress へ記録する
 - 生成文字列内の script（サーバが返す HTML 内のインライン JS 等）、heredoc、テンプレート埋め込みコードに条件分岐やデータ変換を書かない。テストランナーが import して叩ける関数へ切り出し、埋め込み側にはイベント登録と呼び出しの糊だけを残す
 - 実装したコードに対するテストを書く。テストが通る状態を維持する
 - 報告できるのは `PDH-implement` の担当範囲までである。「ticket 完了」「close 可能」と断定しない
-- 別の plan 文書を作らない。investigate・implement・tests を 1 つの作業文脈で完遂し、設計判断は note の実装ログと commit message へ append する
-- テスト実行前に `similarity-ts`（TS/JS）、`similarity-py`（Python）、`similarity-generic`（`--language <lang>`、単一ファイル単位）を `-t 0.7` で回し、変更ファイル間の構造的重複を検出する。閾値超過は共通化を検討してから進む。test setup 等の意図的な重複はそのままでよい。install できない環境では skip し、note へ「重複検出 skip: 環境制約（理由）」と記録する。install は https://github.com/mizchi/similarity/releases の prebuilt archive（OS/arch 別。全 CLI 同梱）を PATH の通った dir へ置く。prebuilt が無い arch だけ `cargo install similarity-ts similarity-py similarity-generic` でビルドする
+- 別の plan 文書を作らない。investigate・implement・tests を 1 つの作業文脈で完遂し、設計判断は progress と commit message へ append する
+- テスト実行前に `similarity-ts`（TS/JS）、`similarity-py`（Python）、`similarity-generic`（`--language <lang>`、単一ファイル単位）を `-t 0.7` で回し、変更ファイル間の構造的重複を検出する。閾値超過は共通化を検討してから進む。test setup 等の意図的な重複はそのままでよい。install できない環境では skip し、progress へ「重複検出 skip: 環境制約（理由）」と記録する。install は https://github.com/mizchi/similarity/releases の prebuilt archive（OS/arch 別。全 CLI 同梱）を PATH の通った dir へ置く。prebuilt が無い arch だけ `cargo install similarity-ts similarity-py similarity-generic` でビルドする
 
 ## 整合性 gate（完了報告の前）
 
@@ -93,7 +93,7 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 
 - 選ぶのは finding が示した入力ではない。その関数が拒否していた入力、通っていた別の分岐、別の実行モード（並列と逐次、CI とローカル、初回と再実行）から選ぶ
 - 報告には、直す前の出力と、直したあとの同じ入力の出力を両方貼る
-- 記録できる形で実行できないものは、そのことを note に書く。「変えていないはず」で済ませない
+- 記録できる形で実行できないものは、そのことを progress に書く。「変えていないはず」で済ませない
 - 検出できる範囲を狭める修正は退行として扱う（作業ツリー比較を commit 間比較へ変えると、未 commit の変更を検出しなくなる）
 
 ## Commit cadence
@@ -112,7 +112,7 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 - stub は外部 API の mock だけを指さない。自分が手で組み立てて系に流し込む入力すべて（合成ログ entry、手で set した context や DB 行、上流が本来生成するデータを迂回する fixture）が stub であり、完了判定には使わない
 - 他所が生成するログ、イベント、payload、DB 行を読む機能は、検証前に実上流が実際に何を出すかを実データで観測する。上流が必要フィールドを出していなければ、その機能は未完成であって pass ではない
 - 「描画された」「生成された」で完了としない。リンク、通知、画面遷移、外部副作用が目的なら、終端のユーザ操作を実際に行って着地まで確認する。実トランスポートを実データと取り違えない（実 Slack に合成ログを流すのは実データ確認ではない）
-- 外部 provider、API、webhook、SDK、認証を経由する path は、実 API で 1 経路以上 200 確認する。credential があるなら実行が必須。無いなら deferred として明示 escalate し、自己判断で skip も「stub で十分」の判断もしない。結果は note へ記録する（response status、body 抜粋、cost）
+- 外部 provider、API、webhook、SDK、認証を経由する path は、実 API で 1 経路以上 200 確認する。credential があるなら実行が必須。無いなら deferred として明示 escalate し、自己判断で skip も「stub で十分」の判断もしない。結果は progress へ記録する（response status、body 抜粋、cost）
 
 ## コミットに含めてよいコード
 
@@ -143,6 +143,6 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 - 昇格判定は 1 問。この挙動を、ticket や一時 fixture の名前を出さずに継続する product contract として記述できるか。Yes なら `application-test` へコミット、No なら ticket-local のまま close 時に刈る
 - repository が生成物（bundle 済み worker、compile 済み asset、生成された SDK model）を commit しているなら、`application-test` で再生成して突き合わせ、commit 済みファイルと異なるとき fail させる
 - 実行可能な `ticket-local-test` script は `tickets/<name>/tests/` に置き、`./scripts/test-ticket-local.sh [ticket-id]` で実行する。ticket.sh は作成しないので、最初の test を書くときに `mkdir -p` する
-- seed、`tmp_dir` の helper、`agent-browser`、`curl`、コマンドの実行証跡は note file へ記録する
+- seed、`tmp_dir` の helper、`agent-browser`、`curl`、コマンドの実行証跡は progress file へ記録する
 
 Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/codex/skills/pdh-coding/SKILL.md

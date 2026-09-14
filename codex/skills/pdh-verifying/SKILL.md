@@ -11,7 +11,7 @@ description: "QA / AC 裏取り / Surface Observer / AC 読み手が、検証の
 
 ## AC 裏取り Agent
 
-- 各 AC を code、test 結果、note で 1 件ずつ検証し、形式ではなく Why の実質達成を見る
+- 各 AC を code、test 結果、note と progress で 1 件ずつ検証し、形式ではなく Why の実質達成を見る
 - 各 AC の `VERIFIED` は、Why / What が定めた利用者・入力・操作を含む条件全体に必要な証拠が揃った場合に限る。部分的な試験の成功は確認範囲を示し、条件全体に不足があれば `NOT VERIFIED` と不足を返す
 - 利用者の目的に必要な終端操作と失敗条件を確認する。証拠の適否は `PDH-AGENTS.md`「Verification」に従い、データの出所と実際に観測した項目を示す
 

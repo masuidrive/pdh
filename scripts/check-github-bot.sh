@@ -42,6 +42,24 @@ for f in github-bot/_pdh.md github-bot/_github-issue.md; do
   fi
 done
 
+# --- 経路の囲い: 起動側が system prompt に置く <Human-Agent-Interface> が _pdh.md に在り、
+# その優先規則が契約（docs/PDH-AGENTS.md）に在るか。片方だけだと、囲いが無視されるか、
+# 囲いの無い指定が経路を上書きしうる。再開時に note の Checklist を読む規則も同様に守る。
+for tag in '<Human-Agent-Interface>' '</Human-Agent-Interface>'; do
+  if [ -f github-bot/_pdh.md ] && ! grep -qF -- "$tag" github-bot/_pdh.md; then
+    printf 'github-bot: MISSING route block %s in github-bot/_pdh.md\n' "$tag" >&2
+    failed=1
+  fi
+done
+if ! grep -qF -- 'Human-Agent-Interface' docs/PDH-AGENTS.md; then
+  printf 'github-bot: docs/PDH-AGENTS.md に <Human-Agent-Interface> の優先規則が無い（囲いが契約で裏付けられていない）\n' >&2
+  failed=1
+fi
+if [ -f github-bot/_github-issue.md ] && ! grep -qF -- '## Checklist' github-bot/_github-issue.md; then
+  printf 'github-bot: _github-issue.md に再開時 note の ## Checklist を読む規則が無い\n' >&2
+  failed=1
+fi
+
 # --- 配線: gate 停止句が «実際に agent の prompt に載る» ことを保証する ---
 # run-action.sh は system prompt へ _pdh.md «だけ» を append する（_github-issue.md は
 # agent が Read する前提で append しない）。よって「gate 停止句が _pdh.md に在る」かつ

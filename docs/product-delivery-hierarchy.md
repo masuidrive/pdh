@@ -26,7 +26,8 @@ project-root/
     .gitignore                              ← 各 ticket の tmp/ を除外
     250711-091538-fix-something/            ← per-ticket ディレクトリ
       ticket.md                             ← Ticket 本文
-      note.md                               ← 作業ノート
+      note.md                               ← 作業ノート（現在値。上書きする）
+      progress.md                           ← 経緯（追記のみ。agent が PDH-open で作る）
       tests/                                ← ticket-local-test（必要時に agent が作成）
       tmp/                                  ← 一時領域（ticket.sh が作成。git 管理外）
     done/
@@ -41,7 +42,7 @@ project-root/
 |---|---|---|
 | Product Brief | `product-brief.md` | repo ルートに固定。1 つだけ |
 | Technical Reference | `technical-reference.md` | repo ルートに固定。1 つだけ。常に現在形の How（意思は持たない） |
-| Ticket | `YYMMDD-hhmmss-slug/`（中に `ticket.md` / `note.md`） | `250711-091538-fix-auth/ticket.md` |
+| Ticket | `YYMMDD-hhmmss-slug/`（中に `ticket.md` / `note.md` / `progress.md`） | `250711-091538-fix-auth/ticket.md` |
 
 タイムスタンプは **UTC**。
 

@@ -2,7 +2,7 @@
 
 PDH の **オプション**。GitHub Issue を «エンジニアとの会話面» にし、🤖 コメントで続きの処理を GitHub Actions 上の agent（[github-bots](https://github.com/masuidrive/github-bots) の coding-robot）に回す。**このレイヤーを入れなくても PDH core は完全に動く。** 入れるかは任意で、入れたプロジェクトだけが GitHub Actions を要求する。
 
-これは core の `claude/INSTALL.md` / `codex/INSTALL.md` とは別経路。`pdh-update`（core 更新）はこのレイヤーに触らない。更新は本ファイルで行う。
+これは core の `claude/INSTALL.md` / `codex/INSTALL.md` とは別経路。導入後は `pdh-update` が PDH 保守分（`_pdh.md` / `_github-issue.md` / `pdh-gh-pull/`）を毎回上流の版で置き換える。vendor の machinery は「5. 更新」で再同期する。
 
 ## 前提
 
@@ -73,4 +73,4 @@ done
 
 ## 5. 更新（再同期）
 
-machinery（vendor/）が github-bots 側で更新されたら、`github-bot/vendor/VENDOR.md` の手順で再同期し、commit id を更新する。`_pdh.md` / `_github-issue.md` / `pdh-gh-pull` は PDH 側で保守するので、この repo の版を再配置する。
+machinery（vendor/）が github-bots 側で更新されたら、`github-bot/vendor/VENDOR.md` の手順で再同期し、commit id を更新する。`_pdh.md` / `_github-issue.md` / `pdh-gh-pull` は PDH 側で保守するので、`pdh-update` がこの repo の版を再配置する（手動なら「1. ファイルを配置する」の該当 3 行をコピーし直す）。

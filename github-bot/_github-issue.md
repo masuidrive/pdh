@@ -17,11 +17,11 @@ PDH の human gate は **`PDH-ticket-human-review`（実装前）** と **`PDH-h
 
 ## gate の判断ボードは «issue コメントの markdown» で出す
 
-human gate では判断ボード（`pdh-decision-board` の Completed Staff Work）を作る。**cloud の出力先は HTML kit ではなく issue コメントの markdown** にする:
-- **分けている理由は «届け先の面» の 1 点だけ**: GitHub issue コメントは **markdown は描画するが HTML はインライン描画しない**（ソース表示になる）。一方 local 対話は board を **HTML ファイル / artifact / decision.hanger** ＝«ブラウザで開ける面» に届けるので HTML kit が生きる。cloud の届け先は issue なので markdown。→ **deck / document トグルや `build.sh`・decision.hanger は cloud では使わない**（届け先で読めない）。
+human gate では判断ボード（`pdh-decision-board` の Completed Staff Work）を作る。経路は `_pdh.md` の `<Human-Agent-Interface>` が定める（`docs/PDH-AGENTS.md`「Handover Routes」）。GitHub issue コメントは **markdown は描画するが HTML はインライン描画しない**（ソース表示になる）ので、表現の上限は markdown。`pdh-decision-board` の手順 7 はこの上限の中で表現を選び、手順 9 の発行先は 2 通り:
+- **markdown で足りる板**: 最終レポート（gate コメント本文）として markdown で書く。machinery（`run-action.sh`）がそれを issue コメントとして投稿する。`build.sh` は走らせない。
+- **markdown で足りない板**（像が要る、判断が多く 1 ページで見比べたい）: project ルールに登録された発行先へ HTML を置き、issue には **決定サマリー**（何を決めるか・推奨・代償・承認導線）と URL だけを書く。登録が無ければ markdown で組み、像は «回せない» と書く。**HTML 板の回答も issue に戻す** — 板の「回答をコピー」で出た貼り戻し文を、人が 🤖 付きコメントとして貼る。板のサーバ側の回答機構は使わない。
 - ⚠ **«skill からブラウザを開けない（board を自分で描画・検証できない）» は cloud / local の別ではなく全環境で同じ**。board の見た目はどこでも skill では機械検証されない。これは媒体選択の理由ではない別の普遍的事実なので、混同しない。
 - **守るのは board の «規律»**: 承認者が追加調査なしに求められた判断を下せる／その判断に使わないものを読ませない。同一入力の前後比較・対象外・代償を **markdown（表・`<details>`・コードブロック）** で出す。GitHub がそのまま描画する。
-- **skill の手順との橋渡し**（`pdh-decision-board` は HTML/artifact/decision.hanger 前提で書かれている。cloud はここで上書きする）: 手順 **«媒体を選ぶ» では issue コメントの markdown を選ぶ**（`build.sh` を走らせない）。手順 **«発行» は、board を最終レポート（gate コメント本文）として markdown で書くこと**＝それを machinery（`run-action.sh`）が issue コメントとして投稿する。board 専用の発行先（URL・ファイル）は cloud では作らない。
 - **長くしない — 推奨を先頭に、説明は畳む**（issue コメントは長いと読まれない。折りたたみは GitHub で効く）:
   - **開いたまま（先頭・短く）**: 何を決めるか・**推奨する解き方 / AC**・**代償と対象外**・承認導線（🤖 承認）。承認者がこれだけで諾否を決められる長さに保つ（推奨に乗るだけで済むように）。
   - **`<details>` に畳む**: 裏付け（実測ログ・既存コード確認・方法論・ticket/note リンク）。«あれば効くが、要るときだけ開く» もの。
@@ -31,12 +31,16 @@ human gate では判断ボード（`pdh-decision-board` の Completed Staff Work
   - **ブラウザがあるなら積極的に撮る**（`base.md`「出来上がりの像」の作法どおり: 変更前後・mock・同じ入力/画角/幅・実 DOM に差し込んで撮る）。**切り抜き・強調（annotation）は歓迎。**ただし **board のレイアウトそのものを詰めるのに時間をかけない** — 像は判断の証拠であって見た目の作品ではない。
   - ただし **撮れても «表示» は別問題**: private repo では画像のインライン描画が不安定（認証付き URL）。commit して参照しても viewer 次第。
   - **ブラウザが無い、または表示が当てにできない場合は «回せない» として人へ渡す**（`PDH-AGENTS.md`「Browser And Surface Checks」）。撮れない事実を伏せて «確認した» と書かない。
-- **local 対話フロー（bot を使わない）** は従来どおり HTML kit / artifact / decision.hanger でよい。この markdown 版は cloud（と `pdh-gh-pull` で取り込む local）だけ。
+- **local 対話フロー（bot を使わない）** は経路が会話なので従来どおり。この markdown 版は cloud（と `pdh-gh-pull` で取り込む local）だけ。
+
+## 再起動したら、何を待っていたかを note から読む
+
+Actions の run は 1 回ごとに記憶を失う。gate や質問で停止するときは、**停止する同じ commit で note の `## Checklist` に「何の答えを待つか」と発行先（gate コメントか板の URL）を 1 行書く**（`docs/PDH-AGENTS.md`「Handover Routes」）。次の 🤖 で起動した run は、まずこの行を読んで自分が何を待っていたかを知り、トリガーコメントをその答えとして解釈して ticket へ反映し、行を `[x]` にする。machinery の状態ファイルは同じコメントを二度処理しないための印であり、待っているかどうかの真ではない。経緯（それまでの stage 遷移・Findings・gate の答え）は同じ dir の `progress.md` を読む。
 
 ## 進捗コメントを無意味に増やさない
 
 - run 中の「🤖 **作業中...**」コメントは **1 個を編集し続ける**（machinery の `PROGRESS_COMMENT_ID` が担う）。stage が進むたびに新規コメントを立てない。
-- **新規コメントを立てるのは «人間の注意が要る» ときだけ** — gate・質問・blocker。それ以外（stage 遷移・commit・テスト結果）は作業コメントの編集か、ticket.md / note.md への記録で済ませる。
+- **新規コメントを立てるのは «人間の注意が要る» ときだけ** — gate・質問・blocker。それ以外（stage 遷移・commit・テスト結果）は作業コメントの編集か、ticket.md / note.md / progress.md への記録で済ませる。
 - 通知を撒かないことを優先する。人間が読む必要のない途中経過でコメント欄と通知を埋めない。
 
 ## stage をラベルで可視化する
