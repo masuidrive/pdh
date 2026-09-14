@@ -332,3 +332,5 @@ smoke 自体の穴も 1 つ: 毎回同じ要望を出していたので、claude
 `scripts/smoke-github-bot.sh` を新版で回した結果は codex（#19、3 run・計 45 分）と claude（#20、3 run・計 40 分）のどちらも 14 項目すべて PASS。close 承認のあと bot が `ticket.sh close --no-delete-remote` で main へ squash merge し、PR を作らずに issue を閉じ、main に `tickets/done/…/progress.md` が残った。先の «done の移動が main に届かない» はこれで解消した。
 
 副産物: bot は `ticket.sh start` を使えない（base branch に ticket が無いと動かない。ticket.sh #9 で起票済み）。codex の `auth.json` を手元と共用すると手元で `codex exec` を回した時点で Actions 側の refresh token が失効する（`github-bot/INSTALL.md` に注意書き）。
+
+追記（ticket.sh 20260914.144516）: `start` が ticket 自身の branch 上でも動くようになり（ticket.sh #9）、bot の手順を `new` → commit → `start` に戻して `started_at` の手書きをやめた。claude（#22、3 run・計 41 分）で 14 項目すべて PASS。branch には `[start] agent/issue-22` の commit があり、`started_at` は ticket.sh が入れた。gate の待ち行は claude が URL 無しで書いたぶんを hook が補った（想定どおりの吸収）。
