@@ -316,3 +316,11 @@ coding worker のモデルを切り替えるなら、条件は ticket の種類�
 - 規則を読ませる場所の差ではなく、**close が数える checkbox かどうか**が効いた。bot が毎 run 必ず従わせたい手順は、散文ではなく Checklist に置く。
 - 副産物で直したもの: stage ラベル更新の `--remove-label` に現在 stage を含めると gh の版で add の直後に消える（events で同秒に labeled → unlabeled）。Actions は既定で PR を作れない（`can_approve_pull_request_reviews`）。claude は close gate で vendor `_issue.md` の «Create Pull Request» 形式に流れ、承認導線を落とした（`_pdh.md` の囲いに gate 停止の形を明記して次 run から直った）。
 - 未解決: 最終 close の `tickets/done/` への移動は agent branch にだけ push され、main には残らない（PR merge が close より先のため。github-bot の branch 模型の既知の性質）。stage ラベル更新は散文で 2 度抜けたので、run-action.sh が note の `## Status:` からラベルを付ける機構化が候補。
+
+## 2026-09-14 — 自己申告の checkbox を外し、runner と検査に置き換えたら両 engine で通った
+
+上の smoke のあと、Checklist に足した 3 つの checkbox（progress.md を作った、gate の待ち行を書いた）は «付けた» を数えるだけだと判断し、外から確かめる形に置き換えた。runner hook（`github-bot/pdh-hooks.sh`。最終レポートの投稿前に、progress.md が無ければ作り、note の Status を stage ラベルに写し、human gate なら承認語と `発行先:` + URL の待ち行を補う）と、配布する検査（`check-pdh-ticket.sh`。progress.md の存在、branch 内で削る commit、gate の待ち行）。close の順序も «done へ移してから PR» に変えた。
+
+`scripts/smoke-github-bot.sh` で codex（#9）と claude（#12 → #14 → #16）を回した。codex は 1 回目で 17 項目すべて PASS。claude は 2 回落ちて 3 回目で PASS。落ちた 2 つはどちらも hook の判定の穴だった — close gate の報告が「`🤖 承認` で close 承認」と書き、hook が 🤖 承認 を含むので導線ありと見た（gate ごとの語で判定するよう修正）／「発行先: 今回の完了コメント」のように URL 無しの待ち行が通り、hook が URL を補わなかった（`発行先:` + URL か path を要求）。agent の書き方の揺れは残るが、hook がその揺れを吸収する側になった。
+
+smoke 自体の穴も 1 つ: 毎回同じ要望を出していたので、claude が «#9 で実装済みの重複» と判断して ticket を作らなかった（正しい振る舞い）。要望の option 名を run ごとに変えた。
