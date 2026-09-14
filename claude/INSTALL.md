@@ -424,9 +424,10 @@ ticket dir に `progress.md`（経緯。追記のみ）が加わり、note は�
 ```bash
 grep -q '## PDH-implement. 実装ログ' .ticket-config.yaml && echo "節: 要適用" || echo "節: 適用済み"
 grep -q 'PDH-open: ticket と同じ dir に `progress.md` を作った' .ticket-config.yaml && echo "checkbox: 適用済み" || echo "checkbox: 要適用"
+grep -c '判断ボードを発行し、この Checklist に' .ticket-config.yaml | grep -qx 2 && echo "gate 待ち行: 適用済み" || echo "gate 待ち行: 要適用"
 ```
 
-「要適用」なら `tmp/pdh/claude/templates/.ticket-config.yaml` の `note_content` に合わせて 4 節を外し、Checklist の先頭に `PDH-open: … progress.md を作った` の checkbox を足す（close がこれを数えるので、作り忘れが機構で止まる）。close 済みでない（todo / doing）ticket は、次の stage に入るときに agent が `progress.md` を作り、以後の記録をそちらへ書く。既存 note の記録は移さない。`tickets/done/` は歴史記録なので触らない。
+「要適用」なら `tmp/pdh/claude/templates/.ticket-config.yaml` の `note_content` に合わせて 4 節を外し、Checklist の先頭に `PDH-open: … progress.md を作った` の checkbox を、両 human gate の項目に `判断ボードを発行し、この Checklist に「何の答えを待つか」と発行先 … の行を書いた` の checkbox を足す（close がこれを数えるので、作り忘れ・書き忘れが機構で止まる）。close 済みでない（todo / doing）ticket は、次の stage に入るときに agent が `progress.md` を作り、以後の記録をそちらへ書く。既存 note の記録は移さない。`tickets/done/` は歴史記録なので触らない。
 
 #### 検証 worker 向け skill `pdh-verifying` が新設された（2026-08-30 以降）
 
