@@ -306,3 +306,13 @@ close gate はさらに、PDH 本体の定義（達成したことがユーザ�
 実案件 7 切り出し（新規機能 3、既存修正 4）の実装工程を、現行 skill で opus と gpt-5.6-sol medium に 2 回ずつ（新 case 2 本は 1 回）回した。**符号は 12 組中 11 組で同じ** — 新規機能では opus が上、既存修正では sol が上か同点。ただし差の中身は得意不得意ではない。**ticket が実装へ委譲した product / UX の判断が残っていると、sol は `pdh-coding` の「default を使わず明示回答まで止める」に従って 2〜3 分で BLOCKED を返し、opus は default を置いて実装し切る**（新規機能 3 切り出し中 2 つ）。判断が残っていない ticket では sol が opus より速く高く、ticket が禁じたファイルも触らなかった（opus は 1 case で 2 回とも触った）。
 
 coding worker のモデルを切り替えるなら、条件は ticket の種類ではなく «委譲された判断が残っているか» で、それは ticket-review の出口で見える。skill には手を入れていない。
+
+## 2026-09-14 — issue 経路の実走: 散文 3 か所より Checklist の 1 行が効いた
+
+`pdh-ghbot-smoke` で codex（#4）と claude（#6、#8）を GitHub Actions 経由で回した。open → 実装前 gate → 承認 → 実装・review・verify → close gate → 承認 → PR → merge → 最終 close の全段を両 engine で通した（codex 5 run・計 47 分、claude 5 run・計 32 分）。
+
+- **codex** は初回から規則どおりだった。note の Checklist に「何の答えを待つか + 発行先 URL」の行を書き、答えを反映した手で `[x]`。`progress.md` は `## <UTC> [<stage>] <題>` の追記だけで、branch 全体の diff に削除行 0。
+- **claude** は待ち行は書いたが、`progress.md` を作らなかった。`_flow.md` の前提・`PDH-AGENTS.md` の図・`_pdh.md` の 3 か所に置き直しても、次の run でも作らなかった。**note テンプレートの Checklist に「progress.md を作った」の checkbox を足した途端、次の ticket の最初の run で作った。**ただし entry は箇条書き、待ち行に URL 無し、ラベル更新は run によって抜けた。entry 形式と待ち行の URL は Checklist の文言に含めた。
+- 規則を読ませる場所の差ではなく、**close が数える checkbox かどうか**が効いた。bot が毎 run 必ず従わせたい手順は、散文ではなく Checklist に置く。
+- 副産物で直したもの: stage ラベル更新の `--remove-label` に現在 stage を含めると gh の版で add の直後に消える（events で同秒に labeled → unlabeled）。Actions は既定で PR を作れない（`can_approve_pull_request_reviews`）。claude は close gate で vendor `_issue.md` の «Create Pull Request» 形式に流れ、承認導線を落とした（`_pdh.md` の囲いに gate 停止の形を明記して次 run から直った）。
+- 未解決: 最終 close の `tickets/done/` への移動は agent branch にだけ push され、main には残らない（PR merge が close より先のため。github-bot の branch 模型の既知の性質）。stage ラベル更新は散文で 2 度抜けたので、run-action.sh が note の `## Status:` からラベルを付ける機構化が候補。
