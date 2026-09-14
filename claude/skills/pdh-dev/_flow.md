@@ -2,15 +2,14 @@
 
 ## 前提
 
-`./ticket.sh help` を最初に実行する。各 stage の入口で note の Status をその stage 名へ更新する。仕様が変わったら、code と review を続ける前に ticket の AC と確定判断を更新する。stage 遷移の宣言（[_reference.md](_reference.md)「報告」）は progress へ追記する。通常は`PDH-review`と`PDH-verify`まで自動で進める。
+`./ticket.sh help` を最初に実行する。各 stage の入口で note の Status をその stage 名へ更新する。仕様が変わったら、code と review を続ける前に ticket の AC と確定判断を更新する。各 stage の入口で、ticket と同じ dir に `progress.md` が無ければ作る（1 行目は `# Progress: <ticket-name>`、以後は追記のみ。[_reference.md](_reference.md)「ticket / note / progress の役割分担」）。stage 遷移の宣言（[_reference.md](_reference.md)「報告」）は progress へ追記する。通常は`PDH-review`と`PDH-verify`まで自動で進める。
 
 ## PDH-open
 
 1. `./ticket.sh start`/`restore` 出力の `ticket:` と `note:` パスを確認する。無ければ `list`、新規なら `new <slug>` → 標準構造の記入 → `start <ticket-name>`
-2. 同じ dir に `progress.md` が無ければ作る。1 行目は `# Progress: <ticket-name>`、以後は追記のみ（[_reference.md](_reference.md)「ticket / note / progress の役割分担」）
-3. `What` の冒頭へ 1 文を書く — 「この ticket が終わると、〈誰〉が、いままでできなかった〈何〉をできるようになる」
-4. 各 AC はこの 1 文の分割としてだけ書く
-5. AC を note へ copy しない
+2. `What` の冒頭へ 1 文を書く — 「この ticket が終わると、〈誰〉が、いままでできなかった〈何〉をできるようになる」
+3. 各 AC はこの 1 文の分割としてだけ書く
+4. AC を note へ copy しない
 
 ## PDH-ticket-review
 

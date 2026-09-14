@@ -60,7 +60,7 @@ fi
 
 **作業ビュー**: `ticket.sh` が示す `ticket:` / `note:` 実パスへ compat symlink を張る（`current-ticket.md` を参照する指示がそのまま機能するように）。symlink は `.gitignore` 済・毎回張り直す（揮発）。
 
-生成後、本体の各セクション（Why / What + Acceptance Criteria / Architectural Invariants check / Design Decisions / Out-of-scope）を Issue・`product-brief.md` から埋める。`started_at` / `closed_at` は `start`/`close` を使わないので、必要なタイミングで frontmatter を直接更新する。
+生成後、本体の各セクション（Why / What + Acceptance Criteria / Architectural Invariants check / Design Decisions / Out-of-scope）を Issue・`product-brief.md` から埋める。**同じ dir に `progress.md` を作る**（1 行目 `# Progress: <TICKET_NAME>`。ticket.sh は作らない。無ければどの stage の入口でも作る）。経緯はここへ追記し、note は現在値だけにする（`_reference.md`「ticket / note / progress の役割分担」）。`started_at` / `closed_at` は `start`/`close` を使わないので、必要なタイミングで frontmatter を直接更新する。
 
 ## checklist gate と close（bot のブランチ模型に注意）
 bot は `agent/issue-N` で作業し、ticket.sh の feature-branch 模型（`{branch_prefix}<ticket-name>`）を使わない。そのため **`ticket.sh check` の «ticket/branch 同期» 判定は構造的に不一致を出す**（checklist の合否ではなく、branch が `agent/issue-N` で `{branch_prefix}<name>` と違うことを報告している）。これは想定内で、フローを止める失敗ではない。

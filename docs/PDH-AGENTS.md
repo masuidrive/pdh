@@ -7,7 +7,7 @@
 ```mermaid
 flowchart TD
     new["./ticket.sh new<br/>ticket 作成"] --> write["ticket を書く<br/>Why / AC / Invariants check / Design Decisions / Out-of-scope"]
-    write --> start["./ticket.sh start<br/>branch 作成・note 生成"]
+    write --> start["./ticket.sh start<br/>branch 作成・note 生成<br/>agent が同じ dir に progress.md を作る（追記のみ）"]
     start --> open[PDH-open]
     open --> treview[PDH-ticket-review]
     treview --> probes["Required Probes を実行<br/>./ticket.sh check --require 'Required Probes' で未了確認"]
