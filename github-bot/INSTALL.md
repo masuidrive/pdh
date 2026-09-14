@@ -49,6 +49,17 @@ project 固有の env が要るテストがあるなら、まとめて 1 つの 
 gh secret set ENV_JSON --body '{"SOME_API_KEY":"...","BASE_URL":"..."}'
 ```
 
+### Actions に PR 作成を許可する
+
+close 承認後に bot が PR を作る（`_github-issue.md`「PR は `Refs`」）。既定の repo 設定では GitHub Actions は PR を作れず、`gh pr create` が `GitHub Actions is not permitted to create or approve pull requests` で落ちる（smoke 実測）。Settings → Actions → General → Workflow permissions の「Allow GitHub Actions to create and approve pull requests」を有効にする:
+
+```bash
+gh api -X PUT repos/<owner/repo>/actions/permissions/workflow -f default_workflow_permissions=write -F can_approve_pull_request_reviews=true
+gh api repos/<owner/repo>/actions/permissions/workflow   # can_approve_pull_request_reviews が true なら適用済み
+```
+
+組織ポリシーで固定されている場合は管理者に依頼する。無効のままでも bot は blocker として停止し、人間が PR を作る手順を issue に書く。
+
 ## 3. stage ラベルを作る
 
 bot は stage 遷移で issue に PDH stage ラベルを付ける（status を Issues 一覧で見るため。Projects は使わない）。8 段のラベルを作っておく（gate の 2 つは amber で目立たせる）:
