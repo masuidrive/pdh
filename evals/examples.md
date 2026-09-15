@@ -342,3 +342,5 @@ smoke 自体の穴も 1 つ: 毎回同じ要望を出していたので、claude
 - どちらの engine も progress に「承認受領 / AC 承認を受領」の見出しで Issue の `🤖 承認` を記録した（散文の規則だが、gate の答えは既に progress の役割分担表に載っていたので、書く場所を変えただけ）。
 - codex は待ち行を URL 付きで自分で書き、hook の補正なし。claude は両 gate とも URL 無しで書き、hook が補った。hook が揺れを吸収する形は変わらない。
 - claude の progress の entry は見出しの UTC が前後した（23:10 の entry の後に 23:05）。追記のみは守っているので `close` は通る。時刻の正確さは検査していない。
+
+追記（`5f1d8a1`、pdh-dev の読み順の重複除去。pdh issue #25 の 1・2・6）: Director が入口ファイルの読ませるものを再読せず、`docs/product-delivery-hierarchy.md` を条件付きにし、worker の必読からも外した版で smoke を回した。codex（smoke #25、3 run・計 35 分）と claude（smoke #26、3 run・計 34 分）のどちらも 14 項目すべて PASS。読む量を減らしても、ticket の書式・待ち行・progress の記録・close の手順は変わらなかった。
