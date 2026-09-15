@@ -10,7 +10,9 @@ PR に 🤖 が付いたときのあなたの仕事は、その PR の head ブ�
    - **長時間 gate の前に push**: `scripts/test-all.sh` 等の長時間ジョブを回す前に、未 push の変更があれば必ず push してから実行する。
    - **test-all 前の deadline チェック**: Environment Variables の `DEADLINE_UNIX` を見て、残時間が test-all の想定実行時間 + 5 分のマージンを下回るなら、フル実行せず scoped に留めて「deadline 不足のため test-all はスキップ／scoped で代替、PD-C-9 に委譲」を note に記録して進める（kill されるより合理的）。
    - test cadence 本体（scoped中／test-all 1回／失敗時 triage）と round escalation policy は `_flow.md` PD-C-7 / `_review.md` 収束性診断・スコープ外既存問題の扱い に従う。
-3. **worker spawn の失敗報告**: worker 起動後は必ず `wait` 後に `rc=$?` を保存し、最終レポートには各 worker の rc、result/stderr の `ls -l`、`tail -120 stderr.log` を含める。result が空/無い場合も、それだけで silent failure と扱わず rc と stderr tail をセットで報告する。spawn が失敗/不可能なら単独で続行せず中止し原因を報告する。
+3. **worker の起動と終了コードの回収**: 起動と待機は `_execution-team.md`「並行起動」に従う（**正本**）。要点だけ再掲する — ⚠ **worker を «起動した shell 呼び出しの中で» 待たない。**shell tool は 1 コマンドごとに timeout を持ち、超えるとそのコマンドへ SIGTERM を送るので、同じ呼び出しの中で `wait` すると **worker がまだ働いていても約 3 分で刈られる**（2026-09-15 に coding-robot の run で 4 回発生）。`set -m` で独立した process group へ出し、待つのは**別の呼び出しで短く区切って**終了コードのファイルを見に行く。
+
+   最終レポートには各 worker の rc、result/stderr の `ls -l`、`tail -120 stderr.log` を含める。result が空 / 無い場合も、それだけで silent failure と扱わず rc と stderr tail をセットで報告する。⚠ **rc が `143` の worker は «失敗した» のではなく «殺された» のであって、結果が無い理由が違う。**そのまま報告する。spawn が失敗 / 不可能なら単独で続行せず中止し、原因を報告する。
 4. **最終レポートは PD-C-9 到達状況で分岐**：
    - **到達 + 自己チェック通過** → `_flow.md` PD-C-10 の「完了報告の必須要素」に従う（実装内容・PD-C-7/C-9 結果・各 AC の達成状況）。PR モードなので PR は既にある → 追加コメントとして post。
    - **到達できず途中終了** → 共通 `system.md` の「For Incomplete / Early Termination」テンプレートに切り替え。category は time / decision / blocker / non-convergence / spawn-failure から 1 つを 1 行目に出し、`What was done (committed)` / `What was NOT done (remaining)` / `Decision needed from user` / `Evidence pointers` を埋める。次回 `🤖` の続行で何を再開すればよいか分かる状態にする。Issue モード step 4 と同じ category 分類とトリガー（DEADLINE_UNIX 近接、AC 解釈の分岐、pre-existing major、3+ round 同型再発、worker 起動失敗）。
