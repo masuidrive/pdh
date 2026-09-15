@@ -1,4 +1,4 @@
-# PDH worker 共通コンテキスト（AC 読み手を除く全 worker の spawn prompt 冒頭に必ず渡す）
+# PDH worker 共通コンテキスト（AC 読み手を除く全 worker が最初に従う。in-process 起動では `.codex/agents/pdh-*.toml` が読ませ、CLI 起動では PM が spawn prompt 冒頭に渡す）
 
 ## あなた（worker）への共通指示
 
@@ -9,13 +9,12 @@ PM から委譲された 1 つの subtask だけを実行する。会話履歴�
 AC 読み手への入力と起動は `_execution-team.md` に従う。
 
 1. `product-brief.md`（全判断の基準）
-2. `docs/product-delivery-hierarchy.md`（存在すれば）
-3. `PDH-AGENTS.md`（PDH 汎用ルール。severity 等の判定はここに従う）
-4. `AGENTS.md`（project 固有ルール、テスト、approval、tool/model 上書き）
-5. `AGENTS.local.md`（存在すれば）
-6. `<TICKET_FILE>`（Why、AC、Invariants、確定判断、Out-of-scope）
+2. `PDH-AGENTS.md`（PDH 汎用ルール。severity 等の判定はここに従う）
+3. `AGENTS.md`（project 固有ルール、テスト、approval、tool/model 上書き）
+4. `AGENTS.local.md`（存在すれば）
+5. `<TICKET_FILE>`（Why、AC、Invariants、確定判断、Out-of-scope）
 
-**例外: レンズ1（Why end-to-end 無バイアス）の reviewer だけは 6 を読まない。**渡されていない ticket や note を自分で探して読まない。
+**例外: レンズ1（Why end-to-end 無バイアス）の reviewer だけは 5 を読まない。**渡されていない ticket や note を自分で探して読まない。
 
 上記以外は、prompt と役割別指示で指定されたファイルだけ読む。
 

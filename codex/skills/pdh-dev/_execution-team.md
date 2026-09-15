@@ -12,7 +12,7 @@ Director は目的、合意、担当範囲、結果を管理する。調査・�
 
 ## worker prompt の組み立て
 
-`PDH-AGENTS.md`「Worker Instructions」の入力と、`_subagent-context.md` の該当役の指示を渡す。`<TICKET_FILE>`、`<NOTE_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`、`<TESTS_DIR>`、`<TMP_DIR>` は実値へ置き換える。
+prompt は task 固有依頼と、`PDH-AGENTS.md`「Worker Instructions」の入力、`<TICKET_FILE>`、`<NOTE_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`、`<TESTS_DIR>`、`<TMP_DIR>` の実値で組む。`_subagent-context.md` の本文は `.codex/agents/pdh-*.toml` が worker に読ませるので、in-process 起動では prompt へ転記しない。skill が既に持つ手順を prompt に再掲しない。
 
 - `<TMP_DIR>` は `ticket.sh start`/`restore` 出力の `tmp_dir:`、`<TESTS_DIR>` は `ticket_dir:` に `/tests/` を足す。legacy flat layout は `tests/tickets/<id>/` を使う。
 - レンズ1 reviewer には Why の原文と対象の作業 tree を渡し、ticket・note・diff・実装者の結論は渡さない。共通指示の該当参照も除く。
@@ -33,7 +33,7 @@ codex exec --json --model "$worker_model" \
   - < "$worker_prompt" > "$worker_output/events.jsonl" 2> "$worker_output/stderr.log"
 ```
 
-CLI 呼び出しでは named agent の developer instructions が自動で適用されると仮定せず、担当の規則を prompt に含める。sandbox と承認は実行環境に従い、承認待ちを bypass flag で解決しない。
+CLI 呼び出しでは named agent の developer instructions が自動で適用されると仮定せず、`_subagent-context.md` の共通指示と該当役の指示、担当の規則を prompt に含める。sandbox と承認は実行環境に従い、承認待ちを bypass flag で解決しない。
 
 各実行の終了コード、最終回答、失敗理由を回収する。non-zero、出力欠落、途中終了は成功に数えない。JSON の当該実行に属する usage と経過時間を記録し、取得できない値は不明とする。親子の usage が別集計なら、その範囲も記録する。
 
