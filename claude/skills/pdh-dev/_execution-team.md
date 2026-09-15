@@ -57,30 +57,55 @@ Bash ツールで直接実行する。codex plugin 等の別経路があって�
 - worktree 中の ticket へ実行するときは `cd <worktree> && codex exec ...` の形にする
 - 完了通知後は `<RESULT_FILE>` だけ Read する。stderr.log は失敗時に `tail -50` 程度で部分読みする
 
-### 並行起動（必須パターン: `&` background + PID 配列 + wait + exit code）
+### 並行起動（必須パターン: `set -m` で切り離して起動し、待つのは別呼び出しで区切る）
 
-独立 worker は同一 Bash 呼出し内で background 並行起動し、PID ごとに `wait` して exit code を回収する。
+**守るのは «worker が仕事を終えるまで生きていること» である。**
+
+⚠ **worker を «起動した shell 呼び出しの中で» 待たない。**engine の shell tool は **1 コマンドごとに timeout** を持ち、超えるとそのコマンドへ SIGTERM を送る。同じ呼び出しの中で `wait` すると、**worker がまだ働いていても一緒に殺される。**
+
+2026-09-15 に実測（codex exec を main とする coding bot で 4 回発生）。signal を受けたその場で採った記録では、送り主は runner でも OOM でもなく **親の engine プロセス自身**で、2 件とも «自分が起動してから» 181 秒・183 秒だった。⚠ **起動時刻は 73 秒ずれている** — つまり全体の締切ではなく **1 コマンドごとのタイマー**である。
+
+**`set -m`（job control）を有効にして起動する。**background job が独立した process group になるので、呼び出し側の group へ送られた signal が worker へ届かない。⚠ **`setsid` は macOS に無いので使わない。**同じ実測で、`set -m` 有りの worker は完走し、無しの worker は殺されることを確かめた。
+
+⚠ **harness 自身の background 機構（Claude Code の `run_in_background`）を使う経路はこの限りではない。**あちらは engine が寿命を管理するので、上の `timeout` 指定のままでよい。ここで言っているのは **shell の中で `&` と `wait` を書く場合**である。
 
 ```bash
 # ⚠ 連想配列 (declare -A) を使わない — macOS 既定の bash 3.2 に無い
-pids=/tmp/wk-pids; rcs=/tmp/wk-rc; : > "$pids"; : > "$rcs"
 launch() { # launch <name> <engine> <promptfile>
   local name="$1" engine="$2" pf="$3" d="/tmp/wk-$1"
-  mkdir -p "$d"
+  mkdir -p "$d"; rm -f "$d/rc"
+  set -m   # ⚠ これが無いと worker は呼び出し側と同じ process group に入り、巻き添えで死ぬ
   if [ "$engine" = codex ]; then
-    codex exec -o "$d/last-message.txt" < "$pf" > "$d/stdout.log" 2> "$d/stderr.log" &
+    ( trap 'echo 143 > "$d/rc"; exit 143' TERM
+      codex exec -o "$d/last-message.txt" < "$pf" > "$d/stdout.log" 2> "$d/stderr.log"
+      echo $? > "$d/rc" ) &
   else
-    claude -p < "$pf" > "$d/stdout.log" 2> "$d/stderr.log" &
+    ( trap 'echo 143 > "$d/rc"; exit 143' TERM
+      claude -p < "$pf" > "$d/stdout.log" 2> "$d/stderr.log"
+      echo $? > "$d/rc" ) &
   fi
-  echo "$! $name" >> "$pids"
+  set +m
+  echo "$! $name" >> /tmp/wk-pids
 }
-# …launch を worker の数だけ呼ぶ…
-while read -r pid name; do
-  wait "$pid"; echo "$name $?" >> "$rcs"
-done < "$pids"
+# …launch を worker の数だけ呼んで、この呼び出しは «待たずに» 終える…
 ```
 
-worker ごとに rc と stderr 末尾を診断証跡へ残す。non-zero rc または空・欠落 result では、rc と stderr を併読して報告する。
+待つのは **別の shell 呼び出し**で行い、**1 回を短く区切る**。
+
+```bash
+# wait-workers <name...> : 150 秒だけ待ち、終わっていなければ RUNNING を返す
+for _ in $(seq 1 75); do
+  missing=0
+  for name in "$@"; do [ -f "/tmp/wk-$name/rc" ] || missing=1; done
+  [ "$missing" = 0 ] && break
+  sleep 2
+done
+for name in "$@"; do printf '%s %s\n' "$name" "$(cat "/tmp/wk-$name/rc" 2>/dev/null || echo RUNNING)"; done
+```
+
+⚠ **1 回の待ち時間を長くして «1 回で済ませる» ことをしない。**長くした分だけ shell tool の timeout に近づくだけで、**元の症状がそのまま戻る。**`RUNNING` が返るのは失敗ではなく、**呼び直しの合図**である。
+
+worker ごとに rc と stderr 末尾を診断証跡へ残す。non-zero rc または空・欠落 result では、rc と stderr を併読して報告する。⚠ **rc が `143` の worker は «失敗した» のではなく «殺された» のであって、結果が無いことの理由が違う。**そのまま報告する。
 
 同時worker数が多い場合はbatch分割して起動上限を設ける。
 
