@@ -1,9 +1,30 @@
 name: Coding Robot — Finalize Ticket
 
-# agent/issue-<N> ブランチの PR がマージされたら、対応する PDH チケットを
-# tickets/done/ へ移し closed_at(= マージ時刻)を記録する。
-# PR マージは Action を起動しない問題への対応（人が PR をマージする行為 = 受け入れ = close）。
-# devcontainer / agent は使わない決定的な軽量ジョブ。
+# agent/issue-<N> の PR が merge されたら、対応する Issue を閉じる。
+#
+# ⚠ この job は git への書き込みを一切しない。ticket の `tickets/done/` への移動と
+# `closed_at` は **merge される PR 自身に載っている**（bot が PR を作ったあと
+# `ticket.sh close --no-merge --no-push` で branch へ commit する。`_pdh.md` 参照）。
+# したがってここに残る仕事は「Issue を閉じる」だけで、それは API で足りる。
+#
+# ⚠ **以前はここで base branch へ push していた。それは動かない設計だった。**
+# default branch に「PR を経由せよ」を設定している repo では、`GITHUB_TOKEN` の push が
+# 必ず拒否される:
+#
+#     remote: error: GH006: Protected branch update failed for refs/heads/main.
+#     remote: - Changes must be made through a pull request.
+#
+# `set -euo pipefail` のため、その後ろの `gh issue close` まで道連れになっていた。
+# 残るのは «code は base branch に入ったのに ticket は未移動・Issue は OPEN»。
+# 成功する経路が構造的に存在しなかった（2026-09-16 実測）。
+#
+# ⚠ **checkout もしない。**以前は merge 直後の tree の `ticket.sh` を実行していた。
+# bot は自分の PR にそのファイルの変更を混ぜられる（workflow ファイルと違い push 制限が
+# 効かない）ので、人がその diff を見落とすと、次の実行で任意のコードが昇格した文脈で走る。
+# `ticket.sh` は `selfupdate` で数千行の差分が正規に出るファイルであり、いちばん読み飛ばされる
+# 種類の diff である。
+#
+# 守るのは 1 つ — **base branch への書き込みは、人が PR を merge することだけである。**
 
 on:
   pull_request:
@@ -11,40 +32,26 @@ on:
 
 jobs:
   finalize:
-    # マージされた agent/issue-* の PR だけに反応する（close だけ=未マージは無視）
+    # merge された agent/issue-* の PR だけに反応する（merge せず閉じた場合は何もしない）
     if: >
       github.event.pull_request.merged == true &&
       startsWith(github.event.pull_request.head.ref, 'agent/issue-')
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      # ⚠ contents は read すら要らない（checkout しない）。Issue を閉じるのに issues: write、
+      # merge された PR のファイル一覧を読むのに pull-requests: read。
+      issues: write
+      pull-requests: read
 
     steps:
-      # マージ後の base ブランチ（通常 main）を取得
-      - name: Checkout base branch
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.base.ref }}
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Finalize ticket (move to done/ + closed_at)
+      - name: Close the issue if the ticket actually landed
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          MERGED_AT: ${{ github.event.pull_request.merged_at }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-
-          # PDH 構成でなければ何もしない
-          if [ ! -f product-brief.md ] || [ ! -d tickets ]; then
-            echo "Not a PDH repo (product-brief.md / tickets/ missing); skipping."
-            exit 0
-          fi
-          if [ ! -f ticket.sh ]; then
-            echo "ticket.sh not found; skipping."
-            exit 0
-          fi
 
           # head ref 'agent/issue-<N>' から Issue 番号を取り出す
           ISSUE_NUMBER="${HEAD_REF##*issue-}"
@@ -52,33 +59,32 @@ jobs:
             echo "Could not parse issue number from head ref '$HEAD_REF'; skipping."
             exit 0
           fi
-          echo "Issue #$ISSUE_NUMBER (head: $HEAD_REF, base: $BASE_REF, merged_at: $MERGED_AT)"
+          echo "Issue #$ISSUE_NUMBER (head: $HEAD_REF, PR: #$PR_NUMBER)"
 
-          # チケット本体を tickets/ または tickets/done/ から特定（note は除外）
-          TICKET_FILE=$(ls tickets/*issue-"${ISSUE_NUMBER}".md tickets/done/*issue-"${ISSUE_NUMBER}".md 2>/dev/null | head -1 || true)
-          if [ -z "$TICKET_FILE" ]; then
-            echo "No ticket file matching '*issue-${ISSUE_NUMBER}.md'; nothing to finalize."
+          # ⚠ ここは «実行» ではなく «検査» である。ticket を done/ へ移すのは PR の仕事で、
+          # この job はそれが本当に入っていたかだけを見る。入っていなければ Issue を閉じない
+          # — 閉じてしまうと «Issue は完了なのに ticket は未処理» という、いちばん見つけにくい
+          # 食い違いが残る。開いたままなら人の目でも後述の照合でも拾える。
+          FILES=$(gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename' || true)
+          if printf '%s\n' "$FILES" | grep -qE "^tickets/done/.*-issue-${ISSUE_NUMBER}/ticket\.md$"; then
+            LANDED=yes
+          else
+            LANDED=no
+          fi
+          echo "ticket landed in tickets/done/: $LANDED"
+
+          STATE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json state -q .state || echo UNKNOWN)
+          if [ "$STATE" != OPEN ]; then
+            echo "Issue #$ISSUE_NUMBER is already closed ($STATE); nothing to do."
             exit 0
           fi
-          TICKET_NAME=$(basename "$TICKET_FILE" .md)
-          echo "Ticket: $TICKET_NAME ($TICKET_FILE)"
 
-          # commit するための git identity
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # close --no-merge: closed_at(= マージ時刻) を入れて done/ へ移動。
-          # --no-push: ここではコミットだけ作らせ、push は下で行う。
-          # 既に done/ にある場合は冪等にコミットを作らず exit 0。
-          BEFORE_SHA=$(git rev-parse HEAD)
-          bash ticket.sh close --no-merge --no-push --closed-at "$MERGED_AT" "$TICKET_NAME"
-          AFTER_SHA=$(git rev-parse HEAD)
-
-          # ticket.sh がコミットを作った場合だけ、メッセージを release-notes 向けの
-          # 一貫した形式に書き換えてから push する。コミットがなければ何もしない（冪等）。
-          if [ "$BEFORE_SHA" != "$AFTER_SHA" ]; then
-            git commit --amend -m "chore(pdh): close #${ISSUE_NUMBER} ${TICKET_NAME} (post-merge finalize)"
-            git push origin "HEAD:${BASE_REF}"
-          else
-            echo "No commit created by ticket.sh (already finalized); nothing to push."
+          if [ "$LANDED" = no ]; then
+            gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "$(printf 'PR #%s が merge されましたが、**この PR に ticket の `tickets/done/` への移動が入っていません。**\n\nそのため Issue を閉じていません。ticket は `tickets/` に残ったままです。\n\n直し方: branch 上で `bash ticket.sh close --no-merge --no-push <ticket 名>` を実行して commit を作り、その差分を base branch へ入れてください。' "$PR_NUMBER")" || true
+            echo "Ticket did not land; issue left open on purpose."
+            exit 0
           fi
+
+          gh issue close "$ISSUE_NUMBER" --repo "$REPO" --reason completed \
+            --comment "PR #${PR_NUMBER} が merge されました。merge が close 承認です（\`github_bot.close: pr-merge\`）。ticket の \`tickets/done/\` への移動と \`closed_at\` は、この PR の差分に含まれています。" \
+            || echo "Warning: gh issue close failed; issue stays open."

@@ -69,7 +69,94 @@ fi
 - **close 段階（PDH-close、close 承認後）** は `.ticket-config.yaml` の `github_bot.close` で分岐する:
   - **`merge`（既定）**: bot が `bash ticket.sh close --no-delete-remote` を実行する（squash merge → default branch へ push、ticket は `tickets/done/` へ）。続けて `gh issue close #N`。**1 run で終わり、PR は作らない。**
   - **`pr`**: bot が `bash ticket.sh close --no-merge "$TICKET_NAME"` で done へ移し、その commit を含む PR（`Refs #N`。`Closes` にしない）を作り、«merge したら 🤖 で issue を閉じます» と伝えて**停止する**。人間が merge → 次の 🤖 で `gh issue close #N`。
-  - checklist gate（`require_checklist` / `require_checklist_groups` / `append_only_files`）はどちらでも `close` で効く。
+  - ⚠ **`pr-merge`**: **PR の merge そのものを close 承認にする。**手順は下の節にある。
+  - checklist gate（`require_checklist` / `require_checklist_groups` / `append_only_files`）は 3 モードとも `close` が効かせる。⚠ **`pr-merge` では `close --no-merge` が feature branch 上で走るので、そこで効く**（`ticket.sh 20260916.084455` 以降）。
+
+## `pr-merge`: done への移動を PR に載せて出す
+
+**守るのは «default branch 上で ticket が `tickets/done/` にある ⇒ 人が merge した» である。**
+
+⚠ **default branch へ書き込むのは、人が PR を merge することだけにする。**bot も workflow も push しない。
+したがって **done への移動と `closed_at` は、merge される PR 自身に載せる。**PDH-verify を終えたら、**この順で**行う。
+
+0. ⚠ **`ATTACHMENTS_TOKEN`（人の PAT）があれば、PR の作成と PR ブランチへの push をそれで行う。**
+   `GITHUB_TOKEN` で作った PR / 押した push では、`pull_request` と `synchronize` の CI が
+   **`action_required`（承認待ち）**になり、**人が «Approve and run» を押すまで走らない。**
+   PAT なら作者・push 主が人になるので**自動で走り、人が押すのは Merge の 1 回だけ**になる（実測）。
+   **無ければ `GITHUB_TOKEN` のままでよい** — その場合は人が «Approve and run» を 1 回多く押す。
+   設定は `github-bot/INSTALL.md`。
+   ```bash
+   # ⚠ actions/checkout が仕込んだ Authorization を外さないと Duplicate header で落ちる
+   if [ -n "${ATTACHMENTS_TOKEN:-}" ]; then
+     git config --local --unset-all 'http.https://github.com/.extraheader' || true
+     git_push() { git push "https://x-access-token:${ATTACHMENTS_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$@"; }
+     PR_TOKEN="$ATTACHMENTS_TOKEN"
+   else
+     git_push() { git push origin "$@"; }
+     PR_TOKEN="$GITHUB_TOKEN"
+   fi
+   ```
+1. **base branch を取り込んで push する**:
+   ```bash
+   BASE="${GITHUB_BASE_REF:-$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)}"
+   git fetch origin "$BASE" && git merge "origin/$BASE" --no-edit && git_push "HEAD:$BRANCH_NAME"
+   ```
+   ⚠ **CI の緑を «現在の base を含んだ SHA» に紐づけるため、PR より前に取り込む。**必須チェックが
+   `strict: false` なら、GitHub は «古い base のまま緑» でも merge を許す — 誰も試していない
+   組み合わせが default branch に入る。衝突したら解決してから進む。
+2. ⚠ **PR を作る**（`Refs #N`。`Closes` にしない）:
+   ```bash
+   GH_TOKEN="$PR_TOKEN" gh pr create --base "$BASE" --head "$BRANCH_NAME" --title … --body "… Refs #N"
+   ```
+   そのうえで **close 判断ボードをその PR にコメントする。**
+   ⚠ **PR メタデータ marker は出さない** — «人がリンクを押して PR を作る» 形式では、close 判断ボードを
+   PR へ出す経路が無く bot が止まる。
+3. ⚠ **最後に done へ移して push する**（**順序が逆にならないこと**）:
+   ```bash
+   bash ticket.sh close --no-merge --no-push "$TICKET_NAME"
+   git_push "HEAD:$BRANCH_NAME"
+   ```
+   **PR の内容は作成後の push で更新される**ので、done 移動はこれで PR の差分に入る。
+   ⚠ **`close --no-merge` を PR より前に置かないこと。**checklist gate が「判断ボードを PR へ出した」
+   「merge 承認を反映した」を未了として弾き、**PR を作る前に必ず止まる**（2026-09-16 に実際に踏んだ）。
+   ⚠ **`pr-merge` では merge が承認なので、«承認を反映した» を bot が `[x]` にできる瞬間は無い。**
+   その種の項目は **`- [-] … - skip: pr-merge では merge が承認であり、bot はそれを観測できない`** と
+   理由つきで落とす。**消さない** — 判断したのか落としたのかが区別できなくなる。
+4. 人が merge すると `coding-robot-finalize.yml` が **Issue を閉じるだけ**を行う（API のみ・git 書き込み無し）。
+   ⚠ **その job は «PR の差分に `tickets/done/…/ticket.md` が入っているか» を検査し、入っていなければ
+   Issue を閉じずに警告をコメントする。**手順 3 を飛ばすと、そこで止まる。
+
+⚠ **「承認前に `done/` へ移すのは嘘だ」とは考えない。**未 merge の branch は、default branch について
+「まだ真でないこと」を主張するもので、それが branch というものである。⚠ **むしろ逆で、merge の後に
+bot の credential で default branch へ書く方式こそが、守りたい不変則を機構として破っていた。**
+
+### CI は PR 側の run だけが gate である（bot は回さない）
+
+⚠ **bot が `gh workflow run` で起動した CI は、PR の必須チェックを満たさない。**2026-09-16 に実測:
+
+```
+head の check-run : test-all completed/success   ← commit には付く
+PR の rollup      : test-all が居ない
+mergeable_state   : blocked
+```
+
+`pull_request` イベント由来の run が緑になって初めて `clean` になる。**したがって bot は
+フルスイートを自分で回さない。**回しても merge の可否に 1 ミリも効かず、時間を 2 回払うだけになる。
+
+⚠ **守る数字は «人が押す回数»。**`ATTACHMENTS_TOKEN` があれば **1 回**（Merge）、無ければ **2 回**
+（Approve and run → Merge）。**手順を変えるときは、この回数が増えていないか必ず確かめること。**
+
+### CI が赤いとき、«関係なし» は結論として書かない
+
+`PDH-AGENTS.md`「Reporting」が定めているのは 1 つ — **失敗は無関係だと断言することは免責にならない。**
+免責できるのは、**同じ step を base ref で実行して、そこでも落ちることを示したとき**だけである。
+報告には次の 3 つのどれかだけを書く。**「関係なし」という語で終わらせない。**
+
+1. **base でも落ちた** — その出力を貼る。免責になる
+2. **base では通った** — 自分の差分のせいである。直す
+3. ⚠ **確かめられなかった** — **そう書く。**推測の根拠は 3 の中身であって 1 の代わりにはならない
+
+⚠ **不安定な失敗では 1 も 2 も決まらない**（budget 超過・timeout・`flaky: N` 併記）。その場合は 3 を選ぶ。
 
 ## worker spawn（team 実行）
 **あなた（bot の main agent）は PM として team フローを実行する。** worker（Coding Engineer / reviewer / AC 裏取り 等）は **CLI subprocess で spawn** する（`_execution-team.md`「spawn 機構」）。
@@ -83,7 +170,7 @@ issue とのやり取りは、同じディレクトリの **`.github/coding-robo
 - **human gate では自己承認しない。** `PDH-ticket-human-review` と `PDH-human-review` に達したら、Actions には対話できる人間がいないので、**gate の要点を判断ボード（`_github-issue.md`）として issue にコメントし、note の Checklist に待ち行を書いて run を停止**する。承認は **🤖 を含むコメント**（例「🤖 承認」。Actions は reaction では起動しないので 👍 だけでは再開しない）、変更希望は 🤖 付きで返信。«よしなに» で gate を越えない。
 - **進捗コメントは増やさない。** run 中の「🤖 作業中...」は 1 個を編集し続ける（machinery が担う）。人間の注意が要るとき（gate・質問・blocker）だけ新規コメントを立てる。
 - **stage をラベルで出す。** ラベルは runner が note の `## Status:` から付ける。agent は Status を到達 stage に保つ。Projects は使わない。
-- **close は `github_bot.close` の設定に従う**（既定 `merge`: `ticket.sh close` で squash merge して issue を閉じる。`pr`: PR は `Refs #N`、`Closes #N` にしない）。
+- **close は `github_bot.close` の設定に従う**（既定 `merge`: `ticket.sh close` で squash merge して issue を閉じる。`pr` / `pr-merge`: PR は `Refs #N`、`Closes #N` にしない。⚠ **`pr-merge` では merge が close gate であり、done への移動は PR の差分に載せる**。手順は上の「`pr-merge`: done への移動を PR に載せて出す」にある）。
 
 ## 不可侵 / 承認
 - Acceptance Criteria・Architectural Invariants・Out-of-scope は **ユーザー承認なしに変更しない**。

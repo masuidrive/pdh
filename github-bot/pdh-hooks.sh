@@ -7,16 +7,28 @@
 #   2. Status が human gate なら、最終レポートにその gate の承認語（🤖 承認 / 🤖 クローズ承認）が無ければ導線を足す
 #   3. Status が human gate なら、note の Checklist に «発行先:» + URL か path の未了行が無ければ足す
 #      （URL は今回の gate コメント）
-#   4. 導入検査（stage ラベル・Actions の PR 作成許可）で要追加があれば報告に足す
+#   4. note の Checklist に «未了 + 発行先:» の行があれば awaiting-reply ラベルを付け、無ければ外す
+#   5. 導入検査（ラベル・Actions の PR 作成許可）で要追加があれば報告に足す
+#
+# ⚠ awaiting-reply は run の «始め» と «終わり» の両方で動かす。終わりだけだと、人が答えて
+# run が始まっても付いたままになり、«自分の番» を誤って言い続ける。engine が失敗した run では
+# final が呼ばれないので、失敗側からも付ける（止まっていて人の手が要る、という意味は同じ）。
 #
 # usage:
 #   pdh-hooks.sh final <issue> <branch> <comment-id>   # stdin: 最終レポート → stdout: 補正後の本文
+#   pdh-hooks.sh start <issue>                          # run の開始: awaiting-reply を外す
+#   pdh-hooks.sh progress <issue>                       # 進捗コメント用の AC 一覧を stdout へ
+#   pdh-hooks.sh failed <issue>                         # engine 失敗: awaiting-reply を付ける
 #   pdh-hooks.sh setup [owner/repo]                     # 導入検査だけ。要追加があれば exit 1
 # 依存: bash / git / awk / grep / sed / gh。GITHUB_REPOSITORY を使う（setup は引数でも可）。
 set -uo pipefail
 
 REPO="${GITHUB_REPOSITORY:-}"
 STAGES="PDH-open PDH-ticket-review PDH-ticket-human-review PDH-implement PDH-review PDH-verify PDH-human-review PDH-close"
+# ⚠ stage ラベルとは別系統。stage は «どこにいるか» しか言わないので、gate でない場所で
+# 止まったとき（非収束での escalate・blocker・質問）に «自分の番か» が一覧から分からない。
+# STAGES に入れてはならない — 入れると stage を付けるときに他として外される。
+AWAITING_LABEL="awaiting-reply"
 log() { printf 'pdh-hooks: %s\n' "$*" >&2; }
 
 setup_check() {
@@ -26,10 +38,10 @@ setup_check() {
   if [ "$have" = "__gh_failed__" ]; then
     printf '%s\n' "- stage ラベルを確認できない（gh label list が失敗）"
   else
-    for s in $STAGES; do
+    for s in $STAGES $AWAITING_LABEL; do
       printf '%s\n' "$have" | grep -qx "$s" || missing="$missing $s"
     done
-    [ -z "$missing" ] || printf '%s\n' "- stage ラベルが無い:$missing（github-bot/INSTALL.md「3. stage ラベルを作る」）"
+    [ -z "$missing" ] || printf '%s\n' "- ラベルが無い:$missing（github-bot/INSTALL.md「3. stage ラベルを作る」）"
   fi
   local perm
   perm=$(gh api "repos/$repo/actions/permissions/workflow" -q .can_approve_pull_request_reviews 2>/dev/null || echo "unknown")
@@ -40,6 +52,28 @@ setup_check() {
   esac
 }
 
+# 進捗コメントに出す AC 一覧。⚠ AC の本当の状態は ticket.md にあるので、そこだけを読む。
+# agent に別ファイルを書かせると «書き忘れ» と «実体とのズレ» の 2 つを新しく抱える。
+ac_progress_block() {
+  local issue="$1" dir="" d lines total done_n
+  for d in tickets/*-issue-"$issue"; do
+    [ -d "$d" ] && [ -f "$d/ticket.md" ] && { dir="$d"; break; }
+  done
+  [ -n "$dir" ] || return 0
+  lines=$(awk '
+    /^#+ .*Acceptance Criteria/ {f=1; next}
+    f && /^#+ / {exit}
+    f && /^- \[[ x]\]/ {print}
+  ' "$dir/ticket.md" | head -12)
+  [ -n "$lines" ] || return 0
+  total=$(printf '%s\n' "$lines" | grep -c '^- \[')
+  done_n=$(printf '%s\n' "$lines" | grep -c '^- \[x\]')
+  printf '**AC %s/%s**\n' "$done_n" "$total"
+  # ⚠ `- [ ]` のまま出すと GitHub が «押せる checkbox» として描く。押しても次の更新で
+  # 上書きされて消えるだけなので、押せない記号にする。
+  printf '%s\n' "$lines" | sed -E 's/^- \[x\][[:space:]]*/✅ /; s/^- \[ \][[:space:]]*/⬜ /'
+}
+
 cmd="${1:-}"
 case "$cmd" in
   setup)
@@ -47,8 +81,23 @@ case "$cmd" in
     out=$(setup_check "$repo")
     if [ -n "$out" ]; then printf '%s\n' "$out"; exit 1; fi
     echo "pdh-hooks setup: ok（ラベル 8 段・PR 作成許可）"; exit 0 ;;
+  progress)
+    issue="${2:-}"; [ -n "$issue" ] || exit 0
+    ac_progress_block "$issue"; exit 0 ;;
+  start|failed)
+    issue="${2:-}"; [ -n "$issue" ] && [ -n "$REPO" ] || { log "$cmd: issue / GITHUB_REPOSITORY が要る"; exit 2; }
+    if [ "$cmd" = start ]; then
+      # run が始まった＝bot の番。人が答えたかどうかに関係なく、いま待ってはいない。
+      gh issue edit "$issue" --repo "$REPO" --remove-label "$AWAITING_LABEL" >/dev/null 2>&1 \
+        && log "$AWAITING_LABEL を外した（run 開始）"
+    else
+      # engine が失敗した＝止まっていて人の手が要る（認証・quota・環境）。final は呼ばれない。
+      gh issue edit "$issue" --repo "$REPO" --add-label "$AWAITING_LABEL" >/dev/null 2>&1 \
+        && log "$AWAITING_LABEL を付けた（engine 失敗）"
+    fi
+    exit 0 ;;
   final) ;;
-  *) log "usage: pdh-hooks.sh final <issue> <branch> <comment-id> | setup [owner/repo]"; exit 2 ;;
+  *) log "usage: pdh-hooks.sh final <issue> <branch> <comment-id> | start <issue> | failed <issue> | progress <issue> | setup [owner/repo]"; exit 2 ;;
 esac
 
 ISSUE="${2:-}"; BRANCH="${3:-}"; CID="${4:-}"
@@ -65,8 +114,17 @@ fi
 note="$dir/note.md"; changed=0
 
 # --- Status ---
+# ⚠ note の Status は 2 通りの書き方がある。両方を読む。
+#   `## Status: PDH-implement`（見出しと同じ行。上流テンプレ）
+#   `## Status` の次行に値（この repo の .ticket-config.yaml のテンプレ）
+# 片方しか読まないと status が空になり、gate=0 になって **ラベルも承認導線も待ち行も
+# 足されない**（2026-09-15、独立 review が検出）。
 status=""
-[ -f "$note" ] && status=$(grep -m1 '^## Status:' "$note" | sed -E 's/^## Status:[[:space:]]*(PDH-[a-z-]+).*/\1/')
+if [ -f "$note" ]; then
+  status=$(grep -m1 '^## Status:' "$note" | sed -E 's/^## Status:[[:space:]]*(PDH-[a-z-]+).*/\1/')
+  [ -n "$status" ] || status=$(awk '/^## Status[[:space:]]*$/{getline; while ($0 ~ /^[[:space:]]*$/ || $0 ~ /^<!--/) getline; print; exit}' "$note" | sed -E 's/.*(PDH-[a-z-]+).*/\1/')
+  case "$status" in PDH-*) ;; *) status="" ;; esac
+fi
 gate=0; case "$status" in PDH-ticket-human-review|PDH-human-review) gate=1 ;; esac
 
 # --- 1. stage ラベル ---
@@ -83,18 +141,46 @@ if [ -n "$status" ] && printf '%s\n' $STAGES | grep -qx "$status"; then
 fi
 
 # --- 2. 承認導線 ---
-if [ "$status" = "PDH-ticket-human-review" ]; then word="🤖 承認"; else word="🤖 クローズ承認"; fi
+# close gate の答え方は `github_bot.close` で変わる。⚠ `pr-merge` では merge そのものが
+# 承認なので、承認語を求めると承認が 2 回になる（コメント + merge）。
+close_mode=$(awk '/^github_bot:/{f=1;next} /^[^ #]/{f=0} f && /^[[:space:]]*close:[[:space:]]*/{print $2; exit}' .ticket-config.yaml 2>/dev/null)
+if [ "$status" = "PDH-ticket-human-review" ]; then
+  word="🤖 承認"
+  guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。板を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。"
+elif [ "$close_mode" = "pr-merge" ]; then
+  # ⚠ 単語 `merge` で判定すると、説明文に一度出ただけで導線追加が抑止される。
+  # 導線そのものの文を目印にする。
+  word="merge が close 承認です"
+  # ⚠ 人のクリック数は ATTACHMENTS_TOKEN の有無で変わる。案内も変える。
+  # 有り: PR の作者が人になるので CI が自動で走る → 押すのは Merge の 1 回だけ
+  # 無し: GITHUB_TOKEN が作った PR なので workflow が承認待ちになる → «Approve and run» が要る
+  if [ -n "${ATTACHMENTS_TOKEN:-}" ]; then
+    guide="**この PR の CI が緑になったら Merge を 1 回押してください。それが close 承認です。**CI は自動で走っています。直してほしい点があれば、merge せずに \`🤖 修正して: …\` とコメントしてください。"
+  else
+    guide="**この PR で 2 つ押してください。**① Checks タブの **«Approve and run»**（bot が作った PR なので workflow が承認待ちで止まっています）② 緑になったら **Merge**。⚠ **merge が close 承認です。**直してほしい点があれば、merge せずに \`🤖 修正して: …\` とコメントしてください（修正後はもう一度 «Approve and run» が要ります）。⚠ **`ATTACHMENTS_TOKEN` を設定すると、この ① が要らなくなります**（`github-bot/INSTALL.md`）。"
+  fi
+else
+  word="🤖 クローズ承認"
+  guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。板を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。"
+fi
 if [ "$gate" -eq 1 ] && ! printf '%s' "$report" | grep -qF "$word"; then
   report="$report
 
 ### 回答のしかた
-この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。板を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。"
+$guide"
   log "承認導線を足した（agent の報告に無かった）"
 fi
 
+# note の Checklist に «未了 + 発行先:» の行があるか。PDH-AGENTS.md「Handover Routes」が
+# «待つものを出したらこの行を書く» と定めているので、これがそのまま «人の答え待ち» の印になる。
+has_waiting_line() {
+  [ -f "$note" ] || return 1
+  awk '/^## Checklist/{f=1;next} /^## /{f=0} f' "$note" | grep -Eq '^- \[ \].*発行先:.*(https?://|/)'
+}
+
 # --- 3. 待ち行 ---
 if [ "$gate" -eq 1 ] && [ -f "$note" ]; then
-  if ! awk '/^## Checklist/{f=1;next} /^## /{f=0} f' "$note" | grep -Eq '^- \[ \].*発行先:.*(https?://|/)'; then
+  if ! has_waiting_line; then
     url="https://github.com/$REPO/issues/$ISSUE"; [ -n "$CID" ] && url="$url#issuecomment-$CID"
     line="- [ ] $status: 回答待ち。発行先: ${url}（答えを ticket へ反映した手で [x]）"
     tmp=$(mktemp)
@@ -105,6 +191,22 @@ if [ "$gate" -eq 1 ] && [ -f "$note" ]; then
       END {if (f) print line}
     ' "$note" > "$tmp" && mv "$tmp" "$note"
     log "note の Checklist に待ち行を足した（agent は書いていなかった）"; changed=1
+  fi
+fi
+
+# --- 4. 回答待ちラベル ---
+# ⚠ 手順 3 が待ち行を足しうるので、必ずその後で判定する。
+# gate かどうかを見ない — gate でない場所で止まったとき（非収束での escalate・blocker・質問）に
+# こそ要る。2026-09-16 に実際に起きた: レビュー 3 巡目の escalate で止まったが、ラベルは
+# PDH-review のままで «動いているのか待っているのか» が一覧から区別できなかった。
+# 答えを反映した手で [x] にすると、次の run のこの節がラベルを外す（自動で戻る）。
+if [ -f "$note" ]; then
+  if has_waiting_line; then
+    gh issue edit "$ISSUE" --repo "$REPO" --add-label "$AWAITING_LABEL" >/dev/null 2>&1 \
+      && log "$AWAITING_LABEL を付けた（回答待ちの行がある）"
+  else
+    gh issue edit "$ISSUE" --repo "$REPO" --remove-label "$AWAITING_LABEL" >/dev/null 2>&1 \
+      && log "$AWAITING_LABEL を外した（回答待ちの行が無い）"
   fi
 fi
 

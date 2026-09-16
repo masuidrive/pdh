@@ -59,6 +59,11 @@ For more information, see the [Claude Code documentation](https://docs.anthropic
 ---
 
 **After setting the token, try commenting 🤖 \`:robot:\` on this thread again!**"
+  # ⚠ この経路は ENGINE_EXIT_CODE の分岐へ入らないので run-action.sh の failed hook が呼ばれない。
+  # いちばん多い «止まっていて人の手が要る» 停止なので、ここで直接 awaiting-reply を付ける。
+  if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
+    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" || true
+  fi
   exit 1
 }
 
