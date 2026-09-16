@@ -69,7 +69,7 @@ fi
 - **close 段階（PDH-close、close 承認後）** は `.ticket-config.yaml` の `github_bot.close` で分岐する:
   - **`merge`（既定）**: bot が `bash ticket.sh close --no-delete-remote` を実行する（squash merge → default branch へ push、ticket は `tickets/done/` へ）。続けて `gh issue close #N`。**1 run で終わり、PR は作らない。**
   - **`pr`**: bot が `bash ticket.sh close --no-merge "$TICKET_NAME"` で done へ移し、その commit を含む PR（`Refs #N`。`Closes` にしない）を作り、«merge したら 🤖 で issue を閉じます» と伝えて**停止する**。人間が merge → 次の 🤖 で `gh issue close #N`。
-  - ⚠ **`pr-merge`**: **PR の merge そのものを close 承認にする。**下の節が正。
+  - ⚠ **`pr-merge`**: **PR の merge そのものを close 承認にする。**手順は下の節にある。
   - checklist gate（`require_checklist` / `require_checklist_groups` / `append_only_files`）は 3 モードとも `close` が効かせる。⚠ **`pr-merge` では `close --no-merge` が feature branch 上で走るので、そこで効く**（`ticket.sh 20260916.084455` 以降）。
 
 ## `pr-merge`: done への移動を PR に載せて出す
@@ -98,14 +98,15 @@ fi
    ```
 1. **base branch を取り込んで push する**:
    ```bash
-   git fetch origin "$BASE_BRANCH" && git merge "origin/$BASE_BRANCH" --no-edit && git_push "HEAD:$BRANCH_NAME"
+   BASE="${GITHUB_BASE_REF:-$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)}"
+   git fetch origin "$BASE" && git merge "origin/$BASE" --no-edit && git_push "HEAD:$BRANCH_NAME"
    ```
    ⚠ **CI の緑を «現在の base を含んだ SHA» に紐づけるため、PR より前に取り込む。**必須チェックが
    `strict: false` なら、GitHub は «古い base のまま緑» でも merge を許す — 誰も試していない
    組み合わせが default branch に入る。衝突したら解決してから進む。
 2. ⚠ **PR を作る**（`Refs #N`。`Closes` にしない）:
    ```bash
-   GH_TOKEN="$PR_TOKEN" gh pr create --base "$BASE_BRANCH" --head "$BRANCH_NAME" --title … --body "… Refs #N"
+   GH_TOKEN="$PR_TOKEN" gh pr create --base "$BASE" --head "$BRANCH_NAME" --title … --body "… Refs #N"
    ```
    そのうえで **close 判断ボードをその PR にコメントする。**
    ⚠ **PR メタデータ marker は出さない** — «人がリンクを押して PR を作る» 形式では、close 判断ボードを
@@ -169,7 +170,7 @@ issue とのやり取りは、同じディレクトリの **`.github/coding-robo
 - **human gate では自己承認しない。** `PDH-ticket-human-review` と `PDH-human-review` に達したら、Actions には対話できる人間がいないので、**gate の要点を判断ボード（`_github-issue.md`）として issue にコメントし、note の Checklist に待ち行を書いて run を停止**する。承認は **🤖 を含むコメント**（例「🤖 承認」。Actions は reaction では起動しないので 👍 だけでは再開しない）、変更希望は 🤖 付きで返信。«よしなに» で gate を越えない。
 - **進捗コメントは増やさない。** run 中の「🤖 作業中...」は 1 個を編集し続ける（machinery が担う）。人間の注意が要るとき（gate・質問・blocker）だけ新規コメントを立てる。
 - **stage をラベルで出す。** ラベルは runner が note の `## Status:` から付ける。agent は Status を到達 stage に保つ。Projects は使わない。
-- **close は `github_bot.close` の設定に従う**（既定 `merge`: `ticket.sh close` で squash merge して issue を閉じる。`pr` / `pr-merge`: PR は `Refs #N`、`Closes #N` にしない。⚠ **`pr-merge` では merge が close gate であり、done への移動は PR の差分に載せる**。上の「`pr-merge`: done への移動を PR に載せて出す」が正）。
+- **close は `github_bot.close` の設定に従う**（既定 `merge`: `ticket.sh close` で squash merge して issue を閉じる。`pr` / `pr-merge`: PR は `Refs #N`、`Closes #N` にしない。⚠ **`pr-merge` では merge が close gate であり、done への移動は PR の差分に載せる**。手順は上の「`pr-merge`: done への移動を PR に載せて出す」にある）。
 
 ## 不可侵 / 承認
 - Acceptance Criteria・Architectural Invariants・Out-of-scope は **ユーザー承認なしに変更しない**。

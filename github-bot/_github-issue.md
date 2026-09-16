@@ -76,7 +76,7 @@ close 承認は issue で得ているので、同じ人が PR でもう一度承
 - ⚠ **`pr-merge`**: **PR の merge そのものが close gate である。**bot は実装を終えたら PR
   （本文に **`Refs #N`**。`Closes` / `Fixes` は使わない）を作り、**close 判断ボードを PR にコメントして
   停止する。**⚠ **`tickets/done/` への移動と `closed_at` は、その PR の差分に載せる**（手順は
-  `_pdh.md`「`pr-merge`: done への移動を PR に載せて出す」が正）。人が merge すると
+  `_pdh.md`「`pr-merge`: done への移動を PR に載せて出す」に従う）。人が merge すると
   `coding-robot-finalize.yml` は **Issue を close するだけ**を行う（API のみ・git 書き込み無し）。
   ⚠ **その job は «PR の差分に `tickets/done/…/ticket.md` が入っているか» を検査し、入っていなければ
   Issue を閉じずに警告する。**⚠ **`🤖 クローズ承認` というコメントは使わない** — GitHub の承認
