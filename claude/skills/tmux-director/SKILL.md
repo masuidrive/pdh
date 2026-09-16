@@ -122,7 +122,7 @@ slash command（`/clear`、`/effort`、`/pdh-dev` 等）は必ず literal な `t
 - 既に worktree 内で起動している window に `EnterWorktree({name: ...})` を指示しない。2 巡目以降の window には `ticket.sh start --worktree` を使わせる。移動に失敗した場合、worker は「全コマンドで絶対パスを明示する」運用で続行できる。新しい ticket は、可能なら新規セッションを新 worktree で立てる。
 - worktree path は `.worktrees/<slug>/`（ticket.sh default）。
 - `.env` 等 gitignored ファイルの持ち込みは `.ticket-config.yaml` の `worktree_copy_files` で行う（単発の追加は `--copy-file <path>`）。`claude --worktree` / `EnterWorktree` だけで作った worktree には適用されないので、その場合は手動でコピーする。
-- close 時は `ticket.sh close --keep-worktree` で worktree path を維持する。
+- close 時も worktree path は残る（`ticket.sh 20260916.094345` 以降は**残すのが既定**。消したいときだけ `--delete-worktree`）。⚠ **`--keep-worktree` はもう要らない**（受け取るが何もしない）。
 
 ## TD-3: 監督ループ
 
@@ -392,7 +392,7 @@ worker が ticket を close したら、次の ticket を割り当てる前に 3
 
 1. **その ticket のために起動したプロセスを止める。**dev server、検証用の `http.server`、`agent-browser` のセッション、その ticket 専用の Monitor が対象。「kickoff・note に記録された background」と「`ss -tlnp` で worktree 由来の listen port」の 2 経路で探す。**広いパターンの `pkill -f` を使わず、PID か port を特定して個別に kill する。**他 ticket・他 window のプロセスに触れず、誰が起動したか分からないプロセスはユーザに確認する。
 2. **window を `/clear` する**（送り方は「送り方」節）。
-3. **worker に `ExitWorktree()` を実行させ、main repo（main branch）へ戻す。**pane の処理が終わった時点で実行させる。Bash の `cd` でも `/clear` でも戻らない。`close --keep-worktree` で worktree 自体を残す場合も、worker の現在地は main に戻す。
+3. **worker に `ExitWorktree()` を実行させ、main repo（main branch）へ戻す。**pane の処理が終わった時点で実行させる。Bash の `cd` でも `/clear` でも戻らない。worktree 自体は既定で残るが、worker の現在地は main に戻す。
 
 ## worker の /clear タイミング
 
