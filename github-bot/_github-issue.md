@@ -51,6 +51,13 @@ bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する*
 - **ラベルは runner（`pdh-hooks.sh`）が run の終わりに note の `## Status:` から付ける。**agent は note の Status を到達 stage に保つだけでよく、`gh issue edit` でラベルを触らない。同じ hook が、human gate で停止する run の最終レポートに承認導線が無ければ足し、note の Checklist に `発行先:` 付きの待ち行が無ければ gate コメントの URL で足し、`progress.md` が無ければ作る。**hook が補うのは落ちたときの保険であり、agent が書く規則は変わらない。**
 - 特に **gate 待ちラベル（`PDH-ticket-human-review` / `PDH-human-review`）**で溜まると、Issues 一覧のラベルフィルタで «あなたが承認すべき issue» が一目で分かる。これがラベルの主目的。
 - ラベルは INSTALL で作成済みが前提。無い repo では hook が skip し、最終レポートの「導入検査で要追加」に出る（gate や実装は止めない）。
+- ⚠ **`awaiting-reply` は stage ラベルとは別系統で、8 段と同時に付く。**stage は «どこにいるか» しか
+  言わないので、**gate でない場所で止まったとき**（非収束での escalate・blocker・質問・認証失敗）に
+  «bot が動いているのか、自分の番なのか» が一覧から区別できない。hook は **note の Checklist にある
+  «未了 + `発行先:`» の行**を印にして付け外しする（`PDH-AGENTS.md`「Handover Routes」が、待つものを
+  出したらこの行を書くことを求めている）。⚠ **run の始まりで外し、終わりに付け直す** — 終わりだけに
+  すると、人が答えて run が始まっても付いたままになる。**答えを反映した手で `[x]` にすれば次の run で
+  外れる。**agent が `gh issue edit` で触らない。
 
 ## issue の作り方（on-gate）
 
@@ -66,6 +73,14 @@ bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する*
 close 承認は issue で得ているので、同じ人が PR でもう一度承認する二重 gate は既定では置かない。`.ticket-config.yaml` の `github_bot.close`:
 
 - **`merge`（既定）**: bot が `bash ticket.sh close --no-delete-remote` で default branch へ squash merge して push し、`gh issue close #N` する。1 run で終わる。
+- ⚠ **`pr-merge`**: **PR の merge そのものが close gate である。**bot は実装を終えたら PR
+  （本文に **`Refs #N`**。`Closes` / `Fixes` は使わない）を作り、**close 判断ボードを PR にコメントして
+  停止する。**⚠ **`tickets/done/` への移動と `closed_at` は、その PR の差分に載せる**（手順は
+  `_pdh.md`「`pr-merge`: done への移動を PR に載せて出す」が正）。人が merge すると
+  `coding-robot-finalize.yml` は **Issue を close するだけ**を行う（API のみ・git 書き込み無し）。
+  ⚠ **その job は «PR の差分に `tickets/done/…/ticket.md` が入っているか» を検査し、入っていなければ
+  Issue を閉じずに警告する。**⚠ **`🤖 クローズ承認` というコメントは使わない** — GitHub の承認
+  プリミティブは merge ボタンであり、コメントを足すと承認が 2 回になる。
 - **`pr`**: bot は `ticket.sh close --no-merge <name>` で `tickets/done/` へ移した commit を含めて PR（本文に **`Refs #N`**。`Closes` / `Fixes` は issue を自動 close して PDH の close 手順を飛ばすので使わない）を作り、«merge したら 🤖 で issue を閉じます» と伝えて停止する。人間が merge → 次の 🤖 で `gh issue close #N` だけを行う。**done への移動を PR の後にすると、その commit が agent branch に取り残されて main に届かない**（smoke 実測）。選ぶのは、branch protection で Actions が default branch へ push できない、外部のコードを受け入れる、close 承認とは別の人にコードレビューさせたい、のどれかに当たる repo。
 - 作業中の「🤖 作業中...」コメントは close 時に消すか、最終結果へ置き換える。
 

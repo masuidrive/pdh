@@ -10,6 +10,15 @@ on:
   pull_request_review:
     types: [submitted]
 
+# ⚠ 同じ issue で 2 つの run を同時に走らせない。走らせると 2 つの agent が同じ
+# agent/issue-<N> ブランチへ push を取り合い、進捗コメントを奪い合い、ラベルが往復する。
+# ticket 名は決定的なので ticket が二重になることは無いが、commit は競合する。
+# cancel-in-progress: false — 走っている方を殺さず、次を待たせる。人の 🤖 コメントは
+# «前の作業を捨てて» の意味ではないため。
+concurrency:
+  group: coding-robot-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   agent:
     # トリガー条件: :robot: または 🤖 を含むコメント・Issue・Pull Request

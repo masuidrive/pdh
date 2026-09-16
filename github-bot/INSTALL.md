@@ -95,3 +95,46 @@ done
 ## 5. 更新（再同期）
 
 machinery（vendor/）が github-bots 側で更新されたら、`github-bot/vendor/VENDOR.md` の手順で再同期し、commit id を更新する。`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull` は PDH 側で保守するので、`pdh-update` がこの repo の版を再配置する（手動なら「1. ファイルを配置する」の該当 4 行をコピーし直す）。vendor の `run-action.sh` には PDH 側の 5 行パッチ（`pdh-hooks.sh` の呼び出し）があり、再同期後に `VENDOR.md`「PDH 側の移植性パッチ」を再適用する。
+
+## 任意: 人のクリックを 1 回にする（`ATTACHMENTS_TOKEN`）
+
+`github_bot.close: pr-merge` を使うとき、**この secret があるかどうかで人の手数が変わる。**
+
+| | 人が押す回数 |
+|---|---|
+| `ATTACHMENTS_TOKEN` あり | **1**（Merge だけ） |
+| 無し | **2**（Approve and run → Merge） |
+
+⚠ **理由**: `GITHUB_TOKEN` が作った PR / 押した push では、`pull_request` と `synchronize` の
+workflow が **`action_required`（承認待ち）**になり、**人が «Approve and run» を押すまで走らない。**
+人の PAT で作れば作者・push 主が人になるので、**CI は自動で走る。**
+
+```bash
+gh secret set ATTACHMENTS_TOKEN --repo <owner>/<repo>
+```
+
+⚠ **この token は Issue の添付ファイル取得にも使われる**（`GITHUB_TOKEN` では取れない既知制約）。
+⚠ **repo scope の classic PAT を admin が発行すると、default branch の保護を bypass できる資格が
+agent の環境に入ることになる。**読み取りだけで足りるなら、**権限を絞った token を使うこと。**
+
+## 必要なラベル
+
+stage ラベル 8 段（`PDH-open` … `PDH-close`）に加えて、**`awaiting-reply`** を作る。
+
+```bash
+gh label create awaiting-reply --color d93f0b \
+  --description "bot が人の答えを待って止まっている（stage ラベルと同時に付く）"
+```
+
+⚠ **stage ラベルは «どこにいるか» しか言わない。**gate でない場所で止まったとき（非収束・blocker・
+質問・認証失敗）に «自分の番か» を一覧から見分けるのがこのラベルである。無い repo では hook が
+skip し、最終レポートの「導入検査で要追加」に出る。
+
+## default branch の保護（`pr-merge` を使う場合）
+
+- **PR を経由すること**を必須にする（`required_pull_request_reviews` を置く。⚠ **まるごと消すと
+  bot の直 push が復活する**）
+- **承認レビューは 0 件でよい。**⚠ **1 件以上にすると、bot が作った PR を人が承認する形になり、
+  クリックが 1 回増える**（作者は自分の PR を承認できないので、bot の self-merge は別途止まる）
+- **CI の job を必須チェックにする**（これが merge ボタンを塞ぐ gate になる）
+- `enforce_admins` は false のままにする（**人がローカルから `ticket.sh close` する経路を残すため**）

@@ -527,6 +527,13 @@ TIMEOUT_VALUE=$RUN_TIMEOUT_SECONDS
 # 実行（エンジン実装に委譲）。バックグラウンドで起動し ENGINE_PID をセットする。
 engine_run
 
+# ⚠ ここは engine を起動した直後で、進捗ループ（下）に入る前である。run が始まった＝bot の番なので
+# awaiting-reply を外す。⚠ **ループの後ろに置いてはならない** — そこは engine が終わった後であり、
+# 人が答えて run が動いている間ずっとラベルが «自分の番» と言い続ける。
+if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
+  bash "$SCRIPT_DIR/pdh-hooks.sh" start "$ISSUE_NUMBER" || true
+fi
+
 # GitHub Actions URL を取得
 ACTIONS_URL="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
@@ -602,6 +609,12 @@ done
 # handling below instead of tripping `set -e` / the ERR trap.
 ENGINE_EXIT_CODE=0
 wait $ENGINE_PID || ENGINE_EXIT_CODE=$?
+
+# ⚠ engine が止まったあとにも machinery が commit / push する経路がある（画像の後始末、
+# pdh-hooks の待ち行）。そこで head が動くと、その SHA には check が 1 つも付かない
+# （GITHUB_TOKEN の push は workflow を起動しない）。required status check が «Expected» の
+# まま埋まらず、PR の merge ボタンが押せなくなる。動いたかどうかをここで覚えておく。
+HEAD_BEFORE_POST=$(git rev-parse HEAD 2>/dev/null || echo "")
 
 echo "Engine finished with exit code: $ENGINE_EXIT_CODE"
 
@@ -804,6 +817,16 @@ ${SCREENSHOTS_BLOCK}"
       && [ -n "$HOOKED" ] && CLAUDE_OUTPUT_CLEAN="$HOOKED" || echo "Warning: pdh-hooks.sh failed; posting report unchanged"
   fi
 
+  # ⚠ machinery が head を動かしていたら、その SHA には check が付いていない。CI を起動し直す。
+  # 待たない — この run はもう終わるところで、待つと timeout を食う。
+  HEAD_AFTER_POST=$(git rev-parse HEAD 2>/dev/null || echo "")
+  if [ -n "$HEAD_BEFORE_POST" ] && [ -n "$HEAD_AFTER_POST" ] \
+     && [ "$HEAD_BEFORE_POST" != "$HEAD_AFTER_POST" ]; then
+    echo "⚠️ head moved after the engine finished; re-dispatching CI"
+    gh workflow run ci.yml --ref "$BRANCH_NAME" --repo "$GITHUB_REPOSITORY" \
+      || echo "Warning: failed to re-dispatch CI for $BRANCH_NAME"
+  fi
+
   # 最終結果を投稿（ブランチ情報付き）
   gh api -X PATCH repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID \
     -f body="$CLAUDE_OUTPUT_CLEAN
@@ -814,6 +837,12 @@ ${SCREENSHOTS_BLOCK}"
 📝 [View changes](https://github.com/$GITHUB_REPOSITORY/compare/main...$BRANCH_NAME)$PR_LINK"
 else
   echo "❌ Task failed with exit code $ENGINE_EXIT_CODE"
+
+  # ⚠ この経路では pdh-hooks の final が呼ばれない。止まっていて人の手が要るという意味は
+  # gate 停止と同じなので、失敗側からも awaiting-reply を付ける。
+  if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
+    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "$ISSUE_NUMBER" || true
+  fi
 
   # エラー詳細はエンジン実装が生成する
   ERROR_DETAILS="$(engine_error_details)"
