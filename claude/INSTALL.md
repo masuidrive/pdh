@@ -395,8 +395,11 @@ rm -rf tmp/pdh
    ```bash
    cd tmp/pdh && git diff <旧commit-id> HEAD -- <テンプレートファイルパス>
    ```
-   - **スキル（`.claude/skills/` 配下すべて）と PDH worker の agent 定義（`.claude/agents/pdh-*.md` / `.codex/agents/pdh-*.toml`）**: 常にテンプレートで上書きする。**どちらもプロジェクト固有のカスタマイズを持たない**（skill は共通ルール、agent 定義は skill を指す thin pointer）ので、`Based on` 行を持たず差分マージもしない。⚠ **`pdh-` で始まらない自前の agent 定義は上書きしない。**
-   - **github-bot レイヤー（`.github/coding-robot/_pdh.md` がある場合）**: `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `.claude/skills/pdh-gh-pull/` は skill と同じく毎回まるごと上書きする（`github-bot/INSTALL.md`「更新」）。vendor 由来の `.github/workflows/` と `.devcontainer/` はこの手順で触らない
+   - **PDH が配っている skill と、PDH worker の agent 定義（`.claude/agents/pdh-*.md` / `.codex/agents/pdh-*.toml`）**: 常にテンプレートで上書きする。**どちらもプロジェクト固有のカスタマイズを持たない**（skill は共通ルール、agent 定義は skill を指す thin pointer）ので、`Based on` 行を持たず差分マージもしない。⚠ **上書きするのは «この INSTALL の配置表に名前がある» ものだけである。**導入先は自前の skill を同じ `.claude/skills/` に置いている — 「配下すべて」と読むと**それが消える**。⚠ **`pdh-` で始まらない自前の agent 定義も上書きしない。**
+   - **github-bot レイヤー（`.github/coding-robot/_pdh.md` がある場合）**: 2 つに分かれる。
+     - **まるごと上書きする 4 つ** — `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `.claude/skills/pdh-gh-pull/`（`github-bot/INSTALL.md`「更新」）。⚠ **ただし導入先が `_pdh.md` を自分の設定（`github_bot.close` のモード・base branch 名）に固定して書き直している場合は、そこは差分マージにする。**
+     - ⚠ **残りの machinery は «diff してから» 反映する** — `.github/coding-robot/system.md` `_issue.md` `_pr.md` `run-action.sh` `engines/`、`.github/workflows/coding-robot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**導入先はここを意図して変えていることがある（repo 固有の規則を書いた節・action の SHA 固定・timeout・既存 devcontainer とのマージ結果）。**上流だけにある行を見て、取るべきものだけ取る。**
+       ⚠ **2026-09-17 に所有者が変わってから、この節は «触らない» ではなくなった。**それまで machinery は外部 repo からの vendoring で「この手順では触らない」ものだったので、導入先が書き足した節も自動的に守られていた。**いまは守られない。**
    - **CLAUDE.md**: `Based on` 行の commit ID 間の差分を取り、プロジェクト固有の設定（テストコマンド、ディレクトリ構造、チーム構成テーブル等）を保持しつつテンプレートの変更を反映する
    - **`Based on` 行を持たない配布物のうち、上書きでないもの (`scripts/fast-checks.sh` / `scripts/checks/README.md` / `scripts/hookbus.js`)**: この手順では拾えない。該当する変更は[既知の移行手順](#既知の移行手順)で個別に扱う
    - **`.ticket-config.yaml`**: ⚠ **`note_content` を独自化していないなら、差分マージより «テンプレートで全置換してから固有設定を戻す» ほうが確実。**戻すのは `tickets_dir` / `default_branch` / `branch_prefix` / `repository` / `auto_push` / `delete_remote_on_close` / `worktree_copy_files` / 各 `*_success_message`。⚠ **`note_content` に独自の節を足しているなら全置換してはならない** — その節がまるごと消える。その場合は差分マージにし、下の[既知の移行手順](#既知の移行手順)の確認コマンドで**トップレベルのキーを 1 つずつ見る。**大きなブロック（`note_content`）と数行のキーが同居するファイルを行単位で diff マージすると、**ブロックだけが入ってキーが落ちる**（実際に落ちた配布先がある）
