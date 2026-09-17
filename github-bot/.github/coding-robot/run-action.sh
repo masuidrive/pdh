@@ -770,9 +770,9 @@ PYEOF
       if git -c "http.https://github.com/.extraheader=" \
            push -q "https://x-access-token:${ATTACH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
            "HEAD:$BRANCH_NAME" 2>/dev/null; then
-        :
+        ARTIFACT_PUSH_AUTH=pat
       elif git push -q origin "$BRANCH_NAME" 2>/dev/null; then
-        :
+        ARTIFACT_PUSH_AUTH=github_token
       else
         echo "Warning: failed to push artifact cleanup"
       fi
@@ -843,11 +843,16 @@ ${SCREENSHOTS_BLOCK}"
       && [ -n "$HOOKED" ] && CLAUDE_OUTPUT_CLEAN="$HOOKED" || echo "Warning: pdh-hooks.sh failed; posting report unchanged"
   fi
 
-  # ⚠ machinery が head を動かしていたら、その SHA には check が付いていない。CI を起動し直す。
+  # ⚠ machinery が head を動かしていたら、その SHA の check が «走らないまま» のことがある。
+  # そうなるのは GITHUB_TOKEN で push したときで、その SHA の pull_request run は
+  # action_required（承認待ち）で止まり、人が «Approve and run» を押すまで動かない。
+  # ⚠ PAT で押せた場合は push / pull_request の run が普通に走るので、ここで dispatch すると
+  # **同じ SHA を 2 回**フルスイートに掛けることになる（実測）。
   # 待たない — この run はもう終わるところで、待つと timeout を食う。
   HEAD_AFTER_POST=$(git rev-parse HEAD 2>/dev/null || echo "")
   if [ -n "$HEAD_BEFORE_POST" ] && [ -n "$HEAD_AFTER_POST" ] \
-     && [ "$HEAD_BEFORE_POST" != "$HEAD_AFTER_POST" ]; then
+     && [ "$HEAD_BEFORE_POST" != "$HEAD_AFTER_POST" ] \
+     && [ "${ARTIFACT_PUSH_AUTH:-github_token}" != pat ]; then
     echo "⚠️ head moved after the engine finished; re-dispatching CI"
     gh workflow run ci.yml --ref "$BRANCH_NAME" --repo "$GITHUB_REPOSITORY" \
       || echo "Warning: failed to re-dispatch CI for $BRANCH_NAME"

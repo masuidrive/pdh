@@ -425,8 +425,10 @@ pull-request-title}}}}}
 ## Notes (optional)
 - [design decisions, alternatives, compatibility, rollout]
 
-Closes #[issue-number]   # ⚠ PDH mode: use `Refs` instead — `Closes` / `Fixes`
-                         # auto-closes the issue and skips the finalize workflow
+Refs #[issue-number]     # ⚠ PDH mode (github_bot.close: pr-merge / pr)
+Closes #[issue-number]   # ⚠ everything else
+# Pick ONE. In PDH mode `Closes` / `Fixes` auto-closes the issue and skips the
+# finalize workflow, which is what moves the ticket into tickets/done/.
 pull-request-body}}}}}
 ```
 
