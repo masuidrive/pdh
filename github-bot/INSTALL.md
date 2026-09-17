@@ -25,6 +25,13 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 
 `.gitignore` に `current-ticket.md` / `current-note.md`（作業ビュー symlink）が無ければ足す。
 
+⚠ **`scripts/checks/required-pdh-files.check` に、このレイヤーの分を足す。**core の配布物にはこのレイヤーが入っていないので、**`pdh-gh-pull` が消えても誰も検出しない。**`required_paths=` へ次の 2 つを加える（Codex CLI を使わないなら symlink の行は省く）。
+
+```
+.claude/skills/pdh-gh-pull/SKILL.md
+.agents/skills/pdh-gh-pull
+```
+
 ## 2. リポジトリ変数・secret を設定する
 
 engine を選び、その認証を入れる。**基本はサブスク（購読ログイン）で運用する** — Claude は `CLAUDE_CODE_OAUTH_TOKEN`、Codex は `CODEX_AUTH_JSON`。**API key 課金（`OPENAI_API_KEY`）は既定で使わない**（使うのは明示的に選んだときだけ）。

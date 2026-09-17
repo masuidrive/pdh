@@ -61,6 +61,7 @@ bash ticket.sh init
 | `tmp/pdh/codex/templates/dev-server.sh` | `scripts/dev-server.sh` | verify 用開発サーバー入口 |
 | `tmp/pdh/codex/templates/seed-pdh-verify.sh` | `scripts/seed-pdh-verify.sh` | verify 用 fixture seed hook |
 | `tmp/pdh/codex/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | ticket-local-test wrapper |
+| `tmp/pdh/codex/templates/spawn-worker.sh` | `scripts/spawn-worker.sh` | worker を «起動した shell 呼び出しの寿命» から切り離して走らせ、終わり方（rc・受けた signal）を必ず残す。`_execution-team.md`「並行起動」の実装（実行権限 `chmod +x` 要） |
 | `tmp/pdh/codex/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | ticket dir の progress.md と human gate の待ち行の検査（test-all の 1 段） |
 
 配置コマンド:

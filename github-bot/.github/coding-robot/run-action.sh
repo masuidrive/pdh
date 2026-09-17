@@ -540,10 +540,22 @@ ACTIONS_URL="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 # 開始時刻を記録（agent に渡したものと同じ値）
 START_TIME=$RUN_START_UNIX
 
-# 進捗を定期的に更新（10秒ごと）
+# 進捗コメントの更新間隔（秒）。既定 60。
+# ⚠ 10 秒固定だと 72 分の run で 385 回 PATCH していた（実測 = 約 321 回/時）。
+# GITHUB_TOKEN の上限は 1,000 リクエスト/時/repo なので、進捗表示だけで予算の 3 分の 1 を
+# 固定で持っていき、agent 自身の gh 呼び出しと CI 待ちのポーリングと食い合う。
+# ⚠ **engine の生存確認は 10 秒のまま** — そこを伸ばすと終了検知が遅れ、PR の作成が後ろへずれる。
+PROGRESS_UPDATE_INTERVAL=${PROGRESS_UPDATE_INTERVAL:-60}
+case "$PROGRESS_UPDATE_INTERVAL" in ''|*[!0-9]*) echo "❌ PROGRESS_UPDATE_INTERVAL must be an integer"; exit 1 ;; esac
+[ "$PROGRESS_UPDATE_INTERVAL" -ge 10 ] || { echo "❌ PROGRESS_UPDATE_INTERVAL must be >= 10 seconds"; exit 1; }
+
 UPDATE_COUNT=0
+LAST_UPDATE_AT=0
 while kill -0 $ENGINE_PID 2>/dev/null; do
   sleep 10
+  NOW_UNIX=$(date +%s)
+  [ $((NOW_UNIX - LAST_UPDATE_AT)) -ge "$PROGRESS_UPDATE_INTERVAL" ] || continue
+  LAST_UPDATE_AT=$NOW_UNIX
   UPDATE_COUNT=$((UPDATE_COUNT + 1))
 
   # 経過時間を計算（MM:SS形式）

@@ -82,6 +82,7 @@ bash ticket.sh init
 | `tmp/pdh/claude/templates/agents/codex/` | `.codex/agents/` | PDH worker の agent 定義（Codex CLI 用。read-only 役を `sandbox_mode` で機構化する。Codex CLI を使わないなら省略してよい） |
 | `tmp/pdh/claude/templates/product-brief.md` | `product-brief.md` | Product Brief テンプレート |
 | `tmp/pdh/claude/templates/technical-reference.md` | `technical-reference.md` | Technical Reference テンプレート（現在の実装の How。運用は `docs/product-delivery-hierarchy.md` 参照） |
+| `tmp/pdh/claude/templates/spawn-worker.sh` | `scripts/spawn-worker.sh` | worker を «起動した shell 呼び出しの寿命» から切り離して走らせ、終わり方（rc・受けた signal）を必ず残す。`_execution-team.md`「並行起動」の実装（実行権限 `chmod +x` 要） |
 | `tmp/pdh/claude/scripts/hookbus.js` | `scripts/hookbus.js` | tmux worker hook event bus (実行権限 `chmod +x` 要) — README「tmux Director」参照 |
 
 コピー時に、各ファイル末尾の `Based on` 行の `XXXXXXX` を `tmp/pdh` の HEAD commit ID（7 桁）に置換する。
