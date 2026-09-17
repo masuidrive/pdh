@@ -323,7 +323,13 @@ End with a question or proposal — never a silent finish.
 
 ## PR Metadata (REQUIRED when code was committed and PD-C-9 verified)
 
-**The bot never calls `gh pr create` directly.** PRs are created by the
+⚠ **In PDH mode with `github_bot.close: pr-merge`, the bot DOES call `gh pr create`**
+— the PR is where the close gate lives, so it must exist before approval, and its
+body says `Refs #N` (never `Closes` / `Fixes`, which would skip the finalize
+workflow). See `_pdh.md` and `_github-issue.md`. The paragraph below describes the
+non-PDH default only.
+
+**Outside PDH mode the bot never calls `gh pr create` directly.** PRs are created by the
 user clicking a one-click `📋 Create Pull Request` link that the harness
 appends below your comment whenever you emit PR-metadata markers. Your
 job is to write the markers; the harness builds the link; the user

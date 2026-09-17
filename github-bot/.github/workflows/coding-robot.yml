@@ -19,6 +19,10 @@ concurrency:
   group: coding-robot-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: false
 
+# ⚠ 使う action は commit SHA で固定する。tag（@v5 等）は動かせるので、同じ workflow が
+# «いつ走ったか» で別のコードを実行しうる。この bot は repo の書き込み権限と engine の
+# 認証情報を持って走るので、そこは固定しておく。末尾のコメントが人間向けの版表示。
+
 jobs:
   agent:
     # トリガー条件: :robot: または 🤖 を含むコメント・Issue・Pull Request
@@ -67,14 +71,14 @@ jobs:
 
       # ステップ2: コードチェックアウト
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       # ステップ3: GHCR にログイン（イメージキャッシュ用）
       - name: Login to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -83,7 +87,7 @@ jobs:
       # ステップ4: devcontainer で実行
       - name: Run Agent in devcontainer
         id: run_claude
-        uses: devcontainers/ci@v0.3
+        uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca # v0.3.1900000450
         with:
           configFile: .devcontainer/devcontainer.json
           imageName: ghcr.io/${{ github.repository }}/devcontainer-ci
@@ -97,6 +101,7 @@ jobs:
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
             CODEX_MODEL=${{ vars.CODEX_MODEL }}
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            ATTACHMENTS_TOKEN=${{ secrets.ATTACHMENTS_TOKEN }}
             FIREBASE_TOKEN=${{ secrets.FIREBASE_TOKEN }}
             ENV_JSON=${{ secrets.ENV_JSON }}
             GITHUB_REPOSITORY=${{ github.repository }}
@@ -105,7 +110,7 @@ jobs:
             EVENT_TYPE=${{ github.event_name }}
             COMMENT_ID=${{ github.event.comment.id }}
             DEVCONTAINER_CONFIG_PATH=.devcontainer/devcontainer.json
-            CLAUDE_TIMEOUT=5400
+            CLAUDE_TIMEOUT=${{ vars.CODING_ROBOT_TIMEOUT || 5400 }}
           runCmd: |
             # Run Agent
             ./.github/coding-robot/run-action.sh

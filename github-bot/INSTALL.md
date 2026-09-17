@@ -39,6 +39,10 @@ engine を選び、その認証を入れる。**基本はサブスク（購読�
 ```bash
 # engine を選ぶ（claude か codex。未設定だと workflow は fail-fast する）
 gh variable set CODING_ROBOT_ENGINE --body 'claude'     # or 'codex'
+
+# 1 run の上限（秒）。既定 5400（90 分）。⚠ 実装 → review → verify → PR まで通す run は
+# 70 分を超えることがあり、既定だと途中で殺される。長めに取るなら設定する
+gh variable set CODING_ROBOT_TIMEOUT --body '10800'
 ```
 
 engine 別の認証 secret:
