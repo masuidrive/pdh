@@ -2,7 +2,7 @@
 
 PDH の **オプション**。GitHub Issue を «エンジニアとの会話面» にし、🤖 コメントで続きの処理を GitHub Actions 上の agent（[github-bots](https://github.com/masuidrive/github-bots) の coding-robot）に回す。**このレイヤーを入れなくても PDH core は完全に動く。** 入れるかは任意で、入れたプロジェクトだけが GitHub Actions を要求する。
 
-これは core の `claude/INSTALL.md` / `codex/INSTALL.md` とは別経路。導入後は `pdh-update` が PDH 保守分（`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/`）を毎回上流の版で置き換える。vendor の machinery は「5. 更新」で再同期する。
+これは core の `claude/INSTALL.md` / `codex/INSTALL.md` とは別経路。導入後は `pdh-update` が PDH 保守分（`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/`）を毎回上流の版で置き換える。machinery（`github-bot/.github/` と `github-bot/.devcontainer/`）も PDH が所有しているので、同じ更新で置き換わる。
 
 ## 前提
 
@@ -15,11 +15,11 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 
 | コピー元（この repo） | コピー先（あなたの project） | 役割 |
 |---|---|---|
-| `github-bot/vendor/.github/` | `.github/` | workflow 2 本・coding-robot 一式（machinery） |
-| `github-bot/vendor/.devcontainer/` | `.devcontainer/` | Actions が使う devcontainer。**既存の devcontainer があればマージ**（上書き前に diff を確認） |
-| `github-bot/_pdh.md` | `.github/coding-robot/_pdh.md` | **PDH mode を定義する**（vendor の古い `_pdh.md` は使わない） |
+| `github-bot/.github/` | `.github/` | workflow 2 本・coding-robot 一式（machinery） |
+| `github-bot/.devcontainer/` | `.devcontainer/` | Actions が使う devcontainer。**既存の devcontainer があればマージ**（上書き前に diff を確認） |
+| `github-bot/_pdh.md` | `.github/coding-robot/_pdh.md` | **PDH mode を定義する**（machinery 側には `_pdh.md` を置かない） |
 | `github-bot/_github-issue.md` | `.github/coding-robot/_github-issue.md` | gate→issue プロトコル（cloud / local 共通） |
-| `github-bot/pdh-hooks.sh` | `.github/coding-robot/pdh-hooks.sh` | runner hook。progress.md の作成・stage ラベル・承認導線・待ち行・導入検査を、agent の申告に依らず run の終わりに保証する（vendor の `run-action.sh` が呼ぶ） |
+| `github-bot/pdh-hooks.sh` | `.github/coding-robot/pdh-hooks.sh` | runner hook。progress.md の作成・stage ラベル・承認導線・待ち行・導入検査を、agent の申告に依らず run の終わりに保証する（`run-action.sh` が呼ぶ） |
 | `github-bot/pdh-gh-pull/` | `.claude/skills/pdh-gh-pull/`（Codex は `.codex/skills/pdh-gh-pull/`） | 「issue 読みに行く」skill。core skill と同じ流儀で symlink する場合はそれに合わせる |
 | `github-bot/.ticket-config.snippet.yaml` の中身 | `.ticket-config.yaml` の末尾へ追記 | `github_bot:` 設定 |
 
@@ -45,7 +45,7 @@ engine 別の認証 secret:
   codex login && jq -c . ~/.codex/auth.json | gh secret set CODEX_AUTH_JSON
   ```
   ⚠ 同じアカウントの `auth.json` を手元の `codex` でも使うと、片方が refresh した時点でもう片方の refresh token が失効する（Actions 側が `refresh token was already used` で落ちる。smoke 実測）。落ちたら上のコマンドで secret を入れ直す。
-  `OPENAI_API_KEY`（API 課金）という別路も machinery は受け付けるが、**この運用では使わない**。サブスク運用では `OPENAI_API_KEY` secret は設定しない（vendored workflow が空で渡すのは無害）。
+  `OPENAI_API_KEY`（API 課金）という別路も machinery は受け付けるが、**この運用では使わない**。サブスク運用では `OPENAI_API_KEY` secret は設定しない（workflow が空で渡すのは無害）。
 
 project 固有の env が要るテストがあるなら、まとめて 1 つの secret に:
 ```bash
@@ -94,7 +94,7 @@ done
 
 ## 5. 更新（再同期）
 
-machinery（vendor/）が github-bots 側で更新されたら、`github-bot/vendor/VENDOR.md` の手順で再同期し、commit id を更新する。`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull` は PDH 側で保守するので、`pdh-update` がこの repo の版を再配置する（手動なら「1. ファイルを配置する」の該当 4 行をコピーし直す）。vendor の `run-action.sh` には PDH 側の 5 行パッチ（`pdh-hooks.sh` の呼び出し）があり、再同期後に `VENDOR.md`「PDH 側の移植性パッチ」を再適用する。
+**coding-robot 一式は PDH が所有している**（`github-bot/ROBOT.md`）。machinery も PDH 保守分（`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull`）も、`pdh-update` がこの repo の版を再配置する（手動なら「1. ファイルを配置する」の行をコピーし直す）。⚠ **外部 repo との再同期はもう無い** — 2026-09-17 に github-bots からの取り込みをやめ、`github-bot/` 配下が直す場所になった。
 
 ## 任意: 人のクリックを 1 回にする（`ATTACHMENTS_TOKEN`）
 
