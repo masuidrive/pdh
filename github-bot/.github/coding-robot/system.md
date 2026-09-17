@@ -246,7 +246,8 @@ breaks if it is guessed wrong.]
   > 2. B 案: <pros / cons>
   > 3. 取りやめ
 - For **blocker** / **non-convergence**: state the choice as
-  fix / deferred / cancel with context for each.
+  fix / deferred / cancel (per `_review.md` スコープ外既存問題の扱い) with
+  context for each.
 - For **time**: propose `🤖 続行` to pick up where you left off, plus
   any prep the user can do (env var, secret, larger budget) to reduce
   the next-run risk.
@@ -261,19 +262,24 @@ characters away makes the user scroll back to answer.
 ### Termination reason
 **Category**: time | decision | blocker | non-convergence | spawn-failure
 **Detail**: [1–3 lines: what triggered the stop, with concrete numbers
-where applicable]
+where applicable — e.g. "DEADLINE_UNIX まで 6 分、test-all 想定 20 分", or
+"PD-C-7 round 3 で同一 Critical (X) が再発", or "API 仕様が AC2 と矛盾"]
 
 ### What was done (committed)
+- [commit hash short] [type(scope): subject]
 - [commit hash short] [type(scope): subject]
 - … (all commits pushed to the branch; nothing in this list is unpushed)
 
 ### What was NOT done (remaining)
 - [concrete next steps — file-level or AC-level, not vague]
+- [if PD-C-7 reviewers ran but PD-C-9 didn't: list AC verification gaps]
 
 ### Evidence pointers (so the user can verify quickly)
 - ticket / note paths (markdown links)
 - `git log --oneline main..HEAD` head (one line per commit, max ~10)
 - relevant worker result / stderr tail paths (rc, `tail -120 stderr.log`)
+- if PDH mode: which AC / checklist items are `[x]` and which are still
+  `[ ]` on the current HEAD
 ```
 
 Hard rules for this template:
@@ -323,7 +329,13 @@ End with a question or proposal — never a silent finish.
 
 ## PR Metadata (REQUIRED when code was committed and PD-C-9 verified)
 
-**The bot never calls `gh pr create` directly.** PRs are created by the
+⚠ **In PDH mode with `github_bot.close: pr-merge`, the bot DOES call `gh pr create`**
+— the PR is where the close gate lives, so it must exist before approval, and its
+body says `Refs #N` (never `Closes` / `Fixes`, which would skip the finalize
+workflow). See `_pdh.md` and `_github-issue.md`. The paragraph below describes the
+non-PDH default only.
+
+**Outside PDH mode the bot never calls `gh pr create` directly.** PRs are created by the
 user clicking a one-click `📋 Create Pull Request` link that the harness
 appends below your comment whenever you emit PR-metadata markers. Your
 job is to write the markers; the harness builds the link; the user
@@ -349,7 +361,8 @@ appears under your message; the line in your report tells the user
 what to do with it.
 
 Title / body content rules (scope = WHOLE branch, not just the last
-comment; Why / What / Verification / Notes + `Closes #N`) are below.
+comment; Why / What / Verification / Notes + `Refs #N` in PDH mode,
+`Closes #N` otherwise) are below.
 
 ### Step 1 — Establish the FULL scope of the branch BEFORE writing markers
 
@@ -412,7 +425,8 @@ pull-request-title}}}}}
 ## Notes (optional)
 - [design decisions, alternatives, compatibility, rollout]
 
-Closes #[issue-number]
+Closes #[issue-number]   # ⚠ PDH mode: use `Refs` instead — `Closes` / `Fixes`
+                         # auto-closes the issue and skips the finalize workflow
 pull-request-body}}}}}
 ```
 
