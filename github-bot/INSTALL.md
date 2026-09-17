@@ -105,7 +105,16 @@ done
 
 ## 5. 更新（再同期）
 
-**coding-robot 一式は PDH が所有している**（`github-bot/ROBOT.md`）。machinery も PDH 保守分（`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull`）も、`pdh-update` がこの repo の版を再配置する（手動なら「1. ファイルを配置する」の行をコピーし直す）。⚠ **外部 repo との再同期はもう無い** — 2026-09-17 に github-bots からの取り込みをやめ、`github-bot/` 配下が直す場所になった。
+**coding-robot 一式は PDH が所有している**（`github-bot/ROBOT.md`）。⚠ **外部 repo との再同期はもう無い** — 2026-09-17 に github-bots からの取り込みをやめ、`github-bot/` 配下が直す場所になった。
+
+更新のときの扱いは 2 つに分かれる。
+
+- **まるごと置き換える 4 つ** — `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/`。⚠ ただし `_pdh.md` を自分の設定（`github_bot.close` のモード・base branch 名）に固定して書き直しているなら、そこは差分マージにする。
+- ⚠ **machinery は «diff してから» 反映する** — `.github/coding-robot/system.md` `_issue.md` `_pr.md` `run-action.sh` `engines/`、`.github/workflows/coding-robot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**
+
+**守るのは «導入先が意図して変えた場所が、更新で黙って消えないこと» である。**⚠ **所有者が PDH に変わるまで、machinery は「この手順では触らない」ものだった**ので、導入先の書き足しは自動的に守られていた。**いまは守られない** — 名前で選んで diff する以外に守る機構は無い。
+
+⚠ **repo 固有の規則を machinery のファイルに書かない。**書くと更新のたびに «上流に無い節» として揺れる。置き場所は `CLAUDE.md` / `AGENTS.md` である（bot はそれを読む）。
 
 ## 任意: 人のクリックを 1 回にする（`ATTACHMENTS_TOKEN`）
 
