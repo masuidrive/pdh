@@ -246,7 +246,8 @@ breaks if it is guessed wrong.]
   > 2. B 案: <pros / cons>
   > 3. 取りやめ
 - For **blocker** / **non-convergence**: state the choice as
-  fix / deferred / cancel with context for each.
+  fix / deferred / cancel (per `_review.md` スコープ外既存問題の扱い) with
+  context for each.
 - For **time**: propose `🤖 続行` to pick up where you left off, plus
   any prep the user can do (env var, secret, larger budget) to reduce
   the next-run risk.
@@ -261,14 +262,17 @@ characters away makes the user scroll back to answer.
 ### Termination reason
 **Category**: time | decision | blocker | non-convergence | spawn-failure
 **Detail**: [1–3 lines: what triggered the stop, with concrete numbers
-where applicable]
+where applicable — e.g. "DEADLINE_UNIX まで 6 分、test-all 想定 20 分", or
+"PD-C-7 round 3 で同一 Critical (X) が再発", or "API 仕様が AC2 と矛盾"]
 
 ### What was done (committed)
+- [commit hash short] [type(scope): subject]
 - [commit hash short] [type(scope): subject]
 - … (all commits pushed to the branch; nothing in this list is unpushed)
 
 ### What was NOT done (remaining)
 - [concrete next steps — file-level or AC-level, not vague]
+- [if PD-C-7 reviewers ran but PD-C-9 didn't: list AC verification gaps]
 
 ### Evidence pointers (so the user can verify quickly)
 - ticket / note paths (markdown links)
