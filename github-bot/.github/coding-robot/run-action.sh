@@ -749,7 +749,21 @@ PYEOF
     while IFS= read -r bf; do [ -n "$bf" ] && git rm -q --ignore-unmatch "$bf" >/dev/null 2>&1 || true; done <<< "$IMG_FILES"
     if ! git diff --cached --quiet 2>/dev/null; then
       git commit -q -m "chore: move review image artifacts off $BRANCH_NAME to bot-artifacts"
-      git push -q origin "$BRANCH_NAME" 2>/dev/null || echo "Warning: failed to push artifact cleanup"
+      # ⚠ この push は PAT ($ATTACH_TOKEN) で行う。GITHUB_TOKEN で push すると、その SHA の
+      # pull_request / synchronize の run が action_required（承認待ち）になり、人が
+      # «Approve and run» を押すまで走らない。この push は run の最後に来ることがあるので、
+      # そのとき PR は «緑にできない» 状態で人に渡る（実測 2026-09-17）。
+      # extraheader は actions/checkout が仕込む Authorization。消さないと Duplicate header で
+      # 落ちるが、--unset-all だと後続の git 操作まで巻き添えになるので -c で 1 コマンドだけ外す。
+      if git -c "http.https://github.com/.extraheader=" \
+           push -q "https://x-access-token:${ATTACH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+           "HEAD:$BRANCH_NAME" 2>/dev/null; then
+        :
+      elif git push -q origin "$BRANCH_NAME" 2>/dev/null; then
+        :
+      else
+        echo "Warning: failed to push artifact cleanup"
+      fi
     fi
   fi
 

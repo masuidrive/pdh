@@ -22,9 +22,9 @@ required=(
   github-bot/INSTALL.md
   github-bot/.ticket-config.snippet.yaml
   github-bot/pdh-gh-pull/SKILL.md
-  github-bot/vendor/VENDOR.md
-  github-bot/vendor/.github/workflows/coding-robot.yml
-  github-bot/vendor/.github/coding-robot/run-action.sh
+  github-bot/ROBOT.md
+  github-bot/.github/workflows/coding-robot.yml
+  github-bot/.github/coding-robot/run-action.sh
 )
 for f in "${required[@]}"; do
   if [ ! -f "$f" ]; then
@@ -65,9 +65,9 @@ fi
 # run-action.sh は system prompt へ _pdh.md «だけ» を append する（_github-issue.md は
 # agent が Read する前提で append しない）。よって「gate 停止句が _pdh.md に在る」かつ
 # 「run-action.sh が PDH project で _pdh.md を append する」の 2 つが揃って初めて、停止指示
-# が agent に必ず届く。上で前者を検査済み。ここで後者（vendored 機構がその append を今も
+# が agent に必ず届く。上で前者を検査済み。ここで後者（machinery がその append を今も
 # するか）を検査する。upstream の再同期で detection/append が変わればここが落ちて気づける。
-ra="github-bot/vendor/.github/coding-robot/run-action.sh"
+ra="github-bot/.github/coding-robot/run-action.sh"
 if [ -f "$ra" ]; then
   if ! grep -q 'product-brief.md' "$ra" || ! grep -q -- '-d tickets' "$ra"; then
     printf 'github-bot: run-action.sh の PDH 検出（product-brief.md && tickets/）が見当たらない\n' >&2
@@ -84,9 +84,12 @@ if [ -f "$ra" ]; then
   fi
 fi
 
-# --- vendor の出どころ commit が VENDOR.md に固定されているか ---
-if [ -f github-bot/vendor/VENDOR.md ] && ! grep -qE 'commit.*[0-9a-f]{40}' github-bot/vendor/VENDOR.md; then
-  printf 'github-bot: vendor/VENDOR.md に取り込み元 commit（40 hex）が無い\n' >&2
+# --- 所有と «直す場所» が ROBOT.md に書かれているか ---
+# ⚠ かつてここは «取り込み元 commit（40 hex）が固定されているか» を検査していた。2026-09-17 に
+# github-bots からの取り込みをやめ PDH が所有者になったので、固定する相手が消えた。代わりに
+# «ここが直す場所である» と書いてあることを守る — それが消えると、次に読む人が上流を探しに行く。
+if [ -f github-bot/ROBOT.md ] && ! grep -q '直すのはここである' github-bot/ROBOT.md; then
+  printf 'github-bot: ROBOT.md に «直すのはここである» が無い（所有の宣言が消えている）\n' >&2
   failed=1
 fi
 
@@ -95,7 +98,7 @@ fi
 # 案内できることが利用体験の要。machinery 側に既存（_claude.sh / _codex.sh の Authentication
 # Error）。re-sync で消えると «認証切れが分かりにくい失敗» に戻るので、存在を守る。
 for e in _claude _codex; do
-  f="github-bot/vendor/.github/coding-robot/engines/${e}.sh"
+  f="github-bot/.github/coding-robot/engines/${e}.sh"
   if [ -f "$f" ]; then
     if ! grep -q 'Authentication Error' "$f"; then
       printf 'github-bot: %s に認証エラーコメント（Authentication Error）が無い\n' "$f" >&2
@@ -112,15 +115,15 @@ done
 # --- 移植性パッチ: devcontainer の workspaceFolder が固定パスか（re-sync で戻ると任意 repo で落ちる）---
 # upstream は repo 名依存の ${localWorkspaceFolderBasename} で、compose の既定(/workspaces/project)と
 # 食い違い devcontainer exec が落ちる（smoke 実測。VENDOR.md「PDH 側の移植性パッチ」）。固定形を守る。
-dc="github-bot/vendor/.devcontainer/devcontainer.json"
+dc="github-bot/.devcontainer/devcontainer.json"
 if [ -f "$dc" ] && grep -q 'workspaceFolder.*localWorkspaceFolderBasename' "$dc"; then
   printf 'github-bot: devcontainer.json の workspaceFolder が repo 名依存に戻っている（compose mount と食い違い任意 repo で落ちる。VENDOR.md 参照）\n' >&2
   failed=1
 fi
 
-# --- stale の再混入検出: vendor の古い _pdh.md を取り込んでいないか ---
-if [ -f github-bot/vendor/.github/coding-robot/_pdh.md ]; then
-  printf 'github-bot: vendor に _pdh.md がある（古い版。PDH は github-bot/_pdh.md を正とし vendor には置かない）\n' >&2
+# --- stale の再混入検出: machinery 側に古い _pdh.md が紛れていないか ---
+if [ -f github-bot/.github/coding-robot/_pdh.md ]; then
+  printf 'github-bot: machinery 側に _pdh.md がある（PDH は github-bot/_pdh.md を持ち、machinery 側には置かない）\n' >&2
   failed=1
 fi
 
@@ -128,4 +131,4 @@ if [ "$failed" -ne 0 ]; then
   printf 'check-github-bot: FAILED\n' >&2
   exit 1
 fi
-printf 'check-github-bot: files present, gate-stop guard present & wired into prompt, vendor pinned\n'
+printf 'check-github-bot: files present, gate-stop guard present & wired into prompt, ownership declared\n'

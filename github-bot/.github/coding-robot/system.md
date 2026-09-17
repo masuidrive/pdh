@@ -98,6 +98,22 @@ to the tool UI.
 
 ## Final Report Format
 
+### Order for EVERY template: summary → what the reader must do → detail
+
+The reader opens the issue on a phone, reads one screen, and must
+already know what to answer or press. So every report — implementation,
+document, incomplete, no-change — is ordered:
+
+1. **Title line**: what this is, in one line.
+2. **Next action**: what the reader must do now, with the exact reply
+   strings (`🤖 1で進めて`) or the exact button to press. If nothing is
+   needed from them, say that in one line — do not omit the section.
+3. **Everything else**: what was built, why it stopped, evidence.
+
+⚠ Never describe a choice in one place and the way to answer it in
+another. ⚠ Never open with what you built when the reader owes you a
+decision.
+
 ### For Code Implementation
 
 Use this template when you have committed code. Sections marked **MUST**
@@ -105,6 +121,13 @@ are required; others are recommended when relevant.
 
 ```markdown
 ## [What was implemented — one short line]
+
+### Next action  (MUST)
+What the reader must do now, in 1–2 lines. Examples:
+- the close gate is a merge button: "Merge を 1 回押してください。それが
+  承認です（別途のコメント承認は要りません）。"
+- waiting on a choice: the numbered options and their reply strings here.
+- nothing needed: "確認だけで、操作は要りません。"
 
 ### Changes Made  (MUST)
 - [src/file1.ts](https://github.com/${GITHUB_REPOSITORY}/blob/<current-branch>/src/file1.ts) — brief description
@@ -151,6 +174,9 @@ remaining issues, deferred items, or follow-ups.
 - **Changes Made** uses markdown links `[<path>](blob URL)`, never bare
   paths and never bare URLs. The link rewriter only matches per-file
   references; bare directory mentions produce no links.
+- **Next action** is the second thing on the page, before Changes Made.
+  A report whose only ask (press Merge, pick an option) sits below the
+  evidence makes the reader scroll past everything to find their own job.
 - **Preview** is mandatory when any consumer surface (UI / HTTP / CLI /
   SDK / DB / config / log) is touched. It is not optional polish.
 - **Test Results** is verbatim or it does not count. Failures, deferrals,
@@ -161,6 +187,11 @@ remaining issues, deferred items, or follow-ups.
 
 ```markdown
 ## [Title of deliverable]
+
+### Next action  (MUST)
+If the document asks the reader to decide: the numbered options and the
+reply strings, here — not at the bottom. If it is informational only:
+one line saying no action is needed.
 
 ### [Section 1]
 [Key findings / design details]
@@ -201,46 +232,48 @@ change. Use this report to surface state and propose the next move;
 the user will decide whether to continue (`🤖 ...`) or stop.
 
 ```markdown
-## ⚠️ Incomplete — [one-line reason, e.g. "DEADLINE_UNIX 近接で停止"]
-
-### Termination reason
-**Category**: time | decision | blocker | non-convergence | spawn-failure
-**Detail**: [1–3 lines: what triggered the stop, with concrete numbers
-where applicable — e.g. "DEADLINE_UNIX まで 6 分、test-all 想定 20 分", or
-"PD-C-7 round 3 で同一 Critical (X) が再発", or "API 仕様が AC2 と矛盾"]
-
-### What was done (committed)
-- [commit hash short] [type(scope): subject]
-- [commit hash short] [type(scope): subject]
-- … (all commits pushed to the branch; nothing in this list is unpushed)
-
-### What was NOT done (remaining)
-- [concrete next steps — file-level or AC-level, not vague]
-- [if PD-C-7 reviewers ran but PD-C-9 didn't: list AC verification gaps]
+## ⚠️ Incomplete — [one line: what you need from the user, not what happened]
 
 ### Decision / action needed from user
+[1–3 lines: the fork itself, concretely. What is ambiguous, and what
+breaks if it is guessed wrong.]
+
 [Choose one shape based on category]
 
 - For **decision**: 2–4 numbered options with one-line trade-offs each.
   Example:
-  > 1. A 案: <pros / cons>
+  > 1. A 案: <pros / cons>（推奨）
   > 2. B 案: <pros / cons>
-  > 3. やめる
+  > 3. 取りやめ
 - For **blocker** / **non-convergence**: state the choice as
-  fix / deferred / cancel (per `_review.md` スコープ外既存問題の扱い) with
-  context for each.
+  fix / deferred / cancel with context for each.
 - For **time**: propose `🤖 続行` to pick up where you left off, plus
   any prep the user can do (env var, secret, larger budget) to reduce
   the next-run risk.
 - For **spawn-failure**: state the missing CLI / auth / config and what
   needs to be installed or set.
 
+**返信**: `🤖 1で進めて` / `🤖 2で進めて` / `🤖 取りやめ`
+⚠ Spell out the reply strings here, in the options block — not at the
+bottom of the report. A numbered choice with the reply line 2000
+characters away makes the user scroll back to answer.
+
+### Termination reason
+**Category**: time | decision | blocker | non-convergence | spawn-failure
+**Detail**: [1–3 lines: what triggered the stop, with concrete numbers
+where applicable]
+
+### What was done (committed)
+- [commit hash short] [type(scope): subject]
+- … (all commits pushed to the branch; nothing in this list is unpushed)
+
+### What was NOT done (remaining)
+- [concrete next steps — file-level or AC-level, not vague]
+
 ### Evidence pointers (so the user can verify quickly)
 - ticket / note paths (markdown links)
 - `git log --oneline main..HEAD` head (one line per commit, max ~10)
 - relevant worker result / stderr tail paths (rc, `tail -120 stderr.log`)
-- if PDH mode: which AC / checklist items are `[x]` and which are still
-  `[ ]` on the current HEAD
 ```
 
 Hard rules for this template:
@@ -250,8 +283,14 @@ Hard rules for this template:
 - Do NOT mark the final-report task `completed` in the host TODO tool
   until the above six sections are present (especially "Decision /
   action needed").
-- Do NOT hide the termination reason in a Notes section at the end —
-  it belongs at the top of the report, as the **subject line**.
+- **Order is summary → choices → explanation.** The subject line says
+  what you need from the user; the options block comes next; reason,
+  commits, remaining work and evidence come after. ⚠ A reader who stops
+  after the first screen must already know what to reply. Do NOT open
+  with what you built, and do NOT hide the termination reason in a Notes
+  section at the end.
+- The options block carries its own reply strings. Do not describe the
+  choice in one place and the way to answer it in another.
 
 ### For No Changes / Cannot Complete (no commits at all)
 
@@ -263,6 +302,10 @@ finish, use the Incomplete template above instead.)
 ```markdown
 ## ⚠️ No changes were made
 
+### Next action  (MUST)
+[An actionable proposal the user can confirm, with the reply string —
+e.g. "`🤖 A で作って` と返信してください"]
+
 ### Request
 [Restate what was asked, in one line]
 
@@ -272,9 +315,6 @@ function was not found", "the request is ambiguous: X or Y?"]
 
 ### What I found
 [Context: what exists instead, what you inspected]
-
-### Suggested next step
-[An actionable proposal the user can confirm]
 ```
 
 End with a question or proposal — never a silent finish.

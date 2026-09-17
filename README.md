@@ -245,7 +245,7 @@ pdh/
   codex/                             ← Codex CLI 用の配布セット（同じ構成。入口は AGENTS.md、agent 定義は .codex/agents/*.toml）
   github-bot/                        ← GitHub Issues + Actions bot レイヤー【任意・engine 中立。有効化した人だけが配置】
     INSTALL.md  _pdh.md  _github-issue.md  pdh-hooks.sh  pdh-gh-pull/  .ticket-config.snippet.yaml
-    vendor/                          ← github-bots から取り込んだ machinery（workflow / devcontainer。VENDOR.md に取り込み元 commit）
+    .github/  .devcontainer/  ROBOT.md ← coding-robot の実体（workflow / runner / devcontainer）。直すのはここ
   evals/                             ← 評価【配布物ではない。両セット共通】
     eval-*.md  fixtures/  examples.md
     private/                         ← 実案件の切り出し再生（private repo pdh-eval の checkout。git 管理外）
