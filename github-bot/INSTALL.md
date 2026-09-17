@@ -137,6 +137,50 @@ gh label create awaiting-reply --color d93f0b \
 質問・認証失敗）に «自分の番か» を一覧から見分けるのがこのラベルである。無い repo では hook が
 skip し、最終レポートの「導入検査で要追加」に出る。
 
+## 既に CI がある repo — 同じ commit を 2 回走らせていないか確かめる
+
+**守るのは «bot が回す CI が、既存 CI と二重にならないこと» である。**
+
+bot は自分でフルスイートを回さない。⚠ **回すのは repo の既存 CI で、bot はその緑を待つだけである。**
+そのため、**既存 CI の trigger 次第で同じ commit が 2 回走る。**
+
+```yaml
+on:
+  pull_request:          # ← bot が作った PR で走る
+  push:
+    branches: [main, "agent/issue-*"]   # ← 同じ commit の push でも走る
+```
+
+この形だと、bot の push 1 回につき **`push` 側と `pull_request` 側の 2 本**が同じ内容を回す。⚠ **merge
+ボタンを解除するのは `pull_request` 側だけ**なので、`push` 側は待ち時間と Actions の時間を増やすだけになる。
+
+導入時に既存の workflow を開いて、**`agent/issue-*`（bot の branch）が push trigger に入っているか**を見る。
+入っているなら、**PR がある間は重い step を飛ばす。**
+
+```yaml
+- name: Detect whether the full suite must run
+  env:
+    EVENT: ${{ github.event_name }}
+    REF_NAME: ${{ github.ref_name }}
+    GH_TOKEN: ${{ github.token }}      # permissions に pull-requests: read が要る
+  run: |
+    case "$EVENT:$REF_NAME" in
+      push:agent/issue-*)
+        if [ "$(gh pr list --head "$REF_NAME" --state open --json number --jq 'length')" -gt 0 ]; then
+          echo "open PR exists → pull_request 側が回すので skip"
+          echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+        fi
+        ;;
+    esac
+```
+
+⚠ **push trigger をまるごと外さない。**PR ができる前（実装中）の push では `pull_request` 側が存在せず、
+**赤に気づくのが PR 作成まで遅れる。**
+
+⚠ **bot 側が CI を明示起動する経路もある**（`run-action.sh`。engine が終わったあとに machinery が
+commit したとき）。⚠ **`ATTACHMENTS_TOKEN` があるときは起動しない** — PAT の push は `push` と
+`pull_request` の run を普通に立てるので、そこで起動すると **3 本目**になる。
+
 ## default branch の保護（`pr-merge` を使う場合）
 
 - **PR を経由すること**を必須にする（`required_pull_request_reviews` を置く。⚠ **まるごと消すと
