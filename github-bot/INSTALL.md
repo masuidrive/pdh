@@ -17,6 +17,7 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 |---|---|---|
 | `github-bot/.github/` | `.github/` | workflow 2 本・coding-robot 一式（machinery） |
 | `github-bot/.devcontainer/` | `.devcontainer/` | Actions が使う devcontainer。**既存の devcontainer があればマージ**（上書き前に diff を確認） |
+| `github-bot/.github/workflows/devcontainer-prebuild.yml` | `.github/workflows/` | **任意。**devcontainer が重い repo 向け（下の「任意: devcontainer を毎 run 焼かない」） |
 | `github-bot/_pdh.md` | `.github/coding-robot/_pdh.md` | **PDH mode を定義する**（machinery 側には `_pdh.md` を置かない） |
 | `github-bot/_github-issue.md` | `.github/coding-robot/_github-issue.md` | gate→issue プロトコル（cloud / local 共通） |
 | `github-bot/pdh-hooks.sh` | `.github/coding-robot/pdh-hooks.sh` | runner hook。progress.md の作成・stage ラベル・承認導線・待ち行・導入検査を、agent の申告に依らず run の終わりに保証する（`run-action.sh` が呼ぶ） |
@@ -142,6 +143,29 @@ done
 **守るのは «導入先が意図して変えた場所が、更新で黙って消えないこと» である。**⚠ **所有者が PDH に変わるまで、machinery は「この手順では触らない」ものだった**ので、導入先の書き足しは自動的に守られていた。**いまは守られない** — 名前で選んで diff する以外に守る機構は無い。
 
 ⚠ **repo 固有の規則を machinery のファイルに書かない。**書くと更新のたびに «上流に無い節» として揺れる。置き場所は `CLAUDE.md` / `AGENTS.md` である（bot はそれを読む）。
+
+## 任意: devcontainer を毎 run 焼かない（事前ビルド）
+
+**守るのは «run の大半がビルドで終わらないこと» である。**
+
+coding-robot は毎 run で devcontainer をビルドする。配っている最小構成なら数分だが、⚠ **repo の開発環境をマージすると 10 分を超えることがある**（apt・言語処理系のソースビルド・ブラウザの焼き込み）。**重い層は `.devcontainer/**` が変わったときしか変わらない**ので、先に焼いて置いておける。
+
+⚠ **入れる基準は «1 run のビルドが 5 分を超えるか» である。**超えないなら入れなくてよい（workflow が 1 本増えるだけ損になる）。
+
+**3 つで 1 組である。**どれか 1 つだけでは効かない。
+
+1. **`.devcontainer/docker-compose.yml` の `image:` と `cache_from:`** — ⚠ **compose 構成では `devcontainers/ci` の `cacheFrom` は効かない。**層を実際に再利用させているのはこの 2 行で、`DEVCONTAINER_IMAGE` が空ならローカル tag へ落ちる（配布物には入っている）
+2. **`coding-robot.yml` の pull step** — 事前ビルド済み image を pull し、`DEVCONTAINER_IMAGE` として compose へ渡す。⚠ **無ければ従来どおりこの run でビルドする**ので、この節を入れていない repo でも止まらない
+3. **`devcontainer-prebuild.yml`**（この節で配置するもの）— image を焼いて GHCR へ publish する。走るのは **`.devcontainer/**` を触った push・週 1 の cron・手動**だけ
+
+導入時に見ておくこと。
+
+- ⚠ **GHCR への publish には `packages: write` が要る**（workflow 内に宣言済み）。repo の Actions 設定が workflow token を read-only に絞っている場合は、そこを緩めるか、この節を入れない
+- ⚠ **private repo では image の pull にも認証が要る。**同じ repo の Actions からは `GITHUB_TOKEN` で引けるが、**手元から確かめるときは `docker login ghcr.io` が要る**
+- ⚠ **GHCR の ref は小文字**である。repo 名に大文字が入る場合、`imageName` は式を取らないので小文字の固定文字列に書き換える
+- ⚠ **Dockerfile が `COPY` するファイルがあれば、prebuild の `paths:` に足す。**ビルドキャッシュのキーなので、挙げ忘れると «中身が変わったのに publish されない» ことになる
+
+⚠ **`push: never` とセットである。**毎 run の GHCR push（数分）は publish を prebuild 側に寄せることで無くなる。**片方だけ入れると、焼いた image を使わないまま毎 run push し続ける。**
 
 ## 任意: 人のクリックを 1 回にする（`ATTACHMENTS_TOKEN`）
 

@@ -1,0 +1,77 @@
+name: Devcontainer Prebuild
+
+# coding-robot が使う devcontainer image を先に焼いて GHCR へ置く。
+#
+# ⚠ **なぜ要るのか。**coding-robot は毎 run で devcontainer をビルドする。軽い image なら
+# 数分で済むが、repo の開発環境（apt・言語処理系のソースビルド・ブラウザの焼き込み）が
+# 入ると 10 分を超え、run の大半がビルドになる。⚠ **重い層は `.devcontainer/**` が
+# 変わったときしか変わらない**ので、ここで 1 回焼いて coding-robot は pull するだけにする。
+#
+# ⚠ **compose 構成では devcontainers/ci の cacheFrom は効かない。**実際に層を再利用させて
+# いるのは docker-compose.yml の `image:` と `cache_from:` である（この 2 つが無いと、
+# 事前ビルドしても coding-robot 側は作り直す）。
+#
+# ⚠ **この workflow は任意である。**入れなくても coding-robot は動く（毎 run ビルドする）。
+# 入れる基準は «devcontainer が重いか» で、目安は 1 run のビルドが 5 分を超えるとき。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".devcontainer/**"
+      - ".github/workflows/devcontainer-prebuild.yml"
+      # ⚠ Dockerfile が COPY するファイルがあれば、ここに足す。ビルドキャッシュのキーなので、
+      # 挙げ忘れると «内容が変わったのに publish されない» ことになる。
+  workflow_dispatch:
+  # 上流の浮動インストール（CLI の最新版など）が古びすぎないよう、週 1 で焼き直す。
+  schedule:
+    - cron: "17 4 * * 1" # Mondays 04:17 UTC
+
+# 同じ :latest を取り合わない
+concurrency:
+  group: devcontainer-prebuild-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prebuild:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      - name: Login to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push devcontainer image
+        uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca # v0.3.1900000450
+        env:
+          # ⚠ compose の image: / cache_from: と同じ ref を指す。ずれると «焼いた image と
+          # 使う image が別» になり、coding-robot 側が作り直す。
+          DEVCONTAINER_IMAGE: ghcr.io/${{ github.repository }}/devcontainer-ci:latest
+        with:
+          configFile: .devcontainer/devcontainer.json
+          # ⚠ GHCR の ref は小文字でなければならない。${{ github.repository }} が大文字を
+          # 含む repo では、小文字の固定文字列に置き換えること（imageName は式を取らない）。
+          imageName: ghcr.io/${{ github.repository }}/devcontainer-ci
+          imageTag: latest
+          push: always
+          cacheFrom: |
+            ghcr.io/${{ github.repository }}/devcontainer-ci:latest
+          # ⚠ 焼いた image をここで 1 回使ってみる。壊れた image を :latest として
+          # publish すると、次に 🤖 を打った人が run の途中で気づくことになる。
+          runCmd: |
+            set -e
+            for c in git gh jq python3; do
+              command -v "$c" >/dev/null || { echo "MISSING: $c"; exit 1; }
+            done
+            command -v claude >/dev/null || command -v codex >/dev/null || {
+              echo "MISSING: neither claude nor codex"; exit 1; }
+            echo "prebuilt image: toolchain ok"
