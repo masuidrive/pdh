@@ -85,15 +85,37 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # ステップ4: devcontainer で実行
+      # ⚠ 事前ビルド済み image があれば pull して使う（devcontainer-prebuild.yml）。
+      # 無ければ従来どおりこの run でビルドする — その workflow は任意なので、
+      # 入れていない repo でもここで止まってはいけない。
+      - name: Pull prebuilt devcontainer image
+        id: prebuilt
+        run: |
+          IMAGE="ghcr.io/${{ github.repository }}/devcontainer-ci:latest"
+          IMAGE="$(printf '%s' "$IMAGE" | tr '[:upper:]' '[:lower:]')"
+          if docker pull "$IMAGE" 2>/dev/null; then
+            echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+            echo "✅ prebuilt image pulled; compose build will reuse its layers."
+          else
+            echo "⚠️ prebuilt image not found; devcontainer will build in this run."
+            echo "image=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run Agent in devcontainer
         id: run_claude
         uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca # v0.3.1900000450
+        env:
+          # docker-compose.yml の image: / cache_from: がこれを読む。空なら compose 側の
+          # 既定（ローカル tag）へ落ちて、この run でビルドする。
+          DEVCONTAINER_IMAGE: ${{ steps.prebuilt.outputs.image }}
         with:
           configFile: .devcontainer/devcontainer.json
           imageName: ghcr.io/${{ github.repository }}/devcontainer-ci
-          push: always
-          cacheFrom: |
-            ghcr.io/${{ github.repository }}/devcontainer-ci:latest
+          # ⚠ push: never — image の publish は devcontainer-prebuild.yml の仕事である。
+          # 毎 run push すると、その分（数分）を全 run が払う。
+          # ⚠ cacheFrom は置かない — compose 構成では効かない。層の再利用は上で pull した
+          # image と docker-compose.yml の cache_from: が担う。
+          push: never
           env: |
             CODING_ROBOT_ENGINE=${{ vars.CODING_ROBOT_ENGINE }}
             CLAUDE_CODE_OAUTH_TOKEN=${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

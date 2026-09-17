@@ -3,9 +3,16 @@ name: coding-robot
 services:
   app:
     container_name: coding-robot-app
+    # ⚠ compose 構成では、devcontainers/ci の cacheFrom だけでは層が再利用されない。
+    # 実際に効くのはここの image: / cache_from: である。CI では DEVCONTAINER_IMAGE に
+    # 事前ビルド済みの ref が入り、pull 済みの層をそのまま使う。ローカルでは未設定なので
+    # 下のローカル tag へ落ちる。
+    image: ${DEVCONTAINER_IMAGE:-coding-robot-devcontainer:local}
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
+      cache_from:
+        - ${DEVCONTAINER_IMAGE:-coding-robot-devcontainer:local}
     volumes:
       - ..:/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-project}:cached
     environment:
