@@ -65,6 +65,8 @@ Bash ツールで直接実行する。codex plugin 等の別経路があって�
 
 2026-09-15 に実測（codex exec を main とする coding bot で 4 回発生）。signal を受けたその場で採った記録では、送り主は runner でも OOM でもなく **親の engine プロセス自身**で、2 件とも «自分が起動してから» 181 秒・183 秒だった。⚠ **起動時刻は 73 秒ずれている** — つまり全体の締切ではなく **1 コマンドごとのタイマー**である。
 
+⚠ **配布物に実装がある** — `scripts/spawn-worker.sh` が、この切り離しと «終わり方の記録»（rc・受けた signal・親子関係）をまとめて行う。`bash scripts/spawn-worker.sh <out-dir> -- <cmd...>` で起動して即座に返り、`bash scripts/spawn-worker.sh --wait <out-dir> [秒]` で短く区切って待つ（`75` = まだ走っている、`0` = 終了して `rc.txt` にある）。prompt を渡すときは `--stdin <file>` を使う — ⚠ **切り離した先は呼び出し側の stdin を継承しないので、`-- cmd < prompt.txt` と書くとその `<` は spawn-worker.sh 自身に掛かり worker には届かない。**
+
 **`set -m`（job control）を有効にして起動する。**background job が独立した process group になるので、呼び出し側の group へ送られた signal が worker へ届かない。⚠ **`setsid` は macOS に無いので使わない。**同じ実測で、`set -m` 有りの worker は完走し、無しの worker は殺されることを確かめた。
 
 ⚠ **harness 自身の background 機構（Claude Code の `run_in_background`）を使う経路はこの限りではない。**あちらは engine が寿命を管理するので、上の `timeout` 指定のままでよい。ここで言っているのは **shell の中で `&` と `wait` を書く場合**である。

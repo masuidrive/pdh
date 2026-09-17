@@ -48,6 +48,15 @@ Actions の run は 1 回ごとに記憶を失う。gate や質問で停止す�
 bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する**（Projects は使わない。ラベルだけで status を出す）。
 
 - ラベルは 8 段: `PDH-open` / `PDH-ticket-review` / `PDH-ticket-human-review` / `PDH-implement` / `PDH-review` / `PDH-verify` / `PDH-human-review` / `PDH-close`。**ticket は常に 1 stage**。
+- **AC の進み具合は runner が差し込む。**`ticket.md` の Acceptance Criteria を読んで
+  `**AC 2/3**` と ✅ / ⬜ の一覧を、計画要約の直後へ入れる。⚠ **agent は別ファイルを書かない**
+  — AC の本当の状態は `ticket.md` にあり、写しを作るとズレる。⚠ **押せる checkbox（`- [ ]`）
+  では出さない** — GitHub はそれを押せるものとして描くが、次の更新で上書きされて押した結果が
+  消えるので、«効かない操作» になる。
+- ⚠ **作業中コメントの更新は既定で 60 秒に 1 回**（`PROGRESS_UPDATE_INTERVAL`）。10 秒固定だと
+  72 分の run で 385 回 PATCH し、`GITHUB_TOKEN` の 1,000 リクエスト/時/repo の 3 分の 1 を
+  進捗表示だけで使う（実測）。**engine の生存確認は 10 秒のまま** — そこを伸ばすと
+  終了検知が遅れ、PR の作成が後ろへずれる。
 - **ラベルは runner（`pdh-hooks.sh`）が run の終わりに note の `## Status:` から付ける。**agent は note の Status を到達 stage に保つだけでよく、`gh issue edit` でラベルを触らない。同じ hook が、human gate で停止する run の最終レポートに承認導線が無ければ足し、note の Checklist に `発行先:` 付きの待ち行が無ければ gate コメントの URL で足し、`progress.md` が無ければ作る。**hook が補うのは落ちたときの保険であり、agent が書く規則は変わらない。**
 - 特に **gate 待ちラベル（`PDH-ticket-human-review` / `PDH-human-review`）**で溜まると、Issues 一覧のラベルフィルタで «あなたが承認すべき issue» が一目で分かる。これがラベルの主目的。
 - ラベルは INSTALL で作成済みが前提。無い repo では hook が skip し、最終レポートの「導入検査で要追加」に出る（gate や実装は止めない）。
@@ -55,7 +64,7 @@ bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する*
   言わないので、**gate でない場所で止まったとき**（非収束での escalate・blocker・質問・認証失敗）に
   «bot が動いているのか、自分の番なのか» が一覧から区別できない。hook は **note の Checklist にある
   «未了 + `発行先:`» の行**を印にして付け外しする（`PDH-AGENTS.md`「Handover Routes」が、待つものを
-  出したらこの行を書くことを求めている）。⚠ **run の始まりで外し、終わりに付け直す** — 終わりだけに
+  出したらこの行を書くことを求めている）。⚠ **engine が失敗した run でも付ける** — 止まっていて人の手が要る（認証・quota・環境）という意味は gate 停止と同じで、しかもその経路では最終報告の hook が呼ばれない。⚠ **run の始まりで外し、終わりに付け直す** — 終わりだけに
   すると、人が答えて run が始まっても付いたままになる。**答えを反映した手で `[x]` にすれば次の run で
   外れる。**agent が `gh issue edit` で触らない。
 
@@ -72,7 +81,7 @@ bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する*
 
 close 承認は issue で得ているので、同じ人が PR でもう一度承認する二重 gate は既定では置かない。`.ticket-config.yaml` の `github_bot.close`:
 
-- **`merge`（既定）**: bot が `bash ticket.sh close --no-delete-remote` で default branch へ squash merge して push し、`gh issue close #N` する。1 run で終わる。
+- **`merge`（既定）**: bot が `bash ticket.sh close --no-delete-remote` で default branch へ squash merge して push し、`gh issue close #N` する。1 run で終わる。⚠ **`ticket.sh close` は branch protection の required status check を bypass する**ので、CI を gate にしたい repo では選ばない。
 - ⚠ **`pr-merge`**: **PR の merge そのものが close gate である。**bot は実装を終えたら PR
   （本文に **`Refs #N`**。`Closes` / `Fixes` は使わない）を作り、**close 判断ボードを PR にコメントして
   停止する。**⚠ **`tickets/done/` への移動と `closed_at` は、その PR の差分に載せる**（手順は

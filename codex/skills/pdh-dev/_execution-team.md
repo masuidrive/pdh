@@ -43,6 +43,8 @@ CLI 呼び出しでは named agent の developer instructions が自動で適用
 
 したがって CLI worker は `set -m`（job control）を有効にして background 起動し、**独立した process group へ出す。**呼び出し側の group へ送られた signal が worker へ届かなくなる。⚠ **`setsid` は macOS に無いので使わない。**待つのは **別の shell 呼び出し**で、**1 回を短く区切って**終了コードのファイルを見に行く。⚠ **1 回の待ち時間を長くして «1 回で済ませる» ことをしない** — 長くした分だけ timeout に近づくだけで、元の症状が戻る。実行例は claude 版 `_execution-team.md`「並行起動」にある。
 
+⚠ **配布物に実装がある** — `scripts/spawn-worker.sh` が、この切り離しと «終わり方の記録»（rc・受けた signal・親子関係）をまとめて行う。`bash scripts/spawn-worker.sh <out-dir> -- <cmd...>` で起動して即座に返り、`bash scripts/spawn-worker.sh --wait <out-dir> [秒]` で短く区切って待つ（`75` = まだ走っている、`0` = 終了して `rc.txt` にある）。prompt は `--stdin <file>` で渡す — ⚠ **切り離した先は呼び出し側の stdin を継承しないので、`-- cmd < prompt.txt` と書くとその `<` は spawn-worker.sh 自身に掛かり worker には届かない。**
+
 ## 各 stage の出口
 
 - **PDH-implement**: 実装担当が調査・実装・必要な検証を完遂する。QA には未確認の経路と既存の実行証拠を渡し、同じテストを理由なく重複させない。
