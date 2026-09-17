@@ -278,6 +278,8 @@ where applicable — e.g. "DEADLINE_UNIX まで 6 分、test-all 想定 20 分",
 - ticket / note paths (markdown links)
 - `git log --oneline main..HEAD` head (one line per commit, max ~10)
 - relevant worker result / stderr tail paths (rc, `tail -120 stderr.log`)
+- if PDH mode: which AC / checklist items are `[x]` and which are still
+  `[ ]` on the current HEAD
 ```
 
 Hard rules for this template:
@@ -359,7 +361,8 @@ appears under your message; the line in your report tells the user
 what to do with it.
 
 Title / body content rules (scope = WHOLE branch, not just the last
-comment; Why / What / Verification / Notes + `Closes #N`) are below.
+comment; Why / What / Verification / Notes + `Refs #N` in PDH mode,
+`Closes #N` otherwise) are below.
 
 ### Step 1 — Establish the FULL scope of the branch BEFORE writing markers
 
@@ -422,7 +425,8 @@ pull-request-title}}}}}
 ## Notes (optional)
 - [design decisions, alternatives, compatibility, rollout]
 
-Closes #[issue-number]
+Closes #[issue-number]   # ⚠ PDH mode: use `Refs` instead — `Closes` / `Fixes`
+                         # auto-closes the issue and skips the finalize workflow
 pull-request-body}}}}}
 ```
 
