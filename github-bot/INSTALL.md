@@ -32,6 +32,33 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 .agents/skills/pdh-gh-pull
 ```
 
+## 1.5 既存の devcontainer とマージするとき
+
+**守るのは «run が始まってから «道具が無い» と分かる状態にしないこと» である。**
+
+配置表の `github-bot/.devcontainer/` は、**この bot が動くだけの最小構成**である（engine の CLI と `git` / `gh`）。⚠ **既に devcontainer を持っている repo では、上書きではなくマージになる** — そちらには repo の開発環境が入っているからである。マージしたあと、**次のものが container の中に在ることを確かめる。**
+
+| 要るもの | 使う場所 | 無いとどうなるか |
+|---|---|---|
+| `claude` または `codex` | engine（`CODING_ROBOT_ENGINE` で選ぶ） | run が起動直後に失敗する |
+| `gh` | `run-action.sh` と `pdh-hooks.sh`（コメント・ラベル・PR・CI） | 同上 |
+| `jq` | `run-action.sh`（トリガーの解析・API 応答） | 同上 |
+| `git` | branch・merge・push・差分 | 同上 |
+| `python3` | 最終レポートのリンク書き換え | ⚠ **黙って飛ばす。**`command -v python3` で分岐しているのでエラーは出ず、**レポートのファイル名がただの文字列になる**だけ |
+| **repo のテスト道具** | bot は scoped test を自分で回す | ⚠ **実装はできるのにテストが回らない run** になる。上流の既定 image は Node/TypeScript だけなので、Python・DB・ブラウザが要る repo は自分で足す |
+| ブラウザ（任意） | スクリーンショット・実 surface 検証 | 撮れない。⚠ **これは «skill の掟» ではなく «container に入っているか» で決まる**（`_github-issue.md`）。headless Chromium / Playwright を足せば cloud bot が自分で画面を確かめられる |
+
+⚠ **`workspaceFolder` は `/workspaces/project` のままにする。**`${localWorkspaceFolderBasename}`（repo 名）へ変えると、compose 側の `/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-project}` が env 未設定で `project` へ落ちたときに食い違い、**`devcontainer exec` が «no such file or directory» で落ちる**（実測）。理由は `github-bot/ROBOT.md`。
+
+確かめ方 — **導入直後に 1 回、container の中で見る。**
+
+```bash
+devcontainer exec --workspace-folder . bash -lc \
+  'for c in git gh jq python3 claude codex; do printf "%-8s %s\n" "$c" "$(command -v $c || echo MISSING)"; done'
+```
+
+⚠ **engine は選んだほうだけ在ればよい**（`claude` か `codex`）。それ以外が `MISSING` なら、足してから 🤖 を打つ。
+
 ## 2. リポジトリ変数・secret を設定する
 
 engine を選び、その認証を入れる。**基本はサブスク（購読ログイン）で運用する** — Claude は `CLAUDE_CODE_OAUTH_TOKEN`、Codex は `CODEX_AUTH_JSON`。**API key 課金（`OPENAI_API_KEY`）は既定で使わない**（使うのは明示的に選んだときだけ）。
