@@ -136,6 +136,14 @@ CSS は `kit/board.css` にある。**色・枠を style 属性で足さない**
 
 「自分で確かめる手順」の URL に、ホスト名を書いてはならない。**本文には path だけ**を書き（`data-path`）、board にはホストと port の入力欄を 1 か所置く。入力されたときだけ «開く» リンクと «URL をコピー» が現れ、**未入力・script 停止時は path の文字だけ**が見える。保存できない環境（file:// 等）でも、入力・URL 生成・回答フォームは動き続ける。
 
+## 経路へ貼る Markdown を作る
+
+```sh
+sh tools/to-markdown.sh <board.html> --url <発行した board の URL>
+```
+
+**HTML を唯一の本文にして、経路（issue コメントなど）へはここで作った Markdown と URL を出す。**⚠ **Markdown を手で書かない** — 本文が 2 つになると片方だけ古くなる。組み上げ済みの HTML でも断片でも受け取る（`<main class="board">` があればそこだけ切り出す）。
+
 ## 発行前検査
 
 ```bash

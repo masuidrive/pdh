@@ -133,6 +133,34 @@ for fixture in broken-static-tag broken-static-class broken-static-reference \
   echo "PASS $fixture: static $expected を反証"
 done
 
+# to-markdown.sh — HTML の board から経路へ貼る Markdown を作る。
+# 守るのは「本文が 1 つであること」。Markdown を書かせず HTML から機械で作るので、
+# 落ちると «Markdown を手で書く» へ戻り、2 つの本文がずれ始める。
+if sh "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/good.html" > "$SELFTEST_TMP/good.md" 2>"$SELFTEST_TMP/good.md.err"; then
+  md_bad=0
+  # HTML の残骸が無いこと（details / summary だけは GitHub が描くので残す）
+  if grep -qE '<(div|span|section|main|label|aside|figure|input|button|textarea|svg|nav|style|script)' "$SELFTEST_TMP/good.md"; then
+    echo 'FAIL to-markdown: HTML の残骸が出ました' >&2; grep -nE '<(div|span|section|main|label|aside|figure|input|button|textarea|svg|nav|style|script)' "$SELFTEST_TMP/good.md" | head -5 >&2; md_bad=1
+  fi
+  # 見出しが Markdown になっていること
+  grep -q '^#\{1,4\} ' "$SELFTEST_TMP/good.md" || { echo 'FAIL to-markdown: 見出しが出ませんでした' >&2; md_bad=1; }
+  grep -q '^#### ' "$SELFTEST_TMP/good.md" || { echo 'FAIL to-markdown: h4 の階層が落ちました' >&2; md_bad=1; }
+  # 表が GFM になっていること（区切り行がある）
+  if grep -q '^| ' "$SELFTEST_TMP/good.md"; then
+    grep -q '^| --- ' "$SELFTEST_TMP/good.md" || { echo 'FAIL to-markdown: 表の区切り行がありません' >&2; md_bad=1; }
+  fi
+  # URL を渡したら末尾に出ること
+  sh "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/good.html" --url 'https://example.invalid/b' \
+    | tail -3 | grep -q 'https://example.invalid/b' \
+    || { echo 'FAIL to-markdown: --url が末尾に出ませんでした' >&2; md_bad=1; }
+  [ "$md_bad" -eq 0 ] || exit 1
+  echo 'PASS to-markdown.sh: Markdown へ落とす'
+else
+  echo 'FAIL to-markdown.sh: 変換に失敗しました' >&2
+  cat "$SELFTEST_TMP/good.md.err" >&2
+  exit 1
+fi
+
 if bash "$TOOLS_DIR/../kit/check-contrast.sh" >"$SELFTEST_TMP/contrast.out" 2>&1; then
   echo 'PASS check-contrast.sh: tokens.css'
 else
