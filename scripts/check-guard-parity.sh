@@ -25,9 +25,12 @@ guards=(
 )
 
 failed=0
+# ⚠ -R であって -r ではない。codex/ 側の共有 file は claude/ への symlink になった（4262099）。
+# -r は再帰中に見つけた symlink を辿らないので、symlink 化した guard が codex=0 と数えられて
+# 落ちる（2026-09-18 に実測: "Human-Agent-Interface" と "Checklist` へ 1 行書く" の 2 件）。
 for g in "${guards[@]}"; do
-  c=$(grep -rl -- "$g" claude/skills/ 2>/dev/null | wc -l | tr -d ' ')
-  x=$(grep -rl -- "$g" codex/skills/ 2>/dev/null | wc -l | tr -d ' ')
+  c=$(grep -Rl -- "$g" claude/skills/ 2>/dev/null | wc -l | tr -d ' ')
+  x=$(grep -Rl -- "$g" codex/skills/ 2>/dev/null | wc -l | tr -d ' ')
   if [ "$c" -eq 0 ] || [ "$x" -eq 0 ]; then
     printf 'guard-parity: MISSING — "%s" (claude=%s codex=%s)\n' "$g" "$c" "$x" >&2
     failed=1

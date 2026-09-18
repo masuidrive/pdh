@@ -293,6 +293,13 @@ fi
 
 universe_files=()
 while IFS= read -r -d '' file; do
+  # git ls-files lists a symlink as a path even when it points at a directory
+  # (codex/skills/pdh-decision-board/kit -> ../../../claude/.../kit, since 4262099).
+  # grep given that path fails with "Is a directory" and the whole check errors;
+  # rg silently recurses into it and scans the target files a second time. Keep
+  # regular files only — the target's own files are already in this list under
+  # their real path. A symlink to a regular file still passes -f (it is followed).
+  [[ -f "$file" ]] || continue
   universe_files+=("$file")
 done < <(git ls-files -z --cached --others --exclude-standard)
 
