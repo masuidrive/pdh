@@ -285,7 +285,10 @@ IMAGE_DIR="/tmp/issue-${ISSUE_NUMBER}-images"
 mkdir -p "$IMAGE_DIR"
 
 # 元のMarkdownから画像URLを抽出（表示用）
-ORIGINAL_IMAGE_URLS=$(echo "$ISSUE_BODY" | \
+# ⚠ 本文だけでなく全コメントを走査する。以前は本文だけで、コメントに貼られた画像は
+# engine に届かなかった（非画像の添付は本文 + 全コメントを走査していたのに、画像だけ非対称）。
+# «違う» と言うために依頼者が注記つきのスクショを返しても、bot はそれを見ずに進んでいた。
+ORIGINAL_IMAGE_URLS=$(printf '%s\n%s\n' "$ISSUE_BODY" "$(printf '%s' "$ALL_COMMENTS_JSON" | jq -r '.[].body // empty' 2>/dev/null)" | \
   grep -oE '(https?://[^)"\s]+\.(png|jpg|jpeg|gif|webp|svg))|(https?://github\.com/user-attachments/assets/[^)"\s]+)|(https?://user-images\.githubusercontent\.com/[^)"\s]+)' | \
   sort -u)
 
@@ -296,20 +299,22 @@ if [ "$IS_PR" = true ]; then
       repository(owner: \"$(echo $GITHUB_REPOSITORY | cut -d/ -f1)\", name: \"$(echo $GITHUB_REPOSITORY | cut -d/ -f2)\") {
         pullRequest(number: $ISSUE_NUMBER) {
           bodyHTML
+          comments(last: 50) { nodes { bodyHTML } }
         }
       }
     }
-  " --jq '.data.repository.pullRequest.bodyHTML' 2>/dev/null || echo "")
+  " --jq '[.data.repository.pullRequest.bodyHTML] + [.data.repository.pullRequest.comments.nodes[].bodyHTML] | join("\n")' 2>/dev/null || echo "")
 else
   BODY_HTML=$(gh api graphql -f query="
     query {
       repository(owner: \"$(echo $GITHUB_REPOSITORY | cut -d/ -f1)\", name: \"$(echo $GITHUB_REPOSITORY | cut -d/ -f2)\") {
         issue(number: $ISSUE_NUMBER) {
           bodyHTML
+          comments(last: 50) { nodes { bodyHTML } }
         }
       }
     }
-  " --jq '.data.repository.issue.bodyHTML' 2>/dev/null || echo "")
+  " --jq '[.data.repository.issue.bodyHTML] + [.data.repository.issue.comments.nodes[].bodyHTML] | join("\n")' 2>/dev/null || echo "")
 fi
 
 # bodyHTML から画像URLを抽出（JWT付きのprivate-user-images URLと通常の画像URL）
@@ -769,7 +774,7 @@ PYEOF
       mkdir -p "$BA_W/$(dirname "$dest")"
       cp "$bf" "$BA_W/$dest"
       git -C "$BA_W" add "$dest"
-      ARTIFACT_MAP="${ARTIFACT_MAP}${bf}	https://github.com/${GITHUB_REPOSITORY}/blob/bot-artifacts/${dest}
+      ARTIFACT_MAP="${ARTIFACT_MAP}${bf}	https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/bot-artifacts/${dest}
 "
     done <<< "$IMG_FILES"
     if ! git -C "$BA_W" diff --cached --quiet 2>/dev/null; then
@@ -816,14 +821,19 @@ for line in os.environ.get("ARTIFACTS", "").splitlines():
 text = sys.argv[1]
 parts = re.split(r'(```.*?```)', text, flags=re.S)  # コードフェンスは触らない
 def rewrite(seg):
-    # 1) 画像 artifact の参照 → bot-artifacts のクリックリンク（inline ![] は [] に変換）
+    # 1) 画像 artifact の参照 → bot-artifacts の raw URL。⚠ inline ![]() のまま残す。
+    #    以前はここで ![]() を []() へ落としていた。理由は «blob 形式が private repo で
+    #    画像として読み込めない» ことだったが、URL を raw.githubusercontent.com にすれば
+    #    読み込める（実測: blob は 404 text/html、raw は 200 image/png）。
+    #    ⚠ «違う» と言うには変更後の姿が見えている必要があり、人は長文を読むコストが高い。
+    #    リンクにすると、読む人は毎回クリックしないと変化が分からない。
     for p, u in sorted(artifacts.items(), key=lambda kv: len(kv[0]), reverse=True):
         base = os.path.basename(p)
-        seg = re.sub(r'!?\[([^\]]*)\]\([^)]*' + re.escape(p) + r'[^)]*\)',
-                     lambda m: "[%s](%s)" % (m.group(1) or base, u), seg)
-        seg = re.sub(r'`' + re.escape(p) + r'`', "[%s](%s)" % (base, u), seg)
+        seg = re.sub(r'(!?)\[([^\]]*)\]\([^)]*' + re.escape(p) + r'[^)]*\)',
+                     lambda m: "%s[%s](%s)" % (m.group(1), m.group(2) or base, u), seg)
+        seg = re.sub(r'`' + re.escape(p) + r'`', "![%s](%s)" % (base, u), seg)
         seg = re.sub(r'(?<![\[`/\w.-])' + re.escape(p) + r'(?!\]\()(?![\w/.-])',
-                     "[%s](%s)" % (base, u), seg)
+                     "![%s](%s)" % (base, u), seg)
     # 2) 通常の変更ファイル → blob リンク
     for f in sorted(changed, key=len, reverse=True):
         url = "https://github.com/%s/blob/%s/%s" % (repo, branch, f)
