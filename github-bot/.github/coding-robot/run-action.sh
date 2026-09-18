@@ -44,6 +44,11 @@ trap 'handle_unexpected_error $LINENO' ERR
 
 # Resolve this script's directory before any cd, so we can source engine files.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# トリガーの出どころを正しく取る 2 つ（event 別の API / PR の出自）。承認判定とは無関係。
+source "$SCRIPT_DIR/trigger-source.sh"
+TRUSTED_LINKED_ISSUE=""
+TRUSTED_PR_BRANCH=""
+TRIGGER_ERROR=""
 
 # Select execution engine (claude | codex). MUST be set explicitly — no default.
 ENGINE="${CODING_ROBOT_ENGINE:-}"
@@ -138,6 +143,12 @@ elif [[ "$EVENT_TYPE" == "issue_comment" ]] && gh pr view "$ISSUE_NUMBER" --repo
 fi
 
 if [ "$IS_PR" = true ]; then
+  # ⚠ PR の出自を確かめる。fork の PR を拒まないと、fork 側で書いたコードを
+  # write token を持つ agent が checkout して実行する経路になる。
+  if ! validate_pr_context "$GITHUB_REPOSITORY" "$ISSUE_NUMBER"; then
+    echo "⛔ Untrusted PR context: $TRIGGER_ERROR"
+    exit 1
+  fi
   # PR の場合
   PR_DATA=$(gh pr view $ISSUE_NUMBER \
     --json title,body,comments,headRefName \
@@ -191,7 +202,9 @@ ALL_COMMENTS_JSON=$(gh api repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comment
 
 if [ -n "$COMMENT_ID" ]; then
   # トリガーコメントの本文を直接取得（GitHub API、1回で body + login 両方取得）
-  TRIGGER_DATA=$(gh api repos/$GITHUB_REPOSITORY/issues/comments/$COMMENT_ID 2>/dev/null || echo '{}')
+  # ⚠ event ごとに正しい API を叩く。review と review comment は issues comments collection に
+  # «存在しない» ので、/issues/comments/ だけだと本文が空になりユーザの依頼が失われる。
+  TRIGGER_DATA=$(fetch_trigger_context "$EVENT_TYPE" "$GITHUB_REPOSITORY" "$ISSUE_NUMBER" "$COMMENT_ID" 2>/dev/null || echo '{}')
   TRIGGER_COMMENT=$(echo "$TRIGGER_DATA" | jq -r '.body // ""')
   TRIGGER_AUTHOR=$(echo "$TRIGGER_DATA" | jq -r '.user.login // "unknown"')
   # /code や 🤖 トリガー文字列を除去
@@ -415,6 +428,9 @@ fi
 # Deadline awareness: tell the agent how much wall-clock budget it has.
 # Must be computed BEFORE the prompt is built so it can be injected.
 RUN_TIMEOUT_SECONDS=${CLAUDE_TIMEOUT:-5400}
+# 値を検証する。空や非数値のまま timeout へ渡すと、時間の枠が黙って壊れる。
+case "$RUN_TIMEOUT_SECONDS" in ''|*[!0-9]*) echo "❌ CLAUDE_TIMEOUT must be an integer"; exit 1 ;; esac
+[ "$RUN_TIMEOUT_SECONDS" -ge 60 ] && [ "$RUN_TIMEOUT_SECONDS" -le 86400 ] || { echo "❌ CLAUDE_TIMEOUT must be between 60 and 86400 seconds"; exit 1; }
 RUN_START_UNIX=$(date +%s)
 RUN_DEADLINE_UNIX=$((RUN_START_UNIX + RUN_TIMEOUT_SECONDS))
 
@@ -531,7 +547,7 @@ engine_run
 # awaiting-reply を外す。⚠ **ループの後ろに置いてはならない** — そこは engine が終わった後であり、
 # 人が答えて run が動いている間ずっとラベルが «自分の番» と言い続ける。
 if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
-  bash "$SCRIPT_DIR/pdh-hooks.sh" start "$ISSUE_NUMBER" || true
+  bash "$SCRIPT_DIR/pdh-hooks.sh" start "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" || true
 fi
 
 # GitHub Actions URL を取得
@@ -726,6 +742,10 @@ sys.stdout.write('\n'.join(lines))
 PYEOF
 )
 
+  # ⚠ 画像後始末の push に使う token。定義が無いと空展開で push が必ず失敗し、
+  # GITHUB_TOKEN fallback へ落ちる（その SHA の pull_request run は承認待ちで止まる）。
+  ATTACH_TOKEN="${ATTACHMENTS_TOKEN:-$GITHUB_TOKEN}"
+
   # ===== 補助成果物(画像)の決定的処理 + ファイルリンク化（harness が担保。LLM 遵守に頼らない）=====
   # working ブランチに追加された画像バイナリは bot-artifacts へ移送し working から除去する
   # （main を汚さない）。レポート内の参照は後段で bot-artifacts のクリックリンクに書き換える。
@@ -839,7 +859,7 @@ ${SCREENSHOTS_BLOCK}"
 
   # PDH 側パッチ: 受け渡し経路（issue）の保証を runner が担う（github-bot/pdh-hooks.sh。PDH mode のみ。VENDOR.md）
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
-    HOOKED=$(printf '%s' "$CLAUDE_OUTPUT_CLEAN" | bash "$SCRIPT_DIR/pdh-hooks.sh" final "$ISSUE_NUMBER" "$BRANCH_NAME" "$PROGRESS_COMMENT_ID") \
+    HOOKED=$(printf '%s' "$CLAUDE_OUTPUT_CLEAN" | bash "$SCRIPT_DIR/pdh-hooks.sh" final "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "$BRANCH_NAME" "$PROGRESS_COMMENT_ID") \
       && [ -n "$HOOKED" ] && CLAUDE_OUTPUT_CLEAN="$HOOKED" || echo "Warning: pdh-hooks.sh failed; posting report unchanged"
   fi
 
@@ -872,7 +892,7 @@ else
   # ⚠ この経路では pdh-hooks の final が呼ばれない。止まっていて人の手が要るという意味は
   # gate 停止と同じなので、失敗側からも awaiting-reply を付ける。
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
-    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "$ISSUE_NUMBER" || true
+    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" || true
   fi
 
   # エラー詳細はエンジン実装が生成する
