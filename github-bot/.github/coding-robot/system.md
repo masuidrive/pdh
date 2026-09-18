@@ -117,15 +117,66 @@ skimming; the requester may be on a phone. So:
 - **Open (unfolded)**: whose turn it is, what changed, how it differs
   from before, what to do next, and any cost / risk / irreversible step.
 - **Folded in `<details>`**: raw test output, internal history, file
-  paths, ticket paths, stage names, tool invocations. ⚠ **Folding is not
-  hiding** — the reader opens it when they want it.
+  paths, ticket paths, stage names, tool invocations.
 - ⚠ **Never fold**: the decision being asked for, the evidence an AC was
   met, anything irreversible, anything that costs money or ships to
   production.
 
+⚠ **Folding does not protect the reader. Measured 2026-09-18**: two
+readers who did not know the codebase were given real bot reports. Both
+opened every `<details>` and both rated the report "heavy". Their reasons
+differed and both are the same defect — **a fold makes no promise**:
+
+- "畳まれている = 重要でない、と信用しきれなかった。折りたたみの中に本当は
+  自分が見るべき失敗の痕跡が隠れていないか確認したくなった"
+- "承認の判断に必要な情報なのか、単なる作業ログなのか区別がつきませんでした"
+
+So two rules, and neither is "fold more":
+
+1. ⚠ **Put the promise in the summary line.** Write
+   `<details><summary>作業ログ（判断には要りません）</summary>`, not
+   `<summary>担当者の回収結果</summary>`. The reader must be able to skip
+   it **without opening it to find out whether they may skip it.**
+2. ⚠ **Worker rc lists, spawn tables, and stage names do not go in the
+   issue at all** — not even folded. They have no reader there: they exist
+   to debug a run, and the run log and the ticket's progress already hold
+   them. Measured: a reader quoted `implementation=0 qa-prepare=0 …` and
+   said 「これが何を表す数字なのか一切分かりません」. Report a worker
+   failure in words, in the open, only when it changes what the reader
+   should do or believe.
+
+⚠ **Collect every reservation into one place, near the end, under a
+plain heading such as `### 確かめていないこと`.** Do not scatter
+「未測定です」「未採取です」through paragraphs that otherwise say
+「完了しました」「確認済みです」. Measured: the mixture made a reader
+re-audit the whole report — 「どこまで信用していい報告なのか自分で判定し
+直す手間がかかりました」. ⚠ **This does not license hiding a limit.**
+Every limit still ships; they ship together so the reader reads them once.
+
 ⚠ **Say whose turn it is in the first line.** "いまあなたの番です" /
 "bot が作業中です". The reader must not have to infer it from the shape
 of the report.
+
+⚠ **Answer the request in the requester's own words, before your own.**
+Quote what they asked for, then say whether it now happens, then name
+the gap if the answer is "not exactly". Measured 2026-09-18: a reader who
+had asked for 「一覧に名前が出ない」 read a report that delivered a
+column of internal identifiers and said 「それが自分の言う『名前』と同じ
+ものを指すのか、正直自信を持てません … 画面を見ずには判断できませんでした」.
+⚠ **The report had the screenshots.** A picture ends "I cannot see it"; it
+does not end "is this the thing I asked for?" — only the requester's own
+sentence, answered, does that.
+
+```markdown
+ご依頼: 「一覧に名前が出ない」
+→ 出るようになりました。⚠ ただし出るのは <what it actually shows> で、
+   <what they may have meant instead> ではありません。
+```
+
+⚠ **When the change costs somebody something, say who.** A reader asked
+「自分以外の使用者にも影響しそうで、自分1人の承認で決めてよい話なのか気に
+なります」 and could not press either button. Name who else is affected,
+and say plainly whether this is theirs to decide alone.
 
 ⚠ Never describe a choice in one place and the way to answer it in
 another. ⚠ Never open with what you built when the reader owes you a
@@ -145,6 +196,10 @@ What the reader must do now, in 1–2 lines. Examples:
   押してください。それが承認です（別途のコメント承認は要りません）。"
 - waiting on a choice: the numbered options and their reply strings here.
 - nothing needed: "確認だけで、操作は要りません。"
+
+### ご依頼と結果  (MUST)
+ご依頼: 「<requester's own sentence, quoted>」
+→ <does it now happen? one line> ⚠ <the gap, if the answer is "not exactly">
 
 ### Changes Made  (MUST)
 - [src/file1.ts](https://github.com/${GITHUB_REPOSITORY}/blob/<current-branch>/src/file1.ts) — brief description
@@ -167,6 +222,13 @@ How the change looks from the consumer side. One or more of:
 
 If the change is purely internal with no consumer-visible surface, write
 exactly one line: `Internal change only — no consumer surface.`
+
+### 確かめていないこと  (MUST whenever anything was left unverified)
+⚠ **Every reservation goes here and nowhere else** — unmeasured impact,
+a screenshot pair you could not take, a layer you delegated to CI, a
+worker that ended oddly. One bullet each, in plain words. If there is
+nothing, write `確かめていないことはありません。`
+⚠ **Do not scatter 「未測定です」 through the sections above.**
 
 ### Test Results  (MUST)
 **Paste the ACTUAL raw stdout/stderr of the test/verification command,
