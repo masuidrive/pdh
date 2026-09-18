@@ -201,3 +201,42 @@ jobs:
               "$REACTIONS_URL" \
               -d '{"content":"confused"}'
           fi
+      # ⚠ run が «何も残さずに» 死ぬのを塞ぐ（F1）。
+      #
+      # 実測 2026-09-08（ある導入先の issue）: run が failure で終わったが、
+      # コメントも 👀 も残らなかった。人は 15 分後に勘で 🤖 を打ち直した。
+      # ⚠ この壊れ方は定義上 «何も出ない» ので、使っても気づけない。
+      #
+      # run-action.sh の中に置いても遅い — そこまで到達せずに死ぬ場合があるためである
+      # （setup / checkout / devcontainer の起動で落ちると run-action.sh は動いていない）。
+      # だから workflow の層に置き、if: always() で必ず通す。
+      #
+      # ⚠ 二重投稿を避けるため、run-action.sh が最終レポートを投稿したら
+      # $GITHUB_WORKSPACE/.coding-robot-reported を置く。この step はそれが在れば何もしない。
+      - name: Report if the run left nothing
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number || github.event.pull_request.number }}
+          CONCLUSION: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          if [ -z "${ISSUE:-}" ]; then
+            echo "issue 番号が取れない（workflow_dispatch など）。何もしない"; exit 0
+          fi
+          if [ -f "$GITHUB_WORKSPACE/.coding-robot-reported" ]; then
+            echo "run-action.sh が最終レポートを投稿済み。何もしない"; exit 0
+          fi
+          echo "最終レポートが投稿されていない（job.status=$CONCLUSION）。1 行残す"
+          BODY=$(printf '%s\n\n%s\n\n- %s\n- %s\n\n%s' \
+            "**この run は結果を残さずに終わりました**（$CONCLUSION）。" \
+            "実行そのものが途中で落ちたため、何をしたかの報告がありません。作業は進んでいません。" \
+            "何が起きたか: [実行ログ]($RUN_URL)" \
+            "もう一度やらせるには: このスレッドに 🤖 を付けてコメントしてください" \
+            "<!-- coding-robot -->")
+          gh issue comment "$ISSUE" --repo "$REPO" --body "$BODY" \
+            || echo "Warning: failed to post the fallback report"
+          gh issue edit "$ISSUE" --repo "$REPO" --add-label "awaiting-reply" >/dev/null 2>&1 \
+            && echo "awaiting-reply を付けた" || echo "Warning: failed to add awaiting-reply"

@@ -886,6 +886,10 @@ ${SCREENSHOTS_BLOCK}"
 
 🌿 Branch: \`$BRANCH_NAME\`
 📝 [View changes](https://github.com/$GITHUB_REPOSITORY/compare/main...$BRANCH_NAME)$PR_LINK"
+
+  # ⚠ 最終レポートを投稿した印。coding-robot.yml の «Report if the run left nothing» が
+  # これを見て二重投稿を避ける。置かないと、そちらが必ずもう 1 通出す。
+  : > "${GITHUB_WORKSPACE:-.}/.coding-robot-reported" 2>/dev/null || true
 else
   echo "❌ Task failed with exit code $ENGINE_EXIT_CODE"
 
@@ -922,6 +926,10 @@ $(tail -n 200 "$PROGRESS_OUTPUT_FILE" 2>/dev/null || tail -n 200 "$JSON_OUTPUT_F
 \`\`\`
 
 </details>"
+
+  # ⚠ 最終レポートを投稿した印。coding-robot.yml の «Report if the run left nothing» が
+  # これを見て二重投稿を避ける。置かないと、そちらが必ずもう 1 通出す。
+  : > "${GITHUB_WORKSPACE:-.}/.coding-robot-reported" 2>/dev/null || true
 
   exit $ENGINE_EXIT_CODE
 fi
