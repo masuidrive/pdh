@@ -296,15 +296,29 @@ jq -c . ~/.codex/auth.json | gh secret set CODEX_AUTH_JSON --repo $GITHUB_REPOSI
 Or copy it to the clipboard and paste it into
 [Repository Secrets](https://github.com/$GITHUB_REPOSITORY/settings/secrets/actions).
 
-UI path: [Repository Secrets](https://github.com/$GITHUB_REPOSITORY/settings/secrets/actions)
+macOS:
 
-**If using \`OPENAI_API_KEY\`:** verify the key is valid and has quota:
+\`\`\`bash
+jq -c . ~/.codex/auth.json | pbcopy
+\`\`\`
+
+Linux:
+
+\`\`\`bash
+jq -c . ~/.codex/auth.json | xclip -selection clipboard
+\`\`\`
+
+### If using \`OPENAI_API_KEY\`
+
+Verify the key is valid and has quota, then set it:
 
 \`\`\`bash
 gh secret set OPENAI_API_KEY --repo $GITHUB_REPOSITORY
 \`\`\`
 
-Then comment \`:robot:\` to retry.
+### Retry
+
+Comment \`:robot:\` on this issue.
 EOF
     return 0
   fi

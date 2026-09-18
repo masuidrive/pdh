@@ -124,8 +124,8 @@ are required; others are recommended when relevant.
 
 ### Next action  (MUST)
 What the reader must do now, in 1–2 lines. Examples:
-- the close gate is a merge button: "Merge を 1 回押してください。それが
-  承認です（別途のコメント承認は要りません）。"
+- the close gate is a merge button: "CI が緑になったら Merge を 1 回
+  押してください。それが承認です（別途のコメント承認は要りません）。"
 - waiting on a choice: the numbered options and their reply strings here.
 - nothing needed: "確認だけで、操作は要りません。"
 

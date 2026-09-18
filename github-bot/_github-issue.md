@@ -90,7 +90,11 @@ close 承認は issue で得ているので、同じ人が PR でもう一度承
   ⚠ **その job は «PR の差分に `tickets/done/…/ticket.md` が入っているか» を検査し、入っていなければ
   Issue を閉じずに警告する。**⚠ **`🤖 クローズ承認` というコメントは使わない** — GitHub の承認
   プリミティブは merge ボタンであり、コメントを足すと承認が 2 回になる。
+  ⚠ **PR で «修正して» と言われたら、`_pr.md` のモードで実装し、また PR にコメントして停止する。**
+  merge されるまで close gate は越えていない。
 - **`pr`**: bot は `ticket.sh close --no-merge <name>` で `tickets/done/` へ移した commit を含めて PR（本文に **`Refs #N`**。`Closes` / `Fixes` は issue を自動 close して PDH の close 手順を飛ばすので使わない）を作り、«merge したら 🤖 で issue を閉じます» と伝えて停止する。人間が merge → 次の 🤖 で `gh issue close #N` だけを行う。**done への移動を PR の後にすると、その commit が agent branch に取り残されて main に届かない**（smoke 実測）。選ぶのは、branch protection で Actions が default branch へ push できない、外部のコードを受け入れる、close 承認とは別の人にコードレビューさせたい、のどれかに当たる repo。
+- ⚠ **ticket gate（実装に入ってよいか）は、`github_bot.close` の値に関わらず issue で行う。**
+  その時点ではコードも PR も無く、決めるのは «何を作るか» だからである。
 - 作業中の「🤖 作業中...」コメントは close 時に消すか、最終結果へ置き換える。
 
 ## local: issue を読みに行く
