@@ -35,6 +35,14 @@ jobs:
     #      「追加変更なし」で終わった。印は HTML コメントなので描画されない。
     #      ⚠ 人が板を引用してコメントすると印ごと写り、その依頼は無視される。
     # bot の進捗コメント「🤖 作業中...」が自己再トリガーして二重起動するのを防ぐため。
+    #   3. ⚠ awaiting-reply が付いている間は 🤖 が無くても起動する。
+    #      bot が «あなたの番です» と止めた直後のコメントは、ほぼ確実にその答えである。
+    #      🤖 の付け忘れで無反応になるのは、新しく使う人が最初に踏む罠なので、そこだけ外す。
+    #      ⚠ 判定材料は label（metadata）であって、人が書いた文ではない。
+    #      ⚠ 印は Issue と PR の両方に付ける（pdh-hooks.sh）。PR へのコメントは issue_comment と
+    #      して飛び、github.event.issue は PR 自身を指すので、Issue 側だけだと close gate で効かない。
+    #      ⚠ 残る穴 2 つ: ①答えでないコメント（相槌・第三者）でも起動する ②start hook が run 開始で
+    #      印を外すので、答えを 2 コメントに分けた 2 通目は無言で落ちる → 案内文で «続きは 🤖 を付けて»。
     if: |
       github.event.sender.type != 'Bot' &&
       !contains(github.event.comment.body || '', '<!-- coding-robot -->') &&
@@ -43,7 +51,10 @@ jobs:
       (github.event_name == 'issue_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||
       (github.event_name == 'pull_request_review_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||
       (github.event_name == 'pull_request_review' && (contains(github.event.review.body, ':robot:') || contains(github.event.review.body, '🤖'))) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, ':robot:') || contains(github.event.issue.body, '🤖') || contains(github.event.issue.title, ':robot:') || contains(github.event.issue.title, '🤖')))
+      (github.event_name == 'issues' && (contains(github.event.issue.body, ':robot:') || contains(github.event.issue.body, '🤖') || contains(github.event.issue.title, ':robot:') || contains(github.event.issue.title, '🤖'))) ||
+      (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'awaiting-reply')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.pull_request.labels.*.name, 'awaiting-reply')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.pull_request.labels.*.name, 'awaiting-reply'))
       )
 
     runs-on: ubuntu-latest

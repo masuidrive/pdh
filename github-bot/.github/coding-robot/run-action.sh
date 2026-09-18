@@ -547,7 +547,7 @@ engine_run
 # awaiting-reply を外す。⚠ **ループの後ろに置いてはならない** — そこは engine が終わった後であり、
 # 人が答えて run が動いている間ずっとラベルが «自分の番» と言い続ける。
 if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
-  bash "$SCRIPT_DIR/pdh-hooks.sh" start "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" || true
+  bash "$SCRIPT_DIR/pdh-hooks.sh" start "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "$BRANCH_NAME" || true
 fi
 
 # GitHub Actions URL を取得
@@ -896,7 +896,7 @@ else
   # ⚠ この経路では pdh-hooks の final が呼ばれない。止まっていて人の手が要るという意味は
   # gate 停止と同じなので、失敗側からも awaiting-reply を付ける。
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
-    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" || true
+    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "$BRANCH_NAME" || true
   fi
 
   # エラー詳細はエンジン実装が生成する

@@ -29,6 +29,23 @@ STAGES="PDH-open PDH-ticket-review PDH-ticket-human-review PDH-implement PDH-rev
 # 止まったとき（非収束での escalate・blocker・質問）に «自分の番か» が一覧から分からない。
 # STAGES に入れてはならない — 入れると stage を付けるときに他として外される。
 AWAITING_LABEL="awaiting-reply"
+
+# ⚠ 待ち印は Issue と PR の «両方» に付ける。
+#
+# coding-robot.yml は «この印が付いている間は 🤖 無しのコメントでも起動する» を、
+# その event の label で判定する。ところが PR へのコメントは issue_comment として飛び、
+# github.event.issue は **PR 自身** を指すので、Issue に付けた印は見えない。
+# 片方だけに付けると、依頼者がいちばん迷う close gate（板は PR にある）で効かない。
+#
+# ⚠ 触るのは AWAITING_LABEL だけにする。人が PR に付けた他の label には触れない。
+awaiting_label_on_pr() {  # $1=add|remove  $2=branch
+  local action="$1" branch="${2:-}" pr
+  [ -n "$branch" ] || return 0
+  pr=$(gh pr list --head "$branch" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
+  [ -n "$pr" ] && [ "$pr" != "null" ] || return 0
+  gh issue edit "$pr" --repo "$REPO" "--${action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
+    && log "$AWAITING_LABEL を PR #$pr にも ${action} した"
+}
 log() { printf 'pdh-hooks: %s\n' "$*" >&2; }
 
 setup_check() {
@@ -85,19 +102,22 @@ case "$cmd" in
     issue="${2:-}"; [ -n "$issue" ] || exit 0
     ac_progress_block "$issue"; exit 0 ;;
   start|failed)
-    issue="${2:-}"; [ -n "$issue" ] && [ -n "$REPO" ] || { log "$cmd: issue / GITHUB_REPOSITORY が要る"; exit 2; }
+    issue="${2:-}"; branch="${3:-}"
+    [ -n "$issue" ] && [ -n "$REPO" ] || { log "$cmd: issue / GITHUB_REPOSITORY が要る"; exit 2; }
     if [ "$cmd" = start ]; then
       # run が始まった＝bot の番。人が答えたかどうかに関係なく、いま待ってはいない。
       gh issue edit "$issue" --repo "$REPO" --remove-label "$AWAITING_LABEL" >/dev/null 2>&1 \
         && log "$AWAITING_LABEL を外した（run 開始）"
+      awaiting_label_on_pr remove "$branch"
     else
       # engine が失敗した＝止まっていて人の手が要る（認証・quota・環境）。final は呼ばれない。
       gh issue edit "$issue" --repo "$REPO" --add-label "$AWAITING_LABEL" >/dev/null 2>&1 \
         && log "$AWAITING_LABEL を付けた（engine 失敗）"
+      awaiting_label_on_pr add "$branch"
     fi
     exit 0 ;;
   final) ;;
-  *) log "usage: pdh-hooks.sh final <issue> <branch> <comment-id> | start <issue> | failed <issue> | progress <issue> | setup [owner/repo]"; exit 2 ;;
+  *) log "usage: pdh-hooks.sh final <issue> <branch> <comment-id> | start <issue> [branch] | failed <issue> [branch] | progress <issue> | setup [owner/repo]"; exit 2 ;;
 esac
 
 ISSUE="${2:-}"; BRANCH="${3:-}"; CID="${4:-}"
@@ -117,6 +137,7 @@ if [ -z "$dir" ]; then
   if [ -z "$done_dir" ]; then
     gh issue edit "$ISSUE" --repo "$REPO" --add-label "$AWAITING_LABEL" >/dev/null 2>&1 \
       && log "$AWAITING_LABEL を付けた（ticket 未作成のまま run が終わった＝人に聞いている）"
+    awaiting_label_on_pr add "$BRANCH"
   else
     log "issue #$ISSUE は done 済み。補正なし"
   fi
@@ -157,7 +178,7 @@ fi
 close_mode=$(awk '/^github_bot:/{f=1;next} /^[^ #]/{f=0} f && /^[[:space:]]*close:[[:space:]]*/{print $2; exit}' .ticket-config.yaml 2>/dev/null)
 if [ "$status" = "PDH-ticket-human-review" ]; then
   word="🤖 承認"
-  guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。板を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。"
+  guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。板を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。**この 1 通目は 🤖 が無くても届きます**（\`awaiting-reply\` が付いているため）。⚠ **2 通目からは 🤖 を付けてください。**"
 elif [ "$close_mode" = "pr-merge" ]; then
   # ⚠ 単語 `merge` で判定すると、説明文に一度出ただけで導線追加が抑止される。
   # 導線そのものの文を目印にする。
@@ -172,7 +193,7 @@ elif [ "$close_mode" = "pr-merge" ]; then
   fi
 else
   word="🤖 クローズ承認"
-  guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。板を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。"
+  guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。板を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。**この 1 通目は 🤖 が無くても届きます**（\`awaiting-reply\` が付いているため）。⚠ **2 通目からは 🤖 を付けてください。**"
 fi
 if [ "$gate" -eq 1 ] && ! printf '%s' "$report" | grep -qF "$word"; then
   report="$report
@@ -215,9 +236,11 @@ if [ -f "$note" ]; then
   if has_waiting_line; then
     gh issue edit "$ISSUE" --repo "$REPO" --add-label "$AWAITING_LABEL" >/dev/null 2>&1 \
       && log "$AWAITING_LABEL を付けた（回答待ちの行がある）"
+    awaiting_label_on_pr add "$BRANCH"
   else
     gh issue edit "$ISSUE" --repo "$REPO" --remove-label "$AWAITING_LABEL" >/dev/null 2>&1 \
       && log "$AWAITING_LABEL を外した（回答待ちの行が無い）"
+    awaiting_label_on_pr remove "$BRANCH"
   fi
 fi
 
