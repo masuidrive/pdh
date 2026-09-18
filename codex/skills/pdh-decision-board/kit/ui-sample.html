@@ -327,6 +327,8 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
   <div class="sw"><div class="chip" style="background:var(--ok-soft);border-bottom:1px solid var(--line)"></div><div class="m"><code>--ok-soft</code><br>推奨の地</div></div>
   <div class="sw"><div class="chip" style="background:var(--warn);border-bottom:1px solid var(--line)"></div><div class="m"><code>--warn</code><br>注意・未測定・停止</div></div>
   <div class="sw"><div class="chip" style="background:var(--warn-soft);border-bottom:1px solid var(--line)"></div><div class="m"><code>--warn-soft</code><br>注意の地</div></div>
+  <div class="sw"><div class="chip" style="background:var(--bad);border-bottom:1px solid var(--line)"></div><div class="m"><code>--bad</code><br>通らなかった判定</div></div>
+  <div class="sw"><div class="chip" style="background:var(--bad-soft);border-bottom:1px solid var(--line)"></div><div class="m"><code>--bad-soft</code><br>通らなかった行の地</div></div>
 </div>
 <div class="callout accent"><span class="lab">寸法の token</span><p><code>--measure: 44rem</code>（本文幅の唯一の基準）・<code>--u: .25rem</code>（余白の目盛）・<code>--r: 6px</code>（角丸）。部品が幅や余白のリテラル値を持つことを禁じ、検査は「token を経由しない hex / px が無いか」の grep 1 本にする。</p></div>
 
@@ -402,6 +404,19 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
 <div class="spec" id="sp-table">
 <p class="name">tw（表）と acrow（AC 行）</p>
 <p class="why">実装する規則: 表を使うのは<b>セルが語・数値・1 句で終わる列挙</b>だけ。セルに文章を書き始めたらそれは表ではない — 語+説明は facts、案の比較は compare（セルは 1 文まで）、それ以外は本文の散文へ。表は読み手が検算できる形にし、自分の枠でだけ横に逃がす。AC は書き換えの隣で原文を確認できる。</p>
+<h3>判定の表 — <code>.tag</code> と、通らなかった行だけの塗り</h3>
+<p>受け入れ条件の一覧と、毎回の確認は、どちらも <b>1 行 1 判定</b>である。判定は語ではなく <code>.tag</code> で置き、<b>通っていない行だけ</b>地を薄く塗る。全行を塗ると差が消えるので、<code>--ok</code> の行は塗らない。</p>
+<div class="tw"><table>
+  <thead><tr><th>確認</th><th>判定</th><th>根拠</th></tr></thead>
+  <tbody>
+    <tr><td>テストは同じ変更に入っているか</td><td><span class="tag ok">通った</span></td><td>3 本を同じ commit に入れた</td></tr>
+    <tr><td>保存されている形は変わったか</td><td><span class="tag na">対応なし</span></td><td>DB に触れていない — migration の差分 0 本</td></tr>
+    <tr><td>文書は追随したか</td><td><span class="tag partial">部分的</span></td><td>README は直したが、SDK の例が古いまま</td></tr>
+    <tr><td>生成物は再生成したか</td><td><span class="tag ng">通らない</span></td><td>型の再生成をしていない — 次の CI で落ちる</td></tr>
+  </tbody>
+</table></div>
+<p class="mut"><code>.tag.ok</code> / <code>.partial</code> / <code>.ng</code> / <code>.na</code> は判定の軸、<code>.rec</code> / <code>.alt</code> / <code>.care</code> は推奨の軸で、混ぜない。どちらも枠と字だけで、塗らない。</p>
+
 <div class="tw"><table><thead><tr><th>案</th><th>得るもの</th><th>失うもの</th><th class="num">AC 数</th></tr></thead>
 <tbody><tr><td>A（推奨）</td><td>階層が読める。Simple の用途を維持</td><td>表示全体は有効な JSON にならない</td><td class="num">4</td></tr>
 <tr><td>C</td><td>実装が減る</td><td>output 抽出・Markdown・型別色</td><td class="num">3</td></tr></tbody></table></div>
@@ -466,10 +481,27 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
   <figcaption>見てほしいこと: dark で textarea の回答文が<b>読めること</b>（以前は文字色未指定で黒字だった）。ボタンの字が地に沈まないこと。</figcaption>
 </figure>
 
+<h3>横長の図 — <code>.media.wide</code></h3>
+<p>横長の図は入れ物だけを全幅にする。<b>svg の寸法には触らない</b> — 引き伸ばすと、小さな図で字まで比例拡大されて読めなくなる。図の側が <code>viewBox</code> と <code>width="100%"</code> を持っていれば、広げた入れ物に合わせて自分で伸びる。図は mermaid ではなく SVG で書くと、縦横の比を書き手が決められる。</p>
+<figure class="fig">
+  <div class="bar"><b>コメントから gate までの流れ</b></div>
+  <div class="media wide"><svg viewBox="0 0 720 120" width="100%" height="auto" role="img" aria-label="コメント、依頼の実行、gate の判定、PR の 4 段が左から右へ並ぶ図">
+    <g fill="none" stroke="var(--line)" stroke-width="1.5">
+      <rect x="8" y="40" width="140" height="40" rx="6"/><rect x="196" y="40" width="140" height="40" rx="6"/>
+      <rect x="384" y="40" width="140" height="40" rx="6" stroke="var(--accent)"/><rect x="572" y="40" width="140" height="40" rx="6"/>
+      <path d="M148 60h48M336 60h48M524 60h48" stroke="var(--muted)" marker-end="url(#a)"/>
+    </g>
+    <defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0l8 4-8 4z" fill="var(--muted)"/></marker></defs>
+    <text x="78" y="65" text-anchor="middle">コメント</text><text x="266" y="65" text-anchor="middle">依頼を全部やる</text>
+    <text x="454" y="65" text-anchor="middle" fill="var(--accent)">gate の判定</text><text x="642" y="65" text-anchor="middle">PR</text>
+  </svg></div>
+  <figcaption>色は <code>var(--line)</code> <code>var(--muted)</code> <code>var(--accent)</code> だけで指定する。固定色を書くと暗い配色で読めなくなる。</figcaption>
+</figure>
+
 <figure class="fig">
   <div class="bar"><b>実行詳細 — 変更後</b><span class="badge">未撮影</span></div>
   <div class="ph">1280 × 720 — 実装後にここへ screenshot を差す</div>
-  <figcaption>撮る前は寸法入りの枠。枠が残っていれば「撮り忘れ」が見た目で分かる。</figcaption>
+  <figcaption>撮る前は寸法入りの斜線。残っていれば「撮り忘れ」が見た目で分かる。枠は <code>.fig</code> の 1 本だけで、<code>.ph</code> は枠を持たない（2 本が近接して二重に見えるため）。</figcaption>
 </figure>
 
 <figure class="fig">
