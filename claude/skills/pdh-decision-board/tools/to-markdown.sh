@@ -9,7 +9,7 @@
 # usage: to-markdown.sh <board.html|fragment.html> [--url <発行した board の URL>]
 #
 # 落とすもの: 目次・style・script・回答 UI（ボタン / 貼り戻し欄 / 進捗）・svg の中身
-# （代わりに «図は HTML の board にあります» と出して URL を案内する）。
+# （代わりに «図は HTML の board にあります» と出す。--url は出力の先頭に置く）。
 # 残すもの（GitHub Flavored Markdown が描くもの）: 見出し・段落・箇条書き・表・引用・
 # 畳み（<details>）・mermaid（```mermaid）・注意の枠（> [!WARNING] などの alert）・
 # 判定の tag・選択肢（- [ ]）・用語と説明（dl → 太字の行 + 説明の行）。
@@ -215,7 +215,9 @@ END{
   flushpara()
   gsub(/\n\n\n+/,"\n\n",out)
   sub(/^\n+/,"",out)
+  # ⚠ URL は先頭に出す（ユーザ指示 2026-09-18「url は最上位に出す」）。読む人が探すのは
+  # 図と表のある本物の board で、末尾に置くと長いコメントをスクロールして探すことになる。
+  if (url != "") printf "図と表を含む全文はこちら: %s\n\n---\n\n", url
   printf "%s", out
-  if (url != "") printf "\n---\n\n図と表を含む全文はこちら: %s\n", url
 }
 ' "$slice"

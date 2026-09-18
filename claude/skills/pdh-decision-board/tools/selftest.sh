@@ -149,10 +149,10 @@ if sh "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/good.html" > "$SELFTEST_TMP/goo
   if grep -q '^| ' "$SELFTEST_TMP/good.md"; then
     grep -q '^| --- ' "$SELFTEST_TMP/good.md" || { echo 'FAIL to-markdown: 表の区切り行がありません' >&2; md_bad=1; }
   fi
-  # URL を渡したら末尾に出ること
+  # URL を渡したら先頭の 1 行目に出ること（ユーザ指示 2026-09-18「url は最上位に出す」）
   sh "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/good.html" --url 'https://example.invalid/b' \
-    | tail -3 | grep -q 'https://example.invalid/b' \
-    || { echo 'FAIL to-markdown: --url が末尾に出ませんでした' >&2; md_bad=1; }
+    | head -1 | grep -q 'https://example.invalid/b' \
+    || { echo 'FAIL to-markdown: --url が先頭に出ませんでした' >&2; md_bad=1; }
   # callout → GitHub Alerts（GFM が枠と色で描く）。段落に落とすと «注意» の意味が消える。
   printf '%s\n' '<main class="board">' '<div class="callout warn"><span class="lab">気をつけること</span><p>本番に出ます。</p></div>' '<div class="callout ok"><p>通りました。</p></div>' '</main>' > "$SELFTEST_TMP/callout.html"
   sh "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/callout.html" > "$SELFTEST_TMP/callout.md"
