@@ -18,7 +18,7 @@
   --accent:#17657f;      --accent-soft:#e3eef2;  /* 判断・選択・接続 */
   --on-accent:#ffffff;   /* accent 塗りの上の字 */
   --ok:#2e6b4e;          --ok-soft:#e7f1ea;      /* 推奨・合格 */
-  --warn:#8a5512;        --warn-soft:#faf1e2;    /* 注意・未測定・停止条件 */
+  --warn:#8a5512;        --warn-soft:#faf1e2;--bad:#9a2b2b;--bad-soft:#f8e9e9;    /* 注意・未測定・停止条件 */
   --mark:#faeaa8;      /* mark.k の帯。塗り«だけ»で意味を運ぶ唯一の面なので、
                           bg / paper の両方に対して面の下限 1.08 を要求する（check-contrast.sh） */
   /* 寸法 */
@@ -36,7 +36,7 @@
   --bg:#0b0e13; --paper:#1a2027; --fill:#2a333e; --ink:#f2f5f9; --muted:#b9c3ce; --line:#66788a;
   --accent:#93cee2; --accent-soft:#20404f; --on-accent:#0b0e13;
   --ok:#9cdab7;     --ok-soft:#20402c;
-  --warn:#f3c886;   --warn-soft:#4a3825;
+  --warn:#f3c886;   --warn-soft:#4a3825;--bad:#e79191;--bad-soft:#4a2828;
   --mark:#4a3825;
   --shadow:0 2px 10px rgba(0,0,0,.55);
   color-scheme:dark;
@@ -46,7 +46,7 @@
   --bg:#0b0e13; --paper:#1a2027; --fill:#2a333e; --ink:#f2f5f9; --muted:#b9c3ce; --line:#66788a;
   --accent:#93cee2; --accent-soft:#20404f; --on-accent:#0b0e13;
   --ok:#9cdab7;     --ok-soft:#20402c;
-  --warn:#f3c886;   --warn-soft:#4a3825;
+  --warn:#f3c886;   --warn-soft:#4a3825;--bad:#e79191;--bad-soft:#4a2828;
   --mark:#4a3825;
   --shadow:0 2px 10px rgba(0,0,0,.55);
   color-scheme:dark;

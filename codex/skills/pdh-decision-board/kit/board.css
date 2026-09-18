@@ -188,6 +188,18 @@ a.shot-open, a.mapcell, a.shot-zoom, .lightbox-close { color: inherit; text-deco
 .tag.rec { color: var(--accent); }
 .tag.alt { color: var(--muted); }
 .tag.care { color: var(--warn); }
+/* 判定の 4 種。推奨・注意（上の 3 つ）とは別の軸で、AC 一覧と毎回の確認の «各行 1 判定» に使う。
+   枠と文字だけで、塗らない — 塗ると board が信号機になり、どれが重いのか分からなくなる。 */
+.tag.ok { color: var(--ok); }
+.tag.partial { color: var(--warn); }
+.tag.ng { color: var(--bad); }
+.tag.na { color: var(--muted); border-color: var(--line); }
+
+/* 判定の表 — 通っていない行だけ薄く塗る。⚠ 全行を塗ると差が消える
+   （実測 2026-09-18: ok 10 / partial 2 / ng 1 / na 2 の board で、塗るのは 3 行）。
+   «塗らない» の原則の例外はここだけで、理由は «目で走って落ちている行を見つける» ためである。 */
+.tw tbody tr:has(.tag.ng){background:var(--bad-soft)}
+.tw tbody tr:has(.tag.partial){background:var(--warn-soft)}
 
 /* ---------- 決定サマリーと選択肢の軸 ---------- */
 .summary-list { margin: 0; padding: 0; list-style: none; }
@@ -342,9 +354,19 @@ ul.tl time{display:block;font-family:var(--font-head);font-size:.78rem;letter-sp
 .fig img,.fig svg{display:block}
 .mermaid-svg svg{display:block;max-width:100%;height:auto}
 .fig .media{overflow-x:auto}
+/* 横長の図は入れ物を広げるだけにする。⚠ svg へ width:100%/max-width:none を当てて
+   引き伸ばすと、小さな図（4 ノードの flowchart など）で文字まで比例拡大されて壊れる
+   （2026-09-18 に実機で確認）。SVG 側が viewBox と width="100%" を持っていれば、
+   広げた入れ物に合わせて自分で伸びる。 */
+.fig:has(.media.wide){width:100%}
+.fig .media.wide{display:flex;justify-content:center}
 .fig .media.pad{padding:calc(var(--u)*4)}
-.fig .ph{display:grid;place-items:center;min-height:12rem;margin:calc(var(--u)*3);border:2px dashed var(--line);
-  border-radius:var(--r);color:var(--muted);font-family:var(--font-head);font-size:.85rem}
+/* ⚠ .ph に枠を描かない。.fig が既に 1px の枠を持っており、margin を挟んだ 2 本目の枠が
+   12px の隙間で並んで «二重で近すぎ» になる（2026-09-18 に実機で確認）。
+   未撮影であることは .badge と塗りで示し、枠は外側の 1 本だけにする。 */
+.fig .ph{display:grid;place-items:center;min-height:11rem;padding:calc(var(--u)*6);
+  background:repeating-linear-gradient(135deg,transparent 0 10px,var(--fill) 10px 11px);
+  color:var(--muted);font-family:var(--font-head);font-size:.85rem}
 .fig .badge{margin-left:auto;font-size:.7rem;letter-spacing:.08em;color:var(--warn);border:1px solid var(--warn);
   border-radius:999px;padding:0 calc(var(--u)*2)}
 .fig figcaption{padding:calc(var(--u)*2) calc(var(--u)*4);font-size:.85rem;color:var(--muted);border-top:1px solid var(--line)}
