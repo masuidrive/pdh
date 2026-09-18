@@ -16,4 +16,4 @@ PR に 🤖 が付いたときのあなたの仕事は、その PR の head ブ�
 4. **最終レポートは PD-C-9 到達状況で分岐**：
    - **到達 + 自己チェック通過** → `_flow.md` PD-C-10 の「完了報告の必須要素」に従う（実装内容・PD-C-7/C-9 結果・各 AC の達成状況）。PR モードなので PR は既にある → 追加コメントとして post。
    - **到達できず途中終了** → 共通 `system.md` の「For Incomplete / Early Termination」テンプレートに切り替え。category は time / decision / blocker / non-convergence / spawn-failure から 1 つを 1 行目に出し、`What was done (committed)` / `What was NOT done (remaining)` / `Decision needed from user` / `Evidence pointers` を埋める。次回 `🤖` の続行で何を再開すればよいか分かる状態にする。Issue モード step 4 と同じ category 分類とトリガー（DEADLINE_UNIX 近接、AC 解釈の分岐、pre-existing major、3+ round 同型再発、worker 起動失敗）。
-5. クローズ（`tickets/<TICKET_NAME>.md` を `tickets/done/` へ移動 + `closed_at` 設定）は **AC 達成 + ユーザー承認後**（PD-C-10）。原則 **PR マージで完了**とし、未承認の段階では done に移動しない。
+5. クローズ（`tickets/<TICKET_NAME>.md` を `tickets/done/` へ移動 + `closed_at` 設定）は **AC 達成 + ユーザー承認後**（PD-C-10）。原則 **PR マージで完了**とし、未承認の段階では done に移動しない。⚠ **これは `github_bot.close` が `merge`（既定）のときの話である。**`pr` / `pr-merge` の repo では `_pdh.md`「checklist gate と close」に従い、**bot は承認より前に `tickets/done/` へ移して、その差分を PR に載せる**（`pr-merge` では `coding-robot-finalize.yml` がその移動の有無を検査して issue を閉じるので、載っていないと閉じない）。
