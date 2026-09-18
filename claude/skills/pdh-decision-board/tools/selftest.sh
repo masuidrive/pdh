@@ -159,8 +159,20 @@ if sh "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/good.html" > "$SELFTEST_TMP/goo
   grep -q '^> \[!WARNING\]' "$SELFTEST_TMP/callout.md" || { echo 'FAIL to-markdown: callout.warn が alert になりません' >&2; md_bad=1; }
   grep -q '^> \[!TIP\]'     "$SELFTEST_TMP/callout.md" || { echo 'FAIL to-markdown: callout.ok が alert になりません' >&2; md_bad=1; }
   grep -q '^> \*\*気をつけること\*\*' "$SELFTEST_TMP/callout.md" || { echo 'FAIL to-markdown: callout の見出しが引用の中に入りません' >&2; md_bad=1; }
-  [ "$md_bad" -eq 0 ] || { cat "$SELFTEST_TMP/callout.md" >&2; exit 1; }
-  echo 'PASS to-markdown.sh: Markdown へ落とす（表・畳み・alert・mermaid）'
+  # 行内の強調と用語の列挙。⚠ `**出ません。**触った` は GitHub が記号ごと素で出す
+  # （CommonMark の flanking 規則。2026-09-18 に実測）。句読点は強調の外へ出す。
+  printf '%s\n' '<main class="board">' \
+    '<p>前<strong>出ません。</strong>触った。<em>「注」</em>です</p>' \
+    '<dl class="facts"><dt>用語</dt><dd>説明の文</dd></dl>' \
+    '<p><a class="answer-jump" href="#answer-summary">回答欄へ進む</a></p>' '</main>' > "$SELFTEST_TMP/inline.html"
+  sh "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/inline.html" > "$SELFTEST_TMP/inline.md"
+  grep -q '前\*\*出ません\*\*。触った。' "$SELFTEST_TMP/inline.md" || { echo 'FAIL to-markdown: 強調の閉じの直前の句読点が外へ出ません' >&2; md_bad=1; }
+  grep -q '「\*注\*」です'            "$SELFTEST_TMP/inline.md" || { echo 'FAIL to-markdown: 強調の開きの直後の括弧が外へ出ません' >&2; md_bad=1; }
+  grep -q '^\*\*用語\*\*\\$'          "$SELFTEST_TMP/inline.md" || { echo 'FAIL to-markdown: dt が太字の行になりません' >&2; md_bad=1; }
+  grep -q '^説明の文$'                 "$SELFTEST_TMP/inline.md" || { echo 'FAIL to-markdown: dd が説明の行になりません' >&2; md_bad=1; }
+  if grep -q 'answer-summary' "$SELFTEST_TMP/inline.md"; then echo 'FAIL to-markdown: 回答欄へのリンクが残っています' >&2; md_bad=1; fi
+  [ "$md_bad" -eq 0 ] || { cat "$SELFTEST_TMP/callout.md" "$SELFTEST_TMP/inline.md" >&2; exit 1; }
+  echo 'PASS to-markdown.sh: Markdown へ落とす（表・畳み・alert・mermaid・強調・dl）'
 else
   echo 'FAIL to-markdown.sh: 変換に失敗しました' >&2
   cat "$SELFTEST_TMP/good.md.err" >&2

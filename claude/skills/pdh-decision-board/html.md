@@ -154,7 +154,10 @@ sh tools/to-markdown.sh <board.html> --url <発行した board の URL>
 | 表 | GFM の表。⚠ **`thead` が無くても区切り行を入れる**（無いと表にならない） |
 | `.tag` | `` `達した` `` のように語のまま |
 | `.opt` の radio | `- [ ]` |
-| `figure.fig` の `img` | `![caption](src)` |
+| `figure.fig` の `img` | `![caption](画像の src)` |
+| `dl`（`.facts` など） | `**用語**` の行 + 説明の行（行末の `\` で改行を固定） |
+| `strong` / `em` | `**…**` / `*…*`。⚠ **句読点・括弧・空白は強調の外へ出す**（`**出ません**。触った`）— 中に入れると GitHub が記号ごと素で出す（2026-09-18 に実測） |
+| `.answer-jump`（回答欄へのリンク） | ⚠ **落ちる**（Markdown 側に回答欄が無い） |
 | ⚠ **`svg`** | ⚠ **落ちる。**「図は HTML の board にあります」に置き換わるので、**`--url` を必ず添える** |
 
 落とすもの: 目次・回答 UI（ボタン / 貼り戻し欄 / 進捗）・style・script。

@@ -12,7 +12,7 @@
 # （代わりに «図は HTML の board にあります» と出して URL を案内する）。
 # 残すもの（GitHub Flavored Markdown が描くもの）: 見出し・段落・箇条書き・表・引用・
 # 畳み（<details>）・mermaid（```mermaid）・注意の枠（> [!WARNING] などの alert）・
-# 判定の tag・選択肢（- [ ]）。
+# 判定の tag・選択肢（- [ ]）・用語と説明（dl → 太字の行 + 説明の行）。
 set -eu
 
 board=""; url=""
@@ -51,6 +51,21 @@ function clsof(t,   c){
   c = t; sub(/.*class="/,"",c); sub(/".*/,"",c); return c
 }
 function emit(s){ out = out s }
+# 強調の閉じ記号の直前に句読点があり、直後に字が続くと、CommonMark は閉じと認めない
+# （右 flanking の規則: 句読点の後ろの ** は、空白か句読点が続くときだけ閉じられる）。
+# GitHub で `**出ません。**触った` が記号ごと素で出た（2026-09-18 に実測、1 枚の board で 2 か所）。
+# 開き側も同じで、`は**「注」**です` は開けない。句読点・括弧・空白は強調の外へ出す:
+# `**出ません**。触った` / `「**注**」です`。at は開き記号を足した直後の buf の長さ。
+function wrapclose(b, at, m,   inner, head, tail){
+  if (at == 0 || at > length(b)) return b m
+  inner = substr(b, at+1)
+  head=""; tail=""
+  while (match(inner, /(。|、|！|？|：|；|」|』|）| )$/)) { tail = substr(inner, RSTART) tail; inner = substr(inner, 1, RSTART-1) }
+  while (match(inner, /^(「|『|（| )/))                { head = head substr(inner, 1, RLENGTH); inner = substr(inner, RLENGTH+1) }
+  b = substr(b, 1, at - length(m))
+  if (inner == "") return b head tail
+  return b head m inner m tail
+}
 function flushpara(   t){
   t = trim(buf); buf=""
   if (t == "") return
@@ -77,6 +92,9 @@ BEGIN{ RS="<"; mode="para"; listmark="-"; indent=""; skip=0; drop=0 }
   # 回答 UI は Markdown では動かない。ボタン・貼り戻し欄・進捗は落とす。
   else if (lt ~ /^(button|textarea)[ >]/ || lt ~ /^(button|textarea)$/) { drop++ }
   else if (lt ~ /^\/(button|textarea)$/) { if (drop>0) drop--; next }
+  # 回答欄へのページ内リンクも回答 UI の一部。Markdown 側に回答欄は無いので、残すと行き先の無い link になる。
+  else if (lt ~ /^a [^>]*class="[^"]*answer-jump/) { drop++; ajump=1 }
+  else if (lt == "/a" && ajump) { if (drop>0) drop--; ajump=0; next }
   else if (lt ~ /^\/(style|script|svg|nav)$/) { if (drop > 0) drop-- ; if (drop==0 && sawsvg) { emit("（図は HTML の board にあります）\n\n"); sawsvg=0 }; next }
   if (drop > 0) next
 
@@ -104,6 +122,17 @@ BEGIN{ RS="<"; mode="para"; listmark="-"; indent=""; skip=0; drop=0 }
   # ---- 引用 ----
   else if (lt ~ /^blockquote/ && lt !~ /^\//) { flushpara(); mode="quote" }
   else if (lt == "/blockquote")               { flushpara(); mode="para"; emit("\n") }
+
+  # ---- 用語と説明（.facts などの dl）----
+  # dt は太字の行、dd はその下の行にする。⚠ 改行 1 つでは CommonMark が同じ段落へ繋ぐので、
+  # dt の行末に \ を置いて改行を固定する（GitHub の comment は素の改行も改行にするが、
+  # README や他の描画器では「用語 説明」と 1 行に繋がる）。
+  else if (lt ~ /^dl( |$)/)  { flushpara() }
+  else if (lt == "/dl")      { flushpara(); emit("\n") }
+  else if (lt ~ /^dt( |$)/)  { flushpara(); mode="dt" }
+  else if (lt == "/dt")      { t=trim(buf); buf=""; if (t!="") emit("**" t "**\\\n"); mode="para" }
+  else if (lt ~ /^dd( |$)/)  { flushpara(); mode="dd" }
+  else if (lt == "/dd")      { t=trim(buf); buf=""; if (t!="") emit(t "\n\n"); mode="para" }
 
   # ---- callout → GitHub Alerts（GFM が枠と色で描く）----
   # .callout は «意味を tone が持つ» 部品なので、GFM の alert へそのまま写せる。
@@ -170,10 +199,10 @@ BEGIN{ RS="<"; mode="para"; listmark="-"; indent=""; skip=0; drop=0 }
   }
 
   # ---- 行内 ----
-  else if (lt ~ /^(strong|b)[ >]?$|^(strong|b)$/) { buf = buf "**" }
-  else if (lt ~ /^\/(strong|b)$/)                 { buf = buf "**" }
-  else if (lt ~ /^(em|i)[ >]?$|^(em|i)$/)         { buf = buf "*" }
-  else if (lt ~ /^\/(em|i)$/)                     { buf = buf "*" }
+  else if (lt ~ /^(strong|b)[ >]?$|^(strong|b)$/) { buf = buf "**"; sopen = length(buf) }
+  else if (lt ~ /^\/(strong|b)$/)                 { buf = wrapclose(buf, sopen, "**"); sopen = 0 }
+  else if (lt ~ /^(em|i)[ >]?$|^(em|i)$/)         { buf = buf "*"; eopen = length(buf) }
+  else if (lt ~ /^\/(em|i)$/)                     { buf = wrapclose(buf, eopen, "*"); eopen = 0 }
   else if (lt ~ /^code/ && lt !~ /^\//)           { buf = buf "`" }
   else if (lt == "/code")                         { buf = buf "`" }
   else if (lt ~ /^a [^>]*href="/) { href=lt; sub(/.*href="/,"",href); sub(/".*/,"",href); buf = buf "["; lasthref=href }
