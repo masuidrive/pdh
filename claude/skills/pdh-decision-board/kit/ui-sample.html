@@ -351,6 +351,7 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
 <div class="spec" id="sp-toc">
 <p class="name">toc-rail（折りたたみ sidebar）</p>
 <p class="why">実装する規則: 読み手が現在地を失わない・判断のある節を目次から見つけられる（判断のある行の末尾に ✓ が付き、その節の判断が全部埋まると淡色の丸みが付く — この目次の 「判断カード」と「answer」の 2 行が実物。class は board.js が付ける）。広い画面では左に sticky、狭い画面では右上に浮いた「目次」ボタンだけを置き、押すと dropdown で開く — 帯を作らないので heading と高さを取り合わない。このページの左（狭ければ上）にあるのが実物 — 見出しを通過すると現在地が動く。節見出し（h2）も sticky で上に残り、いまどの節を読んでいるかが常に見える。</p>
+<p class="why"><b>目次は書き手が書かない。</b><code>page.js</code> が <code>section[id]</code> とその中の <code>h2</code> から組み、必要なら <code>.layout</code> / <code>.content</code> の包みまで作る。節が 5 つ以下の board では作らない。<b>手で書いた <code>nav#toc</code> がある board では何もしない</b> — このページがそれで、<code>.sub</code> で階層を持たせた並びを尊重している。<b>節を <code>&lt;section id="…"&gt;</code> で包み、その中に <code>h2</code> を置く</b>ことだけが書き手の仕事である。</p>
 </div>
 
 <div class="spec" id="sp-chips">
