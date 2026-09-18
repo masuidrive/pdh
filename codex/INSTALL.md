@@ -71,7 +71,10 @@ mkdir -p docs .agents/skills .codex/agents scripts
 cp tmp/pdh/docs/product-delivery-hierarchy.md docs/product-delivery-hierarchy.md
 cp tmp/pdh/docs/PDH-AGENTS.md PDH-AGENTS.md
 for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-check-writing pdh-update pdh-decision-board; do
-  cp -R "tmp/pdh/codex/skills/$skill" ".agents/skills/$skill"
+  # ⚠ -L で symlink を辿る。配布の codex/skills/pdh-decision-board/ は kit / tools /
+  # 共通の .md を claude/ 側の実体への symlink で持っている（同じ物を 2 つ持たないため）。
+  # -L が無いと、導入先には壊れたリンクだけが置かれる。
+  cp -RL "tmp/pdh/codex/skills/$skill" ".agents/skills/$skill"
 done
 cp tmp/pdh/codex/templates/AGENTS.md AGENTS.md
 cp tmp/pdh/codex/templates/AGENTS.local.md.example AGENTS.local.md.example
@@ -202,7 +205,10 @@ backup は `tmp/` 配下にあり、更新が正しいと確認するまで消�
 mkdir -p docs .agents/skills .codex/agents
 for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-check-writing pdh-update pdh-decision-board; do
   rm -rf ".agents/skills/$skill"
-  cp -R "tmp/pdh/codex/skills/$skill" ".agents/skills/$skill"
+  # ⚠ -L で symlink を辿る。配布の codex/skills/pdh-decision-board/ は kit / tools /
+  # 共通の .md を claude/ 側の実体への symlink で持っている（同じ物を 2 つ持たないため）。
+  # -L が無いと、導入先には壊れたリンクだけが置かれる。
+  cp -RL "tmp/pdh/codex/skills/$skill" ".agents/skills/$skill"
 done
 for agent in pdh-ac-reader pdh-ac-verifier pdh-coding-engineer pdh-qa pdh-reviewer-lens1 pdh-reviewer pdh-surface-observer; do
   cp "tmp/pdh/codex/templates/agents/codex/$agent.toml" ".codex/agents/$agent.toml"
