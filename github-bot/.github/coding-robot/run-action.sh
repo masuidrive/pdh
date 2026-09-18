@@ -439,6 +439,39 @@ case "$RUN_TIMEOUT_SECONDS" in ''|*[!0-9]*) echo "❌ CLAUDE_TIMEOUT must be an 
 RUN_START_UNIX=$(date +%s)
 RUN_DEADLINE_UNIX=$((RUN_START_UNIX + RUN_TIMEOUT_SECONDS))
 
+# ⚠ この run で «何が使えるか» を先に調べて prompt へ入れる（preflight）。
+#
+# 実測（2026-09-08〜17 の詰まり 16 件のうち 4 件）: OpenAI の認証情報が無い / Chromium が入って
+# いない / OpenAI の残高が足りない / engine の認証が切れている、で run の «終わり» に止まった。
+# ⚠ どれも «走り出す前に分かったはずのこと» である。人はそのたびに「続行」を打つか、
+# devcontainer を直すかしていた。
+#
+# ⚠ «無ければ落とす» にはしない。その run が本当にその credential を要るとは限らないためである
+# （frontend だけの変更に provider の鍵は要らない）。代わりに **何が在って何が無いかを先に渡し、
+# agent が計画の時点で «実 API の検証は回せない» と判断できるようにする。**
+ENVIRONMENT_SECTION=""
+{
+  _browser="無し"
+  if command -v agent-browser >/dev/null 2>&1; then _browser="agent-browser が使える"
+  elif [ -d "$HOME/.cache/ms-playwright" ]; then _browser="Playwright の chromium が使える"; fi
+  _keys=""
+  for k in OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY XAI_API_KEY; do
+    if [ -n "$(eval printf '%s' "\${$k:-}")" ]; then _keys="$_keys $k"; fi
+  done
+  [ -n "$_keys" ] || _keys=" （1 つも無い）"
+  _pat="無し（PR の CI が承認待ちで止まる）"
+  [ -n "${ATTACHMENTS_TOKEN:-}" ] && _pat="有り"
+  ENVIRONMENT_SECTION="
+<environment>
+この run で使えるもの（走り出す前に調べた値である。⚠ **これを前提に計画を立てること。**
+足りないものが要る作業は、**途中で止まらずに «回せない» と書いて先へ進む**）:
+
+- ブラウザ: $_browser
+- provider の鍵:$_keys
+- ATTACHMENTS_TOKEN: $_pat
+</environment>"
+} 2>/dev/null || true
+
 # ユーザプロンプト構築（システムプロンプトは --system-prompt で渡す）
 USER_PROMPT="<current-request>
 $USER_REQUEST
@@ -456,7 +489,7 @@ $ISSUE_BODY
 <conversation-history>
 $CONVERSATION_HISTORY_NOTE
 </conversation-history>
-</context>"
+</context>$ENVIRONMENT_SECTION"
 
 if [ -n "$PR_DIFF" ]; then
   USER_PROMPT="$USER_PROMPT

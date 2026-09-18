@@ -181,6 +181,21 @@ mergeable_state   : blocked
 **どの場合も «再実行して偶然 green を得る» を選ばない。**緑が出ても、それは失敗が消えた証拠ではない。
 
 ## worker spawn（team 実行）
+
+⚠ **worker が «作業と無関係な理由» で落ちたら、1 回だけやり直す。**
+
+実測（2026-09-15〜16 の 4 件）: «実 API 検証後に worker が異常終了» / «QA・review 起動プロセスの
+異常終了» / «2 worker が起動約 3 分後に TERM で中断» / «QA担当がモデル容量エラーで終了»。
+⚠ **4 件とも、人がやったことは «🤖 続行» と打つことだけだった。**判断を求められたのではなく、
+**再起動を求められていた。**
+
+- **やり直してよいのは «作業と無関係な落ち方» だけ** — 起動失敗・TERM・容量エラー・一時的な
+  API エラー。⚠ **prompt や仕様の誤りで落ちたものはやり直さない**（2 回とも同じに落ちる）
+- ⚠ **1 回だけ。**2 回目も落ちたら人に返す
+- ⚠ **やり直した事実と回数を、最終レポートに必ず書く。**書かないと «失敗が消える»。
+  «QA worker が TERM で落ちたので 1 回やり直し、2 回目は通った» のように 1 行
+- ⚠ **run 全体はやり直さない。**run 1 本は中央値 27 分かかる。落ちた worker だけをやり直す
+
 **あなた（bot の main agent）は PM として team フローを実行する。** worker（Coding Engineer / reviewer / AC 裏取り 等）は **CLI subprocess で spawn** する（`_execution-team.md`「spawn 機構」）。
 - **main engine** = `CODING_ROBOT_ENGINE`（この run の engine）。**worker は既定で main と同じ engine**。起動コマンド（claude / codex、**bypass 権限**）と並行起動・結果回収は `_execution-team.md` に self-contained に書いてある。**それをそのまま使う**。
 - 各 worker は専用 result ファイルに書かせ、統合する。認証は run の環境変数を subprocess が継承する（追加設定不要）。
