@@ -46,12 +46,11 @@ jobs:
     if: |
       github.event.sender.type != 'Bot' &&
       !contains(github.event.comment.body || '', '<!-- coding-robot -->') &&
-      !contains(github.event.review.body || '', '<!-- coding-robot -->') &&
-      !contains(github.event.issue.body || '', '<!-- coding-robot -->') && (
+      !contains(github.event.review.body || '', '<!-- coding-robot -->') && (
       (github.event_name == 'issue_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||
       (github.event_name == 'pull_request_review_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||
       (github.event_name == 'pull_request_review' && (contains(github.event.review.body, ':robot:') || contains(github.event.review.body, '🤖'))) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, ':robot:') || contains(github.event.issue.body, '🤖') || contains(github.event.issue.title, ':robot:') || contains(github.event.issue.title, '🤖'))) ||
+      (github.event_name == 'issues' && !contains(github.event.issue.body || '', '<!-- coding-robot -->') && (contains(github.event.issue.body, ':robot:') || contains(github.event.issue.body, '🤖') || contains(github.event.issue.title, ':robot:') || contains(github.event.issue.title, '🤖'))) ||
       (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'awaiting-reply')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.pull_request.labels.*.name, 'awaiting-reply')) ||
       (github.event_name == 'pull_request_review' && contains(github.event.pull_request.labels.*.name, 'awaiting-reply'))

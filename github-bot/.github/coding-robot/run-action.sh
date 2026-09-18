@@ -428,6 +428,12 @@ fi
 # PDH プロジェクト（project root に product-brief.md と tickets/ がある）なら _pdh.md
 if [ -f product-brief.md ] && [ -d tickets ]; then
   append_prompt "$SCRIPT_DIR/_pdh.md"
+  # ⚠ _github-issue.md も一緒に連結する。あれは «bot が issue / PR へ書くコメントの書き方»
+  # （判断ボード・語彙・画像・自己トリガーの印）を定める規則で、run の出力すべてに効く。
+  # 連結しないと、_pdh.md の «そのファイルを Read すること» 1 行だけが届ける手段になる —
+  # 導入先で実測すると 1749 行の prompt の 1740 行目にある指示である。⚠ Read を飛ばしても
+  # run は成功し、板が少し悪くなるだけなので、飛ばしたことを誰も観測できない。
+  append_prompt "$SCRIPT_DIR/_github-issue.md"
 fi
 
 # Deadline awareness: tell the agent how much wall-clock budget it has.

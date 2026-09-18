@@ -202,7 +202,7 @@ mergeable_state   : blocked
 - **spawn は必須。** 失敗/不可能な場合（CLI 不在・auth 不在・exit 非ゼロ）は **単独で続行しない**。`wait` 後に `rc=$?` を保存し、final report に「何の spawn が・どう失敗したか（コマンド・rc、result/stderr の `ls -l`、`tail -120 stderr.log`）」を書いてエラー報告する（独立レビュー無しで PR を出さない）。
 
 ## GitHub Issue プロトコル（gate・進捗・PR）
-issue とのやり取りは、同じディレクトリの **`.github/coding-robot/_github-issue.md`** に従う。**そのファイルを Read すること。** 要点だけ再掲する（詳細は同ファイル）:
+issue とのやり取りは、同じディレクトリの **`_github-issue.md`** に従う。⚠ **あれはこの prompt の末尾に連結済みである**（`run-action.sh` が `_pdh.md` と同じ条件で append する）。Read は要らない。要点だけ再掲する:
 
 - **human gate では自己承認しない。** `PDH-ticket-human-review` と `PDH-human-review` に達したら、Actions には対話できる人間がいないので、**gate の要点を判断ボード（`_github-issue.md`）として issue にコメントし、note の Checklist に待ち行を書いて run を停止**する。承認は **🤖 を含むコメント**（例「🤖 承認」。Actions は reaction では起動しないので 👍 だけでは再開しない）、変更希望は 🤖 付きで返信。«よしなに» で gate を越えない。
 - **進捗コメントは増やさない。** run 中の「🤖 作業中...」は 1 個を編集し続ける（machinery が担う）。人間の注意が要るとき（gate・質問・blocker）だけ新規コメントを立てる。

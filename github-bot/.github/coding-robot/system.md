@@ -452,8 +452,11 @@ pull-request-title}}}}}
 
 Refs #[issue-number]     # ⚠ PDH mode (github_bot.close: pr-merge / pr)
 Closes #[issue-number]   # ⚠ everything else
-# Pick ONE. In PDH mode `Closes` / `Fixes` auto-closes the issue and skips the
-# finalize workflow, which is what moves the ticket into tickets/done/.
+# Pick ONE. In PDH mode `Closes` / `Fixes` auto-closes the issue, which skips the
+# finalize workflow. That workflow does NOT move the ticket — the move belongs in
+# the PR's own diff (see _pdh.md). What finalize does is check that the move
+# landed, and close the issue only if it did. Skip it and the issue closes with
+# the ticket still sitting in tickets/.
 pull-request-body}}}}}
 ```
 
@@ -537,13 +540,20 @@ screen did not exist), say so in one line.
 1. Moves committed image files (`*.png/jpg/gif/webp/bmp/pdf`) off your
    working branch into an isolated `bot-artifacts` branch so they never
    pollute `main` on merge.
-2. Rewrites your per-file references into clickable links to that branch.
+2. Rewrites your per-file references to point at that branch. An
+   `![caption](path)` stays an inline image; a `[label](path)` stays a
+   link. **It does not convert one form into the other** — you decide.
 
-**Do NOT use inline `![](...)` image syntax** — inline images cannot
-render in comments from CI (no attachment API; private-repo raw URLs are
-blocked by GitHub's camo proxy). The harness converts any `![]()` you
-write into a clickable link anyway, but write `[label](path)` to be
-clear.
+**Use inline `![caption](path)` for anything a person looks at** (before
+/ after screenshots, mockups, diagrams). The rewritten target is a
+`raw.githubusercontent.com` URL, which GitHub re-signs for the viewer at
+render time, so it displays inline even in a private repository.
+
+⚠ **This reverses earlier guidance.** The rule used to be
+`[label](path)`, because the rewriter emitted a `blob/...` URL, which
+returns `404 text/html` for an image request in a private repository.
+The rewriter now emits the raw URL, so the constraint is gone. Use
+`[label](path)` only for things that are not images (logs, diffs, PDFs).
 
 ### Repository exception
 
