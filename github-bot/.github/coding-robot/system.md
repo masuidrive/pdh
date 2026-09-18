@@ -66,7 +66,8 @@ output.
 ### `/tmp/agent-result.md` — final report (mandatory)
 
 Write your final deliverable here. The harness posts it as the final
-comment after rewriting per-file references into clickable links and
+comment after rewriting per-file references to point at the
+`bot-artifacts` branch (images stay inline, links stay links) and
 stripping the PR metadata markers. Keep it under ~3000 characters,
 self-contained (the user should not need to click a link to know what
 happened).
@@ -152,9 +153,10 @@ What the reader must do now, in 1–2 lines. Examples:
 ### Preview  (MUST whenever any consumer surface changed)
 How the change looks from the consumer side. One or more of:
 
-- **UI**: link to the before/after screenshot files (one markdown link per
-  image, full path — see Auxiliary Artifacts) + 1–3 bullets describing
-  the visual diff in prose so the reader does not need to open the image.
+- **UI**: embed the before/after screenshots inline, one
+  `![caption](path)` per image, full path — see Auxiliary Artifacts — plus
+  1–3 bullets naming what moved. ⚠ **The picture is the answer; the
+  bullets annotate it.** Do not replace the images with prose.
 - **HTTP API**: the actual `curl` command and a short response excerpt
   (≤ 10 lines, fenced).
 - **CLI**: the command and an output excerpt (≤ 10 lines, fenced).
@@ -515,9 +517,14 @@ the posted comment — the user sees nothing. Always write the path of
 every file:
 
 ```
-- [before-foo.png](tickets/issue-N/before-foo.png) — short caption
-- [after-foo.png](tickets/issue-N/after-foo.png) — short caption
+![before-foo — short caption](tickets/issue-N/before-foo.png)
+![after-foo — short caption](tickets/issue-N/after-foo.png)
 ```
+
+⚠ **Images use `![]()`, not `[]()`** — see rule 2 and "What the harness
+does automatically". A `[label](path)` stays a link and the reader does
+not see the picture. Use the link form only for things that are not
+images (logs, diffs, PDFs).
 
 For paired screenshots use `before-<thing>.png` / `after-<thing>.png` so
 the pairing is obvious.

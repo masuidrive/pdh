@@ -896,7 +896,7 @@ PYEOF
     echo "🖼️ Agent did not link any artifact; appending Screenshots safety-net section."
     SCREENSHOTS_BLOCK=$(printf '%s' "$ARTIFACT_MAP" | awk -F'\t' 'NF==2 {
       n=split($1, parts, "/"); base=parts[n];
-      printf("- [%s](%s)\n", base, $2);
+      printf("![%s](%s)\n", base, $2);   # ⚠ 画像なので inline。[]() にすると読む人に見えない
     }')
     if [ -n "$SCREENSHOTS_BLOCK" ]; then
       CLAUDE_OUTPUT_CLEAN="${CLAUDE_OUTPUT_CLEAN}
