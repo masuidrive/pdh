@@ -144,6 +144,21 @@ sh tools/to-markdown.sh <board.html> --url <発行した board の URL>
 
 **HTML を唯一の本文にして、経路（issue コメントなど）へはここで作った Markdown と URL を出す。**⚠ **Markdown を手で書かない** — 本文が 2 つになると片方だけ古くなる。組み上げ済みの HTML でも断片でも受け取る（`<main class="board">` があればそこだけ切り出す）。
 
+**GitHub Flavored Markdown が描くものは、そのまま写る。**
+
+| board の部品 | Markdown 側 |
+|---|---|
+| `details.fold` | `<details>`（GFM が畳みとして描く） |
+| `pre.mermaid` | ` ```mermaid `（GFM が図として描く） |
+| `.callout.warn` / `.ok` / `.accent` | `> [!WARNING]` / `> [!TIP]` / `> [!NOTE]`（GFM の alert） |
+| 表 | GFM の表。⚠ **`thead` が無くても区切り行を入れる**（無いと表にならない） |
+| `.tag` | `` `達した` `` のように語のまま |
+| `.opt` の radio | `- [ ]` |
+| `figure.fig` の `img` | `![caption](src)` |
+| ⚠ **`svg`** | ⚠ **落ちる。**「図は HTML の board にあります」に置き換わるので、**`--url` を必ず添える** |
+
+落とすもの: 目次・回答 UI（ボタン / 貼り戻し欄 / 進捗）・style・script。
+
 ## 発行前検査
 
 ```bash

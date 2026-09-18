@@ -153,8 +153,14 @@ if sh "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/good.html" > "$SELFTEST_TMP/goo
   sh "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/good.html" --url 'https://example.invalid/b' \
     | tail -3 | grep -q 'https://example.invalid/b' \
     || { echo 'FAIL to-markdown: --url が末尾に出ませんでした' >&2; md_bad=1; }
-  [ "$md_bad" -eq 0 ] || exit 1
-  echo 'PASS to-markdown.sh: Markdown へ落とす'
+  # callout → GitHub Alerts（GFM が枠と色で描く）。段落に落とすと «注意» の意味が消える。
+  printf '%s\n' '<main class="board">' '<div class="callout warn"><span class="lab">気をつけること</span><p>本番に出ます。</p></div>' '<div class="callout ok"><p>通りました。</p></div>' '</main>' > "$SELFTEST_TMP/callout.html"
+  sh "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/callout.html" > "$SELFTEST_TMP/callout.md"
+  grep -q '^> \[!WARNING\]' "$SELFTEST_TMP/callout.md" || { echo 'FAIL to-markdown: callout.warn が alert になりません' >&2; md_bad=1; }
+  grep -q '^> \[!TIP\]'     "$SELFTEST_TMP/callout.md" || { echo 'FAIL to-markdown: callout.ok が alert になりません' >&2; md_bad=1; }
+  grep -q '^> \*\*気をつけること\*\*' "$SELFTEST_TMP/callout.md" || { echo 'FAIL to-markdown: callout の見出しが引用の中に入りません' >&2; md_bad=1; }
+  [ "$md_bad" -eq 0 ] || { cat "$SELFTEST_TMP/callout.md" >&2; exit 1; }
+  echo 'PASS to-markdown.sh: Markdown へ落とす（表・畳み・alert・mermaid）'
 else
   echo 'FAIL to-markdown.sh: 変換に失敗しました' >&2
   cat "$SELFTEST_TMP/good.md.err" >&2

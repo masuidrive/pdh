@@ -10,8 +10,9 @@
 #
 # 落とすもの: 目次・style・script・回答 UI（ボタン / 貼り戻し欄 / 進捗）・svg の中身
 # （代わりに «図は HTML の board にあります» と出して URL を案内する）。
-# 残すもの: 見出し・段落・箇条書き・表・引用・畳み（GitHub は details を描く）・
-# mermaid（GitHub は ```mermaid を描く）・判定の tag・選択肢。
+# 残すもの（GitHub Flavored Markdown が描くもの）: 見出し・段落・箇条書き・表・引用・
+# 畳み（<details>）・mermaid（```mermaid）・注意の枠（> [!WARNING] などの alert）・
+# 判定の tag・選択肢（- [ ]）。
 set -eu
 
 board=""; url=""
@@ -53,6 +54,7 @@ function emit(s){ out = out s }
 function flushpara(   t){
   t = trim(buf); buf=""
   if (t == "") return
+  if (mode == "li" && calldepth > 0) { emit("> " indent listmark " " t "\n"); return }
   if (mode == "li")      { emit(indent listmark " " t "\n"); return }
   if (mode == "quote")   { emit("> " t "\n"); return }
   if (mode == "cell")    { row = row "| " esc(t) " "; return }
@@ -97,11 +99,25 @@ BEGIN{ RS="<"; mode="para"; listmark="-"; indent=""; skip=0; drop=0 }
   else if (lt ~ /^ol/ && lt !~ /^\//){ flushpara(); if(listdepth>0) indent=indent "  "; listdepth++; listmark="1."; mode="para" }
   else if (lt == "/ul" || lt == "/ol"){ flushpara(); listdepth--; if(listdepth>0) indent=substr(indent,3); else {indent=""; emit("\n")} }
   else if (lt ~ /^li/ && lt !~ /^\//){ flushpara(); mode="li" }
-  else if (lt == "/li")              { flushpara(); mode="para" }
+  else if (lt == "/li")              { flushpara(); mode=(calldepth>0 ? "quote" : "para") }
 
   # ---- 引用 ----
   else if (lt ~ /^blockquote/ && lt !~ /^\//) { flushpara(); mode="quote" }
   else if (lt == "/blockquote")               { flushpara(); mode="para"; emit("\n") }
+
+  # ---- callout → GitHub Alerts（GFM が枠と色で描く）----
+  # .callout は «意味を tone が持つ» 部品なので、GFM の alert へそのまま写せる。
+  # ⚠ 段落にすると、注意・良否という意味が消えて地の文に埋まる。
+  else if (lt ~ /^div/ && lt !~ /^\// && clsof(lt) ~ /(^| )callout( |$)/) {
+    flushpara()
+    c=" " clsof(lt) " "
+    if      (c ~ / warn /)   emit("> [!WARNING]\n")
+    else if (c ~ / ok /)     emit("> [!TIP]\n")
+    else if (c ~ / accent /) emit("> [!NOTE]\n")
+    else                     emit("> [!NOTE]\n")
+    mode="quote"; calldepth++
+  }
+  else if (lt == "/div" && calldepth > 0 && mode == "quote") { flushpara(); calldepth--; mode="para"; emit("\n") }
 
   # ---- 表 ----
   else if (lt ~ /^table/ && lt !~ /^\//) { flushpara(); intable=1; cols=0; headdone=0 }
