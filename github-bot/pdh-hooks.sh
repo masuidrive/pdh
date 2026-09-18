@@ -108,7 +108,18 @@ report=$(cat)
 dir=""
 for d in tickets/*-issue-"$ISSUE"; do [ -d "$d" ] && [ -f "$d/ticket.md" ] && { dir="$d"; break; }; done
 if [ -z "$dir" ]; then
-  log "issue #$ISSUE の ticket dir が無い（done 済みか未作成）。補正なし"
+  # ⚠ ticket dir が無いのは 2 通りあり、扱いが逆になる。
+  #   done 済み  : tickets/done/*-issue-N が在る。仕事は終わっており、人を待っていない
+  #   未作成     : どちらも無い。bot が «足りないことを聞く» 段で止まっている（_issue.md A0）
+  # 後者でラベルを付けないと、依頼者の画面に «あなたの番» が 1 つも出ない。
+  done_dir=""
+  for d in tickets/done/*-issue-"$ISSUE"; do [ -d "$d" ] && { done_dir="$d"; break; }; done
+  if [ -z "$done_dir" ]; then
+    gh issue edit "$ISSUE" --repo "$REPO" --add-label "$AWAITING_LABEL" >/dev/null 2>&1 \
+      && log "$AWAITING_LABEL を付けた（ticket 未作成のまま run が終わった＝人に聞いている）"
+  else
+    log "issue #$ISSUE は done 済み。補正なし"
+  fi
   printf '%s' "$report"; exit 0
 fi
 note="$dir/note.md"; changed=0
