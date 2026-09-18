@@ -23,6 +23,31 @@
   pick.addEventListener('click', function(e){ var b=e.target.closest('button'); if(!b) return;
     localStorage.setItem(KEY, b.dataset.set); apply(b.dataset.set); });
 })();
+// 目次が書かれていなければ、節から作る。
+// ⚠ 目次は DOM から完全に導ける — 書き手に手で書かせると、節を足したときに追随せず、
+// 節が 5 つを超える board でも «目次が無い» まま出る（実測 2026-09-18）。
+// 既に nav#toc がある board では何もしない（手書きの並びを尊重する）。
+(function(){
+  if(document.getElementById('toc')) return;
+  var host=document.querySelector('.board, .view-doc, main');
+  if(!host) return;
+  var secs=[].filter.call(host.querySelectorAll('section[id]'), function(sec){
+    return sec.querySelector('h2');
+  });
+  if(secs.length <= 5) return;   // 5 つ以下の board には置かない（html.md の規則）
+  var nav=document.createElement('nav');
+  nav.className='toc'; nav.id='toc'; nav.setAttribute('aria-label','目次');
+  var btn=document.createElement('button');
+  btn.className='toc-t'; btn.type='button'; btn.id='toct'; btn.textContent='目次';
+  var ol=document.createElement('ol');
+  secs.forEach(function(sec){
+    var h=sec.querySelector('h2'), li=document.createElement('li'), a=document.createElement('a');
+    a.href='#'+sec.id; a.textContent=(h.textContent||'').trim().replace(/\s+/g,' ');
+    li.appendChild(a); ol.appendChild(li);
+  });
+  nav.appendChild(btn); nav.appendChild(ol);
+  host.insertBefore(nav, host.firstChild);
+})();
 (function(){
   var t=document.getElementById('toct'), nav=document.getElementById('toc');
   if(!nav) return;  // 目次の無い board では spy も含めて何もしない
