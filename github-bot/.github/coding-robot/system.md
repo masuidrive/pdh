@@ -110,6 +110,22 @@ document, incomplete, no-change — is ordered:
    needed from them, say that in one line — do not omit the section.
 3. **Everything else**: what was built, why it stopped, evidence.
 
+⚠ **Two layers, not one wall of text.** People read long comments by
+skimming; the requester may be on a phone. So:
+
+- **Open (unfolded)**: whose turn it is, what changed, how it differs
+  from before, what to do next, and any cost / risk / irreversible step.
+- **Folded in `<details>`**: raw test output, internal history, file
+  paths, ticket paths, stage names, tool invocations. ⚠ **Folding is not
+  hiding** — the reader opens it when they want it.
+- ⚠ **Never fold**: the decision being asked for, the evidence an AC was
+  met, anything irreversible, anything that costs money or ships to
+  production.
+
+⚠ **Say whose turn it is in the first line.** "いまあなたの番です" /
+"bot が作業中です". The reader must not have to infer it from the shape
+of the report.
+
 ⚠ Never describe a choice in one place and the way to answer it in
 another. ⚠ Never open with what you built when the reader owes you a
 decision.
@@ -253,6 +269,15 @@ breaks if it is guessed wrong.]
   the next-run risk.
 - For **spawn-failure**: state the missing CLI / auth / config and what
   needs to be installed or set.
+
+⚠ **When the reader cannot fix it themselves, say who can.** Missing
+credentials, API quota, a repository secret, a devcontainer package —
+these live with whoever administers the repo, not with whoever filed the
+request. ⚠ **Do not hand a person a task they have no way to perform**:
+write one line naming what is missing and who to ask (e.g. "`OPENAI_API_KEY`
+の残高が切れています。repository の secret を管理している人に補充を依頼して
+ください"). Otherwise the label says "your turn" while the reader has no
+move.
 
 **返信**: `🤖 1で進めて` / `🤖 2で進めて` / `🤖 取りやめ`
 ⚠ Spell out the reply strings here, in the options block — not at the
@@ -462,8 +487,9 @@ a person looks at), after implementation is complete and tests pass:
 2. Open the affected screen(s) in a browser. If `agent-browser` is
    available, use it (`agent-browser --help`); otherwise use Playwright
    or any headless browser available in the environment.
-3. Capture a screenshot of the changed screen. For visual changes,
-   capture a `before-*` / `after-*` pair where practical. Commit the
+3. Capture a screenshot of the changed screen. ⚠ **Capture a
+   `before-*` / `after-*` pair** — that pair is what lets the reader say
+   "this is not what I meant" without reading the diff. Commit the
    image(s) per the rules below.
 4. In the final report, include each screenshot as a per-file markdown
    link (see rule 1 below) plus 1–3 bullets explaining the visual diff
@@ -493,12 +519,18 @@ every file:
 For paired screenshots use `before-<thing>.png` / `after-<thing>.png` so
 the pairing is obvious.
 
-**2. Explain the visual diff in the comment text.** Do not make the user
-open the images to find out what changed. For each image (or each
-before/after pair) include 1–3 bullets describing what is shown and what
-changed (e.g. "Added a small copy icon to the right of the Conversation
-ID header"). The image is supporting evidence; the prose alone should
-already convey the change.
+**2. The picture is the main thing. Put 1–3 bullets next to it, not
+instead of it.** ⚠ **Do not write a wall of prose that the reader must
+parse to learn what changed** — people find long text expensive to read.
+Show the change, then annotate it (e.g. "Added a small copy icon to the
+right of the Conversation ID header"). ⚠ **Images render inline**: the
+runner rewrites your reference to a `raw.githubusercontent.com` URL and
+keeps `![]()` as an inline image, so write `![caption](path)`.
+
+⚠ **`before-*` / `after-*` pairs are required, not "where practical",
+for any change a person looks at.** Without the pair the reader cannot
+tell what moved. If you genuinely cannot produce the "before" (the
+screen did not exist), say so in one line.
 
 ### What the harness does automatically
 
