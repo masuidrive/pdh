@@ -792,7 +792,8 @@ PYEOF
 
   # ===== 補助成果物(画像)の決定的処理 + ファイルリンク化（harness が担保。LLM 遵守に頼らない）=====
   # working ブランチに追加された画像バイナリは bot-artifacts へ移送し working から除去する
-  # （main を汚さない）。レポート内の参照は後段で bot-artifacts のクリックリンクに書き換える。
+  # （main を汚さない）。レポート内の参照は後段で bot-artifacts の raw URL へ書き換える
+  # （⚠ inline ![]() は ![]() のまま、リンク []() は []() のまま。形は変えない）。
   ARTIFACT_MAP=""   # "workingpath<TAB>boturl" の行
   IMG_FILES=$(git diff --numstat origin/main...HEAD 2>/dev/null \
     | awk -F'\t' '$1=="-" && $2=="-" {print $3}' \

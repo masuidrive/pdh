@@ -204,7 +204,7 @@ mergeable_state   : blocked
 ## GitHub Issue プロトコル（gate・進捗・PR）
 issue とのやり取りは、同じディレクトリの **`_github-issue.md`** に従う。⚠ **あれはこの prompt の末尾に連結済みである**（`run-action.sh` が `_pdh.md` と同じ条件で append する）。Read は要らない。要点だけ再掲する:
 
-- **human gate では自己承認しない。** `PDH-ticket-human-review` と `PDH-human-review` に達したら、Actions には対話できる人間がいないので、**gate の要点を判断ボード（`_github-issue.md`）として issue にコメントし、note の Checklist に待ち行を書いて run を停止**する。承認は **🤖 を含むコメント**（例「🤖 承認」。Actions は reaction では起動しないので 👍 だけでは再開しない）、変更希望は 🤖 付きで返信。«よしなに» で gate を越えない。
+- **human gate では自己承認しない。** `PDH-ticket-human-review` と `PDH-human-review` に達したら、Actions には対話できる人間がいないので、**gate の要点を判断ボード（`_github-issue.md`）として issue にコメントし、note の Checklist に待ち行を書いて run を停止**する。承認は **🤖 を含むコメント**（例「🤖 承認」。Actions は reaction では起動しないので 👍 だけでは再開しない）、変更希望は 🤖 付きで返信。⚠ **ただし close gate は除く** — `github_bot.close` が `pr-merge` のときは **PR の merge そのものが close 承認**であり、承認語を求めない（この `_pdh.md` の「checklist gate と close」を参照）。«よしなに» で gate を越えない。
 - **進捗コメントは増やさない。** run 中の「🤖 作業中...」は 1 個を編集し続ける（machinery が担う）。人間の注意が要るとき（gate・質問・blocker）だけ新規コメントを立てる。
 - **stage をラベルで出す。** ラベルは runner が note の `## Status:` から付ける。agent は Status を到達 stage に保つ。Projects は使わない。
 - **close は `github_bot.close` の設定に従う**（既定 `merge`: `ticket.sh close` で squash merge して issue を閉じる。`pr` / `pr-merge`: PR は `Refs #N`、`Closes #N` にしない。⚠ **`pr-merge` では merge が close gate であり、done への移動は PR の差分に載せる**。手順は上の「`pr-merge`: done への移動を PR に載せて出す」にある）。

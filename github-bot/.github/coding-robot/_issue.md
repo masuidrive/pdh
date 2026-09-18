@@ -112,7 +112,7 @@ Issue に 🤖 が付いたら、**トリガーコメントの内容で 2 フェ
 
 フローの定義は `.claude/skills/pdh-dev/_flow.md`（PD-C-6/7/9/10）/ `_review.md`（収束性診断・スコープ外既存問題の扱い・裏取りルール）/ `_execution-team.md`（spawn 機構・並行起動・worker prompt の組み立て）/ `_subagent-context.md`（worker 共通プロンプト）。**その定義に従う**。以下は coding-robot harness 固有の補足のみ：
 
-1. `TICKET_NAME` でチケットを特定する（無ければ実装に進まず、先に A を促す）。`current-ticket.md` / `current-note.md` を symlink。frontmatter `started_at` を今（UTC）に設定。
+1. `TICKET_NAME` でチケットを特定する（無ければ実装に進まず、**A0 を通してから** A を促す）。`current-ticket.md` / `current-note.md` を symlink。frontmatter `started_at` を今（UTC）に設定。
 2. **harness の hard timeout 対策（PD-C-6 中）**:
    - **Commit 早期義務**: worker は spawn 後の最初の意味ある変更で *先に commit + push してから* scoped テストを回す（最初の commit は spawn から *15 分以内*が目安）。push されていない作業は harness の hard timeout（`DEADLINE_UNIX`）で消失する。
    - **長時間 gate の前に push**: `scripts/test-all.sh` 等の長時間ジョブを回す前に、未 push の変更があれば必ず push してから実行する。
