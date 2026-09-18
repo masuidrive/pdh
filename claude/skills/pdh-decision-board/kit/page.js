@@ -46,7 +46,17 @@
     li.appendChild(a); ol.appendChild(li);
   });
   nav.appendChild(btn); nav.appendChild(ol);
-  host.insertBefore(nav, host.firstChild);
+  // ⚠ .toc は .layout の grid の中でしか «左の柱» にならない。挿すだけだと先頭に全幅の
+  // 塊として出る（2026-09-18 に実機で確認）。無ければ .layout / .content を作って包む。
+  var lay=host.querySelector(':scope > .layout');
+  if(!lay){
+    lay=document.createElement('div'); lay.className='layout';
+    var content=document.createElement('div'); content.className='content';
+    while(host.firstChild) content.appendChild(host.firstChild);
+    lay.appendChild(nav); lay.appendChild(content); host.appendChild(lay);
+  }else{
+    lay.insertBefore(nav, lay.firstChild);
+  }
 })();
 (function(){
   var t=document.getElementById('toct'), nav=document.getElementById('toc');
