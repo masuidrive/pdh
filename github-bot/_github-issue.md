@@ -39,6 +39,22 @@ human gate では判断ボード（`pdh-decision-board` の Completed Staff Work
   - **ブラウザが無い場合だけ «回せない» として人へ渡す**（`PDH-AGENTS.md`「Browser And Surface Checks」）。⚠ **撮れない事実を伏せて «確認した» と書かない。**
 - **local 対話フロー（bot を使わない）** は経路が会話なので従来どおり。この markdown 版は cloud（と `pdh-gh-pull` で取り込む local）だけ。
 
+## ⚠ 自分で投稿するコメントには印を置く
+
+**守るのは «bot の投稿で bot が起動しないこと» である。**
+
+⚠ **agent が自分で投稿するコメント**（`gh issue comment` / `gh pr comment`。とくに
+`ATTACHMENTS_TOKEN` を使うもの）は、**最後の行に `<!-- coding-robot -->` を置く。**
+
+- **なぜ要るか**: `coding-robot.yml` の bot 除外は `sender.type != 'Bot'` だけなので、
+  ⚠ **PAT で投稿したものは «人のコメント» に見える。**そして判断ボードの本文には説明として
+  `🤖` が入るため、起動条件に当たる。実測 2026-09-17: 3 つの PR すべてで、板の投稿の 3 秒後に
+  run が起動し、14〜24 分走って「追加変更なし」で終わった。
+- **machinery が投稿するもの**（進捗コメント・最終レポート）は `GITHUB_TOKEN` なので
+  `sender.type` で弾ける。**印は要らない**（あっても害はない）。
+- 印は HTML コメントなので **読む人の画面には出ない。**
+- ⚠ **人が板を引用してコメントすると印ごと写り、その依頼は無視される。**引用せずに書く。
+
 ## 再起動したら、何を待っていたかを note から読む
 
 Actions の run は 1 回ごとに記憶を失う。gate や質問で停止するときは、**停止する同じ commit で note の `## Checklist` に「何の答えを待つか」と発行先（gate コメントか板の URL）を 1 行書く**（`docs/PDH-AGENTS.md`「Handover Routes」）。次の 🤖 で起動した run は、まずこの行を読んで自分が何を待っていたかを知り、トリガーコメントをその答えとして解釈して ticket へ反映し、行を `[x]` にする。machinery の状態ファイルは同じコメントを二度処理しないための印であり、待っているかどうかの真ではない。経緯（それまでの stage 遷移・Findings・gate の答え）は同じ dir の `progress.md` を読む。

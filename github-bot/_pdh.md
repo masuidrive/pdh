@@ -111,6 +111,12 @@ fi
    GH_TOKEN="$PR_TOKEN" gh pr create --base "$BASE" --head "$BRANCH_NAME" --title … --body "… Refs #N"
    ```
    そのうえで **close 判断ボードをその PR にコメントする。**
+   ⚠ **自分で投稿するコメントの最後には、必ず `<!-- coding-robot -->` を 1 行置く。**
+   この印が無いと、板の本文に説明として入っている `🤖` が `coding-robot.yml` の起動条件に当たり、
+   **自分の投稿で自分が起動する**（実測 2026-09-17: 3 つの PR すべてで、板の投稿の 3 秒後に run が
+   起動し、14〜24 分走って「追加変更なし」で終わった）。
+   ⚠ **`ATTACHMENTS_TOKEN` で投稿すると author が人になるので、`sender.type` では弾けない。**
+   印は HTML コメントなので、読む人の画面には出ない。
    ⚠ **PR メタデータ marker は出さない** — «人がリンクを押して PR を作る» 形式では、close 判断ボードを
    PR へ出す経路が無く bot が止まる。
 3. ⚠ **最後に done へ移して push する**（**順序が逆にならないこと**）:

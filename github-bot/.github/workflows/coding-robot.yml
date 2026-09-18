@@ -26,10 +26,20 @@ concurrency:
 jobs:
   agent:
     # トリガー条件: :robot: または 🤖 を含むコメント・Issue・Pull Request
-    # ただし bot 自身（github.event.sender.type == 'Bot'）のコメントでは起動しない。
+    # ただし bot 自身のコメントでは起動しない。判定は 2 つある。
+    #   1. sender.type != 'Bot' — machinery が GITHUB_TOKEN で投稿する進捗コメントを弾く。
+    #   2. ⚠ 本文に `<!-- coding-robot -->` が無いこと — agent 自身が ATTACHMENTS_TOKEN（PAT）で
+    #      投稿するコメント（close 判断ボードなど）は author が PAT の持ち主＝人になるので 1 では
+    #      弾けない。板の本文には説明として 🤖 が入るため、毎回 run が 1 本空撃ちしていた。
+    #      実測 2026-09-17: 3 つの PR すべてで板の投稿から 3 秒後に run が起動し、14〜24 分走って
+    #      「追加変更なし」で終わった。印は HTML コメントなので描画されない。
+    #      ⚠ 人が板を引用してコメントすると印ごと写り、その依頼は無視される。
     # bot の進捗コメント「🤖 作業中...」が自己再トリガーして二重起動するのを防ぐため。
     if: |
-      github.event.sender.type != 'Bot' && (
+      github.event.sender.type != 'Bot' &&
+      !contains(github.event.comment.body || '', '<!-- coding-robot -->') &&
+      !contains(github.event.review.body || '', '<!-- coding-robot -->') &&
+      !contains(github.event.issue.body || '', '<!-- coding-robot -->') && (
       (github.event_name == 'issue_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||
       (github.event_name == 'pull_request_review_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||
       (github.event_name == 'pull_request_review' && (contains(github.event.review.body, ':robot:') || contains(github.event.review.body, '🤖'))) ||
