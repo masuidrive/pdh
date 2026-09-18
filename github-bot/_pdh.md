@@ -68,6 +68,8 @@ fi
 - **checklist の充足は `bash ticket.sh check` で確認する。**required グループ（`require_checklist_groups`）、未了 checkbox、`append_only_files` の欠落行を出す。ticket は `branch:` を持つので同期判定も通る。
 - **close 段階（PDH-close、close 承認後）** は `.ticket-config.yaml` の `github_bot.close` で分岐する:
   - **`merge`（既定）**: bot が `bash ticket.sh close --no-delete-remote` を実行する（squash merge → default branch へ push、ticket は `tickets/done/` へ）。続けて `gh issue close #N`。**1 run で終わり、PR は作らない。**
+    ⚠ **`--no-delete-remote` を外してはならない。**`run-action.sh` は engine が止まったあとにも `HEAD:$BRANCH_NAME` へ push する経路を持つ（画像の後始末・待ち行の反映）。`close` が branch を消しても**その push が作り直す**ので、残るのは «PR を持たず default branch にも無い commit を載せた branch» — 消したせいで置き去りの branch を作ることになる。
+    ⚠ **その結果 `merge` では branch が溜まり続ける。**安全に消せる場所は `run-action.sh` の最後の push より後しかなく、そこにはいま何も無い（`pr` / `pr-merge` は run の外で `coding-robot-finalize.yml` が消す）。
   - **`pr`**: bot が `bash ticket.sh close --no-merge "$TICKET_NAME"` で done へ移し、その commit を含む PR（`Refs #N`。`Closes` にしない）を作り、«merge したら 🤖 で issue を閉じます» と伝えて**停止する**。人間が merge → 次の 🤖 で `gh issue close #N`。
   - ⚠ **`pr-merge`**: **PR の merge そのものを close 承認にする。**手順は下の節にある。
   - checklist gate（`require_checklist` / `require_checklist_groups` / `append_only_files`）は 3 モードとも `close` が効かせる。⚠ **`pr-merge` では `close --no-merge` が feature branch 上で走るので、そこで効く**（`ticket.sh 20260916.084455` 以降）。

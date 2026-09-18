@@ -42,9 +42,14 @@ jobs:
       # merge された PR のファイル一覧を読むのに pull-requests: read。
       issues: write
       pull-requests: read
+    outputs:
+      # 下の delete-branch job が読む。ticket が done/ へ入っていない PR の branch は消さない
+      # — そのときの直し方が «branch 上で close をやり直す» だからである（下のコメント参照）。
+      landed: ${{ steps.check.outputs.landed }}
 
     steps:
       - name: Close the issue if the ticket actually landed
+        id: check
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -72,6 +77,7 @@ jobs:
             LANDED=no
           fi
           echo "ticket landed in tickets/done/: $LANDED"
+          echo "landed=$LANDED" >> "$GITHUB_OUTPUT"
 
           STATE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json state -q .state || echo UNKNOWN)
           if [ "$STATE" != OPEN ]; then
@@ -88,3 +94,43 @@ jobs:
           gh issue close "$ISSUE_NUMBER" --repo "$REPO" --reason completed \
             --comment "PR #${PR_NUMBER} が merge されました。merge が close 承認です（\`github_bot.close: pr-merge\`）。ticket の \`tickets/done/\` への移動と \`closed_at\` は、この PR の差分に含まれています。" \
             || echo "Warning: gh issue close failed; issue stays open."
+
+  # merge された agent/issue-<N> の head branch を消す。
+  #
+  # ⚠ **消してよいのはここだけである。**`github_bot.close: merge` では bot 自身が
+  # `ticket.sh close --no-delete-remote` で squash merge するが、**その run はまだ終わっていない。**
+  # `run-action.sh` は engine が止まったあとにも `HEAD:$BRANCH_NAME` へ push する経路を持つ
+  # （画像の後始末・待ち行の反映）ので、そこで branch を消しても **その push が作り直す。**
+  # 残るのは «PR を持たず default branch にも無い commit を載せた branch» — つまり消したせいで
+  # 置き去りの branch を作ることになる。この job は run の外（人が merge した後）で走るため、
+  # 作り直すものが無い。
+  #
+  # ⚠ **repo 設定 `delete_branch_on_merge` は使わない。**あれは人が手で作った PR の branch にも
+  # 一律で効くので、導入先に副作用が出る。ここで head ref を名指しすれば副作用は生じない。
+  #
+  # ⚠ **merge されずに閉じた PR の branch は消さない**（`merged == true` でしか走らない）。
+  # その作業は branch にしか無いためである。
+  # ⚠ **ticket が `tickets/done/` へ入っていない PR の branch も消さない**（`landed` を見る）。
+  # 上の job が案内する直し方が «その branch 上で close をやり直す» なので、消すと直せなくなる。
+  delete-branch:
+    needs: finalize
+    if: needs.finalize.outputs.landed == 'yes'
+    runs-on: ubuntu-latest
+    permissions:
+      # ⚠ ref を消すのに contents: write が要る。⚠ この job は checkout せず repo のコードを
+      # 1 行も実行しないので、bot が PR に混ぜたコードがこの権限で走る経路は無い。
+      contents: write
+
+    steps:
+      - name: Delete the merged agent branch
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh api -X DELETE "repos/$REPO/git/refs/heads/$HEAD_REF" --silent 2>/dev/null; then
+            echo "Deleted branch $HEAD_REF"
+          else
+            echo "Branch $HEAD_REF was not deleted (already gone, or protected); leaving it as is."
+          fi
