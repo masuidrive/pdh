@@ -10,21 +10,44 @@ PDH の human gate は **`PDH-ticket-human-review`（実装前）** と **`PDH-h
 
 - **cloud（Actions）**: 対話できる人間がいない。gate に達したら、**gate の要点（何を承認してほしいか・判断の分岐・影響レイヤー）を issue にコメントして run を停止する。** 実装や close に進まない。«よしなに» で越えない。次回の 🤖 トリガーで再開する。
 - **local（端末）**: 通常どおり人間に確認する。issue にも同じ gate コメントを残すと、他の人が経緯を追える。
-- **承認は «🤖 を含むコメント»**（実装前 gate は「🤖 承認」、close gate は「🤖 クローズ承認」。最終レポートにこの語が無ければ runner の hook が導線を足す）。⚠ **close gate は `github_bot.close` が `pr-merge` のときだけ違う** — そこでは **PR の merge そのものが close 承認**であり、承認語を求めない（求めると承認がコメントと merge の 2 回になる）。⚠ **GitHub Actions は reaction では起動しない**（coding-robot.yml の trigger は 🤖 コメントだけ）ので、**👍 リアクションだけでは bot は再開しない。**👍 は人間向けの印として任意で付けてよいが trigger にしない。変更希望は 🤖 付きで「修正して：…」、差し戻しは「差し戻す：…」。承認が来るまで gate の先へ進まない。
+- **承認は «🤖 を含むコメント»**（実装前 gate は「🤖 承認」、close gate は「🤖 クローズ承認」。最終レポートに導線が無ければ runner の hook が足す）。⚠ **close gate は `github_bot.close` が `pr-merge` のときだけ違う** — そこでは **PR の merge そのものが close 承認**であり、承認語を求めない（求めると承認がコメントと merge の 2 回になる）。⚠ **GitHub Actions は reaction では起動しない**（coding-robot.yml の trigger は 🤖 コメントだけ）ので、**👍 リアクションだけでは bot は再開しない。**👍 は人間向けの印として任意で付けてよいが trigger にしない。変更希望は 🤖 付きで「修正して：…」、差し戻しは「差し戻す：…」。承認が来るまで gate の先へ進まない。
   - **local（`pdh-gh-pull` で取り込む場合）だけは reaction を読める**ので、👍 を承認の印として扱ってよい。cloud との差はこの 1 点。
 
 この停止は engine で変えない契約であり、`docs/PDH-AGENTS.md` の gate 規則を Actions 実行に写したもの。緩めない。
 
-## gate の判断ボードは «issue コメントの markdown» で出す
+## gate の判断ボードは «HTML を発行し、コメントに URL と markdown の両方» を出す
 
-human gate では判断ボード（`pdh-decision-board` の Completed Staff Work）を作る。経路は `_pdh.md` の `<Human-Agent-Interface>` が定める（`docs/PDH-AGENTS.md`「Handover Routes」）。GitHub issue コメントは **markdown は描画するが HTML はインライン描画しない**（ソース表示になる）ので、表現の上限は markdown。`pdh-decision-board` の手順 7 はこの上限の中で表現を選び、手順 9 の発行先は 2 通り:
-- **markdown で足りる板**: 最終レポート（gate コメント本文）として markdown で書く。machinery（`run-action.sh`）がそれを issue コメントとして投稿する。`build.sh` は走らせない。
-- **markdown で足りない板**（像が要る、判断が多く 1 ページで見比べたい）: project ルールに登録された発行先へ HTML を置き、issue には **決定サマリー**（何を決めるか・推奨・代償・承認導線）と URL だけを書く。登録が無ければ markdown で組み、像は «回せない» と書く。**HTML 板の回答も issue に戻す** — 板の「回答をコピー」で出た貼り戻し文を、人が 🤖 付きコメントとして貼る。板のサーバ側の回答機構は使わない。
+human gate では判断ボード（`pdh-decision-board` の Completed Staff Work）を作る。経路は `_pdh.md` の `<Human-Agent-Interface>` が定める（`docs/PDH-AGENTS.md`「Handover Routes」）。GitHub issue コメントは **markdown は描画するが HTML はインライン描画しない**（ソース表示になる）ので、コメント本文の表現の上限は markdown。
+
+⚠ **どちらか選ぶのではない。両方出す。**（発行先が登録されているとき）**HTML の板を発行し、その URL をコメントの先頭に置き、同じコメントに markdown 版の本文を続ける。**
+
+- **なぜ両方か**: HTML のほうが表現力が高い（像・図・並べた比較）が、⚠ **開けないことがある**（発行先にログインしていない・モバイル・後から読む人）。markdown は GitHub がその場で描画するので**必ず読める**。⚠ **どちらかに賭けると、賭けが外れた回の gate が止まる。**
+- **作り方は 1 本道**: 板を HTML の断片として書く → `tools/build.sh --body <断片> --out board.html` → 発行して URL を得る → **`tools/to-markdown.sh board.html` で同じ板の GFM 版を作る** → コメントは **URL 1 行 + GFM 本文**。⚠ **2 つを別々に書かない** — 書くと中身がずれ、どちらが本当か分からなくなる。
+- **発行先は project ルールに登録されたものを名前で指す。**⚠ **URL をここで定義しない**（`docs/PDH-AGENTS.md`「Handover Routes」）。**登録が無ければ markdown だけで出す。**
+- ⚠ **発行できなかったときは markdown だけで出し、«板は発行できなかった» と 1 行書く**（token 切れ・発行先に届かない・登録が無い）。⚠ **黙って markdown だけにしない** — 読み手は «URL が無い板» を «URL を省いた板» と区別できない。
+- **GFM は素の markdown より広い。使う**: `<details>` の折りたたみ・表・```mermaid・タスクリスト・`> [!WARNING]` / `> [!TIP]` / `> [!NOTE]`。`to-markdown.sh` が板の callout をこの記法へ移す。
+- **回答は issue に戻す** — 板の「回答をコピー」で出た貼り戻し文を、人が 🤖 付きコメントとして貼る。板のサーバ側の回答機構は使わない。
 - ⚠ **«skill からブラウザを開けない（board を自分で描画・検証できない）» は cloud / local の別ではなく全環境で同じ**。board の見た目はどこでも skill では機械検証されない。これは媒体選択の理由ではない別の普遍的事実なので、混同しない。
 - **守るのは board の «規律»**: 承認者が追加調査なしに求められた判断を下せる／その判断に使わないものを読ませない。同一入力の前後比較・対象外・代償を **markdown（表・`<details>`・コードブロック）** で出す。GitHub がそのまま描画する。
 - ⚠ **board から外すのは «この repo 固有の語» と «PDH の process 語» だけである。**
   外す: `PDH-verify` / `PDH-human-review` / checklist gate / note の待ち行 / AC / worker / spawn /
   `ticket.sh` / ticket のパス / 内部のシンボル名やテーブル名。
+  ⚠ **数で言う — board 本文に `PDH-` で始まる語は 0 個、`tickets/` へのリンクは 0 本、
+  skill のファイル（`SKILL.md` / `_flow.md` / `PDH-AGENTS.md`）への言及は 0 件。**
+  ⚠ **畳んだ `<details>` の中も本文である。**
+  ⚠ **«なぜ実装前で止まるのか» を board に書かない。書く場所は `progress.md` に 1 行である。**
+  依頼者に要るのは «自分は何を返せばよいか» だけで、それは末尾の「回答のしかた」が持っている。
+  **止まる理由は開発側の事情なので、開発側の記録に置く。**
+  ⚠ **実測 2026-09-19: 同じ ticket で 4 run 回したうち 3 回、これを破った。**破り方は毎回同じ
+  定型文で、«実装前で止める理由：… [pdh-dev](…/SKILL.md) と [PDH-AGENTS.md](…) に
+  従っています» と書く。⚠ **規則の根拠を依頼者へ示したくなるが、依頼者はその規則を知らないし、
+  知る必要もない。**⚠ **禁止を «0 件» と数で書き直しても止まらなかった** — 同じ prompt で
+  結果が割れるものは prompt では止まらないので、機械側にも落とす口を作った（次の行）。
+  ⚠ **内部の process 文書へのリンクを含む行は、`pdh-hooks.sh` が投稿前に消す**（消したことは
+  run のログに出る）。**消されるより先に書かないほうが、板の文がつながる。**
+  ⚠ **`<details>` に ticket や note へのリンクを並べるのも同じ違反である。畳んだ中も本文である。**
+  ⚠ **畳んだ中に置いてよいのは**、実測ログ・既存コードの確認結果・**前回の回答をどう反映したか**
+  である（依頼者が «自分の答えが通ったか» を確かめる材料なので残す）。
   ⚠ **外さない**: `git push` / CI / API / JSON / diff / merge / revert / PostgreSQL のような
   **どの現場にもある語**。⚠ **依頼者はエンジニアである。**日本語に開くと、かえって何の話か
   分からなくなる。**読みやすくするために語彙を落とすのではない。**

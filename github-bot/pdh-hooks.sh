@@ -195,12 +195,57 @@ else
   word="🤖 クローズ承認"
   guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。板を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。**この 1 通目は 🤖 が無くても届きます**（\`awaiting-reply\` が付いているため）。⚠ **2 通目からは 🤖 を付けてください。**"
 fi
-if [ "$gate" -eq 1 ] && ! printf '%s' "$report" | grep -qF "$word"; then
+# ⚠ 板が自分で答え方を書いているなら、足さない。
+# 実測 2026-09-19: 板は «`🤖 1で進めて` / `🤖 2で進めて`» と選択肢ごとの返し方を
+# 書いていたのに、`🤖 承認` という語が無かったので hook が末尾に別の導線を足した。
+# **読み手は 3 つの語（1で進めて / 2で進めて / 承認）を渡されて、どれで返すか分からない。**
+# 案ごとの返し方は語が毎回変わるので、語では探せない — **backtick に囲まれた 🤖 の指示**が
+# あるかどうかで見る。⚠ `pr-merge` の close gate だけは 🤖 の指示ではなく «merge を押す» なので、
+# 従来どおり導線そのものの文で判定する。
+has_answer_path() {
+  printf '%s' "$report" | grep -qF "$word" && return 0
+  [ "$status" = "PDH-ticket-human-review" ] || [ "$close_mode" != "pr-merge" ] || return 1
+  printf '%s' "$report" | grep -q '`🤖'
+}
+if [ "$gate" -eq 1 ] && ! has_answer_path; then
   report="$report
 
 ### 回答のしかた
 $guide"
   log "承認導線を足した（agent の報告に無かった）"
+fi
+
+# --- 2.4. 内部 process 文書へのリンクを含む行を消す ---
+# ⚠ **消してよいのはこの 1 種だけである。**`.claude/skills/` 配下・`PDH-AGENTS.md`・
+# `tickets/…` へのリンクは、`_github-issue.md` の «0 本 / 0 件» で**どんな板にも正当な用途が無い**。
+# だから行ごと落としても読み手は何も失わない。⚠ **語の漏れ（`AC` / `PDH-…` が文の中に出る）は
+# 消さない** — 文の一部なので、消すと文が途中で切れる。あちらは下の 2.5 で数えるだけにする。
+# ⚠ 実測 2026-09-19: 同じ ticket の 4 run のうち 3 回、同じ定型文（«実装前で止める理由：… に従っています»）で
+# 出た。規則を «0 件» と書き直しても止まらなかったので、機械側にも落とす口を作る。
+if [ "$gate" -eq 1 ]; then
+  cut=$(printf '%s\n' "$report" | grep -nE '\]\([^)]*(\.claude/skills/|PDH-AGENTS\.md|tickets/)[^)]*\)' || true)
+  if [ -n "$cut" ]; then
+    printf '%s\n' "$cut" | while IFS= read -r l; do log "⚠ board から行を消した: $(printf '%s' "$l" | cut -c1-140)"; done
+    report=$(printf '%s\n' "$report" | grep -vE '\]\([^)]*(\.claude/skills/|PDH-AGENTS\.md|tickets/)[^)]*\)')
+  fi
+fi
+
+# --- 2.5. process 語の漏れを数える ---
+# ⚠ ここは直さない。数えて log に出すだけである。**守るのは «漏れたことが run のログから
+# 分かること»** で、文の中の語を機械で書き換えると、削った跡が読み手に見えない形で文意を壊す。
+# 規則は `_github-issue.md`「board から外すのは…」が持つ（`PDH-` 0 個 / `tickets/` 0 本 /
+# skill のファイル 0 件）。⚠ 実測 2026-09-19: 板が 3 種すべて漏らしていた回がある。
+if [ "$gate" -eq 1 ]; then
+  leak=0
+  n=$(printf '%s' "$report" | grep -oE 'PDH-[A-Za-z-]+' | sort -u | paste -sd, - )
+  [ -n "$n" ] && { log "⚠ board に process 語が漏れている: $n"; leak=1; }
+  n=$(printf '%s' "$report" | grep -oE 'tickets/[A-Za-z0-9./-]+' | sort -u | paste -sd, - )
+  [ -n "$n" ] && { log "⚠ board に ticket のパスが漏れている: $n"; leak=1; }
+  n=$(printf '%s' "$report" | grep -oE '(SKILL\.md|PDH-AGENTS\.md|_flow\.md|pdh-dev)' | sort -u | paste -sd, - )
+  [ -n "$n" ] && { log "⚠ board に skill のファイルが漏れている: $n"; leak=1; }
+  n=$(printf '%s' "$report" | grep -owE 'AC' | sort -u | paste -sd, - )
+  [ -n "$n" ] && { log "⚠ board に AC という語が漏れている（依頼者の語ではない）"; leak=1; }
+  [ "$leak" -eq 0 ] && log "board の process 語: 漏れなし"
 fi
 
 # note の Checklist に «未了 + 発行先:» の行があるか。PDH-AGENTS.md「Handover Routes」が
