@@ -118,7 +118,7 @@ Issue に 🤖 が付いたら、**トリガーコメントの内容で 2 フェ
    - **長時間 gate の前に push**: `scripts/test-all.sh` 等の長時間ジョブを回す前に、未 push の変更があれば必ず push してから実行する。
    - **test-all 前の deadline チェック**: Environment Variables の `DEADLINE_UNIX` を見て、残時間が test-all の想定実行時間 + 5 分のマージンを下回るなら、フル実行せず scoped に留めて「deadline 不足のため test-all はスキップ／scoped で代替、PD-C-9 に委譲」を note に記録して進める（kill されるより合理的）。
    - test cadence 本体（scoped中／test-all 1回／失敗時 triage）と round escalation policy は `_flow.md` PD-C-7 / `_review.md` 収束性診断・スコープ外既存問題の扱い に従う。
-3. **worker spawn の失敗報告**: worker 起動後は必ず `wait` 後に `rc=$?` を保存し、`/tmp/agent-result.md` の final report には各 worker の rc、result/stderr の `ls -l`、`tail -120 stderr.log` を含める。result が空/無い場合も、それだけで silent failure と扱わず rc と stderr tail をセットで報告する。spawn が失敗/不可能なら単独で続行せず中止し原因を報告する。
+3. **worker spawn の失敗報告**: worker 起動後は必ず `wait` 後に `rc=$?` を保存し、各 worker の rc、result/stderr の `ls -l`、`tail -120 stderr.log` を **note へ記録する**。result が空/無い場合も、それだけで silent failure と扱わず rc と stderr tail をセットで残す。⚠ **rc と `tail -120 stderr.log` は note（または progress）へ書く。**⚠ **issue のコメントには出さない** — あれは run を debug するためのもので、issue には読み手がいない（`system.md`「Worker rc lists … do not go in the issue at all」）。**issue に書くのは «worker が落ちて、その結果あなたの番が変わるかどうか» を言葉で 1 行**である。spawn が失敗/不可能なら単独で続行せず中止し原因を報告する。
 4. **PD-C-9 に到達できたか分岐**：
    ⚠ **PDH repo（作業 repo の root に `product-brief.md` と `tickets/` がある。そのとき
    `_pdh.md` がこの prompt に連結されている）では、この step 4 の marker 手順と、下の

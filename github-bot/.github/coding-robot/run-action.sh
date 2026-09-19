@@ -470,7 +470,10 @@ ENVIRONMENT_SECTION=""
   ENVIRONMENT_SECTION="
 <environment>
 この run で使えるもの（走り出す前に調べた値である。⚠ **これを前提に計画を立てること。**
-足りないものが要る作業は、**途中で止まらずに «回せない» と書いて先へ進む**）:
+**脇の確認に足りないものがあるだけなら、途中で止まらずに «回せない» と書いて先へ進む**。
+⚠ **ただし «この依頼が直ったことを示す核心の確認» が回せないなら、進まずに止まる** —
+Incomplete のテンプレで category `blocker` として、何が無くて何を確かめられないかを書く。
+⚠ **確かめずに «直りました» と報告しない。**）:
 
 - ブラウザ: $_browser
 - provider の鍵:$_keys
@@ -563,6 +566,15 @@ echo "$USER_PROMPT" > "/tmp/agent-prompt-$ISSUE_NUMBER.txt"
 
 # エンジン実装を読み込む（ISSUE_NUMBER 等が確定してから source する）
 # shellcheck source=/dev/null
+# ⚠ gh の既定を GITHUB_TOKEN（= github-actions[bot]）に固定する。
+# agent が板や報告を投稿するとき、author が bot になっていないと
+# `coding-robot.yml` の `sender.type != 'Bot'` で弾けず、**自分の投稿で自分が起動する**。
+# 導入先の実測 2026-09-17: PR の板 3 件が人名義で投稿され、3 秒後に run が起動して
+# 14〜24 分走った（計 ~45 分）。
+# ⚠ ATTACHMENTS_TOKEN は env に残す — push と PR 作成では、その場限りの
+# `GH_TOKEN="$ATTACHMENTS_TOKEN" gh …` で明示的に上書きして使う。
+export GH_TOKEN="$GITHUB_TOKEN"
+
 source "$ENGINE_FILE"
 
 # 初期コメント投稿

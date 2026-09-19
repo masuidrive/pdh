@@ -366,7 +366,9 @@ where applicable — e.g. "DEADLINE_UNIX まで 6 分、test-all 想定 20 分",
 ### Evidence pointers (so the user can verify quickly)
 - ticket / note paths (markdown links)
 - `git log --oneline main..HEAD` head (one line per commit, max ~10)
-- relevant worker result / stderr tail paths (rc, `tail -120 stderr.log`)
+- the note path that holds the worker rc list and stderr tails. ⚠ **Do not
+  paste rc values or stderr into the comment** — say in words which worker
+  could not run and what is therefore unfinished.
 - if PDH mode: which AC / checklist items are `[x]` and which are still
   `[ ]` on the current HEAD
 ```
