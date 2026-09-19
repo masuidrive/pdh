@@ -291,7 +291,7 @@ a.shot-open, a.mapcell, a.shot-zoom, .lightbox-close { color: inherit; text-deco
 }
 
 /* ---------- v2 部品（steps / timeline / compare / quote / fig / mermaid） ----------
-   primitives.css（見本ページ）から移動した共有部品。色・幅は token のみで書く。
+   v2 の primitives 層（2026-09-19 に撤去）から移動した共有部品。色・幅は token のみで書く。
    使い方の規則は ../html.md「v2 部品」。 */
 /* steps — 順番が意味を持つ列挙（依存順・段階承認・確認手順） */
 ol.steps{list-style:none;margin:0 0 calc(var(--u)*5);padding:0;max-width:var(--measure);counter-reset:step}
@@ -373,7 +373,7 @@ ul.tl time{display:block;font-family:var(--font-head);font-size:.78rem;letter-sp
 .fig svg text{font-family:var(--font-head);font-size:13px;fill:var(--ink)}
 .fig svg .dim{fill:var(--muted)}
 
-/* ---------- 汎用の畳みと目次（v2 部品の続き — primitives.css から移動） ----------
+/* ---------- 汎用の畳みと目次（v2 部品の続き — 撤去した primitives 層から移動） ----------
    details.fold = 根拠の詳細を 1 手で開く汎用の畳み（AC 原文専用の .acx とは別部品）。
    toc = 文書版の目次。前提 DOM: <div class="layout"><nav class="toc" id="toc">
    <button class="toc-t" id="toct">目次</button><ol><li><a href="#節id">…</ol></nav>
