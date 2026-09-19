@@ -13,9 +13,12 @@
 
 - 同種 Critical が 2 attempt で再発したら escalate し、ticket への実装詳細混入、scope 肥大、reviewer prompt 偏り、確定値の下流委譲を root cause として確認する
 - `PDH-review-2` 以降で初回 finding が誤検出、pre-existing、Out-of-scope、user 価値非直結と判明したら、追加 fix をせず Discovery へ記録し、元の AC と user journey だけを verify する
-- **既定は 2 巡である**（網羅探索 1 巡 + 修正確認 1 巡）。⚠ **`### Findings (PDH-review-3)` の表を作る前に escalate する。**3 巡目を自分の判断で始めない。escalate したら、scope 再作成、3 案以上の提示、戦略転換、レビュー対象の変更（diff をやめ実 data・実挙動の監査へ切り替える）、そのまま続行のいずれかを人が選ぶ
-  - ⚠ **«2 巡で打ち切る» ではない。**実測（2026-09-19 に 4 ticket を数えた）では 3 巡目以降にも本物の Major が出た — 恒久 test が flaky で full suite を不安定にする / 検証用 DB の隔離漏れ。**機械的に打ち切ると、これが出荷される。**止めるのは自動の継続だけで、続けるかどうかは人が決める
-  - ⚠ **2 巡目で出た Minor で 3 巡目を起こさない。**`記録のみ` か `起票` に振る（`PDH-AGENTS.md`「保留した ticket には、それ自身が存在する理由が要る」の 4 処置）。⚠ **そもそも `pdh-reviewing`「報告」は Critical と Major だけを書くと定めている。**実測では 4 巡目以降が Minor ばかりになり、6 巡目は**製品コードを 1 行も変えなかった**（Minor 4 件のうち 記録のみ 2・test 2、Surface 2 件は両方 棄却）
+- **次の巡を起こす条件は 1 つだけ — 直前の巡で «修正が持ち込んだ Critical / Major» が出たこと。**出ていなければ、その時点で review は終わりである（「巡回」2 の «修正起因の Critical / Major だけを scope gate へ戻す» の対偶）。⚠ **回数で決めない。**⚠ **人に «次の巡をやるか» を聞かない** — 何が出るかは、やる前には誰にも分からないので、**判断できない問いを承認者へ渡すことになる**（`PDH-AGENTS.md`「Human Gate Materials」）
+  - ⚠ **Minor では次の巡を起こさない。**`記録のみ` か `起票` に振る（`PDH-AGENTS.md`「保留した ticket には、それ自身が存在する理由が要る」の 4 処置）。⚠ **そもそも `pdh-reviewing`「報告」は Critical と Major だけを書くと定めている**
+  - ⚠ **`記録先` が note で済む Critical/Major でも、次の巡は起こさない。**直したコードに対する指摘でなければ «修正が持ち込んだ» に当たらない
+  - ⚠ **既存の欠陥（pre-existing）や CI の既存 flaky では次の巡を起こさない。**`起票` に振る
+  - **実測でこの条件が正しく切れることを確かめた**（2026-09-19 に 4 ticket・計 16 巡を数えた）。ある ticket は 6 巡回ったが、**修正起因の Critical/Major が出たのは 3 巡目まで**で、4 巡目は Minor 4 件（記録のみ 3）、5 巡目は Major 1 件だが記録先 note と既存 flaky の起票、**6 巡目は製品コードを 1 行も変えなかった**（Minor 4 件・Surface 2 件は両方棄却）。⚠ **この条件なら 3 巡で止まり、3 巡目の Major 2 件（恒久 test が flaky で full suite を不安定にする / 検証用 DB の隔離漏れ）は取り逃さない**
+  - ⚠ **止まらない側の歯止めは既にある** — 「同種 Critical が 2 attempt で再発したら escalate」。**そちらは «出続けている» ときの話なので、人が判断できる**（何が出たかを見てから決める）
 
 ## 裏取り
 
