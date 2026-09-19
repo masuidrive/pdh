@@ -814,7 +814,7 @@ PYEOF
       mkdir -p "$BA_W/$(dirname "$dest")"
       cp "$bf" "$BA_W/$dest"
       git -C "$BA_W" add "$dest"
-      ARTIFACT_MAP="${ARTIFACT_MAP}${bf}	https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/bot-artifacts/${dest}
+      ARTIFACT_MAP="${ARTIFACT_MAP}${bf}	https://github.com/${GITHUB_REPOSITORY}/raw/bot-artifacts/${dest}
 "
     done <<< "$IMG_FILES"
     if ! git -C "$BA_W" diff --cached --quiet 2>/dev/null; then
@@ -861,10 +861,14 @@ for line in os.environ.get("ARTIFACTS", "").splitlines():
 text = sys.argv[1]
 parts = re.split(r'(```.*?```)', text, flags=re.S)  # コードフェンスは触らない
 def rewrite(seg):
-    # 1) 画像 artifact の参照 → bot-artifacts の raw URL。⚠ inline ![]() のまま残す。
+    # 1) 画像 artifact の参照 → bot-artifacts の github.com/<repo>/raw/ URL。⚠ inline ![]() のまま残す。
     #    以前はここで ![]() を []() へ落としていた。理由は «blob 形式が private repo で
-    #    画像として読み込めない» ことだったが、URL を raw.githubusercontent.com にすれば
-    #    読み込める（実測: blob は 404 text/html、raw は 200 image/png）。
+    #    画像として読み込めない» ことだった。⚠ raw.githubusercontent.com も private repo では
+    #    ブラウザから読めない — GitHub は描画時に署名を付けず、ブラウザは cookie 無しで取りに行って
+    #    404 になる（token 付き curl だけが 200 を返すので、端末で測ると «読める» に見える）。
+    #    github.com/<repo>/raw/ は github.com 宛てなのでログイン cookie が効き、署名付き raw へ
+    #    redirect される（2026-09-19 にブラウザで実測: raw ✗ / blob?raw=true ✓ / /raw/ ✓。
+    #    GitHub モバイルアプリは 3 形式とも表示しない）。
     #    ⚠ «違う» と言うには変更後の姿が見えている必要があり、人は長文を読むコストが高い。
     #    リンクにすると、読む人は毎回クリックしないと変化が分からない。
     for p, u in sorted(artifacts.items(), key=lambda kv: len(kv[0]), reverse=True):

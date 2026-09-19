@@ -70,7 +70,7 @@ human gate では判断ボード（`pdh-decision-board` の Completed Staff Work
 - **図表・画像**: **mermaid は使える** — GitHub が ` ```mermaid ` を issue でネイティブ描画し、bot はテキストで author できる（ブラウザ不要。HTML kit の mermaid と同じ役割）。フロー/構成図で判断が明確になるなら使う。
   - **スクリーンショットは «devcontainer にブラウザが入っているか» で決まる**（«skill の掟» ではない）。⚠ **入っているかどうかを、決めつけずに確かめる** — `command -v agent-browser` / `ls ~/.cache/ms-playwright` / `npx playwright --version` のどれかで見る。**入っていれば撮る。**入っていなければ Dockerfile に headless ブラウザ（Chromium / Playwright 等）を足せば撮れるようになる — 対話 skill が人へ回す視覚確認を、cloud は自前で回せる。
   - **ブラウザがあるなら積極的に撮る**（`base.md`「出来上がりの像」の作法どおり: 変更前後・mock・同じ入力/画角/幅・実 DOM に差し込んで撮る）。**切り抜き・強調（annotation）は歓迎。**ただし **board のレイアウトそのものを詰めるのに時間をかけない** — 像は判断の証拠であって見た目の作品ではない。
-  - **撮ったら «読む人の画面に出る» 形で貼る。**⚠ **private repo では `https://github.com/<owner>/<repo>/blob/<branch>/<path>.png` 形式は画像として読み込めない**（`?raw=1` を付けても変わらない。実測: `blob` は `404 text/html`、`raw` は `200 image/png`）。**`https://raw.githubusercontent.com/<owner>/<repo>/<branch>/<path>.png` を使い、`![]()` のインラインで貼る。**
+  - **撮ったら «読む人の画面に出る» 形で貼る。**⚠ **private repo では `https://github.com/<owner>/<repo>/blob/<branch>/<path>.png` 形式は画像として読み込めない**（実測: `blob` は `404 text/html`）。⚠ **`https://raw.githubusercontent.com/…` もブラウザでは読めない** — GitHub は描画時に署名を付けず、cookie 無しで取りに行って 404 になる（token 付き curl は 200 を返すので端末では気づけない。2026-09-19 にブラウザで実測）。**`https://github.com/<owner>/<repo>/raw/<branch>/<path>.png` を使い、`![]()` のインラインで貼る。**
   - **ブラウザが無い場合だけ «回せない» として人へ渡す**（`PDH-AGENTS.md`「Browser And Surface Checks」）。⚠ **撮れない事実を伏せて «確認した» と書かない。**
 - **local 対話フロー（bot を使わない）** は経路が会話なので従来どおり。この markdown 版は cloud（と `pdh-gh-pull` で取り込む local）だけ。
 

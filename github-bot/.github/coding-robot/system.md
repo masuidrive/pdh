@@ -596,7 +596,7 @@ instead of it.** ⚠ **Do not write a wall of prose that the reader must
 parse to learn what changed** — people find long text expensive to read.
 Show the change, then annotate it (e.g. "Added a small copy icon to the
 right of the Conversation ID header"). ⚠ **Images render inline**: the
-runner rewrites your reference to a `raw.githubusercontent.com` URL and
+runner rewrites your reference to a `github.com/<owner>/<repo>/raw/…` URL and
 keeps `![]()` as an inline image, so write `![caption](path)`.
 
 ⚠ **`before-*` / `after-*` pairs are required, not "where practical",
@@ -615,13 +615,19 @@ screen did not exist), say so in one line.
 
 **Use inline `![caption](path)` for anything a person looks at** (before
 / after screenshots, mockups, diagrams). The rewritten target is a
-`raw.githubusercontent.com` URL, which GitHub re-signs for the viewer at
-render time, so it displays inline even in a private repository.
+`https://github.com/<owner>/<repo>/raw/bot-artifacts/…` URL. It is served
+by github.com, so the viewer's login cookie applies and GitHub redirects
+to a signed raw URL — it displays inline in a private repository
+(verified in a browser, 2026-09-19). ⚠ **A bare `raw.githubusercontent.com`
+URL does not work there**: GitHub does not sign it at render time, the
+browser fetches it without credentials and gets 404. Only a token-bearing
+`curl` sees 200, which is how the 2026-09-17 rule went wrong. ⚠ The GitHub
+mobile app shows none of these forms; that is accepted.
 
 ⚠ **This reverses earlier guidance.** The rule used to be
 `[label](path)`, because the rewriter emitted a `blob/...` URL, which
 returns `404 text/html` for an image request in a private repository.
-The rewriter now emits the raw URL, so the constraint is gone. Use
+The rewriter now emits the `/raw/` URL, so the constraint is gone. Use
 `[label](path)` only for things that are not images (logs, diffs, PDFs).
 
 ### Repository exception
