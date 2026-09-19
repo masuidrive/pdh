@@ -73,6 +73,17 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 - 別の plan 文書を作らない。investigate・implement・tests を 1 つの作業文脈で完遂し、設計判断は progress と commit message へ append する
 - テスト実行前に `similarity-ts`（TS/JS）、`similarity-py`（Python）、`similarity-generic`（`--language <lang>`、単一ファイル単位）を `-t 0.7` で回し、変更ファイル間の構造的重複を検出する。閾値超過は共通化を検討してから進む。test setup 等の意図的な重複はそのままでよい。install できない環境では skip し、progress へ「重複検出 skip: 環境制約（理由）」と記録する。install は https://github.com/mizchi/similarity/releases の prebuilt archive（OS/arch 別。全 CLI 同梱）を PATH の通った dir へ置く。prebuilt が無い arch だけ `cargo install similarity-ts similarity-py similarity-generic` でビルドする
 
+## 渡された仕様と、できたものを突き合わせる（完了報告の前）
+
+守るのは、**自分が既に持っていた仕様との不一致を、reviewer に見つけさせないこと**である。
+
+⚠ **AC 全件と、合意済みの画像を、自分の出力と 1 項目ずつ並べて照合する。**「AC を満たすように書いた」ではなく、**できたものを見て確かめる。**
+
+- **AC は 1 件ずつ**。「画面に出る」「読める」「押せる」と書かれているなら、**実際に出して・読んで・押して**確かめる
+- **合意済みの画像は 1 要素ずつ** — 文言・並び順・色・どこに何が置かれているか・操作の入口の形。⚠ **画像が決めていることに気づかないまま実装すると、必ず指摘になる**
+- **一致しない項目が 1 つでもあれば、直すか、違えた理由を書く。**黙って違えない
+- ⚠ **これは reviewer のレンズ2 と同じ照合である。**重複に見えるが、**先にやると 1 巡ぶん早く出る** — 実測（2026-09-19）では、ある ticket の 1 巡目 Major 3 件のうち **2 件がこの照合漏れ**だった（AC の 1 項目が未実装・合意画像と操作の入口が違う）。**どちらも発見ではなく確認漏れなので、reviewer を強くしても減らない**
+
 ## 整合性 gate（完了報告の前）
 
 - 変更した identifier、field、API path、enum 値を、実装・test・公開層・生成層・doc・spec・sample の全 layer で追従させる
