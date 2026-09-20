@@ -87,6 +87,7 @@ note_content: |
   - [ ] PDH-implement: 全スイートの green を確認済み（PR 経由なら最終 HEAD に対する PR の CI、PR を経由せず直接 merge するなら close 直前のローカル `scripts/test-all.sh`。どちらを使ったか 1 行書く）
   - [ ] PDH-implement: 外部 provider 経由 path は実 API 200 確認済み (deferred の場合は明示記録)
   - [ ] PDH-implement: 変更した identifier / field / API path / enum の旧名を doc・spec・README・sample・comment で grep し、出力を貼った（0 件なら 0 件と貼る）
+  - [ ] PDH-implement: 新設・変更した公開契約（API の欄・イベント・状態・enum 値）の説明文を更新し、直した doc のパスと箇所を列挙した。⚠ «説明が無い» 側は旧名の grep では出ない（openapi.yaml / specs / SDK の README / 生成物）
   - [ ] PDH-implement: 恒久テストを追加・変更したなら、そのテストだけを 3 回連続で実行した（1 回では flaky を見つけられない）
   - [ ] PDH-implement: ticket の AC / Architectural Invariants / out-of-scope が implementor によって書き換えられていない
   - [ ] PDH-review: 確定判断が 1 件ずつ実装に落ちている（対応する実体を名指しできない判断は未実装）
@@ -95,8 +96,7 @@ note_content: |
   - [ ] PDH-review: Directorが採用したCritical/Majorが解消し、非採用findingの分類根拠を記録
   - [ ] PDH-verify: AC 裏取り Agent が各 AC の実質達成を verify 済み
   - [ ] PDH-verify: Surface Observer 観察済み (純 backend ticket では skip 可、判断を 1 行記録)
-  - [ ] PDH-verify: ドキュメント更新の要否を確認済み（必要なら `.agents/skills/pdh-update/SKILL.md` or `.claude/skills/pdh-update/SKILL.md`）
-  - [ ] PDH-verify: technical-reference.md 突合済み（下の「Technical reference 更新」欄に記録）
+  - [ ] PDH-verify: technical-reference.md 突合済み（下の「Technical reference 更新」欄に記録）。PDH の配布物そのものを直す必要があるなら `pdh-update` skill を使う
   - [ ] PDH-human-review: ユーザに差分・検証結果・確認手順を提示し、人間レビューを依頼済み
   - [ ] PDH-human-review: クローズの承認を得た（`github_bot.close` が `pr-merge` なら人の Merge が承認。それ以外は明示のクローズ承認。どちらだったか 1 行書く）
 
