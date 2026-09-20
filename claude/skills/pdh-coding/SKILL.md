@@ -118,6 +118,29 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 - 各 commit はテストパス状態を維持する（progressing 中は明示的 WIP marker）。「あとでテストを追加する」は許容しない
 - commit 数を合否基準にしない。数合わせの retroactive split をしない。他 worker の未コミット blob を引き継ぐときも既存の塊を過去へ分解せず、残作業を論理単位で commit する
 
+## 完了報告の前に、機械で回せる gate を自分で回す
+
+守るのは、**別の worker が «発見» するのではなく «確認» で済むこと**である。
+
+⚠ **これらは QA も独立に回すが、QA が最初に見つける状態にしない。**QA で落ちると Coding Engineer へ
+戻る往復になり、実測（2026-09-19）では「指摘の修正」が 1 run 154 分のうち 51 分を占めた。
+⚠ **自分で回して出力を貼れば、その往復が消える。**
+
+- **doc sweep** — 変更した identifier / field / API path / enum 値の旧名を、doc・spec・README・sample・
+  comment で grep し、**出力をそのまま貼る**（0 件なら 0 件と貼る）
+- **実 provider / 外部 API を経由する path** — 1 経路以上を実 API で叩き、**status と body 抜粋を貼る**。
+  credential が無ければ「無い」と書く（自己判断で skip しない）
+- **終端のユーザ操作** — リンク・通知・画面遷移・外部副作用が目的なら、**着地まで実際に操作する**。
+  ⚠ **途中で URL や port を手で書き換えたなら、それは finding である**（書き換えないと着かない状態が出荷される）
+- ⚠ **恒久テストを追加・変更したなら、そのテスト自身を検査する** — repo が test の契約テストを持つなら
+  それを回し、**追加・変更したテストだけを 3 回連続で実行する**。⚠ **1 回通っただけでは flaky を見つけられない。**
+  全体スイートを待つ必要はなく、対象だけなら数分で済む。⚠ **実測: ある ticket の修正起因 Critical/Major
+  5 件のうち 3 件が、追加したテスト自身の欠陥だった**（契約違反・共有 state への干渉・flaky）
+- テストが**失敗するはずの経路で «成功» と記録できないか**を見る（取得に失敗したのにローカルのファイルを
+  読んで通る、等）
+
+⚠ **回せなかったものは「回せなかった」と理由つきで書く。**黙って飛ばさない。
+
 ## 動作確認 gate
 
 ビルド成功やテストパスは完了判定ではない。実装後は実環境で動作確認する。
@@ -158,4 +181,4 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 - 実行可能な `ticket-local-test` script は `tickets/<name>/tests/` に置き、`./scripts/test-ticket-local.sh [ticket-id]` で実行する。ticket.sh は作成しないので、最初の test を書くときに `mkdir -p` する
 - seed、`tmp_dir` の helper、`agent-browser`、`curl`、コマンドの実行証跡は progress file へ記録する
 
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/skills/pdh-coding/SKILL.md
+Based on https://github.com/masuidrive/pdh/blob/07e92ef/claude/skills/pdh-coding/SKILL.md

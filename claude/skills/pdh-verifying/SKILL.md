@@ -9,7 +9,11 @@ description: "QA / AC 裏取り / Surface Observer / AC 読み手が、検証の
 
 影響 layer 横断 test、E2E、実環境確認を含む全テストを実行し、実出力を verbatim で貼る。失敗は再現 command と output を残す。
 
-**⚠ test と E2E だけではない。`pdh-coding` の gate のうち機械で回せるものを、実装者の代わりに回して実出力を貼る。**
+**⚠ test と E2E だけではない。下の gate を独立に回して実出力を貼る。**
+
+⚠ **実装者も同じものを回している**（`pdh-coding`「完了報告の前に、機械で回せる gate を自分で回す」）。
+**ここでの仕事は «発見» ではなく «確認» である** — 実装者の出力を信じず自分で回すが、**落ちたら
+«実装者が回していないか、回して見落とした» という finding でもある。**そのことも報告に書く。
 
 守るのは、**実装者が «通したつもり» で飛ばした gate が、出荷前に 1 つも残らないこと**である。⚠ **実装者は完成へ向かって急ぐので、自分の gate を採点する役には向かない。**別の worker が回すと、その動機が無い。
 
@@ -47,4 +51,4 @@ description: "QA / AC 裏取り / Surface Observer / AC 読み手が、検証の
 - 登場人物は `What` 冒頭の 1 文から補う。AC 1 件ごとに書かれている必要はない
 - 復元できた AC には «復元できた» だけを返す。書き直し・改善案・AC の追加を挙げない
 
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/skills/pdh-verifying/SKILL.md
+Based on https://github.com/masuidrive/pdh/blob/07e92ef/claude/skills/pdh-verifying/SKILL.md
