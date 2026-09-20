@@ -85,6 +85,8 @@ note_content: |
   - [ ] PDH-implement: implementor が論理単位ごとに commit し、mega-commit にしていない
   - [ ] PDH-implement: `scripts/test-all.sh` 全スイートパス確認済み
   - [ ] PDH-implement: 外部 provider 経由 path は実 API 200 確認済み (deferred の場合は明示記録)
+  - [ ] PDH-implement: 変更した identifier / field / API path / enum の旧名を doc・spec・README・sample・comment で grep し、出力を貼った（0 件なら 0 件と貼る）
+  - [ ] PDH-implement: 恒久テストを追加・変更したなら、そのテストだけを 3 回連続で実行した（1 回では flaky を見つけられない）
   - [ ] PDH-implement: ticket の AC / Architectural Invariants / out-of-scope が implementor によって書き換えられていない
   - [ ] PDH-review: 確定判断が 1 件ずつ実装に落ちている（対応する実体を名指しできない判断は未実装）
   - [ ] PDH-review: 指摘を直すとき、壊していない側の入力を 1 つ選んで前後の出力を記録した
