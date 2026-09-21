@@ -68,6 +68,14 @@ echo "🔌 Engine: $ENGINE"
 # JSON object of {KEY: value} pairs to export into the agent and its subprocesses
 # (e.g. test suites needing provider API keys), so this generic workflow need not
 # enumerate app-specific keys. Values are masked in Actions logs, never printed.
+#
+# The exported KEY NAMES are collected into ENV_JSON_KEY_LINES and rendered into
+# the agent prompt's "Environment Variables Available" section. Without that, the
+# prompt lists only this runner's own control variables and an agent reads it as
+# the whole inventory: in production a run stopped as a blocker saying "there is
+# no provider key" while that very key was exported and readable in its own
+# environment. Names only — never the values.
+ENV_JSON_KEY_LINES=""
 if [ -n "${ENV_JSON:-}" ]; then
   if printf '%s' "$ENV_JSON" | jq -e . >/dev/null 2>&1; then
     while IFS= read -r _env_key; do
@@ -76,11 +84,24 @@ if [ -n "${ENV_JSON:-}" ]; then
       echo "::add-mask::$_env_val"
       export "$_env_key=$_env_val"
       echo "🔑 ENV_JSON: exported $_env_key"
+      ENV_JSON_KEY_LINES="$ENV_JSON_KEY_LINES
+- $_env_key"
     done < <(printf '%s' "$ENV_JSON" | jq -r 'keys[]')
     unset _env_key _env_val
   else
     echo "⚠️  ENV_JSON is set but is not valid JSON; skipping."
   fi
+fi
+
+if [ -n "$ENV_JSON_KEY_LINES" ]; then
+  ENV_JSON_KEYS_SECTION="
+Also exported for you from this repository's ENV_JSON secret (names only — the
+values are set in your environment and masked in logs; read them as \$NAME, and
+never echo, log, or commit a value):$ENV_JSON_KEY_LINES"
+else
+  ENV_JSON_KEYS_SECTION="
+This repository set no ENV_JSON secret, so no project keys were exported by the
+runner. Other variables may still be present from the devcontainer or image."
 fi
 
 echo "🤖 Coding Robot starting..."
@@ -532,6 +553,20 @@ Users can view your changes by visiting the comparison page.
 - START_TIME_UNIX: $RUN_START_UNIX     # wall-clock at run start
 - TIMEOUT_SECONDS: $RUN_TIMEOUT_SECONDS  # the hard kill budget
 - DEADLINE_UNIX: $RUN_DEADLINE_UNIX     # START_TIME_UNIX + TIMEOUT_SECONDS
+$ENV_JSON_KEYS_SECTION
+
+⚠ **This section is not an inventory of your environment.** It lists what this
+runner sets. The devcontainer image, \`.env\`, and the repository add more that
+never appear here. Before you report a variable, credential, or tool as missing
+— and especially before you stop as a blocker over one — **measure it**:
+
+\`\`\`bash
+[ -n "\${THE_VAR_YOU_NEED:-}" ] && echo present || echo absent
+env | sed -n 's/^\([A-Z0-9_]*\)=.*/\1/p' | sort   # names only; never print values
+\`\`\`
+
+"It is not in the list above" is not evidence of absence, and a run that stops
+on it burns a turn and hands the reader a task they did not need to do.
 
 # Wall-clock budget
 You are running inside a hard \`timeout $RUN_TIMEOUT_SECONDS\` envelope. When

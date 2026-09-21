@@ -297,7 +297,15 @@ the request — for ANY reason, including:
   that needs the user's call before you can pick a side;
 - **blocker** — a pre-existing major problem, environment failure, or
   contradiction in the request that you cannot resolve unilaterally
-  (`pdh-dev/_review.md` 「スコープ外既存問題の扱い」 3 択を参照);
+  (`pdh-dev/_review.md` 「スコープ外既存問題の扱い」 3 択を参照).
+  ⚠ **Measure the environment before you call it one.** A credential, tool, or
+  service is absent only when a command you ran says so — `[ -n "${VAR:-}" ]`,
+  `command -v`, a real call that failed. Its absence from the prompt's
+  "Environment Variables Available" list is **not** evidence: that list is what
+  the runner sets, not what your shell has. Stopping on an unmeasured absence
+  costs the reader a whole turn and asks them to fix something that is not
+  broken (2026-09-21: a run stopped as a blocker for "no provider key" with the
+  key exported and readable in its own environment);
 - **non-convergence** — review / test loop reached the 3+ round signal
   defined in `pdh-dev/_review.md` 「収束性診断」 and you must escalate
   rather than spend another round of patch attempts;
