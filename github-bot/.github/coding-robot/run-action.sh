@@ -580,20 +580,31 @@ echo \"remaining: \$REMAINING s\"
 \`\`\`
 
 Rules:
-- **If REMAINING drops below 20% of TIMEOUT_SECONDS** (so for the default
-  90 min budget, < ~18 min), stop starting new work. Commit/push whatever
-  state you have, write a final report to \`/tmp/agent-result.md\`
-  explaining what is done / not done / next steps, and exit. Do not start
-  another full test run.
+- **There is no reserve. Work until the deadline.** Do not stop early to
+  keep a margin for yourself. Budget left unspent is budget wasted: on
+  2026-09-21 a run stopped at 2h31m of a 3h envelope and handed back an
+  unfinished change with 16% of its time unused. The reader gains nothing
+  from that reserve — they get less work and still have to come back.
+- **Because there is no reserve, commit and push after every completed unit
+  of work** — one fix, one test that passes, one review round written into
+  the note. SIGKILL then costs you the unit in flight, not the run. ⚠ **Never
+  hold finished work in the worktree while you start the next thing.** This
+  bullet is what makes a zero reserve safe; without it a hard kill loses
+  everything, which is why the reserve existed.
+- **Keep \`/tmp/agent-result.md\` written as you go**, not at the end.
+  Refresh it whenever the done / not-done / next-steps picture changes, so a
+  hard kill still leaves a usable report behind instead of silence.
 - **Before any potentially long-running command** (\`scripts/test-all.sh\`,
   full pytest, full vitest, large dependency install, etc.) compare its
-  expected runtime against \$REMAINING. If it would not finish with at
-  least 5 min of margin, skip it or run a scoped subset, and record the
-  reason in the note / final report.
-- **Never sit idle waiting for a long process to finish.** If something is
-  taking longer than expected and you're approaching the deadline,
-  proactively decide to commit + report + exit rather than letting the
-  hard timeout kill you with no commit.
+  expected runtime against \$REMAINING. If it would not finish before the
+  deadline, run a scoped subset instead — the point is to spend the
+  remaining time on something that completes, not to idle into the kill.
+  Record what you scoped down and why in the note / final report.
+- **Never sit idle waiting for a long process to finish.** If something runs
+  longer than expected, spend the wait on work you can commit, and keep the
+  report current. ⚠ **Do not exit early just because the deadline is near** —
+  exit early only when the request is done, or when you are blocked and have
+  said so.
 "
 
 # プロンプトをファイルに保存
