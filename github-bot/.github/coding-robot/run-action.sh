@@ -561,11 +561,11 @@ never appear here. Before you report a variable, credential, or tool as missing
 — and especially before you stop as a blocker over one — **measure it**:
 
 \`\`\`bash
-[ -n "\${THE_VAR_YOU_NEED:-}" ] && echo present || echo absent
+[ -n \"\${THE_VAR_YOU_NEED:-}\" ] && echo present || echo absent
 env | sed -n 's/^\([A-Z0-9_]*\)=.*/\1/p' | sort   # names only; never print values
 \`\`\`
 
-"It is not in the list above" is not evidence of absence, and a run that stops
+\"It is not in the list above\" is not evidence of absence, and a run that stops
 on it burns a turn and hands the reader a task they did not need to do.
 
 # Wall-clock budget
