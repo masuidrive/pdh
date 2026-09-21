@@ -32,6 +32,7 @@ SKIP_PREFIXES = ("claude/templates/", "codex/templates/", "github-bot/.github/")
 
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 FENCE = re.compile(r"^\s*(```|~~~)")
+CODE_SPAN = re.compile(r"`[^`]*`")   # inline code is literal text, not a link
 
 
 def slugify(heading: str) -> str:
@@ -73,7 +74,7 @@ def headings(path: pathlib.Path) -> set:
 
 
 def links(path: pathlib.Path):
-    """(line_number, target) for each Markdown link outside fenced code."""
+    """(line_number, target) for each Markdown link outside fenced code and code spans."""
     in_fence = False
     for lineno, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
         if FENCE.match(line):
@@ -81,7 +82,7 @@ def links(path: pathlib.Path):
             continue
         if in_fence:
             continue
-        for m in LINK.finditer(line):
+        for m in LINK.finditer(CODE_SPAN.sub("", line)):
             yield lineno, m.group(1)
 
 
