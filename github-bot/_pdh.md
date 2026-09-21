@@ -62,6 +62,47 @@ else
 fi
 ```
 
+## 依頼が既存のチケットを名指ししていたら、新しく作らずそれを使う
+
+**守るのは «同じ仕事のチケットが 2 つの名前で並ばないこと» である。**
+
+リポジトリには、Issue を経ずに先に起票されたチケットが溜まる。上の find-or-create が探すのは
+`issue-<N>` という名前だけなので、**同じ仕事のチケットが別名で在っても見えない。**そのまま
+`new` すると、1 つの仕事が 2 つの名前を持ち、**どちらが本物か誰にも決められなくなる。**
+
+Issue 本文または起動した 🤖 コメントが `tickets/<名前>/` か `YYMMDD-hhmmss-<slug>` の形の
+チケット名を含み、**そのチケットが `tickets/` 直下に在るなら、`ticket.sh new` を実行しない。**
+
+```bash
+# 依頼の文から名前を拾う（本文と起動コメントの両方を見る）
+NAMED=$(printf '%s\n' "$ISSUE_BODY" "$COMMENT_BODY" \
+  | grep -oE '[0-9]{6}-[0-9]{6}-[a-z0-9][a-z0-9-]*' | sort -u)
+COUNT=$(printf '%s\n' "$NAMED" | grep -c . || true)
+```
+
+- **1 つだけ在る場合** — そのチケットを使う。`branch:` を bot の branch へ向けてから `start` する。
+  ```bash
+  TICKET_NAME="$NAMED"
+  # frontmatter に branch: を書く（既に在れば書き換える）
+  f="tickets/$TICKET_NAME/ticket.md"
+  if grep -q '^branch:' "$f"; then
+    sed -i.bak -E "s#^branch:.*#branch: agent/issue-${ISSUE_NUMBER}#" "$f" && rm -f "$f.bak"
+  else
+    sed -i.bak -E "s#^(priority:.*)#\1\nbranch: agent/issue-${ISSUE_NUMBER}#" "$f" && rm -f "$f.bak"
+  fi
+  git add tickets && git commit -m "ticket: adopt $TICKET_NAME for issue #${ISSUE_NUMBER}"
+  bash ticket.sh start "$TICKET_NAME"
+  ```
+  以後 `restore` / `check` / `close` はその branch でチケットを解決する（2026-09-21 に実測）。
+
+- ⚠ **名前が 2 つ以上あるとき** — どれを使うか Issue で聞いて止まる。**選ばない。**
+- ⚠ **`tickets/done/` のものを名指ししているとき** — 使わない。**閉じた仕事である。**
+  その旨を Issue に書いて、`issue-<N>` で新しく作る。
+- ⚠ **名前が在るのにファイルが無いとき** — 打ち間違いとして扱い、Issue で聞いて止まる。
+
+**使ったチケットは、その Issue のものとして最後まで扱う。**close も `tickets/done/` への移動も
+通常どおりで、`issue-<N>` という名前のチケットは作らない。
+
 生成後、本体の各セクション（Why / What + Acceptance Criteria / Architectural Invariants check / Design Decisions / Out-of-scope）を Issue・`product-brief.md` から埋める。`progress.md` は `ticket_files` により `new` が作る。経緯はここへ追記し、note は現在値だけにする（`_reference.md`「ticket / note / progress の役割分担」）。旧 ticket.sh で作られて `progress.md` が無い ticket は、stage の入口で作る。`started_at` は `start` が、`closed_at` は `close` が入れる。
 
 ## checklist gate と close
