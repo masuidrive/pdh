@@ -79,6 +79,17 @@ For more information, see the [Claude Code documentation](https://docs.anthropic
 engine_run() {
   echo "🚀 Starting Claude Code CLI (timeout: ${TIMEOUT_VALUE}s)..."
 
+  # Optional model pin, symmetric with CODEX_MODEL in _codex.sh. Without it the
+  # run takes whatever the account default is, so the transcript never records
+  # which model did the work and two runs are not comparable.
+  local MODEL_ARGS=()
+  if [ -n "${CLAUDE_MODEL:-}" ]; then
+    MODEL_ARGS=(--model "$CLAUDE_MODEL")
+    echo "🧠 Model: $CLAUDE_MODEL"
+  else
+    echo "🧠 Model: (account default — set the CLAUDE_MODEL variable to pin one)"
+  fi
+
   (
     > "$PROGRESS_OUTPUT_FILE"  # Initialize progress file
     > "$TASK_STATUS_FILE"       # Initialize task status file
@@ -92,6 +103,7 @@ engine_run() {
     mkdir -p "$BLOCKS_DIR"
 
     timeout "$TIMEOUT_VALUE" claude -p --dangerously-skip-permissions \
+      ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
       --system-prompt "$SYSTEM_PROMPT" \
       --output-format stream-json --include-partial-messages --verbose \
       < "/tmp/agent-prompt-$ISSUE_NUMBER.txt" 2>&1 | \
