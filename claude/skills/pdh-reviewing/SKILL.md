@@ -16,6 +16,7 @@ AC・Architectural Invariants・Out-of-scope が再合意なく変更されて�
 - test 追従：test、mock、fixture、stub、hardcoded expectation
 - test 到達可能性：client JS、generated string、template 内 logic を test から import できるか
 - doc sweep：old identifier、path、enum が doc、README、comment、sample に残っていないか
+- test が発明した要件：test が assert している値と条件が、製品のどこかで約束されているか。待ち時間、timeout、上限、件数、順序を literal で書いた test は、その数字の出どころを製品の code か doc か ticket で示せなければ finding とする。test 同士が共有する fixture、connection、session の前提も同じく見る（追従の向きが逆の観点である。「製品を変えたのに test が古い」ではなく「test が製品の約束していないことを要求している」を探す）
 
 ## レンズ
 
