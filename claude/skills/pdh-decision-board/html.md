@@ -64,15 +64,17 @@ HTML を選んだときだけ読む。**HTML は 1 枚に文書とスライド�
 
 同じ論理判断に属する要素は、表示場所が違っても同じ `data-q` を持つ。判断 ID は意味のある安定名にする。**カードには `data-label` を必ず書く**（無いと貼り戻し文にカード本文が丸ごと入る）。
 
+⚠ **`data-q` を設問番号にしない。**番号（`T1` `T2` …）は設問の見出しと `data-label` に書き、`data-q` は意味のある安定名のままにする（`pdh-dev` の `_collaboration.md`「設問には番号を振る」）。**寿命が違う** — 番号は返答ごとに振り直され、`data-q` は板の寿命を通じて変わらない。
+
 ```html
 <!-- 選択肢は «説明のカードそのもの»。data-label が貼り戻し文に入る短い名前。 -->
 <div class="card rec answer-choice" role="button" tabindex="0" aria-pressed="false"
-     data-q="scope" data-value="recommended" data-label="A. 推奨を承認する（推奨）">
-  <h4><span class="tag rec">推奨</span>A. 推奨を承認する</h4>
+     data-q="scope" data-value="recommended" data-label="1. 推奨を承認する（推奨）">
+  <h4><span class="tag rec">推奨</span>1. 推奨を承認する</h4>
   … 軸と弱点 …
 </div>
 <div class="card answer-choice" role="button" tabindex="0" aria-pressed="false"
-     data-q="scope" data-value="alternative" data-label="B. 別案を指示する">…</div>
+     data-q="scope" data-value="alternative" data-label="2. 別案を指示する">…</div>
 
 <section class="answer-set" data-q="scope" data-title="判断 scope の見出し">
   <textarea class="answer-note" data-q="scope" aria-label="判断 scope の補足"></textarea>
