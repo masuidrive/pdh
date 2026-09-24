@@ -859,27 +859,67 @@ PYEOF
   if [ -n "$IMG_FILES" ]; then
     echo "🖼️ Relocating review image artifacts to bot-artifacts: $(echo "$IMG_FILES" | tr '\n' ' ')"
     BA_W="$(mktemp -d)/ba"
-    if git fetch origin bot-artifacts 2>/dev/null; then
-      git worktree add "$BA_W" bot-artifacts 2>/dev/null
+    # ⚠ bot-artifacts の fetch / push も、作業 branch の push と同じく token を明示する。
+    #   origin のままだと container の中では認証が無く、fetch も push も失敗していた
+    #   （実測 2026-09-24: «fatal: could not read Username for 'https://github.com'»）。
+    #   そのうえ fetch の失敗を «branch がまだ無い» と読んで空の branch を作り、push の成否を
+    #   見ずに作業 branch から画像を消していたので、URL だけが残って画像は 404 になった。
+    BA_REMOTE="https://x-access-token:${ATTACH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+    BA_READY=0
+    BA_PUSHED=0
+    BA_MAP=""
+    PRE_RM_SHA=$(git rev-parse HEAD)
+    if git -c "http.https://github.com/.extraheader=" fetch -q "$BA_REMOTE" \
+         "+refs/heads/bot-artifacts:refs/remotes/origin/bot-artifacts" 2>/dev/null \
+       || git fetch -q origin bot-artifacts 2>/dev/null; then
+      git worktree add -q --detach "$BA_W" origin/bot-artifacts 2>/dev/null && BA_READY=1
     else
-      git worktree add --detach "$BA_W" 2>/dev/null
-      git -C "$BA_W" checkout --orphan bot-artifacts 2>/dev/null
-      git -C "$BA_W" rm -rf . >/dev/null 2>&1 || true
+      # 新しく作ってよいのは «まだ無い» ときだけ（ls-remote --exit-code は、無いと 2 を返す）
+      BA_LS=0
+      git -c "http.https://github.com/.extraheader=" ls-remote --exit-code "$BA_REMOTE" \
+        refs/heads/bot-artifacts >/dev/null 2>&1 || BA_LS=$?
+      if [ "$BA_LS" = 2 ]; then
+        git worktree add -q --detach "$BA_W" 2>/dev/null \
+          && git -C "$BA_W" checkout -q --orphan bot-artifacts-new 2>/dev/null \
+          && { git -C "$BA_W" rm -rfq . >/dev/null 2>&1 || true; } \
+          && BA_READY=1
+      else
+        echo "Warning: bot-artifacts could not be fetched (exit $BA_LS)"
+      fi
     fi
-    while IFS= read -r bf; do
-      [ -z "$bf" ] || [ ! -f "$bf" ] && continue
-      dest="issue-${ISSUE_NUMBER}/$(basename "$bf")"
-      mkdir -p "$BA_W/$(dirname "$dest")"
-      cp "$bf" "$BA_W/$dest"
-      git -C "$BA_W" add "$dest"
-      ARTIFACT_MAP="${ARTIFACT_MAP}${bf}	https://github.com/${GITHUB_REPOSITORY}/raw/bot-artifacts/${dest}
+    if [ "$BA_READY" = 1 ]; then
+      while IFS= read -r bf; do
+        [ -z "$bf" ] || [ ! -f "$bf" ] && continue
+        dest="issue-${ISSUE_NUMBER}/$(basename "$bf")"
+        mkdir -p "$BA_W/$(dirname "$dest")"
+        cp "$bf" "$BA_W/$dest"
+        git -C "$BA_W" add "$dest"
+        BA_MAP="${BA_MAP}${bf}	https://github.com/${GITHUB_REPOSITORY}/raw/bot-artifacts/${dest}
 "
-    done <<< "$IMG_FILES"
-    if ! git -C "$BA_W" diff --cached --quiet 2>/dev/null; then
-      git -C "$BA_W" commit -q -m "artifacts: issue-${ISSUE_NUMBER}" \
-        && git -C "$BA_W" push -q origin bot-artifacts || echo "Warning: bot-artifacts push failed"
+      done <<< "$IMG_FILES"
+      if ! git -C "$BA_W" diff --cached --quiet 2>/dev/null \
+         && git -C "$BA_W" commit -q -m "artifacts: issue-${ISSUE_NUMBER}"; then
+        if git -C "$BA_W" -c "http.https://github.com/.extraheader=" push -q "$BA_REMOTE" \
+             HEAD:refs/heads/bot-artifacts \
+           || git -C "$BA_W" push -q origin HEAD:refs/heads/bot-artifacts; then
+          BA_PUSHED=1
+        else
+          echo "Warning: bot-artifacts push failed"
+        fi
+      fi
+      git worktree remove --force "$BA_W" 2>/dev/null || true
     fi
-    git worktree remove --force "$BA_W" 2>/dev/null || true
+    if [ "$BA_PUSHED" = 1 ]; then
+      ARTIFACT_MAP="$BA_MAP"
+    else
+      # 置けなかったときは、画像を消す直前の commit を指す。作業 branch からは消すので main は
+      # 汚れず、その commit は PR の履歴に残るので URL は切れない
+      echo "Warning: images are linked at $PRE_RM_SHA instead of bot-artifacts"
+      while IFS= read -r bf; do
+        [ -n "$bf" ] && ARTIFACT_MAP="${ARTIFACT_MAP}${bf}	https://github.com/${GITHUB_REPOSITORY}/raw/${PRE_RM_SHA}/${bf}
+"
+      done <<< "$IMG_FILES"
+    fi
     # working ブランチから画像を除去して push（main 汚染防止）
     while IFS= read -r bf; do [ -n "$bf" ] && git rm -q --ignore-unmatch "$bf" >/dev/null 2>&1 || true; done <<< "$IMG_FILES"
     if ! git diff --cached --quiet 2>/dev/null; then
