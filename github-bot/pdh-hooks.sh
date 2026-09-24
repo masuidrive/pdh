@@ -8,6 +8,7 @@
 #   3. Status が human gate なら、note の Checklist に «発行先:» + URL か path の未了行が無ければ足す
 #      （URL は今回の gate コメント）
 #   4. note の Checklist に «未了 + 発行先:» の行があれば awaiting-reply ラベルを付け、無ければ外す
+#      （ただし bot の PR が開いていれば、issue には付けず PR にだけ付ける。待っているのは Merge なので）
 #   5. 導入検査（ラベル・Actions の PR 作成許可）で要追加があれば報告に足す
 #
 # ⚠ awaiting-reply は run の «始め» と «終わり» の両方で動かす。終わりだけだと、人が答えて
@@ -278,7 +279,19 @@ fi
 # PDH-review のままで «動いているのか待っているのか» が一覧から区別できなかった。
 # 答えを反映した手で [x] にすると、次の run のこの節がラベルを外す（自動で戻る）。
 if [ -f "$note" ]; then
-  if has_waiting_line; then
+  # ⚠ bot が PR を作ったあとは、issue には付けない。人がすることは PR の Merge で、issue への返事では
+  #   ない（close gate の答え方は Merge なので、Checklist の行は «答え待ち» のまま残る）。issue に
+  #   «返事待ち» が付いていると、実態と合わない（2026-09-24 ユーザ指摘）。PR 側には付ける
+  open_pr=""
+  if [ -n "$BRANCH" ]; then
+    open_pr=$(gh pr list --head "$BRANCH" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
+    [ "$open_pr" = "null" ] && open_pr=""
+  fi
+  if has_waiting_line && [ -n "$open_pr" ]; then
+    gh issue edit "$ISSUE" --repo "$REPO" --remove-label "$AWAITING_LABEL" >/dev/null 2>&1 \
+      && log "$AWAITING_LABEL を issue から外した（PR #$open_pr が開いている＝待っているのは Merge）"
+    awaiting_label_on_pr add "$BRANCH"
+  elif has_waiting_line; then
     gh issue edit "$ISSUE" --repo "$REPO" --add-label "$AWAITING_LABEL" >/dev/null 2>&1 \
       && log "$AWAITING_LABEL を付けた（回答待ちの行がある）"
     awaiting_label_on_pr add "$BRANCH"
