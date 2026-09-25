@@ -12,11 +12,11 @@
 ## 収束
 
 - 同種 Critical が 2 attempt で再発したら escalate し、ticket への実装詳細混入、scope 肥大、reviewer prompt 偏り、確定値の下流委譲を root cause として確認する
-- `PDH-review-2` 以降で初回 finding が誤検出、pre-existing、Out-of-scope、user 価値非直結と判明したら、追加 fix をせず Discovery へ記録し、元の AC と user journey だけを verify する
+- `PDH-review-2` 以降で初回 finding が誤検出と判明したら棄却し、今回と無関係なら Discovery へ記録して、元の AC と user journey だけを verify する。⚠ **既存の問題（pre-existing）や 2 巡目以降の発見でも、承認された目的の達成に要る修正、または安く直せる修正は続ける** — 範囲の判断は `PDH-AGENTS.md`「Verification」の Scope boundary に従う
 - **次の巡を起こす条件は 1 つだけ — 直前の巡で «修正が持ち込んだ Critical / Major» が出たこと。**出ていなければ、その時点で review は終わりである（「巡回」2 の «修正起因の Critical / Major だけを scope gate へ戻す» の対偶）。⚠ **回数で決めない。**⚠ **人に «次の巡をやるか» を聞かない** — 何が出るかは、やる前には誰にも分からないので、**判断できない問いを承認者へ渡すことになる**（`PDH-AGENTS.md`「Human Gate Materials」）
-  - ⚠ **Minor では次の巡を起こさない。**`記録のみ` か `起票` に振る（`PDH-AGENTS.md`「保留した ticket には、それ自身が存在する理由が要る」の 4 処置）。⚠ **そもそも `pdh-reviewing`「報告」は Critical と Major だけを書くと定めている**
+  - ⚠ **Minor では次の巡を起こさない。**処置は 4 処置から Scope boundary で選ぶ — 安く直せるなら `採用`（`PDH-AGENTS.md`「保留した ticket には、それ自身が存在する理由が要る」の 4 処置）。⚠ **そもそも `pdh-reviewing`「報告」は Critical と Major だけを書くと定めている**
   - ⚠ **`記録先` が note で済む Critical/Major でも、次の巡は起こさない。**直したコードに対する指摘でなければ «修正が持ち込んだ» に当たらない
-  - ⚠ **既存の欠陥（pre-existing）や CI の既存 flaky では次の巡を起こさない。**`起票` に振る
+  - ⚠ **既存の欠陥（pre-existing）や CI の既存 flaky では次の巡を起こさない。**⚠ **ただし «既存だから `起票`» にしない** — 巡を起こさないことと、いま直さないことは別の判断である。処置は Scope boundary で選び、`起票` は «別の問題 かつ ここで直すと高くつく» ときだけ
   - **実測でこの条件が正しく切れることを確かめた**（2026-09-19 に 4 ticket・計 16 巡を数えた）。ある ticket は 6 巡回ったが、**修正起因の Critical/Major が出たのは 3 巡目まで**で、4 巡目は Minor 4 件（記録のみ 3）、5 巡目は Major 1 件だが記録先 note と既存 flaky の起票、**6 巡目は製品コードを 1 行も変えなかった**（Minor 4 件・Surface 2 件は両方棄却）。⚠ **この条件なら 3 巡で止まり、3 巡目の Major 2 件（恒久 test が flaky で full suite を不安定にする / 検証用 DB の隔離漏れ）は取り逃さない**
   - ⚠ **この条件は巡回を必ず減らすわけではない。増える ticket もある。**実測の 4 件のうち 1 件は **2 巡で終わっていたが、この条件では 3 巡になるのが正しい** — 2 巡目で «修正が持ち込んだ Major» が出て、それを直したのに、**その修正を誰も検査していなかった。**⚠ **「巡回を減らす規則」として読むと、増える回に «規則を守っていない» と誤解する。**これは «出た finding に応じて回す» 規則であって、回数を削る規則ではない。
   - ⚠ **止まる側の条件だけでは、止まらない場合がある。**修正が欠陥を作り続ける限り、この条件は無限に巡を起こす — **A を直すと B が壊れ、B を直すと A が壊れる**形の発振である。⚠ **既存の「同種 Critical が 2 attempt で再発したら escalate」は同種に限られていて、種類の違う修正起因 Major が続く発振を止めない。**
