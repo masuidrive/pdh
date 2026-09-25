@@ -34,7 +34,7 @@ Next Stage:
 
 節構成は `.ticket-config.yaml` の `default_content` / `note_content` が決める。`./ticket.sh new` が出した節と記入ガイドに従い、そこに無い section を前提にしない。次を守る。
 
-- ticket は 1 page、約 20 行以内を目安にする
+- ticket の長さの目安を、節の数と矛盾する数字で置かない。長さは `.ticket-config.yaml` の `default_content` が declare した節が決める — **節を全部埋めて収まらない行数を目安に書くと、全 ticket がその目安を破り、誰も気づかない**
 - 1 ticket per work。cross-cuttingな全layerを1 ticket、1作業文脈で整合させる
 - Implementation Notes は、ユーザが明示または会話で言及した関数名 / module 名 level の事項だけを書く。自主的に書かない
 - Status行を冒頭に維持し、timestampを必須とする

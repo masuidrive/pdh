@@ -143,6 +143,7 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 - 昇格判定は 1 問。この挙動を、ticket や一時 fixture の名前を出さずに継続する product contract として記述できるか。Yes なら `application-test` へコミット、No なら ticket-local のまま close 時に刈る
 - repository が生成物（bundle 済み worker、compile 済み asset、生成された SDK model）を commit しているなら、`application-test` で再生成して突き合わせ、commit 済みファイルと異なるとき fail させる
 - 実行可能な `ticket-local-test` script は `tickets/<name>/tests/` に置き、`./scripts/test-ticket-local.sh [ticket-id]` で実行する。ticket.sh は作成しないので、最初の test を書くときに `mkdir -p` する
+- 新しく足した検査（grep の不変条件・CI の step・gate の条件・恒久テスト）は、**落ちることを 1 度見せる。**その検査が守る対象を 1 つだけ壊し（条件の `and` を `or` にする、除外を 1 つ外す、期待値を 1 つずらす）、検査が落ちることを確かめて、当てた変更と結果を progress へ 1 行書く。⚠ **通ってしまう検査は、足しても何も守らない。**
 - seed、`tmp_dir` の helper、`agent-browser`、`curl`、コマンドの実行証跡は progress file へ記録する
 
 Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/codex/skills/pdh-coding/SKILL.md
