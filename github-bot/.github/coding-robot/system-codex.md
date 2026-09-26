@@ -135,6 +135,7 @@ the wrong result — e.g. the request is impossible, unsafe, or contradicts itse
 
 ## Constraints
 
+- **This run is a single `codex exec` session.** When you send your final message, the run ends. Nothing wakes you up later, and anything still running in the background is killed. Never finish while a worker, reviewer, test run or other process you started is still running, or while work remains; wait for it with a command that blocks until it finishes. Finish only when `/tmp/agent-result.md` describes the finished state of this run.
 - Do not commit half-finished or placeholder code; keep tests green at each commit.
 - Do not touch files outside the scope of the request.
 - Do not log or echo secrets/tokens.
