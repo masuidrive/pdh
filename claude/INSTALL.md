@@ -77,7 +77,8 @@ bash ticket.sh init
 | `tmp/pdh/claude/templates/dev-server.sh` | `scripts/dev-server.sh` | PDH verify / human-review 用の開発サーバ入口 |
 | `tmp/pdh/claude/templates/seed-pdh-verify.sh` | `scripts/seed-pdh-verify.sh` | PDH verify / human-review 用のローカル seed hook |
 | `tmp/pdh/claude/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | `ticket-local-test` 実行スクリプト（CI には含めない） |
-| `tmp/pdh/claude/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | ticket dir の `progress.md`（存在・追記のみ）と human gate の待ち行を確かめる検査。`scripts/test-all.sh` の `run "pdh-ticket"` 行が呼ぶ |
+| `tmp/pdh/claude/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | ticket dir の `progress.md`（存在・追記のみ）、human gate の待ち行、close 前 review の区間、`起票:` 行の実在、Why の根拠 2 行を確かめる検査。`scripts/test-all.sh` の `run "pdh-ticket"` 行が呼ぶ |
+| `tmp/pdh/claude/templates/pdh-review-range.sh` | `scripts/pdh-review-range.sh` | 最後に review した SHA 以降の ticket 自身の commit を列挙し、close 前 review の指示文を作る。`check-pdh-ticket.sh` も読み込む（実行権限 `chmod +x` 要） |
 | `tmp/pdh/claude/templates/agents/claude/` | `.claude/agents/` | PDH worker の agent 定義（Claude Code 用。read-only 役の書き込み境界を `tools` で機構化する。**ディレクトリごと**コピーする） |
 | `tmp/pdh/claude/templates/agents/codex/` | `.codex/agents/` | PDH worker の agent 定義（Codex CLI 用。read-only 役を `sandbox_mode` で機構化する。Codex CLI を使わないなら省略してよい） |
 | `tmp/pdh/claude/templates/product-brief.md` | `product-brief.md` | Product Brief テンプレート |
@@ -419,6 +420,20 @@ rm -rf tmp/pdh
 11. 後片付け: `rm -rf tmp/pdh`
 
 ### 既知の移行手順
+
+#### close 前 review の区間と、起票の検査が `check-pdh-ticket.sh` に入った（2026-09-26 以降）
+
+`scripts/check-pdh-ticket.sh` が 3 つを新しく落とす。① progress の最後の `close-gate-sha:` の後に ticket 自身の commit が残っている、または Status が `PDH-close`（branch 自身の commit が `tickets/done/` へ移した ticket を含む）なのに `close-gate-sha:` が 1 行も無い。② note の Checklist の `起票: <anchor> → <ticket 名>` 行の ticket が `tickets/` にも `tickets/done/` にも無い。③ `.ticket-config.yaml` の ticket テンプレが Why 節に `再現か実測:` を持つようになった commit より後に作られた ticket で、Why の `再現か実測:` か `いま直さない理由:` が空。区間は新しい `scripts/pdh-review-range.sh` が作り、base の branch 名は `.ticket-config.yaml` の `default_branch` から読む。記録の書式と回し方は `pdh-dev` の `_reference.md` と `_flow.md`（PDH-verify の 7）にある。
+
+適用済みかの確認（冪等）:
+
+```bash
+test -f scripts/pdh-review-range.sh && echo "区間 script: 適用済み" || echo "区間 script: 要適用"
+grep -q 'close-gate-sha' scripts/check-pdh-ticket.sh && echo "検査: 適用済み" || echo "検査: 要適用"
+grep -q '再現か実測:' .ticket-config.yaml && echo "テンプレ: 適用済み" || echo "テンプレ: 要追加"
+```
+
+「要適用」なら `tmp/pdh/claude/templates/pdh-review-range.sh` と `tmp/pdh/claude/templates/check-pdh-ticket.sh` を `scripts/` へコピーして `chmod +x` する（`check-pdh-ticket.sh` は project 固有の変更を持たないので上書きしてよい）。「要追加」なら同 template の `default_content` の `### Why` にある 2 行を足す。③ はこの 2 行を足した commit より後に作られた ticket にだけ効くので、既存の ticket は書き換えない。⚠ close 済みでない ticket のうち、Status が `PDH-close` のものと、branch の上で `tickets/done/` へ移したがまだ base に入っていないものは、`close-gate-sha:` が無いと ① で落ちる。close の前に close 前 review を回して行を書く。
 
 #### note の時系列の節が `progress.md` へ移った（2026-09-14 以降）
 

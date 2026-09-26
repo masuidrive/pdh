@@ -61,6 +61,10 @@ for distribution_set in claude codex; do
   fi
 done
 
+for distribution_set in claude codex; do
+  run "$distribution_set check-pdh-ticket" bash scripts/test-pdh-ticket-checks.sh "$distribution_set"
+done
+
 printf '\n=== shell syntax (shipped scripts) ===\n'
 syntax_failed=0
 while IFS= read -r script; do

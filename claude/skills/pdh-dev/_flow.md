@@ -4,6 +4,8 @@
 
 `./ticket.sh help` を最初に実行する。各 stage の入口で note の Status をその stage 名へ更新する。仕様が変わったら、code と review を続ける前に ticket の AC と確定判断を更新する。`progress.md` は `ticket.sh new` が `ticket_files` から作る。旧 ticket.sh で作られて無い ticket は stage の入口で作る（1 行目は `# Progress: <ticket-name>`。[_reference.md](_reference.md)「ticket / note / progress の役割分担」）。stage 遷移の宣言（[_reference.md](_reference.md)「報告」）は progress へ追記する。通常は`PDH-review`と`PDH-verify`まで自動で進める。
 
+note の Status を human gate（`PDH-ticket-human-review` / `PDH-human-review`）へ進める変更と、Checklist に `発行先:` の待ち行を足す変更は、同じ commit に入れる。分けると、その間の commit で回した `scripts/test-all.sh` の `pdh-ticket` 段が落ちる。
+
 ## PDH-open
 
 1. `./ticket.sh start`/`restore` 出力の `ticket:` と `note:` パスを確認する。無ければ `list`、新規なら `new <slug>` → 標準構造の記入 → `start <ticket-name>`
@@ -46,6 +48,7 @@ review 前に `git merge-base --is-ancestor origin/<base> HEAD` を確認し、f
 - 未記載の公開 surface、破壊操作、権限変更を機械的に列挙する。見つけたら Critical として human gate へ出す
 - 中間 attempt では、変更 file と import chain 上の影響 test だけを実行する
 - 完了条件は、最新 SHA で採用 Critical と Major が解消し、非採用理由が progress にあること
+- 1 巡ごとに、reviewer が読んだ SHA を progress へ `review-sha:` の行で追記する（行の形は [_reference.md](_reference.md)「ticket / note / progress の役割分担」）
 
 ## PDH-verify
 
@@ -55,6 +58,11 @@ review 前に `git merge-base --is-ancestor origin/<base> HEAD` を確認し、f
 4. 最終 HEAD で `scripts/test-all.sh` を再実行して実出力を progress へ貼る
 5. 外部 surface を consumer 視点で観察する（`pdh-verifying`「Surface Observer」）。純 backend は progress に 1 行残して skip する
 6. AC check 済み ticket file を含めて commit する
+7. close 前 review: 最後に review した SHA の後に入った ticket 自身の commit を review する。**守るのは、review が読んでいない ticket 自身の commit が close へ進まないこと**である
+   - reviewer への指示文は `bash scripts/pdh-review-range.sh <ticket dir> --from last-review --prompt` の出力にする。区間は first-parent の merge 以外の commit で作るので、base の merge で入った変更は含まない。diff の基点を指定する形（`--base` など）は HEAD との merge-base を取るので、この区間を渡せない
+   - exit 3 は区間が空なので、review を回さない。exit 2（起点の行が無い・起点が履歴に無い）は ticket の差分全体を review する
+   - 回した HEAD を progress へ `close-gate-sha:` の行で追記する（区間が空なら SHA の後に `区間が空` と書く）。`tickets/` だけの commit は区間に入らない
+   - この後に ticket 自身の変更を commit したら、もう一度回す。`scripts/check-pdh-ticket.sh` が、`close-gate-sha:` の後に残った ticket 自身の変更と、`PDH-close` なのに行が無いことを落とす
 
 ## PDH-human-review
 
@@ -68,6 +76,8 @@ review 前に `git merge-base --is-ancestor origin/<base> HEAD` を確認し、f
    - 各 AC の data 出所。user-facing AC が合成 data のみなら close blocker とする
    - merge 直後に失う user-observable 機能の yes / no。yes は downstream 復旧予定でも close blocker とする
 3. 承認後に `./ticket.sh close` を実行する
+
+⚠ `scripts/check-pdh-ticket.sh` は `tickets/` の未完了の ticket を全部検査する。branch を先に base へ merge し、close を後にする経路では、未完了の ticket が base に載る。その ticket の記録が崩れると — `close-gate-sha:` を持ったまま別の ticket の commit が base に入る、`PDH-human-review` のまま `発行先:` の行を `[x]` にする — base から分かれた全 branch の `scripts/test-all.sh` の `pdh-ticket` 段が落ち、CI と deploy 前の検査が止まる。この経路では、base に載せる前に close するか、載せている間その ticket の記録を崩さない。
 
 ## 中止フロー
 

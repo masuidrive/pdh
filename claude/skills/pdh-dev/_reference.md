@@ -42,6 +42,7 @@ Next Stage:
 - gate 未達のまま次 stage 名へ Status を進めない
 - progress は追記のみ。1 出来事 1 見出しで `## <UTC 日時> [<stage>] <題>` の形にし、書いた後は編集しない（消す・書き換えると `ticket.sh close` が `append_only_files` で拒否する）。書くのは diff を生まない出来事だけ（diff を生む変更は commit が持つ）
 - attempt 2 以降は progress に `### Findings (PDH-review-2)` のように見出しを自分で追加する
+- review と close 前 review が読んだ SHA は、progress の行頭に `review-sha: <SHA>` / `close-gate-sha: <SHA>` の形で書く（行頭の `- ` と、SHA の後の説明を許す。SHA は 7〜40 桁）。`scripts/pdh-review-range.sh` は 2 種のうち最後に現れた行を起点にし、`scripts/check-pdh-ticket.sh` は最後の `close-gate-sha:` を読む
 - session 終了時に作業途中なら、現在状態と次 action を note へ残す
 - 検証checkは対象SHA、実command、実outputをprogressへ貼ってからnoteのcheckboxをcheckする
 

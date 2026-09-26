@@ -191,7 +191,8 @@ project-root/
     dev-server.sh           ← PDH verify / human-review 用の開発サーバ入口
     seed-pdh-verify.sh      ← PDH verify / human-review 用のローカル seed hook
     test-ticket-local.sh    ← `ticket-local-test` 実行
-    check-pdh-ticket.sh     ← ticket dir の progress.md と human gate の待ち行の検査（test-all の 1 段）
+    check-pdh-ticket.sh     ← ticket dir の progress.md・human gate の待ち行・close 前 review の区間・起票の検査（test-all の 1 段）
+    pdh-review-range.sh     ← 最後に review した SHA 以降の ticket 自身の commit（close 前 review の区間）
     hookbus.js              ← (任意) tmux Director hookbus event bus
   tests/
     tickets/
@@ -240,7 +241,7 @@ pdh/
       AGENTS.md                      ← Codex を worker に使うときの thin pointer
       agents/claude/  agents/codex/  ← PDH worker の agent 定義（配布先 .claude/agents/ と .codex/agents/）
       product-brief.md  technical-reference.md  .ticket-config.yaml
-      test-all.sh  fast-checks.sh  checks/  dev-server.sh  seed-pdh-verify.sh  test-ticket-local.sh  check-pdh-ticket.sh
+      test-all.sh  fast-checks.sh  checks/  dev-server.sh  seed-pdh-verify.sh  test-ticket-local.sh  check-pdh-ticket.sh  pdh-review-range.sh
     scripts/hookbus.js               ← tmux Director hookbus（CLI + library + in-source vitest）
   codex/                             ← Codex CLI 用の配布セット（同じ構成。入口は AGENTS.md、agent 定義は .codex/agents/*.toml）
   github-bot/                        ← GitHub Issues + Actions bot レイヤー【任意・engine 中立。有効化した人だけが配置】

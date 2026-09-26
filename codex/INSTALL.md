@@ -62,7 +62,8 @@ bash ticket.sh init
 | `tmp/pdh/codex/templates/seed-pdh-verify.sh` | `scripts/seed-pdh-verify.sh` | verify 用 fixture seed hook |
 | `tmp/pdh/codex/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | ticket-local-test wrapper |
 | `tmp/pdh/codex/templates/spawn-worker.sh` | `scripts/spawn-worker.sh` | worker を «起動した shell 呼び出しの寿命» から切り離して走らせ、終わり方（rc・受けた signal）を必ず残す。`_execution-team.md`「並行起動」の実装（実行権限 `chmod +x` 要） |
-| `tmp/pdh/codex/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | ticket dir の progress.md と human gate の待ち行の検査（test-all の 1 段） |
+| `tmp/pdh/codex/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | ticket dir の progress.md、human gate の待ち行、close 前 review の区間、`起票:` 行の実在、Why の根拠 2 行の検査（test-all の 1 段） |
+| `tmp/pdh/codex/templates/pdh-review-range.sh` | `scripts/pdh-review-range.sh` | 最後に review した SHA 以降の ticket 自身の commit を列挙し、close 前 review の指示文を作る（`check-pdh-ticket.sh` も読み込む） |
 
 配置コマンド:
 
@@ -89,7 +90,8 @@ cp tmp/pdh/codex/templates/dev-server.sh scripts/dev-server.sh
 cp tmp/pdh/codex/templates/seed-pdh-verify.sh scripts/seed-pdh-verify.sh
 cp tmp/pdh/codex/templates/test-ticket-local.sh scripts/test-ticket-local.sh
 cp tmp/pdh/codex/templates/check-pdh-ticket.sh scripts/check-pdh-ticket.sh
-chmod +x ticket.sh scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh
+cp tmp/pdh/codex/templates/pdh-review-range.sh scripts/pdh-review-range.sh
+chmod +x ticket.sh scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh scripts/pdh-review-range.sh
 ```
 
 `.agents/skills/` は skill の実体である。`.claude/skills/` への symlink や wrapper は作らない。
@@ -166,7 +168,7 @@ for agent in pdh-ac-reader pdh-ac-verifier pdh-coding-engineer pdh-qa pdh-review
   test -f ".codex/agents/$agent.toml" || exit 1
 done
 ! grep -Rqs 'XXXXXXX' AGENTS.md PDH-AGENTS.md product-brief.md technical-reference.md .ticket-config.yaml docs/product-delivery-hierarchy.md .agents/skills scripts/checks
-bash -n ticket.sh scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh
+bash -n ticket.sh scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh scripts/pdh-review-range.sh
 ```
 
 最後に `codex` を新しく起動し、`pdh-dev` と `pdh-update` が skill 一覧にあり、PDH worker が custom agent として選べることを確認する。
@@ -188,7 +190,7 @@ else
   git clone https://github.com/masuidrive/pdh.git tmp/pdh
 fi
 PDH_BACKUP=$(mktemp -d tmp/pdh-backup.XXXXXX)
-for path in AGENTS.md PDH-AGENTS.md product-brief.md technical-reference.md .ticket-config.yaml docs/product-delivery-hierarchy.md scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh; do
+for path in AGENTS.md PDH-AGENTS.md product-brief.md technical-reference.md .ticket-config.yaml docs/product-delivery-hierarchy.md scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh scripts/pdh-review-range.sh; do
   [ ! -e "$path" ] || cp -Rp "$path" "$PDH_BACKUP/"
 done
 [ ! -d .agents/skills ] || cp -Rp .agents/skills "$PDH_BACKUP/agents-skills"
@@ -246,7 +248,7 @@ fi
 - `scripts/dev-server.sh`
 - `scripts/seed-pdh-verify.sh`
 - `scripts/test-ticket-local.sh`
-- `scripts/check-pdh-ticket.sh`（上流の版で置き換えてよい。project 固有の変更を持たない）
+- `scripts/check-pdh-ticket.sh` と `scripts/pdh-review-range.sh`（上流の版で置き換えてよい。project 固有の変更を持たない）
 
 例:
 
@@ -257,6 +259,20 @@ git diff --no-index -- scripts/test-all.sh tmp/pdh/codex/templates/test-all.sh |
 ```
 
 `.ticket-config.yaml` の `note_content` は 2026-09-14 以降、現在値の節だけを持つ（実装ログ / 品質検証結果 / 人間レビュー / Discoveries の 4 節は `progress.md` へ移った）。`grep -q '## PDH-implement. 実装ログ' .ticket-config.yaml && echo "要適用" || echo "適用済み"` で確認し、「要適用」なら template に合わせて 4 節を外し、`ticket_files` と `append_only_files` を足す（ticket.sh 20260914 以降。`selfupdate` を先に）。あわせて `scripts/check-pdh-ticket.sh` を配置し、`scripts/test-all.sh` の `run "fast-checks"` の次に `run "pdh-ticket" bash scripts/check-pdh-ticket.sh` を足す（`grep -q check-pdh-ticket.sh scripts/test-all.sh` で確認）。
+
+**close 前 review の区間と、起票の検査が `check-pdh-ticket.sh` に入った（2026-09-26 以降）**
+
+`scripts/check-pdh-ticket.sh` が 3 つを新しく落とす。① progress の最後の `close-gate-sha:` の後に ticket 自身の commit が残っている、または Status が `PDH-close`（branch 自身の commit が `tickets/done/` へ移した ticket を含む）なのに `close-gate-sha:` が 1 行も無い。② note の Checklist の `起票: <anchor> → <ticket 名>` 行の ticket が `tickets/` にも `tickets/done/` にも無い。③ `.ticket-config.yaml` の ticket テンプレが Why 節に `再現か実測:` を持つようになった commit より後に作られた ticket で、Why の `再現か実測:` か `いま直さない理由:` が空。区間は新しい `scripts/pdh-review-range.sh` が作り、base の branch 名は `.ticket-config.yaml` の `default_branch` から読む。記録の書式と回し方は `pdh-dev` の `_reference.md` と `_flow.md`（PDH-verify の 7）にある。
+
+適用済みかの確認（冪等）:
+
+```bash
+test -f scripts/pdh-review-range.sh && echo "区間 script: 適用済み" || echo "区間 script: 要適用"
+grep -q 'close-gate-sha' scripts/check-pdh-ticket.sh && echo "検査: 適用済み" || echo "検査: 要適用"
+grep -q '再現か実測:' .ticket-config.yaml && echo "テンプレ: 適用済み" || echo "テンプレ: 要追加"
+```
+
+「要適用」なら `tmp/pdh/codex/templates/pdh-review-range.sh` と `tmp/pdh/codex/templates/check-pdh-ticket.sh` を `scripts/` へコピーして `chmod +x` する（`check-pdh-ticket.sh` は project 固有の変更を持たないので上書きしてよい）。「要追加」なら同 template の `default_content` の `### Why` にある 2 行を足す。③ はこの 2 行を足した commit より後に作られた ticket にだけ効くので、既存の ticket は書き換えない。⚠ close 済みでない ticket のうち、Status が `PDH-close` のものと、branch の上で `tickets/done/` へ移したがまだ base に入っていないものは、`close-gate-sha:` が無いと ① で落ちる。close の前に close 前 review を回して行を書く。
 
 新しい `codex/templates/checks/*.check` は追加し、既存の project 固有 `.check` は残す。`required-pdh-files.check` の `required_paths` は、実際に配置した PDH skill と Codex agent 定義の全件に合わせる。
 
