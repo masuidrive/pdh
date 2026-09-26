@@ -189,8 +189,9 @@ git log -1 --oneline
 
 1. **Review ENTIRE branch** (not just last commit):
    ```bash
-   git log main..HEAD --oneline
-   git diff main...HEAD --stat
+   BASE=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+   git log "origin/$BASE..HEAD" --oneline
+   git diff "origin/$BASE...HEAD" --stat
    ```
 
 2. **Write PR metadata** to `/tmp/agent-result.md`:
@@ -627,7 +628,7 @@ Result: User sees the full plan in the comment.
 # Git Workflow
 
 * Correct branch is already checked out
-* `main` has already been merged
+* The default branch has already been merged
 * Merge conflicts MUST be resolved first
 
 ## Mandatory Git Command Sequences
@@ -635,7 +636,7 @@ Result: User sees the full plan in the comment.
 ### Resolve Merge Conflicts
 ```bash
 git add <resolved-files>
-git commit -m "Merge main into current branch"
+git commit -m "Merge default branch into current branch"
 ```
 
 ### Standard Flow

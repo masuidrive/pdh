@@ -31,14 +31,8 @@ STAGES="PDH-open PDH-ticket-review PDH-ticket-human-review PDH-implement PDH-rev
 # STAGES に入れてはならない — 入れると stage を付けるときに他として外される。
 AWAITING_LABEL="awaiting-reply"
 
-# ⚠ 待ち印は Issue と PR の «両方» に付ける。
-#
-# coding-robot.yml は «この印が付いている間は 🤖 無しのコメントでも起動する» を、
-# その event の label で判定する。ところが PR へのコメントは issue_comment として飛び、
-# github.event.issue は **PR 自身** を指すので、Issue に付けた印は見えない。
-# 片方だけに付けると、依頼者がいちばん迷う close gate（板は PR にある）で効かない。
-#
-# ⚠ 触るのは AWAITING_LABEL だけにする。人が PR に付けた他の label には触れない。
+# Issue / PR の待ち印は表示だけに使う。起動の合図は 🤖 である。
+# open PR があるときは PR に付ける。人が付けた他のラベルは変更しない。
 awaiting_label_on_pr() {  # $1=add|remove  $2=branch
   local action="$1" branch="${2:-}" pr
   [ -n "$branch" ] || return 0
@@ -146,12 +140,7 @@ if [ -z "$dir" ]; then
 fi
 note="$dir/note.md"; changed=0
 
-# --- Status ---
-# ⚠ note の Status は 2 通りの書き方がある。両方を読む。
-#   `## Status: PDH-implement`（見出しと同じ行。上流テンプレ）
-#   `## Status` の次行に値（この repo の .ticket-config.yaml のテンプレ）
-# 片方しか読まないと status が空になり、gate=0 になって **ラベルも承認導線も待ち行も
-# 足されない**（2026-09-15、独立 review が検出）。
+# note の Status は見出しと同じ行・次の行の両方を読む。
 status=""
 if [ -f "$note" ]; then
   status=$(grep -m1 '^## Status:' "$note" | sed -E 's/^## Status:[[:space:]]*(PDH-[a-z-]+).*/\1/')
@@ -196,13 +185,7 @@ else
   word="🤖 クローズ承認"
   guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。板を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。⚠ **返信には必ず 🤖 を付けてください** — 付いていないコメントは bot に届きません（この Issue では人同士の会話やメモも書かれるため、🤖 が唯一の合図です）。"
 fi
-# ⚠ 板が自分で答え方を書いているなら、足さない。
-# 実測 2026-09-19: 板は «`🤖 1で進めて` / `🤖 2で進めて`» と選択肢ごとの返し方を
-# 書いていたのに、`🤖 承認` という語が無かったので hook が末尾に別の導線を足した。
-# **読み手は 3 つの語（1で進めて / 2で進めて / 承認）を渡されて、どれで返すか分からない。**
-# 案ごとの返し方は語が毎回変わるので、語では探せない — **backtick に囲まれた 🤖 の指示**が
-# あるかどうかで見る。⚠ `pr-merge` の close gate だけは 🤖 の指示ではなく «merge を押す» なので、
-# 従来どおり導線そのものの文で判定する。
+# 板が backtick 付きの 🤖 回答手順を持つときは、別の承認語を追加しない。
 has_answer_path() {
   printf '%s' "$report" | grep -qF "$word" && return 0
   [ "$status" = "PDH-ticket-human-review" ] || [ "$close_mode" != "pr-merge" ] || return 1
@@ -216,13 +199,7 @@ $guide"
   log "承認導線を足した（agent の報告に無かった）"
 fi
 
-# --- 2.4. 内部 process 文書へのリンクを含む行を消す ---
-# ⚠ **消してよいのはこの 1 種だけである。**`.claude/skills/` 配下・`PDH-AGENTS.md`・
-# `tickets/…` へのリンクは、`_github-issue.md` の «0 本 / 0 件» で**どんな板にも正当な用途が無い**。
-# だから行ごと落としても読み手は何も失わない。⚠ **語の漏れ（`AC` / `PDH-…` が文の中に出る）は
-# 消さない** — 文の一部なので、消すと文が途中で切れる。あちらは下の 2.5 で数えるだけにする。
-# ⚠ 実測 2026-09-19: 同じ ticket の 4 run のうち 3 回、同じ定型文（«実装前で止める理由：… に従っています»）で
-# 出た。規則を «0 件» と書き直しても止まらなかったので、機械側にも落とす口を作る。
+# 内部文書へのリンク行を投稿前に除く。文中の語は下で観測するだけにする。
 if [ "$gate" -eq 1 ]; then
   cut=$(printf '%s\n' "$report" | grep -nE '\]\([^)]*(\.claude/skills/|PDH-AGENTS\.md|tickets/)[^)]*\)' || true)
   if [ -n "$cut" ]; then
@@ -231,11 +208,7 @@ if [ "$gate" -eq 1 ]; then
   fi
 fi
 
-# --- 2.5. process 語の漏れを数える ---
-# ⚠ ここは直さない。数えて log に出すだけである。**守るのは «漏れたことが run のログから
-# 分かること»** で、文の中の語を機械で書き換えると、削った跡が読み手に見えない形で文意を壊す。
-# 規則は `_github-issue.md`「board から外すのは…」が持つ（`PDH-` 0 個 / `tickets/` 0 本 /
-# skill のファイル 0 件）。⚠ 実測 2026-09-19: 板が 3 種すべて漏らしていた回がある。
+# 文中の process 語は数えてログに出すだけにする。自動置換で文意を変えない。
 if [ "$gate" -eq 1 ]; then
   leak=0
   n=$(printf '%s' "$report" | grep -oE 'PDH-[A-Za-z-]+' | sort -u | paste -sd, - )
@@ -272,16 +245,9 @@ if [ "$gate" -eq 1 ] && [ -f "$note" ]; then
   fi
 fi
 
-# --- 4. 回答待ちラベル ---
-# ⚠ 手順 3 が待ち行を足しうるので、必ずその後で判定する。
-# gate かどうかを見ない — gate でない場所で止まったとき（非収束での escalate・blocker・質問）に
-# こそ要る。2026-09-16 に実際に起きた: レビュー 3 巡目の escalate で止まったが、ラベルは
-# PDH-review のままで «動いているのか待っているのか» が一覧から区別できなかった。
-# 答えを反映した手で [x] にすると、次の run のこの節がラベルを外す（自動で戻る）。
+# gate 以外の質問・blocker でも、未了の待ち行があれば待ち印を付ける。
 if [ -f "$note" ]; then
-  # ⚠ bot が PR を作ったあとは、issue には付けない。人がすることは PR の Merge で、issue への返事では
-  #   ない（close gate の答え方は Merge なので、Checklist の行は «答え待ち» のまま残る）。issue に
-  #   «返事待ち» が付いていると、実態と合わない（2026-09-24 ユーザ指摘）。PR 側には付ける
+  # open PR で返答を待つときは PR に待ち印を付け、Issue の印は外す。
   open_pr=""
   if [ -n "$BRANCH" ]; then
     open_pr=$(gh pr list --head "$BRANCH" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)

@@ -14,6 +14,7 @@ github_bot:
   #   refs   : PR 本文に `Refs #N` を書く（既定）。close は PDH-close の手順で行う。
   #   closes : `Closes #N`（PR merge で issue を自動 close）。PDH の close gate を飛ばすので
   #            非推奨。checklist gate / close 判断ボードを通したい場合は refs のままにする。
+  # pr-merge は finalize の検査を経て閉じるため、常に refs を使う。
   pr_link: refs
 
   # close の仕方。
@@ -26,4 +27,6 @@ github_bot:
   #           coding-robot-finalize.yml が issue を閉じる。承認する画面に diff があり、人の操作は
   #           merge の 1 回で済む。required status check が merge ボタンを塞ぐので CI が実際の gate になる。
   #           ⚠ default branch を保護している repo 向け。INSTALL.md「default branch の保護」を読むこと。
+  # finalize も merge 時点のこの値を読む。未設定は merge。pr では自動 close しない。
+  # 環境値は repo 変数、固有の検査は .github/coding-robot/smoke-local.sh へ置く（INSTALL.md）。
   close: merge

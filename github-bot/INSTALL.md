@@ -1,21 +1,23 @@
 # github-bot レイヤー — 導入手順（任意）
 
-PDH の **オプション**。GitHub Issue を «エンジニアとの会話面» にし、🤖 コメントで続きの処理を GitHub Actions 上の agent（[github-bots](https://github.com/masuidrive/github-bots) の coding-robot）に回す。**このレイヤーを入れなくても PDH core は完全に動く。** 入れるかは任意で、入れたプロジェクトだけが GitHub Actions を要求する。
+PDH の **オプション**。GitHub Issue を «エンジニアとの会話面» にし、🤖 コメントで続きの処理を GitHub Actions 上の agent（PDH が配布する coding-robot）に回す。**このレイヤーを入れなくても PDH core は完全に動く。** 入れるかは任意で、入れたプロジェクトだけが GitHub Actions を要求する。
 
-これは core の `claude/INSTALL.md` / `codex/INSTALL.md` とは別経路。導入後は `pdh-update` が PDH 保守分（`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/`）を毎回上流の版で置き換える。machinery（`github-bot/.github/` と `github-bot/.devcontainer/`）も PDH が所有しているので、同じ更新で置き換わる。
+これは core の `claude/INSTALL.md` / `codex/INSTALL.md` とは別経路。導入後は `pdh-update` が PDH 保守分（`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/`）を毎回上流の版で置き換える。machinery（`github-bot/.github/` と `github-bot/.devcontainer/`）は同じ更新で diff を確認して反映する。repo 固有の値は変数へ、追加検査は `smoke-local.sh` へ置く。
 
 ## 前提
 
 - PDH core が導入済み（`.claude/skills/pdh-dev/` か `.codex/skills/pdh-dev/` がある）。無ければ先に core を入れる。
 - `gh` CLI が使えて、対象が GitHub repo であること。**このレイヤーでは `gh` を必須にする。**
-- ticket.sh が 20260914.144516 以降であること（`new --branch` / `ticket_files` / `append_only_files`、ticket 自身の branch 上での `start`。`bash ./ticket.sh selfupdate`）。
+- ticket.sh が 20260916.084455 以降であること（`new --branch` / `ticket_files` / `append_only_files`、ticket 自身の branch 上での `start`。`bash ./ticket.sh selfupdate`）。
 - project root に `product-brief.md` と `tickets/` がある（bot はこれで PDH mode を判定する）。
 
 ## 1. ファイルを配置する
 
 | コピー元（この repo） | コピー先（あなたの project） | 役割 |
 |---|---|---|
-| `github-bot/.github/` | `.github/` | workflow 2 本・coding-robot 一式（machinery） |
+| `github-bot/.github/` | `.github/` | coding-robot 一式と workflow（prebuild は任意） |
+| `github-bot/.github/coding-robot/run-in-container.sh` | `.github/coding-robot/run-in-container.sh` | container 内の実行入口・共通 smoke |
+| `github-bot/.github/coding-robot/engines/_stub.sh` | `.github/coding-robot/engines/_stub.sh` | 明示 opt-in のローカル試験専用。Actions では実行を拒否 |
 | `github-bot/.devcontainer/` | `.devcontainer/` | Actions が使う devcontainer。**既存の devcontainer があればマージ**（上書き前に diff を確認） |
 | `github-bot/.github/workflows/devcontainer-prebuild.yml` | `.github/workflows/` | **任意。**devcontainer が重い repo 向け（下の「任意: devcontainer を毎 run 焼かない」） |
 | `github-bot/_pdh.md` | `.github/coding-robot/_pdh.md` | **PDH mode を定義する**（machinery 側には `_pdh.md` を置かない） |
@@ -49,12 +51,13 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 | **repo のテスト道具** | bot は scoped test を自分で回す | ⚠ **実装はできるのにテストが回らない run** になる。上流の既定 image は Node/TypeScript だけなので、Python・DB・ブラウザが要る repo は自分で足す |
 | ブラウザ（任意） | スクリーンショット・実 surface 検証 | 撮れない。⚠ **これは «skill の掟» ではなく «container に入っているか» で決まる**（`_github-issue.md`）。headless Chromium / Playwright を足せば cloud bot が自分で画面を確かめられる |
 
-⚠ **`workspaceFolder` は `/workspaces/project` のままにする。**`${localWorkspaceFolderBasename}`（repo 名）へ変えると、compose 側の `/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-project}` が env 未設定で `project` へ落ちたときに食い違い、**`devcontainer exec` が «no such file or directory» で落ちる**（実測）。理由は `github-bot/ROBOT.md`。
+⚠ **テンプレートの `workspaceFolder` と compose の mount は `/workspaces/project` で揃える。**既存の workspace を使う場合は `CODING_ROBOT_WORKSPACE` に同じパスを設定する。`${localWorkspaceFolderBasename}`（repo 名）へ変えると、compose 側の `/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-project}` が env 未設定で `project` へ落ちたときに食い違い、**`devcontainer exec` が «no such file or directory» で落ちる**（実測）。理由は `github-bot/ROBOT.md`。
 
 確かめ方 — **導入直後に 1 回、container の中で見る。**
 
 ```bash
-devcontainer exec --workspace-folder . bash -lc \
+docker compose -p coding-robot -f .devcontainer/docker-compose.yml up -d --build
+docker compose -p coding-robot -f .devcontainer/docker-compose.yml exec -T -u node app bash -lc \
   'for c in git gh jq python3 claude codex; do printf "%-8s %s\n" "$c" "$(command -v $c || echo MISSING)"; done'
 ```
 
@@ -72,6 +75,36 @@ gh variable set CODING_ROBOT_ENGINE --body 'claude'     # or 'codex'
 # 70 分を超えることがあり、既定だと途中で殺される。長めに取るなら設定する
 gh variable set CODING_ROBOT_TIMEOUT --body '10800'
 ```
+
+リポジトリ変数（Settings → Secrets and variables → Actions → Variables）。既定と異なる環境だけ設定する。
+
+| 変数 | 未設定時の値 | 用途 |
+|---|---|---|
+| `CODING_ROBOT_ENGINE` | なし（必須） | `claude` / `codex` |
+| `CODING_ROBOT_TIMEOUT` | `5400` 秒 | 1 run の上限。既存の変数を継続使用 |
+| `CODING_ROBOT_RUNNER` | `ubuntu-latest` | coding-robot の runner |
+| `CODING_ROBOT_COMPOSE_PROJECT` | `coding-robot` | compose project 名 |
+| `CODING_ROBOT_COMPOSE_FILE` | `.devcontainer/docker-compose.yml` | 主 compose ファイル |
+| `CODING_ROBOT_COMPOSE_OVERRIDE` | 空（追加なし） | 重ねる compose ファイル。存在しなければ skip |
+| `CODING_ROBOT_WORKSPACE` | `/workspaces/project` | container 内の workspace。compose の mount と揃える |
+| `CODING_ROBOT_SERVICE` | `app` | agent を実行する compose service |
+| `CODING_ROBOT_USER` | `node` | container 内の実行 user |
+| `CODING_ROBOT_POST_CREATE` | 空（実行なし） | workspace 相対の bash script。存在しなければ skip |
+| `CODING_ROBOT_CI_WORKFLOW` | `ci.yml` | 失敗ログ取得・後処理で head が動いた場合の CI 起動先 |
+| `CODING_ROBOT_PROGRESS_INTERVAL` | `60` 秒 | 作業中コメントの更新間隔（生存確認は 10 秒） |
+| `CODING_ROBOT_PREBUILD_PATHS` | `.devcontainer/** .github/workflows/devcontainer-prebuild.yml .github/coding-robot/smoke-local.sh` | 空白区切りの glob。Dockerfile の COPY 元や起動 script を追加する |
+| `CLAUDE_MODEL` / `CODEX_MODEL` | engine の既定 | モデルの上書き |
+
+`coding-robot.yml` は **docker compose で直接 container を上げる**。prebuilt image があれば
+`--no-build`、無ければ `--build` で起動する。devcontainer features はこの経路では適用しないため、
+必要なツールは Dockerfile に入れる。テンプレートは git / gh / jq / python3 と両 CLI を含む。
+workspace の safe.directory と所有者を整え、任意の postCreate script、agent の順に実行する。
+
+追加の環境検査は **導入先だけ**に `.github/coding-robot/smoke-local.sh` を作る。
+共通 smoke と prebuild の両方が、存在するときだけ `bash` で呼ぶ。ブラウザや repo の
+言語処理系の検査をここへ置く。`set -euo pipefail` で失敗を返し、外部へ書き込む処理は入れない。
+このファイルは配布・更新しない。`workflow_dispatch` の `verify_only: true` で、選んだ engine の
+CLI・認証の到達、JSON の形式、共通ツール、git の読み書き、追加 smoke を検査できる。
 
 engine 別の認証 secret:
 
@@ -93,7 +126,7 @@ gh secret set ENV_JSON --body '{"SOME_API_KEY":"...","BASE_URL":"..."}'
 
 ### Actions に PR 作成を許可する
 
-close 承認後に bot が PR を作る（`_github-issue.md`「PR は `Refs`」）。既定の repo 設定では GitHub Actions は PR を作れず、`gh pr create` が `GitHub Actions is not permitted to create or approve pull requests` で落ちる（smoke 実測）。Settings → Actions → General → Workflow permissions の「Allow GitHub Actions to create and approve pull requests」を有効にする:
+`pr` は close 承認後、`pr-merge` は merge 承認より前に bot が PR を作る。`merge` は PR を使わない。既定の repo 設定では GitHub Actions は PR を作れず、`gh pr create` が `GitHub Actions is not permitted to create or approve pull requests` で落ちる（smoke 実測）。Settings → Actions → General → Workflow permissions の「Allow GitHub Actions to create and approve pull requests」を有効にする:
 
 ```bash
 gh api -X PUT repos/<owner/repo>/actions/permissions/workflow -f default_workflow_permissions=write -F can_approve_pull_request_reviews=true
@@ -128,7 +161,7 @@ done
 
 - Issue / PR のコメントに **🤖**（または `:robot:`）を含めると Actions が発火し、coding-robot が PDH フローで動く。
 - **human gate（`PDH-ticket-human-review` / `PDH-human-review`）では bot は自己承認せず、要点を issue にコメントして停止する。** 承認は **「🤖 承認」など 🤖 を含むコメント**で再開（⚠ Actions は reaction では起動しないので 👍 だけでは動かない。👍 は任意の印）。変更希望は 🤖 付きで返信。
-- close 承認後は既定で bot が `ticket.sh close` で squash merge して issue を閉じる（PR は作らない）。PR を通したい repo は `.ticket-config.yaml` の `github_bot.close: pr`（snippet のコメント参照）。
+- close 承認後は既定で bot が `ticket.sh close` で squash merge して issue を閉じる（PR は作らない）。PR を通したい repo は `.ticket-config.yaml` の `github_bot.close: pr`または `pr-merge`（snippet のコメント参照）。
 - 端末で issue のコメントを拾いたいときは「issue 読んで」等と言えば `pdh-gh-pull` skill が取り込む。
 
 ## 5. 更新（再同期）
@@ -137,8 +170,8 @@ done
 
 更新のときの扱いは 2 つに分かれる。
 
-- **まるごと置き換える 4 つ** — `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/`。⚠ ただし `_pdh.md` を自分の設定（`github_bot.close` のモード・base branch 名）に固定して書き直しているなら、そこは差分マージにする。
-- ⚠ **machinery は «diff してから» 反映する** — `.github/coding-robot/system.md` `_issue.md` `_pr.md` `run-action.sh` `engines/` `trigger-source.sh`、`.github/workflows/coding-robot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**
+- **まるごと置き換える 4 つ** — `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/`。close モードと base branch はファイルに固定せず、設定から読む。旧カスタマイズは設定へ移す。
+- ⚠ **machinery は «diff してから» 反映する** — `.github/coding-robot/system.md` `_issue.md` `_pr.md` `run-action.sh` `run-in-container.sh` `engines/` `trigger-source.sh`、`.github/workflows/coding-robot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**
 
 **守るのは «導入先が意図して変えた場所が、更新で黙って消えないこと» である。**⚠ **所有者が PDH に変わるまで、machinery は「この手順では触らない」ものだった**ので、導入先の書き足しは自動的に守られていた。**いまは守られない** — 名前で選んで diff する以外に守る機構は無い。
 
@@ -148,7 +181,7 @@ done
 
 **守るのは «run の大半がビルドで終わらないこと» である。**
 
-coding-robot は毎 run で devcontainer をビルドする。配っている最小構成なら数分だが、⚠ **repo の開発環境をマージすると 10 分を超えることがある**（apt・言語処理系のソースビルド・ブラウザの焼き込み）。**重い層は `.devcontainer/**` が変わったときしか変わらない**ので、先に焼いて置いておける。
+coding-robot は prebuilt が取得できない run で devcontainer をビルドする。配っている最小構成なら数分だが、⚠ **repo の開発環境をマージすると 10 分を超えることがある**（apt・言語処理系のソースビルド・ブラウザの焼き込み）。**重い層は `.devcontainer/**` が変わったときしか変わらない**ので、先に焼いて置いておける。
 
 ⚠ **入れる基準は «1 run のビルドが 5 分を超えるか» である。**超えないなら入れなくてよい（workflow が 1 本増えるだけ損になる）。
 
@@ -156,16 +189,16 @@ coding-robot は毎 run で devcontainer をビルドする。配っている最
 
 1. **`.devcontainer/docker-compose.yml` の `image:` と `cache_from:`** — ⚠ **compose 構成では `devcontainers/ci` の `cacheFrom` は効かない。**層を実際に再利用させているのはこの 2 行で、`DEVCONTAINER_IMAGE` が空ならローカル tag へ落ちる（配布物には入っている）
 2. **`coding-robot.yml` の pull step** — 事前ビルド済み image を pull し、`DEVCONTAINER_IMAGE` として compose へ渡す。⚠ **無ければ従来どおりこの run でビルドする**ので、この節を入れていない repo でも止まらない
-3. **`devcontainer-prebuild.yml`**（この節で配置するもの）— image を焼いて GHCR へ publish する。走るのは **`.devcontainer/**` を触った push・週 1 の cron・手動**だけ
+3. **`devcontainer-prebuild.yml`**（この節で配置するもの）— default branch への push で変更パスを調べ、`CODING_ROBOT_PREBUILD_PATHS` に当たる場合だけビルド・publish する。週 1 の cron・手動でも実行する
 
 導入時に見ておくこと。
 
 - ⚠ **GHCR への publish には `packages: write` が要る**（workflow 内に宣言済み）。repo の Actions 設定が workflow token を read-only に絞っている場合は、そこを緩めるか、この節を入れない
 - ⚠ **private repo では image の pull にも認証が要る。**同じ repo の Actions からは `GITHUB_TOKEN` で引けるが、**手元から確かめるときは `docker login ghcr.io` が要る**
-- ⚠ **GHCR の ref は小文字**である。repo 名に大文字が入る場合、`imageName` は式を取らないので小文字の固定文字列に書き換える
-- ⚠ **Dockerfile が `COPY` するファイルがあれば、prebuild の `paths:` に足す。**ビルドキャッシュのキーなので、挙げ忘れると «中身が変わったのに publish されない» ことになる
+- GHCR の image ref は workflow が小文字へ正規化する
+- ⚠ **Dockerfile が `COPY` するファイルがあれば、`CODING_ROBOT_PREBUILD_PATHS` に足す。**ビルドキャッシュのキーなので、挙げ忘れると «中身が変わったのに publish されない» ことになる
 
-⚠ **`push: never` とセットである。**毎 run の GHCR push（数分）は publish を prebuild 側に寄せることで無くなる。**片方だけ入れると、焼いた image を使わないまま毎 run push し続ける。**
+coding-robot の実行側では image を publish しない。publish は prebuild に集約する。
 
 ## 任意: 人のクリックを 1 回にする（`ATTACHMENTS_TOKEN`）
 
@@ -205,7 +238,7 @@ skip し、最終レポートの「導入検査で要追加」に出る。
 
 **守るのは «bot が回す CI が、既存 CI と二重にならないこと» である。**
 
-bot は自分でフルスイートを回さない。⚠ **回すのは repo の既存 CI で、bot はその緑を待つだけである。**
+`pr-merge` では bot は自分でフルスイートを回さない。⚠ **回すのは repo の既存 CI で、bot はその緑を待つだけである。**
 そのため、**既存 CI の trigger 次第で同じ commit が 2 回走る。**
 
 ```yaml
@@ -253,3 +286,24 @@ commit したとき）。⚠ **`ATTACHMENTS_TOKEN` があるときは起動し�
   クリックが 1 回増える**（作者は自分の PR を承認できないので、bot の self-merge は別途止まる）
 - **CI の job を必須チェックにする**（これが merge ボタンを塞ぐ gate になる）
 - `enforce_admins` は false のままにする（**人がローカルから `ticket.sh close` する経路を残すため**）
+
+## 既知の移行手順: 共有版の compose 起動へ移す
+
+1. 既存 workflow の project・workspace・service・user・追加 compose・postCreate を上の変数へ移す。
+2. repo 固有の smoke を `smoke-local.sh` に移し、prebuild の追加入力を `CODING_ROBOT_PREBUILD_PATHS` に設定する。
+3. `.ticket-config.yaml` の `github_bot.close` を確認する。未設定は `merge`、`pr` は次の 🤖、`pr-merge` だけが finalize で Issue を閉じる。新しい設定キーは不要。
+4. `pr-merge` でフルスイートを 1 回にするには既存 CI で draft を skip し、`pull_request.types` に `ready_for_review` を含める。PR の head SHA に必須チェックが付くことを確認する。
+5. テンプレート由来の Dockerfile に git / gh / jq / python3 が含まれるか確認する。features の導入だけでは compose 直接起動に足りない。
+
+次の確認は何度実行しても設定を書き換えない。
+
+```bash
+gh variable list --repo <owner/repo>
+rg -n 'github_bot:|create_issue:|pr_link:|close:' .ticket-config.yaml
+rg -n 'git gh jq python3' .devcontainer/Dockerfile
+bash -n .github/coding-robot/run-in-container.sh
+if [ -f .github/coding-robot/smoke-local.sh ]; then bash -n .github/coding-robot/smoke-local.sh; fi
+```
+
+PR 起点の run は同じ repo の `agent/issue-<N>` で、N が実在の Issue であることを要求する。
+任意の手作業 branch の PR は拒否理由をコメントして正常終了する。依頼は元の Issue へ戻す。

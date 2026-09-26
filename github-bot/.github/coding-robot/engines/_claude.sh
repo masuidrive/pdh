@@ -60,7 +60,7 @@ For more information, see the [Claude Code documentation](https://docs.anthropic
 
 **After setting the token, try commenting 🤖 \`:robot:\` on this thread again!**"
   # ⚠ この経路は ENGINE_EXIT_CODE の分岐へ入らないので run-action.sh の failed hook が呼ばれない。
-  # いちばん多い «止まっていて人の手が要る» 停止なので、ここで直接 awaiting-reply を付ける。
+  # いちばん多い «止まっていて人の手が要る» 停止なので、ここで直接付ける。
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
     bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" || true
   fi
@@ -90,6 +90,11 @@ engine_run() {
     echo "🧠 Model: (account default — set the CLAUDE_MODEL variable to pin one)"
   fi
 
+  # system prompt はファイルで渡す。単一引数の長さ制限で engine の起動が失敗するのを避ける。
+  local SYSTEM_PROMPT_FILE="/tmp/claude-system-prompt-$ISSUE_NUMBER.txt"
+  printf '%s' "$SYSTEM_PROMPT" > "$SYSTEM_PROMPT_FILE"
+  echo "📄 System prompt: $(wc -c < "$SYSTEM_PROMPT_FILE") bytes → $SYSTEM_PROMPT_FILE"
+
   (
     > "$PROGRESS_OUTPUT_FILE"  # Initialize progress file
     > "$TASK_STATUS_FILE"       # Initialize task status file
@@ -104,7 +109,7 @@ engine_run() {
 
     timeout "$TIMEOUT_VALUE" claude -p --dangerously-skip-permissions \
       ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
-      --system-prompt "$SYSTEM_PROMPT" \
+      --system-prompt-file "$SYSTEM_PROMPT_FILE" \
       --output-format stream-json --include-partial-messages --verbose \
       < "/tmp/agent-prompt-$ISSUE_NUMBER.txt" 2>&1 | \
     while IFS= read -r line; do

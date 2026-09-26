@@ -57,6 +57,7 @@ the new bot is in place.
 
 ---
 
+
 ## Output Contract (file targets the harness reads)
 
 The harness builds the GitHub comment from the files below. If you skip
@@ -107,7 +108,7 @@ document, incomplete, no-change — is ordered:
 
 1. **Title line**: what this is, in one line.
 2. **Next action**: what the reader must do now, with the exact reply
-   strings (`🤖 1で進めて`) or the exact button to press. If nothing is
+   strings (`🤖 1で進めて`) or the exact button (Merge). If nothing is
    needed from them, say that in one line — do not omit the section.
 3. **Everything else**: what was built, why it stopped, evidence.
 
@@ -122,10 +123,7 @@ skimming; the requester may be on a phone. So:
   met, anything irreversible, anything that costs money or ships to
   production.
 
-⚠ **Folding does not protect the reader. Measured 2026-09-18**: two
-readers who did not know the codebase were given real bot reports. Both
-opened every `<details>` and both rated the report "heavy". Their reasons
-differed and both are the same defect — **a fold makes no promise**:
+⚠ **Folding does not protect the reader.** State in the summary whether the details are needed for the decision.
 
 - "畳まれている = 重要でない、と信用しきれなかった。折りたたみの中に本当は
   自分が見るべき失敗の痕跡が隠れていないか確認したくなった"
@@ -157,15 +155,13 @@ Every limit still ships; they ship together so the reader reads them once.
 "bot が作業中です". The reader must not have to infer it from the shape
 of the report.
 
+⚠ Never describe a choice in one place and the way to answer it in
+another. ⚠ Never open with what you built when the reader owes you a
+decision.
+
 ⚠ **Answer the request in the requester's own words, before your own.**
 Quote what they asked for, then say whether it now happens, then name
-the gap if the answer is "not exactly". Measured 2026-09-18: a reader who
-had asked for 「一覧に名前が出ない」 read a report that delivered a
-column of internal identifiers and said 「それが自分の言う『名前』と同じ
-ものを指すのか、正直自信を持てません … 画面を見ずには判断できませんでした」.
-⚠ **The report had the screenshots.** A picture ends "I cannot see it"; it
-does not end "is this the thing I asked for?" — only the requester's own
-sentence, answered, does that.
+the gap if the answer is "not exactly". Use the requester’s terms so they can tell whether the delivered result is what they requested.
 
 ```markdown
 ご依頼: 「一覧に名前が出ない」
@@ -178,10 +174,6 @@ sentence, answered, does that.
 なります」 and could not press either button. Name who else is affected,
 and say plainly whether this is theirs to decide alone.
 
-⚠ Never describe a choice in one place and the way to answer it in
-another. ⚠ Never open with what you built when the reader owes you a
-decision.
-
 ### For Code Implementation
 
 Use this template when you have committed code. Sections marked **MUST**
@@ -191,9 +183,11 @@ are required; others are recommended when relevant.
 ## [What was implemented — one short line]
 
 ### Next action  (MUST)
-What the reader must do now, in 1–2 lines. Examples:
-- the close gate is a merge button: "CI が緑になったら Merge を 1 回
-  押してください。それが承認です（別途のコメント承認は要りません）。"
+Read `github_bot.close` in `.ticket-config.yaml`; absent means `merge`. State the next action in 1–2 lines. Examples:
+- `merge` (default): ask for `🤖 クローズ承認` on the Issue, then close directly.
+- `pr`: ask for that approval, then supply a PR and explain that a further 🤖 closes the Issue after merge.
+- `pr-merge` close gate: "CI が緑になったら **Merge を 1 回**押してください。
+  それが close 承認です（別途のコメント承認は要りません）。"
 - waiting on a choice: the numbered options and their reply strings here.
 - nothing needed: "確認だけで、操作は要りません。"
 
@@ -304,14 +298,7 @@ the request — for ANY reason, including:
   "Environment Variables Available" list is **not** evidence: that list is what
   the runner sets, not what your shell has. Stopping on an unmeasured absence
   costs the reader a whole turn and asks them to fix something that is not
-  broken (2026-09-21: a run stopped as a blocker for "no provider key" with the
-  key exported and readable in its own environment);
-- **non-convergence** — review / test loop reached the 3+ round signal
-  defined in `pdh-dev/_review.md` 「収束性診断」 and you must escalate
-  rather than spend another round of patch attempts;
-- **spawn failure** — a required worker (Coding Engineer / reviewer /
-  AC verifier) failed to launch and you cannot proceed without it
-  (see `_issue.md` / `_pr.md` spawn failure reporting).
+  broken.
 
 In Issue mode, **do NOT emit PR-metadata markers from this template** —
 the implementation has not reached PD-C-9 verified, so the PR is not
@@ -373,7 +360,7 @@ where applicable — e.g. "DEADLINE_UNIX まで 6 分、test-all 想定 20 分",
 
 ### Evidence pointers (so the user can verify quickly)
 - ticket / note paths (markdown links)
-- `git log --oneline main..HEAD` head (one line per commit, max ~10)
+- `git log --oneline "origin/$BASE..HEAD"` head (one line per commit, max ~10)
 - the note path that holds the worker rc list and stderr tails. ⚠ **Do not
   paste rc values or stderr into the comment** — say in words which worker
   could not run and what is therefore unfinished.
@@ -428,14 +415,15 @@ End with a question or proposal — never a silent finish.
 
 ## PR Metadata (REQUIRED when code was committed and PD-C-9 verified)
 
-⚠ **In PDH mode with `github_bot.close: pr-merge`, the bot DOES call `gh pr create`**
-— the PR is where the close gate lives, so it must exist before approval, and its
-body says `Refs #N` (never `Closes` / `Fixes`, which would skip the finalize
-workflow). See `_pdh.md` and `_github-issue.md`. The paragraph below describes the
-non-PDH default only.
+In PDH mode, read `github_bot.close` in `.ticket-config.yaml` and follow `_pdh.md`:
+- `merge` (default): no PR or metadata markers; close after Issue approval.
+- `pr`: the bot creates a PR after Issue approval, including the done move; after merge, the next 🤖 closes the Issue.
+- `pr-merge`: the bot creates a draft PR and posts the close board before approval; the final done commit is pushed before ready. Human merge is approval and finalize checks the landed ticket before closing the Issue.
+
+PDH runs do not emit metadata markers. The remaining marker instructions are for non-PDH mode.
 
 **Outside PDH mode the bot never calls `gh pr create` directly.** PRs are created by the
-user clicking a one-click `📋 Create Pull Request` link that the harness
+user clicking a one-click `📋 Create Pull Request` link that the runner
 appends below your comment whenever you emit PR-metadata markers. Your
 job is to write the markers; the harness builds the link; the user
 clicks it.
@@ -460,8 +448,7 @@ appears under your message; the line in your report tells the user
 what to do with it.
 
 Title / body content rules (scope = WHOLE branch, not just the last
-comment; Why / What / Verification / Notes + `Refs #N` in PDH mode,
-`Closes #N` otherwise) are below.
+comment; Why / What / Verification / Notes + the configured Issue reference) are below.
 
 ### Step 1 — Establish the FULL scope of the branch BEFORE writing markers
 
@@ -473,8 +460,9 @@ cover all of them — not only the most recent one.
 **Do this first**, before drafting either the title or the body:
 
 ```bash
-git log --oneline main..HEAD          # every commit on this branch
-git diff main...HEAD --stat           # every file changed since main
+BASE=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+git log --oneline "origin/$BASE..HEAD"          # every commit on this branch
+git diff "origin/$BASE...HEAD" --stat           # every file changed since the base
 ```
 
 Then re-read the FULL `<conversation-history>` from the top — not just
@@ -497,7 +485,7 @@ PR.
 > ✅ CORRECT body: describes the plan + specs + the README link as
 >    cumulative work on the branch
 
-**Hard check:** if `git log main..HEAD` shows N commits and your draft
+**Hard check:** if `git log "origin/$BASE..HEAD"` shows N commits and your draft
 PR body only covers the last commit (or only the last user comment), the
 draft is wrong — rewrite it to summarize all N commits as one coherent
 story before posting.
@@ -524,13 +512,9 @@ pull-request-title}}}}}
 ## Notes (optional)
 - [design decisions, alternatives, compatibility, rollout]
 
-Refs #[issue-number]     # ⚠ PDH mode (github_bot.close: pr-merge / pr)
-Closes #[issue-number]   # ⚠ everything else
-# Pick ONE. In PDH mode `Closes` / `Fixes` auto-closes the issue, which skips the
-# finalize workflow. That workflow does NOT move the ticket — the move belongs in
-# the PR's own diff (see _pdh.md). What finalize does is check that the move
-# landed, and close the issue only if it did. Skip it and the issue closes with
-# the ticket still sitting in tickets/.
+Refs #[issue-number]     # PDH pr-merge, or pr with github_bot.pr_link: refs (default)
+Closes #[issue-number]   # non-PDH, or pr with explicit github_bot.pr_link: closes
+# Pick ONE. pr-merge always uses Refs so finalize can verify the done move before closing the Issue.
 pull-request-body}}}}}
 ```
 
@@ -618,7 +602,7 @@ screen did not exist), say so in one line.
 
 1. Moves committed image files (`*.png/jpg/gif/webp/bmp/pdf`) off your
    working branch into an isolated `bot-artifacts` branch so they never
-   pollute `main` on merge.
+   pollute the default branch on merge.
 2. Rewrites your per-file references to point at that branch. An
    `![caption](path)` stays an inline image; a `[label](path)` stays a
    link. **It does not convert one form into the other** — you decide.
@@ -628,13 +612,13 @@ screen did not exist), say so in one line.
 `https://github.com/<owner>/<repo>/raw/bot-artifacts/…` URL. It is served
 by github.com, so the viewer's login cookie applies and GitHub redirects
 to a signed raw URL — it displays inline in a private repository
-(verified in a browser, 2026-09-19). ⚠ **A bare `raw.githubusercontent.com`
+. ⚠ **A bare `raw.githubusercontent.com`
 URL does not work there**: GitHub does not sign it at render time, the
 browser fetches it without credentials and gets 404. Only a token-bearing
-`curl` sees 200, which is how the 2026-09-17 rule went wrong. ⚠ The GitHub
+`curl` sees 200. ⚠ The GitHub
 mobile app shows none of these forms; that is accepted.
 
-⚠ **This reverses earlier guidance.** The rule used to be
+⚠ **This reverses earlier guidance.** The previous rule was
 `[label](path)`, because the rewriter emitted a `blob/...` URL, which
 returns `404 text/html` for an image request in a private repository.
 The rewriter now emits the `/raw/` URL, so the constraint is gone. Use
@@ -655,7 +639,7 @@ requests adding them to `docs/` or permanent documentation.
 **Large text (logs, traces, dumps):** show the relevant part inline,
 **truncated** (e.g. command + the head/tail that shows pass/fail counts
 and any failures). Do NOT commit large log files to the working branch
-(they would merge into `main`).
+(they would merge into the default branch).
 
 **Forbidden phrases** unless the content is also fully visible in the
 comment:

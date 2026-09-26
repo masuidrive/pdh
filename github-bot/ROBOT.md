@@ -15,10 +15,11 @@
 ```
 .github/workflows/coding-robot.yml            # 🤖 トリガー・devcontainer 実行
 .github/workflows/coding-robot-finalize.yml   # merge された PR の Issue を閉じる
+.github/coding-robot/run-in-container.sh      # compose 内の入口・共通 smoke
 .github/coding-robot/run-action.sh            # prompt 組み立て・agent 実行・進捗コメント
 .github/coding-robot/system.md  system-claude.md  system-codex.md
 .github/coding-robot/_issue.md  _pr.md
-.github/coding-robot/engines/_claude.sh  _codex.sh   # ← engine で割れるのはここだけ
+.github/coding-robot/engines/_claude.sh  _codex.sh  _stub.sh   # ← engine で割れるのはここだけ
 .github/coding-robot/trigger-source.sh        # event 別の本文取得・PR の出自検査
 .devcontainer/Dockerfile  docker-compose.yml  devcontainer.json
 ```
@@ -32,3 +33,9 @@
 - **`.devcontainer/devcontainer.json` の `workspaceFolder` は `/workspaces/project` 固定である。**repo 名（`${localWorkspaceFolderBasename}`）にすると、compose 側の `/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-project}` が env 未設定で `project` へ落ちたときに食い違い、`devcontainer exec` が «no such file or directory» で落ちる。**実測**: smoke（`pdh-ghbot-smoke`）の 1 回目がこの mismatch で失敗し、固定にした 2 回目が成功した。
 - **`run-action.sh` は最終レポートの投稿直前に `$SCRIPT_DIR/pdh-hooks.sh final` を通す。**hook が無い環境では何もしない。`scripts/check-github-bot.sh` がこの呼び出し行を守る。
 - **branch への push は `ATTACHMENTS_TOKEN`（classic PAT）で行う。**`GITHUB_TOKEN` で押すと、その SHA の `pull_request` run が `action_required`（承認待ち）になり、人が «Approve and run» を押すまで走らない。run の最後の push がこれだと、**PR は «緑にできない» 状態で人に渡る。**
+
+- **coding-robot は compose を直接起動する。**prebuilt があればビルドせず、無ければ Dockerfile から作る。features に依存せず、テンプレートの Dockerfile が runner の共通ツールを入れる。
+- **環境値は repo 変数に置く。**project / workspace / compose override / service / user / postCreate / runner の既定と設定方法は INSTALL の表を参照する。
+- **repo 固有の smoke は `smoke-local.sh` に置き、配布しない。**共通 smoke と prebuild の両方から任意で呼ぶ。
+- **close の既定は `merge`。**`pr` は merge 後の 🤖 を待つ。`pr-merge` は finalize が設定と done 移動を API で確認して Issue を閉じ、stage ラベルを `PDH-close` にする。
+- **PR 出自は fail-closed。**同じ repo の `agent/issue-<N>` と実在の Issue を要求し、拒否は障害扱いせず理由をコメントする。

@@ -1,33 +1,82 @@
-# Issue モード = 足りないことを聞く → ticket 作成 →（承認後）実装して PR 作成
+# Issue モード = 足りないことを聞く → ticket 作成 → 承認後に実装 → 設定に従って close
 
-Issue に 🤖 が付いたら、**トリガーコメントの内容で 2 フェーズを判別**する。デフォルトは **B（実装）**。明確に「質問」「修正・追加指示」「一時停止」のシグナルがある場合だけ **A（ticket 作成/更新フェーズ）**に回す。
+Issue に 🤖 が付いたら、**コメントに書かれたことを全部やる**。そのうえで **gate を越えるか
+どうかだけ**を判断する。
 
-⚠ **その前に A0 がある。**ticket がまだ無い issue では、起票の前に «依頼者にしか答えられないこと» が欠けていないかを見る。欠けていれば聞いて止まる。欠けていなければ素通りして A / B へ進む。
+⚠ **keyword の表でコメントを分類しない。**依頼の意味と gate を越える許可を別々に読む。
+
+### 判定手順
+
+**1. 書かれた依頼を全部やる。**
+
+- **質問には答える** — コードは書かない。コメントで答える
+- **修正・追加指示は ticket に反映する** — AC / Out-of-scope / Why を差分更新する
+- **報告を求められたら返す**
+- ⚠ **1 つのコメントに 2 種類以上が混じっていても、全部扱う。**混在は例外ではなく普通である
+
+**2. そのうえで «gate を越えてよいと書かれているか» だけを判断する。**
+
+- ⚠ **未解決の質問や、反映したばかりで承認を得ていない修正が残っているなら越えない。**
+  直した AC は、まだ人が見ていない
+- 人が «それでも進めて» と書いているときだけ、両方やってから越える
+- **`🤖` だけの空打ちでは越えない。**ticket を書き換えず、現状の AC を再掲するだけにする
+
+**3. どちらにしたかと、その理由を最終レポートに 1 行書く。**
+
+読む人が «なぜ進まなかったのか» を探さずに済むようにする。⚠ **黙って止まらない。**
+理由は依頼者の状況で書く（«質問に答えてから進みます» «直した AC を見てもらってから進みます»）。
+手順書の規則を理由に挙げない（`_github-issue.md`「gate の判断ボードは…」）。
+
+### 例
+
+| コメント | 何をするか |
+|---|---|
+| `🤖承認` / `🤖 よろしく` / `👍🤖` / `🤖 承認します、お願いします` | **越える**。⚠ **スラッシュの有無で変わらない** |
+| `🤖 AC2 って何を指してる？` | 答えるだけ。越えない |
+| `🤖 AC2 のとこ、もうちょい丁寧にしたいかな` | ⚠ **ticket を直して越えない**（«直して» とは書かれていないが修正依頼である） |
+| `🤖 AC2 って何を指してる？ あと README にも書いて。それで進めて` | ⚠ **答える + 直す + 越える**（3 つとも） |
+| `🤖 待って` / `🤖 cancel` | 越えない。現状報告のみ |
+| `🤖` のみ | 越えない。AC を再掲するだけ。ticket を書き換えない |
+
+越えたら **B（実装フェーズ）**、越えなければ **A0 / A** へ進む。⚠ **ticket がまだ無く、依頼者にしか答えられないことが欠けているなら A0（聞く）。それ以外は A（ticket 作成 / 更新）。**
 
 ## A0. 足りないことを聞くフェーズ（ticket をまだ作らない）
 
-⚠ **この段へ来る条件。**下の「A / B の判定手順」で **A** と判定したとき、または **B** と判定したが
-**その issue の ticket がまだ無い**とき、**起票の前にこの段を通す。**依頼者にしか答えられない
-ことが 1 つも欠けていなければ、そのまま A / B の作業へ進む（この段は素通りしてよい）。
-⚠ **ticket が既にあるなら、この段は関係ない。**
-
 **守るのは «依頼者が症状を 1 行書けば足りる» ことである。**
 
-⚠ **依頼は雑でよい。**「一覧に名前が出ない」「取り込みに失敗する」の 1 行で始まってよい。
-**Why・再現手順・案の比較・影響レイヤー・AC を依頼者に書かせない。**それらを作るのは bot の
-仕事である。
+⚠ **依頼は雑でよい。**「一覧に名前が出ない」「ファイルの処理が失敗する」の
+1 行で始まってよい。**Why・再現手順・案の比較・影響レイヤー・AC を依頼者に書かせない。**
+それらを作るのは bot の仕事である。
 
 ### 聞くかどうかの判定
+
+⚠ **まず、どの入口から来た依頼かを見る。**`<context>` の **Labels** に `coding-robot` が
+あれば、**Issue フォーム（`.github/ISSUE_TEMPLATE/robot-request.yml`）から来ている。**
+`gh issue create` はテンプレートを素通りするので、このラベルは付かない。
+
+- ⚠ **フォームから来た依頼は、既定で確認する。**フォームを使うのは **repo を知らない人**である。
+  こちらが推測で埋めたものは、**その人が «違う» と言うための材料を持たないまま先へ進む**ことになる。
+  **1 つでも聞けることがあるなら聞いて止まる。**⚠ **絵と ticket を作ってから «違うなら言って» に
+  しない** — 外れたとき、作ったものが丸ごと捨てになる
+- **ラベルが無い依頼は、下の判定だけで決める。**`gh` / CLI から立てる人は書き慣れていて、
+  Why も再現手順も最初から入っていることが多い。⚠ **欠けていなければ、この段は素通りしてよい**
+
+⚠ **どちらの場合も、聞く «中身» の基準は同じである**（下記）。変わるのは
+**«迷ったときにどちらへ倒すか»** だけ — フォーム由来なら聞く側、そうでなければ進む側。
 
 ⚠ **keyword で判定しない。**依頼の文を読んで、**「自分にはどうしても決められないこと」が
 残っているか**だけを見る。
 
-- ⚠ **調べれば分かることは聞かない。**原因・影響する範囲・実装の選択肢・AC は、**コードを読み、
-  必要なら使い捨てのコードやサーバ起動 + ブラウザ / `curl` で確かめて、自分で用意する**
-  （`PDH-AGENTS.md`「確認が要るのは判断であって、調査ではない」）。«調べてよいですか» と聞かない
+- ⚠ **調べれば分かることは聞かない。**原因・影響するレイヤー・実装の選択肢・AC は、
+  **コードを読み、必要なら使い捨てのコードやサーバ起動 + `agent-browser` / `curl` で
+  確かめて、自分で用意する**（`PDH-AGENTS.md`「確認が要るのは判断であって、調査ではない」）。
+  «調べてよいですか» と聞かない
 - **聞いてよいのは、依頼者にしか答えられないことだけ** — **何をしたらそうなったか**（再現の手順）・
   **どうなってほしいか**（期待する結果）・**どれだけ困っているか**（急ぎ・回避策の有無）
-- **1 つも欠けていなければ、この段を飛ばして次へ進む。**必ず通す必要はない
+- **1 つも欠けていなければ A へ進む。**この段を必ず通す必要はない
+- ⚠ **フォームの欄が空なのは «調べれば分かること» ではない。**「どうなってほしいですか」を
+  空のまま送った人は、**まだ決めていないか、書き方が分からなかった**のどちらかである。
+  ⚠ **推測で埋めて起票へ進まない** — そこがいちばん «違う» と言われやすい
 
 ### 聞き方
 
@@ -37,72 +86,34 @@ Issue に 🤖 が付いたら、**トリガーコメントの内容で 2 フェ
 2. ⚠ **絵で聞けるなら絵で聞く。**画面の話なら現状の画面を撮って «この画面のここのことですか» と
    示す（撮り方は共通 `system.md`「Auxiliary Artifacts」）。**文章だけで確認させない**
 3. **自分の当て推量を先に見せる。**«こう理解しました。違っていたら教えてください» の形にすると、
-   依頼者は «違う» とだけ返せばよくなる
-4. ⚠ **ticket を作らない。**この段では ticket も note も作らない。branch には何も commit しない
+   依頼者は «違う» とだけ返せばよくなる。⚠ **ただし «見せる» のは推量であって、作った成果物では
+   ない。**現状の画面を撮って «このことですか» と聞くのはよい。**ticket を書き、実装案の mock を
+   作ってから聞くのは、この段ではやらない**
+4. ⚠ **`ticket.sh new` を呼ばない。**この段では ticket も note も作らない。branch には何も commit しない
 5. 最終コメントは **«いまあなたの番です»** で始め、聞きたいことを箇条書きにする
 
 ### 答えが返ってきたら
 
-- **答えを踏まえて次へ進む。**聞いたことと答えを ticket の Why に書き写す
+- **答えを踏まえて A へ進む。**聞いたことと答えを ticket の Why に書き写す
 - ⚠ **«分からない» / «任せる» / «いい感じに» と返ってきたら、聞き直さない。**
-  **bot が決めて進み、何をどう決めたかを ticket と最終コメントに明示する。**
+  **bot が決めて A へ進み、何をどう決めたかを ticket と最終コメントに明示する。**
   決めたことは実装前 gate で依頼者が見て «違う» と言える
 - ⚠ **同じことを 2 回聞かない。**過去のコメントに答えがあるなら、それを使う
 
 ⚠ **この段で止まった run は、ticket がまだ無い。**`pdh-hooks.sh` はそれを見て «人に聞いている»
 と判定し、回答待ちラベルを付ける（done 済みで ticket dir が無い場合と扱いを分けている）。
 
----
-
-## A / B の判定手順
-
-1. `:robot:` / 🤖（および前後の空白）を除いた残り文字列を `RESIDUAL` とする。`RESIDUAL` を normalize：trim、lowercase、全角→半角、末尾の `!` `！` `.` `。` を削除。
-
-2. 次の順で判定：
-
-   a. **`RESIDUAL` が空**（🤖 だけの空打ち）→ **A**。チケットがあれば書き換えず、現状の AC を再掲して「実装に進むには承認語、修正したい点があれば指示でコメント」と案内するだけ。
-
-   b. **質問シグナルを含む** → **A（質問への回答フェーズ）**。コードは書かず、コメントで回答し、必要なら AC を再掲する。
-      - 末尾に `?` または `？`
-      - `ですか` / `ますか` / `でしょうか` / `教えて` / `何` / `どう` / `なぜ` / `どうして` / `いつ` / `どこ` / `理由` を含む
-      - 英: `?` / `why` / `what` / `how` / `when` / `where` / `can you explain` / `is this` を含む
-
-   c. **修正・追加指示シグナルを含む** → **A（チケット更新フェーズ）**。AC や Out-of-scope や Why を差分更新して、再度承認を促す。
-      - `直して` / `修正` / `変更` / `追加` / `削除` / `書き換え` / `書いて` / `入れて` / `外して` / `含めて` / `除いて` / `差し替え` / `差し戻し` / `加えて` / `減らして` / `消して`
-      - `ac\d` / `acceptance` / `out-of-scope` / `スコープ` / `不可侵` / `architectural invariants` / `why`（本文への言及として）
-      - 英: `fix` / `change` / `update` / `add` / `remove` / `replace` / `include` / `exclude` / `instead`
-      - 具体的なファイルパス（`/` または `.` を挟む英数字列）が含まれる
-
-   d. **一時停止シグナルを含む** → **A**。実装には進まず、現状報告のみ。
-      - `待って` / `保留` / `やめて` / `キャンセル` / `一旦` / `止めて` / `NG` / `no` / `cancel` / `wait` / `hold` / `pause` / `stop`
-
-   e. **上記いずれにも当てはまらない** → **B（実装フェーズ）**。「whitelist 一致」を求めない。短い肯定・任せる系の言い回し（`ok` / `yes` / `lgtm` / `go` / `start` / `承認` / `実装` / `進めて` / `よろしく` / `お願い` / `任せた` / `もちろん` / `ぜひ` / 👍 / ❤️ / 🎉 / 🚀 / ✅ など）はすべてここに落ちる。
-
-### 例
-
-| コメント | 判定 | 理由 |
-|---|---|---|
-| `🤖 ok` / `🤖 yes` / `🤖 よろしく` / `🤖 お願いします` / `🤖 任せた` / `👍🤖` | B | (e) デフォルト |
-| `🤖` のみ | A | (a) 空 |
-| `🤖 これでいい？` / `🤖 AC2 って何を指してる？` | A | (b) 質問 |
-| `🤖 AC2 を直して` / `🤖 README にも書いて` / `🤖 instead use Flask` | A | (c) 修正指示 |
-| `🤖 待って、もう少し考える` / `🤖 cancel` | A | (d) 停止 |
-
-**設計意図**：AC 承認 gate を破る誤実装より、誤って A（差し戻し）に落ちる方がコストが小さい — のはずだったが、運用上「短文の肯定」を毎回 whitelist 拡張で追うのは無理ゲーだった。代わりに「修正・質問・停止のシグナルを能動的に検出し、それ以外は承認」へ反転する。誤承認のリスクは「修正指示シグナルの語彙」を厚めに持つことで吸収する（足りなければ追加する）。
-
----
-
 ## A. ticket 作成フェーズ（PD-C-1 相当）
 
 フローの定義は `.claude/skills/pdh-dev/_flow.md` の PD-C-1（`_pdh.md` の指示で事前 Read 済み）。**その定義に従う**。以下は coding-robot harness 固有の補足のみ：
 
-1. `TICKET_NAME` を算出（「PDH モード」）。find-or-create: 無ければ `bash ticket.sh new "issue-${ISSUE_NUMBER}" --created-at "$TS"` で本体＋ノート生成。`current-ticket.md` / `current-note.md` を symlink。
+1. `TICKET_NAME` を算出（「PDH モード」）。find-or-create: 無ければ `bash ticket.sh new "issue-${ISSUE_NUMBER}" --created-at "$TS" --branch "agent/issue-${ISSUE_NUMBER}"` で本体＋ノート生成（`--branch` の理由は `_pdh.md`）。`current-ticket.md` / `current-note.md` を symlink。
    - **既にチケットがあり、Issue 本文・コメントに前回から新情報が無い場合**（例: `🤖` だけの空打ち）は、**チケットを書き直さない**。現状の Acceptance Criteria を再掲し、「実装に進むには承認トークン（例 `🤖 ok`）でコメント」と再案内するだけにする。差分（新しい指示・情報）があるときだけ更新する。
 2. ticket と note の埋め方・AC の扱いは `_flow.md` PD-C-1 に従う（AC は ticket.md のみ、note にはコピーしない／曖昧 AC は勝手に決めない／`product-brief.md` 矛盾は実装に進まず提起、など）。実現可能性の調査として使い捨てコード / サーバ起動 + `agent-browser` / `curl` を使ってよい（成果物コードは commit しない）。
 3. ticket と note を `agent/issue-${ISSUE_NUMBER}` ブランチに commit / push する。**PR は作らない。プロダクトコードは書かない。**
-4. 最終コメントに「チケット要約 + 提案 Acceptance Criteria（**承認待ち**）」を書く。**承認して実装に進むには、この Issue に承認キーワード（例: `承認 🤖`）でコメントするよう案内**する（AC を直したい場合はその旨も案内）。
+4. 最終コメントは **`_github-issue.md`「実装前 gate の板」に従う**（このファイルと同じ prompt に連結済み）。⚠ **«はい / いいえ» で終わる形にしない** — 2〜3 案を推奨先頭で出し、画面の見え方を変えるなら **変更後の姿の絵**を付ける。⚠ **ここに板の作り方を書き写さない**（2 か所に書くと片方だけ古くなる）。
    - **承認者はチケットファイルを開かない前提**で、コメントだけで AC の妥当性を判断できるようにする。AC に加えて **Why（1 行）** と **Out-of-scope** を必ず併記する（必要なら主要な確定判断も 1〜2 行）。AC は番号だけでなく内容を書く。
-   - **チケット本体とノートへのリンクだけ**を載せる（冗長な「Changes Made」一覧や各ファイルの説明は不要 — 中身の要約は上の Why / AC / Out-of-scope で既に伝わっている）。リンクは **markdown 形式 `[<path>](url)`**（表示テキスト = パス）で、`[tickets/<TICKET_NAME>.md](https://github.com/${GITHUB_REPOSITORY}/blob/agent/issue-${ISSUE_NUMBER}/tickets/<TICKET_NAME>.md)` のように書く。
+   - gate のコメントには ticket / note のパスを出さない。開発側の参照先は progress に記録する。
    - **内部メカニクスを並べない**: commit hash・「push 済み」等は書かない。チケットの所在は「`agent/issue-${ISSUE_NUMBER}` に作成（コードは未変更）」の 1 行で足りる。
    - **PR メタデータマーカー（`{{{{{pull-request-*}}}}}`）は出さない**。この段階では Create-PR リンクを出さない（コードがまだ無いため）。
 
@@ -120,24 +131,25 @@ Issue に 🤖 が付いたら、**トリガーコメントの内容で 2 フェ
    - test cadence 本体（scoped中／test-all 1回／失敗時 triage）と round escalation policy は `_flow.md` PD-C-7 / `_review.md` 収束性診断・スコープ外既存問題の扱い に従う。
 3. **worker spawn の失敗報告**: worker 起動後は必ず `wait` 後に `rc=$?` を保存し、各 worker の rc、result/stderr の `ls -l`、`tail -120 stderr.log` を **note へ記録する**。result が空/無い場合も、それだけで silent failure と扱わず rc と stderr tail をセットで残す。⚠ **rc と `tail -120 stderr.log` は note（または progress）へ書く。**⚠ **issue のコメントには出さない** — あれは run を debug するためのもので、issue には読み手がいない（`system.md`「Worker rc lists … do not go in the issue at all」）。**issue に書くのは «worker が落ちて、その結果あなたの番が変わるかどうか» を言葉で 1 行**である。spawn が失敗/不可能なら単独で続行せず中止し原因を報告する。
 4. **PD-C-9 に到達できたか分岐**：
-   ⚠ **PDH repo（作業 repo の root に `product-brief.md` と `tickets/` がある。そのとき
-   `_pdh.md` がこの prompt に連結されている）では、この step 4 の marker 手順と、下の
-   「B で出す PR タイトル / 本文」の `Closes #N` を使わない。**PR を作るのか marker を出すのか・
-   `Refs` と `Closes` のどちらを書くのか・`tickets/done/` への移動をいつ行うのかは、すべて
-   `_pdh.md`「checklist gate と close」の close モード（`merge` / `pr` / `pr-merge`）が決める。
-   **以下は非 PDH repo の既定である。**
-   - **到達 + 自己チェック通過 → PR メタデータ marker を出す**。**bot は `gh pr create` を呼ばない**。`/tmp/agent-result.md` の末尾に `{{{{{pull-request-title}}}}}` / `{{{{{pull-request-body}}}}}` を書く（中身の作り方は下の「B で出す PR タイトル / 本文」節、`Closes #${ISSUE_NUMBER}` を末尾必須）。harness がこれをコメント下部の `📋 Create Pull Request` リンクに変換する。
-     - 最終コメント本文（PD-C-10 完了報告セクションの末尾）に**ユーザーへの 1 行指示**を入れる。例: `この PR を作成するには、下の 📋 Create Pull Request リンクをクリックしてください。`
-     - 既に `agent/issue-${ISSUE_NUMBER}` 向け open PR があれば marker を出さない（`gh pr list --head "agent/issue-${ISSUE_NUMBER}" --state open --json number --jq 'length'` で確認）。代わりに最終コメントに `📋 既存の PR #${PR_NUMBER} に追加 commit を push しました` のような 1 行を入れる。
+   - **PDH repo**（root に `product-brief.md` と `tickets/` がある）: `.ticket-config.yaml` の
+     `github_bot.close` を読み、`_pdh.md`「checklist gate と close」に従う。具体的な手順はそちらが持つ。
+     `merge`（既定）は issue の close 承認後に直接 close、`pr` は同承認後に done 移動を含む PR、
+     `pr-merge` は close 承認を待たずに draft PR と判断ボードを出し、done 移動後に ready にして停止する。
+     **PR の merge が close 承認になるのは `pr-merge` だけである。**PDH では marker を出さない。
+   - **非 PDH repo の到達 + 自己チェック通過**: bot は `gh pr create` を呼ばず、結果の末尾に
+     `{{{{{pull-request-title}}}}}` / `{{{{{pull-request-body}}}}}` を出す。
+     runner が作る `📋 Create Pull Request` リンクを押すよう伝える。既存 open PR があれば
+     marker を出さず、追加 commit を push したことを伝える。
    - **到達できず途中で終わる → marker は出さない**。共通 `system.md` の「For Incomplete / Early Termination」テンプレートに切り替え、停止理由を分類（time / decision / blocker / non-convergence / spawn-failure）して 1 行目に出す。`What was done (committed)` / `What was NOT done (remaining)` / `Decision needed from user` / `Evidence pointers` を埋める。次回 `🤖` の続行で何を再開すればよいか分かる状態にする。
      - **時間切れ系**: `DEADLINE_UNIX` 近接で test-all / 長時間 worker を起こす前に止めた、PD-C-7 ループの途中で deadline が来た等 → category `time`、残時間と必要だった時間を書く。
      - **判断要求系**: AC 解釈の分岐、scope 拡大の可否、product-brief.md と矛盾する要求等 → category `decision`、2–4 個の選択肢と trade-off。
      - **未解決問題系**: pre-existing major、環境ブロッカー、矛盾する要求等 → category `blocker`、`_review.md`「スコープ外既存問題の扱い」の 3 択（fix / deferred / cancel）で諮る。
      - **収束しない**: PD-C-7 / test-all 失敗が 3+ round 同型再発 → category `non-convergence`、`_review.md`「収束性診断」に従って scope 切り直し or cancel をユーザーに諮る。
-     - **spawn 失敗**: Coding Engineer / reviewer / AC 裏取り worker が起動不能 → category `spawn-failure`、step 3 の報告内容（rc / `ls -l` / `tail -120 stderr.log`）を Evidence pointers に含める。
-5. 最終コメントは `_flow.md` PD-C-10 の「完了報告の必須要素」（PD-C-9 到達時）か、共通 `system.md` の「For Incomplete / Early Termination」（途中終了時）のどちらかに従う。step 4 で marker を出した（＋ Create-PR リンクのクリック指示 1 行）／既存 PR に追加 push した／途中終了テンプレを使った、のいずれかを 1 行で明記。**PDH repo では代わりに「`_pdh.md` の close モードに従って何を行ったか」を 1 行で明記する**（前 3 択はどれも当てはまらない）。
+     - **spawn 失敗**: Coding Engineer / reviewer / AC 裏取り worker が起動不能 → category `spawn-failure`。⚠ **Evidence pointers には note の path を書く** — rc や stderr の中身をコメントへ貼らない。コメントに書くのは «何が起動できず、そのせいで何が終わっていないか» を言葉で。
+5. 最終コメントは `_flow.md` PD-C-10 の「完了報告の必須要素」（PD-C-9 到達時）か、共通 `system.md` の「For Incomplete / Early Termination」（途中終了時）のどちらかに従う。⚠ **PDH では「`_pdh.md` の close モードに従って何を行ったか」を 1 行で明記する。**非 PDH では marker / 既存 PR の更新のどちらかを書く。途中終了なら途中終了テンプレを使ったことを 1 行で明記。
 
-### B で出す PR タイトル / 本文（marker `{{{{{pull-request-title}}}}}` / `{{{{{pull-request-body}}}}}` の中身）
+### B で出す PR タイトル / 本文
+PDH は `_pdh.md` に従って bot が作る PR、非 PDH は marker に書く中身である。
 **実装済みの機能**を説明する（チケット作成という作業ではない）。
 - **タイトル**: 機能ベース。機能に合った conventional commit type。例 `feat: helloworld に名前引数を追加`（`docs:` にしない）。
 - **本文**:
@@ -145,7 +157,7 @@ Issue に 🤖 が付いたら、**トリガーコメントの内容で 2 フェ
   - **What**: 実装した内容（= AC を満たす観察可能な振る舞い）。
   - **Verification**: 実行したテストと結果、E2E 確認。
   - **Notes**: 補足（あれば）。
-  - 末尾に `Closes #${ISSUE_NUMBER}`（**非 PDH repo の既定。**PDH repo では `_pdh.md` に従う — `pr` / `pr-merge` では `Refs #N` を書き、`Closes` / `Fixes` にしない。`Closes` にすると merge で issue が自動で閉じ、`coding-robot-finalize.yml` が `tickets/done/` への移動を検査する経路を飛ばす）。
+  - 末尾の紐付けは PDH の `pr` なら `github_bot.pr_link`（既定 `refs`）、`pr-merge` なら `Refs #N`。非 PDH の既定は `Closes #N`。
 
 ---
 

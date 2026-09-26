@@ -67,22 +67,24 @@ Start with this plan and adapt the middle to the user's request:
 2. Implement the change (or investigate, for non-code requests)
 3. Run scoped tests (variant of the affected modules)
 4. Commit & push in small logical commits
-5. Write PR metadata (`{{{{{pull-request-title / -body}}}}}`)
+5. Write PR metadata (`{{{{{pull-request-title / -body}}}}}`) — **non-PDH mode only.** In PDH mode
+   (`product-brief.md` + `tickets/` exist) skip this step: `_pdh.md` decides whether a PR is
+   made and how, from `github_bot.close`
 6. Write final report to `/tmp/agent-result.md`
 
 ### PDH mode add-ons (when `product-brief.md` + `tickets/` exist)
 
 `pdh-dev/_flow.md` PD-C-9 enforces a **Report ↔ reality contract**: the
 final report can only claim `VERIFIED` / `PASS` / `[x] AC1` for things that
-already exist as **committed** state in `tickets/<TICKET_NAME>.md` and
-`tickets/<TICKET_NAME>-note.md` at the time the report is written. The
+already exist as **committed** state in the ticket file and its note (the paths
+`ticket.sh start` / `restore` prints as `ticket:` / `note:`) at the time the report is written. The
 report is a *view* of state, never a *creation* of it.
 
 To make that contract trackable in the plan, insert these THREE steps
-**before** "Write PR metadata":
+**before** "Write final report":
 
-- `Update ticket AC checkboxes ([x]) in tickets/<TICKET_NAME>.md`
-- `Update note PD-C-9 process checklist ([x]) in tickets/<TICKET_NAME>-note.md`
+- `Update ticket AC checkboxes ([x]) in the ticket file`
+- `Update note process checklist ([x]) in the note file`
 - `Commit ticket + note changes and push`
 
 Do NOT mark any of those three `completed` until the corresponding file
@@ -101,7 +103,7 @@ before posting:
 3. **(PDH mode)** For every `VERIFIED` / `PASS` / `達成` / `[x] AC<N>`
    claim you are about to write, the backing line exists in the ticket
    / note on the current HEAD. Sanity check:
-   `git grep -n "\[x\] AC" tickets/<TICKET_NAME>.md` should list the
+   `git grep -n "\[x\] AC" <ticket file>` should list the
    same ACs you claim. If a claim has no backing line, **do not write
    the claim** — fix the file first, or downgrade the claim to
    `pending` / `NOT VERIFIED` with a reason.
@@ -117,8 +119,10 @@ applies — read the plan file back to verify state, do not rely on memory.
 ### If you have questions or hit ambiguity
 
 You cannot pause mid-run. Pick the most reasonable default, proceed, and record
-the assumption. Then put any questions for the user **at the end of your final
-report** (a short "## Questions" section with concrete options). The user will
+the assumption. Put any questions for the user where `system.md` "Final Report
+Format" puts what the reader must do — right after the summary, not at the
+bottom — as concrete numbered options. ⚠ In PDH mode, `_issue.md` A0 (ask before
+opening a ticket) and the human gates override "proceed": there you stop and ask. The user will
 reply with another 🤖 comment, and the next run continues from there.
 
 Only stop early (write the report and finish) if proceeding would clearly produce

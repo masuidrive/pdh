@@ -18,7 +18,7 @@ $error_message
 - **Run ID**: $GITHUB_RUN_ID
 
 ---
-🤖 [Coding Robot](https://github.com/masuidrive/github-bots/tree/main/coding-robot)" || true
+🤖 [Coding Robot](https://github.com/masuidrive/pdh/tree/main/github-bot)" || true
   fi
 }
 
@@ -64,17 +64,8 @@ if [ ! -f "$ENGINE_FILE" ]; then
 fi
 echo "🔌 Engine: $ENGINE"
 
-# Project-specific env passthrough. A single optional secret ENV_JSON carries a
-# JSON object of {KEY: value} pairs to export into the agent and its subprocesses
-# (e.g. test suites needing provider API keys), so this generic workflow need not
-# enumerate app-specific keys. Values are masked in Actions logs, never printed.
-#
-# The exported KEY NAMES are collected into ENV_JSON_KEY_LINES and rendered into
-# the agent prompt's "Environment Variables Available" section. Without that, the
-# prompt lists only this runner's own control variables and an agent reads it as
-# the whole inventory: in production a run stopped as a blocker saying "there is
-# no provider key" while that very key was exported and readable in its own
-# environment. Names only — never the values.
+# The exported key names appear in the prompt; never print their values.
+# The list describes runner controls and exported keys, not the whole environment.
 ENV_JSON_KEY_LINES=""
 if [ -n "${ENV_JSON:-}" ]; then
   if printf '%s' "$ENV_JSON" | jq -e . >/dev/null 2>&1; then
@@ -111,22 +102,11 @@ echo "📁 Current directory: $(pwd)"
 echo "📁 Contents:"
 ls -la
 
-# Gitリポジトリが現在のディレクトリにあるか確認
-if [ ! -d ".git" ]; then
-  echo "⚠️ .git directory not found in current directory"
-
-  # 作業ディレクトリを探す
-  if [ -d "/workspaces/review-apps/.git" ]; then
-    cd /workspaces/review-apps
-    echo "✅ Changed to /workspaces/review-apps"
-  elif [ -d "/workspace/.git" ]; then
-    cd /workspace
-    echo "✅ Changed to /workspace"
-  else
-    echo "❌ Cannot find git repository"
-    exit 1
-  fi
+# worktree の .git file も受け付ける。workflow と同じ workspace を既定にする。
+if [ ! -e .git ]; then
+  cd "${CODING_ROBOT_WORKSPACE:-/workspaces/project}"
 fi
+[ -e .git ] || { echo "Cannot find git repository" >&2; exit 1; }
 
 echo "📁 Working directory: $(pwd)"
 
@@ -143,12 +123,14 @@ echo "📦 Repository: $GITHUB_REPOSITORY"
 echo "🎯 Event type: $EVENT_TYPE"
 
 # Git 設定
-git config --global --add safe.directory /workspaces/review-apps
+git config --global --add safe.directory "$(pwd)"
 git config --global user.name "github-actions[bot]"
 git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
 # 最新の状態を取得
 git fetch origin
+BASE_BRANCH="${GITHUB_BASE_REF:-$(gh repo view --repo "$GITHUB_REPOSITORY" --json defaultBranchRef --jq .defaultBranchRef.name)}"
+CI_WORKFLOW="${CODING_ROBOT_CI_WORKFLOW:-ci.yml}"
 
 # Issue/PR情報の取得
 echo "📝 Fetching Issue/PR data..."
@@ -163,24 +145,93 @@ elif [[ "$EVENT_TYPE" == "issue_comment" ]] && gh pr view "$ISSUE_NUMBER" --repo
   IS_PR=true
 fi
 
+# PR head SHA に対する直近の CI run を引き、失敗していれば
+# 失敗サマリ + 生ログ末尾を返す（成功 / 実行中 / run 無し なら空文字）。head SHA で引くのは、
+# agent がこの後 origin/$BASE_BRANCH を merge して push し直す前の「ユーザが 🤖 を押した時点で見えて
+# いた失敗 run」を確実に捕まえるため。全文ログは prompt に入れず、agent が run id 経由で
+# `gh run view <id> --log-failed` で自前取得できるよう run id と取得手段を併記する。
+#
+# ログ抽出の設計（実ログ観測に基づく）: `--log-failed` の末尾は job teardown の
+# postgres service ログ (`... UTC [NNN] ERROR: duplicate key ...` = idempotency テストが
+# 意図的に出す期待ログ。失敗ではない) で埋まり、tail だけだと肝心の失敗サマリ
+# (`FAILED ...` / `Passed: N / M`) がノイズに押し出される。そこで失敗 signal 行を grep で
+# 抽出して <ci-failure-summary> として先頭に置き、生ログは末尾 400 行だけを併記する。
+build_ci_section() {
+  local branch="$1" head_sha="$2"
+  local run_id conclusion raw summary tail_block summary_block
+  run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$CI_WORKFLOW" \
+    --branch "$branch" --json databaseId,headSha,status --limit 30 2>/dev/null \
+    | jq -r --arg sha "$head_sha" \
+        'map(select(.headSha == $sha and .status == "completed")) | .[0].databaseId // empty' 2>/dev/null \
+    || true)
+  [ -n "$run_id" ] || return 0
+  conclusion=$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion' 2>/dev/null || echo "")
+  # success / 取得不能 は注入しない（失敗時のみ context に出す）
+  [ -n "$conclusion" ] && [ "$conclusion" != "success" ] || return 0
+  # 生ログを取得し、各行頭の `<job>\t<step>\t<ISO timestamp> ` prefix を除去して圧縮する。
+  raw=$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed 2>/dev/null \
+    | sed -E 's/^[^\t]*\t[^\t]*\t[0-9T:.Z-]+ //')
+  # 失敗 signal 行を抽出（postgres service ログ `UTC [NNN]` は除外）。
+  summary=$(printf '%s\n' "$raw" \
+    | grep -iE 'FAILED |[0-9]+ failed|Passed: [0-9]+ ?/|short test summary|AssertionError|Traceback|expect\(|error TS[0-9]|npm ERR!|✘|^FAIL ' \
+    | grep -vE 'UTC \[[0-9]+\]' | head -n 200 || true)
+  tail_block=$(printf '%s\n' "$raw" | tail -n 400)
+  summary_block=""
+  [ -n "$summary" ] && summary_block="
+<ci-failure-summary>
+$summary
+</ci-failure-summary>
+"
+  cat <<EOF
+
+---
+
+# 🔴 CI on this PR head: \`$conclusion\`
+
+最後に push された PR head (\`${head_sha:0:7}\`) に対する CI ($CI_WORKFLOW)
+が **$conclusion** で終わっています。ユーザの依頼に着手する前に、まずこの失敗を再現・修正することを
+最優先してください。
+
+- Run id: \`$run_id\`
+- **全文ログは自分で取得できる**: \`gh run view $run_id --repo $GITHUB_REPOSITORY --log-failed\`
+  （diff は \`git diff origin/$BASE_BRANCH...HEAD\` で自分で取得すること）
+
+下記は失敗ステップのログから抽出した **失敗サマリ** と、生ログの**末尾 400 行**です
+（行頭の job/step/timestamp prefix は除去済み。postgres の期待 ERROR ログは summary から除外）。
+${summary_block}
+<ci-failed-log-tail lines="400">
+$tail_block
+</ci-failed-log-tail>
+EOF
+}
+
 if [ "$IS_PR" = true ]; then
-  # ⚠ PR の出自を確かめる。fork の PR を拒まないと、fork 側で書いたコードを
-  # write token を持つ agent が checkout して実行する経路になる。
+  # ⚠ PR の出自を fail-closed で検査する。これが無いと、同じ repo の無関係な PR に 🤖 と
+  # 書くだけで、write token を持つ agent がその head branch を checkout して起動する。
   if ! validate_pr_context "$GITHUB_REPOSITORY" "$ISSUE_NUMBER"; then
     echo "⛔ Untrusted PR context: $TRIGGER_ERROR"
-    exit 1
+    # 出自の拒否は障害ではない。理由をコメントし、報告済みとして exit 0 にする。
+    gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$(printf '%s\n\n%s\n\n%s' \
+      "**この PR では動きません**（$TRIGGER_ERROR）。" \
+      "Coding Robot が触れるのは、自分が作った \`agent/issue-<番号>\` branch の PR だけです。依頼は元の Issue に 🤖 付きでコメントしてください。" \
+      "<!-- coding-robot -->")" >/dev/null 2>&1 \
+      || echo "Warning: failed to post the refusal note"
+    : > "${GITHUB_WORKSPACE:-.}/.coding-robot-reported" 2>/dev/null || true
+    exit 0
   fi
   # PR の場合
   PR_DATA=$(gh pr view $ISSUE_NUMBER \
-    --json title,body,comments,headRefName \
+    --json title,body,comments,headRefName,headRefOid,labels \
     --repo $GITHUB_REPOSITORY)
 
   ISSUE_TITLE=$(echo "$PR_DATA" | jq -r '.title')
   ISSUE_BODY=$(echo "$PR_DATA" | jq -r '.body // ""')
+  ISSUE_LABELS=$(echo "$PR_DATA" | jq -r '[.labels[].name] | join(", ")')
 
   # PR の場合: head ブランチ名を取得
   BRANCH_NAME=$(echo "$PR_DATA" | jq -r '.headRefName')
-  echo "📌 PR head branch: $BRANCH_NAME"
+  HEAD_SHA=$(echo "$PR_DATA" | jq -r '.headRefOid')
+  echo "📌 PR head branch: $BRANCH_NAME ($HEAD_SHA)"
 
   git checkout "$BRANCH_NAME"
   git pull origin "$BRANCH_NAME" || true
@@ -188,14 +239,24 @@ if [ "$IS_PR" = true ]; then
   # PR diff取得
   PR_DIFF=$(gh pr diff $ISSUE_NUMBER --repo $GITHUB_REPOSITORY | head -1000 || echo "")
 
+  # PR head に対する直近 CI (test-all) が失敗していれば失敗ログ末尾を context に注入する。
+  CI_SECTION="$(build_ci_section "$BRANCH_NAME" "$HEAD_SHA")"
+  # 観測用: 注入有無を workflow ログに残す（内容は出さず長さのみ）。0 bytes = 失敗 CI 無し。
+  echo "🔎 build_ci_section: ${#CI_SECTION} bytes injected for $BRANCH_NAME @ ${HEAD_SHA:0:7}"
+
 else
   # Issue の場合
   ISSUE_DATA=$(gh issue view $ISSUE_NUMBER \
-    --json title,body,comments \
+    --json title,body,comments,labels \
     --repo $GITHUB_REPOSITORY)
 
   ISSUE_TITLE=$(echo "$ISSUE_DATA" | jq -r '.title')
   ISSUE_BODY=$(echo "$ISSUE_DATA" | jq -r '.body // ""')
+  # ⚠ ラベルを prompt へ渡す。«どの入口から来た依頼か» はラベルにしか出ない。
+  # Issue フォーム（.github/ISSUE_TEMPLATE/）は作成時にラベルを付けるが、`gh issue create` は
+  # テンプレートを素通りするので付かない。bot はこの差で «repo を知らない人からの依頼» と
+  # «書き慣れた人からの依頼» を見分ける（判定材料は metadata であって、人が書いた文ではない）。
+  ISSUE_LABELS=$(echo "$ISSUE_DATA" | jq -r '[.labels[].name] | join(", ")')
 
   # Issue の場合: 新しいブランチ名を作成
   BRANCH_NAME="agent/issue-${ISSUE_NUMBER}"
@@ -211,11 +272,30 @@ else
   fi
 
   PR_DIFF=""
+  CI_SECTION=""
 fi
 
 # REST API で全コメント取得（数値 ID 付き。COMMENT_ID とのマッチングに必要）
 ALL_COMMENTS_JSON=$(gh api repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments --paginate \
   --jq '[.[] | {id: .id, login: .user.login, body: .body}]' 2>/dev/null || echo '[]')
+
+# PR の場合、対応する issue (head ブランチ agent/issue-<N>) のコメントも会話履歴に含める。
+# AC 議論など PR 以前の文脈は issue 側に残っているため、PR スレッドだけだと欠落する。
+# issue コメントを時系列で前に、PR コメントを後ろに連結する（GitHub のコメント ID は
+# グローバル一意なので両者を混ぜても COMMENT_ID マッチングは壊れない）。
+if [ "$IS_PR" = true ]; then
+  LINKED_ISSUE_NUMBER=$(printf '%s' "$BRANCH_NAME" | sed -n 's#^agent/issue-\([0-9]\{1,\}\)$#\1#p')
+  if [ -n "$LINKED_ISSUE_NUMBER" ] && [ "$LINKED_ISSUE_NUMBER" != "$ISSUE_NUMBER" ]; then
+    LINKED_ISSUE_COMMENTS_JSON=$(gh api repos/$GITHUB_REPOSITORY/issues/$LINKED_ISSUE_NUMBER/comments --paginate \
+      --jq '[.[] | {id: .id, login: .user.login, body: .body}]' 2>/dev/null || echo '[]')
+    ALL_COMMENTS_JSON=$(jq -n \
+      --argjson issue "$LINKED_ISSUE_COMMENTS_JSON" \
+      --argjson pr "$ALL_COMMENTS_JSON" \
+      '$issue + $pr' 2>/dev/null || echo "$ALL_COMMENTS_JSON")
+    echo "🧵 Merged $(echo "$LINKED_ISSUE_COMMENTS_JSON" | jq 'length') comment(s) from linked issue #$LINKED_ISSUE_NUMBER"
+  fi
+fi
+
 
 # === コメントの構造化: トリガーコメント vs 過去ログ ===
 # COMMENT_ID が設定されている場合、そのコメントがトリガー（＝ユーザの指示）
@@ -262,8 +342,8 @@ else
 fi
 
 # main を merge
-echo "🔀 Merging origin/main into $BRANCH_NAME..."
-MERGE_OUTPUT=$(git merge origin/main --no-edit 2>&1) || MERGE_EXIT_CODE=$?
+echo "🔀 Merging origin/$BASE_BRANCH into $BRANCH_NAME..."
+MERGE_OUTPUT=$(git merge origin/$BASE_BRANCH --no-edit 2>&1) || MERGE_EXIT_CODE=$?
 MERGE_EXIT_CODE=${MERGE_EXIT_CODE:-0}
 
 CONFLICT_SECTION=""
@@ -288,10 +368,10 @@ $CONFLICT_FILES
 
 ## Steps to Resolve:
 1. Read each conflicted file
-2. Understand both changes (current branch vs main)
+2. Understand both changes (current branch vs $BASE_BRANCH)
 3. Resolve conflicts by editing files (remove conflict markers <<<<<<, =======, >>>>>>>)
 4. Stage resolved files: \`git add <file>\`
-5. Commit the merge: \`git commit -m \"Merge main into $BRANCH_NAME\"\`
+5. Commit the merge: \`git commit -m \"Merge $BASE_BRANCH into $BRANCH_NAME\"\`
 6. Verify: \`git status\` should show no conflicts
 
 **After resolving conflicts, proceed with the user's original request.**
@@ -411,6 +491,77 @@ Use these images to better understand the user's requirements, bugs, design requ
 "
 fi
 
+# 添付ファイル(非画像: PDF / .txt / .csv / ログ等)を抽出してダウンロード。
+# 画像と違い user-attachments/files/ は bodyHTML でも署名されず、Actions の
+# installation token (secrets.GITHUB_TOKEN) では private repo で 404 になる
+# (既知制約)。そのため classic PAT (repo scope) の ATTACHMENTS_TOKEN を使う。
+# ファイル添付の URL は markdown 本文/コメントに生のまま入っているので、bodyHTML を
+# 経由せず本文 + 全コメントから直接抽出する。GitHub は添付ファイル名を ASCII
+# ([A-Za-z0-9._-]) にサニタイズするため、抽出 regex はそれで十分。
+echo "📎 Checking for attached files..."
+FILE_DIR="/tmp/issue-${ISSUE_NUMBER}-files"
+mkdir -p "$FILE_DIR"
+
+ATTACH_TOKEN="${ATTACHMENTS_TOKEN:-$GITHUB_TOKEN}"
+if [ -z "${ATTACHMENTS_TOKEN:-}" ]; then
+  echo "⚠️  ATTACHMENTS_TOKEN is not set; falling back to GITHUB_TOKEN."
+  echo "    Private-repo file attachments (user-attachments/files/) return 404 with"
+  echo "    the Actions installation token, so downloads below will likely be skipped."
+  echo "    Set a classic PAT (repo scope): gh secret set ATTACHMENTS_TOKEN --body '<pat>'"
+fi
+
+# 本文 + 全コメントの markdown から user-attachments/files/ URL を抽出（重複排除）。
+# 末尾 sort -u で pipeline exit を 0 に保ち set -e に引っかからないようにする。
+FILE_URLS=$( { printf '%s\n' "$ISSUE_BODY"; echo "$ALL_COMMENTS_JSON" | jq -r '.[].body // ""'; } \
+  | grep -oE 'https://github\.com/user-attachments/files/[0-9]+/[A-Za-z0-9._-]+' \
+  | sort -u )
+
+FILE_COUNT=0
+FILE_LIST=""
+while IFS= read -r furl; do
+  [ -n "$furl" ] || continue
+  fname=$(basename "$furl")
+  FILE_COUNT=$((FILE_COUNT + 1))
+  dest="$FILE_DIR/${FILE_COUNT}-${fname}"
+  echo "  - Downloading: $furl"
+  http_code=$(curl -sL -H "Authorization: Bearer $ATTACH_TOKEN" -w '%{http_code}' -o "$dest" "$furl" 2>/dev/null || echo "000")
+  if [ "$http_code" = "200" ] && [ -s "$dest" ]; then
+    sz=$(wc -c < "$dest" | tr -d ' ')
+    FILE_LIST="$FILE_LIST
+- $dest (source: $furl, ${sz} bytes)"
+    echo "    ✓ Saved to: $dest (${sz} bytes)"
+  else
+    echo "    ✗ Failed (HTTP $http_code) — token lacks access, or the file was removed"
+    rm -f "$dest"
+    FILE_COUNT=$((FILE_COUNT - 1))
+  fi
+done <<< "$FILE_URLS"
+
+FILES_SECTION=""
+if [ $FILE_COUNT -gt 0 ]; then
+  echo "✅ Downloaded $FILE_COUNT file attachment(s)"
+  FILES_SECTION="
+
+---
+
+# 📎 Attached Files
+
+**IMPORTANT**: The user attached $FILE_COUNT non-image file(s) (e.g. PDF, .txt, .csv, logs) to this Issue/PR.
+
+## File Paths:
+$FILE_LIST
+
+## Instructions:
+1. These files are already downloaded to the local filesystem at the paths above.
+2. Read / parse each one as needed: the Read tool handles text and PDF; for PDFs you
+   may also run project tooling (e.g. the extract pipeline) directly on the file path.
+3. Use their contents to fulfill the user's request — do not claim a file is
+   inaccessible; it is on disk at the path shown.
+"
+elif [ -n "$FILE_URLS" ]; then
+  echo "ℹ️ File attachment URLs were present but none could be downloaded."
+fi
+
 # システムプロンプト読み込み：共通 system.md と engine 固有 system-${ENGINE}.md を
 # concat したものを 1 つの system prompt として渡す。共通部に Output Language /
 # Self-update / Output Contract / PR metadata / Auxiliary Artifacts を集約し、
@@ -446,14 +597,9 @@ else
   append_prompt "$SCRIPT_DIR/_issue.md"
 fi
 
-# PDH プロジェクト（project root に product-brief.md と tickets/ がある）なら _pdh.md
+# _github-issue.md も prompt に連結し、コメントの規則を必ず届ける。
 if [ -f product-brief.md ] && [ -d tickets ]; then
   append_prompt "$SCRIPT_DIR/_pdh.md"
-  # ⚠ _github-issue.md も一緒に連結する。あれは «bot が issue / PR へ書くコメントの書き方»
-  # （判断ボード・語彙・画像・自己トリガーの印）を定める規則で、run の出力すべてに効く。
-  # 連結しないと、_pdh.md の «そのファイルを Read すること» 1 行だけが届ける手段になる —
-  # 導入先で実測すると 1749 行の prompt の 1740 行目にある指示である。⚠ Read を飛ばしても
-  # run は成功し、板が少し悪くなるだけなので、飛ばしたことを誰も観測できない。
   append_prompt "$SCRIPT_DIR/_github-issue.md"
 fi
 
@@ -466,16 +612,7 @@ case "$RUN_TIMEOUT_SECONDS" in ''|*[!0-9]*) echo "❌ CLAUDE_TIMEOUT must be an 
 RUN_START_UNIX=$(date +%s)
 RUN_DEADLINE_UNIX=$((RUN_START_UNIX + RUN_TIMEOUT_SECONDS))
 
-# ⚠ この run で «何が使えるか» を先に調べて prompt へ入れる（preflight）。
-#
-# 実測（2026-09-08〜17 の詰まり 16 件のうち 4 件）: OpenAI の認証情報が無い / Chromium が入って
-# いない / OpenAI の残高が足りない / engine の認証が切れている、で run の «終わり» に止まった。
-# ⚠ どれも «走り出す前に分かったはずのこと» である。人はそのたびに「続行」を打つか、
-# devcontainer を直すかしていた。
-#
-# ⚠ «無ければ落とす» にはしない。その run が本当にその credential を要るとは限らないためである
-# （frontend だけの変更に provider の鍵は要らない）。代わりに **何が在って何が無いかを先に渡し、
-# agent が計画の時点で «実 API の検証は回せない» と判断できるようにする。**
+# 環境を先に調べ、認証・ブラウザなどの実行可否を prompt に渡す。
 ENVIRONMENT_SECTION=""
 {
   _browser="無し"
@@ -511,6 +648,7 @@ $USER_REQUEST
 **Type**: $EVENT_TYPE
 **Number**: #$ISSUE_NUMBER
 **Title**: $ISSUE_TITLE
+**Labels**: ${ISSUE_LABELS:-(none)}
 
 <description>
 $ISSUE_BODY
@@ -532,14 +670,16 @@ fi
 
 USER_PROMPT="$USER_PROMPT
 $CONFLICT_SECTION
+$CI_SECTION
 $IMAGES_SECTION
+$FILES_SECTION
 
 ---
 
 # Your Working Branch
 
 **Branch**: \`$BRANCH_NAME\`
-**GitHub Comparison**: https://github.com/$GITHUB_REPOSITORY/compare/main...$BRANCH_NAME
+**GitHub Comparison**: https://github.com/$GITHUB_REPOSITORY/compare/$BASE_BRANCH...$BRANCH_NAME
 
 You are working on this branch. All commits will be pushed here.
 Users can view your changes by visiting the comparison page.
@@ -581,10 +721,7 @@ echo \"remaining: \$REMAINING s\"
 
 Rules:
 - **There is no reserve. Work until the deadline.** Do not stop early to
-  keep a margin for yourself. Budget left unspent is budget wasted: on
-  2026-09-21 a run stopped at 2h31m of a 3h envelope and handed back an
-  unfinished change with 16% of its time unused. The reader gains nothing
-  from that reserve — they get less work and still have to come back.
+  keep a margin for yourself. Budget left unspent is budget wasted.
 - **Because there is no reserve, commit and push after every completed unit
   of work** — one fix, one test that passes, one review round written into
   the note. SIGKILL then costs you the unit in flight, not the run. ⚠ **Never
@@ -610,15 +747,7 @@ Rules:
 # プロンプトをファイルに保存
 echo "$USER_PROMPT" > "/tmp/agent-prompt-$ISSUE_NUMBER.txt"
 
-# エンジン実装を読み込む（ISSUE_NUMBER 等が確定してから source する）
-# shellcheck source=/dev/null
-# ⚠ gh の既定を GITHUB_TOKEN（= github-actions[bot]）に固定する。
-# agent が板や報告を投稿するとき、author が bot になっていないと
-# `coding-robot.yml` の `sender.type != 'Bot'` で弾けず、**自分の投稿で自分が起動する**。
-# 導入先の実測 2026-09-17: PR の板 3 件が人名義で投稿され、3 秒後に run が起動して
-# 14〜24 分走った（計 ~45 分）。
-# ⚠ ATTACHMENTS_TOKEN は env に残す — push と PR 作成では、その場限りの
-# `GH_TOKEN="$ATTACHMENTS_TOKEN" gh …` で明示的に上書きして使う。
+# gh の既定は GITHUB_TOKEN（bot 名義）。PAT は push と PR 作成だけに局所指定する。
 export GH_TOKEN="$GITHUB_TOKEN"
 
 source "$ENGINE_FILE"
@@ -633,6 +762,20 @@ echo "Progress comment ID: $PROGRESS_COMMENT_ID"
 # CI 環境でのエンジン認証設定（エンジン実装に委譲）
 engine_setup_auth
 
+# 選んだ engine と別の worker にも認証を用意する。
+# CODEX_AUTH_JSON があれば auth.json を用意する。値はログへ出さず umask 077 で書く。
+if [ -n "${CODEX_AUTH_JSON:-}" ] && [ ! -f "$HOME/.codex/auth.json" ]; then
+  if printf '%s' "$CODEX_AUTH_JSON" | jq -e . >/dev/null 2>&1; then
+    mkdir -p "$HOME/.codex"
+    chmod 700 "$HOME/.codex"
+    ( umask 077; printf '%s' "$CODEX_AUTH_JSON" | jq -c . > "$HOME/.codex/auth.json" )
+    chmod 600 "$HOME/.codex/auth.json"
+    echo "🔑 委譲先の codex 用に $HOME/.codex/auth.json を用意した ($(wc -c < "$HOME/.codex/auth.json") bytes)"
+  else
+    echo "⚠️  CODEX_AUTH_JSON が JSON として読めない（jq -c で minify したか）— codex worker は OPENAI_API_KEY に頼る"
+  fi
+fi
+
 # 共通の出力ファイル（エンジンはこれらに書き込む）
 JSON_OUTPUT_FILE="/tmp/agent-output-$ISSUE_NUMBER.json"
 PROGRESS_OUTPUT_FILE="/tmp/agent-progress-$ISSUE_NUMBER.txt"  # 進捗用（thinking + text）
@@ -645,9 +788,7 @@ TIMEOUT_VALUE=$RUN_TIMEOUT_SECONDS
 # 実行（エンジン実装に委譲）。バックグラウンドで起動し ENGINE_PID をセットする。
 engine_run
 
-# ⚠ ここは engine を起動した直後で、進捗ループ（下）に入る前である。run が始まった＝bot の番なので
-# awaiting-reply を外す。⚠ **ループの後ろに置いてはならない** — そこは engine が終わった後であり、
-# 人が答えて run が動いている間ずっとラベルが «自分の番» と言い続ける。
+# engine 起動直後に待ち印を外す。終了後だけでは、run 中も人の番と表示される。
 if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
   bash "$SCRIPT_DIR/pdh-hooks.sh" start "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "$BRANCH_NAME" || true
 fi
@@ -658,11 +799,7 @@ ACTIONS_URL="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 # 開始時刻を記録（agent に渡したものと同じ値）
 START_TIME=$RUN_START_UNIX
 
-# 進捗コメントの更新間隔（秒）。既定 60。
-# ⚠ 10 秒固定だと 72 分の run で 385 回 PATCH していた（実測 = 約 321 回/時）。
-# GITHUB_TOKEN の上限は 1,000 リクエスト/時/repo なので、進捗表示だけで予算の 3 分の 1 を
-# 固定で持っていき、agent 自身の gh 呼び出しと CI 待ちのポーリングと食い合う。
-# ⚠ **engine の生存確認は 10 秒のまま** — そこを伸ばすと終了検知が遅れ、PR の作成が後ろへずれる。
+# 生存確認は 10 秒、進捗コメントの PATCH は既定 60 秒ごとにする。
 PROGRESS_UPDATE_INTERVAL=${PROGRESS_UPDATE_INTERVAL:-60}
 case "$PROGRESS_UPDATE_INTERVAL" in ''|*[!0-9]*) echo "❌ PROGRESS_UPDATE_INTERVAL must be an integer"; exit 1 ;; esac
 [ "$PROGRESS_UPDATE_INTERVAL" -ge 10 ] || { echo "❌ PROGRESS_UPDATE_INTERVAL must be >= 10 seconds"; exit 1; }
@@ -682,9 +819,6 @@ while kill -0 $ENGINE_PID 2>/dev/null; do
   ELAPSED_MINUTES=$((ELAPSED_SECONDS / 60))
   ELAPSED_SECS=$((ELAPSED_SECONDS % 60))
   ELAPSED_TIME=$(printf "%d:%02d" $ELAPSED_MINUTES $ELAPSED_SECS)
-
-  # 出力の最後の部分を取得（最大2000文字）
-  CURRENT_OUTPUT=$(tail -c 2000 "$PROGRESS_OUTPUT_FILE" 2>/dev/null || echo "（出力待機中...）")
 
   # タスク状態を取得
   TASK_STATUS=""
@@ -714,6 +848,17 @@ ${PLAN_SUMMARY}"
     fi
   fi
 
+  # PDH 側パッチ: AC の進み具合を計画要約の直後に出す（github-bot/pdh-hooks.sh。PDH mode のみ）。
+  # ⚠ AC の本当の状態は ticket.md にあるので、そこから読む。API は呼ばない。
+  if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
+    AC_BLOCK=$(bash "$SCRIPT_DIR/pdh-hooks.sh" progress "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" 2>/dev/null || true)
+    if [ -n "$AC_BLOCK" ]; then
+      COMMENT_BODY="${COMMENT_BODY}
+
+${AC_BLOCK}"
+    fi
+  fi
+
   # Add task status if exists (outside code block)
   if [ -n "$TASK_STATUS" ]; then
     COMMENT_BODY="${COMMENT_BODY}
@@ -721,12 +866,8 @@ ${PLAN_SUMMARY}"
 ${TASK_STATUS}"
   fi
 
-  # Add output in code block
+  # agent の出力（ログの末尾）は作業中コメントに貼らない。Actions のログへのリンクを出す。
   COMMENT_BODY="${COMMENT_BODY}
-
-~~~~~~~~~
-${CURRENT_OUTPUT}
-~~~~~~~~~
 
 🔗 [View job details]($ACTIONS_URL)"
 
@@ -740,13 +881,26 @@ done
 ENGINE_EXIT_CODE=0
 wait $ENGINE_PID || ENGINE_EXIT_CODE=$?
 
-# ⚠ engine が止まったあとにも machinery が commit / push する経路がある（画像の後始末、
-# pdh-hooks の待ち行）。そこで head が動くと、その SHA には check が 1 つも付かない
-# （GITHUB_TOKEN の push は workflow を起動しない）。required status check が «Expected» の
-# まま埋まらず、PR の merge ボタンが押せなくなる。動いたかどうかをここで覚えておく。
+# 後処理の commit で head が変わる場合、その最終 SHA の CI が必要なので変更前を覚える。
 HEAD_BEFORE_POST=$(git rev-parse HEAD 2>/dev/null || echo "")
 
+# 空ファイルの tail は成功するので || では切り替わらない。中身がある出力を選ぶ。
+engine_output_tail() {
+  local n="${1:-200}" f
+  for f in "$PROGRESS_OUTPUT_FILE" "$JSON_OUTPUT_FILE"; do
+    if [ -s "$f" ]; then tail -n "$n" "$f"; return 0; fi
+  done
+  echo "No output available"
+}
+
 echo "Engine finished with exit code: $ENGINE_EXIT_CODE"
+if [ "$ENGINE_EXIT_CODE" -ne 0 ]; then
+  # ⚠ log にも出す。issue のコメントだけに入れると、コメントを投稿する前に落ちた run が
+  # 何も残さない。engine 自身の出力がここに無いと、原因を追う手がかりが 1 つも無くなる。
+  echo "---- engine output (last 60 lines) ----"
+  engine_output_tail 60
+  echo "---- end engine output ----"
+fi
 
 # 最終結果を RESULT_OUTPUT_FILE に抽出（エンジン実装に委譲）
 engine_extract_result
@@ -819,7 +973,7 @@ if [ $ENGINE_EXIT_CODE -eq 0 ]; then
     # URL encode using jq
     PR_TITLE_ENCODED=$(printf "%s" "$PR_TITLE_RAW" | jq -sRr @uri)
     PR_BODY_ENCODED=$(printf "%s" "$PR_BODY_RAW" | jq -sRr @uri)
-    PR_LINK=" | 📋 [Create Pull Request](https://github.com/$GITHUB_REPOSITORY/compare/main...$BRANCH_NAME?expand=1&title=$PR_TITLE_ENCODED&body=$PR_BODY_ENCODED)"
+    PR_LINK=" | 📋 [Create Pull Request](https://github.com/$GITHUB_REPOSITORY/compare/$BASE_BRANCH...$BRANCH_NAME?expand=1&title=$PR_TITLE_ENCODED&body=$PR_BODY_ENCODED)"
     echo "✅ PR metadata found - Create PR link will be included"
   else
     echo "ℹ️  No PR metadata found - Create PR link will be omitted"
@@ -844,26 +998,18 @@ sys.stdout.write('\n'.join(lines))
 PYEOF
 )
 
-  # ⚠ 画像後始末の push に使う token。定義が無いと空展開で push が必ず失敗し、
-  # GITHUB_TOKEN fallback へ落ちる（その SHA の pull_request run は承認待ちで止まる）。
-  ATTACH_TOKEN="${ATTACHMENTS_TOKEN:-$GITHUB_TOKEN}"
-
   # ===== 補助成果物(画像)の決定的処理 + ファイルリンク化（harness が担保。LLM 遵守に頼らない）=====
   # working ブランチに追加された画像バイナリは bot-artifacts へ移送し working から除去する
   # （main を汚さない）。レポート内の参照は後段で bot-artifacts の raw URL へ書き換える
   # （⚠ inline ![]() は ![]() のまま、リンク []() は []() のまま。形は変えない）。
   ARTIFACT_MAP=""   # "workingpath<TAB>boturl" の行
-  IMG_FILES=$(git diff --numstat origin/main...HEAD 2>/dev/null \
+  IMG_FILES=$(git diff --numstat origin/$BASE_BRANCH...HEAD 2>/dev/null \
     | awk -F'\t' '$1=="-" && $2=="-" {print $3}' \
     | grep -iE '\.(png|jpe?g|gif|webp|bmp|pdf)$' || true)
   if [ -n "$IMG_FILES" ]; then
     echo "🖼️ Relocating review image artifacts to bot-artifacts: $(echo "$IMG_FILES" | tr '\n' ' ')"
     BA_W="$(mktemp -d)/ba"
-    # ⚠ bot-artifacts の fetch / push も、作業 branch の push と同じく token を明示する。
-    #   origin のままだと container の中では認証が無く、fetch も push も失敗していた
-    #   （実測 2026-09-24: «fatal: could not read Username for 'https://github.com'»）。
-    #   そのうえ fetch の失敗を «branch がまだ無い» と読んで空の branch を作り、push の成否を
-    #   見ずに作業 branch から画像を消していたので、URL だけが残って画像は 404 になった。
+    # bot-artifacts の push に使う認証を、作業 branch と同様に設定する。
     BA_REMOTE="https://x-access-token:${ATTACH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
     BA_READY=0
     BA_PUSHED=0
@@ -924,12 +1070,7 @@ PYEOF
     while IFS= read -r bf; do [ -n "$bf" ] && git rm -q --ignore-unmatch "$bf" >/dev/null 2>&1 || true; done <<< "$IMG_FILES"
     if ! git diff --cached --quiet 2>/dev/null; then
       git commit -q -m "chore: move review image artifacts off $BRANCH_NAME to bot-artifacts"
-      # ⚠ この push は PAT ($ATTACH_TOKEN) で行う。GITHUB_TOKEN で push すると、その SHA の
-      # pull_request / synchronize の run が action_required（承認待ち）になり、人が
-      # «Approve and run» を押すまで走らない。この push は run の最後に来ることがあるので、
-      # そのとき PR は «緑にできない» 状態で人に渡る（実測 2026-09-17）。
-      # extraheader は actions/checkout が仕込む Authorization。消さないと Duplicate header で
-      # 落ちるが、--unset-all だと後続の git 操作まで巻き添えになるので -c で 1 コマンドだけ外す。
+      # PAT があれば後処理の push にも使う。checkout の extraheader はこの操作だけ無効にする。
       if git -c "http.https://github.com/.extraheader=" \
            push -q "https://x-access-token:${ATTACH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
            "HEAD:$BRANCH_NAME" 2>/dev/null; then
@@ -943,8 +1084,8 @@ PYEOF
   fi
 
   # 変更ファイル(画像除去後)の bare path を blob リンクに、artifact 参照を bot-artifacts リンクに、
-  # 決定的に書き換える（コードフェンス内・既存リンクは触らない。inline ![]() は []() に変換）。
-  CHANGED_FILES=$(git diff --name-only --diff-filter=d origin/main...HEAD 2>/dev/null || true)
+  # 決定的に書き換える（コードフェンス内・既存リンクは触らない。⚠ inline ![]() は ![]() のまま残す）。
+  CHANGED_FILES=$(git diff --name-only --diff-filter=d origin/$BASE_BRANCH...HEAD 2>/dev/null || true)
   if command -v python3 >/dev/null 2>&1 && { [ -n "$CHANGED_FILES" ] || [ -n "$ARTIFACT_MAP" ]; }; then
     LINKIFIED=$(REPO="$GITHUB_REPOSITORY" BRANCH="$BRANCH_NAME" CHANGED="$CHANGED_FILES" ARTIFACTS="$ARTIFACT_MAP" \
       python3 - "$CLAUDE_OUTPUT_CLEAN" <<'PYEOF'
@@ -959,16 +1100,7 @@ for line in os.environ.get("ARTIFACTS", "").splitlines():
 text = sys.argv[1]
 parts = re.split(r'(```.*?```)', text, flags=re.S)  # コードフェンスは触らない
 def rewrite(seg):
-    # 1) 画像 artifact の参照 → bot-artifacts の github.com/<repo>/raw/ URL。⚠ inline ![]() のまま残す。
-    #    以前はここで ![]() を []() へ落としていた。理由は «blob 形式が private repo で
-    #    画像として読み込めない» ことだった。⚠ raw.githubusercontent.com も private repo では
-    #    ブラウザから読めない — GitHub は描画時に署名を付けず、ブラウザは cookie 無しで取りに行って
-    #    404 になる（token 付き curl だけが 200 を返すので、端末で測ると «読める» に見える）。
-    #    github.com/<repo>/raw/ は github.com 宛てなのでログイン cookie が効き、署名付き raw へ
-    #    redirect される（2026-09-19 にブラウザで実測: raw ✗ / blob?raw=true ✓ / /raw/ ✓。
-    #    GitHub モバイルアプリは 3 形式とも表示しない）。
-    #    ⚠ «違う» と言うには変更後の姿が見えている必要があり、人は長文を読むコストが高い。
-    #    リンクにすると、読む人は毎回クリックしないと変化が分からない。
+    # 画像 URL は GitHub の /raw/ 形式を使う。private repo のブラウザ表示にも対応する。
     for p, u in sorted(artifacts.items(), key=lambda kv: len(kv[0]), reverse=True):
         base = os.path.basename(p)
         seg = re.sub(r'(!?)\[([^\]]*)\]\([^)]*' + re.escape(p) + r'[^)]*\)',
@@ -1011,23 +1143,24 @@ ${SCREENSHOTS_BLOCK}"
 
   # PDH 側パッチ: 受け渡し経路（issue）の保証を runner が担う（github-bot/pdh-hooks.sh。PDH mode のみ。VENDOR.md）
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
-    HOOKED=$(printf '%s' "$CLAUDE_OUTPUT_CLEAN" | bash "$SCRIPT_DIR/pdh-hooks.sh" final "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "$BRANCH_NAME" "$PROGRESS_COMMENT_ID") \
+    # ⚠ PR run では ISSUE_NUMBER は PR 番号。ticket dir は tickets/*-issue-<Issue 番号> なので
+    # 紐づく Issue 番号（validate_pr_context が設定）を渡す。
+    HOOK_ISSUE="${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}"
+    HOOKED=$(printf '%s' "$CLAUDE_OUTPUT_CLEAN" | bash "$SCRIPT_DIR/pdh-hooks.sh" final "$HOOK_ISSUE" "$BRANCH_NAME" "$PROGRESS_COMMENT_ID") \
       && [ -n "$HOOKED" ] && CLAUDE_OUTPUT_CLEAN="$HOOKED" || echo "Warning: pdh-hooks.sh failed; posting report unchanged"
   fi
 
-  # ⚠ machinery が head を動かしていたら、その SHA の check が «走らないまま» のことがある。
-  # そうなるのは GITHUB_TOKEN で push したときで、その SHA の pull_request run は
-  # action_required（承認待ち）で止まり、人が «Approve and run» を押すまで動かない。
-  # ⚠ PAT で押せた場合は push / pull_request の run が普通に走るので、ここで dispatch すると
-  # **同じ SHA を 2 回**フルスイートに掛けることになる（実測）。
-  # 待たない — この run はもう終わるところで、待つと timeout を食う。
+  # 後処理で head が変わったとき、PAT push なら CI は既に起動するので重複 dispatch しない。
   HEAD_AFTER_POST=$(git rev-parse HEAD 2>/dev/null || echo "")
   if [ -n "$HEAD_BEFORE_POST" ] && [ -n "$HEAD_AFTER_POST" ] \
-     && [ "$HEAD_BEFORE_POST" != "$HEAD_AFTER_POST" ] \
-     && [ "${ARTIFACT_PUSH_AUTH:-github_token}" != pat ]; then
-    echo "⚠️ head moved after the engine finished; re-dispatching CI"
-    gh workflow run ci.yml --ref "$BRANCH_NAME" --repo "$GITHUB_REPOSITORY" \
-      || echo "Warning: failed to re-dispatch CI for $BRANCH_NAME"
+     && [ "$HEAD_BEFORE_POST" != "$HEAD_AFTER_POST" ]; then
+    if [ "${ARTIFACT_PUSH_AUTH:-github_token}" = pat ]; then
+      echo "head moved ($HEAD_BEFORE_POST -> $HEAD_AFTER_POST); PAT push already started CI — not dispatching"
+    else
+      echo "⚠️ head moved after the engine finished ($HEAD_BEFORE_POST -> $HEAD_AFTER_POST); re-dispatching CI"
+      gh workflow run "$CI_WORKFLOW" --ref "$BRANCH_NAME" --repo "$GITHUB_REPOSITORY" \
+        || echo "Warning: failed to re-dispatch CI for $BRANCH_NAME"
+    fi
   fi
 
   # 最終結果を投稿（ブランチ情報付き）
@@ -1037,7 +1170,7 @@ ${SCREENSHOTS_BLOCK}"
 ---
 
 🌿 Branch: \`$BRANCH_NAME\`
-📝 [View changes](https://github.com/$GITHUB_REPOSITORY/compare/main...$BRANCH_NAME)$PR_LINK"
+📝 [View changes](https://github.com/$GITHUB_REPOSITORY/compare/$BASE_BRANCH...$BRANCH_NAME)$PR_LINK"
 
   # ⚠ 最終レポートを投稿した印。coding-robot.yml の «Report if the run left nothing» が
   # これを見て二重投稿を避ける。置かないと、そちらが必ずもう 1 通出す。
@@ -1045,8 +1178,8 @@ ${SCREENSHOTS_BLOCK}"
 else
   echo "❌ Task failed with exit code $ENGINE_EXIT_CODE"
 
-  # ⚠ この経路では pdh-hooks の final が呼ばれない。止まっていて人の手が要るという意味は
-  # gate 停止と同じなので、失敗側からも awaiting-reply を付ける。
+  # ⚠ この経路では pdh-hooks の final が呼ばれない（成功側の中にしかない）。止まっていて人の手が
+  # 要るという意味は gate 停止と同じなので、失敗側からも awaiting-reply を付ける。
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
     bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "$BRANCH_NAME" || true
   fi
@@ -1074,7 +1207,7 @@ else
 <summary>📋 Full output (last 200 lines - click to expand)</summary>
 
 \`\`\`
-$(tail -n 200 "$PROGRESS_OUTPUT_FILE" 2>/dev/null || tail -n 200 "$JSON_OUTPUT_FILE" 2>/dev/null || echo "No output available")
+$(engine_output_tail 200)
 \`\`\`
 
 </details>"

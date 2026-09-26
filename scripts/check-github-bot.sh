@@ -24,6 +24,8 @@ required=(
   github-bot/pdh-gh-pull/SKILL.md
   github-bot/ROBOT.md
   github-bot/.github/workflows/coding-robot.yml
+  github-bot/.github/coding-robot/run-in-container.sh
+  github-bot/.github/coding-robot/engines/_stub.sh
   github-bot/.github/coding-robot/run-action.sh
 )
 for f in "${required[@]}"; do
@@ -62,8 +64,7 @@ if [ -f github-bot/_github-issue.md ] && ! grep -qF -- '## Checklist' github-bot
 fi
 
 # --- 配線: gate 停止句が «実際に agent の prompt に載る» ことを保証する ---
-# run-action.sh は system prompt へ _pdh.md «だけ» を append する（_github-issue.md は
-# agent が Read する前提で append しない）。よって「gate 停止句が _pdh.md に在る」かつ
+# run-action.sh は _pdh.md と _github-issue.md を system prompt に連結する。よって「gate 停止句が _pdh.md に在る」かつ
 # 「run-action.sh が PDH project で _pdh.md を append する」の 2 つが揃って初めて、停止指示
 # が agent に必ず届く。上で前者を検査済み。ここで後者（machinery がその append を今も
 # するか）を検査する。upstream の再同期で detection/append が変わればここが落ちて気づける。

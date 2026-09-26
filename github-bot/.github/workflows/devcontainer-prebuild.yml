@@ -16,12 +16,6 @@ name: Devcontainer Prebuild
 
 on:
   push:
-    branches: [main]
-    paths:
-      - ".devcontainer/**"
-      - ".github/workflows/devcontainer-prebuild.yml"
-      # ⚠ Dockerfile が COPY するファイルがあれば、ここに足す。ビルドキャッシュのキーなので、
-      # 挙げ忘れると «内容が変わったのに publish されない» ことになる。
   workflow_dispatch:
   # 上流の浮動インストール（CLI の最新版など）が古びすぎないよう、週 1 で焼き直す。
   schedule:
@@ -34,6 +28,7 @@ concurrency:
 
 jobs:
   prebuild:
+    if: github.event_name != 'push' || github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -43,7 +38,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
 
+        with:
+          fetch-depth: 0
+
+      - name: Select changed image inputs
+        id: inputs
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          IMAGE_PATHS: ${{ vars.CODING_ROBOT_PREBUILD_PATHS || '.devcontainer/** .github/workflows/devcontainer-prebuild.yml .github/coding-robot/smoke-local.sh' }}
+        run: |
+          set -euo pipefail
+          build=false
+          if [ "$EVENT" != push ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            build=true
+          else
+            read -r -a patterns <<< "$IMAGE_PATHS"
+            while IFS= read -r path; do
+              for pattern in "${patterns[@]}"; do
+                if [[ "$path" == $pattern ]]; then build=true; fi
+              done
+            done < <(git diff --name-only "$BEFORE" HEAD)
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/devcontainer-ci"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
       - name: Login to GHCR
+        if: steps.inputs.outputs.build == 'true'
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: ghcr.io
@@ -51,20 +73,20 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push devcontainer image
+        if: steps.inputs.outputs.build == 'true'
         uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca # v0.3.1900000450
         env:
           # ⚠ compose の image: / cache_from: と同じ ref を指す。ずれると «焼いた image と
           # 使う image が別» になり、coding-robot 側が作り直す。
-          DEVCONTAINER_IMAGE: ghcr.io/${{ github.repository }}/devcontainer-ci:latest
+          DEVCONTAINER_IMAGE: ${{ steps.inputs.outputs.image }}:latest
         with:
           configFile: .devcontainer/devcontainer.json
-          # ⚠ GHCR の ref は小文字でなければならない。${{ github.repository }} が大文字を
-          # 含む repo では、小文字の固定文字列に置き換えること（imageName は式を取らない）。
-          imageName: ghcr.io/${{ github.repository }}/devcontainer-ci
+          # image ref は小文字に正規化済み。
+          imageName: ${{ steps.inputs.outputs.image }}
           imageTag: latest
           push: always
           cacheFrom: |
-            ghcr.io/${{ github.repository }}/devcontainer-ci:latest
+            ${{ steps.inputs.outputs.image }}:latest
           # ⚠ 焼いた image をここで 1 回使ってみる。壊れた image を :latest として
           # publish すると、次に 🤖 を打った人が run の途中で気づくことになる。
           runCmd: |
@@ -74,4 +96,5 @@ jobs:
             done
             command -v claude >/dev/null || command -v codex >/dev/null || {
               echo "MISSING: neither claude nor codex"; exit 1; }
+            if [ -f .github/coding-robot/smoke-local.sh ]; then bash .github/coding-robot/smoke-local.sh; fi
             echo "prebuilt image: toolchain ok"
