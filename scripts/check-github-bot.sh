@@ -27,6 +27,7 @@ required=(
   github-bot/.github/coding-robot/run-in-container.sh
   github-bot/.github/coding-robot/engines/_stub.sh
   github-bot/.github/coding-robot/run-action.sh
+  github-bot/.github/coding-robot/notify-devbot.sh
 )
 for f in "${required[@]}"; do
   if [ ! -f "$f" ]; then
@@ -119,6 +120,43 @@ done
 dc="github-bot/.devcontainer/devcontainer.json"
 if [ -f "$dc" ] && grep -q 'workspaceFolder.*localWorkspaceFolderBasename' "$dc"; then
   printf 'github-bot: devcontainer.json の workspaceFolder が repo 名依存に戻っている（compose mount と食い違い任意 repo で落ちる。VENDOR.md 参照）\n' >&2
+  failed=1
+fi
+
+# --- 止まったことの知らせ: 秘密は host 側の step だけが持つか ---
+# 守るのは «署名の秘密が agent の動く devcontainer と command line に届かないこと» である。
+# agent は run-action.sh と同じ container で動くので、container の env に足すと agent から読める。
+wf="github-bot/.github/workflows/coding-robot.yml"
+nd="github-bot/.github/coding-robot/notify-devbot.sh"
+if [ -f "$wf" ]; then
+  agent_env=$(awk '/- name: Run Agent/{f=1;next} f && /^      - name:/{exit} f' "$wf")
+  if printf '%s\n' "$agent_env" | grep -q 'DEVBOT_'; then
+    printf 'github-bot: coding-robot.yml の Run Agent step に DEVBOT_ が渡っている（秘密が agent から読める）\n' >&2
+    failed=1
+  fi
+  if ! grep -q 'name: Tell devbot why the run stopped' "$wf" || ! grep -q 'RUNNER_TEMP/notify-devbot.sh' "$wf"; then
+    printf 'github-bot: coding-robot.yml に host 側の知らせ step（退避した notify-devbot.sh を使う）が無い\n' >&2
+    failed=1
+  fi
+fi
+if [ -f "$wf" ]; then
+  # agent は workflow_dispatch で自分の branch を指せる。その run の workspace の script を秘密付きで走らせない
+  grep -q 'git show "origin/${{ github.event.repository.default_branch }}:.github/coding-robot/notify-devbot.sh"' "$wf" \
+    || { printf 'github-bot: notify-devbot.sh を default branch から退避していない\n' >&2; failed=1; }
+  awk '/- name: Tell devbot why the run stopped/{getline; print; exit}' "$wf" | grep -q "github.event_name != 'workflow_dispatch'" \
+    || { printf 'github-bot: 知らせ step が workflow_dispatch でも走る\n' >&2; failed=1; }
+fi
+# cwd の hmac.py を import させない（host の cwd は agent が書ける workspace）
+if [ -f "$nd" ] && grep -v '^[[:space:]]*#' "$nd" | grep 'python3' | grep -vq -- 'python3 -I'; then
+  printf 'github-bot: notify-devbot.sh が python3 を -I なしで呼んでいる（workspace の module を import する）\n' >&2
+  failed=1
+fi
+if [ -f "$nd" ] && grep -v '^[[:space:]]*#' "$nd" | grep -q -- '-hmac'; then
+  printf 'github-bot: notify-devbot.sh が openssl -hmac を使っている（秘密が command line に載る）\n' >&2
+  failed=1
+fi
+if [ -f "$nd" ] && ! out=$(DEVBOT_NOTIFY_URL= bash "$nd" 1 ticket_gate 2>&1); then
+  printf 'github-bot: notify-devbot.sh が URL 未設定で非 0 を返した（知らせは run の結果を変えてはならない）: %s\n' "$out" >&2
   failed=1
 fi
 

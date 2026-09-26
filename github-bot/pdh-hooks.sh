@@ -19,7 +19,7 @@
 #   pdh-hooks.sh final <issue> <branch> <comment-id>   # stdin: 最終レポート → stdout: 補正後の本文
 #   pdh-hooks.sh start <issue>                          # run の開始: awaiting-reply を外す
 #   pdh-hooks.sh progress <issue>                       # 進捗コメント用の AC 一覧を stdout へ
-#   pdh-hooks.sh failed <issue>                         # engine 失敗: awaiting-reply を付ける
+#   pdh-hooks.sh failed <issue> <branch> <comment-id>   # engine 失敗: awaiting-reply を付ける
 #   pdh-hooks.sh setup [owner/repo]                     # 導入検査だけ。要追加があれば exit 1
 # 依存: bash / git / awk / grep / sed / gh。GITHUB_REPOSITORY を使う（setup は引数でも可）。
 set -uo pipefail
@@ -86,6 +86,29 @@ ac_progress_block() {
   printf '%s\n' "$lines" | sed -E 's/^- \[x\][[:space:]]*/✅ /; s/^- \[ \][[:space:]]*/⬜ /'
 }
 
+# ⚠ host へ渡すのはデータだけ。ローカル実行では通知先ファイルを作らない。
+write_notify() {  # issue kind stage comment_id pr
+  [ -n "${CODING_ROBOT_NOTIFY_FILE:-}" ] || return 0
+  local key value
+  {
+    for key in issue kind stage comment_id pr; do
+      value="${1:-}"; shift
+      value="${value//$'\n'/}"; value="${value//$'\r'/}"; value="${value//=/}"
+      printf '%s=%s\n' "$key" "$value"
+    done
+  } > "$CODING_ROBOT_NOTIFY_FILE" || log '通知ファイルを書けない（続行）'
+}
+
+read_status() {
+  local note="$1" status=""
+  if [ -f "$note" ]; then
+    status=$(grep -m1 '^## Status:' "$note" | sed -E 's/^## Status:[[:space:]]*(PDH-[a-z-]+).*/\1/')
+    [ -n "$status" ] || status=$(awk '/^## Status[[:space:]]*$/{getline; while ($0 ~ /^[[:space:]]*$/ || $0 ~ /^<!--/) getline; print; exit}' "$note" | sed -E 's/.*(PDH-[a-z-]+).*/\1/')
+    case "$status" in PDH-*) ;; *) status="" ;; esac
+  fi
+  printf '%s' "$status"
+}
+
 cmd="${1:-}"
 case "$cmd" in
   setup)
@@ -109,10 +132,17 @@ case "$cmd" in
       gh issue edit "$issue" --repo "$REPO" --add-label "$AWAITING_LABEL" >/dev/null 2>&1 \
         && log "$AWAITING_LABEL を付けた（engine 失敗）"
       awaiting_label_on_pr add "$branch"
+      status=""
+      for d in tickets/*-issue-"$issue" tickets/done/*-issue-"$issue"; do
+        [ -f "$d/note.md" ] && { status=$(read_status "$d/note.md"); break; }
+      done
+      pr=$(gh pr list --head "$branch" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
+      [ "$pr" = null ] && pr=""
+      write_notify "$issue" failed "$status" "${4:-}" "$pr"
     fi
     exit 0 ;;
   final) ;;
-  *) log "usage: pdh-hooks.sh final <issue> <branch> <comment-id> | start <issue> [branch] | failed <issue> [branch] | progress <issue> | setup [owner/repo]"; exit 2 ;;
+  *) log "usage: pdh-hooks.sh final <issue> <branch> <comment-id> | start <issue> [branch] | failed <issue> [branch] [comment-id] | progress <issue> | setup [owner/repo]"; exit 2 ;;
 esac
 
 ISSUE="${2:-}"; BRANCH="${3:-}"; CID="${4:-}"
@@ -124,7 +154,7 @@ dir=""
 for d in tickets/*-issue-"$ISSUE"; do [ -d "$d" ] && [ -f "$d/ticket.md" ] && { dir="$d"; break; }; done
 if [ -z "$dir" ]; then
   # ⚠ ticket dir が無いのは 2 通りあり、扱いが逆になる。
-  #   done 済み  : tickets/done/*-issue-N が在る。仕事は終わっており、人を待っていない
+  #   done 済み  : tickets/done/*-issue-N が在る。ラベルは補正しない（PR の Merge 待ちも含む）
   #   未作成     : どちらも無い。bot が «足りないことを聞く» 段で止まっている（_issue.md A0）
   # 後者でラベルを付けないと、依頼者の画面に «あなたの番» が 1 つも出ない。
   done_dir=""
@@ -133,20 +163,28 @@ if [ -z "$dir" ]; then
     gh issue edit "$ISSUE" --repo "$REPO" --add-label "$AWAITING_LABEL" >/dev/null 2>&1 \
       && log "$AWAITING_LABEL を付けた（ticket 未作成のまま run が終わった＝人に聞いている）"
     awaiting_label_on_pr add "$BRANCH"
+    pr=$(gh pr list --head "$BRANCH" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
+    [ "$pr" = null ] && pr=""
+    write_notify "$ISSUE" question "" "$CID" "$pr"
   else
     log "issue #$ISSUE は done 済み。補正なし"
+    status=$(read_status "$done_dir/note.md")
+    if [ "$status" = "PDH-human-review" ]; then
+      pr=$(gh pr list --head "$BRANCH" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
+      if [[ "$pr" =~ ^[0-9]+$ ]]; then
+        write_notify "$ISSUE" close_gate "$status" "$CID" "$pr"
+      fi
+    fi
   fi
   printf '%s' "$report"; exit 0
 fi
 note="$dir/note.md"; changed=0
 
-# note の Status は見出しと同じ行・次の行の両方を読む。
-status=""
-if [ -f "$note" ]; then
-  status=$(grep -m1 '^## Status:' "$note" | sed -E 's/^## Status:[[:space:]]*(PDH-[a-z-]+).*/\1/')
-  [ -n "$status" ] || status=$(awk '/^## Status[[:space:]]*$/{getline; while ($0 ~ /^[[:space:]]*$/ || $0 ~ /^<!--/) getline; print; exit}' "$note" | sed -E 's/.*(PDH-[a-z-]+).*/\1/')
-  case "$status" in PDH-*) ;; *) status="" ;; esac
-fi
+# --- Status ---
+# ⚠ note の Status は見出しと同じ行・次の行の 2 通りの書き方がある。両方を読む。
+# 片方しか読まないと status が空になり、gate=0 になって **ラベルも承認導線も待ち行も
+# 足されない**。
+status=$(read_status "$note")
 gate=0; case "$status" in PDH-ticket-human-review|PDH-human-review) gate=1 ;; esac
 
 # --- 1. stage ラベル ---
@@ -245,7 +283,13 @@ if [ "$gate" -eq 1 ] && [ -f "$note" ]; then
   fi
 fi
 
-# gate 以外の質問・blocker でも、未了の待ち行があれば待ち印を付ける。
+# --- 4. 回答待ちラベル ---
+# ⚠ 手順 3 が待ち行を足しうるので、必ずその後で判定する。
+# gate かどうかを見ない — gate でない場所で止まったとき（非収束での escalate・blocker・質問）に
+# こそ要る。2026-09-16 に実際に起きた: レビュー 3 巡目の escalate で止まったが、ラベルは
+# PDH-review のままで «動いているのか待っているのか» が一覧から区別できなかった。
+# 答えを反映した手で [x] にすると、次の run のこの節がラベルを外す（自動で戻る）。
+open_pr=""
 if [ -f "$note" ]; then
   # open PR で返答を待つときは PR に待ち印を付け、Issue の印は外す。
   open_pr=""
@@ -267,6 +311,17 @@ if [ -f "$note" ]; then
     awaiting_label_on_pr remove "$BRANCH"
   fi
 fi
+
+# ⚠ 待ち行を補った後の状態を使い、ラベルと通知の理由を一致させる。
+kind=""
+if [ "$status" = PDH-ticket-human-review ]; then
+  kind=ticket_gate
+elif [ "$status" = PDH-human-review ] && [ -n "$open_pr" ]; then
+  kind=close_gate
+elif has_waiting_line; then
+  kind=blocked
+fi
+[ -z "$kind" ] || write_notify "$ISSUE" "$kind" "$status" "$CID" "$open_pr"
 
 # --- commit / push（待ち行を足したとき） ---
 if [ "$changed" -eq 1 ]; then

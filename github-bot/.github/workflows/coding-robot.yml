@@ -98,6 +98,17 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # ⚠ agent が書き換えられる workspace の script を、秘密付きで実行しない。
+      # container に mount されない場所へ、default branch の版を git から直接退避する。
+      - name: Preserve devbot notifier on host
+        run: |
+          if git show "origin/${{ github.event.repository.default_branch }}:.github/coding-robot/notify-devbot.sh" > "$RUNNER_TEMP/notify-devbot.sh"; then
+            chmod 0755 "$RUNNER_TEMP/notify-devbot.sh" || echo "Warning: 通知 script を実行可能にできない"
+          else
+            rm -f "$RUNNER_TEMP/notify-devbot.sh" || true
+            echo "Warning: default branch の通知 script を退避できない"
+          fi
+
       # ステップ3: GHCR にログイン（事前ビルド済みイメージの pull 用）
       - name: Login to GHCR
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
@@ -280,13 +291,52 @@ jobs:
               -d '{"content":"confused"}'
           fi
 
-      # 結果を残さず終わった run に fallback を投稿する。報告済みなら二重投稿しない。
+      # workspace の通知ファイルとは別に、イベントと GitHub API から依頼 issue を決める。
+      - name: Resolve devbot notification issue
+        id: notification_context
+        if: always() && github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          EVENT_IS_PR: ${{ github.event.issue.pull_request != null || github.event.pull_request != null }}
+        run: |
+          set -uo pipefail
+          issue=""; pr=""
+          if [[ "$EVENT_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            if [ "$EVENT_IS_PR" = true ]; then
+              issue=$(gh api "repos/$REPO/pulls/$EVENT_NUMBER" \
+                | jq -er --arg repo "$REPO" '.head | select(.repo.full_name == $repo) | .ref | capture("^agent/issue-(?<issue>[1-9][0-9]*)$").issue') || issue=""
+              [[ "$issue" =~ ^[1-9][0-9]*$ ]] && pr="$EVENT_NUMBER"
+            else
+              issue="$EVENT_NUMBER"
+            fi
+          fi
+          if [ -z "$issue" ]; then
+            echo "Warning: 通知先の依頼 issue を確認できない。送信しない"
+          fi
+          printf 'issue=%s\npr=%s\n' "$issue" "$pr" >> "$GITHUB_OUTPUT"
+
+      # ⚠ run が «何も残さずに» 死ぬのを塞ぐ（F1）。
+      #
+      # 実測 2026-09-08（ある導入先の issue）: run が failure で終わったが、
+      # コメントも 👀 も残らなかった。人は 15 分後に勘で 🤖 を打ち直した。
+      # ⚠ この壊れ方は定義上 «何も出ない» ので、使っても気づけない。
+      #
+      # run-action.sh の中に置いても遅い — そこまで到達せずに死ぬ場合があるためである
+      # （setup / checkout / devcontainer の起動で落ちると run-action.sh は動いていない）。
+      # だから workflow の層に置き、if: always() で必ず通す。
+      #
+      # ⚠ 二重投稿を避けるため、run-action.sh が最終レポートを投稿したら
+      # $GITHUB_WORKSPACE/.coding-robot-reported を置く。この step はそれが在れば何もしない。
       - name: Report if the run left nothing
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           ISSUE: ${{ github.event.issue.number || github.event.pull_request.number }}
+          TRUSTED_ISSUE: ${{ steps.notification_context.outputs.issue }}
+          TRUSTED_PR: ${{ steps.notification_context.outputs.pr }}
           CONCLUSION: ${{ job.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -304,8 +354,17 @@ jobs:
             "何が起きたか: [実行ログ]($RUN_URL)" \
             "もう一度やらせるには: このスレッドに 🤖 を付けてコメントしてください" \
             "<!-- coding-robot -->")
-          gh issue comment "$ISSUE" --repo "$REPO" --body "$BODY" \
-            || echo "Warning: failed to post the fallback report"
+          if COMMENT_URL=$(gh issue comment "$ISSUE" --repo "$REPO" --body "$BODY"); then
+            # ⚠ fallback が実際に残したコメントへ通知を結び付ける。
+            CID="${COMMENT_URL##*#issuecomment-}"
+            [[ "$CID" =~ ^[0-9]+$ ]] || CID=""
+            if [ -n "$TRUSTED_ISSUE" ]; then
+              printf 'issue=%s\nkind=failed\ncomment_id=%s\npr=%s\n' "$TRUSTED_ISSUE" "$CID" "$TRUSTED_PR" \
+                > "$GITHUB_WORKSPACE/.coding-robot-notify" || true
+            fi
+          else
+            echo "Warning: failed to post the fallback report"
+          fi
           # 閉じた Issue / PR には awaiting-reply を付けない。
           state=$(gh issue view "$ISSUE" --repo "$REPO" --json state -q .state 2>/dev/null || echo UNKNOWN)
           if [ "$state" = "CLOSED" ]; then
@@ -314,3 +373,46 @@ jobs:
             gh issue edit "$ISSUE" --repo "$REPO" --add-label "awaiting-reply" >/dev/null 2>&1 \
               && echo "awaiting-reply を付けた" || echo "Warning: failed to add awaiting-reply"
           fi
+
+      - name: Tell devbot why the run stopped
+        if: always() && github.event_name != 'workflow_dispatch'
+        env:
+          TRUSTED_ISSUE: ${{ steps.notification_context.outputs.issue }}
+          TRUSTED_PR: ${{ steps.notification_context.outputs.pr }}
+          DEVBOT_NOTIFY_URL: ${{ vars.DEVBOT_NOTIFY_URL }}
+          # 未設定なら送らない（INSTALL.md「任意: 止まったことを外へ知らせる」）
+          DEVBOT_NOTIFY_SECRET: ${{ secrets.DEVBOT_NOTIFY_SECRET }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set +e
+          if [ -z "${DEVBOT_NOTIFY_URL:-}" ]; then
+            echo "devbot URL 未設定。送信しない"; exit 0
+          fi
+          if [ ! -f "$GITHUB_WORKSPACE/.coding-robot-notify" ]; then
+            echo "人を待っていない。送信しない"; exit 0
+          fi
+          if [ ! -x "$RUNNER_TEMP/notify-devbot.sh" ]; then
+            echo "Warning: 退避した通知 script が無い"; exit 0
+          fi
+          # ⚠ workspace の値は実行しない。既知のキーだけ読み、送信 script が値を検証する。
+          issue=""; kind=""; stage=""; comment_id=""; pr=""
+          while IFS='=' read -r key value; do
+            case "$key" in
+              issue) issue="$value" ;;
+              kind) kind="$value" ;;
+              stage) stage="$value" ;;
+              comment_id) comment_id="$value" ;;
+              pr) pr="$value" ;;
+            esac
+          done < "$GITHUB_WORKSPACE/.coding-robot-notify"
+          if [ -z "$TRUSTED_ISSUE" ] || [ "$issue" != "$TRUSTED_ISSUE" ]; then
+            echo "Warning: 通知ファイルの issue が確認済みの依頼 issue と一致しない。送信しない"
+            exit 0
+          fi
+          # ⚠ PR から起動した run では、pr も event から決まる。ファイルの値と合わなければ送らない。
+          if [ -n "${TRUSTED_PR:-}" ] && [ "$pr" != "$TRUSTED_PR" ]; then
+            echo "Warning: 通知ファイルの pr が起動元の PR と一致しない。送信しない"
+            exit 0
+          fi
+          "$RUNNER_TEMP/notify-devbot.sh" "$issue" "$kind" "$stage" "$comment_id" "$pr" "$RUN_URL" || true
+          exit 0

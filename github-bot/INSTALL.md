@@ -26,7 +26,7 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 | `github-bot/pdh-gh-pull/` | `.claude/skills/pdh-gh-pull/`（Codex は `.codex/skills/pdh-gh-pull/`） | 「issue 読みに行く」skill。core skill と同じ流儀で symlink する場合はそれに合わせる |
 | `github-bot/.ticket-config.snippet.yaml` の中身 | `.ticket-config.yaml` の末尾へ追記 | `github_bot:` 設定 |
 
-`.gitignore` に `current-ticket.md` / `current-note.md`（作業ビュー symlink）が無ければ足す。
+`.gitignore` に `current-ticket.md` / `current-note.md`（作業ビュー symlink）と `.coding-robot-notify`（run が host の step へ停止理由を渡すファイル）が無ければ足す。
 
 ⚠ **`scripts/checks/required-pdh-files.check` に、このレイヤーの分を足す。**core の配布物にはこのレイヤーが入っていないので、**`pdh-gh-pull` が消えても誰も検出しない。**`required_paths=` へ次の 2 つを加える（Codex CLI を使わないなら symlink の行は省く）。
 
@@ -220,6 +220,45 @@ gh secret set ATTACHMENTS_TOKEN --repo <owner>/<repo>
 ⚠ **この token は Issue の添付ファイル取得にも使われる**（`GITHUB_TOKEN` では取れない既知制約）。
 ⚠ **repo scope の classic PAT を admin が発行すると、default branch の保護を bypass できる資格が
 agent の環境に入ることになる。**読み取りだけで足りるなら、**権限を絞った token を使うこと。**
+
+## 任意: 止まったことを外へ知らせる（`DEVBOT_NOTIFY_URL`）
+
+**守るのは «依頼した人が GitHub を見に行かなくても、自分の番だと分かること» である。**
+Slack などから issue を起票する仕組み（以下 devbot）がある repo では、bot が人を待って止まったときに
+その受け口へ «どの issue が・なぜ止まったか・理由を書いたコメントはどれか» を送れる。
+
+```bash
+gh variable set DEVBOT_NOTIFY_URL --body 'https://<受け口のホスト>'   # 空（未設定）なら何も送らない
+gh secret set DEVBOT_NOTIFY_SECRET                                     # 受け口と共有する署名の秘密
+```
+
+送るのは `.github/workflows/coding-robot.yml` の最後の step（`Tell devbot why the run stopped`）で、
+**Actions の host 側で動く。**⚠ **この 2 つを devcontainer の env に足してはならない** — agent は
+`run-action.sh` と同じ container で動くので、足すと agent から読める。
+⚠ **送信 step が実行するのは default branch の `notify-devbot.sh` である**（Checkout 直後に git から `$RUNNER_TEMP` へ退避する）。agent は作業 branch の script を書き換えられるので、workspace の版を秘密付きで走らせない。`issue` も host がイベント（PR なら head branch の `agent/issue-<N>`）から決め、run が書いたファイルの値と合わなければ送らない。
+
+```
+POST ${DEVBOT_NOTIFY_URL}/hooks/robot
+User-Agent: coding-robot-notify/1
+X-Devbot-Timestamp: <unix 秒>
+X-Devbot-Signature: v1=<hex(HMAC-SHA256(DEVBOT_NOTIFY_SECRET, "v1:<timestamp>:<body>"))>
+
+{"issue": 127, "kind": "ticket_gate", "stage": "PDH-ticket-human-review", "comment_id": 5815102464, "pr": 128, "run_url": "https://github.com/..."}
+```
+
+| kind | いつ |
+|---|---|
+| `question` | ticket が無いまま run が終わった（依頼の中身を聞いている） |
+| `ticket_gate` | note の Status が `PDH-ticket-human-review` |
+| `close_gate` | Status が `PDH-human-review` で bot の PR が開いている |
+| `blocked` | 上のどれでもなく、note の Checklist に «未了 + `発行先:`» の待ち行がある |
+| `failed` | engine が失敗した・run が最終レポートを残さずに終わった |
+
+作業が続く・終わった run では送らない。`comment_id` は止まった理由を書いたコメント、`pr` は bot の PR、`stage` は note の Status で、無ければ `null`。
+⚠ **送信に失敗しても run の結果は変わらない。**同じ知らせが 2 回届いてもよいように、受け口は `(issue, kind, comment_id)` で重複を捨てる前提で作る。
+PDH mode でない repo では `failed` だけが送られる。
+
+deploy の結果も知らせたいなら、deploy の workflow から同じ script（`.github/coding-robot/notify-devbot.sh <issue> deployed|deploy_failed …`）を呼ぶ。
 
 ## 必要なラベル
 
