@@ -409,10 +409,15 @@ jobs:
             echo "Warning: 通知ファイルの issue が確認済みの依頼 issue と一致しない。送信しない"
             exit 0
           fi
-          # ⚠ PR から起動した run では、pr も event から決まる。ファイルの値と合わなければ送らない。
-          if [ -n "${TRUSTED_PR:-}" ] && [ "$pr" != "$TRUSTED_PR" ]; then
-            echo "Warning: 通知ファイルの pr が起動元の PR と一致しない。送信しない"
-            exit 0
+          # ⚠ PR から起動した run では、pr も event から決まる。ファイルに無ければ補い
+          #   （runner の失敗経路は pr を書かない）、違う PR を名乗っていれば送らない。
+          if [ -n "${TRUSTED_PR:-}" ]; then
+            if [ -z "$pr" ]; then
+              pr="$TRUSTED_PR"
+            elif [ "$pr" != "$TRUSTED_PR" ]; then
+              echo "Warning: 通知ファイルの pr が起動元の PR と一致しない。送信しない"
+              exit 0
+            fi
           fi
           "$RUNNER_TEMP/notify-devbot.sh" "$issue" "$kind" "$stage" "$comment_id" "$pr" "$RUN_URL" || true
           exit 0
