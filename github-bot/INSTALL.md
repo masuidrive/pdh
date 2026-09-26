@@ -260,6 +260,66 @@ PDH mode でない repo では `failed` だけが送られる。
 
 deploy の結果も知らせたいなら、deploy の workflow から同じ script（`.github/coding-robot/notify-devbot.sh <issue> deployed|deploy_failed …`）を呼ぶ。
 
+## 任意: CI の緑を待たずに承認する（auto-merge）
+
+**守るのは «人が押す回数は 1 回のまま、CI の終わりに張り付かなくてよいこと» である。**
+`pr-merge` では «CI が緑になってから Merge を押す» ので、人は CI（数十分）が終わるのを待つことになる。
+repo で auto-merge を許可しておけば、PR の **Enable auto-merge** を CI の途中で押せて、
+必須チェックが緑になった時点で GitHub が Merge する。
+
+```bash
+gh api -X PATCH repos/<owner>/<repo> -F allow_auto_merge=true
+```
+
+- **前提は、default branch に必須チェックがあること**（上の «default branch の保護»）。必須チェックが無いと、押した瞬間に Merge される
+- ⚠ **Enable auto-merge を押すことが close の承認になる。**Merge の主は押した人なので、`pull_request: closed` の finalize も deploy も、手で Merge したときと同じに動く
+- ⚠ **CI が赤なら Merge されない**（auto-merge は待ち続ける）。赤のまま出したいときは、今までどおり手で判断する
+- bot の最終レポートは «CI が緑になったら Merge を押して» と案内する。auto-merge を使う repo では、読む人が «先に押してよい» と知っていればよい（案内の文は変えなくても動く）
+
+## 任意: 本番に出た記録を残す（Environments / Deployments）
+
+**守るのは «どの commit が・いつ・本番に出たか» が、GitHub の標準の形で残ること» である。**
+deploy の job に `environment:` を付けるだけで、GitHub がその job の実行を Deployment として記録する。
+PR と commit の画面に «production に出た» が表示され、`deployment_status` の event でも取れる。
+
+```bash
+gh api -X PUT repos/<owner>/<repo>/environments/production   # 保護ルール無しで作る（無くても job の初回で作られる）
+```
+
+```yaml
+jobs:
+  deploy:
+    environment:
+      name: production
+      url: https://<本番の URL>
+```
+
+- ⚠ **保護ルール（承認者・待ち時間）は付けない。**`pr-merge` では deploy を止める gate は Merge が担う。付けると «Merge したのに本番に出ない» 2 つ目の gate ができ、人のクリックが増える
+- ⚠ **手動の deploy 経路（`workflow_dispatch` など）がある workflow では、そちらの job にも同じ `environment:` を付ける。**片方だけだと、手動で出したものが記録から抜ける
+- environment を付けた job でも、repo の secret はそのまま読める（environment の secret を足さなくてよい）
+
+## 任意: Actions の runner を Blacksmith にする
+
+**Blacksmith（blacksmith.sh）は、GitHub Actions の job を外部の VM で走らせる runner のサービスである。**
+bot に投げる Issue の本数が増えると、`coding-robot.yml` と CI の分数が比例して増える
+（実測の一例で Issue 1 本 約 240 分）。単価の安い runner に移すと、その費用が下がる
+（2026-09-25 時点: GitHub Linux 2-core $0.006/分、Blacksmith 2 vCPU $0.004/分。どちらも 3,000 分/月 の無料枠）。
+
+```yaml
+jobs:
+  agent:
+    runs-on: blacksmith-2vcpu-ubuntu-2404   # 戻すときは ubuntu-latest に戻すだけ
+```
+
+移す前に、次を判断すること。
+
+- ⚠ **その job の secret は Blacksmith の VM に渡る。**`coding-robot.yml` なら `ATTACHMENTS_TOKEN`（contents の書き込みを持ちうる）や engine の認証が渡る。渡してよいかを先に決める。**本番の deploy（クラウドの認証を持つ job）は GitHub の runner に残す**のが安全
+- ⚠ **Blacksmith の GitHub App の installation は、対象の repo を選ぶ方式にできる。**repo が選ばれていないと、job は runner を得られず **queued のまま**（24 時間で失敗）になる。必須チェックなら全 PR が止まり、`coding-robot.yml` なら bot が動かない。👀 も «結果を残さずに終わりました» も付かない（どちらも job の中の step なので、job が始まらないと走らない）。**移したら、1 本走ることを確かめる**
+- ⚠ **GitHub から見ると self-hosted の runner で、`RUNNER_ENVIRONMENT=self-hosted` になる。**この値で既定を切り替える action がある（例: `astral-sh/setup-uv` の `enable-cache: auto` は `github-hosted` のときだけ cache を有効にする）。そういう action は設定を明示する
+- ⚠ **`actions/cache` は Blacksmith の cache に保存され、GitHub の cache とは共有されない。**移した直後の run は cache miss になる
+- ⚠ **vCPU に比例して課金される。**4 vCPU の label にすると 1 分の単価が 2 倍になる。テストの並列度を `nproc` から決めている repo では、vCPU を増やすと速くなる代わりに単価も上がる
+- `coding-robot.yml` の devcontainer（`docker compose`）は Blacksmith の Ubuntu 24.04 image でも動く（GitHub の runner image と同じ software を入れる、と Blacksmith の docs にある）。workspace の所有者を job の中で揃えている場合は、runner の uid に依存しない
+
 ## 必要なラベル
 
 stage ラベル 8 段（`PDH-open` … `PDH-close`）に加えて、**`awaiting-reply`** を作る。
