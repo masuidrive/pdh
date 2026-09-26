@@ -11,7 +11,7 @@ on:
 
 jobs:
   finalize:
-    # merge された agent/issue-* の PR だけに反応する（merge せず閉じた場合は D6 の扱い）
+    # merge された agent/issue-* の PR だけに反応する（merge せず閉じた場合は下の closed-unmerged）
     if: >
       github.event.pull_request.merged == true &&
       startsWith(github.event.pull_request.head.ref, 'agent/issue-')
@@ -49,7 +49,7 @@ jobs:
           # ⚠ ここは «実行» ではなく «検査» である。ticket を done/ へ移すのは PR の仕事で、
           # この job はそれが本当に入っていたかだけを見る。入っていなければ Issue を閉じない
           # — 閉じてしまうと «Issue は完了なのに ticket は未処理» という、いちばん見つけにくい
-          # 食い違いが残る。開いたままなら reconcile でも人の目でも拾える。
+          # 食い違いが残る。開いたままなら、下のコメントを見た人が拾える。
           FILES=$(gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename' || true)
 
           # 名指しされた ticket は名前に issue 番号を含まないため frontmatter も読む。
@@ -124,6 +124,47 @@ jobs:
           else
             echo "Warning: gh issue close failed; issue stays open."
           fi
+
+  # merge されずに閉じた agent/issue-<N> の PR。
+  #
+  # ⚠ PR が開いている間、待ち印は PR にだけ付き Issue からは外れている（pdh-hooks.sh）。
+  # 何もしないと、PR が閉じた時点で Issue は «誰の番でもない» まま止まる。Issue に 1 行残して
+  # 待ち印を戻す。ticket と branch は残す — その作業は branch にしか無いためである。
+  # Issue も閉じない。作り直すか取り下げるかは人が決める。
+  closed-unmerged:
+    if: >
+      github.event.pull_request.merged != true &&
+      startsWith(github.event.pull_request.head.ref, 'agent/issue-')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Tell the issue that the PR was closed without merge
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ISSUE_NUMBER="${HEAD_REF##*issue-}"
+          if ! printf '%s' "$ISSUE_NUMBER" | grep -qE '^[0-9]+$'; then
+            echo "Could not parse issue number from head ref '$HEAD_REF'; skipping."
+            exit 0
+          fi
+          gh issue edit "$PR_NUMBER" --repo "$REPO" --remove-label awaiting-reply >/dev/null 2>&1 || true
+
+          STATE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json state -q .state || echo UNKNOWN)
+          if [ "$STATE" != OPEN ]; then
+            echo "Issue #$ISSUE_NUMBER is not open ($STATE); nothing to do."
+            exit 0
+          fi
+          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "$(printf 'PR #%s は merge されずに閉じられました。ticket と branch `%s` は残しています。\n\n続けるなら 🤖 を付けて指示してください（PR を作り直す・ticket を取り下げる など）。' "$PR_NUMBER" "$HEAD_REF")"
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label awaiting-reply >/dev/null 2>&1 \
+            && echo "awaiting-reply を Issue #$ISSUE_NUMBER に付けた" \
+            || echo "Warning: failed to add awaiting-reply"
 
   # merge された agent/issue-<N> の head branch を消す。
   #

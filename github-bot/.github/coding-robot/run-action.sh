@@ -1007,6 +1007,7 @@ PYEOF
   # （main を汚さない）。レポート内の参照は後段で bot-artifacts の raw URL へ書き換える
   # （⚠ inline ![]() は ![]() のまま、リンク []() は []() のまま。形は変えない）。
   ARTIFACT_MAP=""   # "workingpath<TAB>boturl" の行
+  IMG_NOTE=""       # 画像を読む人に届けられなかったときの注記。run は緑のまま終わるのでレポートに出す
   IMG_FILES=$(git diff --numstat origin/$BASE_BRANCH...HEAD 2>/dev/null \
     | awk -F'\t' '$1=="-" && $2=="-" {print $3}' \
     | grep -iE '\.(png|jpe?g|gif|webp|bmp|pdf)$' || true)
@@ -1065,6 +1066,8 @@ PYEOF
       # 置けなかったときは、画像を消す直前の commit を指す。作業 branch からは消すので main は
       # 汚れず、その commit は PR の履歴に残るので URL は切れない
       echo "Warning: images are linked at $PRE_RM_SHA instead of bot-artifacts"
+      IMG_NOTE="${IMG_NOTE}
+> ⚠ 画像を \`bot-artifacts\` へ置けなかったので、commit \`${PRE_RM_SHA:0:7}\` の画像を指しています。"
       while IFS= read -r bf; do
         [ -n "$bf" ] && ARTIFACT_MAP="${ARTIFACT_MAP}${bf}	https://github.com/${GITHUB_REPOSITORY}/raw/${PRE_RM_SHA}/${bf}
 "
@@ -1083,6 +1086,8 @@ PYEOF
         ARTIFACT_PUSH_AUTH=github_token
       else
         echo "Warning: failed to push artifact cleanup"
+        [ "${BA_PUSHED:-0}" = 1 ] || IMG_NOTE="${IMG_NOTE}
+> ⚠ 画像を含む commit を push できなかったので、画像が表示されない可能性があります。"
       fi
     fi
   fi
@@ -1143,6 +1148,29 @@ PYEOF
 ### Screenshots
 ${SCREENSHOTS_BLOCK}"
     fi
+  fi
+
+  # 書き換え後も相対 path のまま残った画像参照は、bot-artifacts へ移されなかった画像を指している
+  # （commit し忘れ等）。issue コメントでは相対 path が解決されず表示されないので、どれかを注記する。
+  if command -v python3 >/dev/null 2>&1; then
+    MISSING_IMGS=$(python3 - "$CLAUDE_OUTPUT_CLEAN" <<'PYEOF'
+import re, sys
+text = re.sub(r'```.*?```', '', sys.argv[1], flags=re.S)
+seen = []
+for m in re.finditer(r'!\[[^\]]*\]\(\s*(?:<([^>]+)>|([^)\s]+))', text):
+    u = m.group(1) or m.group(2)
+    if not re.match(r'(?i)(https?:|data:|#)', u) and u not in seen:
+        seen.append(u)
+sys.stdout.write(', '.join('`%s`' % u for u in seen))
+PYEOF
+) || MISSING_IMGS=""
+    [ -n "$MISSING_IMGS" ] && IMG_NOTE="${IMG_NOTE}
+> ⚠ レポートが参照している画像 ${MISSING_IMGS} は相対 path のままなので、issue では表示されません（\`bot-artifacts\` へ移されていない）。"
+  fi
+  if [ -n "$IMG_NOTE" ]; then
+    echo "🖼️ Image note:${IMG_NOTE}"
+    CLAUDE_OUTPUT_CLEAN="${CLAUDE_OUTPUT_CLEAN}
+${IMG_NOTE}"
   fi
 
   # PDH 側パッチ: 受け渡し経路（issue）の保証を runner が担う（github-bot/pdh-hooks.sh。PDH mode のみ。VENDOR.md）

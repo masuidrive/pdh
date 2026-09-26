@@ -14,7 +14,7 @@
 
 ```
 .github/workflows/coding-robot.yml            # 🤖 トリガー・devcontainer 実行
-.github/workflows/coding-robot-finalize.yml   # merge された PR の Issue を閉じる
+.github/workflows/coding-robot-finalize.yml   # merge された PR の Issue を閉じる / merge せず閉じた PR を Issue に知らせる
 .github/coding-robot/run-in-container.sh      # compose 内の入口・共通 smoke
 .github/coding-robot/run-action.sh            # prompt 組み立て・agent 実行・進捗コメント
 .github/coding-robot/system.md  system-claude.md  system-codex.md
