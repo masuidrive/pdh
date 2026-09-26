@@ -193,7 +193,11 @@ for t in tickets/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
     st=PDH-close
   else
     [ -f "$n" ] || continue
-    st=$(grep -m1 '^## Status:' "$n" | sed -E 's/^## Status:[[:space:]]*(PDH-[a-z-]+).*/\1/')
+    # Status は «## Status: <値>» と、旧形式の «## Status» の次の行に値を書く形がある。
+    # 同じ行だけを見ると旧形式の note では検査が素通りするので、両方を読む。
+    st=$(awk '/^## Status:/{sub(/^## Status:[[:space:]]*/,""); print; exit}
+              /^## Status[[:space:]]*$/{getline; print; exit}' "$n" \
+         | sed -E 's/^[[:space:]]*(PDH-[a-z-]+).*/\1/')
   fi
   case "$st" in
     PDH-ticket-human-review|PDH-human-review)

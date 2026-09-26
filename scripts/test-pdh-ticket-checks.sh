@@ -94,6 +94,14 @@ expect 0 '後の close gate を選ぶ' bash scripts/pdh-review-range.sh tickets/
 contains "$own"
 
 : > tickets/sample/progress.md
+printf '## Status\nPDH-close\n## Checklist\n' > tickets/sample/note.md
+expect 1 '旧形式の close の記録欠落' bash scripts/check-pdh-ticket.sh
+contains 'close 前 review を回していない'
+printf '## Status\nPDH-human-review\n## Checklist\n' > tickets/sample/note.md
+expect 1 '旧形式の human review の待ち行欠落' bash scripts/check-pdh-ticket.sh
+contains '発行先:'
+printf '%s\n' '- [ ] 承認の回答を待つ 発行先: /board' >> tickets/sample/note.md
+expect 0 '旧形式の human review の待ち行あり' bash scripts/check-pdh-ticket.sh
 status PDH-close
 expect 1 'close の記録欠落' bash scripts/check-pdh-ticket.sh
 contains 'close 前 review を回していない'
