@@ -347,9 +347,9 @@ jobs:
           if [ -f "$GITHUB_WORKSPACE/.coding-robot-reported" ]; then
             echo "run-action.sh が最終レポートを投稿済み。何もしない"; exit 0
           fi
-          echo "最終レポートが投稿されていない（job.status=$CONCLUSION）。1 行残す"
+          echo "最終レポートが投稿されていない（job.status=${CONCLUSION}）。1 行残す"
           BODY=$(printf '%s\n\n%s\n\n- %s\n- %s\n\n%s' \
-            "**この run は結果を残さずに終わりました**（$CONCLUSION）。" \
+            "**この run は結果を残さずに終わりました**（${CONCLUSION}）。" \
             "実行そのものが途中で落ちたため、何をしたかの報告がありません。作業は進んでいません。" \
             "何が起きたか: [実行ログ]($RUN_URL)" \
             "もう一度やらせるには: このスレッドに 🤖 を付けてコメントしてください" \

@@ -212,7 +212,7 @@ if [ "$IS_PR" = true ]; then
     echo "⛔ Untrusted PR context: $TRIGGER_ERROR"
     # 出自の拒否は障害ではない。理由をコメントし、報告済みとして exit 0 にする。
     gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$(printf '%s\n\n%s\n\n%s' \
-      "**この PR では動きません**（$TRIGGER_ERROR）。" \
+      "**この PR では動きません**（${TRIGGER_ERROR}）。" \
       "Coding Robot が触れるのは、自分が作った \`agent/issue-<番号>\` branch の PR だけです。依頼は元の Issue に 🤖 付きでコメントしてください。" \
       "<!-- coding-robot -->")" >/dev/null 2>&1 \
       || echo "Warning: failed to post the refusal note"

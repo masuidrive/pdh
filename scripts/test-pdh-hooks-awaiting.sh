@@ -74,7 +74,7 @@ expect() {
 REPORT
   ); rc=$?
   if [ "$rc" -ne 0 ]; then
-    fail "$label: exit $rc（期待 0）: $output"
+    fail "$label: exit ${rc}（期待 0）: $output"
     return
   fi
   expect_labels "$label" "$expected"
@@ -142,7 +142,7 @@ expect_auth_failure() {
     engine_setup_auth
   } 2>&1); rc=$?
   if [ "$rc" -ne 1 ]; then
-    fail "$label: exit $rc（期待 1）: $output"
+    fail "$label: exit ${rc}（期待 1）: $output"
     return
   fi
   expect_labels "$label" "$expected"

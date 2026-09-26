@@ -15,7 +15,7 @@ expect() {
   local expected=$1 label=$2 actual
   shift 2
   output=$("$@" 2>&1); actual=$?
-  [ "$actual" -eq "$expected" ] || fail "$label: exit $actual（期待 $expected）: $output"
+  [ "$actual" -eq "$expected" ] || fail "$label: exit ${actual}（期待 ${expected}）: $output"
   checks=$((checks + 1))
 }
 contains() { [[ "$output" == *"$1"* ]] || fail "出力に $1 がありません: $output"; }

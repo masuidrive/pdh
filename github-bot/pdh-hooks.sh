@@ -44,10 +44,10 @@ set_awaiting() {  # $1=add|remove  $2=issue  $3=branch  $4=理由
   fi
   [ -z "$AWAITING_PR" ] || issue_action=remove
   gh issue edit "$issue" --repo "$REPO" "--${issue_action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
-    && log "$AWAITING_LABEL を Issue #$issue に ${issue_action} した（$reason）"
+    && log "$AWAITING_LABEL を Issue #$issue に ${issue_action} した（${reason}）"
   if [ -n "$AWAITING_PR" ]; then
     gh issue edit "$AWAITING_PR" --repo "$REPO" "--${action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
-      && log "$AWAITING_LABEL を PR #$AWAITING_PR に ${action} した（$reason）"
+      && log "$AWAITING_LABEL を PR #$AWAITING_PR に ${action} した（${reason}）"
   fi
 }
 log() { printf 'pdh-hooks: %s\n' "$*" >&2; }
@@ -62,7 +62,7 @@ setup_check() {
     for s in $STAGES $AWAITING_LABEL; do
       printf '%s\n' "$have" | grep -qx "$s" || missing="$missing $s"
     done
-    [ -z "$missing" ] || printf '%s\n' "- ラベルが無い:$missing（github-bot/INSTALL.md「3. stage ラベルを作る」）"
+    [ -z "$missing" ] || printf '%s\n' "- ラベルが無い:${missing}（github-bot/INSTALL.md「3. stage ラベルを作る」）"
   fi
   local perm
   perm=$(gh api "repos/$repo/actions/permissions/workflow" -q .can_approve_pull_request_reviews 2>/dev/null || echo "unknown")
