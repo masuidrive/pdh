@@ -172,6 +172,21 @@ if grep -rnE 'gh repo view[^|;]*--repo' github-bot >&2; then
   failed=1
 fi
 
+# --- pr-merge の push は PAT で出る。runner が agent の起動前に origin の認証を差し替える ---
+# agent に認証を外させ push ごとに PAT を指定させる手順は、agent が認証を GITHUB_TOKEN へ戻すと崩れ、
+# 以降の push が起こす CI が «Approve and run» 待ちで止まった（2026-09-26）。
+ra=github-bot/.github/coding-robot/run-action.sh
+set_line=$(grep -n '^  use_pat_for_origin$' "$ra" | head -1 | cut -d: -f1)
+engine_line=$(grep -n '^source "\$ENGINE_FILE"' "$ra" | head -1 | cut -d: -f1)
+if [ -z "$set_line" ] || [ -z "$engine_line" ] || [ "$set_line" -gt "$engine_line" ]; then
+  printf 'github-bot: run-action.sh が agent の起動前に origin の認証を ATTACHMENTS_TOKEN へ差し替えていない\n' >&2
+  failed=1
+fi
+if grep -n 'unset-all' github-bot/_pdh.md >&2; then
+  printf 'github-bot: _pdh.md が agent に origin の認証を外させている（runner が差し替える。agent は触らない）\n' >&2
+  failed=1
+fi
+
 if [ "$failed" -ne 0 ]; then
   printf 'check-github-bot: FAILED\n' >&2
   exit 1

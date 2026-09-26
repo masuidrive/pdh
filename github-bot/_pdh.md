@@ -124,18 +124,15 @@ PDH-verify を終えたら、次の順で行う。既存 PR があればそれ�
 
 0. **コメントは `GITHUB_TOKEN` で投稿する。**（`merge` / `pr` では push も PR 作成も `origin` のまま＝runner の `GITHUB_TOKEN` で行う。token を選び分けるのはこの `pr-merge` だけである）`GH_TOKEN` に PAT を export しない。
    bot 名義と `<!-- coding-robot -->` の印で自己トリガーを防ぐ。
-   `ATTACHMENTS_TOKEN` があれば **push は `ATTACHMENTS_TOKEN` で行う**。PR 作成も同じ token を
-   そのコマンドだけに渡す。添付ファイルの取得には runner がこの token を使う。
+   `ATTACHMENTS_TOKEN` があれば、**runner が origin の git 認証を agent の起動前にこの token へ
+   差し替えてある。**push は素の `git push origin` でよい。⚠ **origin の認証設定
+   （`http.https://github.com/.extraheader`）を外したり戻したりしない** — `GITHUB_TOKEN` に戻すと、
+   以降の push が起こす CI が «Approve and run» 待ちで止まる。runner の後処理も PAT で push する。
+   PR 作成は同じ token をそのコマンドだけに渡す。添付ファイルの取得には runner がこの token を使う。
    無ければ `GITHUB_TOKEN` へ fallback し、CI の «Approve and run» が追加で必要な場合は人へ伝える。
    ```bash
-   if [ -n "${ATTACHMENTS_TOKEN:-}" ]; then
-     git config --local --unset-all 'http.https://github.com/.extraheader' || true
-     git_push() { git push "https://x-access-token:${ATTACHMENTS_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$@"; }
-     PR_TOKEN="$ATTACHMENTS_TOKEN"
-   else
-     git_push() { git push origin "$@"; }
-     PR_TOKEN="$GITHUB_TOKEN"
-   fi
+   git_push() { git push origin "$@"; }
+   PR_TOKEN="${ATTACHMENTS_TOKEN:-$GITHUB_TOKEN}"
    ```
 1. **base branch を取り込んで push する。**CI の緑を現在の base を含む SHA に紐づける。
    ```bash

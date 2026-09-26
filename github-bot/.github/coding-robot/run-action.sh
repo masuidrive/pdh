@@ -750,6 +750,25 @@ echo "$USER_PROMPT" > "/tmp/agent-prompt-$ISSUE_NUMBER.txt"
 # gh の既定は GITHUB_TOKEN（bot 名義）。PAT は push と PR 作成だけに局所指定する。
 export GH_TOKEN="$GITHUB_TOKEN"
 
+# ⚠ pr-merge では origin の git 認証を、agent が走る前に ATTACHMENTS_TOKEN へ差し替える。
+# GITHUB_TOKEN の push が起こした PR の CI は «Approve and run» 待ちで止まる。以前は
+# agent に認証を外させ push ごとに PAT を指定させていたが、agent が途中で GITHUB_TOKEN の
+# 認証を戻し、以降の push の CI が全部承認待ちになった。
+# 差し替えておけば、agent の素の `git push origin` も PAT で出る。gh は GITHUB_TOKEN のまま。
+# ORIGIN_PUSH_AUTH は後処理の CI 再起動の判定が読む（PAT の push は CI を自分で起動する）。
+ORIGIN_PUSH_AUTH=github_token
+use_pat_for_origin() {
+  git config --local --unset-all 'http.https://github.com/.extraheader' 2>/dev/null || true
+  git config --local 'http.https://github.com/.extraheader' \
+    "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$ATTACHMENTS_TOKEN" | base64 | tr -d '\n')"
+}
+_close_mode=$(awk '/^github_bot:/{f=1;next} /^[^ #]/{f=0} f && /^[[:space:]]*close:[[:space:]]*/{print $2; exit}' .ticket-config.yaml 2>/dev/null | tr -d "\"'" || true)
+if [ "$_close_mode" = "pr-merge" ] && [ -n "${ATTACHMENTS_TOKEN:-}" ]; then
+  use_pat_for_origin
+  ORIGIN_PUSH_AUTH=pat
+  echo "🔑 origin の git 認証を ATTACHMENTS_TOKEN にした（pr-merge）"
+fi
+
 source "$ENGINE_FILE"
 
 # 初期コメント投稿
@@ -887,6 +906,8 @@ rm -f -- "$CODING_ROBOT_NOTIFY_FILE" || true
 
 # 後処理の commit で head が変わる場合、その最終 SHA の CI が必要なので変更前を覚える。
 HEAD_BEFORE_POST=$(git rev-parse HEAD 2>/dev/null || echo "")
+# agent が origin の認証を戻していても、後処理の push は PAT で出す。
+if [ "$ORIGIN_PUSH_AUTH" = pat ]; then use_pat_for_origin; fi
 
 # 空ファイルの tail は成功するので || では切り替わらない。中身がある出力を選ぶ。
 engine_output_tail() {
@@ -1083,7 +1104,7 @@ PYEOF
            "HEAD:$BRANCH_NAME" 2>/dev/null; then
         ARTIFACT_PUSH_AUTH=pat
       elif git push -q origin "$BRANCH_NAME" 2>/dev/null; then
-        ARTIFACT_PUSH_AUTH=github_token
+        ARTIFACT_PUSH_AUTH="$ORIGIN_PUSH_AUTH"
       else
         echo "Warning: failed to push artifact cleanup"
         [ "${BA_PUSHED:-0}" = 1 ] || IMG_NOTE="${IMG_NOTE}
@@ -1186,7 +1207,7 @@ ${IMG_NOTE}"
   HEAD_AFTER_POST=$(git rev-parse HEAD 2>/dev/null || echo "")
   if [ -n "$HEAD_BEFORE_POST" ] && [ -n "$HEAD_AFTER_POST" ] \
      && [ "$HEAD_BEFORE_POST" != "$HEAD_AFTER_POST" ]; then
-    if [ "${ARTIFACT_PUSH_AUTH:-github_token}" = pat ]; then
+    if [ "${ARTIFACT_PUSH_AUTH:-$ORIGIN_PUSH_AUTH}" = pat ]; then
       echo "head moved ($HEAD_BEFORE_POST -> $HEAD_AFTER_POST); PAT push already started CI — not dispatching"
     else
       echo "⚠️ head moved after the engine finished ($HEAD_BEFORE_POST -> $HEAD_AFTER_POST); re-dispatching CI"
