@@ -28,6 +28,7 @@ run "fast-checks (FORCE_COLOR=3)" env FORCE_COLOR=3 bash scripts/fast-checks.sh
 run "distribution consistency" bash scripts/check-distribution.sh
 run "guard parity (claude/ ↔ codex/)" bash scripts/check-guard-parity.sh
 run "github-bot layer" bash scripts/check-github-bot.sh
+run "pdh-hooks awaiting-reply" bash scripts/test-pdh-hooks-awaiting.sh
 
 # Link checking needs Unicode-aware slugification, so it is Python rather than
 # bash. This script is not distributed, so it does not fall under the

@@ -8,12 +8,13 @@
 #   3. Status が human gate なら、note の Checklist に «発行先:» + URL か path の未了行が無ければ足す
 #      （URL は今回の gate コメント）
 #   4. note の Checklist に «未了 + 発行先:» の行があれば awaiting-reply ラベルを付け、無ければ外す
-#      （ただし bot の PR が開いていれば、issue には付けず PR にだけ付ける。待っているのは Merge なので）
+#      （bot の PR が開いていれば Issue から外して PR にだけ付ける。PR が無ければ Issue に付ける）
 #   5. 導入検査（ラベル・Actions の PR 作成許可）で要追加があれば報告に足す
 #
 # ⚠ awaiting-reply は run の «始め» と «終わり» の両方で動かす。終わりだけだと、人が答えて
 # run が始まっても付いたままになり、«自分の番» を誤って言い続ける。engine が失敗した run では
 # final が呼ばれないので、失敗側からも付ける（止まっていて人の手が要る、という意味は同じ）。
+# ⚠ failed でも PR が開いていれば Issue から外して PR にだけ付ける。開始時は両方から外す。
 #
 # usage:
 #   pdh-hooks.sh final <issue> <branch> <comment-id>   # stdin: 最終レポート → stdout: 補正後の本文
@@ -32,14 +33,22 @@ STAGES="PDH-open PDH-ticket-review PDH-ticket-human-review PDH-implement PDH-rev
 AWAITING_LABEL="awaiting-reply"
 
 # Issue / PR の待ち印は表示だけに使う。起動の合図は 🤖 である。
-# open PR があるときは PR に付ける。人が付けた他のラベルは変更しない。
-awaiting_label_on_pr() {  # $1=add|remove  $2=branch
-  local action="$1" branch="${2:-}" pr
-  [ -n "$branch" ] || return 0
-  pr=$(gh pr list --head "$branch" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
-  [ -n "$pr" ] && [ "$pr" != "null" ] || return 0
-  gh issue edit "$pr" --repo "$REPO" "--${action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
-    && log "$AWAITING_LABEL を PR #$pr にも ${action} した"
+# ⚠ AWAITING_PR は通知にも使うので、呼び手はこの関数をコマンド置換で実行しない。
+AWAITING_PR=""
+set_awaiting() {  # $1=add|remove  $2=issue  $3=branch  $4=理由
+  local action="$1" issue="$2" branch="$3" reason="$4" issue_action="$1"
+  AWAITING_PR=""
+  if [ -n "$branch" ]; then
+    AWAITING_PR=$(gh pr list --head "$branch" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
+    [ "$AWAITING_PR" = null ] && AWAITING_PR=""
+  fi
+  [ -z "$AWAITING_PR" ] || issue_action=remove
+  gh issue edit "$issue" --repo "$REPO" "--${issue_action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
+    && log "$AWAITING_LABEL を Issue #$issue に ${issue_action} した（$reason）"
+  if [ -n "$AWAITING_PR" ]; then
+    gh issue edit "$AWAITING_PR" --repo "$REPO" "--${action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
+      && log "$AWAITING_LABEL を PR #$AWAITING_PR に ${action} した（$reason）"
+  fi
 }
 log() { printf 'pdh-hooks: %s\n' "$*" >&2; }
 
@@ -124,21 +133,15 @@ case "$cmd" in
     [ -n "$issue" ] && [ -n "$REPO" ] || { log "$cmd: issue / GITHUB_REPOSITORY が要る"; exit 2; }
     if [ "$cmd" = start ]; then
       # run が始まった＝bot の番。人が答えたかどうかに関係なく、いま待ってはいない。
-      gh issue edit "$issue" --repo "$REPO" --remove-label "$AWAITING_LABEL" >/dev/null 2>&1 \
-        && log "$AWAITING_LABEL を外した（run 開始）"
-      awaiting_label_on_pr remove "$branch"
+      set_awaiting remove "$issue" "$branch" "run 開始"
     else
       # engine が失敗した＝止まっていて人の手が要る（認証・quota・環境）。final は呼ばれない。
-      gh issue edit "$issue" --repo "$REPO" --add-label "$AWAITING_LABEL" >/dev/null 2>&1 \
-        && log "$AWAITING_LABEL を付けた（engine 失敗）"
-      awaiting_label_on_pr add "$branch"
+      set_awaiting add "$issue" "$branch" "engine 失敗"
       status=""
       for d in tickets/*-issue-"$issue" tickets/done/*-issue-"$issue"; do
         [ -f "$d/note.md" ] && { status=$(read_status "$d/note.md"); break; }
       done
-      pr=$(gh pr list --head "$branch" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
-      [ "$pr" = null ] && pr=""
-      write_notify "$issue" failed "$status" "${4:-}" "$pr"
+      write_notify "$issue" failed "$status" "${4:-}" "$AWAITING_PR"
     fi
     exit 0 ;;
   final) ;;
@@ -160,12 +163,8 @@ if [ -z "$dir" ]; then
   done_dir=""
   for d in tickets/done/*-issue-"$ISSUE"; do [ -d "$d" ] && { done_dir="$d"; break; }; done
   if [ -z "$done_dir" ]; then
-    gh issue edit "$ISSUE" --repo "$REPO" --add-label "$AWAITING_LABEL" >/dev/null 2>&1 \
-      && log "$AWAITING_LABEL を付けた（ticket 未作成のまま run が終わった＝人に聞いている）"
-    awaiting_label_on_pr add "$BRANCH"
-    pr=$(gh pr list --head "$BRANCH" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
-    [ "$pr" = null ] && pr=""
-    write_notify "$ISSUE" question "" "$CID" "$pr"
+    set_awaiting add "$ISSUE" "$BRANCH" "ticket 未作成のまま run が終わった＝人に聞いている"
+    write_notify "$ISSUE" question "" "$CID" "$AWAITING_PR"
   else
     log "issue #$ISSUE は done 済み。補正なし"
     status=$(read_status "$done_dir/note.md")
@@ -289,26 +288,11 @@ fi
 # こそ要る。2026-09-16 に実際に起きた: レビュー 3 巡目の escalate で止まったが、ラベルは
 # PDH-review のままで «動いているのか待っているのか» が一覧から区別できなかった。
 # 答えを反映した手で [x] にすると、次の run のこの節がラベルを外す（自動で戻る）。
-open_pr=""
 if [ -f "$note" ]; then
-  # open PR で返答を待つときは PR に待ち印を付け、Issue の印は外す。
-  open_pr=""
-  if [ -n "$BRANCH" ]; then
-    open_pr=$(gh pr list --head "$BRANCH" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
-    [ "$open_pr" = "null" ] && open_pr=""
-  fi
-  if has_waiting_line && [ -n "$open_pr" ]; then
-    gh issue edit "$ISSUE" --repo "$REPO" --remove-label "$AWAITING_LABEL" >/dev/null 2>&1 \
-      && log "$AWAITING_LABEL を issue から外した（PR #$open_pr が開いている＝待っているのは Merge）"
-    awaiting_label_on_pr add "$BRANCH"
-  elif has_waiting_line; then
-    gh issue edit "$ISSUE" --repo "$REPO" --add-label "$AWAITING_LABEL" >/dev/null 2>&1 \
-      && log "$AWAITING_LABEL を付けた（回答待ちの行がある）"
-    awaiting_label_on_pr add "$BRANCH"
+  if has_waiting_line; then
+    set_awaiting add "$ISSUE" "$BRANCH" "回答待ちの行がある"
   else
-    gh issue edit "$ISSUE" --repo "$REPO" --remove-label "$AWAITING_LABEL" >/dev/null 2>&1 \
-      && log "$AWAITING_LABEL を外した（回答待ちの行が無い）"
-    awaiting_label_on_pr remove "$BRANCH"
+    set_awaiting remove "$ISSUE" "$BRANCH" "回答待ちの行が無い"
   fi
 fi
 
@@ -316,12 +300,12 @@ fi
 kind=""
 if [ "$status" = PDH-ticket-human-review ]; then
   kind=ticket_gate
-elif [ "$status" = PDH-human-review ] && [ -n "$open_pr" ]; then
+elif [ "$status" = PDH-human-review ] && [ -n "$AWAITING_PR" ]; then
   kind=close_gate
 elif has_waiting_line; then
   kind=blocked
 fi
-[ -z "$kind" ] || write_notify "$ISSUE" "$kind" "$status" "$CID" "$open_pr"
+[ -z "$kind" ] || write_notify "$ISSUE" "$kind" "$status" "$CID" "$AWAITING_PR"
 
 # --- commit / push（待ち行を足したとき） ---
 if [ "$changed" -eq 1 ]; then
