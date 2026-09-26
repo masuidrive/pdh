@@ -739,6 +739,10 @@ done
 # handling below instead of tripping `set -e` / the ERR trap.
 ENGINE_EXIT_CODE=0
 wait $ENGINE_PID || ENGINE_EXIT_CODE=$?
+# ⚠ engine が残した通知ファイルは消す。host が確かめるのは issue（と PR 起動の run の pr）と値の形だけで、
+# kind は同じ issue について書き換えられうる。
+export CODING_ROBOT_NOTIFY_FILE="${GITHUB_WORKSPACE:-.}/.coding-robot-notify"
+rm -f -- "$CODING_ROBOT_NOTIFY_FILE" || true
 
 # ⚠ engine が止まったあとにも machinery が commit / push する経路がある（画像の後始末、
 # pdh-hooks の待ち行）。そこで head が動くと、その SHA には check が 1 つも付かない
@@ -1048,8 +1052,17 @@ else
   # ⚠ この経路では pdh-hooks の final が呼ばれない。止まっていて人の手が要るという意味は
   # gate 停止と同じなので、失敗側からも awaiting-reply を付ける。
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
-    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "$BRANCH_NAME" || true
+    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "$BRANCH_NAME" "$PROGRESS_COMMENT_ID" || true
   fi
+  # ⚠ PDH の無い repo / hook 失敗でも、engine の失敗は host へ伝える。
+  if [ ! -f "$CODING_ROBOT_NOTIFY_FILE" ]; then
+    {
+      printf 'issue=%s\nkind=failed\ncomment_id=%s\n' \
+        "$(printf '%s' "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" | tr -d '\r\n=')" \
+        "$(printf '%s' "$PROGRESS_COMMENT_ID" | tr -d '\r\n=')"
+    } > "$CODING_ROBOT_NOTIFY_FILE" || true
+  fi
+
 
   # エラー詳細はエンジン実装が生成する
   ERROR_DETAILS="$(engine_error_details)"

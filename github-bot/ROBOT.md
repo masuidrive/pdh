@@ -20,6 +20,7 @@
 .github/coding-robot/_issue.md  _pr.md
 .github/coding-robot/engines/_claude.sh  _codex.sh   # ← engine で割れるのはここだけ
 .github/coding-robot/trigger-source.sh        # event 別の本文取得・PR の出自検査
+.github/coding-robot/notify-devbot.sh         # 止まったことを外の受け口へ署名付きで知らせる（host 側だけで動く）
 .devcontainer/Dockerfile  docker-compose.yml  devcontainer.json
 ```
 
