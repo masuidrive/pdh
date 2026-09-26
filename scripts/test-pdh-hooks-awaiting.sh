@@ -51,7 +51,7 @@ export GH_LOG="$TMP_DIR/gh.log"
 
 expect() {
   local label=$1 cmd=$2 pr=$3 ticket=$4 expected=$5
-  local repo output rc actual
+  local repo output rc
   checks=$((checks + 1))
   repo="$TMP_DIR/repo-$checks"
   must mkdir -p "$repo/tickets"
@@ -77,6 +77,11 @@ REPORT
     fail "$label: exit $rc（期待 0）: $output"
     return
   fi
+  expect_labels "$label" "$expected"
+}
+
+expect_labels() {
+  local label=$1 expected=$2 actual
   # stage ラベルの操作は除外し、番号と add/remove を引数単位で比較する。
   # 全操作を比較するので、期待する操作の欠落も、逆の操作の混入も検出する。
   actual=$(awk -F '\t' '
@@ -95,6 +100,52 @@ REPORT
   else
     printf 'PASS: %s\n' "$label"
   fi
+}
+
+expect_auth_failure() {
+  local label=$1 engine=$2 branch=$3 expected=$4
+  local engine_file="" candidate repo script_dir output rc
+  checks=$((checks + 1))
+  for candidate in "github-bot/.github/coding-robot/engines/_$engine.sh" ".github/coding-robot/engines/_$engine.sh"; do
+    if [ -f "$ROOT_DIR/$candidate" ]; then
+      engine_file="$ROOT_DIR/$candidate"
+      break
+    fi
+  done
+  if [ -z "$engine_file" ]; then
+    fail "$label: engine ファイルが見つかりません"
+    return
+  fi
+  repo="$TMP_DIR/repo-$checks"
+  script_dir="$TMP_DIR/script-$checks"
+  must mkdir -p "$repo/tickets" "$script_dir" "$TMP_DIR/home-$checks" "$TMP_DIR/codex-home-$checks"
+  must git -C "$repo" init -q -b main
+  must touch "$repo/product-brief.md"
+  must cp "$HOOKS" "$script_dir/pdh-hooks.sh"
+  : > "$GH_LOG"
+  output=$({
+    cd "$repo" || exit 2
+    # run-action.sh と同様に、未設定の認証変数を空として評価する。
+    set +u
+    post_error_comment() { :; }
+    ISSUE_NUMBER=1  # Codex は source 時にも参照する。
+    source "$engine_file" || exit 2
+    unset CLAUDE_CODE_OAUTH_TOKEN CODEX_AUTH_JSON OPENAI_API_KEY TRUSTED_LINKED_ISSUE
+    export CODEX_HOME="$TMP_DIR/codex-home-$checks" HOME="$TMP_DIR/home-$checks"
+    if [ -n "$branch" ]; then
+      BRANCH_NAME="$branch"
+    else
+      unset BRANCH_NAME
+    fi
+    SCRIPT_DIR="$script_dir"
+    export FAKE_OPEN_PR=11
+    engine_setup_auth
+  } 2>&1); rc=$?
+  if [ "$rc" -ne 1 ]; then
+    fail "$label: exit $rc（期待 1）: $output"
+    return
+  fi
+  expect_labels "$label" "$expected"
 }
 
 expect '1. failed + open PR 11' failed 11 none $'1 remove\n11 add'
@@ -119,6 +170,10 @@ if [ "$label_lines" -le 2 ]; then
 else
   fail "9. 構造検査（ラベル操作が 2 行以下）: $label_lines 行"
 fi
+
+expect_auth_failure '10. codex の認証失敗 + open PR 11' codex test-branch $'1 remove\n11 add'
+expect_auth_failure '11. claude の認証失敗 + open PR 11' claude test-branch $'1 remove\n11 add'
+expect_auth_failure '12. codex の認証失敗 + BRANCH_NAME 未設定' codex '' '1 add'
 
 if [ "$failures" -ne 0 ]; then
   printf 'FAIL: pdh-hooks awaiting-reply (%s/%s checks failed)\n' "$failures" "$checks" >&2

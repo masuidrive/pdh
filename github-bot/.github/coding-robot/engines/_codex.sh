@@ -86,8 +86,9 @@ No Codex credentials are configured. Set **one** of the following repository sec
 **After setting a secret, comment 🤖 \`:robot:\` again to retry.**"
   # ⚠ この経路は ENGINE_EXIT_CODE の分岐へ入らないので run-action.sh の failed hook が呼ばれない。
   # いちばん多い «止まっていて人の手が要る» 停止なので、ここで直接付ける。
+  # ⚠ branch を渡すのは、PR が開いていれば待ち印を PR にだけ付けるため。
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
-    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" || true
+    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "${BRANCH_NAME:-}" || true
   fi
   exit 1
 }
