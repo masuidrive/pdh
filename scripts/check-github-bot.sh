@@ -166,6 +166,12 @@ if [ -f github-bot/.github/coding-robot/_pdh.md ]; then
   failed=1
 fi
 
+# --- gh repo view は repo を引数で受け取る。--repo は無く、run が起動直後に落ちる（2026-09-26 に実際に起きた） ---
+if grep -rnE 'gh repo view[^|;]*--repo' github-bot >&2; then
+  printf 'github-bot: gh repo view に --repo は無い。repo は引数で渡す（gh repo view "$GITHUB_REPOSITORY" --json …）\n' >&2
+  failed=1
+fi
+
 if [ "$failed" -ne 0 ]; then
   printf 'check-github-bot: FAILED\n' >&2
   exit 1

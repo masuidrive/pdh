@@ -129,7 +129,7 @@ git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
 # 最新の状態を取得
 git fetch origin
-BASE_BRANCH="${GITHUB_BASE_REF:-$(gh repo view --repo "$GITHUB_REPOSITORY" --json defaultBranchRef --jq .defaultBranchRef.name)}"
+BASE_BRANCH="${GITHUB_BASE_REF:-$(gh repo view "$GITHUB_REPOSITORY" --json defaultBranchRef --jq .defaultBranchRef.name)}"
 CI_WORKFLOW="${CODING_ROBOT_CI_WORKFLOW:-ci.yml}"
 
 # Issue/PR情報の取得
