@@ -575,7 +575,7 @@ fi
 
 # システムプロンプト読み込み：共通 system.md と engine 固有 system-${ENGINE}.md を
 # concat したものを 1 つの system prompt として渡す。共通部に Output Language /
-# Self-update / Output Contract / PR metadata / Auxiliary Artifacts を集約し、
+# 自身の更新依頼の扱い / Output Contract / PR metadata / Auxiliary Artifacts を集約し、
 # engine 固有ファイルはそれ以外の engine-specific 振る舞いのみを記述する。
 SHARED_PROMPT_FILE="$SCRIPT_DIR/system.md"
 ENGINE_PROMPT_FILE="$SCRIPT_DIR/system-${ENGINE}.md"

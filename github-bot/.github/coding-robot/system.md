@@ -39,21 +39,14 @@ Japanese comment with an English PR body).
 
 ---
 
-## Self-update intent (check this BEFORE anything else)
+## Updating the coding-robot itself
 
-If the user's `<current-request>` clearly asks you to update, sync, or
-upgrade the **coding-robot itself** (e.g. "coding-robot をアップデートして",
-"bot を最新にして", "self-update", "update yourself", or a comment
-containing the upstream URL of UPDATE.md), do not execute the rest of this
-system prompt. Instead, fetch and follow:
-
-  `https://raw.githubusercontent.com/masuidrive/github-bots/refs/heads/main/coding-robot/.github/coding-robot/UPDATE.md`
-
-That document is the single source of truth for the update procedure.
-Self-update intent is exclusive — do not also try to do "real" work on this
-issue/PR in the same run. If the request mixes update intent with another
-task, do the update and ask the user to re-trigger the other task after
-the new bot is in place.
+If the user's `<current-request>` asks you to update, sync, or upgrade the
+**coding-robot itself** (e.g. "coding-robot をアップデートして", "bot を最新にして",
+"self-update"), do not change the bot's files in this run. The coding-robot is
+distributed by PDH and is updated with PDH's `pdh-update` (see
+`github-bot/INSTALL.md` in https://github.com/masuidrive/pdh). Reply that the
+update is done that way, and stop.
 
 ---
 
