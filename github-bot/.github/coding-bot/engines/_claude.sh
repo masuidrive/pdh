@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # =============================================================================
-# Claude engine for Coding Robot
+# Claude engine for coding-bot
 # =============================================================================
 # Runs `claude -p` (headless) and parses Anthropic stream-json output.
 # Defines: engine_setup_auth / engine_run / engine_extract_result /
@@ -28,7 +28,7 @@ engine_setup_auth() {
   echo "❌ ERROR: CLAUDE_CODE_OAUTH_TOKEN is not set!"
   post_error_comment "### 🔑 Authentication Error
 
-\`CLAUDE_CODE_OAUTH_TOKEN\` secret is not configured.
+\`CODING_BOT_CLAUDE_OAUTH_TOKEN\` secret is not configured.
 
 **How to obtain a token:**
 
@@ -42,7 +42,7 @@ This will guide you through the authentication process and provide the token.
 **How to set it up in GitHub:**
 1. Go to [Repository Secrets Settings](https://github.com/$GITHUB_REPOSITORY/settings/secrets/actions)
 2. Click \`New repository secret\`
-3. Name: \`CLAUDE_CODE_OAUTH_TOKEN\`
+3. Name: \`CODING_BOT_CLAUDE_OAUTH_TOKEN\`
 4. Value: Paste the token from \`claude setup-token\`
 5. Click \`Add secret\`
 
@@ -51,10 +51,10 @@ For more information, see the [Claude Code documentation](https://docs.anthropic
 ---
 
 **Alternatively, use the Codex engine instead of Claude:**
-1. Set the repository variable \`CODING_ROBOT_ENGINE\` to \`codex\` at [Repository Variables Settings](https://github.com/$GITHUB_REPOSITORY/settings/variables/actions)
+1. Set the repository variable \`CODING_BOT_ENGINE\` to \`codex\` at [Repository Variables Settings](https://github.com/$GITHUB_REPOSITORY/settings/variables/actions)
 2. Provide Codex credentials as a secret — choose one:
-   - \`CODEX_AUTH_JSON\`: run \`codex login\` locally, then \`jq -c . ~/.codex/auth.json\` and paste the single-line output as the secret value.
-   - \`OPENAI_API_KEY\`: paste your OpenAI API key.
+   - \`CODING_BOT_CODEX_AUTH_JSON\`: run \`codex login\` locally, then \`jq -c . ~/.codex/auth.json\` and paste the single-line output as the secret value.
+   - \`CODING_BOT_OPENAI_API_KEY\`: paste your OpenAI API key.
 
 ---
 
@@ -80,15 +80,15 @@ For more information, see the [Claude Code documentation](https://docs.anthropic
 engine_run() {
   echo "🚀 Starting Claude Code CLI (timeout: ${TIMEOUT_VALUE}s)..."
 
-  # Optional model pin, symmetric with CODEX_MODEL in _codex.sh. Without it the
+  # Optional model pin, symmetric with CODING_BOT_CODEX_MODEL in _codex.sh. Without it the
   # run takes whatever the account default is, so the transcript never records
   # which model did the work and two runs are not comparable.
   local MODEL_ARGS=()
-  if [ -n "${CLAUDE_MODEL:-}" ]; then
-    MODEL_ARGS=(--model "$CLAUDE_MODEL")
-    echo "🧠 Model: $CLAUDE_MODEL"
+  if [ -n "${CODING_BOT_CLAUDE_MODEL:-}" ]; then
+    MODEL_ARGS=(--model "$CODING_BOT_CLAUDE_MODEL")
+    echo "🧠 Model: $CODING_BOT_CLAUDE_MODEL"
   else
-    echo "🧠 Model: (account default — set the CLAUDE_MODEL variable to pin one)"
+    echo "🧠 Model: (account default — set the CODING_BOT_CLAUDE_MODEL variable to pin one)"
   fi
 
   # system prompt はファイルで渡す。単一引数の長さ制限で engine の起動が失敗するのを避ける。
@@ -355,7 +355,7 @@ Claude exceeded the timeout limit of **${TIMEOUT_VALUE} seconds** (${TIMEOUT_MIN
 
 **Suggested actions:**
 1. Break down the task into smaller steps
-2. Increase \`CLAUDE_TIMEOUT\` in the workflow env
+2. Increase \`CODING_BOT_TIMEOUT\` in the workflow env
 3. Reduce scope - focus on one thing at a time"
     return 0
   fi
@@ -368,7 +368,7 @@ Claude exceeded the timeout limit of **${TIMEOUT_VALUE} seconds** (${TIMEOUT_MIN
 Claude failed to authenticate with Claude API.
 
 **Common causes:**
-- \`CLAUDE_CODE_OAUTH_TOKEN\` secret is not set in repository settings
+- \`CODING_BOT_CLAUDE_OAUTH_TOKEN\` secret is not set in repository settings
 - Token is expired or invalid
 - Token doesn't have required permissions
 
@@ -376,14 +376,14 @@ Claude failed to authenticate with Claude API.
 
 1. **Check if secret exists:**
    - Go to: [Repository Settings → Secrets](https://github.com/$GITHUB_REPOSITORY/settings/secrets/actions)
-   - Verify \`CLAUDE_CODE_OAUTH_TOKEN\` is listed
+   - Verify \`CODING_BOT_CLAUDE_OAUTH_TOKEN\` is listed
 
 2. **Generate new token:**
    - Run \`claude setup-token\` locally and copy the value
 
 3. **Update GitHub Secret:**
    - Go to: https://github.com/$GITHUB_REPOSITORY/settings/secrets/actions
-   - Update \`CLAUDE_CODE_OAUTH_TOKEN\` with the new token
+   - Update \`CODING_BOT_CLAUDE_OAUTH_TOKEN\` with the new token
 
 4. **Re-run:** Comment \`:robot:\` to retry
 EOF

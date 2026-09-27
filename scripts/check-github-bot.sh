@@ -23,11 +23,11 @@ required=(
   github-bot/.ticket-config.snippet.yaml
   github-bot/pdh-gh-pull/SKILL.md
   github-bot/ROBOT.md
-  github-bot/.github/workflows/coding-robot.yml
-  github-bot/.github/coding-robot/run-in-container.sh
-  github-bot/.github/coding-robot/engines/_stub.sh
-  github-bot/.github/coding-robot/run-action.sh
-  github-bot/.github/coding-robot/notify-devbot.sh
+  github-bot/.github/workflows/coding-bot.yml
+  github-bot/.github/coding-bot/run-in-container.sh
+  github-bot/.github/coding-bot/engines/_stub.sh
+  github-bot/.github/coding-bot/run-action.sh
+  github-bot/.github/coding-bot/notify-devbot.sh
 )
 for f in "${required[@]}"; do
   if [ ! -f "$f" ]; then
@@ -69,7 +69,7 @@ fi
 # 「run-action.sh が PDH project で _pdh.md を append する」の 2 つが揃って初めて、停止指示
 # が agent に必ず届く。上で前者を検査済み。ここで後者（machinery がその append を今も
 # するか）を検査する。upstream の再同期で detection/append が変わればここが落ちて気づける。
-ra="github-bot/.github/coding-robot/run-action.sh"
+ra="github-bot/.github/coding-bot/run-action.sh"
 if [ -f "$ra" ]; then
   if ! grep -q 'product-brief.md' "$ra" || ! grep -q -- '-d tickets' "$ra"; then
     printf 'github-bot: run-action.sh の PDH 検出（product-brief.md && tickets/）が見当たらない\n' >&2
@@ -100,7 +100,7 @@ fi
 # 案内できることが利用体験の要。machinery 側に既存（_claude.sh / _codex.sh の Authentication
 # Error）。re-sync で消えると «認証切れが分かりにくい失敗» に戻るので、存在を守る。
 for e in _claude _codex; do
-  f="github-bot/.github/coding-robot/engines/${e}.sh"
+  f="github-bot/.github/coding-bot/engines/${e}.sh"
   if [ -f "$f" ]; then
     if ! grep -q 'Authentication Error' "$f"; then
       printf 'github-bot: %s に認証エラーコメント（Authentication Error）が無い\n' "$f" >&2
@@ -126,22 +126,22 @@ fi
 # --- 止まったことの知らせ: 秘密は host 側の step だけが持つか ---
 # 守るのは «署名の秘密が agent の動く devcontainer と command line に届かないこと» である。
 # agent は run-action.sh と同じ container で動くので、container の env に足すと agent から読める。
-wf="github-bot/.github/workflows/coding-robot.yml"
-nd="github-bot/.github/coding-robot/notify-devbot.sh"
+wf="github-bot/.github/workflows/coding-bot.yml"
+nd="github-bot/.github/coding-bot/notify-devbot.sh"
 if [ -f "$wf" ]; then
   agent_env=$(awk '/- name: Run Agent/{f=1;next} f && /^      - name:/{exit} f' "$wf")
-  if printf '%s\n' "$agent_env" | grep -q 'DEVBOT_'; then
-    printf 'github-bot: coding-robot.yml の Run Agent step に DEVBOT_ が渡っている（秘密が agent から読める）\n' >&2
+  if printf '%s\n' "$agent_env" | grep -q 'CODING_BOT_NOTIFY_'; then
+    printf 'github-bot: coding-bot.yml の Run Agent step に CODING_BOT_NOTIFY_ が渡っている（秘密が agent から読める）\n' >&2
     failed=1
   fi
   if ! grep -q 'name: Tell devbot why the run stopped' "$wf" || ! grep -q 'RUNNER_TEMP/notify-devbot.sh' "$wf"; then
-    printf 'github-bot: coding-robot.yml に host 側の知らせ step（退避した notify-devbot.sh を使う）が無い\n' >&2
+    printf 'github-bot: coding-bot.yml に host 側の知らせ step（退避した notify-devbot.sh を使う）が無い\n' >&2
     failed=1
   fi
 fi
 if [ -f "$wf" ]; then
   # agent は workflow_dispatch で自分の branch を指せる。その run の workspace の script を秘密付きで走らせない
-  grep -q 'git show "origin/${{ github.event.repository.default_branch }}:.github/coding-robot/notify-devbot.sh"' "$wf" \
+  grep -q 'git show "origin/${{ github.event.repository.default_branch }}:.github/coding-bot/notify-devbot.sh"' "$wf" \
     || { printf 'github-bot: notify-devbot.sh を default branch から退避していない\n' >&2; failed=1; }
   awk '/- name: Tell devbot why the run stopped/{getline; print; exit}' "$wf" | grep -q "github.event_name != 'workflow_dispatch'" \
     || { printf 'github-bot: 知らせ step が workflow_dispatch でも走る\n' >&2; failed=1; }
@@ -155,13 +155,13 @@ if [ -f "$nd" ] && grep -v '^[[:space:]]*#' "$nd" | grep -q -- '-hmac'; then
   printf 'github-bot: notify-devbot.sh が openssl -hmac を使っている（秘密が command line に載る）\n' >&2
   failed=1
 fi
-if [ -f "$nd" ] && ! out=$(DEVBOT_NOTIFY_URL= bash "$nd" 1 ticket_gate 2>&1); then
+if [ -f "$nd" ] && ! out=$(CODING_BOT_NOTIFY_URL= bash "$nd" 1 ticket_gate 2>&1); then
   printf 'github-bot: notify-devbot.sh が URL 未設定で非 0 を返した（知らせは run の結果を変えてはならない）: %s\n' "$out" >&2
   failed=1
 fi
 
 # --- stale の再混入検出: machinery 側に古い _pdh.md が紛れていないか ---
-if [ -f github-bot/.github/coding-robot/_pdh.md ]; then
+if [ -f github-bot/.github/coding-bot/_pdh.md ]; then
   printf 'github-bot: machinery 側に _pdh.md がある（PDH は github-bot/_pdh.md を持ち、machinery 側には置かない）\n' >&2
   failed=1
 fi
@@ -175,11 +175,11 @@ fi
 # --- pr-merge の push は PAT で出る。runner が agent の起動前に origin の認証を差し替える ---
 # agent に認証を外させ push ごとに PAT を指定させる手順は、agent が認証を GITHUB_TOKEN へ戻すと崩れ、
 # 以降の push が起こす CI が «Approve and run» 待ちで止まった（2026-09-26）。
-ra=github-bot/.github/coding-robot/run-action.sh
+ra=github-bot/.github/coding-bot/run-action.sh
 set_line=$(grep -n '^  use_pat_for_origin$' "$ra" | head -1 | cut -d: -f1)
 engine_line=$(grep -n '^source "\$ENGINE_FILE"' "$ra" | head -1 | cut -d: -f1)
 if [ -z "$set_line" ] || [ -z "$engine_line" ] || [ "$set_line" -gt "$engine_line" ]; then
-  printf 'github-bot: run-action.sh が agent の起動前に origin の認証を ATTACHMENTS_TOKEN へ差し替えていない\n' >&2
+  printf 'github-bot: run-action.sh が agent の起動前に origin の認証を CODING_BOT_GH_PAT へ差し替えていない\n' >&2
   failed=1
 fi
 if grep -n 'unset-all' github-bot/_pdh.md >&2; then

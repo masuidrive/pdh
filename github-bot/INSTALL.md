@@ -1,6 +1,6 @@
 # github-bot レイヤー — 導入手順（任意）
 
-PDH の **オプション**。GitHub Issue を «エンジニアとの会話面» にし、🤖 コメントで続きの処理を GitHub Actions 上の agent（PDH が配布する coding-robot）に回す。**このレイヤーを入れなくても PDH core は完全に動く。** 入れるかは任意で、入れたプロジェクトだけが GitHub Actions を要求する。
+PDH の **オプション**。GitHub Issue を «エンジニアとの会話面» にし、🤖 コメントで続きの処理を GitHub Actions 上の agent（PDH が配布する coding-bot）に回す。**このレイヤーを入れなくても PDH core は完全に動く。** 入れるかは任意で、入れたプロジェクトだけが GitHub Actions を要求する。
 
 これは core の `claude/INSTALL.md` / `codex/INSTALL.md` とは別経路。導入後は `pdh-update` が PDH 保守分（`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/`）を毎回上流の版で置き換える。machinery（`github-bot/.github/` と `github-bot/.devcontainer/`）は同じ更新で diff を確認して反映する。repo 固有の値は変数へ、追加検査は `smoke-local.sh` へ置く。
 
@@ -15,18 +15,18 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 
 | コピー元（この repo） | コピー先（あなたの project） | 役割 |
 |---|---|---|
-| `github-bot/.github/` | `.github/` | coding-robot 一式と workflow（prebuild は任意） |
-| `github-bot/.github/coding-robot/run-in-container.sh` | `.github/coding-robot/run-in-container.sh` | container 内の実行入口・共通 smoke |
-| `github-bot/.github/coding-robot/engines/_stub.sh` | `.github/coding-robot/engines/_stub.sh` | 明示 opt-in のローカル試験専用。Actions では実行を拒否 |
+| `github-bot/.github/` | `.github/` | coding-bot 一式と workflow（prebuild は任意） |
+| `github-bot/.github/coding-bot/run-in-container.sh` | `.github/coding-bot/run-in-container.sh` | container 内の実行入口・共通 smoke |
+| `github-bot/.github/coding-bot/engines/_stub.sh` | `.github/coding-bot/engines/_stub.sh` | 明示 opt-in のローカル試験専用。Actions では実行を拒否 |
 | `github-bot/.devcontainer/` | `.devcontainer/` | Actions が使う devcontainer。**既存の devcontainer があればマージ**（上書き前に diff を確認） |
 | `github-bot/.github/workflows/devcontainer-prebuild.yml` | `.github/workflows/` | **任意。**devcontainer が重い repo 向け（下の「任意: devcontainer を毎 run 焼かない」） |
-| `github-bot/_pdh.md` | `.github/coding-robot/_pdh.md` | **PDH mode を定義する**（machinery 側には `_pdh.md` を置かない） |
-| `github-bot/_github-issue.md` | `.github/coding-robot/_github-issue.md` | gate→issue プロトコル（cloud / local 共通） |
-| `github-bot/pdh-hooks.sh` | `.github/coding-robot/pdh-hooks.sh` | runner hook。stage ラベル・承認導線・待ち行・待ち印・導入検査を、agent の申告に依らず run の終わりに保証する（`run-action.sh` が呼ぶ） |
+| `github-bot/_pdh.md` | `.github/coding-bot/_pdh.md` | **PDH mode を定義する**（machinery 側には `_pdh.md` を置かない） |
+| `github-bot/_github-issue.md` | `.github/coding-bot/_github-issue.md` | gate→issue プロトコル（cloud / local 共通） |
+| `github-bot/pdh-hooks.sh` | `.github/coding-bot/pdh-hooks.sh` | runner hook。stage ラベル・承認導線・待ち行・待ち印・導入検査を、agent の申告に依らず run の終わりに保証する（`run-action.sh` が呼ぶ） |
 | `github-bot/pdh-gh-pull/` | `.claude/skills/pdh-gh-pull/`（Codex は `.codex/skills/pdh-gh-pull/`） | 「issue 読みに行く」skill。core skill と同じ流儀で symlink する場合はそれに合わせる |
 | `github-bot/.ticket-config.snippet.yaml` の中身 | `.ticket-config.yaml` の末尾へ追記 | `github_bot:` 設定 |
 
-`.gitignore` に `current-ticket.md` / `current-note.md`（作業ビュー symlink）と `.coding-robot-notify`（run が host の step へ停止理由を渡すファイル）が無ければ足す。
+`.gitignore` に `current-ticket.md` / `current-note.md`（作業ビュー symlink）と `.coding-bot-notify`（run が host の step へ停止理由を渡すファイル）が無ければ足す。
 
 ⚠ **`scripts/checks/required-pdh-files.check` に、このレイヤーの分を足す。**core の配布物にはこのレイヤーが入っていないので、**`pdh-gh-pull` が消えても誰も検出しない。**`required_paths=` へ次の 2 つを加える（Codex CLI を使わないなら symlink の行は省く）。
 
@@ -43,7 +43,7 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 
 | 要るもの | 使う場所 | 無いとどうなるか |
 |---|---|---|
-| `claude` または `codex` | engine（`CODING_ROBOT_ENGINE` で選ぶ） | run が起動直後に失敗する |
+| `claude` または `codex` | engine（`CODING_BOT_ENGINE` で選ぶ） | run が起動直後に失敗する |
 | `gh` | `run-action.sh` と `pdh-hooks.sh`（コメント・ラベル・PR・CI） | 同上 |
 | `jq` | `run-action.sh`（トリガーの解析・API 応答） | 同上 |
 | `git` | branch・merge・push・差分 | 同上 |
@@ -51,13 +51,13 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 | **repo のテスト道具** | bot は scoped test を自分で回す | ⚠ **実装はできるのにテストが回らない run** になる。上流の既定 image は Node/TypeScript だけなので、Python・DB・ブラウザが要る repo は自分で足す |
 | ブラウザ（任意） | スクリーンショット・実 surface 検証 | 撮れない。⚠ **これは «skill の掟» ではなく «container に入っているか» で決まる**（`_github-issue.md`）。headless Chromium / Playwright を足せば cloud bot が自分で画面を確かめられる |
 
-⚠ **テンプレートの `workspaceFolder` と compose の mount は `/workspaces/project` で揃える。**既存の workspace を使う場合は `CODING_ROBOT_WORKSPACE` に同じパスを設定する。`${localWorkspaceFolderBasename}`（repo 名）へ変えると、compose 側の `/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-project}` が env 未設定で `project` へ落ちたときに食い違い、**`devcontainer exec` が «no such file or directory» で落ちる**（実測）。理由は `github-bot/ROBOT.md`。
+⚠ **テンプレートの `workspaceFolder` と compose の mount は `/workspaces/project` で揃える。**既存の workspace を使う場合は `CODING_BOT_WORKSPACE` に同じパスを設定する。`${localWorkspaceFolderBasename}`（repo 名）へ変えると、compose 側の `/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-project}` が env 未設定で `project` へ落ちたときに食い違い、**`devcontainer exec` が «no such file or directory» で落ちる**（実測）。理由は `github-bot/ROBOT.md`。
 
 確かめ方 — **導入直後に 1 回、container の中で見る。**
 
 ```bash
-docker compose -p coding-robot -f .devcontainer/docker-compose.yml up -d --build
-docker compose -p coding-robot -f .devcontainer/docker-compose.yml exec -T -u node app bash -lc \
+docker compose -p coding-bot -f .devcontainer/docker-compose.yml up -d --build
+docker compose -p coding-bot -f .devcontainer/docker-compose.yml exec -T -u node app bash -lc \
   'for c in git gh jq python3 claude codex; do printf "%-8s %s\n" "$c" "$(command -v $c || echo MISSING)"; done'
 ```
 
@@ -65,42 +65,42 @@ docker compose -p coding-robot -f .devcontainer/docker-compose.yml exec -T -u no
 
 ## 2. リポジトリ変数・secret を設定する
 
-engine を選び、その認証を入れる。**基本はサブスク（購読ログイン）で運用する** — Claude は `CLAUDE_CODE_OAUTH_TOKEN`、Codex は `CODEX_AUTH_JSON`。**API key 課金（`OPENAI_API_KEY`）は既定で使わない**（使うのは明示的に選んだときだけ）。
+engine を選び、その認証を入れる。**基本はサブスク（購読ログイン）で運用する** — Claude は `CODING_BOT_CLAUDE_OAUTH_TOKEN`、Codex は `CODING_BOT_CODEX_AUTH_JSON`。**API key 課金（`CODING_BOT_OPENAI_API_KEY`）は既定で使わない**（使うのは明示的に選んだときだけ）。
 
 ```bash
 # engine を選ぶ（claude か codex。未設定だと workflow は fail-fast する）
-gh variable set CODING_ROBOT_ENGINE --body 'claude'     # or 'codex'
+gh variable set CODING_BOT_ENGINE --body 'claude'     # or 'codex'
 
 # 1 run の上限（秒）。既定 5400（90 分）。⚠ 実装 → review → verify → PR まで通す run は
 # 70 分を超えることがあり、既定だと途中で殺される。長めに取るなら設定する
-gh variable set CODING_ROBOT_TIMEOUT --body '10800'
+gh variable set CODING_BOT_TIMEOUT --body '10800'
 ```
 
 リポジトリ変数（Settings → Secrets and variables → Actions → Variables）。既定と異なる環境だけ設定する。
 
 | 変数 | 未設定時の値 | 用途 |
 |---|---|---|
-| `CODING_ROBOT_ENGINE` | なし（必須） | `claude` / `codex` |
-| `CODING_ROBOT_TIMEOUT` | `5400` 秒 | 1 run の上限。既存の変数を継続使用 |
-| `CODING_ROBOT_RUNNER` | `ubuntu-latest` | coding-robot の runner |
-| `CODING_ROBOT_COMPOSE_PROJECT` | `coding-robot` | compose project 名 |
-| `CODING_ROBOT_COMPOSE_FILE` | `.devcontainer/docker-compose.yml` | 主 compose ファイル |
-| `CODING_ROBOT_COMPOSE_OVERRIDE` | 空（追加なし） | 重ねる compose ファイル。存在しなければ skip |
-| `CODING_ROBOT_WORKSPACE` | `/workspaces/project` | container 内の workspace。compose の mount と揃える |
-| `CODING_ROBOT_SERVICE` | `app` | agent を実行する compose service |
-| `CODING_ROBOT_USER` | `node` | container 内の実行 user |
-| `CODING_ROBOT_POST_CREATE` | 空（実行なし） | workspace 相対の bash script。存在しなければ skip |
-| `CODING_ROBOT_CI_WORKFLOW` | `ci.yml` | 失敗ログ取得・後処理で head が動いた場合の CI 起動先 |
-| `CODING_ROBOT_PROGRESS_INTERVAL` | `60` 秒 | 作業中コメントの更新間隔（生存確認は 10 秒） |
-| `CODING_ROBOT_PREBUILD_PATHS` | `.devcontainer/** .github/workflows/devcontainer-prebuild.yml .github/coding-robot/smoke-local.sh` | 空白区切りの glob。Dockerfile の COPY 元や起動 script を追加する |
-| `CLAUDE_MODEL` / `CODEX_MODEL` | engine の既定 | モデルの上書き |
+| `CODING_BOT_ENGINE` | なし（必須） | `claude` / `codex` |
+| `CODING_BOT_TIMEOUT` | `5400` 秒 | 1 run の上限。既存の変数を継続使用 |
+| `CODING_BOT_RUNNER` | `ubuntu-latest` | coding-bot の runner |
+| `CODING_BOT_COMPOSE_PROJECT` | `coding-bot` | compose project 名 |
+| `CODING_BOT_COMPOSE_FILE` | `.devcontainer/docker-compose.yml` | 主 compose ファイル |
+| `CODING_BOT_COMPOSE_OVERRIDE` | 空（追加なし） | 重ねる compose ファイル。存在しなければ skip |
+| `CODING_BOT_WORKSPACE` | `/workspaces/project` | container 内の workspace。compose の mount と揃える |
+| `CODING_BOT_SERVICE` | `app` | agent を実行する compose service |
+| `CODING_BOT_USER` | `node` | container 内の実行 user |
+| `CODING_BOT_POST_CREATE` | 空（実行なし） | workspace 相対の bash script。存在しなければ skip |
+| `CODING_BOT_CI_WORKFLOW` | `ci.yml` | 失敗ログ取得・後処理で head が動いた場合の CI 起動先 |
+| `CODING_BOT_PROGRESS_INTERVAL` | `60` 秒 | 作業中コメントの更新間隔（生存確認は 10 秒） |
+| `CODING_BOT_PREBUILD_PATHS` | `.devcontainer/** .github/workflows/devcontainer-prebuild.yml .github/coding-bot/smoke-local.sh` | 空白区切りの glob。Dockerfile の COPY 元や起動 script を追加する |
+| `CODING_BOT_CLAUDE_MODEL` / `CODING_BOT_CODEX_MODEL` | engine の既定 | モデルの上書き |
 
-`coding-robot.yml` は **docker compose で直接 container を上げる**。prebuilt image があれば
+`coding-bot.yml` は **docker compose で直接 container を上げる**。prebuilt image があれば
 `--no-build`、無ければ `--build` で起動する。devcontainer features はこの経路では適用しないため、
 必要なツールは Dockerfile に入れる。テンプレートは git / gh / jq / python3 と両 CLI を含む。
 workspace の safe.directory と所有者を整え、任意の postCreate script、agent の順に実行する。
 
-追加の環境検査は **導入先だけ**に `.github/coding-robot/smoke-local.sh` を作る。
+追加の環境検査は **導入先だけ**に `.github/coding-bot/smoke-local.sh` を作る。
 共通 smoke と prebuild の両方が、存在するときだけ `bash` で呼ぶ。ブラウザや repo の
 言語処理系の検査をここへ置く。`set -euo pipefail` で失敗を返し、外部へ書き込む処理は入れない。
 このファイルは配布・更新しない。`workflow_dispatch` の `verify_only: true` で、選んだ engine の
@@ -108,20 +108,20 @@ CLI・認証の到達、JSON の形式、共通ツール、git の読み書き�
 
 engine 別の認証 secret:
 
-- **claude**: `CLAUDE_CODE_OAUTH_TOKEN`（購読ログイン）
+- **claude**: `CODING_BOT_CLAUDE_OAUTH_TOKEN`（購読ログイン）
   ```bash
-  gh secret set CLAUDE_CODE_OAUTH_TOKEN
+  gh secret set CODING_BOT_CLAUDE_OAUTH_TOKEN
   ```
-- **codex**: `CODEX_AUTH_JSON`（ChatGPT プラン = 購読ログイン。**既定**）
+- **codex**: `CODING_BOT_CODEX_AUTH_JSON`（ChatGPT プラン = 購読ログイン。**既定**）
   ```bash
-  codex login && jq -c . ~/.codex/auth.json | gh secret set CODEX_AUTH_JSON
+  codex login && jq -c . ~/.codex/auth.json | gh secret set CODING_BOT_CODEX_AUTH_JSON
   ```
   ⚠ 同じアカウントの `auth.json` を手元の `codex` でも使うと、片方が refresh した時点でもう片方の refresh token が失効する（Actions 側が `refresh token was already used` で落ちる。smoke 実測）。落ちたら上のコマンドで secret を入れ直す。
-  `OPENAI_API_KEY`（API 課金）という別路も machinery は受け付けるが、**この運用では使わない**。サブスク運用では `OPENAI_API_KEY` secret は設定しない（workflow が空で渡すのは無害）。
+  `CODING_BOT_OPENAI_API_KEY`（API 課金）という別路も machinery は受け付けるが、**この運用では使わない**。サブスク運用では `CODING_BOT_OPENAI_API_KEY` secret は設定しない（workflow が空で渡すのは無害）。
 
 project 固有の env が要るテストがあるなら、まとめて 1 つの secret に:
 ```bash
-gh secret set ENV_JSON --body '{"SOME_API_KEY":"...","BASE_URL":"..."}'
+gh secret set CODING_BOT_ENV_JSON --body '{"SOME_API_KEY":"...","BASE_URL":"..."}'
 ```
 
 ### Actions に PR 作成を許可する
@@ -138,7 +138,7 @@ gh api repos/<owner/repo>/actions/permissions/workflow   # can_approve_pull_requ
 ラベル（次節）と合わせて、導入検査を 1 回実行して「要追加」が無いことを確かめる（bot も run の終わりに同じ検査を行い、要追加があれば最終レポートに出す）:
 
 ```bash
-bash .github/coding-robot/pdh-hooks.sh setup <owner/repo>
+bash .github/coding-bot/pdh-hooks.sh setup <owner/repo>
 ```
 
 ## 3. stage ラベルを作る
@@ -159,19 +159,19 @@ done
 
 ## 4. 使い方
 
-- Issue / PR のコメントに **🤖**（または `:robot:`）を含めると Actions が発火し、coding-robot が PDH フローで動く。
+- Issue / PR のコメントに **🤖**（または `:robot:`）を含めると Actions が発火し、coding-bot が PDH フローで動く。
 - **human gate（`PDH-ticket-human-review` / `PDH-human-review`）では bot は自己承認せず、要点を issue にコメントして停止する。** 承認は **「🤖 承認」など 🤖 を含むコメント**で再開（⚠ Actions は reaction では起動しないので 👍 だけでは動かない。👍 は任意の印）。変更希望は 🤖 付きで返信。
 - close 承認後は既定で bot が `ticket.sh close` で squash merge して issue を閉じる（PR は作らない）。PR を通したい repo は `.ticket-config.yaml` の `github_bot.close: pr`または `pr-merge`（snippet のコメント参照）。
 - 端末で issue のコメントを拾いたいときは「issue 読んで」等と言えば `pdh-gh-pull` skill が取り込む。
 
 ## 5. 更新（再同期）
 
-**coding-robot 一式は PDH が所有している**（`github-bot/ROBOT.md`）。⚠ **外部 repo との再同期はもう無い** — 2026-09-17 に github-bots からの取り込みをやめ、`github-bot/` 配下が直す場所になった。
+**coding-bot 一式は PDH が所有している**（`github-bot/ROBOT.md`）。⚠ **外部 repo との再同期はもう無い** — 2026-09-17 に github-bots からの取り込みをやめ、`github-bot/` 配下が直す場所になった。
 
 更新のときの扱いは 2 つに分かれる。
 
 - **まるごと置き換える 4 つ** — `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/`。close モードと base branch はファイルに固定せず、設定から読む。旧カスタマイズは設定へ移す。
-- ⚠ **machinery は «diff してから» 反映する** — `.github/coding-robot/system.md` `_issue.md` `_pr.md` `run-action.sh` `run-in-container.sh` `engines/` `trigger-source.sh`、`.github/workflows/coding-robot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**
+- ⚠ **machinery は «diff してから» 反映する** — `.github/coding-bot/system.md` `_issue.md` `_pr.md` `run-action.sh` `run-in-container.sh` `engines/` `trigger-source.sh`、`.github/workflows/coding-bot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**
 
 **守るのは «導入先が意図して変えた場所が、更新で黙って消えないこと» である。**⚠ **所有者が PDH に変わるまで、machinery は「この手順では触らない」ものだった**ので、導入先の書き足しは自動的に守られていた。**いまは守られない** — 名前で選んで diff する以外に守る機構は無い。
 
@@ -181,32 +181,32 @@ done
 
 **守るのは «run の大半がビルドで終わらないこと» である。**
 
-coding-robot は prebuilt が取得できない run で devcontainer をビルドする。配っている最小構成なら数分だが、⚠ **repo の開発環境をマージすると 10 分を超えることがある**（apt・言語処理系のソースビルド・ブラウザの焼き込み）。**重い層は `.devcontainer/**` が変わったときしか変わらない**ので、先に焼いて置いておける。
+coding-bot は prebuilt が取得できない run で devcontainer をビルドする。配っている最小構成なら数分だが、⚠ **repo の開発環境をマージすると 10 分を超えることがある**（apt・言語処理系のソースビルド・ブラウザの焼き込み）。**重い層は `.devcontainer/**` が変わったときしか変わらない**ので、先に焼いて置いておける。
 
 ⚠ **入れる基準は «1 run のビルドが 5 分を超えるか» である。**超えないなら入れなくてよい（workflow が 1 本増えるだけ損になる）。
 
 **3 つで 1 組である。**どれか 1 つだけでは効かない。
 
 1. **`.devcontainer/docker-compose.yml` の `image:` と `cache_from:`** — ⚠ **compose 構成では `devcontainers/ci` の `cacheFrom` は効かない。**層を実際に再利用させているのはこの 2 行で、`DEVCONTAINER_IMAGE` が空ならローカル tag へ落ちる（配布物には入っている）
-2. **`coding-robot.yml` の pull step** — 事前ビルド済み image を pull し、`DEVCONTAINER_IMAGE` として compose へ渡す。⚠ **無ければ従来どおりこの run でビルドする**ので、この節を入れていない repo でも止まらない
-3. **`devcontainer-prebuild.yml`**（この節で配置するもの）— default branch への push で変更パスを調べ、`CODING_ROBOT_PREBUILD_PATHS` に当たる場合だけビルド・publish する。週 1 の cron・手動でも実行する
+2. **`coding-bot.yml` の pull step** — 事前ビルド済み image を pull し、`DEVCONTAINER_IMAGE` として compose へ渡す。⚠ **無ければ従来どおりこの run でビルドする**ので、この節を入れていない repo でも止まらない
+3. **`devcontainer-prebuild.yml`**（この節で配置するもの）— default branch への push で変更パスを調べ、`CODING_BOT_PREBUILD_PATHS` に当たる場合だけビルド・publish する。週 1 の cron・手動でも実行する
 
 導入時に見ておくこと。
 
 - ⚠ **GHCR への publish には `packages: write` が要る**（workflow 内に宣言済み）。repo の Actions 設定が workflow token を read-only に絞っている場合は、そこを緩めるか、この節を入れない
 - ⚠ **private repo では image の pull にも認証が要る。**同じ repo の Actions からは `GITHUB_TOKEN` で引けるが、**手元から確かめるときは `docker login ghcr.io` が要る**
 - GHCR の image ref は workflow が小文字へ正規化する
-- ⚠ **Dockerfile が `COPY` するファイルがあれば、`CODING_ROBOT_PREBUILD_PATHS` に足す。**ビルドキャッシュのキーなので、挙げ忘れると «中身が変わったのに publish されない» ことになる
+- ⚠ **Dockerfile が `COPY` するファイルがあれば、`CODING_BOT_PREBUILD_PATHS` に足す。**ビルドキャッシュのキーなので、挙げ忘れると «中身が変わったのに publish されない» ことになる
 
-coding-robot の実行側では image を publish しない。publish は prebuild に集約する。
+coding-bot の実行側では image を publish しない。publish は prebuild に集約する。
 
-## 任意: 人のクリックを 1 回にする（`ATTACHMENTS_TOKEN`）
+## 任意: 人のクリックを 1 回にする（`CODING_BOT_GH_PAT`）
 
 `github_bot.close: pr-merge` を使うとき、**この secret があるかどうかで人の手数が変わる。**
 
 | | 人が押す回数 |
 |---|---|
-| `ATTACHMENTS_TOKEN` あり | **1**（Merge だけ） |
+| `CODING_BOT_GH_PAT` あり | **1**（Merge だけ） |
 | 無し | **2**（Approve and run → Merge） |
 
 ⚠ **理由**: `GITHUB_TOKEN` が作った PR / 押した push では、`pull_request` と `synchronize` の
@@ -214,34 +214,34 @@ workflow が **`action_required`（承認待ち）**になり、**人が «Appro
 人の PAT で作れば作者・push 主が人になるので、**CI は自動で走る。**
 
 ```bash
-gh secret set ATTACHMENTS_TOKEN --repo <owner>/<repo>
+gh secret set CODING_BOT_GH_PAT --repo <owner>/<repo>
 ```
 
-⚠ **この token は Issue の添付ファイル取得にも使われる**（`GITHUB_TOKEN` では取れない既知制約）。
-⚠ **repo scope の classic PAT を admin が発行すると、default branch の保護を bypass できる資格が
-agent の環境に入ることになる。**読み取りだけで足りるなら、**権限を絞った token を使うこと。**
+[fine-grained PAT の作成画面](https://github.com/settings/personal-access-tokens)で、対象を導入先 repo だけに限定し、名前と期限を記録して登録する。Contents / Pull requests を Read and write にする。workflow を変更する push には Workflows の Read and write も要る。下記の一時 workflow で secret をコピーする間は Secrets の Read and write も要る（別の仕組みが token の書き戻しに借りる場合は継続して必要）。
 
-## 任意: 止まったことを外へ知らせる（`DEVBOT_NOTIFY_URL`）
+画像は bodyHTML の署名付き URL から認証なしで取得する。**画像以外の添付は読まない。**`user-attachments/files` は fine-grained PAT では 404 になり、取得には repo を限れない token が要るため、中身を本文へ貼るよう依頼者に頼む。
+
+## 任意: 止まったことを外へ知らせる（`CODING_BOT_NOTIFY_URL`）
 
 **守るのは «依頼した人が GitHub を見に行かなくても、自分の番だと分かること» である。**
 Slack などから issue を起票する仕組み（以下 devbot）がある repo では、bot が人を待って止まったときに
 その受け口へ «どの issue が・なぜ止まったか・理由を書いたコメントはどれか» を送れる。
 
 ```bash
-gh variable set DEVBOT_NOTIFY_URL --body 'https://<受け口のホスト>'   # 空（未設定）なら何も送らない
-gh secret set DEVBOT_NOTIFY_SECRET                                     # 受け口と共有する署名の秘密
+gh variable set CODING_BOT_NOTIFY_URL --body 'https://<受け口のホスト>'   # 空（未設定）なら何も送らない
+gh secret set CODING_BOT_NOTIFY_SECRET                                     # 受け口と共有する署名の秘密
 ```
 
-送るのは `.github/workflows/coding-robot.yml` の最後の step（`Tell devbot why the run stopped`）で、
+送るのは `.github/workflows/coding-bot.yml` の最後の step（`Tell devbot why the run stopped`）で、
 **Actions の host 側で動く。**⚠ **この 2 つを devcontainer の env に足してはならない** — agent は
 `run-action.sh` と同じ container で動くので、足すと agent から読める。
 ⚠ **送信 step が実行するのは default branch の `notify-devbot.sh` である**（Checkout 直後に git から `$RUNNER_TEMP` へ退避する）。agent は作業 branch の script を書き換えられるので、workspace の版を秘密付きで走らせない。`issue` も host がイベント（PR なら head branch の `agent/issue-<N>`）から決め、run が書いたファイルの値と合わなければ送らない。
 
 ```
-POST ${DEVBOT_NOTIFY_URL}/hooks/robot
-User-Agent: coding-robot-notify/1
+POST ${CODING_BOT_NOTIFY_URL}/hooks/robot
+User-Agent: coding-bot-notify/1
 X-Devbot-Timestamp: <unix 秒>
-X-Devbot-Signature: v1=<hex(HMAC-SHA256(DEVBOT_NOTIFY_SECRET, "v1:<timestamp>:<body>"))>
+X-Devbot-Signature: v1=<hex(HMAC-SHA256(CODING_BOT_NOTIFY_SECRET, "v1:<timestamp>:<body>"))>
 
 {"issue": 127, "kind": "ticket_gate", "stage": "PDH-ticket-human-review", "comment_id": 5815102464, "pr": 128, "run_url": "https://github.com/..."}
 ```
@@ -258,7 +258,7 @@ X-Devbot-Signature: v1=<hex(HMAC-SHA256(DEVBOT_NOTIFY_SECRET, "v1:<timestamp>:<b
 ⚠ **送信に失敗しても run の結果は変わらない。**同じ知らせが 2 回届いてもよいように、受け口は `(issue, kind, comment_id)` で重複を捨てる前提で作る。
 PDH mode でない repo では `failed` だけが送られる。
 
-deploy の結果も知らせたいなら、deploy の workflow から同じ script（`.github/coding-robot/notify-devbot.sh <issue> deployed|deploy_failed …`）を呼ぶ。
+deploy の結果も知らせたいなら、deploy の workflow から同じ script（`.github/coding-bot/notify-devbot.sh <issue> deployed|deploy_failed …`）を呼ぶ。
 
 ## 任意: CI の緑を待たずに承認する（auto-merge）
 
@@ -301,7 +301,7 @@ jobs:
 ## 任意: Actions の runner を Blacksmith にする
 
 **Blacksmith（blacksmith.sh）は、GitHub Actions の job を外部の VM で走らせる runner のサービスである。**
-bot に投げる Issue の本数が増えると、`coding-robot.yml` と CI の分数が比例して増える
+bot に投げる Issue の本数が増えると、`coding-bot.yml` と CI の分数が比例して増える
 （実測の一例で Issue 1 本 約 240 分）。単価の安い runner に移すと、その費用が下がる
 （2026-09-25 時点: GitHub Linux 2-core $0.006/分、Blacksmith 2 vCPU $0.004/分。どちらも 3,000 分/月 の無料枠）。
 
@@ -313,12 +313,12 @@ jobs:
 
 移す前に、次を判断すること。
 
-- ⚠ **その job の secret は Blacksmith の VM に渡る。**`coding-robot.yml` なら `ATTACHMENTS_TOKEN`（contents の書き込みを持ちうる）や engine の認証が渡る。渡してよいかを先に決める。**本番の deploy（クラウドの認証を持つ job）は GitHub の runner に残す**のが安全
-- ⚠ **Blacksmith の GitHub App の installation は、対象の repo を選ぶ方式にできる。**repo が選ばれていないと、job は runner を得られず **queued のまま**（24 時間で失敗）になる。必須チェックなら全 PR が止まり、`coding-robot.yml` なら bot が動かない。👀 も «結果を残さずに終わりました» も付かない（どちらも job の中の step なので、job が始まらないと走らない）。**移したら、1 本走ることを確かめる**
+- ⚠ **その job の secret は Blacksmith の VM に渡る。**`coding-bot.yml` なら `CODING_BOT_GH_PAT`（contents の書き込みを持ちうる）や engine の認証が渡る。渡してよいかを先に決める。**本番の deploy（クラウドの認証を持つ job）は GitHub の runner に残す**のが安全
+- ⚠ **Blacksmith の GitHub App の installation は、対象の repo を選ぶ方式にできる。**repo が選ばれていないと、job は runner を得られず **queued のまま**（24 時間で失敗）になる。必須チェックなら全 PR が止まり、`coding-bot.yml` なら bot が動かない。👀 も «結果を残さずに終わりました» も付かない（どちらも job の中の step なので、job が始まらないと走らない）。**移したら、1 本走ることを確かめる**
 - ⚠ **GitHub から見ると self-hosted の runner で、`RUNNER_ENVIRONMENT=self-hosted` になる。**この値で既定を切り替える action がある（例: `astral-sh/setup-uv` の `enable-cache: auto` は `github-hosted` のときだけ cache を有効にする）。そういう action は設定を明示する
 - ⚠ **`actions/cache` は Blacksmith の cache に保存され、GitHub の cache とは共有されない。**移した直後の run は cache miss になる
 - ⚠ **vCPU に比例して課金される。**4 vCPU の label にすると 1 分の単価が 2 倍になる。テストの並列度を `nproc` から決めている repo では、vCPU を増やすと速くなる代わりに単価も上がる
-- `coding-robot.yml` の devcontainer（`docker compose`）は Blacksmith の Ubuntu 24.04 image でも動く（GitHub の runner image と同じ software を入れる、と Blacksmith の docs にある）。workspace の所有者を job の中で揃えている場合は、runner の uid に依存しない
+- `coding-bot.yml` の devcontainer（`docker compose`）は Blacksmith の Ubuntu 24.04 image でも動く（GitHub の runner image と同じ software を入れる、と Blacksmith の docs にある）。workspace の所有者を job の中で揃えている場合は、runner の uid に依存しない
 
 ## 必要なラベル
 
@@ -374,7 +374,7 @@ on:
 **赤に気づくのが PR 作成まで遅れる。**
 
 ⚠ **bot 側が CI を明示起動する経路もある**（`run-action.sh`。engine が終わったあとに machinery が
-commit したとき）。⚠ **`ATTACHMENTS_TOKEN` があるときは起動しない** — PAT の push は `push` と
+commit したとき）。⚠ **`CODING_BOT_GH_PAT` があるときは起動しない** — PAT の push は `push` と
 `pull_request` の run を普通に立てるので、そこで起動すると **3 本目**になる。
 
 ## default branch の保護（`pr-merge` を使う場合）
@@ -389,7 +389,7 @@ commit したとき）。⚠ **`ATTACHMENTS_TOKEN` があるときは起動し�
 ## 既知の移行手順: 共有版の compose 起動へ移す
 
 1. 既存 workflow の project・workspace・service・user・追加 compose・postCreate を上の変数へ移す。
-2. repo 固有の smoke を `smoke-local.sh` に移し、prebuild の追加入力を `CODING_ROBOT_PREBUILD_PATHS` に設定する。
+2. repo 固有の smoke を `smoke-local.sh` に移し、prebuild の追加入力を `CODING_BOT_PREBUILD_PATHS` に設定する。
 3. `.ticket-config.yaml` の `github_bot.close` を確認する。未設定は `merge`、`pr` は次の 🤖、`pr-merge` だけが finalize で Issue を閉じる。新しい設定キーは不要。
 4. `pr-merge` でフルスイートを 1 回にするには既存 CI で draft を skip し、`pull_request.types` に `ready_for_review` を含める。PR の head SHA に必須チェックが付くことを確認する。
 5. テンプレート由来の Dockerfile に git / gh / jq / python3 が含まれるか確認する。features の導入だけでは compose 直接起動に足りない。
@@ -400,20 +400,20 @@ commit したとき）。⚠ **`ATTACHMENTS_TOKEN` があるときは起動し�
 gh variable list --repo <owner/repo>
 rg -n 'github_bot:|create_issue:|pr_link:|close:' .ticket-config.yaml
 rg -n 'git gh jq python3' .devcontainer/Dockerfile
-bash -n .github/coding-robot/run-in-container.sh
-if [ -f .github/coding-robot/smoke-local.sh ]; then bash -n .github/coding-robot/smoke-local.sh; fi
+bash -n .github/coding-bot/run-in-container.sh
+if [ -f .github/coding-bot/smoke-local.sh ]; then bash -n .github/coding-bot/smoke-local.sh; fi
 ```
 
 PR 起点の run は同じ repo の `agent/issue-<N>` で、N が実在の Issue であることを要求する。
 任意の手作業 branch の PR は拒否理由をコメントして正常終了する。依頼は元の Issue へ戻す。
 
-## 既知の移行手順: 導入先固有の secret を `ENV_JSON` へ移す（2026-09-27 以降）
+## 既知の移行手順: 導入先固有の secret を `CODING_BOT_ENV_JSON` へ移す（2026-09-27 以降）
 
-`coding-robot.yml` は `HANGAR_TOKEN` / `FIREBASE_TOKEN` を個別の secret として container へ渡していたが、汎用の workflow から外した。repo 固有の値は `ENV_JSON` に入れる（`run-action.sh` がキーごとに環境変数として export する）。
+`coding-bot.yml` は `HANGAR_TOKEN` / `FIREBASE_TOKEN` を個別の secret として container へ渡していたが、汎用の workflow から外した。repo 固有の値は `CODING_BOT_ENV_JSON` に入れる（`run-action.sh` がキーごとに環境変数として export する）。
 
 ```bash
 gh secret list --repo <owner/repo> | grep -E 'HANGAR_TOKEN|FIREBASE_TOKEN' && echo "要移行" || echo "該当なし"
 ```
 
-「要移行」なら、2 つの値を `ENV_JSON` の JSON に足して登録し直す（例 `gh secret set ENV_JSON --body '{"HANGAR_TOKEN":"…","FIREBASE_TOKEN":"…"}'`。既に `ENV_JSON` があるなら、そのキーも残す）。そのうえで workflow を更新する。
+「要移行」なら、2 つの値を `CODING_BOT_ENV_JSON` の JSON に足して登録し直す（例 `gh secret set CODING_BOT_ENV_JSON --body '{"HANGAR_TOKEN":"…","FIREBASE_TOKEN":"…"}'`。既に `CODING_BOT_ENV_JSON` があるなら、そのキーも残す）。そのうえで workflow を更新する。
 

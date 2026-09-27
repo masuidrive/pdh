@@ -1,17 +1,17 @@
 name: Devcontainer Prebuild
 
-# coding-robot が使う devcontainer image を先に焼いて GHCR へ置く。
+# coding-bot が使う devcontainer image を先に焼いて GHCR へ置く。
 #
-# ⚠ **なぜ要るのか。**coding-robot は毎 run で devcontainer をビルドする。軽い image なら
+# ⚠ **なぜ要るのか。**coding-bot は毎 run で devcontainer をビルドする。軽い image なら
 # 数分で済むが、repo の開発環境（apt・言語処理系のソースビルド・ブラウザの焼き込み）が
 # 入ると 10 分を超え、run の大半がビルドになる。⚠ **重い層は `.devcontainer/**` が
-# 変わったときしか変わらない**ので、ここで 1 回焼いて coding-robot は pull するだけにする。
+# 変わったときしか変わらない**ので、ここで 1 回焼いて coding-bot は pull するだけにする。
 #
 # ⚠ **compose 構成では devcontainers/ci の cacheFrom は効かない。**実際に層を再利用させて
 # いるのは docker-compose.yml の `image:` と `cache_from:` である（この 2 つが無いと、
-# 事前ビルドしても coding-robot 側は作り直す）。
+# 事前ビルドしても coding-bot 側は作り直す）。
 #
-# ⚠ **この workflow は任意である。**入れなくても coding-robot は動く（毎 run ビルドする）。
+# ⚠ **この workflow は任意である。**入れなくても coding-bot は動く（毎 run ビルドする）。
 # 入れる基準は «devcontainer が重いか» で、目安は 1 run のビルドが 5 分を超えるとき。
 
 on:
@@ -46,7 +46,7 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
-          IMAGE_PATHS: ${{ vars.CODING_ROBOT_PREBUILD_PATHS || '.devcontainer/** .github/workflows/devcontainer-prebuild.yml .github/coding-robot/smoke-local.sh' }}
+          IMAGE_PATHS: ${{ vars.CODING_BOT_PREBUILD_PATHS || '.devcontainer/** .github/workflows/devcontainer-prebuild.yml .github/coding-bot/smoke-local.sh' }}
         run: |
           set -euo pipefail
           build=false
@@ -77,7 +77,7 @@ jobs:
         uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca # v0.3.1900000450
         env:
           # ⚠ compose の image: / cache_from: と同じ ref を指す。ずれると «焼いた image と
-          # 使う image が別» になり、coding-robot 側が作り直す。
+          # 使う image が別» になり、coding-bot 側が作り直す。
           DEVCONTAINER_IMAGE: ${{ steps.inputs.outputs.image }}:latest
         with:
           configFile: .devcontainer/devcontainer.json
@@ -96,5 +96,5 @@ jobs:
             done
             command -v claude >/dev/null || command -v codex >/dev/null || {
               echo "MISSING: neither claude nor codex"; exit 1; }
-            if [ -f .github/coding-robot/smoke-local.sh ]; then bash .github/coding-robot/smoke-local.sh; fi
+            if [ -f .github/coding-bot/smoke-local.sh ]; then bash .github/coding-bot/smoke-local.sh; fi
             echo "prebuilt image: toolchain ok"

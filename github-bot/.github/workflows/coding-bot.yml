@@ -1,4 +1,4 @@
-name: Coding Robot
+name: coding-bot
 
 on:
   issue_comment:
@@ -28,7 +28,7 @@ on:
 # cancel-in-progress: false — 走っている方を殺さず、次を待たせる。人の 🤖 コメントは
 # «前の作業を捨てて» の意味ではないため。
 concurrency:
-  group: coding-robot-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  group: coding-bot-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: false
 
 # ⚠ 使う action は commit SHA で固定する。tag（@v5 等）は動かせるので、同じ workflow が
@@ -42,23 +42,23 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' || (
       github.event.sender.type != 'Bot' &&
-      !contains(github.event.comment.body || '', '<!-- coding-robot -->') &&
-      !contains(github.event.review.body || '', '<!-- coding-robot -->') && (
+      !contains(github.event.comment.body || '', '<!-- coding-bot -->') &&
+      !contains(github.event.review.body || '', '<!-- coding-bot -->') && (
       (github.event_name == 'issue_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||
       (github.event_name == 'pull_request_review_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||
       (github.event_name == 'pull_request_review' && (contains(github.event.review.body, ':robot:') || contains(github.event.review.body, '🤖'))) ||
-      (github.event_name == 'issues' && !contains(github.event.issue.body || '', '<!-- coding-robot -->') && (contains(github.event.issue.body, ':robot:') || contains(github.event.issue.body, '🤖') || contains(github.event.issue.title, ':robot:') || contains(github.event.issue.title, '🤖')))
+      (github.event_name == 'issues' && !contains(github.event.issue.body || '', '<!-- coding-bot -->') && (contains(github.event.issue.body, ':robot:') || contains(github.event.issue.body, '🤖') || contains(github.event.issue.title, ':robot:') || contains(github.event.issue.title, '🤖')))
       ))
 
-    runs-on: ${{ vars.CODING_ROBOT_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CODING_BOT_RUNNER || 'ubuntu-latest' }}
     env:
-      CODING_ROBOT_COMPOSE_PROJECT: ${{ vars.CODING_ROBOT_COMPOSE_PROJECT || 'coding-robot' }}
-      CODING_ROBOT_COMPOSE_FILE: ${{ vars.CODING_ROBOT_COMPOSE_FILE || '.devcontainer/docker-compose.yml' }}
-      CODING_ROBOT_COMPOSE_OVERRIDE: ${{ vars.CODING_ROBOT_COMPOSE_OVERRIDE || '' }}
-      CODING_ROBOT_WORKSPACE: ${{ vars.CODING_ROBOT_WORKSPACE || '/workspaces/project' }}
-      CODING_ROBOT_SERVICE: ${{ vars.CODING_ROBOT_SERVICE || 'app' }}
-      CODING_ROBOT_USER: ${{ vars.CODING_ROBOT_USER || 'node' }}
-      CODING_ROBOT_POST_CREATE: ${{ vars.CODING_ROBOT_POST_CREATE || '' }}
+      CODING_BOT_COMPOSE_PROJECT: ${{ vars.CODING_BOT_COMPOSE_PROJECT || 'coding-bot' }}
+      CODING_BOT_COMPOSE_FILE: ${{ vars.CODING_BOT_COMPOSE_FILE || '.devcontainer/docker-compose.yml' }}
+      CODING_BOT_COMPOSE_OVERRIDE: ${{ vars.CODING_BOT_COMPOSE_OVERRIDE || '' }}
+      CODING_BOT_WORKSPACE: ${{ vars.CODING_BOT_WORKSPACE || '/workspaces/project' }}
+      CODING_BOT_SERVICE: ${{ vars.CODING_BOT_SERVICE || 'app' }}
+      CODING_BOT_USER: ${{ vars.CODING_BOT_USER || 'node' }}
+      CODING_BOT_POST_CREATE: ${{ vars.CODING_BOT_POST_CREATE || '' }}
     permissions:
       contents: write
       pull-requests: write
@@ -102,7 +102,7 @@ jobs:
       # container に mount されない場所へ、default branch の版を git から直接退避する。
       - name: Preserve devbot notifier on host
         run: |
-          if git show "origin/${{ github.event.repository.default_branch }}:.github/coding-robot/notify-devbot.sh" > "$RUNNER_TEMP/notify-devbot.sh"; then
+          if git show "origin/${{ github.event.repository.default_branch }}:.github/coding-bot/notify-devbot.sh" > "$RUNNER_TEMP/notify-devbot.sh"; then
             chmod 0755 "$RUNNER_TEMP/notify-devbot.sh" || echo "Warning: 通知 script を実行可能にできない"
           else
             rm -f "$RUNNER_TEMP/notify-devbot.sh" || true
@@ -143,9 +143,9 @@ jobs:
           DEVCONTAINER_IMAGE: ${{ steps.prebuilt.outputs.image }}
         run: |
           set -euo pipefail
-          compose_args=(-p "$CODING_ROBOT_COMPOSE_PROJECT" -f "$CODING_ROBOT_COMPOSE_FILE")
-          if [ -n "$CODING_ROBOT_COMPOSE_OVERRIDE" ] && [ -f "$CODING_ROBOT_COMPOSE_OVERRIDE" ]; then
-            compose_args+=(-f "$CODING_ROBOT_COMPOSE_OVERRIDE")
+          compose_args=(-p "$CODING_BOT_COMPOSE_PROJECT" -f "$CODING_BOT_COMPOSE_FILE")
+          if [ -n "$CODING_BOT_COMPOSE_OVERRIDE" ] && [ -f "$CODING_BOT_COMPOSE_OVERRIDE" ]; then
+            compose_args+=(-f "$CODING_BOT_COMPOSE_OVERRIDE")
           fi
           # 後続の exec でも同じ image ref を使う。
           echo "DEVCONTAINER_IMAGE=$DEVCONTAINER_IMAGE" >> "$GITHUB_ENV"
@@ -155,82 +155,82 @@ jobs:
             docker compose "${compose_args[@]}" up -d --build
           fi
           docker compose "${compose_args[@]}" ps
-          docker compose "${compose_args[@]}" exec -T -u "$CODING_ROBOT_USER" "$CODING_ROBOT_SERVICE" \
-            git config --global --add safe.directory "$CODING_ROBOT_WORKSPACE"
+          docker compose "${compose_args[@]}" exec -T -u "$CODING_BOT_USER" "$CODING_BOT_SERVICE" \
+            git config --global --add safe.directory "$CODING_BOT_WORKSPACE"
           # checkout は使い捨て。所有者チェックと .git への書き込み権限の両方を整える。
-          docker compose "${compose_args[@]}" exec -T -u root "$CODING_ROBOT_SERVICE" \
-            chown -R "$CODING_ROBOT_USER" "$CODING_ROBOT_WORKSPACE"
+          docker compose "${compose_args[@]}" exec -T -u root "$CODING_BOT_SERVICE" \
+            chown -R "$CODING_BOT_USER" "$CODING_BOT_WORKSPACE"
 
       - name: Run postCreateCommand
         run: |
           set -euo pipefail
-          compose_args=(-p "$CODING_ROBOT_COMPOSE_PROJECT" -f "$CODING_ROBOT_COMPOSE_FILE")
-          if [ -n "$CODING_ROBOT_COMPOSE_OVERRIDE" ] && [ -f "$CODING_ROBOT_COMPOSE_OVERRIDE" ]; then
-            compose_args+=(-f "$CODING_ROBOT_COMPOSE_OVERRIDE")
+          compose_args=(-p "$CODING_BOT_COMPOSE_PROJECT" -f "$CODING_BOT_COMPOSE_FILE")
+          if [ -n "$CODING_BOT_COMPOSE_OVERRIDE" ] && [ -f "$CODING_BOT_COMPOSE_OVERRIDE" ]; then
+            compose_args+=(-f "$CODING_BOT_COMPOSE_OVERRIDE")
           fi
           # 任意の script path。テンプレートでは追加処理を要求しない。
-          if [ -n "$CODING_ROBOT_POST_CREATE" ]; then
-            docker compose "${compose_args[@]}" exec -T -u "$CODING_ROBOT_USER" \
-              -w "$CODING_ROBOT_WORKSPACE" "$CODING_ROBOT_SERVICE" \
+          if [ -n "$CODING_BOT_POST_CREATE" ]; then
+            docker compose "${compose_args[@]}" exec -T -u "$CODING_BOT_USER" \
+              -w "$CODING_BOT_WORKSPACE" "$CODING_BOT_SERVICE" \
               bash -c 'if [ -f "$1" ]; then bash "$1"; else echo "postCreate script absent; skipped: $1"; fi' \
-              bash "$CODING_ROBOT_POST_CREATE"
+              bash "$CODING_BOT_POST_CREATE"
           fi
 
       # ステップ5: agent（または verify_only の smoke）を container の中で走らせる
       # ⚠ 環境変数は -e で 1 つずつ渡す。file へ書くと secret が container の FS に残る。
-      #   中身は .github/coding-robot/run-in-container.sh にある（元は runCmd: の inline）。
+      #   中身は .github/coding-bot/run-in-container.sh にある（元は runCmd: の inline）。
       - name: Run Agent
         id: run_claude
         # secret は env から値なしの -e で渡し、shell の引用と command line への露出を避ける。
         env:
-          CODING_ROBOT_ENGINE: ${{ vars.CODING_ROBOT_ENGINE }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          CODEX_MODEL: ${{ vars.CODEX_MODEL }}
-          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+          CODING_BOT_ENGINE: ${{ vars.CODING_BOT_ENGINE }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CODING_BOT_CLAUDE_OAUTH_TOKEN }}
+          CODING_BOT_CODEX_AUTH_JSON: ${{ secrets.CODING_BOT_CODEX_AUTH_JSON }}
+          OPENAI_API_KEY: ${{ secrets.CODING_BOT_OPENAI_API_KEY }}
+          CODING_BOT_CODEX_MODEL: ${{ vars.CODING_BOT_CODEX_MODEL }}
+          CODING_BOT_CLAUDE_MODEL: ${{ vars.CODING_BOT_CLAUDE_MODEL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ATTACHMENTS_TOKEN: ${{ secrets.ATTACHMENTS_TOKEN }}
-          ENV_JSON: ${{ secrets.ENV_JSON }}
+          CODING_BOT_GH_PAT: ${{ secrets.CODING_BOT_GH_PAT }}
+          CODING_BOT_ENV_JSON: ${{ secrets.CODING_BOT_ENV_JSON }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
           EVENT_TYPE: ${{ github.event_name }}
           COMMENT_ID: ${{ github.event.comment.id || github.event.review.id }}
           DEVCONTAINER_CONFIG_PATH: .devcontainer/devcontainer.json
-          CODING_ROBOT_CI_WORKFLOW: ${{ vars.CODING_ROBOT_CI_WORKFLOW || 'ci.yml' }}
-          PROGRESS_UPDATE_INTERVAL: ${{ vars.CODING_ROBOT_PROGRESS_INTERVAL || 60 }}
-          CLAUDE_TIMEOUT: ${{ vars.CODING_ROBOT_TIMEOUT || 5400 }}
+          CODING_BOT_CI_WORKFLOW: ${{ vars.CODING_BOT_CI_WORKFLOW || 'ci.yml' }}
+          CODING_BOT_PROGRESS_INTERVAL: ${{ vars.CODING_BOT_PROGRESS_INTERVAL || 60 }}
+          CODING_BOT_TIMEOUT: ${{ vars.CODING_BOT_TIMEOUT || 5400 }}
           VERIFY_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_only && 'true' || '' }}
         run: |
           set -euo pipefail
-          compose_args=(-p "$CODING_ROBOT_COMPOSE_PROJECT" -f "$CODING_ROBOT_COMPOSE_FILE")
-          if [ -n "$CODING_ROBOT_COMPOSE_OVERRIDE" ] && [ -f "$CODING_ROBOT_COMPOSE_OVERRIDE" ]; then
-            compose_args+=(-f "$CODING_ROBOT_COMPOSE_OVERRIDE")
+          compose_args=(-p "$CODING_BOT_COMPOSE_PROJECT" -f "$CODING_BOT_COMPOSE_FILE")
+          if [ -n "$CODING_BOT_COMPOSE_OVERRIDE" ] && [ -f "$CODING_BOT_COMPOSE_OVERRIDE" ]; then
+            compose_args+=(-f "$CODING_BOT_COMPOSE_OVERRIDE")
           fi
           docker compose "${compose_args[@]}" \
-            exec -T -u "$CODING_ROBOT_USER" -w "$CODING_ROBOT_WORKSPACE" \
-            -e CODING_ROBOT_ENGINE \
-            -e CODING_ROBOT_WORKSPACE \
-            -e CODING_ROBOT_CI_WORKFLOW \
-            -e PROGRESS_UPDATE_INTERVAL \
+            exec -T -u "$CODING_BOT_USER" -w "$CODING_BOT_WORKSPACE" \
+            -e CODING_BOT_ENGINE \
+            -e CODING_BOT_WORKSPACE \
+            -e CODING_BOT_CI_WORKFLOW \
+            -e CODING_BOT_PROGRESS_INTERVAL \
             -e CLAUDE_CODE_OAUTH_TOKEN \
-            -e CODEX_AUTH_JSON \
+            -e CODING_BOT_CODEX_AUTH_JSON \
             -e OPENAI_API_KEY \
-            -e CODEX_MODEL \
-            -e CLAUDE_MODEL \
+            -e CODING_BOT_CODEX_MODEL \
+            -e CODING_BOT_CLAUDE_MODEL \
             -e GITHUB_TOKEN \
-            -e ATTACHMENTS_TOKEN \
-            -e ENV_JSON \
+            -e CODING_BOT_GH_PAT \
+            -e CODING_BOT_ENV_JSON \
             -e GITHUB_REPOSITORY \
             -e GITHUB_RUN_ID \
             -e ISSUE_NUMBER \
             -e EVENT_TYPE \
             -e COMMENT_ID \
             -e DEVCONTAINER_CONFIG_PATH \
-            -e CLAUDE_TIMEOUT \
+            -e CODING_BOT_TIMEOUT \
             -e VERIFY_ONLY \
-            "$CODING_ROBOT_SERVICE" bash .github/coding-robot/run-in-container.sh
+            "$CODING_BOT_SERVICE" bash .github/coding-bot/run-in-container.sh
 
       # エラー時の処理: 👀 を削除して 😟 を追加
       - name: Handle error - Remove eyes and add confused reaction
@@ -324,7 +324,7 @@ jobs:
       # だから workflow の層に置き、if: always() で必ず通す。
       #
       # ⚠ 二重投稿を避けるため、run-action.sh が最終レポートを投稿したら
-      # $GITHUB_WORKSPACE/.coding-robot-reported を置く。この step はそれが在れば何もしない。
+      # $GITHUB_WORKSPACE/.coding-bot-reported を置く。この step はそれが在れば何もしない。
       - name: Report if the run left nothing
         if: always()
         env:
@@ -340,7 +340,7 @@ jobs:
           if [ -z "${ISSUE:-}" ]; then
             echo "issue 番号が取れない（workflow_dispatch など）。何もしない"; exit 0
           fi
-          if [ -f "$GITHUB_WORKSPACE/.coding-robot-reported" ]; then
+          if [ -f "$GITHUB_WORKSPACE/.coding-bot-reported" ]; then
             echo "run-action.sh が最終レポートを投稿済み。何もしない"; exit 0
           fi
           echo "最終レポートが投稿されていない（job.status=${CONCLUSION}）。1 行残す"
@@ -349,14 +349,14 @@ jobs:
             "実行そのものが途中で落ちたため、何をしたかの報告がありません。作業は進んでいません。" \
             "何が起きたか: [実行ログ]($RUN_URL)" \
             "もう一度やらせるには: このスレッドに 🤖 を付けてコメントしてください" \
-            "<!-- coding-robot -->")
+            "<!-- coding-bot -->")
           if COMMENT_URL=$(gh issue comment "$ISSUE" --repo "$REPO" --body "$BODY"); then
             # ⚠ fallback が実際に残したコメントへ通知を結び付ける。
             CID="${COMMENT_URL##*#issuecomment-}"
             [[ "$CID" =~ ^[0-9]+$ ]] || CID=""
             if [ -n "$TRUSTED_ISSUE" ]; then
               printf 'issue=%s\nkind=failed\ncomment_id=%s\npr=%s\n' "$TRUSTED_ISSUE" "$CID" "$TRUSTED_PR" \
-                > "$GITHUB_WORKSPACE/.coding-robot-notify" || true
+                > "$GITHUB_WORKSPACE/.coding-bot-notify" || true
             fi
           else
             echo "Warning: failed to post the fallback report"
@@ -375,16 +375,16 @@ jobs:
         env:
           TRUSTED_ISSUE: ${{ steps.notification_context.outputs.issue }}
           TRUSTED_PR: ${{ steps.notification_context.outputs.pr }}
-          DEVBOT_NOTIFY_URL: ${{ vars.DEVBOT_NOTIFY_URL }}
+          CODING_BOT_NOTIFY_URL: ${{ vars.CODING_BOT_NOTIFY_URL }}
           # 未設定なら送らない（INSTALL.md「任意: 止まったことを外へ知らせる」）
-          DEVBOT_NOTIFY_SECRET: ${{ secrets.DEVBOT_NOTIFY_SECRET }}
+          CODING_BOT_NOTIFY_SECRET: ${{ secrets.CODING_BOT_NOTIFY_SECRET }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set +e
-          if [ -z "${DEVBOT_NOTIFY_URL:-}" ]; then
+          if [ -z "${CODING_BOT_NOTIFY_URL:-}" ]; then
             echo "devbot URL 未設定。送信しない"; exit 0
           fi
-          if [ ! -f "$GITHUB_WORKSPACE/.coding-robot-notify" ]; then
+          if [ ! -f "$GITHUB_WORKSPACE/.coding-bot-notify" ]; then
             echo "人を待っていない。送信しない"; exit 0
           fi
           if [ ! -x "$RUNNER_TEMP/notify-devbot.sh" ]; then
@@ -400,7 +400,7 @@ jobs:
               comment_id) comment_id="$value" ;;
               pr) pr="$value" ;;
             esac
-          done < "$GITHUB_WORKSPACE/.coding-robot-notify"
+          done < "$GITHUB_WORKSPACE/.coding-bot-notify"
           if [ -z "$TRUSTED_ISSUE" ] || [ "$issue" != "$TRUSTED_ISSUE" ]; then
             echo "Warning: 通知ファイルの issue が確認済みの依頼 issue と一致しない。送信しない"
             exit 0

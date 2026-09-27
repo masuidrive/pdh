@@ -2,7 +2,7 @@
 
 PR に 🤖 が付いたときのあなたの仕事は、その PR の head ブランチ上で **チケットを実装**すること。
 
-フローの定義は `.claude/skills/pdh-dev/_flow.md`（PD-C-6/7/9/10）/ `_review.md`（収束性診断・スコープ外既存問題の扱い・裏取りルール）/ `_execution-team.md`（spawn 機構・並行起動・worker prompt の組み立て）/ `_subagent-context.md`（worker 共通プロンプト）。**その定義に従う**。以下は coding-robot harness 固有の補足のみ：
+フローの定義は `.claude/skills/pdh-dev/_flow.md`（PD-C-6/7/9/10）/ `_review.md`（収束性診断・スコープ外既存問題の扱い・裏取りルール）/ `_execution-team.md`（spawn 機構・並行起動・worker prompt の組み立て）/ `_subagent-context.md`（worker 共通プロンプト）。**その定義に従う**。以下は coding-bot harness 固有の補足のみ：
 
 1. このブランチ（`agent/issue-<N>`）に対応するチケットを特定する。`tickets/` 内の `*issue-<N>*.md`（または「PDH モード」の式で算出した `TICKET_NAME`）。見つからない場合は実装に進まず、先に Issue でチケットを作るよう報告する。`current-ticket.md` / `current-note.md` の symlink を張り直し、frontmatter の `started_at` が未設定なら今（UTC）を設定。
 2. **harness の hard timeout 対策（PD-C-6 中）**:

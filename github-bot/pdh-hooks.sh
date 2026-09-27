@@ -99,7 +99,7 @@ ac_progress_block() {
 
 # ⚠ host へ渡すのはデータだけ。ローカル実行では通知先ファイルを作らない。
 write_notify() {  # issue kind stage comment_id pr
-  [ -n "${CODING_ROBOT_NOTIFY_FILE:-}" ] || return 0
+  [ -n "${CODING_BOT_NOTIFY_FILE:-}" ] || return 0
   local key value
   {
     for key in issue kind stage comment_id pr; do
@@ -107,7 +107,7 @@ write_notify() {  # issue kind stage comment_id pr
       value="${value//$'\n'/}"; value="${value//$'\r'/}"; value="${value//=/}"
       printf '%s=%s\n' "$key" "$value"
     done
-  } > "$CODING_ROBOT_NOTIFY_FILE" || log '通知ファイルを書けない（続行）'
+  } > "$CODING_BOT_NOTIFY_FILE" || log '通知ファイルを書けない（続行）'
 }
 
 read_status() {
@@ -206,7 +206,7 @@ fi
 # --- 2. 承認導線 ---
 # close gate の答え方は `github_bot.close` で変わる。⚠ `pr-merge` では merge そのものが
 # 承認なので、承認語を求めると承認が 2 回になる（コメント + merge）。
-# 読み方は coding-robot-finalize.yml と同じ（引用符と行末コメントを許す）。
+# 読み方は coding-bot-finalize.yml と同じ（引用符と行末コメントを許す）。
 close_mode=$(awk '
   /^github_bot:[[:space:]]*(#.*)?$/ { section=1; next }
   section && /^[^[:space:]#]/ { section=0 }
@@ -221,13 +221,13 @@ elif [ "$close_mode" = "pr-merge" ]; then
   # ⚠ 単語 `merge` で判定すると、説明文に一度出ただけで導線追加が抑止される。
   # 導線そのものの文を目印にする。
   word="merge が close 承認です"
-  # ⚠ 人のクリック数は ATTACHMENTS_TOKEN の有無で変わる。案内も変える。
+  # ⚠ 人のクリック数は CODING_BOT_GH_PAT の有無で変わる。案内も変える。
   # 有り: PR の作者が人になるので CI が自動で走る → 押すのは Merge の 1 回だけ
   # 無し: GITHUB_TOKEN が作った PR なので workflow が承認待ちになる → «Approve and run» が要る
-  if [ -n "${ATTACHMENTS_TOKEN:-}" ]; then
+  if [ -n "${CODING_BOT_GH_PAT:-}" ]; then
     guide="**この PR の CI が緑になったら Merge を 1 回押してください。それが close 承認です。**CI は自動で走っています。直してほしい点があれば、merge せずに \`🤖 修正して: …\` とコメントしてください。"
   else
-    guide="**この PR で 2 つ押してください。**① Checks タブの **«Approve and run»**（bot が作った PR なので workflow が承認待ちで止まっています）② 緑になったら **Merge**。⚠ **merge が close 承認です。**直してほしい点があれば、merge せずに \`🤖 修正して: …\` とコメントしてください（修正後はもう一度 «Approve and run» が要ります）。⚠ **`ATTACHMENTS_TOKEN` を設定すると、この ① が要らなくなります**（`github-bot/INSTALL.md`）。"
+    guide="**この PR で 2 つ押してください。**① Checks タブの **«Approve and run»**（bot が作った PR なので workflow が承認待ちで止まっています）② 緑になったら **Merge**。⚠ **merge が close 承認です。**直してほしい点があれば、merge せずに \`🤖 修正して: …\` とコメントしてください（修正後はもう一度 «Approve and run» が要ります）。⚠ **`CODING_BOT_GH_PAT` を設定すると、この ① が要らなくなります**（`github-bot/INSTALL.md`）。"
   fi
 else
   word="🤖 クローズ承認"

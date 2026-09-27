@@ -1,4 +1,4 @@
-name: Coding Robot — Finalize Ticket
+name: coding-bot-finalize
 
 # pr-merge は merge を close 承認とし、API で Issue と stage ラベルを更新する。
 # merge / pr の Issue close は bot の次の run に任せる。

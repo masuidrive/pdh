@@ -24,7 +24,7 @@ import unicodedata
 REPO = pathlib.Path(__file__).resolve().parent.parent
 
 # Files whose links describe a consuming project's layout, not this repo's.
-# github-bot/.github/ is the coding-robot machinery: prompt templates whose
+# github-bot/.github/ is the coding-bot machinery: prompt templates whose
 # "links" are placeholders the agent fills in at runtime ([label](path), (url)).
 # They are not documentation links, so resolving them here is meaningless.
 # PDH's own prose for that layer lives at github-bot/*.md and IS checked.

@@ -2,7 +2,7 @@
 
 GitHub Issue を «エンジニアとの会話面» として使うときの規則。**内容が食い違ったら ticket.md に従う（source of truth）。issue は会話面**。
 
-このファイルは cloud（Actions 上の coding-robot）と local（`pdh-gh-pull` で端末に取り込んだ session）の両方が従う。engine 中立の単一コピーで、両 engine で同一に保つ（判断/契約なので engine で変えない）。
+このファイルは cloud（Actions 上の coding-bot）と local（`pdh-gh-pull` で端末に取り込んだ session）の両方が従う。engine 中立の単一コピーで、両 engine で同一に保つ（判断/契約なので engine で変えない）。
 
 ## ⚠ human gate では自己承認しない（この layer の安全核）
 
@@ -10,7 +10,7 @@ PDH の human gate は **`PDH-ticket-human-review`（実装前）** と **`PDH-h
 
 - **cloud（Actions）**: 対話できる人間がいない。gate に達したら、**gate の要点（何を承認してほしいか・判断の分岐・影響レイヤー）を issue にコメントして run を停止する。** 実装や close に進まない。«よしなに» で越えない。次回の 🤖 トリガーで再開する。
 - **local（端末）**: 通常どおり人間に確認する。issue にも同じ gate コメントを残すと、他の人が経緯を追える。
-- **ticket gate の承認は «🤖 を含むコメント»**（「🤖 承認」）。⚠ **close gate の承認は `github_bot.close` で変わる** — `pr-merge` では **PR の merge そのもの**、`merge` / `pr` では「🤖 クローズ承認」。最終レポートに導線が無ければ runner の hook が足す。⚠ **GitHub Actions は reaction では起動しない**（coding-robot.yml の trigger は 🤖 コメントだけ）ので、**👍 リアクションだけでは bot は再開しない。**👍 は人間向けの印として任意で付けてよいが trigger にしない。変更希望は 🤖 付きで「修正して：…」、差し戻しは「差し戻す：…」。承認が来るまで gate の先へ進まない。
+- **ticket gate の承認は «🤖 を含むコメント»**（「🤖 承認」）。⚠ **close gate の承認は `github_bot.close` で変わる** — `pr-merge` では **PR の merge そのもの**、`merge` / `pr` では「🤖 クローズ承認」。最終レポートに導線が無ければ runner の hook が足す。⚠ **GitHub Actions は reaction では起動しない**（coding-bot.yml の trigger は 🤖 コメントだけ）ので、**👍 リアクションだけでは bot は再開しない。**👍 は人間向けの印として任意で付けてよいが trigger にしない。変更希望は 🤖 付きで「修正して：…」、差し戻しは「差し戻す：…」。承認が来るまで gate の先へ進まない。
   - **local（`pdh-gh-pull` で取り込む場合）だけは reaction を読める**ので、👍 を承認の印として扱ってよい。cloud との差はこの 1 点。
 
 この停止は engine で変えない契約であり、`docs/PDH-AGENTS.md` の gate 規則を Actions 実行に写したもの。緩めない。
@@ -92,13 +92,13 @@ human gate では判断ボード（`pdh-decision-board` の Completed Staff Work
 **守るのは «bot の投稿で bot が起動しないこと» である。**
 
 ⚠ **agent が自分で投稿するコメントは、`GITHUB_TOKEN` で投稿する**（素の `gh issue comment` /
-`gh pr comment`。⚠ **`GH_TOKEN` に `ATTACHMENTS_TOKEN` を入れない**）。bot 名義になるので、
-`coding-robot.yml` の `sender.type != 'Bot'` が «自分の投稿で自分が起動する» を弾く。
+`gh pr comment`。⚠ **`GH_TOKEN` に `CODING_BOT_GH_PAT` を入れない**）。bot 名義になるので、
+`coding-bot.yml` の `sender.type != 'Bot'` が «自分の投稿で自分が起動する» を弾く。
 ⚠ **PAT を使ってよいのは push と PR 作成だけである**（`_pdh.md` の `pr-merge` 手順 0）。
 
-そのうえで、**最後の行に `<!-- coding-robot -->` を置く。**
+そのうえで、**最後の行に `<!-- coding-bot -->` を置く。**
 
-- **なぜ要るか**: `coding-robot.yml` の bot 除外は `sender.type != 'Bot'` だけなので、
+- **なぜ要るか**: `coding-bot.yml` の bot 除外は `sender.type != 'Bot'` だけなので、
   ⚠ **PAT で投稿したものは «人のコメント» に見える。**そして判断ボードの本文には説明として
   `🤖` が入るため、起動条件に当たる。
 - **machinery が投稿するもの**（進捗コメント・最終レポート）は `GITHUB_TOKEN` なので
@@ -121,7 +121,7 @@ Actions の run は 1 回ごとに記憶を失う。gate や質問で停止す�
   では出さない** — GitHub はそれを押せるものとして描くが、次の更新で上書きされて押した結果が
   消えるので、«効かない操作» になる。
 - **作業中コメントに agent の出力（ログ）は貼らない。**経過時間・計画の要約・AC の進み具合・タスクの状態だけを出し、ログは Actions の画面へのリンクで渡す。
-- ⚠ **作業中コメントの更新は既定で 60 秒に 1 回**（`PROGRESS_UPDATE_INTERVAL`）。10 秒固定だと
+- ⚠ **作業中コメントの更新は既定で 60 秒に 1 回**（`CODING_BOT_PROGRESS_INTERVAL`）。10 秒固定だと
   72 分の run で 385 回 PATCH し、`GITHUB_TOKEN` の 1,000 リクエスト/時/repo の 3 分の 1 を
   進捗表示だけで使う。**engine の生存確認は 10 秒のまま** — そこを伸ばすと
   終了検知が遅れ、PR の作成が後ろへずれる。
@@ -160,7 +160,7 @@ bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する*
   実装を終えたら PR（本文に **`Refs #N`**。`Closes` / `Fixes` は使わない）を作り、**close 判断
   ボードを PR にコメントして停止する。**⚠ **`tickets/done/` への移動と `closed_at` は、その PR の
   差分に載せる**（手順は `_pdh.md`「`pr-merge`: done への移動を PR に載せて出す」に従う）。
-  人が Files changed を見て merge すると、`coding-robot-finalize.yml` は **issue を close するだけ**を
+  人が Files changed を見て merge すると、`coding-bot-finalize.yml` は **issue を close するだけ**を
   行う（API のみ。commit / push はしない。merge 済みの branch は消す）。⚠ **その job は «PR の差分に `tickets/done/…/ticket.md` が
   入っているか» を検査し、入っていなければ issue を閉じずに警告する。**⚠ **`🤖 クローズ承認` というコメントは使わない** — GitHub の承認
   プリミティブは merge ボタンであり、コメントを足すと承認が 2 回になる。**PR で «修正して» と

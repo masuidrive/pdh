@@ -5,7 +5,7 @@
 #   codex / claude の shell tool は «1 コマンドごとに» timeout を持ち、超えると
 #   そのコマンドのプロセスへ SIGTERM を送る。worker をその呼び出しの中で待つと、
 #   worker 自身がまだ働いていても約 3 分で刈られる。
-#   ある repo の coding-robot の run で 4 回起きた。診断（diag.txt）が捉えた送り主は runner でも
+#   ある repo の coding-bot の run で 4 回起きた。診断（diag.txt）が捉えた送り主は runner でも
 #   OOM でもなく «親の codex プロセス» で、2 件とも «自分が起動してから» 181 秒・
 #   183 秒だった（起動時刻は 73 秒ずれていたので、全体の締切ではない）。
 #

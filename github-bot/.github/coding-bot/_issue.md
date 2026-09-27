@@ -50,7 +50,7 @@ Issue に 🤖 が付いたら、**コメントに書かれたことを全部や
 
 ### 聞くかどうかの判定
 
-⚠ **まず、どの入口から来た依頼かを見る。**`<context>` の **Labels** に `coding-robot` が
+⚠ **まず、どの入口から来た依頼かを見る。**`<context>` の **Labels** に `coding-bot` が
 あれば、**Issue フォーム（`.github/ISSUE_TEMPLATE/robot-request.yml`）から来ている。**
 `gh issue create` はテンプレートを素通りするので、このラベルは付かない。
 
@@ -105,7 +105,7 @@ Issue に 🤖 が付いたら、**コメントに書かれたことを全部や
 
 ## A. ticket 作成フェーズ（PD-C-1 相当）
 
-フローの定義は `.claude/skills/pdh-dev/_flow.md` の PD-C-1（`_pdh.md` の指示で事前 Read 済み）。**その定義に従う**。以下は coding-robot harness 固有の補足のみ：
+フローの定義は `.claude/skills/pdh-dev/_flow.md` の PD-C-1（`_pdh.md` の指示で事前 Read 済み）。**その定義に従う**。以下は coding-bot harness 固有の補足のみ：
 
 1. `TICKET_NAME` を算出（「PDH モード」）。find-or-create: 無ければ `bash ticket.sh new "issue-${ISSUE_NUMBER}" --created-at "$TS" --branch "agent/issue-${ISSUE_NUMBER}"` で本体＋ノート生成（`--branch` の理由は `_pdh.md`）。`current-ticket.md` / `current-note.md` を symlink。
    - **既にチケットがあり、Issue 本文・コメントに前回から新情報が無い場合**（例: `🤖` だけの空打ち）は、**チケットを書き直さない**。現状の Acceptance Criteria を再掲し、「実装に進むには承認トークン（例 `🤖 ok`）でコメント」と再案内するだけにする。差分（新しい指示・情報）があるときだけ更新する。
@@ -121,7 +121,7 @@ Issue に 🤖 が付いたら、**コメントに書かれたことを全部や
 
 ## B. 実装フェーズ（PD-C-6 → PD-C-10）
 
-フローの定義は `.claude/skills/pdh-dev/_flow.md`（PD-C-6/7/9/10）/ `_review.md`（収束性診断・スコープ外既存問題の扱い・裏取りルール）/ `_execution-team.md`（spawn 機構・並行起動・worker prompt の組み立て）/ `_subagent-context.md`（worker 共通プロンプト）。**その定義に従う**。以下は coding-robot harness 固有の補足のみ：
+フローの定義は `.claude/skills/pdh-dev/_flow.md`（PD-C-6/7/9/10）/ `_review.md`（収束性診断・スコープ外既存問題の扱い・裏取りルール）/ `_execution-team.md`（spawn 機構・並行起動・worker prompt の組み立て）/ `_subagent-context.md`（worker 共通プロンプト）。**その定義に従う**。以下は coding-bot harness 固有の補足のみ：
 
 1. `TICKET_NAME` でチケットを特定する（無ければ実装に進まず、**A0 を通してから** A を促す）。`current-ticket.md` / `current-note.md` を symlink。frontmatter `started_at` を今（UTC）に設定。
 2. **harness の hard timeout 対策（PD-C-6 中）**:

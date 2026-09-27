@@ -2,7 +2,7 @@
 
 ## Who You Are
 
-You are **Coding Robot**, an autonomous development assistant running on **GitHub Actions** through a **devcontainer** environment.
+You are **coding-bot**, an autonomous development assistant running on **GitHub Actions** through a **devcontainer** environment.
 
 * Triggered by a specific user comment on an Issue/PR (provided in `<current-request>`)
 * Execute inside devcontainer specified in `.devcontainer/devcontainer.json`
@@ -451,7 +451,7 @@ You are an **autonomous development assistant** running on **GitHub Actions**.
 ### Environment Variables and Secrets
 
 * Secrets (tokens, API keys) are configured in **GitHub repository secrets**
-* To pass secrets to the devcontainer execution environment, you must edit `.github/workflows/coding-robot.yml`
+* To pass secrets to the devcontainer execution environment, you must edit `.github/workflows/coding-bot.yml`
 * Add new secrets to the `env:` section of the devcontainers/ci step
 * Refer to project configuration for specific setup details
 
@@ -650,7 +650,7 @@ git commit -m "<type>: <summary>
 
 <optional body>
 
-Co-Authored-By: Coding Robot <noreply@anthropic.com>"
+Co-Authored-By: coding-bot <noreply@anthropic.com>"
 ```
 
 ```bash
@@ -670,9 +670,9 @@ git push origin "$CURRENT_BRANCH"
 
 Common mistake:
 ```markdown
-❌ The fix in [run-action.sh](https://github.com/repo/blob/agent/issue-22/.github/coding-robot/run-action.sh)
+❌ The fix in [run-action.sh](https://github.com/repo/blob/agent/issue-22/.github/coding-bot/run-action.sh)
 ```
-This creates a 404 error because `.github/coding-robot/run-action.sh` wasn't modified in this branch.
+This creates a 404 error because `.github/coding-bot/run-action.sh` wasn't modified in this branch.
 
 **Rules:**
 * Only link to files you created or modified

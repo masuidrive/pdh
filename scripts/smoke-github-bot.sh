@@ -36,9 +36,9 @@ stage_is() { [ "$(labels | tr ',' '\n' | grep '^PDH-' | paste -sd, -)" = "$1" ];
 awaiting_on_issue() { labels | tr ',' '\n' | grep -qx awaiting-reply; }
 last_comment() { gh issue view "$N" --repo "$R" --json comments -q '.comments[-1].body'; }
 
-orig_engine=$(gh variable get CODING_ROBOT_ENGINE --repo "$R" 2>/dev/null || echo "")
-gh variable set CODING_ROBOT_ENGINE --repo "$R" --body "$ENGINE"
-trap '[ -n "$orig_engine" ] && gh variable set CODING_ROBOT_ENGINE --repo "$R" --body "$orig_engine" >/dev/null' EXIT
+orig_engine=$(gh variable get CODING_BOT_ENGINE --repo "$R" 2>/dev/null || echo "")
+gh variable set CODING_BOT_ENGINE --repo "$R" --body "$ENGINE"
+trap '[ -n "$orig_engine" ] && gh variable set CODING_BOT_ENGINE --repo "$R" --body "$orig_engine" >/dev/null' EXIT
 
 echo "== smoke ($ENGINE) on $R"
 T=$(now)

@@ -110,7 +110,7 @@ COUNT=$(printf '%s\n' "$NAMED" | grep -c . || true)
 - **close 段階（`merge` / `pr` は close 承認後）** は `.ticket-config.yaml` の `github_bot.close` で分岐する。⚠ **`pr-merge` では «close 承認» は PR の merge であり、bot は承認を待たずに PR を作って停止する:**
   - **`merge`（既定）**: bot が `bash ticket.sh close --no-delete-remote` を実行する（squash merge → default branch へ push、ticket は `tickets/done/` へ）。続けて `gh issue close #N`。**1 run で終わり、PR は作らない。**
     ⚠ **`--no-delete-remote` を外してはならない。**`run-action.sh` は engine が止まったあとにも `HEAD:$BRANCH_NAME` へ push する経路を持つ（画像の後始末・待ち行の反映）。`close` が branch を消しても**その push が作り直す**ので、残るのは «PR を持たず default branch にも無い commit を載せた branch» — 消したせいで置き去りの branch を作ることになる。
-    ⚠ **その結果 `merge` では branch が溜まり続ける。**安全に消せる場所は `run-action.sh` の最後の push より後しかなく、そこにはいま何も無い（`pr` / `pr-merge` は run の外で `coding-robot-finalize.yml` が消す）。
+    ⚠ **その結果 `merge` では branch が溜まり続ける。**安全に消せる場所は `run-action.sh` の最後の push より後しかなく、そこにはいま何も無い（`pr` / `pr-merge` は run の外で `coding-bot-finalize.yml` が消す）。
   - **`pr`**: issue の close 承認後、bot が `bash ticket.sh close --no-merge "$TICKET_NAME"` で done へ移し、その commit を含む PR（`github_bot.pr_link` が `refs` なら `Refs #N`、`closes` なら `Closes #N`）を作り、«merge したら 🤖 で issue を閉じます» と伝えて**停止する**。人間が merge → 次の 🤖 で `gh issue close #N`。
   - ⚠ **`pr-merge`**: 下の「PR に載せて出す」に従う。
   - checklist gate（`require_checklist` / `require_checklist_groups` / `append_only_files`）は **3 モードとも `close` が効かせる**。⚠ **`pr-merge` では `close --no-merge` が feature branch 上で走るので、そこで効く**（`ticket.sh 20260916.084455` 以降）。
@@ -123,8 +123,8 @@ bot と workflow は default branch へ push しない。done 移動と `closed_
 PDH-verify を終えたら、次の順で行う。既存 PR があればそれを更新する。
 
 0. **コメントは `GITHUB_TOKEN` で投稿する。**（`merge` / `pr` では push も PR 作成も `origin` のまま＝runner の `GITHUB_TOKEN` で行う。token を選び分けるのはこの `pr-merge` だけである）`GH_TOKEN` に PAT を export しない。
-   bot 名義と `<!-- coding-robot -->` の印で自己トリガーを防ぐ。
-   `ATTACHMENTS_TOKEN` があれば、**runner が origin の git 認証を agent の起動前にこの token へ
+   bot 名義と `<!-- coding-bot -->` の印で自己トリガーを防ぐ。
+   `CODING_BOT_GH_PAT` があれば、**runner が origin の git 認証を agent の起動前にこの token へ
    差し替えてある。**push は素の `git push origin` でよい。⚠ **origin の認証設定
    （`http.https://github.com/.extraheader`）を外したり戻したりしない** — `GITHUB_TOKEN` に戻すと、
    以降の push が起こす CI が «Approve and run» 待ちで止まる。runner の後処理も PAT で push する。
@@ -132,7 +132,7 @@ PDH-verify を終えたら、次の順で行う。既存 PR があればそれ�
    無ければ `GITHUB_TOKEN` へ fallback し、CI の «Approve and run» が追加で必要な場合は人へ伝える。
    ```bash
    git_push() { git push origin "$@"; }
-   PR_TOKEN="${ATTACHMENTS_TOKEN:-$GITHUB_TOKEN}"
+   PR_TOKEN="${CODING_BOT_GH_PAT:-$GITHUB_TOKEN}"
    ```
 1. **base branch を取り込んで push する。**CI の緑を現在の base を含む SHA に紐づける。
    ```bash
@@ -145,7 +145,7 @@ PDH-verify を終えたら、次の順で行う。既存 PR があればそれ�
    GH_TOKEN="$PR_TOKEN" gh pr create --draft --base "$BASE" --head "$BRANCH_NAME" --title … --body "… Refs #N"
    # 既存 PR の場合: GH_TOKEN="$PR_TOKEN" gh pr ready --undo "$BRANCH_NAME"
    ```
-   **close 判断ボードを PR にコメントする。**末尾に `<!-- coding-robot -->` を置く。
+   **close 判断ボードを PR にコメントする。**末尾に `<!-- coding-bot -->` を置く。
    `pr-merge` は `github_bot.pr_link` に関わらず `Refs #N` を使う。`Closes` / `Fixes` で
    Issue を先に閉じると finalize の検査を飛ばしてしまう。
 3. **done へ移す commit を push してから PR を ready にする。**
@@ -181,7 +181,7 @@ PDH-verify を終えたら、次の順で行う。既存 PR があればそれ�
    Ready for review も必要であり、成功時の «人が押す回数 = 1» とは区別する。
    **その Merge が何を起こすかと、違ったときの戻し方も 1 行ずつ書く。**default branch への
    merge がデプロイを起こす repo なら、出荷でもあることと revert の経路を伝える。
-5. 人が merge すると `coding-robot-finalize.yml` が done 移動を検査して **Issue を閉じる**。
+5. 人が merge すると `coding-bot-finalize.yml` が done 移動を検査して **Issue を閉じる**。
    frontmatter の `branch:` / `issue:` または既存の issue 番号つきディレクトリ名で対応を確認する。
    移動が無ければ閉じずに警告する。commit / push はせず、stage ラベルを `PDH-close` に付け替え、merge 済みの `agent/issue-<N>` branch を消す。
 
@@ -191,7 +191,7 @@ PDH-verify を終えたら、次の順で行う。既存 PR があればそれ�
 PR の必須チェックが、最終 SHA の `pull_request` run によって満たされていることを確認する。
 `gh workflow run` の成功だけを merge 可能の証拠にしない。bot は同じフルスイートを自分でも
 回さず、PR 側の run に任せる。失敗を直す scoped test は実行する。
-`ATTACHMENTS_TOKEN` があれば push と PR 作成に使い、CI の承認待ちを避ける。
+`CODING_BOT_GH_PAT` があれば push と PR 作成に使い、CI の承認待ちを避ける。
 **成功時に人が押す回数 = 1** を目指す。token が無い場合や保護設定で別の操作が要る場合は
 その操作を明示する。導入時の CI・保護設定は `github-bot/INSTALL.md` を参照する。
 
@@ -228,7 +228,7 @@ PR の必須チェックが、最終 SHA の `pull_request` run によって満�
 - ⚠ **run 全体はやり直さない。**落ちた worker だけをやり直す
 
 **あなた（bot の main agent）は PM として team フローを実行する。** worker（Coding Engineer / reviewer / AC 裏取り 等）は **CLI subprocess で spawn** する（`_execution-team.md`「spawn 機構」）。
-- **main engine** = `CODING_ROBOT_ENGINE`（この run の engine）。**worker は既定で main と同じ engine**。起動コマンド（claude / codex、**bypass 権限**）と並行起動・結果回収は `_execution-team.md` に self-contained に書いてある。**それをそのまま使う**。
+- **main engine** = `CODING_BOT_ENGINE`（この run の engine）。**worker は既定で main と同じ engine**。起動コマンド（claude / codex、**bypass 権限**）と並行起動・結果回収は `_execution-team.md` に self-contained に書いてある。**それをそのまま使う**。
 - 各 worker は専用 result ファイルに書かせ、統合する。認証は run の環境変数を subprocess が継承する（追加設定不要）。
 - **spawn は必須。** 失敗/不可能な場合（CLI 不在・auth 不在・exit 非ゼロ）は **単独で続行しない**。`wait` 後に `rc=$?` を保存し、note に「何の spawn が・どう失敗したか（コマンド・rc、result/stderr の `ls -l`、`tail -120 stderr.log`）」を書いてエラー報告する（独立レビュー無しで PR を出さない）。
   ⚠ **rc と stderr の中身は note に置き、コメントには出さない**（`system.md`「Worker rc lists … do not go in the issue at all」）。コメントに書くのは «何が動かず、そのせいで何が終わっていないか» を言葉で。

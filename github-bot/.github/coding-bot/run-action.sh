@@ -18,11 +18,11 @@ $error_message
 - **Run ID**: $GITHUB_RUN_ID
 
 ---
-🤖 [Coding Robot](https://github.com/masuidrive/pdh/tree/main/github-bot)" || return 0
+🤖 [coding-bot](https://github.com/masuidrive/pdh/tree/main/github-bot)" || return 0
     # 進捗コメントがこの run の最終報告になったので、workflow の «Report if the run left nothing» に
-    # 二重投稿させない。認証失敗はまだ CODING_ROBOT_NOTIFY_FILE を定義する前なので、host への通知もここで書く。
-    : > "${GITHUB_WORKSPACE:-.}/.coding-robot-reported" 2>/dev/null || true
-    local notify="${CODING_ROBOT_NOTIFY_FILE:-${GITHUB_WORKSPACE:-.}/.coding-robot-notify}"
+    # 二重投稿させない。認証失敗はまだ CODING_BOT_NOTIFY_FILE を定義する前なので、host への通知もここで書く。
+    : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported" 2>/dev/null || true
+    local notify="${CODING_BOT_NOTIFY_FILE:-${GITHUB_WORKSPACE:-.}/.coding-bot-notify}"
     if [ ! -f "$notify" ]; then
       {
         printf 'issue=%s\nkind=failed\ncomment_id=%s\n' \
@@ -62,10 +62,10 @@ TRUSTED_PR_BRANCH=""
 TRIGGER_ERROR=""
 
 # Select execution engine (claude | codex). MUST be set explicitly — no default.
-ENGINE="${CODING_ROBOT_ENGINE:-}"
+ENGINE="${CODING_BOT_ENGINE:-}"
 if [ -z "$ENGINE" ]; then
-  echo "❌ CODING_ROBOT_ENGINE is not set. Set the repository variable to 'claude' or 'codex'."
-  echo "   gh variable set CODING_ROBOT_ENGINE --body 'claude'   # or codex"
+  echo "❌ CODING_BOT_ENGINE is not set. Set the repository variable to 'claude' or 'codex'."
+  echo "   gh variable set CODING_BOT_ENGINE --body 'claude'   # or codex"
   exit 1
 fi
 ENGINE_FILE="$SCRIPT_DIR/engines/_${ENGINE}.sh"
@@ -78,35 +78,35 @@ echo "🔌 Engine: $ENGINE"
 # The exported key names appear in the prompt; never print their values.
 # The list describes runner controls and exported keys, not the whole environment.
 ENV_JSON_KEY_LINES=""
-if [ -n "${ENV_JSON:-}" ]; then
-  if printf '%s' "$ENV_JSON" | jq -e . >/dev/null 2>&1; then
+if [ -n "${CODING_BOT_ENV_JSON:-}" ]; then
+  if printf '%s' "$CODING_BOT_ENV_JSON" | jq -e . >/dev/null 2>&1; then
     while IFS= read -r _env_key; do
       [ -n "$_env_key" ] || continue
-      _env_val="$(printf '%s' "$ENV_JSON" | jq -r --arg k "$_env_key" '.[$k]')"
+      _env_val="$(printf '%s' "$CODING_BOT_ENV_JSON" | jq -r --arg k "$_env_key" '.[$k]')"
       echo "::add-mask::$_env_val"
       export "$_env_key=$_env_val"
-      echo "🔑 ENV_JSON: exported $_env_key"
+      echo "🔑 CODING_BOT_ENV_JSON: exported $_env_key"
       ENV_JSON_KEY_LINES="$ENV_JSON_KEY_LINES
 - $_env_key"
-    done < <(printf '%s' "$ENV_JSON" | jq -r 'keys[]')
+    done < <(printf '%s' "$CODING_BOT_ENV_JSON" | jq -r 'keys[]')
     unset _env_key _env_val
   else
-    echo "⚠️  ENV_JSON is set but is not valid JSON; skipping."
+    echo "⚠️  CODING_BOT_ENV_JSON is set but is not valid JSON; skipping."
   fi
 fi
 
 if [ -n "$ENV_JSON_KEY_LINES" ]; then
   ENV_JSON_KEYS_SECTION="
-Also exported for you from this repository's ENV_JSON secret (names only — the
+Also exported for you from this repository's CODING_BOT_ENV_JSON secret (names only — the
 values are set in your environment and masked in logs; read them as \$NAME, and
 never echo, log, or commit a value):$ENV_JSON_KEY_LINES"
 else
   ENV_JSON_KEYS_SECTION="
-This repository set no ENV_JSON secret, so no project keys were exported by the
+This repository set no CODING_BOT_ENV_JSON secret, so no project keys were exported by the
 runner. Other variables may still be present from the devcontainer or image."
 fi
 
-echo "🤖 Coding Robot starting..."
+echo "🤖 coding-bot starting..."
 
 # 現在のディレクトリを表示
 echo "📁 Current directory: $(pwd)"
@@ -115,7 +115,7 @@ ls -la
 
 # worktree の .git file も受け付ける。workflow と同じ workspace を既定にする。
 if [ ! -e .git ]; then
-  cd "${CODING_ROBOT_WORKSPACE:-/workspaces/project}"
+  cd "${CODING_BOT_WORKSPACE:-/workspaces/project}"
 fi
 [ -e .git ] || { echo "Cannot find git repository" >&2; exit 1; }
 
@@ -141,7 +141,7 @@ git config --global user.email "github-actions[bot]@users.noreply.github.com"
 # 最新の状態を取得
 git fetch origin
 BASE_BRANCH="${GITHUB_BASE_REF:-$(gh repo view "$GITHUB_REPOSITORY" --json defaultBranchRef --jq .defaultBranchRef.name)}"
-CI_WORKFLOW="${CODING_ROBOT_CI_WORKFLOW:-ci.yml}"
+CI_WORKFLOW="${CODING_BOT_CI_WORKFLOW:-ci.yml}"
 
 # Issue/PR情報の取得
 echo "📝 Fetching Issue/PR data..."
@@ -224,10 +224,10 @@ if [ "$IS_PR" = true ]; then
     # 出自の拒否は障害ではない。理由をコメントし、報告済みとして exit 0 にする。
     gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$(printf '%s\n\n%s\n\n%s' \
       "**この PR では動きません**（${TRIGGER_ERROR}）。" \
-      "Coding Robot が触れるのは、自分が作った \`agent/issue-<番号>\` branch の PR だけです。依頼は元の Issue に 🤖 付きでコメントしてください。" \
-      "<!-- coding-robot -->")" >/dev/null 2>&1 \
+      "coding-bot が触れるのは、自分が作った \`agent/issue-<番号>\` branch の PR だけです。依頼は元の Issue に 🤖 付きでコメントしてください。" \
+      "<!-- coding-bot -->")" >/dev/null 2>&1 \
       || echo "Warning: failed to post the refusal note"
-    : > "${GITHUB_WORKSPACE:-.}/.coding-robot-reported" 2>/dev/null || true
+    : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported" 2>/dev/null || true
     exit 0
   fi
   # PR の場合
@@ -502,75 +502,34 @@ Use these images to better understand the user's requirements, bugs, design requ
 "
 fi
 
-# 添付ファイル(非画像: PDF / .txt / .csv / ログ等)を抽出してダウンロード。
-# 画像と違い user-attachments/files/ は bodyHTML でも署名されず、Actions の
-# installation token (secrets.GITHUB_TOKEN) では private repo で 404 になる
-# (既知制約)。そのため classic PAT (repo scope) の ATTACHMENTS_TOKEN を使う。
-# ファイル添付の URL は markdown 本文/コメントに生のまま入っているので、bodyHTML を
-# 経由せず本文 + 全コメントから直接抽出する。GitHub は添付ファイル名を ASCII
-# ([A-Za-z0-9._-]) にサニタイズするため、抽出 regex はそれで十分。
-echo "📎 Checking for attached files..."
-FILE_DIR="/tmp/issue-${ISSUE_NUMBER}-files"
-mkdir -p "$FILE_DIR"
-
-ATTACH_TOKEN="${ATTACHMENTS_TOKEN:-$GITHUB_TOKEN}"
-if [ -z "${ATTACHMENTS_TOKEN:-}" ]; then
-  echo "⚠️  ATTACHMENTS_TOKEN is not set; falling back to GITHUB_TOKEN."
-  echo "    Private-repo file attachments (user-attachments/files/) return 404 with"
-  echo "    the Actions installation token, so downloads below will likely be skipped."
-  echo "    Set a classic PAT (repo scope): gh secret set ATTACHMENTS_TOKEN --body '<pat>'"
-fi
-
-# 本文 + 全コメントの markdown から user-attachments/files/ URL を抽出（重複排除）。
-# 末尾 sort -u で pipeline exit を 0 に保ち set -e に引っかからないようにする。
+# 画像以外の添付は取得しない。fine-grained PAT では 404 になり、取得には
+# repo を限れない token が要るため（2026-09-27 実測）。画像の署名付き URL は上で取得する。
+# 本文 + 全コメントからファイル名だけを列挙し、内容を本文へ貼るよう依頼する。
+echo "📎 Checking for non-image attachments (not downloaded)..."
 FILE_URLS=$( { printf '%s\n' "$ISSUE_BODY"; echo "$ALL_COMMENTS_JSON" | jq -r '.[].body // ""'; } \
   | grep -oE 'https://github\.com/user-attachments/files/[0-9]+/[A-Za-z0-9._-]+' \
   | sort -u )
-
-FILE_COUNT=0
 FILE_LIST=""
 while IFS= read -r furl; do
   [ -n "$furl" ] || continue
-  fname=$(basename "$furl")
-  FILE_COUNT=$((FILE_COUNT + 1))
-  dest="$FILE_DIR/${FILE_COUNT}-${fname}"
-  echo "  - Downloading: $furl"
-  http_code=$(curl -sL -H "Authorization: Bearer $ATTACH_TOKEN" -w '%{http_code}' -o "$dest" "$furl" 2>/dev/null || echo "000")
-  if [ "$http_code" = "200" ] && [ -s "$dest" ]; then
-    sz=$(wc -c < "$dest" | tr -d ' ')
-    FILE_LIST="$FILE_LIST
-- $dest (source: $furl, ${sz} bytes)"
-    echo "    ✓ Saved to: $dest (${sz} bytes)"
-  else
-    echo "    ✗ Failed (HTTP $http_code) — token lacks access, or the file was removed"
-    rm -f "$dest"
-    FILE_COUNT=$((FILE_COUNT - 1))
-  fi
+  FILE_LIST="$FILE_LIST
+- ${furl##*/}"
 done <<< "$FILE_URLS"
 
 FILES_SECTION=""
-if [ $FILE_COUNT -gt 0 ]; then
-  echo "✅ Downloaded $FILE_COUNT file attachment(s)"
+if [ -n "$FILE_LIST" ]; then
   FILES_SECTION="
 
 ---
 
-# 📎 Attached Files
+# 📎 画像以外の添付（未取得）
 
-**IMPORTANT**: The user attached $FILE_COUNT non-image file(s) (e.g. PDF, .txt, .csv, logs) to this Issue/PR.
-
-## File Paths:
+画像以外の添付がありました（ファイル名一覧）:
 $FILE_LIST
 
 ## Instructions:
-1. These files are already downloaded to the local filesystem at the paths above.
-2. Read / parse each one as needed: the Read tool handles text and PDF; for PDFs you
-   may also run project tooling (e.g. the extract pipeline) directly on the file path.
-3. Use their contents to fulfill the user's request — do not claim a file is
-   inaccessible; it is on disk at the path shown.
+画像以外の添付は読めません。取得を試みず、依頼者に「画像以外の添付は読めないので、中身を本文に貼ってほしい」と伝えてください。中身を推測したり、読んだと報告したりしないでください。
 "
-elif [ -n "$FILE_URLS" ]; then
-  echo "ℹ️ File attachment URLs were present but none could be downloaded."
 fi
 
 # システムプロンプト読み込み：共通 system.md と engine 固有 system-${ENGINE}.md を
@@ -616,10 +575,10 @@ fi
 
 # Deadline awareness: tell the agent how much wall-clock budget it has.
 # Must be computed BEFORE the prompt is built so it can be injected.
-RUN_TIMEOUT_SECONDS=${CLAUDE_TIMEOUT:-5400}
+RUN_TIMEOUT_SECONDS=${CODING_BOT_TIMEOUT:-5400}
 # 値を検証する。空や非数値のまま timeout へ渡すと、時間の枠が黙って壊れる。
-case "$RUN_TIMEOUT_SECONDS" in ''|*[!0-9]*) echo "❌ CLAUDE_TIMEOUT must be an integer"; exit 1 ;; esac
-[ "$RUN_TIMEOUT_SECONDS" -ge 60 ] && [ "$RUN_TIMEOUT_SECONDS" -le 86400 ] || { echo "❌ CLAUDE_TIMEOUT must be between 60 and 86400 seconds"; exit 1; }
+case "$RUN_TIMEOUT_SECONDS" in ''|*[!0-9]*) echo "❌ CODING_BOT_TIMEOUT must be an integer"; exit 1 ;; esac
+[ "$RUN_TIMEOUT_SECONDS" -ge 60 ] && [ "$RUN_TIMEOUT_SECONDS" -le 86400 ] || { echo "❌ CODING_BOT_TIMEOUT must be between 60 and 86400 seconds"; exit 1; }
 RUN_START_UNIX=$(date +%s)
 RUN_DEADLINE_UNIX=$((RUN_START_UNIX + RUN_TIMEOUT_SECONDS))
 
@@ -635,7 +594,7 @@ ENVIRONMENT_SECTION=""
   done
   [ -n "$_keys" ] || _keys=" （1 つも無い）"
   _pat="無し（PR の CI が承認待ちで止まる）"
-  [ -n "${ATTACHMENTS_TOKEN:-}" ] && _pat="有り"
+  [ -n "${CODING_BOT_GH_PAT:-}" ] && _pat="有り"
   ENVIRONMENT_SECTION="
 <environment>
 この run で使えるもの（走り出す前に調べた値である。⚠ **これを前提に計画を立てること。**
@@ -646,7 +605,7 @@ Incomplete のテンプレで category `blocker` として、何が無くて何�
 
 - ブラウザ: $_browser
 - provider の鍵:$_keys
-- ATTACHMENTS_TOKEN: $_pat
+- CODING_BOT_GH_PAT: $_pat
 </environment>"
 } 2>/dev/null || true
 
@@ -761,7 +720,7 @@ echo "$USER_PROMPT" > "/tmp/agent-prompt-$ISSUE_NUMBER.txt"
 # gh の既定は GITHUB_TOKEN（bot 名義）。PAT は push と PR 作成だけに局所指定する。
 export GH_TOKEN="$GITHUB_TOKEN"
 
-# ⚠ pr-merge では origin の git 認証を、agent が走る前に ATTACHMENTS_TOKEN へ差し替える。
+# ⚠ pr-merge では origin の git 認証を、agent が走る前に CODING_BOT_GH_PAT へ差し替える。
 # GITHUB_TOKEN の push が起こした PR の CI は «Approve and run» 待ちで止まる。以前は
 # agent に認証を外させ push ごとに PAT を指定させていたが、agent が途中で GITHUB_TOKEN の
 # 認証を戻し、以降の push の CI が全部承認待ちになった。
@@ -771,13 +730,13 @@ ORIGIN_PUSH_AUTH=github_token
 use_pat_for_origin() {
   git config --local --unset-all 'http.https://github.com/.extraheader' 2>/dev/null || true
   git config --local 'http.https://github.com/.extraheader' \
-    "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$ATTACHMENTS_TOKEN" | base64 | tr -d '\n')"
+    "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$CODING_BOT_GH_PAT" | base64 | tr -d '\n')"
 }
 _close_mode=$(awk '/^github_bot:/{f=1;next} /^[^ #]/{f=0} f && /^[[:space:]]*close:[[:space:]]*/{print $2; exit}' .ticket-config.yaml 2>/dev/null | tr -d "\"'" || true)
-if [ "$_close_mode" = "pr-merge" ] && [ -n "${ATTACHMENTS_TOKEN:-}" ]; then
+if [ "$_close_mode" = "pr-merge" ] && [ -n "${CODING_BOT_GH_PAT:-}" ]; then
   use_pat_for_origin
   ORIGIN_PUSH_AUTH=pat
-  echo "🔑 origin の git 認証を ATTACHMENTS_TOKEN にした（pr-merge）"
+  echo "🔑 origin の git 認証を CODING_BOT_GH_PAT にした（pr-merge）"
 fi
 
 source "$ENGINE_FILE"
@@ -793,16 +752,16 @@ echo "Progress comment ID: $PROGRESS_COMMENT_ID"
 engine_setup_auth
 
 # 選んだ engine と別の worker にも認証を用意する。
-# CODEX_AUTH_JSON があれば auth.json を用意する。値はログへ出さず umask 077 で書く。
-if [ -n "${CODEX_AUTH_JSON:-}" ] && [ ! -f "$HOME/.codex/auth.json" ]; then
-  if printf '%s' "$CODEX_AUTH_JSON" | jq -e . >/dev/null 2>&1; then
+# CODING_BOT_CODEX_AUTH_JSON があれば auth.json を用意する。値はログへ出さず umask 077 で書く。
+if [ -n "${CODING_BOT_CODEX_AUTH_JSON:-}" ] && [ ! -f "$HOME/.codex/auth.json" ]; then
+  if printf '%s' "$CODING_BOT_CODEX_AUTH_JSON" | jq -e . >/dev/null 2>&1; then
     mkdir -p "$HOME/.codex"
     chmod 700 "$HOME/.codex"
-    ( umask 077; printf '%s' "$CODEX_AUTH_JSON" | jq -c . > "$HOME/.codex/auth.json" )
+    ( umask 077; printf '%s' "$CODING_BOT_CODEX_AUTH_JSON" | jq -c . > "$HOME/.codex/auth.json" )
     chmod 600 "$HOME/.codex/auth.json"
     echo "🔑 委譲先の codex 用に $HOME/.codex/auth.json を用意した ($(wc -c < "$HOME/.codex/auth.json") bytes)"
   else
-    echo "⚠️  CODEX_AUTH_JSON が JSON として読めない（jq -c で minify したか）— codex worker は OPENAI_API_KEY に頼る"
+    echo "⚠️  CODING_BOT_CODEX_AUTH_JSON が JSON として読めない（jq -c で minify したか）— codex worker は OPENAI_API_KEY に頼る"
   fi
 fi
 
@@ -830,16 +789,16 @@ ACTIONS_URL="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 START_TIME=$RUN_START_UNIX
 
 # 生存確認は 10 秒、進捗コメントの PATCH は既定 60 秒ごとにする。
-PROGRESS_UPDATE_INTERVAL=${PROGRESS_UPDATE_INTERVAL:-60}
-case "$PROGRESS_UPDATE_INTERVAL" in ''|*[!0-9]*) echo "❌ PROGRESS_UPDATE_INTERVAL must be an integer"; exit 1 ;; esac
-[ "$PROGRESS_UPDATE_INTERVAL" -ge 10 ] || { echo "❌ PROGRESS_UPDATE_INTERVAL must be >= 10 seconds"; exit 1; }
+CODING_BOT_PROGRESS_INTERVAL=${CODING_BOT_PROGRESS_INTERVAL:-60}
+case "$CODING_BOT_PROGRESS_INTERVAL" in ''|*[!0-9]*) echo "❌ CODING_BOT_PROGRESS_INTERVAL must be an integer"; exit 1 ;; esac
+[ "$CODING_BOT_PROGRESS_INTERVAL" -ge 10 ] || { echo "❌ CODING_BOT_PROGRESS_INTERVAL must be >= 10 seconds"; exit 1; }
 
 UPDATE_COUNT=0
 LAST_UPDATE_AT=0
 while kill -0 $ENGINE_PID 2>/dev/null; do
   sleep 10
   NOW_UNIX=$(date +%s)
-  [ $((NOW_UNIX - LAST_UPDATE_AT)) -ge "$PROGRESS_UPDATE_INTERVAL" ] || continue
+  [ $((NOW_UNIX - LAST_UPDATE_AT)) -ge "$CODING_BOT_PROGRESS_INTERVAL" ] || continue
   LAST_UPDATE_AT=$NOW_UNIX
   UPDATE_COUNT=$((UPDATE_COUNT + 1))
 
@@ -912,8 +871,8 @@ ENGINE_EXIT_CODE=0
 wait $ENGINE_PID || ENGINE_EXIT_CODE=$?
 # ⚠ engine が残した通知ファイルは消す。host が確かめるのは issue（と PR 起動の run の pr）と値の形だけで、
 # kind は同じ issue について書き換えられうる。
-export CODING_ROBOT_NOTIFY_FILE="${GITHUB_WORKSPACE:-.}/.coding-robot-notify"
-rm -f -- "$CODING_ROBOT_NOTIFY_FILE" || true
+export CODING_BOT_NOTIFY_FILE="${GITHUB_WORKSPACE:-.}/.coding-bot-notify"
+rm -f -- "$CODING_BOT_NOTIFY_FILE" || true
 
 # 後処理の commit で head が変わる場合、その最終 SHA の CI が必要なので変更前を覚える。
 HEAD_BEFORE_POST=$(git rev-parse HEAD 2>/dev/null || echo "")
@@ -1236,9 +1195,9 @@ ${IMG_NOTE}"
 🌿 Branch: \`$BRANCH_NAME\`
 📝 [View changes](https://github.com/$GITHUB_REPOSITORY/compare/$BASE_BRANCH...$BRANCH_NAME)$PR_LINK"
 
-  # ⚠ 最終レポートを投稿した印。coding-robot.yml の «Report if the run left nothing» が
+  # ⚠ 最終レポートを投稿した印。coding-bot.yml の «Report if the run left nothing» が
   # これを見て二重投稿を避ける。置かないと、そちらが必ずもう 1 通出す。
-  : > "${GITHUB_WORKSPACE:-.}/.coding-robot-reported" 2>/dev/null || true
+  : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported" 2>/dev/null || true
 else
   echo "❌ Task failed with exit code $ENGINE_EXIT_CODE"
 
@@ -1248,12 +1207,12 @@ else
     bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "$BRANCH_NAME" "$PROGRESS_COMMENT_ID" || true
   fi
   # ⚠ PDH の無い repo / hook 失敗でも、engine の失敗は host へ伝える。
-  if [ ! -f "$CODING_ROBOT_NOTIFY_FILE" ]; then
+  if [ ! -f "$CODING_BOT_NOTIFY_FILE" ]; then
     {
       printf 'issue=%s\nkind=failed\ncomment_id=%s\n' \
         "$(printf '%s' "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" | tr -d '\r\n=')" \
         "$(printf '%s' "$PROGRESS_COMMENT_ID" | tr -d '\r\n=')"
-    } > "$CODING_ROBOT_NOTIFY_FILE" || true
+    } > "$CODING_BOT_NOTIFY_FILE" || true
   fi
 
 
@@ -1285,11 +1244,11 @@ $(engine_output_tail 200)
 
 </details>"
 
-  # ⚠ 最終レポートを投稿した印。coding-robot.yml の «Report if the run left nothing» が
+  # ⚠ 最終レポートを投稿した印。coding-bot.yml の «Report if the run left nothing» が
   # これを見て二重投稿を避ける。置かないと、そちらが必ずもう 1 通出す。
-  : > "${GITHUB_WORKSPACE:-.}/.coding-robot-reported" 2>/dev/null || true
+  : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported" 2>/dev/null || true
 
   exit $ENGINE_EXIT_CODE
 fi
 
-echo "🎉 Coding Robot finished!"
+echo "🎉 coding-bot finished!"

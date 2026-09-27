@@ -16,11 +16,11 @@ export GIT_AUTHOR_NAME='検査用' GIT_AUTHOR_EMAIL='test@example.invalid'
 export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME" GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
 export GIT_AUTHOR_DATE='2026-01-01T00:00:00Z'
 export GIT_COMMITTER_DATE="$GIT_AUTHOR_DATE"
-unset CODING_ROBOT_NOTIFY_FILE
+unset CODING_BOT_NOTIFY_FILE
 
 ROOT_DIR=$(git -C "$(dirname "$0")" rev-parse --show-toplevel) || exit 1
 HOOKS=""
-for candidate in github-bot/pdh-hooks.sh .github/coding-robot/pdh-hooks.sh; do
+for candidate in github-bot/pdh-hooks.sh .github/coding-bot/pdh-hooks.sh; do
   if [ -f "$ROOT_DIR/$candidate" ]; then
     HOOKS="$ROOT_DIR/$candidate"
     break
@@ -111,7 +111,7 @@ expect_auth_failure() {
   local label=$1 engine=$2 branch=$3 expected=$4
   local engine_file="" candidate repo script_dir output rc
   checks=$((checks + 1))
-  for candidate in "github-bot/.github/coding-robot/engines/_$engine.sh" ".github/coding-robot/engines/_$engine.sh"; do
+  for candidate in "github-bot/.github/coding-bot/engines/_$engine.sh" ".github/coding-bot/engines/_$engine.sh"; do
     if [ -f "$ROOT_DIR/$candidate" ]; then
       engine_file="$ROOT_DIR/$candidate"
       break
@@ -135,7 +135,7 @@ expect_auth_failure() {
     post_error_comment() { :; }
     ISSUE_NUMBER=1  # Codex は source 時にも参照する。
     source "$engine_file" || exit 2
-    unset CLAUDE_CODE_OAUTH_TOKEN CODEX_AUTH_JSON OPENAI_API_KEY TRUSTED_LINKED_ISSUE
+    unset CLAUDE_CODE_OAUTH_TOKEN CODING_BOT_CODEX_AUTH_JSON OPENAI_API_KEY TRUSTED_LINKED_ISSUE
     export CODEX_HOME="$TMP_DIR/codex-home-$checks" HOME="$TMP_DIR/home-$checks"
     if [ -n "$branch" ]; then
       BRANCH_NAME="$branch"

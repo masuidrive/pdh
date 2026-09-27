@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 
-if [ "${CODING_ROBOT_STUB_OPT_IN:-}" != local-test-only ] || [ "${GITHUB_ACTIONS:-}" = true ]; then
+if [ "${CODING_BOT_STUB_OPT_IN:-}" != local-test-only ] || [ "${GITHUB_ACTIONS:-}" = true ]; then
   echo "stub engine refused outside explicit local test mode" >&2
   return 1 2>/dev/null || exit 1
 fi
@@ -8,14 +8,14 @@ fi
 engine_setup_auth() { :; }
 engine_run() {
   (
-    prompt="${CODING_ROBOT_STUB_PROMPT:?stub prompt required}"
-    fixture="${CODING_ROBOT_STUB_FIXTURE:?stub fixture required}"
+    prompt="${CODING_BOT_STUB_PROMPT:?stub prompt required}"
+    fixture="${CODING_BOT_STUB_FIXTURE:?stub fixture required}"
     # ⚠ prompt が «いまの契約» を運んでいることを確かめる。撤去した decision board の
     # 文字列ではなく、2 分割の gate 判定と PR-merge close gate の文を見る。
     for required in 'keyword の表でコメントを分類しない' 'gate を越えるか'; do
       grep -q "$required" <<< "$prompt" || { echo "stub prompt contract missing: $required" >&2; exit 2; }
     done
-    case "${CODING_ROBOT_STUB_SCENARIO:?stub scenario required}" in
+    case "${CODING_BOT_STUB_SCENARIO:?stub scenario required}" in
       # gate を越える（ticket gate）
       cross-gate)
         printf 'cross\n' >> "$fixture/decisions.log"

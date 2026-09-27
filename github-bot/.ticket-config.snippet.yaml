@@ -24,9 +24,9 @@ github_bot:
   #           branch protection で Actions が push できない / 外部コードを受け入れる / 別の人に review させたい repo 向け。
   #   pr-merge : PR の merge そのものを close 承認にする。bot は tickets/done/ への移動を含む PR を作り、
   #           close 判断ボードを PR にコメントして停止する。人が Files changed を見て merge すると
-  #           coding-robot-finalize.yml が issue を閉じる。承認する画面に diff があり、人の操作は
+  #           coding-bot-finalize.yml が issue を閉じる。承認する画面に diff があり、人の操作は
   #           merge の 1 回で済む。required status check が merge ボタンを塞ぐので CI が実際の gate になる。
   #           ⚠ default branch を保護している repo 向け。INSTALL.md「default branch の保護」を読むこと。
   # finalize も merge 時点のこの値を読む。未設定は merge。pr では自動 close しない。
-  # 環境値は repo 変数、固有の検査は .github/coding-robot/smoke-local.sh へ置く（INSTALL.md）。
+  # 環境値は repo 変数、固有の検査は .github/coding-bot/smoke-local.sh へ置く（INSTALL.md）。
   close: merge

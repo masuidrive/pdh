@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # =============================================================================
-# Codex engine for Coding Robot
+# Codex engine for coding-bot
 # =============================================================================
 # Runs `codex exec --json` (headless) and parses Codex's thread/turn/item
 # event stream. Defines: engine_setup_auth / engine_run /
@@ -16,7 +16,7 @@
 #   {command,aggregated_output,exit_code,status} | file_change
 #   {changes:[{path,kind}],status} | reasoning {text|summary}
 #
-# Auth: writes CODEX_AUTH_JSON secret (single-line minified ~/.codex/auth.json)
+# Auth: writes CODING_BOT_CODEX_AUTH_JSON secret (single-line minified ~/.codex/auth.json)
 # to $CODEX_HOME/auth.json (ChatGPT/login auth), or falls back to OPENAI_API_KEY
 # env (API-key auth). The secret must be minified to one line (jq -c) because
 # devcontainers/ci passes env as line-based KEY=VALUE; a multi-line value breaks it.
@@ -38,15 +38,15 @@ engine_setup_auth() {
   echo "🔑 Setting up Codex authentication..."
 
   # 1. Secret provided (CI): write it into an isolated CODEX_HOME
-  if [ -n "${CODEX_AUTH_JSON:-}" ]; then
+  if [ -n "${CODING_BOT_CODEX_AUTH_JSON:-}" ]; then
     export CODEX_HOME="${CODEX_HOME:-/tmp/codex-home}"
     mkdir -p "$CODEX_HOME"
-    if printf '%s' "$CODEX_AUTH_JSON" | jq -e . > "$CODEX_HOME/auth.json" 2>/dev/null; then
+    if printf '%s' "$CODING_BOT_CODEX_AUTH_JSON" | jq -e . > "$CODEX_HOME/auth.json" 2>/dev/null; then
       chmod 600 "$CODEX_HOME/auth.json"
       echo "✅ Wrote auth.json to \$CODEX_HOME ($CODEX_HOME)"
       return 0
     fi
-    echo "⚠️  CODEX_AUTH_JSON is not valid JSON (did you minify with 'jq -c'?)"
+    echo "⚠️  CODING_BOT_CODEX_AUTH_JSON is not valid JSON (did you minify with 'jq -c'?)"
   fi
 
   # 2. Pre-existing auth.json (local dev, or a pre-mounted CODEX_HOME): use as-is
@@ -62,24 +62,24 @@ engine_setup_auth() {
     return 0
   fi
 
-  echo "❌ ERROR: no Codex credentials (CODEX_AUTH_JSON / existing auth.json / OPENAI_API_KEY)!"
+  echo "❌ ERROR: no Codex credentials (CODING_BOT_CODEX_AUTH_JSON / existing auth.json / OPENAI_API_KEY)!"
   post_error_comment "### 🔑 Authentication Error
 
 No Codex credentials are configured. Set **one** of the following repository secrets:
 
-**Option A — use your ChatGPT plan (\`CODEX_AUTH_JSON\`):**
+**Option A — use your ChatGPT plan (\`CODING_BOT_CODEX_AUTH_JSON\`):**
 1. Log in locally: \`codex login\`
 2. Copy your auth file as a single line: \`jq -c . ~/.codex/auth.json | pbcopy\` (macOS)
    or \`jq -c . ~/.codex/auth.json\` (Linux)
-3. Add it as a secret named \`CODEX_AUTH_JSON\` at
+3. Add it as a secret named \`CODING_BOT_CODEX_AUTH_JSON\` at
    [Repository Secrets](https://github.com/$GITHUB_REPOSITORY/settings/secrets/actions)
 
 > Note: the token is refreshed at runtime but the refreshed copy is discarded
 > (the container is ephemeral). If auth eventually fails, re-run \`codex login\`
-> locally and update the \`CODEX_AUTH_JSON\` secret.
+> locally and update the \`CODING_BOT_CODEX_AUTH_JSON\` secret.
 
-**Option B — use an API key (\`OPENAI_API_KEY\`):**
-- Add your OpenAI API key as a secret named \`OPENAI_API_KEY\`.
+**Option B — use an API key (\`CODING_BOT_OPENAI_API_KEY\`):**
+- Add your OpenAI API key as a secret named \`CODING_BOT_OPENAI_API_KEY\`.
 
 ---
 
@@ -108,8 +108,8 @@ engine_run() {
   } > "$FULL_PROMPT_FILE"
 
   local MODEL_ARGS=()
-  if [ -n "${CODEX_MODEL:-}" ]; then
-    MODEL_ARGS=(--model "$CODEX_MODEL")
+  if [ -n "${CODING_BOT_CODEX_MODEL:-}" ]; then
+    MODEL_ARGS=(--model "$CODING_BOT_CODEX_MODEL")
   fi
 
   (
@@ -228,7 +228,7 @@ engine_extract_result() {
         echo "$RAW_OUTPUT"
         echo '```'
       else
-        echo "Codex emitted no output at all — check the [workflow logs](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) and verify credentials (\`CODEX_AUTH_JSON\` / \`OPENAI_API_KEY\`)."
+        echo "Codex emitted no output at all — check the [workflow logs](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) and verify credentials (\`CODING_BOT_CODEX_AUTH_JSON\` / \`CODING_BOT_OPENAI_API_KEY\`)."
       fi
     } > "$RESULT_OUTPUT_FILE"
   fi
@@ -253,7 +253,7 @@ Codex exceeded the timeout limit of **${TIMEOUT_VALUE} seconds** (${TIMEOUT_MINU
 
 **Suggested actions:**
 1. Break down the task into smaller steps
-2. Increase \`CLAUDE_TIMEOUT\` in the workflow env
+2. Increase \`CODING_BOT_TIMEOUT\` in the workflow env
 3. Reduce scope - focus on one thing at a time"
     return 0
   fi
@@ -276,7 +276,7 @@ Install it (\`npm install -g @openai/codex\`) and ensure the npm global bin is o
 
 Codex failed to authenticate.
 
-### If using \`CODEX_AUTH_JSON\` (ChatGPT/login auth)
+### If using \`CODING_BOT_CODEX_AUTH_JSON\` (ChatGPT/login auth)
 
 The stored token may be expired or rotated — the runtime-refreshed token is
 discarded each run. First re-login locally:
@@ -291,7 +291,7 @@ workflow env passing.
 With the gh CLI (recommended):
 
 \`\`\`bash
-jq -c . ~/.codex/auth.json | gh secret set CODEX_AUTH_JSON --repo $GITHUB_REPOSITORY
+jq -c . ~/.codex/auth.json | gh secret set CODING_BOT_CODEX_AUTH_JSON --repo $GITHUB_REPOSITORY
 \`\`\`
 
 Or copy it to the clipboard and paste it into
@@ -309,12 +309,12 @@ Linux:
 jq -c . ~/.codex/auth.json | xclip -selection clipboard
 \`\`\`
 
-### If using \`OPENAI_API_KEY\`
+### If using \`CODING_BOT_OPENAI_API_KEY\`
 
 Verify the key is valid and has quota, then set it:
 
 \`\`\`bash
-gh secret set OPENAI_API_KEY --repo $GITHUB_REPOSITORY
+gh secret set CODING_BOT_OPENAI_API_KEY --repo $GITHUB_REPOSITORY
 \`\`\`
 
 ### Retry

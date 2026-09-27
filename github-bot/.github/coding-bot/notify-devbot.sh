@@ -5,8 +5,8 @@ set +x
 set +e
 set -uo pipefail
 warn() { printf 'Warning: notify-devbot: %s\n' "$*" >&2; }
-[ -n "${DEVBOT_NOTIFY_URL:-}" ] || { echo 'notify-devbot: URL 未設定。送信しない'; exit 0; }
-[ -n "${DEVBOT_NOTIFY_SECRET:-}" ] || { warn '秘密が未設定。送信しない'; exit 0; }
+[ -n "${CODING_BOT_NOTIFY_URL:-}" ] || { echo 'notify-devbot: URL 未設定。送信しない'; exit 0; }
+[ -n "${CODING_BOT_NOTIFY_SECRET:-}" ] || { warn '秘密が未設定。送信しない'; exit 0; }
 issue="${1:-}"; kind="${2:-}"; stage="${3:-}"; comment_id="${4:-}"; pr="${5:-}"; run_url="${6:-}"
 if ! [[ "$issue" =~ ^[0-9]+$ ]] ||
    ! [[ "$comment_id" =~ ^[0-9]*$ ]] || ! [[ "$pr" =~ ^[0-9]*$ ]] ||
@@ -27,11 +27,11 @@ ts=$(date +%s) || { warn '時刻の取得に失敗'; exit 0; }
 # 署名するバイト列は stdin、鍵は環境からだけ読む。
 sig=$(printf 'v1:%s:%s' "$ts" "$body" | python3 -I -c '
 import hashlib, hmac, os, sys
-print(hmac.new(os.environ["DEVBOT_NOTIFY_SECRET"].encode(), sys.stdin.buffer.read(), hashlib.sha256).hexdigest())
+print(hmac.new(os.environ["CODING_BOT_NOTIFY_SECRET"].encode(), sys.stdin.buffer.read(), hashlib.sha256).hexdigest())
 ') || { warn '署名に失敗'; exit 0; }
-url="${DEVBOT_NOTIFY_URL%/}/hooks/robot"
+url="${CODING_BOT_NOTIFY_URL%/}/hooks/robot"
 status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
-  -A 'coding-robot-notify/1' -H 'Content-Type: application/json' \
+  -A 'coding-bot-notify/1' -H 'Content-Type: application/json' \
   -H "X-Devbot-Timestamp: $ts" -H "X-Devbot-Signature: v1=$sig" \
   --data-binary "$body" "$url")
 rc=$?

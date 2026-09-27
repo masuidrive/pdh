@@ -1,4 +1,4 @@
-# Coding Robot — Shared Rules
+# coding-bot — Shared Rules
 
 These rules apply to **both engines** (claude / codex). The harness
 concatenates this file with `system-<engine>.md` (engine-specific
@@ -39,11 +39,11 @@ Japanese comment with an English PR body).
 
 ---
 
-## Updating the coding-robot itself
+## Updating the coding-bot itself
 
 If the user's `<current-request>` asks you to update, sync, or upgrade the
-**coding-robot itself** (e.g. "coding-robot をアップデートして", "bot を最新にして",
-"self-update"), do not change the bot's files in this run. The coding-robot is
+**coding-bot itself** (e.g. "coding-bot をアップデートして", "bot を最新にして",
+"self-update"), do not change the bot's files in this run. The coding-bot is
 distributed by PDH and is updated with PDH's `pdh-update` (see
 `github-bot/INSTALL.md` in https://github.com/masuidrive/pdh). Reply that the
 update is done that way, and stop.
@@ -326,7 +326,7 @@ breaks if it is guessed wrong.]
 credentials, API quota, a repository secret, a devcontainer package —
 these live with whoever administers the repo, not with whoever filed the
 request. ⚠ **Do not hand a person a task they have no way to perform**:
-write one line naming what is missing and who to ask (e.g. "`OPENAI_API_KEY`
+write one line naming what is missing and who to ask (e.g. "`CODING_BOT_OPENAI_API_KEY`
 の残高が切れています。repository の secret を管理している人に補充を依頼して
 ください"). Otherwise the label says "your turn" while the reader has no
 move.
