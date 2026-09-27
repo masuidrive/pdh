@@ -533,6 +533,10 @@ case "$engine" in
   codex) printf '%s\n' "$secrets" | grep -qE '^CODING_BOT_(CODEX_AUTH_JSON|OPENAI_API_KEY)$' || need=1 ;;
   *) need=1 ;;
 esac
+# 通知を使う repo は、URL と鍵の対で移す。URL だけ移ると通知が黙って止まる（notify は鍵が無いと warning で終わる）。
+if printf '%s\n' "$variables" | grep -qx CODING_BOT_NOTIFY_URL; then
+  printf '%s\n' "$secrets" | grep -qx CODING_BOT_NOTIFY_SECRET || need=1
+fi
 printf 'Secrets:\n%s\nVariables:\n%s\n' "$secrets" "$variables"
 [ -z "$old_refs" ] || printf '%s\n' "$old_refs"
 [ "$need" -eq 0 ] && echo '適用済み' || echo '要移行'
