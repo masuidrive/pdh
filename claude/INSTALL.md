@@ -397,7 +397,7 @@ rm -rf tmp/pdh
    cd tmp/pdh && git diff <旧commit-id> HEAD -- <テンプレートファイルパス>
    ```
    - **PDH が配っている skill と、PDH worker の agent 定義（`.claude/agents/pdh-*.md` / `.codex/agents/pdh-*.toml`）**: 常にテンプレートで上書きする。**どちらもプロジェクト固有のカスタマイズを持たない**（skill は共通ルール、agent 定義は skill を指す thin pointer）ので、`Based on` 行を持たず差分マージもしない。⚠ **上書きするのは «この INSTALL の配置表に名前がある» ものだけである。**導入先は自前の skill を同じ `.claude/skills/` に置いている — 「配下すべて」と読むと**それが消える**。⚠ **`pdh-` で始まらない自前の agent 定義も上書きしない。**
-   - **github-bot レイヤー（`.github/coding-bot/_pdh.md` がある場合）**: 2 つに分かれる。
+   - **github-bot レイヤー（`.github/` 内に `_pdh.md` がある場合。改名前の配置も含む）**: 先に [改名手順](../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)を適用する。更新は 2 つに分かれる。
      - **まるごと上書きする 4 つ** — `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `.claude/skills/pdh-gh-pull/`（`github-bot/INSTALL.md`「更新」）。⚠ **ただし導入先が `_pdh.md` を自分の設定（`github_bot.close` のモード・base branch 名）に固定して書き直している場合は、そこは差分マージにする。**
      - ⚠ **残りの machinery は «diff してから» 反映する** — `.github/coding-bot/system.md` `_issue.md` `_pr.md` `run-action.sh` `engines/`、`.github/workflows/coding-bot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**導入先はここを意図して変えていることがある（repo 固有の規則を書いた節・action の SHA 固定・timeout・既存 devcontainer とのマージ結果）。**上流だけにある行を見て、取るべきものだけ取る。**
        ⚠ **2026-09-17 に所有者が変わってから、この節は «触らない» ではなくなった。**それまで machinery は外部 repo からの vendoring で「この手順では触らない」ものだったので、導入先が書き足した節も自動的に守られていた。**いまは守られない。**
@@ -420,6 +420,10 @@ rm -rf tmp/pdh
 11. 後片付け: `rm -rf tmp/pdh`
 
 ### 既知の移行手順
+
+#### github-bot: 名前と導入先固有の secret（2026-09-27 以降）
+
+github-bot を導入済みなら、[github-bot/INSTALL.md の改名手順](../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)を先に適用する。同文書の「導入先固有の secret を `CODING_BOT_ENV_JSON` へ移す」も確認対象である。各節の確認コマンドを更新前後に実行し、ファイルだけでなく GitHub の secret / variable 名も確認する。
 
 #### close 前 review の区間が sub-branch の merge を拾うようになり、`test-all.sh` の迷子の行が消えた（2026-09-27 以降）
 

@@ -221,7 +221,7 @@ cp tmp/pdh/docs/product-delivery-hierarchy.md docs/product-delivery-hierarchy.md
 
 上の `rm -rf` は名前を列挙した PDH skill だけを置き換える。`.agents/skills/` 全体や、`pdh-` で始まらない user skill / agent 定義は削除しない。
 
-github-bot レイヤーを導入済み（`.github/coding-bot/_pdh.md` がある）なら、PDH 保守分（下の 4 つ）も同じく上流の版で置き換える。
+github-bot レイヤーを導入済み（`.github/` 内に `_pdh.md` がある。改名前の配置も含む）なら、先に [改名手順](../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)と同文書の「導入先固有の secret」を確認し、該当する移行と確認コマンドの再実行を行う。その後、PDH 保守分（下の 4 つ）も同じく上流の版で置き換える。
 
 ⚠ **残りの machinery は «diff してから» 反映する** — `.github/coding-bot/system.md` `_issue.md` `_pr.md` `run-action.sh` `engines/`、`.github/workflows/coding-bot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**導入先はここを意図して変えていることがある（repo 固有の規則を書いた節・action の SHA 固定・timeout・既存 devcontainer とのマージ結果）。⚠ **2026-09-17 に所有者が変わってから、この節は «触らない» ではなくなった** — それまでは外部 repo からの vendoring で「この手順では触らない」ものだったので、導入先の書き足しも自動的に守られていた。**いまは守られない。**
 

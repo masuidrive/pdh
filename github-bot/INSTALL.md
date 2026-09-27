@@ -412,8 +412,127 @@ PR 起点の run は同じ repo の `agent/issue-<N>` で、N が実在の Issue
 `coding-bot.yml` は `HANGAR_TOKEN` / `FIREBASE_TOKEN` を個別の secret として container へ渡していたが、汎用の workflow から外した。repo 固有の値は `CODING_BOT_ENV_JSON` に入れる（`run-action.sh` がキーごとに環境変数として export する）。
 
 ```bash
-gh secret list --repo <owner/repo> | grep -E 'HANGAR_TOKEN|FIREBASE_TOKEN' && echo "要移行" || echo "該当なし"
+(
+names=$(gh secret list --repo <owner/repo> --json name --jq '.[].name') || { echo "要移行（一覧を取得できない）"; exit 1; }
+if printf '%s\n' "$names" | grep -qE '^(HANGAR_TOKEN|FIREBASE_TOKEN)$'; then
+  echo "要移行（CODING_BOT_ENV_JSON へ統合後、旧 secret を削除）"
+elif printf '%s\n' "$names" | grep -qx CODING_BOT_ENV_JSON; then
+  echo "適用済み（JSON の中身は管理者が確認）"
+else
+  echo "該当なし（固有の secret が必要なら CODING_BOT_ENV_JSON を登録）"
+fi
+)
 ```
 
 「要移行」なら、2 つの値を `CODING_BOT_ENV_JSON` の JSON に足して登録し直す（例 `gh secret set CODING_BOT_ENV_JSON --body '{"HANGAR_TOKEN":"…","FIREBASE_TOKEN":"…"}'`。既に `CODING_BOT_ENV_JSON` があるなら、そのキーも残す）。そのうえで workflow を更新する。
 
+
+## 既知の移行手順: Coding Robot を coding-bot に改名する（2026-09-27 以降）
+
+旧名の互換読み取りは残さない。過去に投稿したコメントは書き換えなくてよい。以下は導入先の repo root で行う。
+
+| 対象 | 旧名 | 新名 |
+|---|---|---|
+| ディレクトリ | `.github/coding-robot/` | `.github/coding-bot/` |
+| workflow ファイル / name | `coding-robot.yml` / `Coding Robot` | `coding-bot.yml` / `coding-bot` |
+| finalize ファイル / name | `coding-robot-finalize.yml` / `Coding Robot — Finalize Ticket` | `coding-bot-finalize.yml` / `coding-bot-finalize` |
+| コメント末尾の印 | `<!-- coding-robot -->` | `<!-- coding-bot -->` |
+| concurrency / 一時ファイル | `coding-robot-*` / `.coding-robot-*` | `coding-bot-*` / `.coding-bot-*` |
+| secret | `ATTACHMENTS_TOKEN` | `CODING_BOT_GH_PAT`（対象 repo に限定した fine-grained PAT を新規発行。旧 token はコピーしない） |
+| secret | `CODEX_AUTH_JSON` | `CODING_BOT_CODEX_AUTH_JSON` |
+| secret | `CLAUDE_CODE_OAUTH_TOKEN` | `CODING_BOT_CLAUDE_OAUTH_TOKEN` |
+| secret | `OPENAI_API_KEY` | `CODING_BOT_OPENAI_API_KEY`（使用していた場合だけ） |
+| secret | `ENV_JSON` | `CODING_BOT_ENV_JSON` |
+| secret | `DEVBOT_NOTIFY_SECRET` | `CODING_BOT_NOTIFY_SECRET` |
+| variable | `DEVBOT_NOTIFY_URL` | `CODING_BOT_NOTIFY_URL` |
+| variable | `CLAUDE_MODEL` / `CODEX_MODEL` | `CODING_BOT_CLAUDE_MODEL` / `CODING_BOT_CODEX_MODEL` |
+| variable | `CODING_ROBOT_*` | `CODING_BOT_*`（ENGINE / TIMEOUT / RUNNER / COMPOSE_PROJECT / COMPOSE_FILE / COMPOSE_OVERRIDE / WORKSPACE / SERVICE / USER / POST_CREATE / CI_WORKFLOW / PROGRESS_INTERVAL / PREBUILD_PATHS） |
+
+1. 旧 workflow の run が終わるのを待ち、新しい名前の secret / variable を登録する。省略して既定値を使っていた変数・未使用の認証は登録しない。PAT の権限は上の「任意: 人のクリックを 1 回にする」を参照。変数の値は `gh variable get <旧名> --repo <owner/repo>` で読める。値に旧パスが含まれる `PREBUILD_PATHS` 等は、新パスへ直して登録する。
+2. 新名を読む workflow を default branch へ入れる直前に、下の一時 workflow で secret をコピーする。成功したら一時 workflow を次の commit で削除する。失敗したら旧設定と旧 workflow を維持して止まる。コピー後に旧 run を動かさない（ログイン情報が更新されるとコピー先が失効しうる）。
+3. ディレクトリと workflow を `git mv` し、「更新（再同期）」に従って上流の差分を反映する。`.ticket-config.yaml` の hook・`.gitignore`・devcontainer・既存 CI・skill 等のパス参照も更新する。印は書く側と判定する側の両方を新名へ揃える。container 内では CLI 固定の `CLAUDE_CODE_OAUTH_TOKEN` / `OPENAI_API_KEY` へ新 secret を渡し、それ以外の bot 設定は新名で読む。
+4. 画像と非画像添付を含む Issue から 1 回動かし、画像が読めること、非画像は取得せず本文への転記を頼むこと、human gate で止まることを確認する。承認後の PR と CI、通知を使う場合はその受信も確認する。
+5. 成功後、表の旧 secret / variable を `gh secret delete <旧名>` / `gh variable delete <旧名>` で削除し、下の確認を再実行する。それまでは旧名を残すので workflow を戻せる。ただしログイン情報が切替後に更新された場合、旧 secret に戻すには再ログインが必要になる。使わなくなった旧 token 自体の失効も、発行元で行う。
+
+### secret をコピーする一時 workflow の例
+
+GitHub の secret は登録後に値を読み出せない。**秘密の値をログへ出さず、workflow の env から `gh secret set` の標準入力へ渡す。**以下を `.github/workflows/migrate-coding-bot-secrets.yml` に置く。`migration/coding-bot` は実際の作業 branch 名へ替える。開発中はこのファイルを置かず、切替直前の push にだけ足す（dispatch ではなく branch の push で起動する）。`CODING_BOT_GH_PAT` は事前登録済みで Secrets の Read and write が必要。
+
+```yaml
+name: migrate-coding-bot-secrets
+on:
+  push:
+    branches: [migration/coding-bot]
+permissions: {}
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.CODING_BOT_GH_PAT }}
+      GH_REPO: ${{ github.repository }}
+      OLD_CODEX: ${{ secrets.CODEX_AUTH_JSON }}
+      OLD_CLAUDE: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      OLD_OPENAI: ${{ secrets.OPENAI_API_KEY }}
+      OLD_ENV: ${{ secrets.ENV_JSON }}
+      OLD_NOTIFY: ${{ secrets.DEVBOT_NOTIFY_SECRET }}
+    steps:
+      - name: Copy configured secrets
+        shell: bash
+        run: |
+          set +x
+          set -euo pipefail
+          copy() {
+            if [ -n "$2" ]; then
+              printf '%s' "$2" | gh secret set "$1" --repo "$GH_REPO"
+            fi
+          }
+          copy CODING_BOT_CODEX_AUTH_JSON "$OLD_CODEX"
+          copy CODING_BOT_CLAUDE_OAUTH_TOKEN "$OLD_CLAUDE"
+          copy CODING_BOT_OPENAI_API_KEY "$OLD_OPENAI"
+          copy CODING_BOT_ENV_JSON "$OLD_ENV"
+          copy CODING_BOT_NOTIFY_SECRET "$OLD_NOTIFY"
+```
+
+### 適用確認（冪等・読み取りのみ）
+
+`R` を導入先 repo に替えて実行する。これは **PAT を使う構成**を確認する。必須は PAT、engine の選択、その engine の認証。残りは opt-in なので、使っていた値が新名へ移ったことを表と一覧で確認する（未登録の既定値を新規作成する必要はない）。旧名・旧パスの検査は実行ファイルを対象にし、移行を説明する Markdown と過去のコメントは対象外とする。API の取得に失敗したときも「要移行」とし、適用済みにはしない。
+
+```bash
+(
+R='<owner/repo>'
+need=0
+secrets=$(gh secret list --repo "$R" --json name --jq '.[].name') || { echo '要移行（secret 一覧を取得できない）'; exit 1; }
+variables=$(gh variable list --repo "$R" --json name --jq '.[].name') || { echo '要移行（variable 一覧を取得できない）'; exit 1; }
+engine=$(gh variable get CODING_BOT_ENGINE --repo "$R") || engine=''
+[ -d .github/coding-bot ] || need=1
+[ ! -e .github/coding-robot ] || need=1
+[ -f .github/workflows/coding-bot.yml ] || need=1
+[ -f .github/workflows/coding-bot-finalize.yml ] || need=1
+[ -f .github/coding-bot/run-action.sh ] || need=1
+grep -qF '<!-- coding-bot -->' .github/workflows/coding-bot.yml || need=1
+grep -qF 'secrets.CODING_BOT_GH_PAT' .github/workflows/coding-bot.yml || need=1
+grep -qF 'vars.CODING_BOT_ENGINE' .github/workflows/coding-bot.yml || need=1
+for f in .github/workflows/coding-robot*.yml; do
+  [ ! -e "$f" ] || need=1
+done
+# untracked の実行ファイルも検査する。移行文書のある root/docs は対象外。
+paths=()
+for path in .github .devcontainer scripts .ticket-config.yaml .gitignore; do
+  [ ! -e "$path" ] || paths+=("$path")
+done
+old_refs=$(git grep --no-index -n -E 'coding.robot|CODING_ROBOT_|ATTACHMENTS_TOKEN|DEVBOT_NOTIFY_|\b(CODEX_AUTH_JSON|ENV_JSON|CLAUDE_MODEL|CODEX_MODEL)\b|secrets\.(CLAUDE_CODE_OAUTH_TOKEN|OPENAI_API_KEY)' -- "${paths[@]}" 2>/dev/null)
+rc=$?
+if [ "$rc" -gt 1 ] || [ -n "$old_refs" ]; then need=1; fi
+printf '%s\n' "$secrets" | grep -qE '^(ATTACHMENTS_TOKEN|CODEX_AUTH_JSON|CLAUDE_CODE_OAUTH_TOKEN|OPENAI_API_KEY|ENV_JSON|DEVBOT_NOTIFY_SECRET)$' && need=1
+printf '%s\n' "$variables" | grep -qE '^(CODING_ROBOT_.*|CLAUDE_MODEL|CODEX_MODEL|DEVBOT_NOTIFY_URL)$' && need=1
+printf '%s\n' "$secrets" | grep -qx CODING_BOT_GH_PAT || need=1
+case "$engine" in
+  claude) printf '%s\n' "$secrets" | grep -qx CODING_BOT_CLAUDE_OAUTH_TOKEN || need=1 ;;
+  codex) printf '%s\n' "$secrets" | grep -qE '^CODING_BOT_(CODEX_AUTH_JSON|OPENAI_API_KEY)$' || need=1 ;;
+  *) need=1 ;;
+esac
+printf 'Secrets:\n%s\nVariables:\n%s\n' "$secrets" "$variables"
+[ -z "$old_refs" ] || printf '%s\n' "$old_refs"
+[ "$need" -eq 0 ] && echo '適用済み' || echo '要移行'
+)
+```

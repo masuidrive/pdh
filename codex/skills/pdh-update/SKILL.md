@@ -13,7 +13,7 @@ description: "PDH アップデート: 上流 PDH リポジトリの最新版を�
 4. `PDH-AGENTS.md` と `docs/product-delivery-hierarchy.md` を更新する。
 5. `AGENTS.md`、`product-brief.md`、`technical-reference.md`、`.ticket-config.yaml`、`scripts/` の project 固有ファイルは上書きしない。template との差分を読み、必要な上流変更だけをマージする。
 6. `codex/INSTALL.md` の配置表に追加された `.check` を取り込み、project 固有の `.check` を残す。`required-pdh-files.check` は現行の skill / agent 定義一式に合わせる。
-6.5. github-bot レイヤーを導入済みなら（`.github/coding-bot/_pdh.md` がある）、上流 `github-bot/INSTALL.md`「更新」に従い `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/` を上流の版で置き換える。machinery（`.github/coding-bot/`・`.github/workflows/coding-bot*.yml`・`.devcontainer/`）は同じ「更新」のとおり diff を確かめて反映し、丸ごと上書きしない。
+6.5. github-bot レイヤーを導入済みなら（`.github/` 内に `_pdh.md` がある。改名前の配置も含む）、先に上流 [github-bot/INSTALL.md の改名手順](../../../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)と同文書の「導入先固有の secret」を確認し、該当する移行と確認コマンドの再実行を行う。その後、同文書「更新」に従い `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/` を上流の版で置き換える。machinery（`.github/coding-bot/`・`.github/workflows/coding-bot*.yml`・`.devcontainer/`）は同じ「更新」のとおり diff を確かめて反映し、丸ごと上書きしない。
 7. `bash ./ticket.sh selfupdate` で ticket.sh を更新する。
 8. `Based on` の commit ID を上流 HEAD に更新し、`codex/INSTALL.md` の導入結果検査と project の `scripts/test-all.sh` を実行する。
 9. 同じ更新をもう一度実行し、PDH 配布物に 2 回目の差分が出ないことを確認する。
