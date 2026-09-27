@@ -25,8 +25,6 @@
 # invariants, run every change in the same gate as the type checker). See
 # scripts/fast-checks.sh and scripts/checks/README.md.
 #   run "fast-checks" bash scripts/fast-checks.sh
-# PDH: ticket dir の progress.md（存在・追記のみ）と human gate の待ち行を、申告に依らず確かめる
-run "pdh-ticket" bash scripts/check-pdh-ticket.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

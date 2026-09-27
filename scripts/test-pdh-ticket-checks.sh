@@ -488,4 +488,52 @@ for environment in no-git no-head; do
   contains 'tickets/sample/note.md:4:'
 done
 
+# sub-branch を --no-ff で merge した commit、base を取り込み直した merge、sub-branch での done 移動。
+must mkdir -p "$TMP_DIR/sub-repo/scripts" "$TMP_DIR/sub-repo/tickets/sample"
+must cp "$TEMPLATES/check-pdh-ticket.sh" "$TEMPLATES/pdh-review-range.sh" "$TMP_DIR/sub-repo/scripts/"
+must cd "$TMP_DIR/sub-repo"
+must git init -q -b main
+printf '初期値\n' > code.txt
+printf '### Why\n区間を検査する\n' > tickets/sample/ticket.md
+status PDH-human-review
+: > tickets/sample/progress.md
+commit 初期状態
+must git checkout -qb feature
+printf 'review 済み\n' >> code.txt
+commit review対象
+gate "$(git rev-parse HEAD)"
+commit gate記録
+must git checkout -qb sub
+printf 'sub で追加\n' >> code.txt
+commit subの変更
+must git checkout -q feature
+must git -c commit.gpgsign=false merge --no-ff -qm subの取り込み sub
+expect 0 'sub-branch の commit も区間に入る' bash scripts/pdh-review-range.sh tickets/sample --from close-gate --commits
+contains 'subの変更'
+expect 1 'sub-branch の未 review 変更を拒否' bash scripts/check-pdh-ticket.sh
+contains '1 ファイル・追加 1 行・削除 0 行'
+gate "$(git rev-parse HEAD)"
+commit gate記録2
+must git checkout -q main
+must git -c commit.gpgsign=false merge --no-ff -qm PRのmerge feature
+printf 'main だけの変更\n' > main-only.txt
+commit main自身の変更
+must git checkout -q feature
+must git -c commit.gpgsign=false merge --no-ff -qm mainの取り込み直し main
+expect 0 'base の取り込み直しで tip を切り替えない' bash scripts/pdh-review-range.sh tickets/sample --from close-gate --commits
+excludes 'main自身の変更'
+expect 0 'base の取り込み直しは未 review 変更にしない' bash scripts/check-pdh-ticket.sh
+must git checkout -qb sub-done
+printf '未 review\n' >> code.txt
+must mkdir -p tickets/done
+must git mv tickets/sample tickets/done/sample
+commit subでdoneへ移動
+must git checkout -q feature
+must git -c commit.gpgsign=false merge --no-ff -qm sub-doneの取り込み sub-done
+expect 1 'sub-branch で done へ移した ticket も検査する' bash scripts/check-pdh-ticket.sh
+contains 'tickets/done/sample'
+must rm scripts/pdh-review-range.sh
+expect 1 'pdh-review-range.sh の欠落を名指しする' bash scripts/check-pdh-ticket.sh
+contains 'scripts/pdh-review-range.sh がありません'
+
 printf 'PASS: check-pdh-ticket (%s, %s 件)\n' "$distribution_set" "$checks"

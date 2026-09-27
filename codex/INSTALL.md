@@ -260,6 +260,18 @@ git diff --no-index -- scripts/test-all.sh tmp/pdh/codex/templates/test-all.sh |
 
 `.ticket-config.yaml` の `note_content` は 2026-09-14 以降、現在値の節だけを持つ（実装ログ / 品質検証結果 / 人間レビュー / Discoveries の 4 節は `progress.md` へ移った）。`grep -q '## PDH-implement. 実装ログ' .ticket-config.yaml && echo "要適用" || echo "適用済み"` で確認し、「要適用」なら template に合わせて 4 節を外し、`ticket_files` と `append_only_files` を足す（ticket.sh 20260914 以降。`selfupdate` を先に）。あわせて `scripts/check-pdh-ticket.sh` を配置し、`scripts/test-all.sh` の `run "fast-checks"` の次に `run "pdh-ticket" bash scripts/check-pdh-ticket.sh` を足す（`grep -q check-pdh-ticket.sh scripts/test-all.sh` で確認）。
 
+**close 前 review の区間が sub-branch の merge を拾うようになり、`test-all.sh` の迷子の行が消えた（2026-09-27 以降）**
+
+`scripts/pdh-review-range.sh` は区間を «base から届く commit を除いたもの» で作るようになった。以前は first-parent だけを見ていたので、gate の後に sub-branch を `--no-ff` で merge した commit が区間から漏れ、review されないまま close を通った。base に merge 済みの branch へ base を取り込み直したときに、base 側の commit を ticket の変更と数えることも無くなった。`scripts/check-pdh-ticket.sh` も同じ取り方で `tickets/done/` への移動を探し、`scripts/pdh-review-range.sh` が無ければ名指しして落ちる。あわせて、`test-all.sh` テンプレートの先頭のコメント欄に `run "pdh-ticket"` が 1 行紛れ込んでいて、実行のたびに `run: command not found` が出ていた（本来の行は下の `run "fast-checks"` の次にある）。
+
+```bash
+grep -q 'pdh_review_exclude' scripts/pdh-review-range.sh && echo "区間 script: 適用済み" || echo "区間 script: 要適用"
+grep -q 'pdh_review_exclude' scripts/check-pdh-ticket.sh && echo "検査: 適用済み" || echo "検査: 要適用"
+awk '/^run_seq\(\)/{exit} /^run "pdh-ticket"/{f=1} END{exit !f}' scripts/test-all.sh && echo "test-all: 迷子の行あり" || echo "test-all: 適用済み"
+```
+
+「要適用」なら `tmp/pdh/codex/templates/pdh-review-range.sh` と `tmp/pdh/codex/templates/check-pdh-ticket.sh` を `scripts/` へコピーする。「迷子の行あり」なら、`run_seq()` の定義より前にある `run "pdh-ticket" bash scripts/check-pdh-ticket.sh` の行（と直前の `# PDH:` のコメント行）を消す。下の `run "fast-checks"` の次にある同じ行は残す。
+
 **close 前 review の区間と、起票の検査が `check-pdh-ticket.sh` に入った（2026-09-26 以降）**
 
 `scripts/check-pdh-ticket.sh` が 3 つを新しく落とす。① progress の最後の `close-gate-sha:` の後に ticket 自身の commit が残っている、または Status が `PDH-close`（branch 自身の commit が `tickets/done/` へ移した ticket を含む）なのに `close-gate-sha:` が 1 行も無い。② note の Checklist の `起票: <anchor> → <ticket 名>` 行の ticket が `tickets/` にも `tickets/done/` にも無い。③ `.ticket-config.yaml` の ticket テンプレが Why 節に `再現か実測:` を持つようになった commit より後に作られた ticket で、Why の `再現か実測:` か `いま直さない理由:` が空。区間は新しい `scripts/pdh-review-range.sh` が作り、base の branch 名は `.ticket-config.yaml` の `default_branch` から読む。記録の書式と回し方は `pdh-dev` の `_reference.md` と `_flow.md`（PDH-verify の 7）にある。

@@ -146,13 +146,23 @@ done_tickets=()
 git_ready=0
 if git rev-parse --verify HEAD >/dev/null 2>&1; then
   git_ready=1
+  if [ ! -f scripts/pdh-review-range.sh ]; then
+    printf 'check-pdh-ticket: scripts/pdh-review-range.sh がありません。INSTALL.md の配置表どおりに置いてください\n' >&2
+    exit 1
+  fi
   source scripts/pdh-review-range.sh
   pdh_review_base_tip || exit 1
 fi
 if [ "$git_ready" -eq 1 ] && [ -n "$pdh_review_base" ]; then
-  branch_start=$(git merge-base "$pdh_review_base" "$pdh_review_tip") || exit 1
-  added=$(git log --first-parent --no-merges --diff-filter=A --name-only --format= \
-    "$branch_start..$pdh_review_tip" -- ':(top)tickets/done/*/ticket.md') || exit 1
+  # 区間の取り方は pdh-review-range.sh と同じ（base から届く commit を除く）。
+  if ! git merge-base --is-ancestor "$pdh_review_tip" "$pdh_review_exclude"; then
+    added=$(git log --no-merges --diff-filter=A --name-only --format= \
+      "$pdh_review_tip" --not "$pdh_review_exclude" -- ':(top)tickets/done/*/ticket.md') || exit 1
+  else
+    branch_start=$(git merge-base "$pdh_review_base" "$pdh_review_tip") || exit 1
+    added=$(git log --first-parent --no-merges --diff-filter=A --name-only --format= \
+      "$branch_start..$pdh_review_tip" -- ':(top)tickets/done/*/ticket.md') || exit 1
+  fi
   while IFS= read -r t; do
     [[ "$t" =~ ^tickets/done/[^/]+/ticket\.md$ && "$t" != *-CANCELED-* ]] || continue
     done_tickets+=("$t")

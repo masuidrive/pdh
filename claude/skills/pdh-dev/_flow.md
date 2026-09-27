@@ -59,7 +59,7 @@ review 前に `git merge-base --is-ancestor origin/<base> HEAD` を確認し、f
 5. 外部 surface を consumer 視点で観察する（`pdh-verifying`「Surface Observer」）。純 backend は progress に 1 行残して skip する
 6. AC check 済み ticket file を含めて commit する
 7. close 前 review: 最後に review した SHA の後に入った ticket 自身の commit を review する。**守るのは、review が読んでいない ticket 自身の commit が close へ進まないこと**である
-   - reviewer への指示文は `bash scripts/pdh-review-range.sh <ticket dir> --from last-review --prompt` の出力にする。区間は first-parent の merge 以外の commit で作るので、base の merge で入った変更は含まない。diff の基点を指定する形（`--base` など）は HEAD との merge-base を取るので、この区間を渡せない
+   - reviewer への指示文は `bash scripts/pdh-review-range.sh <ticket dir> --from last-review --prompt` の出力にする。区間は base の取り込みで入った変更を含まない。diff の基点を指定する形（`--base` など）で代用しない
    - exit 3 は区間が空なので、review を回さない。exit 2（起点の行が無い・起点が履歴に無い）は ticket の差分全体を review する
    - 回した HEAD を progress へ `close-gate-sha:` の行で追記する（区間が空なら SHA の後に `区間が空` と書く）。`tickets/` だけの commit は区間に入らない
    - この後に ticket 自身の変更を commit したら、もう一度回す。`scripts/check-pdh-ticket.sh` が、`close-gate-sha:` の後に残った ticket 自身の変更と、`PDH-close` なのに行が無いことを落とす

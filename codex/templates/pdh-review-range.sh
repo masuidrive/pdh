@@ -7,6 +7,7 @@ pdh_review_base_tip() {
   local ref other newest repo_root default_branch
   local candidates=()
   pdh_review_base=''
+  pdh_review_exclude=''
   pdh_review_tip=$(git rev-parse HEAD) || return 2
   # PR の base（GITHUB_BASE_REF）があれば、それが merge 先なので新旧を比べずに使う。
   if [ -n "${GITHUB_BASE_REF:-}" ] &&
@@ -48,10 +49,17 @@ pdh_review_base_tip() {
       break
     fi
   done
+  pdh_review_exclude=$pdh_review_base
+  # HEAD が «base へ branch を merge した ref»（PR の merge ref）なら、第 2 親が ticket の tip で、
+  # 第 1 親が merge 前の base である。第 2 親がすでに base に入っていて HEAD 自身は入っていないなら、
+  # それは base を取り込み直した merge なので、tip は HEAD のまま。
   if [ -n "$pdh_review_base" ] &&
      git rev-parse --verify 'HEAD^2' >/dev/null 2>&1 &&
-     git merge-base --is-ancestor 'HEAD^1' "$pdh_review_base"; then
+     git merge-base --is-ancestor 'HEAD^1' "$pdh_review_base" &&
+     { git merge-base --is-ancestor HEAD "$pdh_review_base" ||
+       ! git merge-base --is-ancestor 'HEAD^2' "$pdh_review_base"; }; then
     pdh_review_tip=$(git rev-parse 'HEAD^2') || return 2
+    pdh_review_exclude=$(git rev-parse 'HEAD^1') || return 2
   fi
 }
 [ "${BASH_SOURCE[0]}" = "$0" ] || return 0
@@ -92,7 +100,15 @@ if ! git merge-base --is-ancestor "$start" "$tip"; then
   printf 'pdh-review-range: 起点が tip の履歴に無い（rebase か amend）。close 前 review を回し直し、progress.md に新しい SHA を追記する（起点: %s / tip: %s）\n' "$start" "$tip" >&2
   exit 2
 fi
-commits=$(git log --first-parent --no-merges --format='%H %s' "$start..$tip" -- ':(top)**' ':(top,exclude)tickets') || exit 2
+# base から届く commit を除けば、base の取り込みで入った変更だけが外れ、sub-branch を merge して
+# 入った ticket 自身の commit は残る。（diff の基点を渡す形 `--base` などは HEAD との merge-base を
+# 取るので、base を取り込み直した branch ではこの区間にならない。）base が分からないときと、base の上で直接作業しているとき
+# （tip が base に含まれる）だけは first-parent で近似する。
+if [ -n "$pdh_review_exclude" ] && ! git merge-base --is-ancestor "$tip" "$pdh_review_exclude"; then
+  commits=$(git log --no-merges --format='%H %s' "$start..$tip" --not "$pdh_review_exclude" -- ':(top)**' ':(top,exclude)tickets') || exit 2
+else
+  commits=$(git log --first-parent --no-merges --format='%H %s' "$start..$tip" -- ':(top)**' ':(top,exclude)tickets') || exit 2
+fi
 case "$mode" in
   --commits)
     [ -z "$commits" ] || printf '%s\n' "$commits"
