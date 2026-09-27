@@ -271,6 +271,9 @@ EOF
         echo "DEBUG: message_stop detected, incremented MESSAGE_COUNTER to $MESSAGE_COUNTER" >&2
       fi
     done
+    # パイプの終了コードは右側の while のもの（0）になるので、claude / timeout の値で抜ける。
+    # これが無いと timeout（124）が成功として報告される。
+    exit "${PIPESTATUS[0]}"
   ) &
   ENGINE_PID=$!
   echo "Claude PID: $ENGINE_PID"
