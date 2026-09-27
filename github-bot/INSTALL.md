@@ -406,3 +406,14 @@ if [ -f .github/coding-robot/smoke-local.sh ]; then bash -n .github/coding-robot
 
 PR 起点の run は同じ repo の `agent/issue-<N>` で、N が実在の Issue であることを要求する。
 任意の手作業 branch の PR は拒否理由をコメントして正常終了する。依頼は元の Issue へ戻す。
+
+## 既知の移行手順: 導入先固有の secret を `ENV_JSON` へ移す（2026-09-27 以降）
+
+`coding-robot.yml` は `HANGAR_TOKEN` / `FIREBASE_TOKEN` を個別の secret として container へ渡していたが、汎用の workflow から外した。repo 固有の値は `ENV_JSON` に入れる（`run-action.sh` がキーごとに環境変数として export する）。
+
+```bash
+gh secret list --repo <owner/repo> | grep -E 'HANGAR_TOKEN|FIREBASE_TOKEN' && echo "要移行" || echo "該当なし"
+```
+
+「要移行」なら、2 つの値を `ENV_JSON` の JSON に足して登録し直す（例 `gh secret set ENV_JSON --body '{"HANGAR_TOKEN":"…","FIREBASE_TOKEN":"…"}'`。既に `ENV_JSON` があるなら、そのキーも残す）。そのうえで workflow を更新する。
+

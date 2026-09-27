@@ -191,8 +191,6 @@ jobs:
           CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ATTACHMENTS_TOKEN: ${{ secrets.ATTACHMENTS_TOKEN }}
-          HANGAR_TOKEN: ${{ secrets.HANGAR_TOKEN }}
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
           ENV_JSON: ${{ secrets.ENV_JSON }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
@@ -223,8 +221,6 @@ jobs:
             -e CLAUDE_MODEL \
             -e GITHUB_TOKEN \
             -e ATTACHMENTS_TOKEN \
-            -e HANGAR_TOKEN \
-            -e FIREBASE_TOKEN \
             -e ENV_JSON \
             -e GITHUB_REPOSITORY \
             -e GITHUB_RUN_ID \
