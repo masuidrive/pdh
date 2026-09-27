@@ -18,7 +18,18 @@ $error_message
 - **Run ID**: $GITHUB_RUN_ID
 
 ---
-🤖 [Coding Robot](https://github.com/masuidrive/pdh/tree/main/github-bot)" || true
+🤖 [Coding Robot](https://github.com/masuidrive/pdh/tree/main/github-bot)" || return 0
+    # 進捗コメントがこの run の最終報告になったので、workflow の «Report if the run left nothing» に
+    # 二重投稿させない。認証失敗はまだ CODING_ROBOT_NOTIFY_FILE を定義する前なので、host への通知もここで書く。
+    : > "${GITHUB_WORKSPACE:-.}/.coding-robot-reported" 2>/dev/null || true
+    local notify="${CODING_ROBOT_NOTIFY_FILE:-${GITHUB_WORKSPACE:-.}/.coding-robot-notify}"
+    if [ ! -f "$notify" ]; then
+      {
+        printf 'issue=%s\nkind=failed\ncomment_id=%s\n' \
+          "$(printf '%s' "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" | tr -d '\r\n=')" \
+          "$(printf '%s' "$PROGRESS_COMMENT_ID" | tr -d '\r\n=')"
+      } > "$notify" 2>/dev/null || true
+    fi
   fi
 }
 
