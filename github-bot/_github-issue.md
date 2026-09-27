@@ -65,8 +65,7 @@ human gate では判断ボード（`pdh-decision-board` の Completed Staff Work
     ⚠ **どうしても撮れないときは、撮れないことと理由を板の開いた場所に書き、
     «絵なしで承認してよいか» を問いに含める。**黙って絵を落とさない
   - ⚠ **その変更で何かを失う人がいるなら、誰が失うかを書く。**«入力して Enter だけ» のような
-    既存の操作が消えるなら、**それを使っている人が承認者以外にもいる**。実測で読み手は
-    「自分以外の使用者にも影響しそうで、自分1人の承認で決めてよい話なのか気になります」と答えた。
+    既存の操作が消えるなら、**それを使っている人が承認者以外にもいる**。
     **承認者 1 人で決めてよいのかどうかを、こちらから 1 行で言う**
   - **どれでもないときの返し方も 1 行書く**（«どれも違う。◯◯したい» と書けばよい）
 - **長くしない — 推奨を先頭に、説明は畳む**（issue コメントは長いと読まれない。折りたたみは GitHub で効く）:
@@ -77,11 +76,9 @@ human gate では判断ボード（`pdh-decision-board` の Completed Staff Work
     **畳むこと自体は、開かずに済むという約束にならない。**
   - ⚠ **worker の rc 一覧・spawn の表・stage 名は、畳んでも issue に出さない。**あれは run を
     debug するためのもので、**issue には読み手がいない**（progress と run のログが既に持っている）。
-    実測で読み手は `implementation=0 qa-prepare=0 …` を引いて「これが何を表す数字なのか
-    一切分かりません」と答えた。**worker の失敗は、読み手の判断が変わるときだけ、言葉で開いて書く**
+    **worker の失敗は、読み手の判断が変わるときだけ、言葉で開いて書く**
   - ⚠ **«確かめていないこと» は 1 か所にまとめる。**«完了しました» と «未測定です» を段落ごとに
-    混ぜない。実測: 混在のせいで読み手は「どこまで信用していい報告なのか自分で判定し直す手間が
-    かかりました」と答えた。⚠ **限界を隠してよいという意味ではない** — 全部書いたうえで、1 か所に置く
+    混ぜない。⚠ **限界を隠してよいという意味ではない** — 全部書いたうえで、1 か所に置く
   - ⚠ **畳んではならない**: 代償・リスク・不可逆操作・機微情報・(close gate では) AC 達成の証拠。判断に load-bearing なので開いたまま（`base.md` / `risk-overlay.md` の «承認・証拠・機微・不可逆は de-emphasize しない»）。**«推奨で行ける» は «判断を隠す» ではない** — 承認者が代償を見た上で軽く諾否できることが条件。
 - **図表・画像**: **mermaid は使える** — GitHub が ` ```mermaid ` を issue でネイティブ描画し、bot はテキストで author できる（ブラウザ不要。HTML kit の mermaid と同じ役割）。フロー/構成図で判断が明確になるなら使う。
   - **スクリーンショットは «devcontainer にブラウザが入っているか» で決まる**（«skill の掟» ではない）。⚠ **入っているかどうかを、決めつけずに確かめる** — `command -v agent-browser` / `ls ~/.cache/ms-playwright` / `npx playwright --version` のどれかで見る。**入っていれば撮る。**devcontainer に無い機能を、あると決めつけない。
@@ -134,7 +131,7 @@ Actions の run は 1 回ごとに記憶を失う。gate や質問で停止す�
 bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する**（Projects は使わない。ラベルだけで status を出す）。
 
 - ラベルは 8 段: `PDH-open` / `PDH-ticket-review` / `PDH-ticket-human-review` / `PDH-implement` / `PDH-review` / `PDH-verify` / `PDH-human-review` / `PDH-close`。**ticket は常に 1 stage**。
-- **ラベルは runner（`pdh-hooks.sh`）が run の終わりに note の `## Status:` から付ける。**agent は note の Status を到達 stage に保つだけでよく、`gh issue edit` でラベルを触らない。同じ hook が、human gate で停止する run の最終レポートに承認導線が無ければ足し、note の Checklist に `発行先:` 付きの待ち行が無ければ gate コメントの URL で足し、`progress.md` が無ければ作る。**hook が補うのは落ちたときの保険であり、agent が書く規則は変わらない。**
+- **ラベルは runner（`pdh-hooks.sh`）が run の終わりに note の `## Status:` から付ける。**agent は note の Status を到達 stage に保つだけでよく、`gh issue edit` でラベルを触らない。同じ hook が、human gate で停止する run の最終レポートに承認導線が無ければ足し、note の Checklist に `発行先:` 付きの待ち行が無ければ gate コメントの URL で足す。**hook が補うのは落ちたときの保険であり、agent が書く規則は変わらない。**
 - 特に **gate 待ちラベル（`PDH-ticket-human-review` / `PDH-human-review`）**で溜まると、Issues 一覧のラベルフィルタで «あなたが承認すべき issue» が一目で分かる。これがラベルの主目的。
 - ラベルは INSTALL で作成済みが前提。無い repo では hook が skip し、最終レポートの「導入検査で要追加」に出る（gate や実装は止めない）。
 - ⚠ **`awaiting-reply` は stage ラベルとは別系統で、8 段と同時に付く。**stage は «どこにいるか» しか

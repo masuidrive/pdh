@@ -22,7 +22,7 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 | `github-bot/.github/workflows/devcontainer-prebuild.yml` | `.github/workflows/` | **任意。**devcontainer が重い repo 向け（下の「任意: devcontainer を毎 run 焼かない」） |
 | `github-bot/_pdh.md` | `.github/coding-robot/_pdh.md` | **PDH mode を定義する**（machinery 側には `_pdh.md` を置かない） |
 | `github-bot/_github-issue.md` | `.github/coding-robot/_github-issue.md` | gate→issue プロトコル（cloud / local 共通） |
-| `github-bot/pdh-hooks.sh` | `.github/coding-robot/pdh-hooks.sh` | runner hook。progress.md の作成・stage ラベル・承認導線・待ち行・導入検査を、agent の申告に依らず run の終わりに保証する（`run-action.sh` が呼ぶ） |
+| `github-bot/pdh-hooks.sh` | `.github/coding-robot/pdh-hooks.sh` | runner hook。stage ラベル・承認導線・待ち行・待ち印・導入検査を、agent の申告に依らず run の終わりに保証する（`run-action.sh` が呼ぶ） |
 | `github-bot/pdh-gh-pull/` | `.claude/skills/pdh-gh-pull/`（Codex は `.codex/skills/pdh-gh-pull/`） | 「issue 読みに行く」skill。core skill と同じ流儀で symlink する場合はそれに合わせる |
 | `github-bot/.ticket-config.snippet.yaml` の中身 | `.ticket-config.yaml` の末尾へ追記 | `github_bot:` 設定 |
 
