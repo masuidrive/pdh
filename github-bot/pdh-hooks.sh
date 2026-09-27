@@ -44,10 +44,12 @@ set_awaiting() {  # $1=add|remove  $2=issue  $3=branch  $4=理由
   fi
   [ -z "$AWAITING_PR" ] || issue_action=remove
   gh issue edit "$issue" --repo "$REPO" "--${issue_action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
-    && log "$AWAITING_LABEL を Issue #$issue に ${issue_action} した（${reason}）"
+    && log "$AWAITING_LABEL を Issue #$issue に ${issue_action} した（${reason}）" \
+    || { [ "$issue_action" = remove ] || log "$AWAITING_LABEL を Issue #$issue に付けられない（ラベルが無いか権限不足。github-bot/INSTALL.md「3. stage ラベルを作る」）"; }
   if [ -n "$AWAITING_PR" ]; then
     gh issue edit "$AWAITING_PR" --repo "$REPO" "--${action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
-      && log "$AWAITING_LABEL を PR #$AWAITING_PR に ${action} した（${reason}）"
+      && log "$AWAITING_LABEL を PR #$AWAITING_PR に ${action} した（${reason}）" \
+      || { [ "$action" = remove ] || log "$AWAITING_LABEL を PR #$AWAITING_PR に付けられない（ラベルが無いか権限不足。github-bot/INSTALL.md「3. stage ラベルを作る」）"; }
   fi
 }
 log() { printf 'pdh-hooks: %s\n' "$*" >&2; }
