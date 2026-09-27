@@ -57,7 +57,12 @@ expect() {
   must mkdir -p "$repo/tickets"
   must git -C "$repo" init -q -b main
   printf 'github_bot:\n  close: pr-merge\n' > "$repo/.ticket-config.yaml"
-  if [ "$ticket" != missing ]; then
+  if [ "$ticket" = done ]; then
+    # pr-merge の close gate: ticket.sh close --no-merge で done へ移したあと、PR の Merge を待つ。
+    must mkdir -p "$repo/tickets/done/260101-000000-issue-1"
+    printf '# Issue 1\n' > "$repo/tickets/done/260101-000000-issue-1/ticket.md"
+    printf '## Status: PDH-human-review\n\n## Checklist\n' > "$repo/tickets/done/260101-000000-issue-1/note.md"
+  elif [ "$ticket" != missing ]; then
     must mkdir -p "$repo/tickets/260101-000000-issue-1"
     printf '# Issue 1\n' > "$repo/tickets/260101-000000-issue-1/ticket.md"
     {
@@ -156,6 +161,8 @@ expect '5. final（待ち行あり）+ open PR 11' final 11 waiting $'1 remove\n
 expect '6. final（待ち行あり）+ PR 無し' final '' waiting '1 add'
 expect '7. final（待ち行なし）+ open PR 11' final 11 none $'1 remove\n11 remove'
 expect '8. final（ticket 未作成）+ PR 無し' final '' missing '1 add'
+expect '13. final（done 済みの close gate）+ open PR 11' final 11 done $'1 remove\n11 add'
+expect '14. final（done 済み）+ PR 無し' final '' done ''
 
 # 共通関数への集約を、コメント以外のラベル操作行が 2 行以下かで検査する。
 # --add-label / --remove-label と "--${action}-label" の両方を数える。

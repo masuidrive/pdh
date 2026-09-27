@@ -157,7 +157,8 @@ dir=""
 for d in tickets/*-issue-"$ISSUE"; do [ -d "$d" ] && [ -f "$d/ticket.md" ] && { dir="$d"; break; }; done
 if [ -z "$dir" ]; then
   # ⚠ ticket dir が無いのは 2 通りあり、扱いが逆になる。
-  #   done 済み  : tickets/done/*-issue-N が在る。ラベルは補正しない（PR の Merge 待ちも含む）
+  #   done 済み  : tickets/done/*-issue-N が在る。stage ラベルは補正しない。PR の Merge を待つ close gate
+  #                なら待ち印を PR に付ける（start が Issue と PR の両方から外しているため）
   #   未作成     : どちらも無い。bot が «足りないことを聞く» 段で止まっている（_issue.md A0）
   # 後者でラベルを付けないと、依頼者の画面に «あなたの番» が 1 つも出ない。
   done_dir=""
@@ -171,6 +172,7 @@ if [ -z "$dir" ]; then
     if [ "$status" = "PDH-human-review" ]; then
       pr=$(gh pr list --head "$BRANCH" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
       if [[ "$pr" =~ ^[0-9]+$ ]]; then
+        set_awaiting add "$ISSUE" "$BRANCH" "close gate: PR #$pr の Merge 待ち"
         write_notify "$ISSUE" close_gate "$status" "$CID" "$pr"
       fi
     fi
@@ -202,7 +204,14 @@ fi
 # --- 2. 承認導線 ---
 # close gate の答え方は `github_bot.close` で変わる。⚠ `pr-merge` では merge そのものが
 # 承認なので、承認語を求めると承認が 2 回になる（コメント + merge）。
-close_mode=$(awk '/^github_bot:/{f=1;next} /^[^ #]/{f=0} f && /^[[:space:]]*close:[[:space:]]*/{print $2; exit}' .ticket-config.yaml 2>/dev/null | tr -d "\"'")
+# 読み方は coding-robot-finalize.yml と同じ（引用符と行末コメントを許す）。
+close_mode=$(awk '
+  /^github_bot:[[:space:]]*(#.*)?$/ { section=1; next }
+  section && /^[^[:space:]#]/ { section=0 }
+  section && /^  close:/ {
+    sub(/^  close:[[:space:]]*/, ""); sub(/[[:space:]]+#.*/, "")
+    gsub(/[\047\042[:space:]]/, ""); print; exit
+  }' .ticket-config.yaml 2>/dev/null)
 if [ "$status" = "PDH-ticket-human-review" ]; then
   word="🤖 承認"
   guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。板を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。⚠ **返信には必ず 🤖 を付けてください** — 付いていないコメントは bot に届きません（この Issue では人同士の会話やメモも書かれるため、🤖 が唯一の合図です）。"
