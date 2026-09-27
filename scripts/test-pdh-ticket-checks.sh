@@ -488,6 +488,20 @@ for environment in no-git no-head; do
   contains 'tickets/sample/note.md:4:'
 done
 
+# anchor に → を含む起票行と、旧形式の Status の直後の空行。
+must mkdir -p "$TMP_DIR/edge-repo/scripts" "$TMP_DIR/edge-repo/tickets/sample" "$TMP_DIR/edge-repo/tickets/260101-000000-target"
+must cp "$TEMPLATES/check-pdh-ticket.sh" "$TEMPLATES/pdh-review-range.sh" "$TMP_DIR/edge-repo/scripts/"
+must cd "$TMP_DIR/edge-repo"
+printf '### Why\n本文\n' > tickets/sample/ticket.md
+printf '### Why\n本文\n' > tickets/260101-000000-target/ticket.md
+: > tickets/sample/progress.md
+: > tickets/260101-000000-target/progress.md
+printf '## Status: PDH-implement\n## Checklist\n- [ ] 起票: A → B の変換 → 260101-000000-target\n' > tickets/sample/note.md
+expect 0 'anchor に → を含む起票行は最後の → の後を名前にする' bash scripts/check-pdh-ticket.sh
+printf '## Status\n\nPDH-human-review\n## Checklist\n' > tickets/sample/note.md
+expect 1 '旧形式の Status の直後が空行でも値を読む' bash scripts/check-pdh-ticket.sh
+contains '発行先:'
+
 # sub-branch を --no-ff で merge した commit、base を取り込み直した merge、sub-branch での done 移動。
 must mkdir -p "$TMP_DIR/sub-repo/scripts" "$TMP_DIR/sub-repo/tickets/sample"
 must cp "$TEMPLATES/check-pdh-ticket.sh" "$TEMPLATES/pdh-review-range.sh" "$TMP_DIR/sub-repo/scripts/"

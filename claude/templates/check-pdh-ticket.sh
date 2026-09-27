@@ -75,7 +75,8 @@ check_kihyo_ticket_exists() {
     [ -n "$line" ] || continue
     name=''
     if [[ "$content" == *'→'* ]]; then
-      name=$(printf '%s\n' "${content#*→}" | awk '{gsub(/`/, ""); print $1}')
+      # ticket 名は → を含まないので、anchor 側に → があっても最後の → の後が名前である。
+      name=$(printf '%s\n' "${content##*→}" | awk '{gsub(/`/, ""); print $1}')
     fi
     exists=0
     reason='ticket を作ってから名前を書く（./ticket.sh new）'
@@ -206,7 +207,9 @@ for t in tickets/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
     # Status は «## Status: <値>» と、旧形式の «## Status» の次の行に値を書く形がある。
     # 同じ行だけを見ると旧形式の note では検査が素通りするので、両方を読む。
     st=$(awk '/^## Status:/{sub(/^## Status:[[:space:]]*/,""); print; exit}
-              /^## Status[[:space:]]*$/{getline; print; exit}' "$n" \
+              /^## Status[[:space:]]*$/{f=1; next}
+              f && /^## /{exit}
+              f && NF{print; exit}' "$n" \
          | sed -E 's/^[[:space:]]*(PDH-[a-z-]+).*/\1/')
   fi
   case "$st" in
