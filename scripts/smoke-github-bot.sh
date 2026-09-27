@@ -31,6 +31,9 @@ wait_run() {  # $1: after-timestamp → run id を返し、完了まで待つ
 }
 file_on() { gh api "repos/$R/contents/$2?ref=$1" -q .content 2>/dev/null | base64 -d 2>/dev/null; }
 labels() { gh issue view "$N" --repo "$R" --json labels -q '[.labels[].name]|join(",")'; }
+# stage ラベルは 1 つだけ。待ち印（awaiting-reply）は stage とは別に見る。
+stage_is() { [ "$(labels | tr ',' '\n' | grep '^PDH-' | paste -sd, -)" = "$1" ]; }
+awaiting_on_issue() { labels | tr ',' '\n' | grep -qx awaiting-reply; }
 last_comment() { gh issue view "$N" --repo "$R" --json comments -q '.comments[-1].body'; }
 
 orig_engine=$(gh variable get CODING_ROBOT_ENGINE --repo "$R" 2>/dev/null || echo "")
@@ -50,7 +53,8 @@ D=$(gh api "repos/$R/git/trees/$B?recursive=1" -q '.tree[].path' | grep -E "^tic
 [ -n "$D" ] && ok "ticket dir $D" || ng "ticket dir が無い"
 [ -n "$(file_on "$B" "$D/progress.md")" ] && ok "progress.md あり" || ng "progress.md が無い"
 file_on "$B" "$D/note.md" | awk '/^## Checklist/{f=1;next} /^## /{f=0} f' | grep -Eq '^- \[ \].*発行先:.*(https?://|/)' && ok "待ち行（発行先: + URL）" || ng "待ち行が無い"
-[ "$(labels)" = "PDH-ticket-human-review" ] && ok "ラベル PDH-ticket-human-review" || ng "ラベル: $(labels)"
+stage_is PDH-ticket-human-review && ok "ラベル PDH-ticket-human-review" || ng "ラベル: $(labels)"
+awaiting_on_issue && ok "Issue に待ち印" || ng "Issue に待ち印が無い: $(labels)"
 last_comment | grep -q '🤖 承認' && ok "承認導線" || ng "承認導線が無い"
 
 echo "-- run 2: 承認 → 実装 → close gate"; T=$(now); gh issue comment "$N" --repo "$R" --body "🤖 承認" >/dev/null
@@ -63,8 +67,8 @@ if [ "${SMOKE_CLOSE:-merge}" = "pr-merge" ]; then
   pr_labels() { gh pr view "$PR" --repo "$R" --json labels -q '[.labels[].name]|join(",")'; }
   [ -n "$PR" ] && pr_labels | grep -qw awaiting-reply && ok "待ち印は PR に付く" || ng "PR に待ち印が無い: $(pr_labels)"
   labels | grep -qw awaiting-reply && ng "Issue にも待ち印: $(labels)" || ok "Issue には待ち印を付けない"
-  # 導線は hook の定型文か、bot が自分で書いた «Merge で承認» のどちらでもよい
-  last_comment | grep -Eq 'merge が close 承認です|Merge\*\* で承認|Merge で承認' && ok "merge の承認導線" || ng "merge の承認導線が無い"
+  # 導線の文面は bot が毎回書く。PR へのリンクと Merge の語があるかだけを見る
+  last_comment | grep -q "pull/$PR" && last_comment | grep -q 'Merge' && ok "merge の承認導線" || ng "merge の承認導線が無い"
   echo "-- PR を merge せずに閉じる → finalize（closed-unmerged）"
   T=$(now); gh pr close "$PR" --repo "$R" >/dev/null
   wait_run "$T" || ng "closed-unmerged の run が失敗"
@@ -87,7 +91,8 @@ else
   open_waits=$(printf '%s\n' "$checklist" | grep -Ec '^- \[ \].*発行先:.*(https?://|/)')
   [ "$done_waits" -ge 1 ] && ok "実装前 gate の待ち行が [x]" || ng "実装前 gate の待ち行が [x] でない"
   [ "$open_waits" -eq 1 ] && ok "close gate の待ち行（URL 付き）が 1 行" || ng "close gate の未了の待ち行が $open_waits 行"
-  [ "$(labels)" = "PDH-human-review" ] && ok "ラベル PDH-human-review" || ng "ラベル: $(labels)"
+  stage_is PDH-human-review && ok "ラベル PDH-human-review" || ng "ラベル: $(labels)"
+  awaiting_on_issue && ok "Issue に待ち印" || ng "Issue に待ち印が無い: $(labels)"
   last_comment | grep -q '🤖 クローズ承認' && ok "close の承認導線" || ng "close の承認導線が無い"
   del=$(gh api "repos/$R/compare/main...$B" -q '.files[] | select(.filename | endswith("progress.md")) | .deletions' | awk '{s+=$1} END{print s+0}')
   [ "$del" = "0" ] && ok "progress に削除行なし" || ng "progress に削除行 $del"
