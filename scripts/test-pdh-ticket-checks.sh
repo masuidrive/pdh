@@ -124,7 +124,7 @@ expect 1 'PR の head 側の未 review 変更' bash scripts/check-pdh-ticket.sh
 contains '1 ファイル・追加 1 行・削除 0 行'
 must git clone -q --depth=1 "file://$TMP_DIR/repo" "$TMP_DIR/shallow"
 must cd "$TMP_DIR/shallow"
-expect 0 'shallow の未解決 SHA' bash scripts/check-pdh-ticket.sh
+expect 0 'shallow の未解決 SHA' env GITHUB_HEAD_REF=features/sample bash scripts/check-pdh-ticket.sh
 contains 'shallow clone なので確かめられなかった'
 must cd "$TMP_DIR/repo"
 gate "$(git rev-parse HEAD)"
@@ -150,7 +150,7 @@ for mode in --commits --stat --prompt; do
   contains '起点が tip の履歴に無い（rebase か amend）'
   contains 'close 前 review を回し直し、progress.md に新しい SHA を追記する'
 done
-expect 1 'gate 検査も祖先でない起点を拒否する' bash scripts/check-pdh-ticket.sh
+expect 1 'gate 検査も祖先でない起点を拒否する' env GITHUB_HEAD_REF=features/sample bash scripts/check-pdh-ticket.sh
 
 # done へ移した後の feature HEAD、PR merge ref、base 取込み済みを比較する。
 must mkdir -p "$TMP_DIR/done-repo/scripts" "$TMP_DIR/done-repo/tickets/sample"
@@ -549,5 +549,27 @@ contains 'tickets/done/sample'
 must rm scripts/pdh-review-range.sh
 expect 1 'pdh-review-range.sh の欠落を名指しする' bash scripts/check-pdh-ticket.sh
 contains 'scripts/pdh-review-range.sh がありません'
+
+# base に載った別の ticket の記録で、ほかの branch の検査を落とさない。
+must mkdir -p "$TMP_DIR/owner-repo/scripts" "$TMP_DIR/owner-repo/tickets/x-ticket"
+must cp "$TEMPLATES/check-pdh-ticket.sh" "$TEMPLATES/pdh-review-range.sh" "$TMP_DIR/owner-repo/scripts/"
+must cd "$TMP_DIR/owner-repo"
+must git init -q -b main
+printf '初期値\n' > code.txt
+printf '### Why\n本文\n' > tickets/x-ticket/ticket.md
+printf '## Status: PDH-human-review\n## Checklist\n- [ ] 承認の回答を待つ 発行先: /board\n' > tickets/x-ticket/note.md
+: > tickets/x-ticket/progress.md
+commit 初期状態
+printf 'close-gate-sha: %s\n' "$(git rev-parse HEAD)" > tickets/x-ticket/progress.md
+commit xのgate記録
+must git checkout -qb features/y-ticket
+printf 'y の変更\n' >> code.txt
+commit yの変更
+expect 0 '別の branch の commit を base 上の ticket の変更と数えない' bash scripts/check-pdh-ticket.sh
+expect 1 'その ticket の branch なら同じ状態で落とす' env GITHUB_HEAD_REF=features/x-ticket bash scripts/check-pdh-ticket.sh
+contains 'tickets/x-ticket'
+printf -- '---\nbranch: features/y-ticket\n---\n### Why\n本文\n' > tickets/x-ticket/ticket.md
+expect 1 'frontmatter の branch: が一致すれば検査する' bash scripts/check-pdh-ticket.sh
+contains 'tickets/x-ticket'
 
 printf 'PASS: check-pdh-ticket (%s, %s 件)\n' "$distribution_set" "$checks"

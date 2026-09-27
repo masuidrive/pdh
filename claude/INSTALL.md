@@ -423,13 +423,13 @@ rm -rf tmp/pdh
 
 #### close 前 review の区間が sub-branch の merge を拾うようになり、`test-all.sh` の迷子の行が消えた（2026-09-27 以降）
 
-`scripts/pdh-review-range.sh` は区間を «base から届く commit を除いたもの» で作るようになった。以前は first-parent だけを見ていたので、gate の後に sub-branch を `--no-ff` で merge した commit が区間から漏れ、review されないまま close を通った。base に merge 済みの branch へ base を取り込み直したときに、base 側の commit を ticket の変更と数えることも無くなった。`scripts/check-pdh-ticket.sh` も同じ取り方で `tickets/done/` への移動を探し、`scripts/pdh-review-range.sh` が無ければ名指しして落ちる。あわせて、`test-all.sh` テンプレートの先頭のコメント欄に `run "pdh-ticket"` が 1 行紛れ込んでいて、実行のたびに `run: command not found` が出ていた（本来の行は下の `run "fast-checks"` の次にある）。
+`scripts/pdh-review-range.sh` は区間を «base から届く commit を除いたもの» で作るようになった。以前は first-parent だけを見ていたので、gate の後に sub-branch を `--no-ff` で merge した commit が区間から漏れ、review されないまま close を通った。base に merge 済みの branch へ base を取り込み直したときに、base 側の commit を ticket の変更と数えることも無くなった。`scripts/check-pdh-ticket.sh` も同じ取り方で `tickets/done/` への移動を探し、`scripts/pdh-review-range.sh` が無ければ名指しして落ちる。さらに ticket の状態（progress・待ち行・close 前 review）を、その ticket の branch（branch 名が一致するか、branch の commit が ticket dir に触っている）でだけ検査するようになった。base に載った別の ticket の記録で、ほかの branch の CI が落ちることは無くなった。あわせて、`test-all.sh` テンプレートの先頭のコメント欄に `run "pdh-ticket"` が 1 行紛れ込んでいて、実行のたびに `run: command not found` が出ていた（本来の行は下の `run "fast-checks"` の次にある）。
 
 適用済みかの確認（冪等）:
 
 ```bash
 grep -q 'pdh_review_exclude' scripts/pdh-review-range.sh && echo "区間 script: 適用済み" || echo "区間 script: 要適用"
-grep -q 'pdh_review_exclude' scripts/check-pdh-ticket.sh && echo "検査: 適用済み" || echo "検査: 要適用"
+grep -q 'ticket_is_on_this_branch' scripts/check-pdh-ticket.sh && echo "検査: 適用済み" || echo "検査: 要適用"
 awk '/^run_seq\(\)/{exit} /^run "pdh-ticket"/{f=1} END{exit !f}' scripts/test-all.sh && echo "test-all: 迷子の行あり" || echo "test-all: 適用済み"
 ```
 

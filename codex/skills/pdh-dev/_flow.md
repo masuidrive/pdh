@@ -77,8 +77,6 @@ review 前に `git merge-base --is-ancestor origin/<base> HEAD` を確認し、f
    - merge 直後に失う利用者機能と、その削除が承認された目的かを確認する。意図しない機能喪失は downstream 復旧予定でも blocker とする。承認済みの廃止は影響と合意を報告する
 3. 承認後に `./ticket.sh close` を実行する
 
-⚠ `scripts/check-pdh-ticket.sh` は `tickets/` の未完了の ticket を全部検査する。branch を先に base へ merge し、close を後にする経路では、未完了の ticket が base に載る。その ticket の記録が崩れると — `close-gate-sha:` を持ったまま別の ticket の commit が base に入る、`PDH-human-review` のまま `発行先:` の行を `[x]` にする — base から分かれた全 branch の `scripts/test-all.sh` の `pdh-ticket` 段が落ち、CI と deploy 前の検査が止まる。この経路では、base に載せる前に close するか、載せている間その ticket の記録を崩さない。
-
 ## 中止フロー
 
 - 中止理由をticketとprogressへ記録してから`./ticket.sh cancel`を実行する

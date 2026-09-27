@@ -189,10 +189,39 @@ for t in tickets/*/ticket.md; do
   check_ticket_why_intake_evidence "$t"
 done
 
+# ticket の状態（progress・待ち行・close 前 review）は、その ticket の branch でだけ検査する。
+# 別の branch の ticket が base に載っていても、その記録でこの branch の検査を落とさない。
+# その branch の ticket とは、branch 名（frontmatter の branch:、無ければ branch_prefix + 名前）が
+# いまの branch と一致するか、いまの branch の commit が ticket dir に触っているものである。
+# いまの branch が分からない（detached HEAD）ときは全部を検査する。
+current_branch=''
+touched_dirs=''
+branch_prefix=features/
+if [ "$git_ready" -eq 1 ]; then
+  current_branch=${GITHUB_HEAD_REF:-$(git symbolic-ref -q --short HEAD 2>/dev/null || true)}
+  if [ -f .ticket-config.yaml ]; then
+    branch_prefix=$(awk '/^branch_prefix:/ { sub(/^branch_prefix:[[:space:]]*/, ""); gsub(/["\047]/, ""); print $1; exit }' .ticket-config.yaml)
+  fi
+  if [ -n "$pdh_review_exclude" ] && ! git merge-base --is-ancestor "$pdh_review_tip" "$pdh_review_exclude"; then
+    touched_dirs=$(git log --name-only --format= "$pdh_review_tip" --not "$pdh_review_exclude" -- ':(top)tickets' |
+      awk -F/ 'NF >= 3 { if ($2 == "done") { if (NF >= 4) print "tickets/done/" $3 } else print "tickets/" $2 }' | sort -u) || exit 1
+  fi
+fi
+ticket_is_on_this_branch() {
+  local d=$1 name own
+  [ -n "$current_branch" ] || return 0
+  name=${d##*/}
+  own=$(awk 'NR == 1 && $0 != "---" { exit } NR > 1 && $0 == "---" { exit } /^branch:/ { sub(/^branch:[[:space:]]*/, ""); gsub(/["\047]/, ""); print $1; exit }' "$d/ticket.md" 2>/dev/null)
+  [ "${own:-$branch_prefix$name}" = "$current_branch" ] && return 0
+  printf '%s\n' "$touched_dirs" | grep -qxF -- "$d" && return 0
+  # done へ移したのが branch 上なら、移す前の dir 名で触っている
+  [[ "$d" == tickets/done/* ]] && printf '%s\n' "$touched_dirs" | grep -qxF -- "tickets/$name"
+}
 for t in tickets/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
   [ -f "$t" ] || continue
-  seen=1
   d=${t%/ticket.md}
+  ticket_is_on_this_branch "$d" || continue
+  seen=1
 
   if [ ! -f "$d/progress.md" ]; then
     printf 'check-pdh-ticket: %s/progress.md が無い（経緯は progress.md へ。1 行目は "# Progress: <ticket-name>"）\n' "$d" >&2
