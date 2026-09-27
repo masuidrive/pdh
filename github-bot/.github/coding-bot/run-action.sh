@@ -1006,7 +1006,8 @@ PYEOF
     echo "🖼️ Relocating review image artifacts to bot-artifacts: $(echo "$IMG_FILES" | tr '\n' ' ')"
     BA_W="$(mktemp -d)/ba"
     # bot-artifacts の push に使う認証を、作業 branch と同様に設定する。
-    BA_REMOTE="https://x-access-token:${ATTACH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+    ARTIFACTS_PUSH_TOKEN="${CODING_BOT_GH_PAT:-$GITHUB_TOKEN}"
+    BA_REMOTE="https://x-access-token:${ARTIFACTS_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
     BA_READY=0
     BA_PUSHED=0
     BA_MAP=""
@@ -1070,9 +1071,10 @@ PYEOF
       git commit -q -m "chore: move review image artifacts off $BRANCH_NAME to bot-artifacts"
       # PAT があれば後処理の push にも使う。checkout の extraheader はこの操作だけ無効にする。
       if git -c "http.https://github.com/.extraheader=" \
-           push -q "https://x-access-token:${ATTACH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+           push -q "https://x-access-token:${ARTIFACTS_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
            "HEAD:$BRANCH_NAME" 2>/dev/null; then
         ARTIFACT_PUSH_AUTH=pat
+        [ -n "${CODING_BOT_GH_PAT:-}" ] || ARTIFACT_PUSH_AUTH=github_token
       elif git push -q origin "$BRANCH_NAME" 2>/dev/null; then
         ARTIFACT_PUSH_AUTH="$ORIGIN_PUSH_AUTH"
       else

@@ -32,3 +32,27 @@ source "$tmp/attachments.sh"
 test -z "$FILES_SECTION"
 echo 'PASS: 添付なしなら依頼なし'
 echo 'PASS: bot attachments (3 checks)'
+
+# 実際の token 定義と push 成功時の認証判定を実行する（ネットワーク不要）。
+ra=github-bot/.github/coding-bot/run-action.sh
+grep '^    ARTIFACTS_PUSH_TOKEN=' "$ra" > "$tmp/artifact-auth.sh"
+awk '/^        ARTIFACT_PUSH_AUTH=pat$/ {copy=1}
+     copy && /^      elif / {exit}
+     copy {print}' "$ra" >> "$tmp/artifact-auth.sh"
+for pat in test-pat '' unset; do
+  (
+    GITHUB_TOKEN=test-github
+    CODING_BOT_GH_PAT=$pat
+    expected_token=test-pat
+    expected_auth=pat
+    if [ "$pat" != test-pat ]; then
+      expected_token=test-github
+      expected_auth=github_token
+    fi
+    [ "$pat" != unset ] || unset CODING_BOT_GH_PAT
+    source "$tmp/artifact-auth.sh"
+    test "$ARTIFACTS_PUSH_TOKEN" = "$expected_token"
+    test "$ARTIFACT_PUSH_AUTH" = "$expected_auth"
+  )
+done
+echo 'PASS: artifact push token/auth (PAT set, empty, unset)'

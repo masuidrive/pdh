@@ -187,6 +187,30 @@ if grep -n 'unset-all' github-bot/_pdh.md >&2; then
   failed=1
 fi
 
+# --- 削除した代入だけを参照する ${VAR} を検出する（set -u の静的な補助） ---
+# 単純な ${VAR} が対象。default 付き展開・配列・制御フローや scope は解析しない。
+# コメントを除いた runner の代入/export/read と workflow の env キーを照合する。
+# ATTACH_TOKEN のような、機能削除に巻き込まれた定義の取りこぼしを捕まえる。
+runner_code=$(grep -v '^[[:space:]]*#' "$ra")
+workflow_env=$(awk '
+  /^[[:space:]]*env:[[:space:]]*$/ {indent=match($0, /[^ ]/); in_env=1; next}
+  in_env && /[^[:space:]]/ {
+    if (match($0, /[^ ]/) <= indent) in_env=0
+    else if ($0 ~ /^[[:space:]]*[A-Za-z_][A-Za-z_0-9]*:/) {
+      key=$1; sub(/:$/, "", key); print key
+    }
+  }
+' "$wf")
+while IFS= read -r var; do
+  [ -n "$var" ] || continue
+  if ! printf '%s\n' "$runner_code" | grep -E "(^|[[:space:];])${var}\\+?=|(^|[[:space:];])export[[:space:]]+${var}([[:space:]]|$)" >/dev/null \
+    && ! printf '%s\n' "$runner_code" | grep -E "(^|[[:space:];])read[[:space:]]+(-r[[:space:]]+)?${var}([[:space:];]|$)" >/dev/null \
+    && ! printf '%s\n' "$workflow_env" | grep -qx "$var"; then
+    printf 'github-bot: run-action.sh: ${%s} に代入/export/workflow env が無い\n' "$var" >&2
+    failed=1
+  fi
+done < <(printf '%s\n' "$runner_code" | grep -oE '\$\{[A-Za-z_][A-Za-z_0-9]*\}' | sed 's/^${//; s/}$//' | sort -u)
+
 if [ "$failed" -ne 0 ]; then
   printf 'check-github-bot: FAILED\n' >&2
   exit 1
