@@ -363,3 +363,11 @@ smoke 自体の穴も 1 つ: 毎回同じ要望を出していたので、claude
 - 例外（Independent review triggers に当たる diff は網羅探索をもう 1 巡してよい）の根拠: 初回の網羅が見逃した欠陥は修正差分だけを見る 2 巡目に映らない。再検査の純益は初回より低いが、品質要求の高い成果物では割に合う（Biffl・Halling の再検査実験）
 - 作り直しを選択肢に入れる根拠: 修正が新しい欠陥を含む率は不慣れな担当 × 複雑な箇所で 25% を超える（Capers Jones）。大規模 OS の出荷後バグ修正の 14.8〜24.4% が誤りで、誤修正の 27% は対象ファイルに一度も触れたことのない担当によるもの（Yin ら, ESEC/FSE 2011）
 
+## 2026-09-21 — «test が発明した要件» は claude でだけ測って入れた（codex/ には写していない）
+
+`ef181e7`。`claude/skills/pdh-reviewing/SKILL.md` の網羅探索に 6 項目目を足した。導入先の 1 PR の 1 巡目と同じ diff・同じ ticket に対し、SKILL.md の本文だけを差し替えて同じモデル（claude）を各群 2 本走らせた（prompt は 6 項目目の 1 行以外が同一）。旧観点 2 本は test の literal 指摘 0 件・private 属性依存 0 件、新観点 2 本は同じ 2 件（`asyncio.wait_for(..., timeout=1.0)` の 1.0 に製品側の出どころが無い / httpx の private 属性 `client._transport.app` への依存）を独立に指摘した。どちらも diff の追加行に実在した。**codex では測っていないので `codex/skills/pdh-reviewing/` には入れていない。**
+
+## 2026-09-23 — 設問番号（T1/T2…）と判断ボードの選択肢の数字化は、eval を回さずに入れた
+
+`2ca0012`。`pdh-dev/_collaboration.md` に設問番号の規則を置き、判断ボード（`base.md` の判断カードの型、`html.md` の `data-label` 例）の選択肢を A/B/C から数字へ、設問の見出しを「判断 n」から「T<n>」へ変えた。**判断ボード skill の散文規則の変更だが、`evals/` のシナリオは回していない。**旧版との比較は無い。
+
