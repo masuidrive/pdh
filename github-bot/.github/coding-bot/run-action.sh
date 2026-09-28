@@ -57,6 +57,7 @@ trap 'handle_unexpected_error $LINENO' ERR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # トリガーの出どころを正しく取る 2 つ（event 別の API / PR の出自）。承認判定とは無関係。
 source "$SCRIPT_DIR/trigger-source.sh"
+source "$SCRIPT_DIR/ci-autofix-result.sh"
 TRUSTED_LINKED_ISSUE=""
 TRUSTED_PR_BRANCH=""
 TRIGGER_ERROR=""
@@ -150,7 +151,7 @@ echo "📝 Fetching Issue/PR data..."
 # その場合は対象番号が実際に PR かどうかを gh で確認する（PR への 🤖 コメントを
 # PR 扱いにし、PR の head ブランチで作業 + _pr.md を読むため）。
 IS_PR=false
-if [[ "$EVENT_TYPE" == "pull_request"* ]]; then
+if [[ "$EVENT_TYPE" == "pull_request"* ]] || [ "$EVENT_TYPE" = workflow_run ]; then
   IS_PR=true
 elif [[ "$EVENT_TYPE" == "issue_comment" ]] && gh pr view "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --json number >/dev/null 2>&1; then
   IS_PR=true
@@ -170,11 +171,14 @@ fi
 build_ci_section() {
   local branch="$1" head_sha="$2"
   local run_id conclusion raw summary tail_block summary_block
-  run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$CI_WORKFLOW" \
+  run_id="${CI_AUTOFIX_RUN_ID:-}"
+  if [ -z "$run_id" ]; then
+    run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$CI_WORKFLOW" \
     --branch "$branch" --json databaseId,headSha,status --limit 30 2>/dev/null \
     | jq -r --arg sha "$head_sha" \
         'map(select(.headSha == $sha and .status == "completed")) | .[0].databaseId // empty' 2>/dev/null \
     || true)
+  fi
   [ -n "$run_id" ] || return 0
   conclusion=$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion' 2>/dev/null || echo "")
   # success / 取得不能 は注入しない（失敗時のみ context に出す）
@@ -204,6 +208,7 @@ $summary
 最優先してください。
 
 - Run id: \`$run_id\`
+- CI run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$run_id
 - **全文ログは自分で取得できる**: \`gh run view $run_id --repo $GITHUB_REPOSITORY --log-failed\`
   （diff は \`git diff origin/$BASE_BRANCH...HEAD\` で自分で取得すること）
 
@@ -312,7 +317,12 @@ fi
 # COMMENT_ID が設定されている場合、そのコメントがトリガー（＝ユーザの指示）
 # それ以外のコメントは過去の会話ログとして参考情報扱い
 
-if [ -n "$COMMENT_ID" ]; then
+if [ "$EVENT_TYPE" = workflow_run ]; then
+  USER_REQUEST="CI の失敗を直す。指定された run の失敗を再現し、コードかテストを直す commit を作ってください。"
+  TRIGGER_COMMENT=""
+  TRIGGER_AUTHOR=""
+  COMMENT_ID=""
+elif [ -n "$COMMENT_ID" ]; then
   # トリガーコメントの本文を直接取得（GitHub API、1回で body + login 両方取得）
   # ⚠ event ごとに正しい API を叩く。review と review comment は issues comments collection に
   # «存在しない» ので、/issues/comments/ だけだと本文が空になりユーザの依頼が失われる。
@@ -573,6 +583,11 @@ if [ -f product-brief.md ] && [ -d tickets ]; then
   append_prompt "$SCRIPT_DIR/_github-issue.md"
 fi
 
+# 通常の PR の draft / 早期 push 手順より優先する指示を最後に渡す。
+if [ "$EVENT_TYPE" = workflow_run ]; then
+  append_prompt "$SCRIPT_DIR/_ci-autofix.md"
+fi
+
 # Deadline awareness: tell the agent how much wall-clock budget it has.
 # Must be computed BEFORE the prompt is built so it can be injected.
 RUN_TIMEOUT_SECONDS=${CODING_BOT_TIMEOUT:-5400}
@@ -720,7 +735,8 @@ echo "$USER_PROMPT" > "/tmp/agent-prompt-$ISSUE_NUMBER.txt"
 # gh の既定は GITHUB_TOKEN（bot 名義）。PAT は push と PR 作成だけに局所指定する。
 export GH_TOKEN="$GITHUB_TOKEN"
 
-# ⚠ pr-merge では origin の git 認証を、agent が走る前に CODING_BOT_GH_PAT へ差し替える。
+# ⚠ 人の依頼の pr-merge では origin の git 認証を、agent が走る前に CODING_BOT_GH_PAT へ差し替える。
+# CI 自動修正は ci-autofix-result.sh の push 直前まで PAT への差し替えを待つ。
 # GITHUB_TOKEN の push が起こした PR の CI は «Approve and run» 待ちで止まる。以前は
 # agent に認証を外させ push ごとに PAT を指定させていたが、agent が途中で GITHUB_TOKEN の
 # 認証を戻し、以降の push の CI が全部承認待ちになった。
@@ -733,10 +749,14 @@ use_pat_for_origin() {
     "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$CODING_BOT_GH_PAT" | base64 | tr -d '\n')"
 }
 _close_mode=$(awk '/^github_bot:/{f=1;next} /^[^ #]/{f=0} f && /^[[:space:]]*close:[[:space:]]*/{print $2; exit}' .ticket-config.yaml 2>/dev/null | tr -d "\"'" || true)
-if [ "$_close_mode" = "pr-merge" ] && [ -n "${CODING_BOT_GH_PAT:-}" ]; then
+if [ "$_close_mode" = "pr-merge" ] && [ -n "${CODING_BOT_GH_PAT:-}" ] && [ -z "${CI_AUTOFIX_RUN_ID:-}" ]; then
   use_pat_for_origin
   ORIGIN_PUSH_AUTH=pat
   echo "🔑 origin の git 認証を CODING_BOT_GH_PAT にした（pr-merge）"
+fi
+
+if [ -n "${CI_AUTOFIX_RUN_ID:-}" ]; then
+  ci_autofix_prepare || { echo 'auto-merge の解除または PR への通知に失敗したため、agent を起動しません。' >&2; exit 1; }
 fi
 
 source "$ENGINE_FILE"
@@ -775,6 +795,7 @@ TASK_STATUS_FILE="/tmp/agent-tasks-$ISSUE_NUMBER.txt"         # タスク状態�
 TIMEOUT_VALUE=$RUN_TIMEOUT_SECONDS
 
 # 実行（エンジン実装に委譲）。バックグラウンドで起動し ENGINE_PID をセットする。
+CI_AUTOFIX_START_SHA=$(git rev-parse HEAD)
 engine_run
 
 # engine 起動直後に待ち印を外す。終了後だけでは、run 中も人の番と表示される。
@@ -902,6 +923,12 @@ engine_extract_result
 
 # 最終結果を投稿（text outputのみ、thinkingは除外）
 CLAUDE_OUTPUT=$(cat "$RESULT_OUTPUT_FILE")
+
+# CI 自動修正では、agent は commit まで。push 前の auto-merge 解除と結果の報告を保証する。
+if [ "$EVENT_TYPE" = workflow_run ]; then
+  ci_autofix_finish
+  exit "$ENGINE_EXIT_CODE"
+fi
 
 if [ $ENGINE_EXIT_CODE -eq 0 ]; then
   echo "✅ Task completed successfully"

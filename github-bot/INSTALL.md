@@ -91,6 +91,8 @@ gh variable set CODING_BOT_TIMEOUT --body '10800'
 | `CODING_BOT_USER` | `node` | container 内の実行 user |
 | `CODING_BOT_POST_CREATE` | 空（実行なし） | workspace 相対の bash script。存在しなければ skip |
 | `CODING_BOT_CI_WORKFLOW` | `ci.yml` | 失敗ログ取得・後処理で head が動いた場合の CI 起動先 |
+| `CODING_BOT_CI_AUTOFIX` | 無効（`true` 以外） | `true` の repo だけ、bot の PR の CI の失敗を bot が自動で直しに行く（下の「任意: bot の PR の CI が落ちたら bot が直す」） |
+| `CODING_BOT_CI_DRAFT_SKIP_STEP` | `Draft PR: full suite skipped` | CI の job のうち «draft なのでフルスイートを skip した» ときだけ走る step の名前（前方一致）。自動修正の回数の数え方が使う |
 | `CODING_BOT_PROGRESS_INTERVAL` | `60` 秒 | 作業中コメントの更新間隔（生存確認は 10 秒） |
 | `CODING_BOT_PREBUILD_PATHS` | `.devcontainer/** .github/workflows/devcontainer-prebuild.yml .github/coding-bot/smoke-local.sh` | 空白区切りの glob。Dockerfile の COPY 元や起動 script を追加する |
 | `CODING_BOT_CLAUDE_MODEL` / `CODING_BOT_CODEX_MODEL` | engine の既定 | モデルの上書き |
@@ -277,6 +279,22 @@ gh api -X PATCH repos/<owner>/<repo> -F allow_auto_merge=true
 - ⚠ **Enable auto-merge を押すことが close の承認になる。**Merge の主は押した人なので、`pull_request: closed` の finalize も deploy も、手で Merge したときと同じに動く
 - ⚠ **CI が赤なら Merge されない**（auto-merge は待ち続ける）。赤のまま出したいときは、今までどおり手で判断する
 - bot の最終レポートは «CI が緑になったら Merge を押して» と案内する。auto-merge を使う repo では、読む人が «先に押してよい» と知っていればよい（案内の文は変えなくても動く）
+
+## 任意: bot の PR の CI が落ちたら bot が直す（`CODING_BOT_CI_AUTOFIX`）
+
+**守るのは «bot の PR が赤いまま、人が 🤖 を書くまで止まらないこと» である。**有効にすると、bot の PR（head が `agent/issue-<N>`）の CI が落ちたとき、人が何も書かなくても bot が直す commit を push し、何が落ちて何を直したかを PR にコメントする。同じ PR で続けて落ちたら、直しに行くのは 1 回目と 2 回目だけで、3 回目は issue に «人が見てほしい» と 3 回分の要約とリンクを書いて止まる。4 回目以降は何も書かない。CI が 1 回でも緑になると回数は 0 に戻る。
+
+```bash
+gh variable set CODING_BOT_CI_AUTOFIX --body 'true'
+```
+
+- ⚠ **CI の workflow の名前が `CI` であることを前提にする。**`coding-bot-ci-autofix.yml` の `on.workflow_run.workflows: [CI]` は式を書けないので、名前が違うなら導入先でこの行を書き換える。書き換えないと何も起動せず、誰も気づかない
+- ⚠ **CI の job に «draft なのでフルスイートを skip した» ときだけ走る step を置く**（名前は `CODING_BOT_CI_DRAFT_SKIP_STEP`、既定 `Draft PR: full suite skipped`）。bot は draft で push してから ready にするので、同じ commit に «skip の緑» と «本検査» が並ぶ。この step が無いと、skip の緑も «緑» として回数を 0 に戻し、«3 回目で人に上げる» が働かないことがある
+- 回数は、判定 job が commit ごとに commit status（context `coding-bot/ci-autofix`）として残し、その記録から数える。CI の run の API は、run が走ったときの draft 状態と head を返さないため、履歴からは数えられない。PR の checks 欄に 1 行増える（必須チェックにはしない）
+- 直しに行く run は、agent を起動する前に PR の auto-merge を外し、PR のコメントでそれを知らせる。確認前の修正が自動で merge されないため
+- 人の PR・draft の PR・取り消された run・PR の今の head より古い commit の run では、bot は起動しない
+- `coding-bot.yml` の concurrency は `queue: max` なので、同じ PR / issue への依頼は置き換えられずに順に実行される
+- 止めるときは変数を外す（`gh variable delete CODING_BOT_CI_AUTOFIX`）
 
 ## 任意: 本番に出た記録を残す（Environments / Deployments）
 

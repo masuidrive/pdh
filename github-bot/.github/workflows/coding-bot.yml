@@ -14,6 +14,12 @@ on:
   # definition, so changes to this file can't be exercised via 🤖 until merged.
   # When dispatched, the devcontainer is started against the given issue number but
   # the agent step is a no-op smoke command (see "verify_only").
+  # CI の受け口が PR 番号を解決してから呼ぶ。github.event は呼び出し元を保持する。
+  workflow_call:
+    inputs:
+      ci_autofix_pr:
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       verify_only:
@@ -28,18 +34,51 @@ on:
 # cancel-in-progress: false — 走っている方を殺さず、次を待たせる。人の 🤖 コメントは
 # «前の作業を捨てて» の意味ではないため。
 concurrency:
-  group: coding-bot-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  group: coding-bot-${{ inputs.ci_autofix_pr || github.event.issue.number || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: false
+  # 判定と修正を同じロックの中に置く。single では待機 run が押し出され、
+  # count だけ残って修正が走らない／緑を見落とすため max にする。
+  # 最大 100 本。満杯のときは新規 run が cancel される（既存の待機は失われない）。
+  queue: max
 
 # ⚠ 使う action は commit SHA で固定する。tag（@v5 等）は動かせるので、同じ workflow が
 # «いつ走ったか» で別のコードを実行しうる。この bot は repo の書き込み権限と engine の
 # 認証情報を持って走るので、そこは固定しておく。末尾のコメントが人間向けの版表示。
 
 jobs:
+  ci-autofix:
+    if: github.event_name == 'workflow_run' && vars.CODING_BOT_CI_AUTOFIX == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+      actions: read
+      statuses: write
+    outputs:
+      repair: ${{ steps.decide.outputs.repair }}
+      run_id: ${{ steps.decide.outputs.run_id }}
+      head_sha: ${{ steps.decide.outputs.head_sha }}
+    steps:
+      # workflow_run の default branch のコードだけを使う。PR のコードは実行しない。
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Decide CI autofix
+        id: decide
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CODING_BOT_CI_AUTOFIX: ${{ vars.CODING_BOT_CI_AUTOFIX }}
+          CODING_BOT_CI_DRAFT_SKIP_STEP: ${{ vars.CODING_BOT_CI_DRAFT_SKIP_STEP }}
+          CI_AUTOFIX_PR: ${{ inputs.ci_autofix_pr }}
+        run: bash .github/coding-bot/ci-autofix-decision.sh decide
+
   agent:
+    needs: ci-autofix
     # 🤖 / :robot: だけが起動の合図。bot 自身と marker 付き投稿は除外する。
     # awaiting-reply は状態表示であり、ラベルの有無では起動しない。
     if: |
+      always() && !cancelled() && (needs.ci-autofix.outputs.repair == 'true' ||
       github.event_name == 'workflow_dispatch' || (
       github.event.sender.type != 'Bot' &&
       !contains(github.event.comment.body || '', '<!-- coding-bot -->') &&
@@ -48,7 +87,7 @@ jobs:
       (github.event_name == 'pull_request_review_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||
       (github.event_name == 'pull_request_review' && (contains(github.event.review.body, ':robot:') || contains(github.event.review.body, '🤖'))) ||
       (github.event_name == 'issues' && !contains(github.event.issue.body || '', '<!-- coding-bot -->') && (contains(github.event.issue.body, ':robot:') || contains(github.event.issue.body, '🤖') || contains(github.event.issue.title, ':robot:') || contains(github.event.issue.title, '🤖')))
-      ))
+      )))
 
     runs-on: ${{ vars.CODING_BOT_RUNNER || 'ubuntu-latest' }}
     env:
@@ -194,7 +233,9 @@ jobs:
           CODING_BOT_ENV_JSON: ${{ secrets.CODING_BOT_ENV_JSON }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
-          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          ISSUE_NUMBER: ${{ inputs.ci_autofix_pr || github.event.issue.number || github.event.pull_request.number }}
+          CI_AUTOFIX_RUN_ID: ${{ needs.ci-autofix.outputs.run_id }}
+          CI_AUTOFIX_HEAD_SHA: ${{ needs.ci-autofix.outputs.head_sha }}
           EVENT_TYPE: ${{ github.event_name }}
           COMMENT_ID: ${{ github.event.comment.id || github.event.review.id }}
           DEVCONTAINER_CONFIG_PATH: .devcontainer/devcontainer.json
@@ -225,6 +266,8 @@ jobs:
             -e GITHUB_REPOSITORY \
             -e GITHUB_RUN_ID \
             -e ISSUE_NUMBER \
+            -e CI_AUTOFIX_RUN_ID \
+            -e CI_AUTOFIX_HEAD_SHA \
             -e EVENT_TYPE \
             -e COMMENT_ID \
             -e DEVCONTAINER_CONFIG_PATH \
@@ -294,8 +337,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          EVENT_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
-          EVENT_IS_PR: ${{ github.event.issue.pull_request != null || github.event.pull_request != null }}
+          EVENT_NUMBER: ${{ inputs.ci_autofix_pr || github.event.issue.number || github.event.pull_request.number }}
+          EVENT_IS_PR: ${{ github.event_name == 'workflow_run' || github.event.issue.pull_request != null || github.event.pull_request != null }}
         run: |
           set -uo pipefail
           issue=""; pr=""
@@ -330,7 +373,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          ISSUE: ${{ github.event.issue.number || github.event.pull_request.number }}
+          ISSUE: ${{ inputs.ci_autofix_pr || github.event.issue.number || github.event.pull_request.number }}
           TRUSTED_ISSUE: ${{ steps.notification_context.outputs.issue }}
           TRUSTED_PR: ${{ steps.notification_context.outputs.pr }}
           CONCLUSION: ${{ job.status }}
