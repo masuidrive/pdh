@@ -54,6 +54,53 @@ set_awaiting() {  # $1=add|remove  $2=issue  $3=branch  $4=理由
 }
 log() { printf 'pdh-hooks: %s\n' "$*" >&2; }
 
+# 呼び手はコマンド置換を使わず、TICKET_DIR / TICKET_STATE（active|done|空）を読む。
+# active の名前 → active の frontmatter → done の名前 → done の frontmatter の順。
+# 同じ優先度では各 dir の名前順で選ぶ。
+find_ticket() {
+  local issue="$1" root mode d matched
+  local LC_ALL=C
+  local -a candidates matches
+  TICKET_DIR="" TICKET_STATE=""
+  for root in tickets tickets/done; do
+    for mode in name frontmatter; do
+      matches=()
+      if [ "$mode" = name ]; then
+        candidates=("$root"/*-issue-"$issue")
+      else
+        candidates=("$root"/*)
+      fi
+      for d in "${candidates[@]}"; do
+        [ -f "$d/ticket.md" ] || continue
+        if [ "$mode" = frontmatter ]; then
+          matched=$(awk -v issue="$issue" '
+            NR == 1 {if ($0 != "---") exit; next}
+            /^---[[:space:]]*$/ {exit}
+            /^(branch|issue):[[:space:]]*/ {
+              key=$0; sub(/:.*/, "", key)
+              sub(/^(branch|issue):[[:space:]]*/, ""); sub(/[[:space:]]+#.*/, "")
+              sub(/[[:space:]]+$/, "")
+              if ($0 ~ /^".*"$/ || $0 ~ /^\047.*\047$/) $0=substr($0, 2, length($0)-2)
+              if ((key == "branch" && $0 == "agent/issue-" issue) ||
+                  (key == "issue" && $0 == issue)) { print "matched"; exit }
+            }
+          ' "$d/ticket.md")
+          [ "$matched" = matched ] || continue
+        fi
+        matches+=("$d")
+      done
+      [ "${#matches[@]}" -gt 0 ] || continue
+      TICKET_DIR="${matches[0]}"
+      case "$TICKET_DIR" in tickets/done/*) TICKET_STATE=done ;; *) TICKET_STATE=active ;; esac
+      if [ "${#matches[@]}" -gt 1 ]; then
+        log "issue #$issue の ticket が複数（$mode 一致 ${#matches[@]} 件）。最初の $TICKET_DIR を使う"
+      fi
+      return 0
+    done
+  done
+  return 0
+}
+
 setup_check() {
   # 出力: 要追加の行（無ければ空）。exit code は呼び手が判断する。
   local repo="$1" missing="" have
@@ -78,11 +125,10 @@ setup_check() {
 # 進捗コメントに出す AC 一覧。⚠ AC の本当の状態は ticket.md にあるので、そこだけを読む。
 # agent に別ファイルを書かせると «書き忘れ» と «実体とのズレ» の 2 つを新しく抱える。
 ac_progress_block() {
-  local issue="$1" dir="" d lines total done_n
-  for d in tickets/*-issue-"$issue"; do
-    [ -d "$d" ] && [ -f "$d/ticket.md" ] && { dir="$d"; break; }
-  done
-  [ -n "$dir" ] || return 0
+  local issue="$1" dir lines total done_n
+  find_ticket "$issue"
+  [ "$TICKET_STATE" = active ] || return 0
+  dir="$TICKET_DIR"
   lines=$(awk '
     /^#+ .*Acceptance Criteria/ {f=1; next}
     f && /^#+ / {exit}
@@ -140,9 +186,8 @@ case "$cmd" in
       # engine が失敗した＝止まっていて人の手が要る（認証・quota・環境）。final は呼ばれない。
       set_awaiting add "$issue" "$branch" "engine 失敗"
       status=""
-      for d in tickets/*-issue-"$issue" tickets/done/*-issue-"$issue"; do
-        [ -f "$d/note.md" ] && { status=$(read_status "$d/note.md"); break; }
-      done
+      find_ticket "$issue"
+      [ -z "$TICKET_DIR" ] || status=$(read_status "$TICKET_DIR/note.md")
       write_notify "$issue" failed "$status" "${4:-}" "$AWAITING_PR"
     fi
     exit 0 ;;
@@ -154,23 +199,21 @@ ISSUE="${2:-}"; BRANCH="${3:-}"; CID="${4:-}"
 [ -n "$ISSUE" ] && [ -n "$BRANCH" ] && [ -n "$REPO" ] || { log "final: issue / branch / GITHUB_REPOSITORY が要る"; cat; exit 1; }
 report=$(cat)
 
-# --- ticket dir（done/ は対象外） ---
-dir=""
-for d in tickets/*-issue-"$ISSUE"; do [ -d "$d" ] && [ -f "$d/ticket.md" ] && { dir="$d"; break; }; done
-if [ -z "$dir" ]; then
+# --- ticket dir（active / done / 未作成） ---
+find_ticket "$ISSUE"
+dir="$TICKET_DIR"
+if [ "$TICKET_STATE" != active ]; then
   # ⚠ ticket dir が無いのは 2 通りあり、扱いが逆になる。
-  #   done 済み  : tickets/done/*-issue-N が在る。stage ラベルは補正しない。PR の Merge を待つ close gate
+  #   done 済み  : 対応する ticket が tickets/done/ に在る。stage ラベルは補正しない。PR の Merge を待つ close gate
   #                なら待ち印を PR に付ける（start が Issue と PR の両方から外しているため）
   #   未作成     : どちらも無い。bot が «足りないことを聞く» 段で止まっている（_issue.md A0）
   # 後者でラベルを付けないと、依頼者の画面に «あなたの番» が 1 つも出ない。
-  done_dir=""
-  for d in tickets/done/*-issue-"$ISSUE"; do [ -d "$d" ] && { done_dir="$d"; break; }; done
-  if [ -z "$done_dir" ]; then
+  if [ -z "$TICKET_STATE" ]; then
     set_awaiting add "$ISSUE" "$BRANCH" "ticket 未作成のまま run が終わった＝人に聞いている"
     write_notify "$ISSUE" question "" "$CID" "$AWAITING_PR"
   else
     log "issue #$ISSUE は done 済み。補正なし"
-    status=$(read_status "$done_dir/note.md")
+    status=$(read_status "$dir/note.md")
     if [ "$status" = "PDH-human-review" ]; then
       pr=$(gh pr list --head "$BRANCH" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
       if [[ "$pr" =~ ^[0-9]+$ ]]; then

@@ -1168,7 +1168,8 @@ ${IMG_NOTE}"
 
   # PDH 側パッチ: 受け渡し経路（issue）の保証を runner が担う（github-bot/pdh-hooks.sh。PDH mode のみ。VENDOR.md）
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
-    # ⚠ PR run では ISSUE_NUMBER は PR 番号。ticket dir は tickets/*-issue-<Issue 番号> なので
+    # ⚠ PR run では ISSUE_NUMBER は PR 番号。ticket は Issue 番号で探す
+    # （名前 *-issue-<N> か frontmatter の branch: agent/issue-<N> / issue: <N>）。
     # 紐づく Issue 番号（validate_pr_context が設定）を渡す。
     HOOK_ISSUE="${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}"
     HOOKED=$(printf '%s' "$CLAUDE_OUTPUT_CLEAN" | bash "$SCRIPT_DIR/pdh-hooks.sh" final "$HOOK_ISSUE" "$BRANCH_NAME" "$PROGRESS_COMMENT_ID") \

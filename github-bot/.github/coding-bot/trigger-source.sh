@@ -21,7 +21,8 @@ fetch_trigger_context() {
 
 # 成功すると TRUSTED_LINKED_ISSUE（紐づく Issue 番号）と TRUSTED_PR_BRANCH を設定する。
 # ⚠ TRUSTED_LINKED_ISSUE は pdh-hooks.sh へ渡す番号でもある — PR run で PR 番号を渡すと
-# ticket dir（tickets/*-issue-<Issue 番号>）が見つからない。
+# ticket が見つからない。ticket は Issue 番号で探す
+# （名前 *-issue-<N> か frontmatter の branch: agent/issue-<N> / issue: <N>）。
 validate_pr_context() {
   local repository="$1" pr_number="$2" data head_repo head_ref linked issue
   data=$(gh api "repos/$repository/pulls/$pr_number" 2>/dev/null) || { TRIGGER_ERROR="PR context API unavailable"; return 1; }
