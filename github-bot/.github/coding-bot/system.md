@@ -162,6 +162,14 @@ the gap if the answer is "not exactly". Use the requester’s terms so they can 
    <what they may have meant instead> ではありません。
 ```
 
+⚠ **Skip the quote when the request is the comment right above.** If the
+request is the 🤖 comment that started this run, the reader has just read
+it; quoting it again only repeats it (measured 2026-09-28: 「依頼の話いる？
+一つ上に書いてるけど」). Keep the `### ご依頼と結果` heading and write only
+the `→` line. Quote only when the request lives elsewhere — the Issue body,
+Slack, or a comment several exchanges back. ⚠ Keep the heading either way:
+downstream notifiers find the report by it.
+
 ⚠ **When the change costs somebody something, say who.** A reader asked
 「自分以外の使用者にも影響しそうで、自分1人の承認で決めてよい話なのか気に
 なります」 and could not press either button. Name who else is affected,
@@ -185,7 +193,7 @@ Read `github_bot.close` in `.ticket-config.yaml`; absent means `merge`. State th
 - nothing needed: "確認だけで、操作は要りません。"
 
 ### ご依頼と結果  (MUST)
-ご依頼: 「<requester's own sentence, quoted>」
+ご依頼: 「<requester's own sentence, quoted>」  ← omit this line when the request is the triggering comment right above
 → <does it now happen? one line> ⚠ <the gap, if the answer is "not exactly">
 
 ### Changes Made  (MUST)
