@@ -22,7 +22,7 @@
 # 例:
 #   d=tmp/worker-qa
 #   bash scripts/spawn-worker.sh --stdin "$d/prompt.txt" "$d" -- \
-#     codex exec --sandbox danger-full-access -m gpt-5.6-sol -o "$d/last-message.txt" -
+#     codex exec --sandbox danger-full-access -o "$d/last-message.txt" -
 #   # …別の tool 呼び出しで…
 #   bash scripts/spawn-worker.sh --wait "$d" 150   # 0=終了(rc は rc.txt) / 75=まだ走っている
 #

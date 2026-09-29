@@ -91,9 +91,7 @@ pdh-dev が spawn するチームメンバーの engine / モデル設定。
 
 engine 割り当ての規則（worker 既定 = main と同一、main engine の選び方、cross-delegate の適用範囲、spawn 機構）は pdh-dev `_execution-team.md`「エンジン割り当て」「spawn 機構」に従う。ここには **この project 固有の上書きだけ**を書く。
 
-<!-- cross-delegate を使う場合の、この project での推奨モデル。モデル名は時間で古びるので最新に読み替えて更新すること -->
-
-- main = claude → 実装 worker = `codex exec -m gpt-5.6-sol -c model_reasoning_effort="medium"`（機械的な実装は `medium`、統合・判断を含む難しい実装は `high`）
+- main = claude → 実装 worker = `codex exec -c model_reasoning_effort="medium"`（機械的な実装は `medium`、統合・判断を含む難しい実装は `high`）
 - main = codex → 実装 worker = `claude -p --model opus`
 
 **下表は「役割ごとに engine / model を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。PDH stage の定義と gate 条件は `PDH-AGENTS.md` と `/pdh-dev` に従い、この表は project 固有の role / model override だけを書く。
