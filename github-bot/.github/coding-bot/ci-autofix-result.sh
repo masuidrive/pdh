@@ -1,14 +1,60 @@
 #!/usr/bin/env bash
 # CI 自動修正だけの終端処理。agent は commit まで行い、push と報告はここで行う。
 
-ci_failure_steps() {
-  local repository="$1" run_id="$2" jobs
+ci_failure_steps() (
+  local repository="$1" run_id="$2" jobs summary log_dir log_status reason details=""
   jobs=$(gh api "repos/$repository/actions/runs/$run_id/jobs?per_page=100" --paginate --slurp) || return 1
-  printf '%s' "$jobs" | jq -r '[.[].jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out") |
+  summary=$(printf '%s' "$jobs" | jq -r '[.[].jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out") |
     .name as $job | ([.steps[]? | select(.conclusion == "failure" or .conclusion == "timed_out") | .name] | join(", ")) as $steps |
     if $steps == "" then $job else "\($job): \($steps)" end] |
-    if length == 0 then "失敗 step の情報なし（workflow の定義エラー等。run のログを確認）" else join(" / ") end'
-}
+    if length == 0 then "失敗 step の情報なし（workflow の定義エラー等。run のログを確認）" else join(" / ") end') || return 1
+  local -a log_args=("${run_id%%/*}" --repo "$repository" --log-failed)
+  if [[ "$run_id" == */attempts/* ]]; then
+    log_args+=(--attempt "${run_id##*/}")
+  fi
+  # The subshell owns cleanup without replacing the caller's EXIT trap.
+  log_dir=$(mktemp -d) || { printf '%s\n' "$summary"; return; }
+  trap 'rm -rf "$log_dir"' EXIT
+  # Logs are optional; partial downloads must not become failure details.
+  if timeout 60 gh run view "${log_args[@]}" > "$log_dir/log" 2> "$log_dir/error"; then
+    # Scan all ordinary logs, or the final 50 MiB of oversized logs. Discard
+    # the partial first line at the byte cutoff. Only three bodies are retained.
+    details=$(tail -c 52428800 "$log_dir/log" | awk -v size="$(wc -c < "$log_dir/log")" '
+      NR == 1 && size > 52428800 { next }
+      {
+        if (!sub(/^[^\t]*\t[^\t]*\t/, "")) next
+        sub(/^[^ ]+ /, "")
+        gsub(/\033\[[0-?]*[ -/]*[@-~]/, "")
+        if ($0 !~ /^[[:space:]]*((\[[^]]*\]|---)[[:space:]]+)*(FAIL|FAILED|ERROR)([^[:alnum:]_]|$)/) next
+        gsub(/[\r\t]/, " ")
+        sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, "")
+        for (i = 1; i <= count; i++) {
+          if (body[i] == $0) {
+            for (j = i; j < count; j++) body[j] = body[j + 1]
+            count--; break
+          }
+        }
+        if (count == 3) { body[1] = body[2]; body[2] = body[3]; count-- }
+        body[++count] = $0
+      }
+      END { for (i = 1; i <= count; i++) print body[i] }
+    ' | jq -Rrs 'split("\n") | map(select(length > 0) | .[0:200] |
+      gsub("`"; "\u0027") | "`" + . + "`") | join(" / ")') || details=""
+  else
+    log_status=$?
+    IFS= read -r -n 200 reason < "$log_dir/error" || :
+    reason=$(printf '%s' "$reason" | sed -E $'s/\033\\[[0-?]*[ -/]*[@-~]//g')
+    reason=${reason//$'\r'/ }
+    if [ "$log_status" -eq 124 ]; then
+      reason="timed out after 60 seconds${reason:+: $reason}"
+    elif [ -z "$reason" ]; then
+      reason="gh exited with status $log_status"
+    fi
+    printf 'ci_failure_steps: log unavailable for run %s: %s\n' "$run_id" "$reason" >&2
+  fi
+  if [ -n "$details" ]; then summary+=" — $details"; fi
+  printf '%s\n' "$summary"
+)
 
 ci_autofix_prepare() {
   local pr_data reason="" body
