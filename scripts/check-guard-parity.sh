@@ -22,6 +22,9 @@ guards=(
   'Checklist` へ 1 行書く'              # 板を発行したら note の Checklist に待ちの行を書く（close が数える）
   'progress.md'                         # 経緯は progress.md（追記のみ）。note は現在値だけ
   "完了判定には使わない"                # 手で組んだ入力（stub）を完了判定に使わない
+  "最下層の 1 テストで固定する"          # 1 つの契約は違反を観測できる最下層の 1 テストで固定する
+  "contrast case"                       # 人が判断する材料では «出ない» 側の証拠も省かない
+  "rc だけで成否を決めない"              # codex exec review の «指摘ゼロ» を review 未実行と取り違えない
 )
 
 failed=0
