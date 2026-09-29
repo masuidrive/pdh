@@ -82,7 +82,7 @@ PDH のフローは engine 中立で、特定の engine を前提にしない。
 
 - **claude だけの環境**: `claude` で起動する。skill は `.claude/skills/` から読まれる
 - **codex だけの環境**: `codex` で起動する。`AGENTS.md` が自動でコンテキストに載り、skill は `.agents/skills/`（`.claude/skills/` への symlink）から読まれる
-- **両方ある環境**: どちらを main にしてもよい。加えて **cross-delegate**（実装 worker だけを main と逆の engine へ委譲）を選べる。セッションで最初に実装へ入る時に 1 回だけ確認され、その回答がセッション既定になる
+- **両方ある環境**: どちらを main にしてもよい。役割ごとに engine を分けたいとき（例: 実装だけ main と逆の engine にする）は、下の `CLAUDE.md` のチーム構成で指定する
 
 役割ごとの engine / model を既定から変えたい場合は `CLAUDE.md` のチーム構成テーブルで上書きする。特定 engine をフローにハードコードしないこと（`product-brief.md` の `AI-5`）。ただし **cross-model review が必須の変更**（認証・認可・DB スキーマ・secret・データ削除・課金）では、生成したモデルとは別のモデルによる独立レビューを最低 1 つ入れる。これは engine の指定ではなく「生成者と検証者を分ける」という要件で、同一 engine 内の別モデルでも満たせる。
 

@@ -89,7 +89,7 @@ PDH 汎用ルールは `PDH-AGENTS.md`、フローの詳細・ステップ定義
 
 pdh-dev が spawn するチームメンバーの engine / モデル設定。
 
-engine 割り当ての規則（worker 既定 = main と同一、main engine の選び方、cross-delegate の適用範囲、spawn 機構）は pdh-dev `_execution-team.md`「エンジン割り当て」「spawn 機構」に従う。ここには **この project 固有の上書きだけ**を書く。
+engine 割り当ての規則（worker 既定 = main と同一、main engine の選び方、spawn 機構）は pdh-dev `_execution-team.md`「エンジン割り当て」「spawn 機構」に従う。ここには **この project 固有の上書きだけ**を書く。
 
 - main = claude → 実装 worker = `codex exec -c model_reasoning_effort="medium"`（機械的な実装は `medium`、統合・判断を含む難しい実装は `high`）
 - main = codex → 実装 worker = `claude -p --model opus`

@@ -11,7 +11,6 @@ PM は source code の編集・test の実行・doc 再生成・review 後の修
 - worker engine は既定で main と同一にする。per-role の engine / model 上書きと混在は project 規約に明示された場合だけ許す
 - worker の model を最小能力の軽量 model へ落とさない。比べるのは «1 回の単価» ではなく «完了 1 件までの合計» である — 取り違えればやり直し・review の巡数・人が押す回数が増え、その合計は 1 回を安く済ませた差より大きい。**単価だけを見ると、必ず非力な側が勝つように見える**
 - 委譲先の model は名前で pin しない。CLI の既定（codex は `-m` を付けない）か、CLI の alias（claude は `opus` など）を使う。**名前を書くと、書いた側だけが古くなる。**どの model で動いたかは worker の出力（stderr の冒頭など）から読む
-- cross-delegate は Coding Engineer だけに許す。逆 engine CLI の存在を確認し、session 初回 implement 時に 1 回だけユーザへ確認して、その回答を以後の ticket へ適用する
 - main engine が未指定で曖昧なときだけ、利用可能な CLI を確認してユーザへ聞く。既指定なら聞かず session 中は継続する。headless / CI では、その実行系が定義する環境変数を main engine とする
 - Coding Engineer（実装 worker）を最上位クラスの汎用 coding モデルで動かすときは reasoning effort を `medium` にする。探索・判断・review の役（architecture 検討、root cause 切り分け、review / verify）は既定の effort を使う
 - 実装 worker の profile は、委譲された product / UX / AC 判断を «自分で決めて進む» のではなく «止めて差し戻す» 側を既定にする（pdh-coding の停止条件どおり）。判断が残る ticket は実装前 gate（PDH-ticket-human-review）で解消してから spawn する。判断を埋めさせるために worker へ «進む» model を当てない — 書き手が決める失敗になる。model / effort は project が agent 定義で決め、切り替えは role profile（«止まる worker» / «決めて進む worker»）で選ぶ
