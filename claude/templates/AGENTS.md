@@ -35,7 +35,7 @@ Do not migrate legacy files in `tickets/` unless the user explicitly asks.
 | `subagent` | Delegated agent with its own context |
 | `teammate` / agent team | Independent agent session coordinated by an `orchestrator` |
 | `Skill` / `.claude/skills/` | Reusable task instruction package |
-| `.agents/skills/` | Where Codex CLI discovers skills; symlinks to the canonical `.claude/skills/` |
+| `.agents/skills/` | Where Codex CLI discovers skills; symlinks to the canonical `.claude/skills/`. PDH skills get theirs from `INSTALL.md` / pdh-update; when you add a project skill that Codex should use, add its symlink here too |
 | `.claude/agents/` | PDH worker agent definitions; the Codex CLI equivalents are `.codex/agents/*.toml` |
 | `model: opus` | Use the environment's `strong-judge` model/profile |
 | `advisor` | Second-opinion judge used at decision points |
