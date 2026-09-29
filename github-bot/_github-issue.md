@@ -152,6 +152,11 @@ bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する*
   gh issue create --title "<ticket の What 1 行>" --body "<gate の要点>"
   ```
   作った issue 番号を ticket.md の frontmatter（`issue:` 等）に控え、以降の紐付けに使う。
+- **依頼として起票するとき**（端末の agent が、bot に作業させるために `gh issue create` するとき）: **タイトルの先頭に `🤖 ` を付ける。**守るのは «起票した issue が、誰も 🤖 を書かないまま止まらないこと» である。`coding-bot.yml` は issue の作成をタイトルか本文の 🤖 で起動し、bot は ticket を書いて実装前 gate（`PDH-ticket-human-review`）で止まるので、付けても承認なしに実装は進まない
+  - 付けないのは次の 3 つ — 試験用の issue（bot が試験と別の作業を始める）、記録のためだけの issue、依頼者が «起票だけ» «まだ作業しない» と言ったとき
+  - Slack などから起票する仕組み（devbot）も同じ既定にする
+  - ⚠ **上の local（`github_bot.create_issue`）で作る issue には付けない。**端末の session が続きを持っている ticket なので、付けると bot が同じ ticket で並行して動き出す
+  - 数える機構は置けない。`gh issue create` は repo の差分に残らない
 
 ## close は `github_bot.close` で分岐する
 
