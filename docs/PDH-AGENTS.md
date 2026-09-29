@@ -97,6 +97,14 @@ worker / subagent は Director の会話状態全体を引き継がない。す�
 
 ローカルで抱えるのは最後の手段である。採るなら、なぜ上流へ出せないのかを project ルールに書き残す。**パッチを当ててよいのは、上流へ出せない理由が書けるときだけ**とする。単なる禁止にすると、本当に必要な場面で黙って破られ、理由が残らない。
 
+## Parallel Work On One Base Branch
+
+**守るのは «並行して動く別の session の commit と作業ツリーを、自分の操作で壊さないこと» である。**複数の session が同じ base branch へ直接 commit しうる間（worktree を使った並行 ticket、tmux Director など）に適用する。
+
+- **base branch で `git commit --amend` を使わない。**amend が書き換えるのは «自分の直前の commit» ではなく «その時点の tip» であり、tip が自分のものとは限らない（他の session の commit を message ごと吸収して消す）。やり直したいときは訂正 commit を積む。`git add <path>` で対象を絞っても、amend は index にある他の変更ごと取り込むので防御にならない
+- **base branch で `git reset --hard` / `rebase` / `push --force` を使わない。**同じ理由で、他の session の commit を巻き添えにする。復元などでやむを得ず使うなら、直前に `git rev-parse HEAD` で tip が想定どおりかを確かめてから実行する
+- **生成物（screenshot・ログ・一時ファイル）を main の checkout の根に置かない。**相対パスで保存するツール（`agent-browser screenshot` など）は cwd に書くので、絶対パスで ticket の `tmp_dir` などへ書く。根に残った未追跡ファイルは、他の session の `ticket.sh close`（main の checkout に未コミットの変更があると中断する）を止める。**止められた側が `--force` で押し通すのは誤りで、置いた本人が片付ける**
+
 ## Context Management
 
 context の compact 時や作業の再開時は、現在の ticket id、現在の PDH stage、未解決の懸念、ユーザの判断、明示の承認を保持する。無関係なタスクの間では context をリセットする。広い調査やノイズの多いログ確認は可能なら委譲し、Director が判断とユーザとの対話に足る context を保てるようにする。
