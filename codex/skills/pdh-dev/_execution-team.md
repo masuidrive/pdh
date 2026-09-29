@@ -35,6 +35,26 @@ codex exec --json --model "$worker_model" \
 
 CLI 呼び出しでは named agent の developer instructions が自動で適用されると仮定せず、`_subagent-context.md` の共通指示と該当役の指示、担当の規則を prompt に含める。sandbox と承認は実行環境に従い、承認待ちを bypass flag で解決しない。
 
+### reviewer に `codex exec review` を使うとき
+
+**守るのは «review が実行されなかったことを、«指摘ゼロ» と取り違えないこと» である。**`codex exec review` は差分を自分で取りに行く review 専用のコマンドで、`codex exec` とは受け付ける引数が違う。
+
+- **差分の指定と指示文は同時に渡せない。**`--base <branch>`（`--commit` / `--uncommitted` も同じ）と、位置引数の指示文 `[PROMPT]` は排他である。`--base` で渡したときは観点を渡せないので、結果の triage は PM が ticket の文脈で行う。**close 前 review は `--base` で代用せず、`pdh-review-range.sh --prompt` の出力を指示文として渡す**（`_flow.md` PDH-verify 7）
+- **sandbox は `-c sandbox_mode=…` で指定する。**`codex exec review` は `--sandbox` フラグを受け付けない。sandbox を外す値（`danger-full-access`）は、ユーザか project ルールが明示許可した場合だけ使う（上の «承認待ちを bypass flag で解決しない» と同じ扱い）
+- ⚠ **sandbox が起動できない環境では、review は «指摘なし» に見える結論を黙って返す。**codex 既定の sandbox（Linux では bubblewrap）が非特権の user namespace を作れない container では、`bwrap: No permissions to create a new namespace` で差分の取得に失敗し、それでも rc 0 で «No actionable correctness issues» のような結論を書く。**結果を読む前に 2 つ確かめる。**
+  1. stderr に、行頭から始まる `bwrap: ` が無いこと — `grep -cE '^bwrap: ' "$d/stderr.log"` が `0`。⚠ **行頭アンカーを外さない。**codex は project ルール（この注意を写した文を含む）を読んで出力に引くので、`bwrap` を素朴に検索すると説明文に当たって必ず非ゼロになる。⚠ **条件を足して «精密» にもしない** — 検査式を文書に書けば、その式ごと出力に引かれて自分に当たる。実エラーは行頭から出る
+  2. 結論が空でないこと
+- rc だけで成否を決めない
+
+```bash
+# PDH-review の第 3 reviewer（sandbox を外すことが project で許可されている環境の例）
+codex exec review --base main -c sandbox_mode="danger-full-access" > "$d/codex-review.txt" 2> "$d/stderr.log"
+# close 前 review（区間は指示文で渡す）
+p=$(bash scripts/pdh-review-range.sh <ticket dir> --from last-review --prompt) && \
+  codex exec review -c sandbox_mode="danger-full-access" "$p" > "$d/codex-final-review.txt" 2> "$d/stderr.log"
+grep -cE '^bwrap: ' "$d/stderr.log"   # 0 でなければ、review は実行されていない
+```
+
 各実行の終了コード、最終回答、失敗理由を回収する。non-zero、出力欠落、途中終了は成功に数えない。JSON の当該実行に属する usage と経過時間を記録し、取得できない値は不明とする。親子の usage が別集計なら、その範囲も記録する。
 
 独立した読み取りは実行枠の範囲で並行できる。書き込みは担当境界を分け、すべての起動に対して完了を待ち結果を回収する。共通の一時ファイル名で結果を上書きしない。
