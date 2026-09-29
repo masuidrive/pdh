@@ -513,7 +513,7 @@ Use these images to better understand the user's requirements, bugs, design requ
 fi
 
 # 画像以外の添付は取得しない。fine-grained PAT では 404 になり、取得には
-# repo を限れない token が要るため（2026-09-27 実測）。画像の署名付き URL は上で取得する。
+# repo を限れない token が要るため（実測）。画像の署名付き URL は上で取得する。
 # 本文 + 全コメントからファイル名だけを列挙し、内容を本文へ貼るよう依頼する。
 echo "📎 Checking for non-image attachments (not downloaded)..."
 FILE_URLS=$( { printf '%s\n' "$ISSUE_BODY"; echo "$ALL_COMMENTS_JSON" | jq -r '.[].body // ""'; } \

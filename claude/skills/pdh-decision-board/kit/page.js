@@ -25,7 +25,7 @@
 })();
 // 目次が書かれていなければ、節から作る。
 // ⚠ 目次は DOM から完全に導ける — 書き手に手で書かせると、節を足したときに追随せず、
-// 節が 5 つを超える board でも «目次が無い» まま出る（実測 2026-09-18）。
+// 節が 5 つを超える board でも «目次が無い» まま出る（実測）。
 // 既に nav#toc がある board では何もしない（手書きの並びを尊重する）。
 (function(){
   if(document.getElementById('toc')) return;
@@ -47,7 +47,7 @@
   });
   nav.appendChild(btn); nav.appendChild(ol);
   // ⚠ .toc は .layout の grid の中でしか «左の柱» にならない。挿すだけだと先頭に全幅の
-  // 塊として出る（2026-09-18 に実機で確認）。無ければ .layout / .content を作って包む。
+  // 塊として出る（実機で確認）。無ければ .layout / .content を作って包む。
   var lay=host.querySelector(':scope > .layout');
   if(!lay){
     lay=document.createElement('div'); lay.className='layout';
@@ -68,7 +68,7 @@
     var id=a.getAttribute('href').slice(1); links[id]=a; order.push(id);
   });
   // 現在地はスクロール位置から決定論で決める。IntersectionObserver は上向きスクロールで
-  // 発火順が前後し、下から戻ると 1 つ先の項目が残る（実測 2026-08-19）。
+  // 発火順が前後し、下から戻ると 1 つ先の項目が残る（実測）。
   var ticking=false;
   function spy(){
     ticking=false;

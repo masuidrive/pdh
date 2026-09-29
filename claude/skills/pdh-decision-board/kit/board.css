@@ -48,7 +48,7 @@ mark.k {
 }
 
 /* 弱い文字（補足・脇の説明）。部品ごとに薄い色を直接書かず、これを使う。
-   書き手が自然に class="mut" と書いて未定義のまま出た事故がある（examples.md 2026-08-14）。 */
+   書き手が自然に class="mut" と書いて未定義のまま出た事故がある（examples.md）。 */
 .mut { color: var(--muted); font-size: var(--text-sm); }
 
 /* ---------- 文書版の組版 ---------- */
@@ -102,7 +102,7 @@ mark.k {
 
 /* ⚠ 素の <a> に色を当てる。class を付けたリンク（.docref / .acref）だけを塗っていたため、
    生成側が素の <a> を出すと «ブラウザ既定の青と紫» になり、暗い配色で地に沈んだ
-   （2026-08-18 に実測。判断面の案内リンク 4 本が読めなかった）。
+   （実測。判断面の案内リンク 4 本が読めなかった）。
    ⚠ 訪問済みも同じ色にする — 読んだかどうかは判断に関係なく、色が変わると別物に見える。
    下線は残す。色だけで «押せる» を示すと、色が見えない環境で手がかりが消える。 */
 .board a, .deck a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: .18em; }
@@ -110,7 +110,7 @@ mark.k {
 .board a:hover, .deck a:hover { text-decoration-thickness: 2px; }
 /* 画面写真・地図のリンクは «部品» なので、この色を継がない。
    ⚠ .deck を前置しない — 地図（.map）と原寸表示（.shot-zoom）は deck の «外» に置く
-   規約なので、`.deck a.mapcell` では当たらない（2026-08-18 に既定の青のまま残った）。 */
+   規約なので、`.deck a.mapcell` では当たらない（既定の青のまま残った）。 */
 a.shot-open, a.mapcell, a.shot-zoom, .lightbox-close { color: inherit; text-decoration: none; }
 
 .board code {
@@ -120,7 +120,7 @@ a.shot-open, a.mapcell, a.shot-zoom, .lightbox-close { color: inherit; text-deco
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.92em;
   /* ⚠ 先頭の空白を潰さない。既定の normal では字下げが消え、«変更前» と «変更後» を
-     並べた表が «同じもの» として描かれる（2026-08-17 に実際に起きた。字下げを入れる
+     並べた表が «同じもの» として描かれる（実際に起きた。字下げを入れる
      という判断の board で、唯一の図が何も示していなかった）。 */
   white-space: pre-wrap;
 }
@@ -196,7 +196,7 @@ a.shot-open, a.mapcell, a.shot-zoom, .lightbox-close { color: inherit; text-deco
 .tag.na { color: var(--muted); border-color: var(--line); }
 
 /* 判定の表 — 通っていない行だけ薄く塗る。⚠ 全行を塗ると差が消える
-   （実測 2026-09-18: ok 10 / partial 2 / ng 1 / na 2 の board で、塗るのは 3 行）。
+   （実測: ok 10 / partial 2 / ng 1 / na 2 の board で、塗るのは 3 行）。
    «塗らない» の原則の例外はここだけで、理由は «目で走って落ちている行を見つける» ためである。 */
 .tw tbody tr:has(.tag.ng){background:var(--bad-soft)}
 .tw tbody tr:has(.tag.partial){background:var(--warn-soft)}
@@ -291,7 +291,7 @@ a.shot-open, a.mapcell, a.shot-zoom, .lightbox-close { color: inherit; text-deco
 }
 
 /* ---------- v2 部品（steps / timeline / compare / quote / fig / mermaid） ----------
-   v2 の primitives 層（2026-09-19 に撤去）から移動した共有部品。色・幅は token のみで書く。
+   撤去した v2 の primitives 層から移動した共有部品。色・幅は token のみで書く。
    使い方の規則は ../html.md「v2 部品」。 */
 /* steps — 順番が意味を持つ列挙（依存順・段階承認・確認手順） */
 ol.steps{list-style:none;margin:0 0 calc(var(--u)*5);padding:0;max-width:var(--measure);counter-reset:step}
@@ -343,8 +343,8 @@ ul.tl time{display:block;font-family:var(--font-head);font-size:.78rem;letter-sp
 
 /* fig — 画像・SVG 図・flowchart の共通枠。caption に「何を見てほしいか」を必ず書く */
 /* 箱は «中身の幅» に合わせる。列いっぱいに広げると、狭い画像（スマホ幅の画面写真など）の右に
-   大きな空白が残り、caption だけが箱いっぱいに伸びて «幅が揃っていない» と読める
-   （ユーザ指摘 2026-08-21）。表や図解のように中身が広いものは、これまでどおり列いっぱいになる。
+   大きな空白が残り、caption だけが箱いっぱいに伸びて «幅が揃っていない» と読める。
+   表や図解のように中身が広いものは、これまでどおり列いっぱいになる。
    ⚠ 狭くしすぎない — 下限を置かないと、小さな画像で caption が縦長の柱になる。 */
 .fig{border:1px solid var(--line);border-radius:var(--r);background:var(--paper);overflow:hidden;
   margin:0 0 calc(var(--u)*5);width:fit-content;min-width:min(100%,28rem);max-width:100%}
@@ -356,13 +356,13 @@ ul.tl time{display:block;font-family:var(--font-head);font-size:.78rem;letter-sp
 .fig .media{overflow-x:auto}
 /* 横長の図は入れ物を広げるだけにする。⚠ svg へ width:100%/max-width:none を当てて
    引き伸ばすと、小さな図（4 ノードの flowchart など）で文字まで比例拡大されて壊れる
-   （2026-09-18 に実機で確認）。SVG 側が viewBox と width="100%" を持っていれば、
+   （実機で確認）。SVG 側が viewBox と width="100%" を持っていれば、
    広げた入れ物に合わせて自分で伸びる。 */
 .fig:has(.media.wide){width:100%}
 .fig .media.wide{display:flex;justify-content:center}
 .fig .media.pad{padding:calc(var(--u)*4)}
 /* ⚠ .ph に枠を描かない。.fig が既に 1px の枠を持っており、margin を挟んだ 2 本目の枠が
-   12px の隙間で並んで «二重で近すぎ» になる（2026-09-18 に実機で確認）。
+   12px の隙間で並んで «二重で近すぎ» になる（実機で確認）。
    未撮影であることは .badge と塗りで示し、枠は外側の 1 本だけにする。 */
 .fig .ph{display:grid;place-items:center;min-height:11rem;padding:calc(var(--u)*6);
   background:repeating-linear-gradient(135deg,transparent 0 10px,var(--fill) 10px 11px);
@@ -394,13 +394,13 @@ h2.stuck{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* 貼り付
 .toc{font-size:.85rem}
 .toc ol{list-style:none;margin:0;padding:0}
 /* .board li の本文用 margin を受けない — 受けると項目間に隙間ができ、
-   border-left の縦線が項目ごとに分割されて見える（見本は 1 本の連続線。2026-08-20 実測） */
+   border-left の縦線が項目ごとに分割されて見える（見本は 1 本の連続線。実測） */
 .toc li{margin:0}
 .toc a{display:block;padding:calc(var(--u)*1) calc(var(--u)*3);color:var(--muted);text-decoration:none;
   border-left:2px solid var(--line)}
 /* ⚠ .board .sub（h1 の副題 — margin-bottom 32px）と同名 class の衝突を遮断する。
    遮断しないと下位項目の li 間に 32px の隙間ができ、縦線が分割されて見える
-   （margin が li を突き抜けて collapse するため、li の rect にも margin にも現れない — 2026-08-20 実測） */
+   （margin が li を突き抜けて collapse するため、li の rect にも margin にも現れない — 実測） */
 .toc a.sub{padding-left:calc(var(--u)*6);margin:0;line-height:inherit}
 .toc a.on{color:var(--accent);border-left-color:var(--accent);background:var(--accent-soft)}
 /* 行末の ✓ は «その節に判断がある» の印。class は board.js が付ける
@@ -415,7 +415,7 @@ h2.stuck{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* 貼り付
 .toc .toc-t{display:none}
 /* ⚠ .layout（目次レールつき）の中では h2 の背景拡張を右だけにする。
    左へ 50vw 伸ばすと、h2 と同じ高さ帯の目次項目が地の色で塗り潰される
-   （2026-08-20 に実測 — DOM にも hit-test にも写らない box-shadow なので、
+   （実測 — DOM にも hit-test にも写らない box-shadow なので、
    目次の 2 番目が「存在するのに描画されない」という見え方になった）。
    目次の無い 1 段組の board では従来どおり左右へ伸ばす（板の左 padding を覆うため）。 */
 .layout .content h2 { box-shadow: 50vw 0 0 0 var(--bg); }
@@ -610,8 +610,7 @@ button.answer-choice,
   cursor: pointer;
 }
 /* 送信が出ている board では、コピーは «送信できないときの予備» である。同じ見た目で並べると
-   «どちらでもよい 2 つ» に見えるので、枠と地を落として控えめにする
-   （ユーザ指摘 2026-08-21「回答をコピーボタンは目立たなくして。送信とイコールではない」）。
+   «どちらでもよい 2 つ» に見えるので、枠と地を落として控えめにする。
    ⚠ 印（data-copy-secondary）は board.js が «送信ボタンを足したときだけ» 付ける。
    送信の無い board（ファイルとして開く・受け取れない発行先）ではコピーが唯一の返し方なので、
    そこでは元の強さのまま残る。 */
@@ -651,8 +650,7 @@ button.answer-choice,
 .card.answer-choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ⚠ 左端が «いまこれを選んでいるか»、右端が «推奨か別案か»。この左右を入れ替えない。
-   逆に置くと、推奨のバッジのほうが «選ばれている印» に読める
-   （ユーザ指摘 2026-08-15「逆な気がする」）。 */
+   逆に置くと、推奨のバッジのほうが «選ばれている印» に読める。 */
 .card.answer-choice > h4 { position: relative; }
 .card.answer-choice > h4::before {
   content: "";
@@ -683,7 +681,7 @@ button.answer-choice,
 }
 
 /* 塗りは «選ばれている» だけの印にする。推奨カードまで塗ると、
-   どちらが選択中か見分けられない（ユーザ指摘 2026-08-15「選択わかりにくい」）。
+   どちらが選択中か見分けられない。
    推奨であることは、右のバッジと枠線の色が伝える。 */
 .card.answer-choice.is-selected {
   border-color: var(--accent);
@@ -734,7 +732,7 @@ button.answer-choice,
    （デッキでは右下に地図があるため、deck.css が左下へ上書きする。）
    ⚠ **閾値は .toc（目次ボタン）と同じ 1079.9px にする。**目次ボタンは 1080px 未満で
    右上へ固定されるので、ここを 700px にすると 701〜1079px で **2 つが同じ右上に重なる**
-   （実測 2026-08-23: 幅 844 = スマホ横で、目次と回答バッジの矩形が完全に重なった）。
+   （実測: 幅 844 = スマホ横で、目次と回答バッジの矩形が完全に重なった）。
    **片方の閾値だけを動かさない** — 動かすならもう片方も同じ値にする。 */
 @media (max-width: 1079.9px) {
   .answer-progress {

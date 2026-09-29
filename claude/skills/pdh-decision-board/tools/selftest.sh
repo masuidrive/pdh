@@ -160,7 +160,7 @@ if sh "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/good.html" > "$SELFTEST_TMP/goo
   grep -q '^> \[!TIP\]'     "$SELFTEST_TMP/callout.md" || { echo 'FAIL to-markdown: callout.ok が alert になりません' >&2; md_bad=1; }
   grep -q '^> \*\*気をつけること\*\*' "$SELFTEST_TMP/callout.md" || { echo 'FAIL to-markdown: callout の見出しが引用の中に入りません' >&2; md_bad=1; }
   # 行内の強調と用語の列挙。⚠ `**出ません。**触った` は GitHub が記号ごと素で出す
-  # （CommonMark の flanking 規則。2026-09-18 に実測）。句読点は強調の外へ出す。
+  # （CommonMark の flanking 規則。実測した）。句読点は強調の外へ出す。
   printf '%s\n' '<main class="board">' \
     '<p>前<strong>出ません。</strong>触った。<em>「注」</em>です</p>' \
     '<dl class="facts"><dt>用語</dt><dd>説明の文</dd></dl>' \

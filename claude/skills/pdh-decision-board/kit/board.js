@@ -157,7 +157,7 @@
     // ⚠ **選択肢のカードを先に探す。**`.answer-set` はメモ欄（補足・修正指示）の入れ物で、
     //    選択肢より下、しばしば節の外に置かれる。そちらを先に見ると、
     //    «まだ答えていない判断へ» と言いながらメモ欄へ運ぶことになる
-    //    （実測 2026-08-23: 選択肢は 2991px、メモ欄は 6602px の位置にあった）。
+    //    （実測: 選択肢は 2991px、メモ欄は 6602px の位置にあった）。
     const hostFor = q => {
       const sel = `[data-q="${CSS.escape(q)}"]`;
       const card = root.querySelector(`.answer-choice${sel}`);
@@ -169,9 +169,9 @@
       // 数え方は進捗・目次の ✓ と同じ «選択またはメモ» で揃える。
       const pending = qids.find(q => !state[q].value && !state[q].note.trim());
       if (pending) { move(hostFor(pending)); return; }
-      // ⚠ **節の頭ではなく «送信できる場所» へ運ぶ**（ユーザ指示 2026-08-23「送信箇所に」）。
+      // ⚠ **節の頭ではなく «送信できる場所» へ運ぶ**。
       //    節の頭に止めると、返す欄も送信ボタンも画面の外に残る
-      //    （実測 2026-08-23: 節の頭 y=0 のとき、返す欄は y=552 で、その下のボタンは
+      //    （実測: 節の頭 y=0 のとき、返す欄は y=552 で、その下のボタンは
       //    高さ 800 の画面に入らなかった）。中央に寄せて、貼り戻し欄とボタンを同時に見せる。
       const submit = root.querySelector('[data-submit-answer]')
         || root.querySelector('[data-copy-answer]');
@@ -299,7 +299,7 @@
     copyButton.before(button);
     // 送信が出ている board では、コピーは «送信できないときの予備» になる。
     // 同じ見た目で並べると «どちらでもよい 2 つ» に見えるので、印を付けて控えめにする
-    // （見た目は board.css。ユーザ指摘 2026-08-21「送信とイコールではない」）。
+    // （見た目は board.css）。
     // ⚠ 印を付けるのはここだけ — 送信の無い board ではコピーが唯一の返し方なので、
     //    そのままの強さで残す。
     copyButton.setAttribute('data-copy-secondary', '');
