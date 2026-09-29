@@ -290,6 +290,8 @@ grep -q '再現か実測:' .ticket-config.yaml && echo "テンプレ: 適用済�
 
 `AGENTS.md` テンプレートの Project Principles にあった «`??` / `？？` で終わる質問には答えるだけ» は、2026-09-29 以降 `PDH-AGENTS.md`「Execution Model」へ移った（«指定されたコマンドが起動しないときは止めて確認する» «base branch のソースコードを書き換える前に ticket にするかを確認する» と一緒に）。`grep -n 'two question marks' AGENTS.md` で行が出たら、その行を消す。`PDH-AGENTS.md` は書き換えない配布物なので、この 3 つは project 側で外せなくなった。
 
+`.ticket-config.yaml` の `default_content` の «### Design Decisions» に、影響 6 項目（DB schema / Public API / CLI・SDK・file format・event schema / Backward compatibility / Migration・rollout・rollback / Docs・generated artifacts）の欄が 2026-09-29 以降に入った。`grep -q 'Backward compatibility:' .ticket-config.yaml` で行が無ければ、template の 7 行と Checklist の PDH-ticket-review 行を写す。既存の ticket は書き換えない。
+
 `scripts/checks/README.md` の «Adding a check» に、grep で表せない不変則（要素間の関係・算術・状態遷移）は `.check` にせず決定論テストで固定し、その選択を ticket の note に 1 行書く、が 2026-09-29 以降に入った。`grep -q 'deterministic test instead' scripts/checks/README.md || cp tmp/pdh/codex/templates/checks/README.md scripts/checks/README.md` で揃える（project 固有のカスタマイズを持たないので上書きしてよい）。
 
 ### 3.5 close 済みでない ticket

@@ -436,6 +436,18 @@ grep -nE '？？|（?2回）|インストール不足・設定ミスで起動し
 
 行が出たら、その行を `CLAUDE.md` から消す。project が意図して書き足した条件（対象のコマンド名など）があるなら、その条件だけを残す。
 
+#### ticket の Design Decisions に影響 6 項目が入った（2026-09-29 以降）
+
+`.ticket-config.yaml` の `default_content` の «### Design Decisions» に、影響 6 項目（DB schema / Public API / CLI・SDK・file format・event schema / Backward compatibility / Migration・rollout・rollback / Docs・generated artifacts）の欄が入った。無ければ «なし» と書く。`note_content` の Checklist の PDH-ticket-review 行も、6 項目を埋めたかを数える形になった。`.ticket-config.yaml` は上書きされないテンプレートなので、既存プロジェクトでは手で更新する。
+
+適用済みかの確認（冪等）:
+
+```bash
+grep -q 'Backward compatibility:' .ticket-config.yaml && echo "適用済み" || echo "要追加"
+```
+
+「要追加」なら `tmp/pdh/claude/templates/.ticket-config.yaml` の «### Design Decisions» の 7 行と、Checklist の PDH-ticket-review 行を写す。既存の ticket は書き換えない。
+
 #### `CLAUDE.md` テンプレートの委譲先モデルが名前で pin されなくなった（2026-09-29 以降）
 
 «チーム構成・モデル設定» の実装 worker の例が `codex exec -m <モデル名>` と名前を書いていた。provider の API は世代番号の無い名前を受け付けないので、名前を書くと書いた側だけが古くなる。例から `-m` を外し、`_execution-team.md`「エンジン割り当て」に «委譲先の model は名前で pin しない» を足した。`CLAUDE.md` は上書きされないので、既存プロジェクトでは手で直す。

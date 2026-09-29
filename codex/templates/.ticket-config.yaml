@@ -80,7 +80,7 @@ note_content: |
        当てはまらない項目は `- [-] ... - skip: <理由>` と書いて理由を残す（理由なしの `- [-]` は未了扱い）。
        未了の一覧は `./ticket.sh check`。 -->
   - [ ] PDH-ticket-review: Why が product-brief.md に接続し、AC が観察可能で、ユーザ承認済み
-  - [ ] PDH-ticket-review: Design Decisions / Out-of-scope / Dependencies / Architectural Invariants check が確認済み
+  - [ ] PDH-ticket-review: Design Decisions（影響 6 項目を «なし» も含めて埋めた）/ Out-of-scope / Dependencies / Architectural Invariants check が確認済み
   - [ ] PDH-implement: 実装が依存する «確かめていない仮定» を書く前に列挙し、測れるものは測った
   - [ ] PDH-implement: できたものを AC 全件と合意済みの画像へ 1 項目ずつ突き合わせた（一致しない項目は直したか、違えた理由を書いた）
   - [ ] PDH-implement: implementor が論理単位ごとに commit し、mega-commit にしていない
@@ -172,6 +172,13 @@ default_content: |
        例: - データ保存形式: data URI (Files API は将来 ticket、本 ticket では不要)
        例: - 423 reject ではなく 422: validation error として扱う -->
   -
+  - 影響（無ければ「なし」と書く）:
+    - DB schema / persisted data model:
+    - Public API / external contract:
+    - CLI / SDK / file format / event schema:
+    - Backward compatibility:
+    - Migration / rollout / rollback:
+    - Docs / generated artifacts:
 
   ### Out-of-scope
   <!-- やらないこと (scope creep 防止)。
