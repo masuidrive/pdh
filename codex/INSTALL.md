@@ -288,6 +288,10 @@ grep -q '再現か実測:' .ticket-config.yaml && echo "テンプレ: 適用済�
 
 新しい `codex/templates/checks/*.check` は追加し、既存の project 固有 `.check` は残す。`required-pdh-files.check` の `required_paths` は、実際に配置した PDH skill と Codex agent 定義の全件に合わせる。
 
+### 3.5 close 済みでない ticket
+
+close 済みでない（todo / doing）ticket は、見出しの改名など AC の中身に触れない変更だけを一括で揃える。**AC の書き方が変わっても、AC は一括で書き直さない** — その ticket に着手するときの `PDH-ticket-review` で 1 件ずつ直し、`PDH-ticket-human-review` で承認を受ける（`PDH-AGENTS.md`「Stage Flow」）。`tickets/done/` は触らない。
+
 ### 4. commit ID と結果を検査する
 
 [新規導入の commit ID 置換](#3-based-on-の-commit-id-を埋める)と[導入結果の検査](#5-導入結果を検査する)を実行する。続けて project の `scripts/test-all.sh` を実行し、`git diff` で user 固有設定が残っていることを確認する。
