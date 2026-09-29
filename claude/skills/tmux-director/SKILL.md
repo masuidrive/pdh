@@ -155,7 +155,7 @@ tmux_send() {  # $1=pane  $2=message file（先頭に prefix を含む）  $3=wo
     tmux send-keys -t "$pane" Enter
     sleep 2.5
     n1=$(grep -cF "$p" "$tr" 2>/dev/null || true)
-    [ "$n1" -gt "$n0" ] && { echo "$pane => DELIVERED (attempt $i)"; return 0; }
+    [ "${n1:-0}" -gt "${n0:-0}" ] && { echo "$pane => DELIVERED (attempt $i)"; return 0; }
   done
   echo "TMUX SEND FAILED: $pane — transcript に届いていない" >&2
   return 1
@@ -163,6 +163,7 @@ tmux_send() {  # $1=pane  $2=message file（先頭に prefix を含む）  $3=wo
 ```
 
 - ⚠ **`grep -c` は 0 件のとき `0` を出力してから exit 1 する。**`$(grep -c … || echo 0)` と書くと値が 2 行の `0` になり、`[ -gt ]` が integer expression error で落ちる — **届いているのに FAILED と報告する。**`|| true` にする
+- transcript がまだ無いと `grep` は何も出力しないので、比較の側で `${n:-0}` にしておく
 
 window への指示は常に 1 フェーズ分のみにする。「PDH-implement をやって、その後 PDH-review も進めて」のように複数フェーズをまとめて指示しない。
 
