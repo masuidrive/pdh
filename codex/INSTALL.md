@@ -288,6 +288,8 @@ grep -q '再現か実測:' .ticket-config.yaml && echo "テンプレ: 適用済�
 
 新しい `codex/templates/checks/*.check` は追加し、既存の project 固有 `.check` は残す。`required-pdh-files.check` の `required_paths` は、実際に配置した PDH skill と Codex agent 定義の全件に合わせる。
 
+`AGENTS.md` テンプレートの Project Principles にあった «`??` / `？？` で終わる質問には答えるだけ» は、2026-09-29 以降 `PDH-AGENTS.md`「Execution Model」へ移った（«指定されたコマンドが起動しないときは止めて確認する» «base branch のソースコードを書き換える前に ticket にするかを確認する» と一緒に）。`grep -n 'two question marks' AGENTS.md` で行が出たら、その行を消す。`PDH-AGENTS.md` は書き換えない配布物なので、この 3 つは project 側で外せなくなった。
+
 ### 3.5 close 済みでない ticket
 
 close 済みでない（todo / doing）ticket は、見出しの改名など AC の中身に触れない変更だけを一括で揃える。**AC の書き方が変わっても、AC は一括で書き直さない** — その ticket に着手するときの `PDH-ticket-review` で 1 件ずつ直し、`PDH-ticket-human-review` で承認を受ける（`PDH-AGENTS.md`「Stage Flow」）。`tickets/done/` は触らない。

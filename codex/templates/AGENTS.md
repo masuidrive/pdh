@@ -20,7 +20,6 @@ tickets/                         # Managed by ticket.sh
 <!-- Write project-specific decisions here. Do not repeat shared PDH rules. -->
 
 - Prioritize technical correctness over speed.
-- If a user message ends with two question marks (`??` or `？？`), answer the question only; do not edit files or execute commands.
 
 ## Implementation Quality
 

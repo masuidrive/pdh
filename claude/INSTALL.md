@@ -424,6 +424,18 @@ rm -rf tmp/pdh
 
 ### 既知の移行手順
 
+#### テンプレートの基本方針の見本 3 つが `PDH-AGENTS.md` へ移った（2026-09-29 以降）
+
+«文末が「？？」の質問には答えるだけ»・«指定されたコマンドが起動しないときは止めて確認する»・«base branch のソースコードを書き換える前に ticket にするかを確認する» の 3 つは、`CLAUDE.md` テンプレートの基本方針の見本から `PDH-AGENTS.md`「Execution Model」へ移った。`PDH-AGENTS.md` は常に読まれるので、project の `CLAUDE.md` に同じ 3 つが残っていると同じ規則が 2 か所にある。⚠ **`PDH-AGENTS.md` は書き換えない配布物なので、この 3 つは project 側で外せなくなった。**
+
+適用済みかの確認（冪等）:
+
+```bash
+grep -nE '？？|（?2回）|インストール不足・設定ミスで起動しない|まずチケット化するか確認' CLAUDE.md || echo "CLAUDE.md: 適用済み"
+```
+
+行が出たら、その行を `CLAUDE.md` から消す。project が意図して書き足した条件（対象のコマンド名など）があるなら、その条件だけを残す。
+
 #### github-bot: 名前と導入先固有の secret（2026-09-27 以降）
 
 github-bot を導入済みなら、[github-bot/INSTALL.md の改名手順](../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)を先に適用する。同文書の「導入先固有の secret を `CODING_BOT_ENV_JSON` へ移す」も確認対象である。各節の確認コマンドを更新前後に実行し、ファイルだけでなく GitHub の secret / variable 名も確認する。
