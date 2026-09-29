@@ -149,6 +149,10 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 - 他所が生成するログ、イベント、payload、DB 行を読む機能は、検証前に実上流が実際に何を出すかを実データで観測する。上流が必要フィールドを出していなければ、その機能は未完成であって pass ではない
 - 「描画された」「生成された」で完了としない。リンク、通知、画面遷移、外部副作用が目的なら、終端のユーザ操作を実際に行って着地まで確認する。実トランスポートを実データと取り違えない（実 Slack に合成ログを流すのは実データ確認ではない）
 - 外部 provider、API、webhook、SDK、認証を経由する path は、実 API で 1 経路以上 200 確認する。credential があるなら実行が必須。無いなら deferred として明示 escalate し、自己判断で skip も「stub で十分」の判断もしない。結果は progress へ記録する（response status、body 抜粋、cost）
+- **人が判断するための確認（動作確認・human gate の材料）では、実 API・実 provider の実行コストを理由に確認を省かない。**守るのは «承認者が、材料の欠けた判断をしないこと» である。材料が 1 つ欠けることの損失は、実 API 数リクエスト分のコストより桁違いに大きい
+  - **contrast case（«出る» だけでなく «出ない» を見せる証拠）を省かない。**allowlist・権限・条件分岐は、negative 側を実データで見せないと確認したことにならない
+  - 減らすのは確認者のコスト（読む手間・判断の迷い）であって、agent 側の実行コストではない
+  - 自動テスト（`scripts/test-all.sh` / CI）はこの対象外で、コスト意識を保つ。恒久テストに実 LLM・実 provider の呼び出しを常設しない
 
 ## コミットに含めてよいコード
 
@@ -178,6 +182,9 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 - `application-test` と `ticket-local-test` は別物である。`scripts/test-all.sh`、CI、`test/` に置く `application-test` は product contract、Architectural Invariants、一般化した regression をカバーする。変更が正しく適用されたかの検証（API リネーム後に旧 URL が 404 を返す等）は `ticket-local-test` であり、テストスイートにコミットしない
 - 昇格判定は 1 問。この挙動を、ticket や一時 fixture の名前を出さずに継続する product contract として記述できるか。Yes なら `application-test` へコミット、No なら ticket-local のまま close 時に刈る
 - repository が生成物（bundle 済み worker、compile 済み asset、生成された SDK model）を commit しているなら、`application-test` で再生成して突き合わせ、commit 済みファイルと異なるとき fail させる
+- **1 つの契約は、その違反を観測できる最下層の 1 テストで固定する。**書く前に «この契約は既にどこかの層で固定されていないか» を確かめる。下層が固定済みなら、上層（E2E など）に足すのは、その層でしか観測できない部分（描画・DOM 操作・フォーム送信・画面遷移）だけにする。例: «絞り込みが効く» を unit test が固定しているなら、E2E は «絞り込みの欄が描画される» だけを見る
+- **恒久テストは減らしてよい。**下層が同じ契約を固定していて、その層でしか観測できないものを含まない上層のテストは、触るついでに削除・統合してよい。削除したら «何を守っていたか / なぜ失われないか» を progress に 1 行残す
+- **影響レイヤーの列挙は «テストを足すレイヤーの一覧» ではない。**«このレイヤーにテストが無い» は、それだけでは finding にならない — 契約が別のレイヤーの恒久テストで固定されているなら、そのレイヤーに足すのはそこでしか観測できない部分だけである
 - 実行可能な `ticket-local-test` script は `tickets/<name>/tests/` に置き、`./scripts/test-ticket-local.sh [ticket-id]` で実行する。ticket.sh は作成しないので、最初の test を書くときに `mkdir -p` する
 - 新しく足した検査（grep の不変条件・CI の step・gate の条件・恒久テスト）は、**落ちることを 1 度見せる。**その検査が守る対象を 1 つだけ壊し（条件の `and` を `or` にする、除外を 1 つ外す、期待値を 1 つずらす）、検査が落ちることを確かめて、当てた変更と結果を progress へ 1 行書く。⚠ **通ってしまう検査は、足しても何も守らない。**
 - seed、`tmp_dir` の helper、`agent-browser`、`curl`、コマンドの実行証跡は progress file へ記録する
