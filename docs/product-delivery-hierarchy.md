@@ -106,6 +106,7 @@ Ticket の状態は YAML frontmatter で判定する。
 - Brief の変更は 2 種類に分ける。方針の変更（Problem / Solution / Appetite / Architectural Invariants / Non-goals）はユーザ承認が必須。事実の追記（Done への達成追記・Open Questions の追加）は agent が ticket close 時に行ってよい。
 - `technical-reference.md` は「現在の実装がどうなっているか」の常設文書（repo root に置く）。ticket close 時に、その ticket の差分に因果がある範囲だけを agent が追記・上書きする。他 ticket 由来の記述は消さない（削除候補は note に記録し、棚卸し ticket で別モデル検証つきで刈る）。
 - Ticket は Product Brief を参照する。commit は Ticket に紐づける。
+- **要望・報告に画像（完成形の mockup・画面の試作・変更前後の比較）が添付されていたら、ticket を書く前に開く。**画像は合意した内容そのもので、文章は方向を、画像は «どう見えるか» を決めている。ticket には、画像の置き場所・画像が決めている文言・色・導線・並び順・画像と違う判断をする理由を書く（PDH-ticket-review 4 で確かめる）。
 - ticket は **1 ticket = 1 work unit**。cross-cutting changes を複数 ticket に切ると layer 間整合性が完成時にしか取れないため、1 ticket で全 layer をカバーする。
 
 ### 変更・中止
