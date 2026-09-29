@@ -141,6 +141,29 @@ tmux send-keys -t WINDOW.PANE Enter
 - 未確認の送信を「送った」と報告しない。
 - 例外: slash command（`/clear` `/compact` `/pdh-dev`）と `AskUserQuestion` への数字回答は buffer 経由にせず literal な `send-keys` で送る。
 
+上の契約を満たす実装の例。**prefix は project で 1 つ決め、全メッセージの先頭に置く**（例: `【Director】`）。
+
+```bash
+tmux_send() {  # $1=pane  $2=message file（先頭に prefix を含む）  $3=worker transcript jsonl  $4=prefix
+  local pane="$1" f="$2" tr="$3" p="$4" i n0 n1
+  n0=$(grep -cF "$p" "$tr" 2>/dev/null || true)   # ⚠ `|| echo 0` にしない（下記）
+  tmux send-keys -t "$pane" C-u; sleep 0.3
+  printf '%s' "$(cat "$f")" | tmux load-buffer -b agentmsg -   # 末尾改行を落とす
+  tmux paste-buffer -b agentmsg -t "$pane" -p -d               # -p: bracketed paste
+  for i in 1 2 3; do
+    sleep 0.6
+    tmux send-keys -t "$pane" Enter
+    sleep 2.5
+    n1=$(grep -cF "$p" "$tr" 2>/dev/null || true)
+    [ "$n1" -gt "$n0" ] && { echo "$pane => DELIVERED (attempt $i)"; return 0; }
+  done
+  echo "TMUX SEND FAILED: $pane — transcript に届いていない" >&2
+  return 1
+}
+```
+
+- ⚠ **`grep -c` は 0 件のとき `0` を出力してから exit 1 する。**`$(grep -c … || echo 0)` と書くと値が 2 行の `0` になり、`[ -gt ]` が integer expression error で落ちる — **届いているのに FAILED と報告する。**`|| true` にする
+
 window への指示は常に 1 フェーズ分のみにする。「PDH-implement をやって、その後 PDH-review も進めて」のように複数フェーズをまとめて指示しない。
 
 #### ゴースト表示
