@@ -65,6 +65,7 @@ done
 
 for distribution_set in claude codex; do
   run "$distribution_set check-pdh-ticket" bash scripts/test-pdh-ticket-checks.sh "$distribution_set"
+  run "$distribution_set ticket template drift" bash scripts/test-ticket-template-drift.sh "$distribution_set"
 done
 
 printf '\n=== shell syntax (shipped scripts) ===\n'

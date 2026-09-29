@@ -32,7 +32,6 @@ PDH-open → PDH-ticket-review → PDH-ticket-human-review → PDH-implement →
 ## ユーザは window を見ない
 
 - 判断材料は読み返せる 1 枚の board に置き、`AskUserQuestion` は決定の入口としてのみ使う。**順序は board を作って発行 → URL を提示 → `AskUserQuestion`。**
-- gate だけでなく scope の判断（finding を本 ticket で直すか / 起票するか / 記録のみか、次にどの ticket を流すか）にも board を作る。判断が 1 件でも、選択肢が単純に見えても同じ。
 - worker が publish した gate report は転送せず、材料として引用・リンクし、Director が board を作る。board には Director の裏取り結果と、window を横断した判断を載せる。artifact を publish できる engine はそれを使い、できない engine は同じ構造を ticket の tmp 配下のファイルに書いて path を渡す。
 
 ## TD-1: ターゲット window の決定

@@ -64,6 +64,7 @@ bash ticket.sh init
 | `tmp/pdh/codex/templates/spawn-worker.sh` | `scripts/spawn-worker.sh` | worker を «起動した shell 呼び出しの寿命» から切り離して走らせ、終わり方（rc・受けた signal）を必ず残す。`_execution-team.md`「並行起動」の実装（実行権限 `chmod +x` 要） |
 | `tmp/pdh/codex/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | ticket dir の progress.md、human gate の待ち行、close 前 review の区間、`起票:` 行の実在、Why の根拠 2 行の検査（test-all の 1 段） |
 | `tmp/pdh/codex/templates/pdh-review-range.sh` | `scripts/pdh-review-range.sh` | 最後に review した SHA 以降の ticket 自身の commit を列挙し、close 前 review の指示文を作る（`check-pdh-ticket.sh` も読み込む） |
+| `tmp/pdh/codex/templates/check-ticket-template-drift.sh` | `scripts/check-ticket-template-drift.sh` | `.ticket-config.yaml` のテンプレ本文（`default_content` / `note_content`）と上流の差を数える。pdh-update の後に回す（実行権限 `chmod +x` 要） |
 
 配置コマンド:
 
@@ -91,7 +92,8 @@ cp tmp/pdh/codex/templates/seed-pdh-verify.sh scripts/seed-pdh-verify.sh
 cp tmp/pdh/codex/templates/test-ticket-local.sh scripts/test-ticket-local.sh
 cp tmp/pdh/codex/templates/check-pdh-ticket.sh scripts/check-pdh-ticket.sh
 cp tmp/pdh/codex/templates/pdh-review-range.sh scripts/pdh-review-range.sh
-chmod +x ticket.sh scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh scripts/pdh-review-range.sh
+cp tmp/pdh/codex/templates/check-ticket-template-drift.sh scripts/check-ticket-template-drift.sh
+chmod +x ticket.sh scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh scripts/pdh-review-range.sh scripts/check-ticket-template-drift.sh
 ```
 
 `.agents/skills/` は skill の実体である。`.claude/skills/` への symlink や wrapper は作らない。
@@ -168,7 +170,7 @@ for agent in pdh-ac-reader pdh-ac-verifier pdh-coding-engineer pdh-qa pdh-review
   test -f ".codex/agents/$agent.toml" || exit 1
 done
 ! grep -Rqs 'XXXXXXX' AGENTS.md PDH-AGENTS.md product-brief.md technical-reference.md .ticket-config.yaml docs/product-delivery-hierarchy.md .agents/skills scripts/checks
-bash -n ticket.sh scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh scripts/pdh-review-range.sh
+bash -n ticket.sh scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh scripts/pdh-review-range.sh scripts/check-ticket-template-drift.sh
 ```
 
 最後に `codex` を新しく起動し、`pdh-dev` と `pdh-update` が skill 一覧にあり、PDH worker が custom agent として選べることを確認する。
@@ -248,7 +250,7 @@ fi
 - `scripts/dev-server.sh`
 - `scripts/seed-pdh-verify.sh`
 - `scripts/test-ticket-local.sh`
-- `scripts/check-pdh-ticket.sh` と `scripts/pdh-review-range.sh`（上流の版で置き換えてよい。project 固有の変更を持たない）
+- `scripts/check-pdh-ticket.sh` と `scripts/pdh-review-range.sh` と `scripts/check-ticket-template-drift.sh`（上流の版で置き換えてよい。project 固有の変更を持たない）
 
 例:
 
@@ -259,6 +261,16 @@ git diff --no-index -- scripts/test-all.sh tmp/pdh/codex/templates/test-all.sh |
 ```
 
 `.ticket-config.yaml` の `note_content` は 2026-09-14 以降、現在値の節だけを持つ（実装ログ / 品質検証結果 / 人間レビュー / Discoveries の 4 節は `progress.md` へ移った）。`grep -q '## PDH-implement. 実装ログ' .ticket-config.yaml && echo "要適用" || echo "適用済み"` で確認し、「要適用」なら template に合わせて 4 節を外し、`ticket_files` と `append_only_files` を足す（ticket.sh 20260914 以降。`selfupdate` を先に）。あわせて `scripts/check-pdh-ticket.sh` を配置し、`scripts/test-all.sh` の `run "fast-checks"` の次に `run "pdh-ticket" bash scripts/check-pdh-ticket.sh` を足す（`grep -q check-pdh-ticket.sh scripts/test-all.sh` で確認）。
+
+**`.ticket-config.yaml` のテンプレ本文と上流の差を数える script が入った（2026-09-29 以降）**
+
+`scripts/check-ticket-template-drift.sh` が、導入先の `.ticket-config.yaml` の `default_content` / `note_content` と上流のテンプレの差分行数を出す（差があれば exit 1）。pdh-update の手順が、更新の後にこれを回して出力を報告させる。
+
+```bash
+test -x scripts/check-ticket-template-drift.sh && echo "差の検査: 適用済み" || echo "差の検査: 要適用"
+```
+
+「要適用」なら `tmp/pdh/codex/templates/check-ticket-template-drift.sh` を `scripts/` へコピーして `chmod +x` する（project 固有の変更を持たないので上書きしてよい）。
 
 **close 前 review の区間が sub-branch の merge を拾うようになり、`test-all.sh` の迷子の行が消えた（2026-09-27 以降）**
 

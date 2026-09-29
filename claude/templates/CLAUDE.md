@@ -114,6 +114,7 @@ engine 割り当ての規則（worker 既定 = main と同一、main engine の�
 | 追加 reviewer（任意） | review | 例: codex を1人追加 | 独立視点を増やしたいとき、別 engine の reviewer を明示追加してよい（混在）|
 | AC 裏取り | verification | （main） | project 固有の AC evidence や canonical docs 照合観点を書く |
 | Surface Observer | surface check | （main） | UI / HTTP API / SDK / CLI など、この project の consumer surface を書く |
+| 判断ボードの独立 reviewer | board の完成検査 | （main の別 worker） | 書き手とは別に起こす。別 engine を指定すると、engine が違うことで見つかる盲点も拾える（`pdh-decision-board` の `final-check.md`） |
 
 共通の worker / spawn / context ルールは `PDH-AGENTS.md` に置く。以下にはこの project / tool 固有の起動方法だけを書く。
 

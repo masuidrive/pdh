@@ -79,6 +79,7 @@ bash ticket.sh init
 | `tmp/pdh/claude/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | `ticket-local-test` 実行スクリプト（CI には含めない） |
 | `tmp/pdh/claude/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | ticket dir の `progress.md`（存在・追記のみ）、human gate の待ち行、close 前 review の区間、`起票:` 行の実在、Why の根拠 2 行を確かめる検査。`scripts/test-all.sh` の `run "pdh-ticket"` 行が呼ぶ |
 | `tmp/pdh/claude/templates/pdh-review-range.sh` | `scripts/pdh-review-range.sh` | 最後に review した SHA 以降の ticket 自身の commit を列挙し、close 前 review の指示文を作る。`check-pdh-ticket.sh` も読み込む（実行権限 `chmod +x` 要） |
+| `tmp/pdh/claude/templates/check-ticket-template-drift.sh` | `scripts/check-ticket-template-drift.sh` | `.ticket-config.yaml` のテンプレ本文（`default_content` / `note_content`）と上流の差を数える。pdh-update の後に回す（実行権限 `chmod +x` 要） |
 | `tmp/pdh/claude/templates/agents/claude/` | `.claude/agents/` | PDH worker の agent 定義（Claude Code 用。read-only 役の書き込み境界を `tools` で機構化する。**ディレクトリごと**コピーする） |
 | `tmp/pdh/claude/templates/agents/codex/` | `.codex/agents/` | PDH worker の agent 定義（Codex CLI 用。read-only 役を `sandbox_mode` で機構化する。Codex CLI を使わないなら省略してよい） |
 | `tmp/pdh/claude/templates/product-brief.md` | `product-brief.md` | Product Brief テンプレート |
@@ -423,6 +424,16 @@ rm -rf tmp/pdh
 11. 後片付け: `rm -rf tmp/pdh`
 
 ### 既知の移行手順
+
+#### `.ticket-config.yaml` のテンプレ本文と上流の差を数える script が入った（2026-09-29 以降）
+
+`scripts/check-ticket-template-drift.sh` が、導入先の `.ticket-config.yaml` の `default_content` / `note_content` と上流のテンプレの差分行数を出す（差があれば exit 1）。pdh-update の手順が、更新の後にこれを回して出力を報告させる。
+
+```bash
+test -x scripts/check-ticket-template-drift.sh && echo "差の検査: 適用済み" || echo "差の検査: 要適用"
+```
+
+「要適用」なら `tmp/pdh/claude/templates/check-ticket-template-drift.sh` を `scripts/` へコピーして `chmod +x` する（project 固有の変更を持たないので上書きしてよい）。
 
 #### テンプレートの基本方針の見本 3 つが `PDH-AGENTS.md` へ移った（2026-09-29 以降）
 

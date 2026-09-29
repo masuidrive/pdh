@@ -448,6 +448,19 @@ fi
 「要移行」なら、2 つの値を `CODING_BOT_ENV_JSON` の JSON に足して登録し直す（例 `gh secret set CODING_BOT_ENV_JSON --body '{"HANGAR_TOKEN":"…","FIREBASE_TOKEN":"…"}'`。既に `CODING_BOT_ENV_JSON` があるなら、そのキーも残す）。そのうえで workflow を更新する。
 
 
+## 導入先固有の secret を入れ替える
+
+**守るのは «キーを 1 つ入れ替えたときに、`CODING_BOT_ENV_JSON` のほかのキーが消えないこと» である。**
+
+GitHub は secret の値を読み出させない。`CODING_BOT_ENV_JSON` のほかのキーは、**登録したときに手元に保管した JSON（例 `env.json`）からしか戻せない。**入れ替えるキーだけの JSON で登録し直すと、ほかのキーが消える。
+
+```bash
+jq -c --arg v "<新しい値>" '. + {HANGAR_TOKEN: $v}' env.json > env.json.new && mv env.json.new env.json
+gh secret set CODING_BOT_ENV_JSON --repo <owner/repo> < env.json
+```
+
+`env.json` は commit しない。保管場所は導入先の環境メモ（`CLAUDE.local.md` / `AGENTS.local.md`）に書く。期限のある token（Hangar は 30 日）が切れている間、bot は板を発行できず、markdown だけで出す（`_github-issue.md`）。
+
 ## 既知の移行手順: Coding Robot を coding-bot に改名する（2026-09-27 以降）
 
 旧名の互換読み取りは残さない。過去に投稿したコメントは書き換えなくてよい。以下は導入先の repo root で行う。

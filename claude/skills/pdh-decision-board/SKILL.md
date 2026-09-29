@@ -1,6 +1,6 @@
 ---
 name: pdh-decision-board
-description: PDH の human gate（`PDH-ticket-human-review` / `PDH-human-review`）で承認者へ渡す判断ボードを作るときに読む。
+description: PDH の human gate（`PDH-ticket-human-review` / `PDH-human-review`）と、ticket の scope（finding を直すか・起票するか・記録のみか）や次に流す ticket をユーザに決めてもらうときに読む。会話で質問を出す前に読む。
 allowed-tools: Bash(tools/build.sh:*) Bash(tools/check-static.sh:*)
 ---
 
@@ -10,6 +10,16 @@ allowed-tools: Bash(tools/build.sh:*) Bash(tools/check-static.sh:*)
 
 > **① 承認者が、書き手自身でできたはずの追加調査をせずに、求められた判断を下せる。**
 > **② 承認者が、その判断に使わないものを読まされない。**
+
+## 板を作る場面
+
+**守るのは «ticket と close の判断に、後から引ける根拠が残ること» である。**会話に材料を並べて質問だけを出すと、何を根拠に決めたかが会話の中にしか残らない。
+
+- human gate の 2 つ（実装前・close 前）
+- ticket の scope の判断（finding を本 ticket で直すか / 起票するか / 記録のみか）
+- 次にどの ticket を流すかの割り当て
+
+**判断が 1 件でも、選択肢が単純に見えても板を作る。**例外は `ticket-gate.md`「板を出さない条件〔手順 0〕」の 1 つだけで、ほかの理由（判断が少ない・急ぐ）では省かない。
 
 ## 唯一の検査
 

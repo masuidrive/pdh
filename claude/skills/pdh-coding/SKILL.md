@@ -128,6 +128,8 @@ AC を満たすコードを書き、out-of-scope と実行指示で指定され�
 
 - **doc sweep** — 変更した identifier / field / API path / enum 値の旧名を、doc・spec・README・sample・
   comment で grep し、**出力をそのまま貼る**（0 件なら 0 件と貼る）
+  - 削除・改名では、entity の名前だけでなく、それに付いて回る派生語彙（helper / adapter / parser /
+    compare / summary など）も pattern に入れる。entity 名だけの grep が 0 件でも、派生語彙の側に残骸が残る
 - **実 provider / 外部 API を経由する path** — 1 経路以上を実 API で叩き、**status と body 抜粋を貼る**。
   credential が無ければ「無い」と書く（自己判断で skip しない）
 - **終端のユーザ操作** — リンク・通知・画面遷移・外部副作用が目的なら、**着地まで実際に操作する**。
