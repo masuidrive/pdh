@@ -29,10 +29,16 @@
 finding は検出した時点で progress の `### Findings (PDH-review-N)` 表へ 1 行追加する。判定列と理由は後で埋めてよい。attempt 2 以降と、修正確認で出た新規 finding も同じ形式で足す。
 
 ```
-| # | 観点 | Sev | 要旨 | 判定 | 理由 |
-|---|---|---|---|---|---|
+| # | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |
+|---|---|---|---|---|---|---|
 ```
 
 観点は `pdh-reviewing` の観点 label、Sev は Critical / Major / Minor、判定は 採用 / 起票 / 記録のみ / 棄却。
+
+**`記録先` は、finding がどこに残ったかを書く列である。**守るのは «`PDH-human-review` で承認者が、finding がどこに残ったかを表から読めること» である。判定 4 つのうち `記録のみ` だけは、行方を追う機構を持たない — `採用` はテストが落ちて、`起票` は ticket 一覧に残って検出されるが、`記録のみ` は人が書いた文章にしか残らない。
+
+- 判定が `記録のみ` なら `note` / `technical-reference` / `なし`（この表だけ）のどれか。**振り分け**: その行を `git blame` した人が辿れるなら `note`、別の ticket の人が知らずに踏む性質なら `technical-reference`（`PDH-AGENTS.md`「保留した ticket には…」の «恒久的な地雷»）
+- 判定が `起票` なら、その ticket 名（Checklist の `起票:` 行と同じ名前）
+- 判定が `採用` と `棄却` なら `—`
 
 判定が `起票` の行は、close の前にその ticket を `./ticket.sh new` で作り、note の `## Checklist` に `- [ ] 起票: <anchor> → <ticket 名>` を 1 行書く。`scripts/check-pdh-ticket.sh` が `→` の後の名前の ticket が `tickets/` か `tickets/done/` に実在するかを確かめ、`require_checklist` が未了の間 close を拒否する。
