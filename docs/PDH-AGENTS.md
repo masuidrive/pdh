@@ -68,6 +68,13 @@ subagent / worker を起動できないとき、solo 実行を同等のものと
 
 ユーザが明示的に要求した場合、承認済みの close フローが実行する場合（例: close 時の ticket.sh `auto_push`）、または project ルールが明示的に許可している場合を除き、`git push` しない。
 
+project ルールが base branch への push を許可しているときは、次の 2 つを両方守る。**守るのは «自分の push と close が、誰も確かめていない commit を出さないこと» である。**
+
+- **push の前に `git log --oneline origin/<base>..<base>` を実行し、同乗する commit を確かめて報告する。**並行運用では、他の session の commit が自分の push に載る。意図しないものが混ざっていたら push せずに報告する
+- **commit したら早めに push する。**溜めた commit は、次に誰かが `ticket.sh close`（`auto_push`）を実行したとき、確かめられないまま一緒に出ていく
+
+片方だけでは守れない。早く出すために確認を飛ばすか、確認を厳しくして溜め込むかのどちらかへ倒れる。
+
 ## Worker Instructions
 
 worker / subagent は Director の会話状態全体を引き継がない。すべての worker prompt に次を含める:
