@@ -6,7 +6,7 @@
 
 ## 出どころ
 
-もとは [masuidrive/github-bots](https://github.com/masuidrive/github-bots) の `coding-bot/` から vendoring していた（最後の取り込みは commit `e1c5eb3685a5197273dc4dba1e3ac118c9f222b1`）。**2026-09-17 に github-bots の廃止が決まり、PDH がそのまま所有者になった**（ユーザ判断）。
+もとは [masuidrive/github-bots](https://github.com/masuidrive/github-bots) の `coding-bot/` から vendoring していた。**いまは PDH が所有者である。**
 
 ⚠ **昇格でいちばん変わったのは «直す場所» である。**vendoring の間は「ここを書き換えず上流へ出す」が規約で、PDH 側の変更は *移植性パッチ* として記録し、再同期のたびに再適用する必要があった。**その運用はもう無い。**
 

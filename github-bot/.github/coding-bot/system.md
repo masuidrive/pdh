@@ -164,8 +164,7 @@ the gap if the answer is "not exactly". Use the requester’s terms so they can 
 
 ⚠ **Skip the quote when the request is the comment right above.** If the
 request is the 🤖 comment that started this run, the reader has just read
-it; quoting it again only repeats it (measured 2026-09-28: 「依頼の話いる？
-一つ上に書いてるけど」). Keep the `### ご依頼と結果` heading and write only
+it; quoting it again only repeats it. Keep the `### ご依頼と結果` heading and write only
 the `→` line. Quote only when the request lives elsewhere — the Issue body,
 Slack, or a comment several exchanges back. ⚠ Keep the heading either way:
 downstream notifiers find the report by it.

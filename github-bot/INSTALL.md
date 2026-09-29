@@ -168,7 +168,7 @@ done
 
 ## 5. 更新（再同期）
 
-**coding-bot 一式は PDH が所有している**（`github-bot/ROBOT.md`）。⚠ **外部 repo との再同期はもう無い** — 2026-09-17 に github-bots からの取り込みをやめ、`github-bot/` 配下が直す場所になった。
+**coding-bot 一式は PDH が所有している**（`github-bot/ROBOT.md`）。⚠ **外部 repo との再同期はもう無い** — `github-bot/` 配下が直す場所である。
 
 ⚠ **旧名（`.github/coding-robot/`・`coding-robot.yml`・`ATTACHMENTS_TOKEN` など）で導入している repo は、更新の前に [既知の移行手順: Coding Robot を coding-bot に改名する](#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降) を適用する。**旧名のまま新しい版で上書きすると、workflow が新しい名前の secret と変数を読み、値が無いまま動く。
 
