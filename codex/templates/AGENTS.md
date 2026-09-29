@@ -60,7 +60,7 @@ List the affected project layers when creating a ticket or planning implementati
 
 ## Codex Workers
 
-Configure the model and reasoning-effort override examples in `.codex/agents/pdh-*.toml` for the project's roles. Keep project-specific constraints here.
+Configure the reasoning effort in `.codex/agents/pdh-*.toml` for the project's roles. Leave `model` unset (workers inherit the parent's model) unless a role needs a different one. Keep project-specific constraints here.
 
 | Role | Project-specific constraints and focus |
 |---|---|

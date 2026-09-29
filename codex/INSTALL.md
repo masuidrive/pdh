@@ -2,7 +2,7 @@
 
 PDH を Codex プロジェクトへ導入する手順と、導入済みプロジェクトを更新する手順。[PDH の概要](../README.md)。
 
-`.codex/agents/*.toml` の model と reasoning effort は上書き例であり、project の役割・利用可能なモデルに合わせて設定する。
+`.codex/agents/*.toml` の reasoning effort は見本であり、project の役割に合わせて設定する。model は書かない（worker は親の model を引き継ぐ）。役ごとに別の model が要るときだけ project が書く。
 
 ## 新規導入
 
