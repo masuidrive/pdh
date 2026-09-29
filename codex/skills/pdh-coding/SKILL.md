@@ -62,7 +62,7 @@ AC を満たす最小の変更で止める。AC に無い機能、オプショ�
 
 AC を満たすコードを書き、out-of-scope と実行指示で指定された担当範囲の外は触らない。
 
-- 変更前に、対象ファイルの `git log`（複数世代）と変更する行の `git blame` を読み、なぜ今その形なのか、過去の変更意図、命名とスタイルの慣習、既知の落とし穴を把握する。なお不明なら コミットメッセージの ticket 名 → `tickets/done/` → `product-brief.md` を辿る（辿り先は `AGENTS.md` を優先）。推測で変更しない
+- 変更前に、まず `technical-reference.md` の該当箇所を引き（現在の姿と、中規模の設計判断・実装の地雷がある）、次に対象ファイルの `git log`（複数世代）と変更する行の `git blame` を読み、なぜ今その形なのか、過去の変更意図、命名とスタイルの慣習、既知の落とし穴を把握する。なお不明なら コミットメッセージの ticket 名 → `tickets/done/` → `product-brief.md` を辿る（辿り先は `AGENTS.md` を優先）。推測で変更しない
 - 既存の規約と pattern に従い、新しい pattern を導入しない
 - 新規 class / helper / utility を増やす前に同型 pattern を grep する。新規導入するなら justification を progress へ記録する
 - 生成文字列内の script（サーバが返す HTML 内のインライン JS 等）、heredoc、テンプレート埋め込みコードに条件分岐やデータ変換を書かない。テストランナーが import して叩ける関数へ切り出し、埋め込み側にはイベント登録と呼び出しの糊だけを残す
