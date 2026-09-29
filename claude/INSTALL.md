@@ -436,6 +436,22 @@ grep -nE '？？|（?2回）|インストール不足・設定ミスで起動し
 
 行が出たら、その行を `CLAUDE.md` から消す。project が意図して書き足した条件（対象のコマンド名など）があるなら、その条件だけを残す。
 
+#### fast-check の README に «grep で書けない不変則は決定論テストで固定する» が入った（2026-09-29 以降）
+
+`scripts/checks/README.md` の «Adding a check» に、grep で表せない不変則（要素間の関係・算術・状態遷移）は `.check` にせず決定論テストで固定し、その選択を ticket の note に 1 行書く、が入った。`scripts/checks/README.md` は `Based on` 行を持たないので、差分マージでは届かない。project 固有のカスタマイズを持たないので上書きしてよい。
+
+適用済みかの確認（冪等）:
+
+```bash
+grep -q 'deterministic test instead' scripts/checks/README.md && echo "適用済み" || echo "要更新"
+```
+
+「要更新」なら上書きする:
+
+```bash
+cp tmp/pdh/claude/templates/checks/README.md scripts/checks/README.md
+```
+
 #### github-bot: 名前と導入先固有の secret（2026-09-27 以降）
 
 github-bot を導入済みなら、[github-bot/INSTALL.md の改名手順](../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)を先に適用する。同文書の「導入先固有の secret を `CODING_BOT_ENV_JSON` へ移す」も確認対象である。各節の確認コマンドを更新前後に実行し、ファイルだけでなく GitHub の secret / variable 名も確認する。

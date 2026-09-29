@@ -149,9 +149,14 @@ This line-local marker is unrelated to the exact-path `allow=` key used by
 ## Adding a check (usually at ticket close)
 
 When a shipped bug's recurrence can be caught deterministically, add one `.check`
-here in the same change that fixes the bug. If it cannot be expressed as a grep,
-record why in the ticket note instead. Keep patterns narrow: a fast-check that
+here in the same change that fixes the bug. Keep patterns narrow: a fast-check that
 false-positives on legitimate code trains people to ignore it.
+
+Some invariants cannot be expressed as a grep: a relation between elements, an
+arithmetic property, a state transition. Do not bend a pattern to approximate
+them. Pin such an invariant with a deterministic test instead, and record that
+choice as one line in the ticket note (no need to re-argue why a grep could not
+express it).
 
 ## Removing a check
 
