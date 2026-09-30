@@ -51,6 +51,9 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 | **repo のテスト道具** | bot は scoped test を自分で回す | ⚠ **実装はできるのにテストが回らない run** になる。上流の既定 image は Node/TypeScript だけなので、Python・DB・ブラウザが要る repo は自分で足す |
 | ブラウザ（任意） | スクリーンショット・実 surface 検証 | 撮れない。⚠ **これは «skill の掟» ではなく «container に入っているか» で決まる**（`_github-issue.md`）。headless Chromium / Playwright を足せば cloud bot が自分で画面を確かめられる |
 
+⚠ **engine の CLI は、run のたびに最新へ更新する。**`.github/coding-bot/update-tools.sh` が run の開始時に codex を別の場所へ入れ直し（焼いた版は書き換えない）、Claude Code を `claude update` する。失敗しても run は止めず、使った版をジョブのログに `::notice::` で出す。
+⚠ **既存の devcontainer にマージした repo は、`CLI_REFRESH` の配線も写す。**`devcontainer-prebuild.yml` は焼き直すたびに `CODING_BOT_CLI_REFRESH` を変えるが、compose の `build.args` に `CLI_REFRESH: ${CODING_BOT_CLI_REFRESH:-}` を、Dockerfile の CLI を入れる行の直前に `ARG CLI_REFRESH=""` を置かないと効かない。**置かないと `cacheFrom` がその行を `CACHED` のまま使い回し、焼き直しても CLI が新しくならない。**
+
 ⚠ **テンプレートの `workspaceFolder` と compose の mount は `/workspaces/project` で揃える。**既存の workspace を使う場合は `CODING_BOT_WORKSPACE` に同じパスを設定する。`${localWorkspaceFolderBasename}`（repo 名）へ変えると、compose 側の `/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-project}` が env 未設定で `project` へ落ちたときに食い違い、**`devcontainer exec` が «no such file or directory» で落ちる**（実測）。理由は `github-bot/ROBOT.md`。
 
 確かめ方 — **導入直後に 1 回、container の中で見る。**

@@ -79,6 +79,8 @@ jobs:
           # ⚠ compose の image: / cache_from: と同じ ref を指す。ずれると «焼いた image と
           # 使う image が別» になり、coding-bot 側が作り直す。
           DEVCONTAINER_IMAGE: ${{ steps.inputs.outputs.image }}:latest
+          # cacheFrom が CLI の浮動インストールを固定しないよう、焼き直すたびに更新する。
+          CODING_BOT_CLI_REFRESH: ${{ github.run_id }}-${{ github.run_attempt }}
         with:
           configFile: .devcontainer/devcontainer.json
           # image ref は小文字に正規化済み。

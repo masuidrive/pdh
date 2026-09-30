@@ -11,10 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends git gh jq pytho
 USER node
 
 # Install Claude Code CLI as node user using curl
-RUN curl -fsSL https://claude.ai/install.sh | bash
+# CLI_REFRESH は焼き直すたびに変わる（devcontainer-prebuild.yml）。cacheFrom で下の 2 行が古いまま使い回されないようにする
+ARG CLI_REFRESH=""
+RUN echo "cli refresh: ${CLI_REFRESH}" && curl -fsSL https://claude.ai/install.sh | bash
 
 # Install Codex CLI (alternative engine, selected via CODING_BOT_ENGINE=codex)
-RUN npm install -g @openai/codex
+RUN echo "cli refresh: ${CLI_REFRESH}" && npm install -g @openai/codex@latest
 
 # Add ~/.local/bin to PATH for Claude CLI
 ENV PATH="/home/node/.local/bin:${PATH}"

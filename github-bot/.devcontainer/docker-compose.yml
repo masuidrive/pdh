@@ -11,6 +11,8 @@ services:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
+      args:
+        CLI_REFRESH: ${CODING_BOT_CLI_REFRESH:-}
       cache_from:
         - ${DEVCONTAINER_IMAGE:-coding-bot-devcontainer:local}
     volumes:

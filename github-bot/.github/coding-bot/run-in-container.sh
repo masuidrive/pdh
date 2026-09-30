@@ -37,6 +37,7 @@ if [ "${EVENT_TYPE:-}" = workflow_dispatch ]; then
   echo "✅ devcontainer is usable from the prebuilt image"
   exit 0
 fi
+source .github/coding-bot/update-tools.sh
 if [ -n "${CODING_BOT_CODEX_AUTH_JSON:-}" ]; then
   if ! bash .github/coding-bot/codex-requirements.sh; then
     echo '::warning::Codex の managed ログイン制限を配置できません（既存設定または権限）。config.toml の ChatGPT 制限を使います。'
