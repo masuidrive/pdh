@@ -22,6 +22,8 @@
 .github/coding-bot/engines/_claude.sh  _codex.sh  _stub.sh   # ← engine で割れるのはここだけ
 .github/coding-bot/trigger-source.sh        # event 別の本文取得・PR の出自検査
 .github/coding-bot/notify-devbot.sh         # 止まったことを外の受け口へ署名付きで知らせる（host 側だけで動く）
+.github/coding-bot/codex-auth.sh            # codex の購読ログインの用意・確認・更新された token の書き戻し
+.github/coding-bot/codex-requirements.sh    # codex を購読ログインだけで動かす managed 設定を置く
 .devcontainer/Dockerfile  docker-compose.yml  devcontainer.json
 ```
 

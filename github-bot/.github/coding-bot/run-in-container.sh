@@ -14,13 +14,13 @@ if [ "${EVENT_TYPE:-}" = workflow_dispatch ]; then
       ;;
     codex)
       command -v codex >/dev/null
-      test -n "${CODING_BOT_CODEX_AUTH_JSON:-}${OPENAI_API_KEY:-}"
+      test -n "${CODING_BOT_CODEX_AUTH_JSON:-}"
       ;;
     *) echo "Set CODING_BOT_ENGINE to claude or codex" >&2; exit 1 ;;
   esac
   test -n "${GITHUB_TOKEN:-}"
   if [ -n "${CODING_BOT_CODEX_AUTH_JSON:-}" ]; then
-    printf '%s' "$CODING_BOT_CODEX_AUTH_JSON" | jq -e 'type == "object"' >/dev/null
+    printf '%s' "$CODING_BOT_CODEX_AUTH_JSON" | jq -e 'type == "object" and (.auth_mode == null or .auth_mode == "chatgpt") and (.tokens.access_token | strings | length > 0) and (.tokens.refresh_token | strings | length > 0)' >/dev/null
   fi
   git rev-parse HEAD
   git status --porcelain >/dev/null
@@ -36,5 +36,10 @@ if [ "${EVENT_TYPE:-}" = workflow_dispatch ]; then
   fi
   echo "✅ devcontainer is usable from the prebuilt image"
   exit 0
+fi
+if [ -n "${CODING_BOT_CODEX_AUTH_JSON:-}" ]; then
+  if ! bash .github/coding-bot/codex-requirements.sh; then
+    echo '::warning::Codex の managed ログイン制限を配置できません（既存設定または権限）。config.toml の ChatGPT 制限を使います。'
+  fi
 fi
 exec bash .github/coding-bot/run-action.sh

@@ -11,6 +11,11 @@ if any, codex does).
 
 ---
 
+Codex must use the ChatGPT subscription login. Never switch it to API-key billing
+or override `forced_login_method = "chatgpt"`. `OPENAI_API_KEY` is available for
+project provider tests. Respect the Codex availability reported in `<environment>`;
+when unavailable, do not launch Codex workers.
+
 ## Output Language
 
 Every piece of text you write **for the user** uses the same language —
@@ -333,8 +338,8 @@ breaks if it is guessed wrong.]
 credentials, API quota, a repository secret, a devcontainer package —
 these live with whoever administers the repo, not with whoever filed the
 request. ⚠ **Do not hand a person a task they have no way to perform**:
-write one line naming what is missing and who to ask (e.g. "`CODING_BOT_OPENAI_API_KEY`
-の残高が切れています。repository の secret を管理している人に補充を依頼して
+write one line naming what is missing and who to ask (e.g. "`CODING_BOT_CODEX_AUTH_JSON`
+の認証が切れています。repository の secret を管理している人に再ログインを依頼して
 ください"). Otherwise the label says "your turn" while the reader has no
 move.
 

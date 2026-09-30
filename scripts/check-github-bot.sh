@@ -28,6 +28,8 @@ required=(
   github-bot/.github/coding-bot/engines/_stub.sh
   github-bot/.github/coding-bot/run-action.sh
   github-bot/.github/coding-bot/notify-devbot.sh
+  github-bot/.github/coding-bot/codex-auth.sh
+  github-bot/.github/coding-bot/codex-requirements.sh
 )
 for f in "${required[@]}"; do
   if [ ! -f "$f" ]; then
@@ -99,20 +101,34 @@ fi
 # missing/expired の credential で、bot が汎用エラーではなく «再ログインして secret 更新» を
 # 案内できることが利用体験の要。machinery 側に既存（_claude.sh / _codex.sh の Authentication
 # Error）。re-sync で消えると «認証切れが分かりにくい失敗» に戻るので、存在を守る。
-for e in _claude _codex; do
-  f="github-bot/.github/coding-bot/engines/${e}.sh"
-  if [ -f "$f" ]; then
-    if ! grep -q 'Authentication Error' "$f"; then
-      printf 'github-bot: %s に認証エラーコメント（Authentication Error）が無い\n' "$f" >&2
-      failed=1
-    fi
-    # run 中の expired/invalid 検出（missing だけでなく «切れた» も拾うヒューリスティック）
-    if ! grep -qi 'unauthorized\|invalid.*token\|invalid.*api.*key\|expired' "$f"; then
-      printf 'github-bot: %s に run 中の認証失敗（expired/unauthorized）検出が無い\n' "$f" >&2
-      failed=1
-    fi
+# codex の認証の用意・確認・案内は engine と claude の委譲先で共有するので codex-auth.sh が持つ。
+f="github-bot/.github/coding-bot/engines/_claude.sh"
+if [ -f "$f" ]; then
+  if ! grep -q 'Authentication Error' "$f"; then
+    printf 'github-bot: %s に認証エラーコメント（Authentication Error）が無い\n' "$f" >&2
+    failed=1
   fi
-done
+  # run 中の expired/invalid 検出（missing だけでなく «切れた» も拾うヒューリスティック）
+  if ! grep -qi 'unauthorized\|invalid.*token\|invalid.*api.*key\|expired' "$f"; then
+    printf 'github-bot: %s に run 中の認証失敗（expired/unauthorized）検出が無い\n' "$f" >&2
+    failed=1
+  fi
+fi
+f="github-bot/.github/coding-bot/codex-auth.sh"
+if [ -f "$f" ]; then
+  if ! grep -q 'codex の認証が切れています' "$f"; then
+    printf 'github-bot: %s に認証切れの案内コメント（codex の認証が切れています）が無い\n' "$f" >&2
+    failed=1
+  fi
+  if ! grep -qi 'could not be refreshed' "$f" || ! grep -q '401' "$f"; then
+    printf 'github-bot: %s に認証失敗（refresh の失敗・401）の検出が無い\n' "$f" >&2
+    failed=1
+  fi
+  if ! grep -q 'gh secret set CODING_BOT_CODEX_AUTH_JSON' "$f"; then
+    printf 'github-bot: %s に更新された token の書き戻しが無い\n' "$f" >&2
+    failed=1
+  fi
+fi
 
 # --- 移植性パッチ: devcontainer の workspaceFolder が固定パスか（re-sync で戻ると任意 repo で落ちる）---
 # upstream は repo 名依存の ${localWorkspaceFolderBasename} で、compose の既定(/workspaces/project)と

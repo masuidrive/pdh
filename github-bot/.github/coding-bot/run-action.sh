@@ -58,6 +58,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # トリガーの出どころを正しく取る 2 つ（event 別の API / PR の出自）。承認判定とは無関係。
 source "$SCRIPT_DIR/trigger-source.sh"
 source "$SCRIPT_DIR/ci-autofix-result.sh"
+source "$SCRIPT_DIR/codex-auth.sh"
 TRUSTED_LINKED_ISSUE=""
 TRUSTED_PR_BRANCH=""
 TRIGGER_ERROR=""
@@ -597,6 +598,48 @@ case "$RUN_TIMEOUT_SECONDS" in ''|*[!0-9]*) echo "❌ CODING_BOT_TIMEOUT must be
 RUN_START_UNIX=$(date +%s)
 RUN_DEADLINE_UNIX=$((RUN_START_UNIX + RUN_TIMEOUT_SECONDS))
 
+# gh の既定は GITHUB_TOKEN（bot 名義）。PAT は push・PR 作成・認証の書き戻しだけに局所指定する。
+export GH_TOKEN="$GITHUB_TOKEN"
+
+# ⚠ 人の依頼の pr-merge では origin の git 認証を、agent が走る前に CODING_BOT_GH_PAT へ差し替える。
+# CI 自動修正は ci-autofix-result.sh の push 直前まで PAT への差し替えを待つ。
+# GITHUB_TOKEN の push が起こした PR の CI は «Approve and run» 待ちで止まる。以前は
+# agent に認証を外させ push ごとに PAT を指定させていたが、agent が途中で GITHUB_TOKEN の
+# 認証を戻し、以降の push の CI が全部承認待ちになった。
+# 差し替えておけば、agent の素の `git push origin` も PAT で出る。gh は GITHUB_TOKEN のまま。
+# ORIGIN_PUSH_AUTH は後処理の CI 再起動の判定が読む（PAT の push は CI を自分で起動する）。
+ORIGIN_PUSH_AUTH=github_token
+use_pat_for_origin() {
+  git config --local --unset-all 'http.https://github.com/.extraheader' 2>/dev/null || true
+  git config --local 'http.https://github.com/.extraheader' \
+    "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$CODING_BOT_GH_PAT" | base64 | tr -d '\n')"
+}
+_close_mode=$(awk '/^github_bot:/{f=1;next} /^[^ #]/{f=0} f && /^[[:space:]]*close:[[:space:]]*/{print $2; exit}' .ticket-config.yaml 2>/dev/null | tr -d "\"'" || true)
+if [ "$_close_mode" = "pr-merge" ] && [ -n "${CODING_BOT_GH_PAT:-}" ] && [ -z "${CI_AUTOFIX_RUN_ID:-}" ]; then
+  use_pat_for_origin
+  ORIGIN_PUSH_AUTH=pat
+  echo "🔑 origin の git 認証を CODING_BOT_GH_PAT にした（pr-merge）"
+fi
+
+if [ -n "${CI_AUTOFIX_RUN_ID:-}" ]; then
+  ci_autofix_prepare || { echo 'auto-merge の解除または PR への通知に失敗したため、agent を起動しません。' >&2; exit 1; }
+fi
+
+source "$ENGINE_FILE"
+
+# 初期コメント投稿
+echo "💬 Posting initial progress comment..."
+PROGRESS_COMMENT_ID=$(gh api repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments \
+  -f body="🤖 **作業中...**" --jq '.id')
+
+echo "Progress comment ID: $PROGRESS_COMMENT_ID"
+
+# CI 環境でのエンジン認証設定（エンジン実装に委譲）
+engine_setup_auth
+
+# Claude main also prepares and checks the Codex login used by its workers.
+if [ "$ENGINE" = claude ]; then codex_prepare_auth; fi
+
 # 環境を先に調べ、認証・ブラウザなどの実行可否を prompt に渡す。
 ENVIRONMENT_SECTION=""
 {
@@ -621,6 +664,7 @@ Incomplete のテンプレで category `blocker` として、何が無くて何�
 - ブラウザ: $_browser
 - provider の鍵:$_keys
 - CODING_BOT_GH_PAT: $_pat
+- codex: $CODEX_AUTH_STATUS
 </environment>"
 } 2>/dev/null || true
 
@@ -731,59 +775,6 @@ Rules:
 
 # プロンプトをファイルに保存
 echo "$USER_PROMPT" > "/tmp/agent-prompt-$ISSUE_NUMBER.txt"
-
-# gh の既定は GITHUB_TOKEN（bot 名義）。PAT は push と PR 作成だけに局所指定する。
-export GH_TOKEN="$GITHUB_TOKEN"
-
-# ⚠ 人の依頼の pr-merge では origin の git 認証を、agent が走る前に CODING_BOT_GH_PAT へ差し替える。
-# CI 自動修正は ci-autofix-result.sh の push 直前まで PAT への差し替えを待つ。
-# GITHUB_TOKEN の push が起こした PR の CI は «Approve and run» 待ちで止まる。以前は
-# agent に認証を外させ push ごとに PAT を指定させていたが、agent が途中で GITHUB_TOKEN の
-# 認証を戻し、以降の push の CI が全部承認待ちになった。
-# 差し替えておけば、agent の素の `git push origin` も PAT で出る。gh は GITHUB_TOKEN のまま。
-# ORIGIN_PUSH_AUTH は後処理の CI 再起動の判定が読む（PAT の push は CI を自分で起動する）。
-ORIGIN_PUSH_AUTH=github_token
-use_pat_for_origin() {
-  git config --local --unset-all 'http.https://github.com/.extraheader' 2>/dev/null || true
-  git config --local 'http.https://github.com/.extraheader' \
-    "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$CODING_BOT_GH_PAT" | base64 | tr -d '\n')"
-}
-_close_mode=$(awk '/^github_bot:/{f=1;next} /^[^ #]/{f=0} f && /^[[:space:]]*close:[[:space:]]*/{print $2; exit}' .ticket-config.yaml 2>/dev/null | tr -d "\"'" || true)
-if [ "$_close_mode" = "pr-merge" ] && [ -n "${CODING_BOT_GH_PAT:-}" ] && [ -z "${CI_AUTOFIX_RUN_ID:-}" ]; then
-  use_pat_for_origin
-  ORIGIN_PUSH_AUTH=pat
-  echo "🔑 origin の git 認証を CODING_BOT_GH_PAT にした（pr-merge）"
-fi
-
-if [ -n "${CI_AUTOFIX_RUN_ID:-}" ]; then
-  ci_autofix_prepare || { echo 'auto-merge の解除または PR への通知に失敗したため、agent を起動しません。' >&2; exit 1; }
-fi
-
-source "$ENGINE_FILE"
-
-# 初期コメント投稿
-echo "💬 Posting initial progress comment..."
-PROGRESS_COMMENT_ID=$(gh api repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments \
-  -f body="🤖 **作業中...**" --jq '.id')
-
-echo "Progress comment ID: $PROGRESS_COMMENT_ID"
-
-# CI 環境でのエンジン認証設定（エンジン実装に委譲）
-engine_setup_auth
-
-# 選んだ engine と別の worker にも認証を用意する。
-# CODING_BOT_CODEX_AUTH_JSON があれば auth.json を用意する。値はログへ出さず umask 077 で書く。
-if [ -n "${CODING_BOT_CODEX_AUTH_JSON:-}" ] && [ ! -f "$HOME/.codex/auth.json" ]; then
-  if printf '%s' "$CODING_BOT_CODEX_AUTH_JSON" | jq -e . >/dev/null 2>&1; then
-    mkdir -p "$HOME/.codex"
-    chmod 700 "$HOME/.codex"
-    ( umask 077; printf '%s' "$CODING_BOT_CODEX_AUTH_JSON" | jq -c . > "$HOME/.codex/auth.json" )
-    chmod 600 "$HOME/.codex/auth.json"
-    echo "🔑 委譲先の codex 用に $HOME/.codex/auth.json を用意した ($(wc -c < "$HOME/.codex/auth.json") bytes)"
-  else
-    echo "⚠️  CODING_BOT_CODEX_AUTH_JSON が JSON として読めない（jq -c で minify したか）— codex worker は OPENAI_API_KEY に頼る"
-  fi
-fi
 
 # 共通の出力ファイル（エンジンはこれらに書き込む）
 JSON_OUTPUT_FILE="/tmp/agent-output-$ISSUE_NUMBER.json"

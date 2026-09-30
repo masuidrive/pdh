@@ -114,12 +114,14 @@ engine 別の認証 secret:
   ```bash
   gh secret set CODING_BOT_CLAUDE_OAUTH_TOKEN
   ```
-- **codex**: `CODING_BOT_CODEX_AUTH_JSON`（ChatGPT プラン = 購読ログイン。**既定**）
+- **codex**: `CODING_BOT_CODEX_AUTH_JSON`（ChatGPT プラン = 購読ログイン）。**使い捨ての `CODEX_HOME` にログインし、bot 専用のログインにする**
   ```bash
-  codex login && jq -c . ~/.codex/auth.json | gh secret set CODING_BOT_CODEX_AUTH_JSON
+  d=$(mktemp -d) && CODEX_HOME="$d" codex login && jq -e . "$d/auth.json" >/dev/null && jq -c . "$d/auth.json" | gh secret set CODING_BOT_CODEX_AUTH_JSON; rm -rf "$d"
   ```
-  ⚠ 同じアカウントの `auth.json` を手元の `codex` でも使うと、片方が refresh した時点でもう片方の refresh token が失効する（Actions 側が `refresh token was already used` で落ちる。smoke 実測）。落ちたら上のコマンドで secret を入れ直す。
-  `CODING_BOT_OPENAI_API_KEY`（API 課金）という別路も machinery は受け付けるが、**この運用では使わない**。サブスク運用では `CODING_BOT_OPENAI_API_KEY` secret は設定しない（workflow が空で渡すのは無害）。
+  ⚠ 手元の `codex` や別用途の secret と同じログインを共有しない。片方が refresh した時点でもう片方の refresh token が失効する（`refresh token was already used`）。
+  run は codex が更新した `auth.json` をこの secret へ書き戻す（`codex-auth.sh`）。⚠ **書き戻しには `CODING_BOT_GH_PAT` に Secrets の Read and write が要る。**無いと更新が捨てられ、次の run で失効する。
+  認証が切れると、run が Issue / PR に «⚠ codex の認証が切れています» のコメントで上の手順を出す。
+  codex は API key 課金では動かさない。container の `/etc/codex/requirements.toml` に `allowed_login_methods = ["chatgpt"]` を置く（`codex-requirements.sh`）。`CODING_BOT_OPENAI_API_KEY` は codex の認証には使われない（project のテストが OpenAI を呼ぶための key としてだけ渡る）。
 
 project 固有の env が要るテストがあるなら、まとめて 1 つの secret に:
 ```bash
