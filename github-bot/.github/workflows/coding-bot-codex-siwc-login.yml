@@ -1,0 +1,60 @@
+name: SIWC のログインを作る
+
+on:
+  workflow_dispatch:
+    inputs:
+      callback_url:
+        description: '貼る URL（初回は空。承認後のブラウザのアドレス欄を丸ごと貼る）'
+        type: string
+        required: false
+        default: ''
+      recreate_client:
+        description: '登録を作り直す（前の OpenAI の登録が使えないときだけ、URL を空にして選ぶ）'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    if: inputs.callback_url == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: 承認 URL を作る
+        env:
+          CODING_BOT_GH_PAT: ${{ secrets.CODING_BOT_GH_PAT }}
+          CODING_BOT_CODEX_SIWC_KEY: ${{ secrets.CODING_BOT_CODEX_SIWC_KEY }}
+          CODING_BOT_CODEX_SIWC_JSON: ${{ secrets.CODING_BOT_CODEX_SIWC_JSON }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: python3 .github/coding-bot/siwc-browser-login.py --phase prepare
+  complete:
+    if: inputs.callback_url != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    concurrency:
+      group: coding-bot-codex-auth
+      queue: max
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: ログインを保存して access を配布する
+        env:
+          CODING_BOT_GH_PAT: ${{ secrets.CODING_BOT_GH_PAT }}
+          CODING_BOT_CODEX_SIWC_KEY: ${{ secrets.CODING_BOT_CODEX_SIWC_KEY }}
+          CODING_BOT_CODEX_SIWC_JSON: ${{ secrets.CODING_BOT_CODEX_SIWC_JSON }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/coding-bot/siwc-browser-login.py --phase complete

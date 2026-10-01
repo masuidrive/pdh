@@ -5,7 +5,7 @@
 codex_auth_relogin_command() {
   case "${1:-}" in
     siwc)
-      printf 'python3 .github/coding-bot/siwc-login.py --repo %q --secret CODING_BOT_CODEX_SIWC_JSON\n' "$GITHUB_REPOSITORY"
+      printf 'https://github.com/%s/actions/workflows/coding-bot-codex-siwc-login.yml — 「SIWC のログインを作る」を入力なしで起動し、summary の URL で承認してください。127.0.0.1 のページが開けない表示になったら、アドレス欄の URL を丸ごと「貼る URL」に貼って同じ workflow を起動してください。鍵も自動で作ります。\n' "$GITHUB_REPOSITORY"
       ;;
     codex-login)
       local secret="${CODING_BOT_CODEX_LOGIN_SECRET:-CODING_BOT_CODEX_AUTH_JSON}"
@@ -88,10 +88,17 @@ codex_auth_issue() {
   fi
   if [ "$kind" = auth ]; then
     command=$(codex_auth_relogin_command "$mode") || return 1
-    message=$(printf '## Codex authentication needs attention\n\nMode: %s\n\nCause: %s\n\nAn administrator should run this command on their machine and approve the browser login:\n\n```bash\n%s\n```\n\nKeep this login separate from personal logins and other secrets; sharing refresh tokens can invalidate both sessions. For SIWC, this command dispatches the updater and waits for new access publication; retry only after it succeeds.\n\n<!-- coding-bot -->\n' \
-    "$display_mode" "$cause" "$command")
+    if [ "$mode" = siwc ]; then
+      message=$(printf '## Codex authentication needs attention\n\nMode: %s\n\nCause: %s\n\n%s\n\nsummary に「bot はもう SIWC で動ける」と出たら、🤖 で bot を再実行してください。\n\n<!-- coding-bot -->\n' "$display_mode" "$cause" "$command")
+    else
+      message=$(printf '## Codex authentication needs attention\n\nMode: %s\n\nCause: %s\n\nAn administrator should run this command on their machine and approve the browser login:\n\n```bash\n%s\n```\n\nKeep this login separate from personal logins and other secrets; sharing refresh tokens can invalidate both sessions.\n\n<!-- coding-bot -->\n' "$display_mode" "$cause" "$command")
+    fi
   else
-    message=$(printf '## Codex updater or provider needs attention\n\nMode: %s\n\nCause: %s\n\nCheck coding-bot-codex-auth, configuration, permissions, usage limits and network; dispatch the updater after resolving the cause.\n\n%s\n<!-- coding-bot -->\n' "$display_mode" "$cause" "$marker")
+    command=''
+    if [ "$mode" = siwc ] && [[ "$cause" == *'CODING_BOT_CODEX_SIWC_KEY is missing'* ]]; then
+      command=$(codex_auth_relogin_command siwc) || return 1
+    fi
+    message=$(printf '## Codex updater or provider needs attention\n\nMode: %s\n\nCause: %s\n\n%s\n\nCheck coding-bot-codex-auth, configuration, permissions, usage limits and network; dispatch the updater after resolving the cause.\n\n%s\n<!-- coding-bot -->\n' "$display_mode" "$cause" "$command" "$marker")
   fi
   if [ -n "$issue_number" ]; then
     ( set -o pipefail

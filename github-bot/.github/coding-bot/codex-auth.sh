@@ -101,13 +101,21 @@ EOF
 codex_auth_recovery_steps() {
   local command
   command=$(codex_auth_relogin_command "${CODING_BOT_CODEX_AUTH_MODE:-codex-login}")
+  if [ "${CODING_BOT_CODEX_AUTH_MODE:-codex-login}" = siwc ]; then
+    cat <<EOF
+### 直し方（repo の write 権限を持つ人が、ブラウザと GitHub の画面で行う）
+$command
+
+summary に「bot はもう SIWC で動ける」と出たら、この Issue / PR に 🤖 とコメントして bot をやり直す。
+EOF
+    return
+  fi
   cat <<EOF
 ### 直し方（secret を管理している人が、手元の端末で行う）
 1. 手元の端末でログインし、ブラウザで承認して secret に登録する:
    \`$command\`
    手元の普段の codex ログインとも、別の用途の secret とも共有しない（片方の token 更新がもう片方を切るため）。
-2. SIWC では上のコマンドが updater を起動して新しい access の公開を待つ。成功するまで bot を再実行しない。
-3. この Issue / PR に 🤖 とコメントして、bot をやり直す。
+2. この Issue / PR に 🤖 とコメントして、bot をやり直す。
 EOF
 }
 

@@ -39,8 +39,16 @@ def command(args, *, value=None, token=None, env=None, timeout=65):
                           env=context, timeout=timeout)
 
 
+def set_variable(name, value, *, repo=None, token=None):
+    """Keep variable payloads off argv and suppress all gh diagnostics."""
+    result = command(['gh', 'variable', 'set', name, '--repo', repo or os.environ['GITHUB_REPOSITORY']],
+                     value=json.dumps(value) if isinstance(value, dict) else value, token=token)
+    if result.returncode:
+        raise RefreshFailure('GitHub variable could not be saved')
+
+
 def mask(value):
-    if os.environ.get('GITHUB_ACTIONS') == 'true' and isinstance(value, str):
+    if os.environ.get('GITHUB_ACTIONS') == 'true' and isinstance(value, str) and value:
         escaped = value.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
         print('::add-mask::' + escaped, flush=True)
 
@@ -96,7 +104,7 @@ def snapshot_is_fresh(secret, metadata=None):
 
 
 def save_secret(name, credentials):
-    value = json.dumps(credentials, separators=(',', ':'))
+    value = credentials if isinstance(credentials, str) else json.dumps(credentials, separators=(',', ':'))
     token = os.environ.get('CODING_BOT_GH_PAT', '')
     if not token:
         raise AuthFailure(f'{name} write-back credential missing; login may be lost; re-login required')
@@ -128,6 +136,64 @@ def crypt(value, *, decrypt=False):
     return result.stdout
 
 
+PENDING_VARIABLE = 'CODING_BOT_CODEX_SIWC_PENDING'
+PENDING_TTL = 15 * 60
+
+
+def decode_pending(value):
+    pending = json.loads(crypt(value, decrypt=True))
+    if not isinstance(pending, dict):
+        raise ValueError('Invalid pending login')
+    for field in ('state', 'nonce', 'code_verifier'):
+        mask(pending.get(field))
+    return pending
+
+
+def pending_login():
+    value = api(f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/variables/{PENDING_VARIABLE}", missing=True)
+    return decode_pending(value['value']) if value is not None else None
+
+
+def clear_pending(state):
+    # A new preparation may run outside this lock. Re-read before deleting;
+    # GitHub has no conditional variable-delete API (see technical-reference).
+    current = pending_login()
+    if current is not None and current.get('state') == state:
+        api(f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/variables/{PENDING_VARIABLE}",
+            fields=('--method', 'DELETE'), missing=True)
+
+
+def cleanup_pending():
+    route = f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/variables/{PENDING_VARIABLE}"
+    value = api(route, missing=True)
+    if value is None:
+        return
+    try:
+        if time.time() - timestamp(value['updated_at']) <= PENDING_TTL:
+            return
+    except (RefreshFailure, ValueError, KeyError, TypeError):
+        # Without a trustworthy variable age, leave the preparation intact.
+        return
+    unreadable = False
+    try:
+        pending = decode_pending(value['value'])
+        expired = time.time() - timestamp(pending['created_at']) >= PENDING_TTL
+    except (RefreshFailure, ValueError, KeyError, TypeError):
+        # A queued updater may hold the old key for a valid new preparation.
+        # Only the GitHub variable's age permits cleanup after decryption fails.
+        expired = unreadable = True
+    if not expired:
+        return
+    # Recheck both ciphertext and update time: even the same ciphertext may
+    # have been republished recently. GitHub has no conditional delete API.
+    current = api(route, missing=True)
+    if (current is not None and current['value'] == value['value']
+            and current.get('updated_at') == value['updated_at']):
+        api(route, fields=('--method', 'DELETE'), missing=True)
+        print('Unreadable SIWC pending login cleaned up.' if unreadable
+              else 'Expired SIWC pending login cleaned up.')
+
+
 def validate_access(access):
     payload = siwc.check_access(access['access_token'])
     siwc.check_scope(access['scope'])
@@ -141,13 +207,12 @@ def publish_access(credentials):
             access[key] = credentials[key]
     try:
         encrypted = crypt(json.dumps(access, separators=(',', ':')))
-        published = command(['gh', 'variable', 'set', 'CODING_BOT_CODEX_SIWC_ACCESS',
-                         '--repo', os.environ['GITHUB_REPOSITORY']], value=encrypted,
-                        token=os.environ['CODING_BOT_GH_PAT'])
+        set_variable('CODING_BOT_CODEX_SIWC_ACCESS', encrypted,
+                     token=os.environ['CODING_BOT_GH_PAT'])
     except subprocess.TimeoutExpired:
         raise RefreshFailure('SIWC access publication timed out; refresh token was saved; check the variable before retrying the updater') from None
-    if published.returncode:
-        raise RefreshFailure('SIWC access publication failed; refresh token was saved')
+    except RefreshFailure:
+        raise RefreshFailure('SIWC access publication failed; refresh token was saved') from None
 
 
 def refresh_siwc(raw):
@@ -345,6 +410,12 @@ def report(mode, cause, kind='auth', secret='CODING_BOT_CODEX_AUTH_JSON'):
 
 def main():
     failed = False
+    if os.environ.get('CODING_BOT_CODEX_SIWC_KEY'):
+        try:
+            cleanup_pending()
+        except Exception:
+            report('siwc', 'SIWC pending login cleanup failed; check key and variables permissions', 'operational')
+            failed = True
     logins = [('siwc', 'CODING_BOT_CODEX_SIWC_JSON', 'CODING_BOT_CODEX_SIWC_JSON'),
               ('codex-login', 'CODING_BOT_CODEX_AUTH_JSON', 'CODING_BOT_CODEX_AUTH_JSON')]
     extra = os.environ.get('CODING_BOT_CODEX_EXTRA_LOGIN_SECRET', '')

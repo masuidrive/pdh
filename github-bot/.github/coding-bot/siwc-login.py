@@ -23,6 +23,9 @@ import uuid
 _spec = importlib.util.spec_from_file_location('siwc_token', Path(__file__).with_name('siwc-token.py'))
 _token = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_token)
+_refresh_spec = importlib.util.spec_from_file_location('codex_refresh', Path(__file__).with_name('codex-refresh.py'))
+_refresh = importlib.util.module_from_spec(_refresh_spec)
+_refresh_spec.loader.exec_module(_refresh)
 atomic_write = _token.atomic_write
 credential_lock = _token.credential_lock
 credentials_from_response = _token.credentials_from_response
@@ -30,10 +33,12 @@ issued_client = _token.issued_client
 token_request = _token.token_request
 
 
-def github_api(repo, suffix, *args):
+def github_api(repo, suffix, *args, missing=False):
     result = subprocess.run(['gh', 'api', 'repos/' + repo + suffix, *args],
                             capture_output=True, text=True, timeout=60)
     if result.returncode:
+        if missing and 'HTTP 404' in result.stderr:
+            return None
         raise RuntimeError('GitHub API unavailable')
     return result.stdout.strip()
 
@@ -60,6 +65,99 @@ def wait_for_publication(repo):
 AUTHORIZE_URL = 'https://auth.openai.com/api/accounts/authorize'
 RESOURCE = 'https://api.openai.com/v1'
 SCOPE = 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct'
+DEFAULT_PORT = 1456
+LEGACY_PORT = 1455
+CLIENT_VARIABLE = 'CODING_BOT_CODEX_SIWC_CLIENT'
+
+
+def save_client(repo, identity):
+    _refresh.set_variable(CLIENT_VARIABLE, identity, repo=repo)
+
+
+def read_client(repo):
+    """Read the shared registration without creating or migrating anything."""
+    raw = github_api(repo, '/actions/variables/' + CLIENT_VARIABLE, missing=True)
+    return json.loads(json.loads(raw)['value']) if raw is not None else None
+
+
+def client_identity(repo, local=None, recreate=False, legacy_port=LEGACY_PORT):
+    stored = read_client(repo)
+    if recreate:
+        identity = {}
+    elif stored:
+        identity = stored
+    else:
+        identity = dict(local or {})
+    identity = {key: identity[key] for key in ('client_id', 'ext_agent_host_id', 'redirect_port') if key in identity}
+    identity.setdefault('redirect_port', legacy_port if identity.get('client_id') else DEFAULT_PORT)
+    redirect_uri(identity)
+    if identity.get('client_id'):
+        issued_client(identity['client_id'])
+    if not identity.get('ext_agent_host_id'):
+        identity['ext_agent_host_id'] = 'urn:uuid:' + str(uuid.uuid4())
+    host = identity['ext_agent_host_id']
+    if not host.startswith('urn:uuid:') or uuid.UUID(host[9:]).version != 4:
+        raise ValueError('Invalid host UUID')
+    # Save BEFORE authorization so an interrupted initial login reuses its host.
+    if recreate or not stored or identity != stored:
+        save_client(repo, identity)
+    return identity
+
+
+def redirect_uri(identity):
+    port = identity['redirect_port']
+    if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
+        raise ValueError('Invalid redirect port')
+    return f'http://127.0.0.1:{port}/callback'
+
+
+def authorization_url(redirect_uri, state, verifier, nonce, host_id, client, name='coding-bot'):
+    params = dict(client_id=client or 'dynamic_agent_client',
+                  ext_agent_host_id=host_id, response_type='code', scope=SCOPE,
+                  resource=RESOURCE, state=state, nonce=nonce,
+                  code_challenge=base64.urlsafe_b64encode(
+                      hashlib.sha256(verifier.encode('ascii')).digest()).decode().rstrip('='),
+                  code_challenge_method='S256', redirect_uri=redirect_uri)
+    if not client:
+        params['agent_name_hint'] = name
+    return AUTHORIZE_URL + '?' + urllib.parse.urlencode(params)
+
+
+def id_token_claims(id_token):
+    part = id_token.split('.')[1]
+    claims = json.loads(base64.b64decode(part + '=' * (-len(part) % 4),
+                                       altchars=b'-_', validate=True))
+    if not isinstance(claims, dict):
+        raise ValueError('Invalid id_token claims')
+    return claims
+
+
+def validate_nonce(id_token, expected):
+    try:
+        nonce = id_token_claims(id_token).get('nonce')
+        valid = isinstance(nonce, str) and nonce.isascii() and secrets.compare_digest(nonce, expected)
+    except (ValueError, IndexError, TypeError, AttributeError, UnicodeError):
+        valid = False
+    if not valid:
+        raise ValueError('id_token nonce mismatch')
+
+
+def account_email(credentials):
+    # Display metadata only; token authenticity is checked by the provider.
+    try:
+        if credentials.get('email'):
+            return credentials['email']
+        email = id_token_claims(credentials['id_token']).get('email')
+        return email if isinstance(email, str) and email and not any(ord(c) < 32 for c in email) else None
+    except (ValueError, KeyError, IndexError, TypeError, UnicodeError):
+        return None
+
+
+def account_warning(old, new):
+    previous, current = account_email(old), account_email(new)
+    if previous and current and previous != current:
+        return 'SIWC のアカウントが前と違います。前: %s / 今回: %s' % (previous, current)
+    return None
 
 
 def parse_callback(url, redirect_uri, state, stored_client):
@@ -71,7 +169,8 @@ def parse_callback(url, redirect_uri, state, stored_client):
     query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
     if any(len(values) != 1 for values in query.values()):
         raise ValueError('Duplicate callback parameter')
-    if not secrets.compare_digest(query.get('state', [''])[0], state):
+    callback_state = query.get('state', [''])[0]
+    if not callback_state.isascii() or not secrets.compare_digest(callback_state, state):
         raise ValueError('Callback state mismatch')
     if 'error' in query:
         raise ValueError('Authorization declined or failed')
@@ -111,14 +210,7 @@ def wait_callback(port, state, verifier, nonce, host_id, client, name):
 
     server = HTTPServer(('127.0.0.1', port), Handler)
     redirect_uri = 'http://127.0.0.1:%d/callback' % server.server_port
-    params = dict(client_id=client or 'dynamic_agent_client',
-                  ext_agent_host_id=host_id, response_type='code', scope=SCOPE,
-                  resource=RESOURCE, state=state, nonce=nonce,
-                  code_challenge=base64.urlsafe_b64encode(
-                      hashlib.sha256(verifier.encode('ascii')).digest()).decode().rstrip('='),
-                  code_challenge_method='S256', redirect_uri=redirect_uri)
-    if not client:
-        params['agent_name_hint'] = name
+    url = authorization_url(redirect_uri, state, verifier, nonce, host_id, client, name)
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
 
@@ -130,7 +222,7 @@ def wait_callback(port, state, verifier, nonce, host_id, client, name):
 
     threading.Thread(target=read_stdin, daemon=True).start()
     try:
-        print(AUTHORIZE_URL + '?' + urllib.parse.urlencode(params), flush=True)
+        print(url, flush=True)
         print('Approve in a browser; waiting for callback or pasted full redirect URL.',
               file=sys.stderr, flush=True)
         code, issued = parse_callback(arrivals.get(), redirect_uri, state, client)
@@ -147,7 +239,7 @@ def main():
     parser.add_argument('--secret', choices=['CODING_BOT_CODEX_SIWC_JSON'],
                         default='CODING_BOT_CODEX_SIWC_JSON')
     parser.add_argument('--creds', type=Path, help='Local 0600 credentials file; reuse it for re-login')
-    parser.add_argument('--port', type=int, default=1455)
+    parser.add_argument('--port', type=int, help='Port for a new or unrecorded legacy registration; recorded ports take priority')
     parser.add_argument('--name', default='coding-bot')
     args = parser.parse_args()
     try:
@@ -162,26 +254,23 @@ def main():
             if args.creds.exists():
                 args.creds.chmod(0o600)
             old = json.loads(args.creds.read_text()) if args.creds.exists() else {}
-            client = old.get('client_id')
-            if client:
-                issued_client(client)
-            host_id = old.get('ext_agent_host_id')
-            if not host_id:
-                host_id = 'urn:uuid:' + str(uuid.uuid4())
-                old['ext_agent_host_id'] = host_id
-                # Persist host identity even if the first sign-in is interrupted.
-                atomic_write(args.creds, old)
-            if not host_id.startswith('urn:uuid:') or uuid.UUID(host_id[9:]).version != 4:
-                raise ValueError('Invalid host UUID')
+            identity = client_identity(args.repo, old,
+                                       legacy_port=args.port if args.port is not None else LEGACY_PORT)
+            client, host_id = identity.get('client_id'), identity['ext_agent_host_id']
+            atomic_write(args.creds, dict(old, **identity))
             state, nonce, verifier = (secrets.token_urlsafe(32) for _ in range(3))
+            port = identity['redirect_port'] if client or args.port is None else args.port
             code, client, redirect_uri = wait_callback(
-                args.port, state, verifier, nonce, host_id, client, args.name)
+                port, state, verifier, nonce, host_id, client, args.name)
+            identity = dict(identity, client_id=client,
+                            redirect_port=urllib.parse.urlsplit(redirect_uri).port)
             result = token_request(dict(grant_type='authorization_code', client_id=client,
                                         code=code, code_verifier=verifier,
                                         redirect_uri=redirect_uri, resource=RESOURCE))
             creds = credentials_from_response(
                 dict(client_id=client, ext_agent_host_id=host_id), result)
             atomic_write(args.creds, creds)
+            save_client(args.repo, identity)
             # stdin keeps token values out of process argv; suppress gh output too.
             result = subprocess.run(
                 ['gh', 'secret', 'set', args.secret, '--repo', args.repo],
@@ -192,8 +281,11 @@ def main():
                       'retry: gh secret set CODING_BOT_CODEX_SIWC_JSON --repo %s < %s' %
                       (args.creds, args.repo, args.creds), file=sys.stderr)
                 return 1
+            warning = account_warning(old, creds)
+            if warning:
+                print(warning, file=sys.stderr)
             # Retain identity only: the updater owns the rotating credentials.
-            atomic_write(args.creds, {key: creds[key] for key in ('client_id', 'ext_agent_host_id')})
+            atomic_write(args.creds, dict(identity, client_id=client, email=account_email(creds)))
             print('Saved SIWC login; waiting for coding-bot-codex-auth access publication.', file=sys.stderr)
         try:
             wait_for_publication(args.repo)

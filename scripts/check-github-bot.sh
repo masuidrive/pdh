@@ -30,6 +30,8 @@ required=(
   github-bot/.github/coding-bot/notify-devbot.sh
   github-bot/.github/coding-bot/codex-auth.sh
   github-bot/.github/coding-bot/codex-requirements.sh
+  github-bot/.github/coding-bot/siwc-browser-login.py
+  github-bot/.github/workflows/coding-bot-codex-siwc-login.yml
 )
 for f in "${required[@]}"; do
   if [ ! -f "$f" ]; then
