@@ -37,6 +37,51 @@ ci_autofix_record() {
     -f target_url="$run_url" >/dev/null
 }
 
+ci_autofix_resolve_red_comments() {
+  local number comments comment id payload
+  for number in "$CI_AUTOFIX_PR" "$TRUSTED_LINKED_ISSUE"; do
+    comments=$(gh api "repos/$GITHUB_REPOSITORY/issues/$number/comments?per_page=100" --paginate --slurp) || return 1
+    # 過去 SHA の赤も対象。GITHUB_TOKEN の投稿と先頭行の目印で引用を除外する。
+    comments=$(printf '%s' "$comments" | jq -c --arg pr "$CI_AUTOFIX_PR" \
+      '.[][] | select(.user.login == "github-actions[bot]") |
+       select((.body // "") | test("^<!-- coding-bot:ci-red pr=" + $pr + " sha=[0-9a-f]{40} run=[0-9]+ -->\n")) |
+       select((.body | startswith("解決済み: CI run ")) | not)') || return 1
+    while IFS= read -r comment; do
+      [ -n "$comment" ] || continue
+      id=$(printf '%s' "$comment" | jq -er '.id') || return 1
+      payload=$(printf '%s' "$comment" | jq -c --arg line "解決済み: CI run $run_id で緑 <!-- coding-bot:ci-green sha=$head_sha -->" \
+        '{body: ($line + "\n\n" + .body)}') || return 1
+      # 既存本文の末尾改行も保持するため、result の -f body= と違い JSON を --input で渡す。
+      if ! gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" --input - <<< "$payload" >/dev/null; then
+        # 消されたコメントや本文上限のエラーでも、緑の回数リセットは妨げない。
+        printf 'WARNING: CI red comment %s could not be resolved; continuing green status recording\n' "$id" >&2
+      fi
+    done <<< "$comments"
+  done
+}
+
+ci_autofix_note_red_after_green() {
+  local number comments comment id payload line="その後、CI run $run_id で再び赤"
+  for number in "$CI_AUTOFIX_PR" "$TRUSTED_LINKED_ISSUE"; do
+    comments=$(gh api "repos/$GITHUB_REPOSITORY/issues/$number/comments?per_page=100" --paginate --slurp) || return 1
+    # 解決した緑の head と照合する。元の赤の SHA は修正前なので一致を要求しない。
+    # 接頭辞と直後の赤の目印で、引用・別 PR・緑の SHA が不明な旧本文を除外する。
+    comments=$(printf '%s' "$comments" | jq -c --arg pr "$CI_AUTOFIX_PR" --arg sha "$head_sha" --arg line "$line" \
+      '.[][] | select(.user.login == "github-actions[bot]") |
+       select((.body // "") | test("^解決済み: CI run [0-9]+ で緑 <!-- coding-bot:ci-green sha=" + $sha + " -->\n\n<!-- coding-bot:ci-red pr=" + $pr + " sha=[0-9a-f]{40} run=[0-9]+ -->\n")) |
+       select((.body | split("\n") | index($line)) == null)') || return 1
+    while IFS= read -r comment; do
+      [ -n "$comment" ] || continue
+      id=$(printf '%s' "$comment" | jq -er '.id') || return 1
+      payload=$(printf '%s' "$comment" | jq -c --arg line "$line" '{body: (.body + "\n\n" + $line)}') || return 1
+      # 緑の追記と同じ JSON 送信で元の本文を保持する。
+      if ! gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" --input - <<< "$payload" >/dev/null; then
+        printf 'WARNING: CI red comment %s could not note red after green; continuing without repair\n' "$id" >&2
+      fi
+    done <<< "$comments"
+  done
+}
+
 ci_autofix_decide() {
   local head_sha run_id run_attempt run_url conclusion pr_data reason="" statuses description
   local commits sha status count=0 url summary body jobs draft_skip previous_runs=()
@@ -80,7 +125,7 @@ ci_autofix_decide() {
       *) reason="結論 $conclusion" ;;
     esac
   fi
-  if [ -z "$reason" ] && [ "$conclusion" = success ]; then
+  if [ -z "$reason" ] && { [ "$conclusion" = success ] || [[ "$description" == '緑:'* ]]; }; then
     jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/attempts/$run_attempt/jobs?per_page=100" --paginate --slurp) || return 1
     draft_skip=$(printf '%s' "$jobs" | jq -r --arg prefix "${CODING_BOT_CI_DRAFT_SKIP_STEP:-Draft PR: full suite skipped}" \
       'any(.[].jobs[].steps[]?; (.name | startswith($prefix)) and .status == "completed" and .conclusion == "success")') || return 1
@@ -92,12 +137,16 @@ ci_autofix_decide() {
     return 0
   fi
   if [ "$conclusion" = success ]; then
+    ci_autofix_resolve_red_comments || return 1
     # 同一 SHA の再実行でも、対象となる緑は AC 3 に従って reset する。
     [ "$description" = '緑: 0 に戻す' ] || ci_autofix_record success '緑: 0 に戻す'
     return 0
   fi
   # 緑は集計の境界。同じ commit の後続の失敗で境界を消さない。
-  case "$description" in '数えた:'*|'緑:'*) return 0 ;; esac
+  case "$description" in
+    '緑:'*) ci_autofix_note_red_after_green || return 1; return 0 ;;
+    '数えた:'*) return 0 ;;
+  esac
 
   # PR commits の connection をページ順に取得する。
   commits=$(gh api graphql --paginate --slurp \
@@ -131,7 +180,7 @@ ci_autofix_decide() {
         || summary='失敗 step の情報を取得できませんでした。run のログを確認してください。'
       body+=$(printf '\n\n- %s — %s' "$summary" "$url")
     done
-    body+=$'\n\n<!-- coding-bot -->'
+    body=$(printf '%s\n\n%s\n\n<!-- coding-bot -->' "$(ci_autofix_red_marker "$CI_AUTOFIX_PR" "$head_sha" "$run_id")" "$body")
     # 投稿失敗時は未記録のまま残し、同じ run の再実行で通知を再試行する。
     gh issue comment "$TRUSTED_LINKED_ISSUE" --repo "$GITHUB_REPOSITORY" --body "$body" || return 1
   fi

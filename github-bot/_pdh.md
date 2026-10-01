@@ -176,6 +176,9 @@ PDH-verify を終えたら、次の順で行う。既存 PR があればそれ�
    遅れることがあるため、上の一致確認を省かない。ready を先にすると旧 SHA と新 SHA の
    2 本が走り、close が止まったときは旧 SHA の run だけが残る。
 4. **最終コメントは見出しの直後に PR リンクと次の操作を置く。**PR メタデータ marker は出さない。
+   **issue / PR の run が PR を作る・更新する・ready にしたら、そこで終わる。
+   自分の push の CI の完了を待たない。その CI の結果をコメントや最終報告に書かない。
+   push 後の CI の結果は CI autofix だけが伝える。**
    «PR の CI が緑になったら Merge を 1 回押してください» と伝える。branch protection が
    承認レビューも要求する場合は、その必要な操作を併記する。途中停止で draft が残った場合は
    Ready for review も必要であり、成功時の «人が押す回数 = 1» とは区別する。
@@ -188,7 +191,9 @@ PDH-verify を終えたら、次の順で行う。既存 PR があればそれ�
 ## `pr-merge`: CI は PR 側の run だけが gate である（bot は回さない）
 
 **この節は `pr-merge` 用である。`merge` / `pr` の検証は project の通常の手順に従う。**
-PR の必須チェックが、最終 SHA の `pull_request` run によって満たされていることを確認する。
+人が Merge を押すとき、PR の必須チェックが最終 SHA の `pull_request` run によって満たされていることを確認する。
+issue / PR の run は自分の push の CI の完了を待たない。その CI の結果を報告しない
+（`system.md`「CI reporting ownership」）。
 `gh workflow run` の成功だけを merge 可能の証拠にしない。bot は同じフルスイートを自分でも
 回さず、PR 側の run に任せる。失敗を直す scoped test は実行する。
 `CODING_BOT_GH_PAT` があれば push と PR 作成に使い、CI の承認待ちを避ける。
@@ -196,6 +201,11 @@ PR の必須チェックが、最終 SHA の `pull_request` run によって満�
 その操作を明示する。導入時の CI・保護設定は `github-bot/INSTALL.md` を参照する。
 
 ### CI が赤いとき、«関係なし» は結論として書かない
+
+この節は CI autofix と、issue / PR の run が CI の失敗を扱う場合の診断に適用する。
+人が 🤖 で CI の確認・修正を依頼したとき、または PR run の依頼文が CI の修正を指示したときは、
+失敗ログを読んで回答・修正してよい。診断・修正内容・scoped test は報告するが、
+自分の push の CI の完了を待たない。その CI の結果は CI autofix だけが伝える。
 
 **守るのは «この失敗は自分の差分のせいではない» という判断を、読み手が確かめられる形で受け取ることである。**
 

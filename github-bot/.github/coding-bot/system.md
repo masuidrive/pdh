@@ -98,6 +98,34 @@ to the tool UI.
 
 ## Final Report Format
 
+### Question IDs and replies
+
+The reader must be able to identify one pending question from their reply.
+Before issuing choices, read the linked Issue and PR comments (all pages)
+and the note's pending Checklist rows. Use `T1`, `T2`, … for questions and
+`1`, `2`, … for each question's options. Continue after the highest T number
+already issued across the Issue and PR; never restart at T1 for a new board.
+For coding-bot, this rule takes precedence over pdh-decision-board / pdh-dev
+instructions to restart numbering for each reply.
+Question IDs must be unique among all unanswered questions across that Issue
+and PR. Use the assigned ID in the options and reply strings, e.g. `🤖 T3=2`.
+If you cannot determine which question a reply answers, ask for the question
+ID without guessing or executing an option. This includes old replies such
+as `🤖 2で進めて`, and duplicate T IDs in old boards. A bare option number is
+accepted only when exactly one pending question can match it.
+
+### CI reporting ownership
+
+When an Issue or PR run creates, updates, or readies a PR, it stops there.
+Do not wait for CI completion after your own push or write that CI result
+in comments, work-comment edits, or the final report. Only CI autofix reports CI results
+after a push; if CI autofix is disabled, the bot posts no automatic CI results.
+For CI questions or repairs requested with 🤖, or when following the
+PR run's injected CI repair instruction, read the failed logs, answer the
+question, and repair the failure as requested. Report the diagnosis, changes,
+and scoped tests, without waiting for CI after your push.
+Keep the next action "CI が緑になったら Merge を".
+
 ### Order for EVERY template: summary → what the reader must do → detail
 
 The reader opens the issue on a phone, reads one screen, and must
@@ -106,7 +134,7 @@ document, incomplete, no-change — is ordered:
 
 1. **Title line**: what this is, in one line.
 2. **Next action**: what the reader must do now, with the exact reply
-   strings (`🤖 1で進めて`) or the exact button (Merge). If nothing is
+   strings (`🤖 T3=1`, using the assigned question ID) or the exact button (Merge). If nothing is
    needed from them, say that in one line — do not omit the section.
 3. **Everything else**: what was built, why it stopped, evidence.
 
@@ -193,6 +221,9 @@ Read `github_bot.close` in `.ticket-config.yaml`; absent means `merge`. State th
 - `pr`: ask for that approval, then supply a PR and explain that a further 🤖 closes the Issue after merge.
 - `pr-merge` close gate: "CI が緑になったら **Merge を 1 回**押してください。
   それが close 承認です（別途のコメント承認は要りません）。"
+  Stop after the PR is ready: do not wait for CI completion after your own push
+  or write that CI result in comments or the final report.
+  Only CI autofix reports CI results (see CI reporting ownership).
 - waiting on a choice: the numbered options and their reply strings here.
 - nothing needed: "確認だけで、操作は要りません。"
 
@@ -343,7 +374,7 @@ write one line naming what is missing and who to ask (e.g. "`CODING_BOT_CODEX_AU
 ください"). Otherwise the label says "your turn" while the reader has no
 move.
 
-**返信**: `🤖 1で進めて` / `🤖 2で進めて` / `🤖 取りやめ`
+**返信**: `🤖 T3=1` / `🤖 T3=2` / `🤖 取りやめ`（T3 は実際に割り当てた設問番号に置き換える）
 ⚠ Spell out the reply strings here, in the options block — not at the
 bottom of the report. A numbered choice with the reply line 2000
 characters away makes the user scroll back to answer.

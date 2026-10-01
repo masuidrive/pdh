@@ -109,12 +109,21 @@ human gate では判断ボード（`pdh-decision-board` の Completed Staff Work
 
 ## 再起動したら、何を待っていたかを note から読む
 
-Actions の run は 1 回ごとに記憶を失う。gate や質問で停止するときは、**停止する同じ commit で note の `## Checklist` に「何の答えを待つか」と発行先（gate コメントか板の URL）を 1 行書く**（`docs/PDH-AGENTS.md`「Handover Routes」）。次の 🤖 で起動した run は、まずこの行を読んで自分が何を待っていたかを知り、トリガーコメントをその答えとして解釈して ticket へ反映し、行を `[x]` にする。machinery の状態ファイルは同じコメントを二度処理しないための印であり、待っているかどうかの真ではない。経緯（それまでの stage 遷移・Findings・gate の答え）は同じ dir の `progress.md` を読む。
+設問番号と返答の解釈は `system.md`「Question IDs and replies」に従う。issue と PR で答えを待っている
+設問すべての中で T 番号を重ねず、板ごとに T1 から振り直さず続きの番号にする。
+note の待ち行と両方のコメントを読み、どの設問への返答か決められないときは推測せず聞き返す。
+
+Actions の run は 1 回ごとに記憶を失う。gate や質問で停止するときは、**停止する同じ commit で note の `## Checklist` に「何の答えを待つか」と発行先（gate コメントか板の URL）を 1 行書く**（`docs/PDH-AGENTS.md`「Handover Routes」）。次の 🤖 で起動した run は、まずこの行を読んで自分が何を待っていたかを知る。トリガーコメントがどの設問への答えか一意に決まる場合だけ ticket へ反映し、対応する行を `[x]` にする。machinery の状態ファイルは同じコメントを二度処理しないための印であり、待っているかどうかの真ではない。経緯（それまでの stage 遷移・Findings・gate の答え）は同じ dir の `progress.md` を読む。
 
 ## 進捗コメントを無意味に増やさない
 
 - run 中の「🤖 **作業中...**」コメントは **1 個を編集し続ける**（machinery の `PROGRESS_COMMENT_ID` が担う）。stage が進むたびに新規コメントを立てない。
 - **新規コメントを立てるのは «人間の注意が要る» ときだけ** — gate・質問・blocker。それ以外（stage 遷移・commit・テスト結果）は作業コメントの編集か、ticket.md / note.md / progress.md への記録で済ませる。
+  **push 後の CI の結果は CI autofix だけが伝える。issue / PR の run は自分の push の CI の完了を待たない。
+  その CI の結果を新規コメント・作業コメントの編集・最終報告に書かない。**
+  人が 🤖 で CI の確認・修正を依頼したとき、または PR run の依頼文が CI の修正を指示したときは、
+  失敗ログを読んで回答・修正し、診断・修正内容・scoped test を報告してよい（push 後の CI は待たない）。
+  `system.md`「CI reporting ownership」に従い、«CI が緑になったら Merge を» の案内は残す。
 - 通知を撒かないことを優先する。人間が読む必要のない途中経過でコメント欄と通知を埋めない。
 - **AC の進み具合は runner が差し込む。**`ticket.md` の Acceptance Criteria を読んで
   `**AC 2/3**` と ✅ / ⬜ の一覧を、計画要約の直後へ入れる。⚠ **agent は別ファイルを書かない**

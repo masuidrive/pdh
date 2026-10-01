@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # CI 自動修正だけの終端処理。agent は commit まで行い、push と報告はここで行う。
 
+ci_autofix_red_marker() {
+  # issue に同じ PR の過去 SHA の報告が残っていても、別 PR の報告と区別する。
+  # decision.sh もこの終端処理を source し、同じ目印で投稿・解決する。
+  printf '<!-- coding-bot:ci-red pr=%s sha=%s run=%s -->' "$1" "$2" "$3"
+}
+
 ci_failure_steps() (
   local repository="$1" run_id="$2" jobs summary log_dir log_status reason details=""
   jobs=$(gh api "repos/$repository/actions/runs/$run_id/jobs?per_page=100" --paginate --slurp) || return 1
@@ -57,7 +63,7 @@ ci_failure_steps() (
 )
 
 ci_autofix_prepare() {
-  local pr_data reason="" body
+  local pr_data reason="" body marker
   if ! pr_data=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$ISSUE_NUMBER"); then
     reason='PR の状態を取得できなかったため、agent を起動しません。'
   elif [ "$(printf '%s' "$pr_data" | jq -r '.auto_merge != null')" = true ]; then
@@ -70,8 +76,9 @@ ci_autofix_prepare() {
     fi
   fi
   if [ -n "$reason" ]; then
-    body=$(printf '直せなかった: %s\n\nCI: %s/%s/actions/runs/%s\n\n<!-- coding-bot -->' \
-      "$reason" "${GITHUB_SERVER_URL:-https://github.com}" "$GITHUB_REPOSITORY" "$CI_AUTOFIX_RUN_ID")
+    marker=$(ci_autofix_red_marker "$ISSUE_NUMBER" "$CI_AUTOFIX_HEAD_SHA" "$CI_AUTOFIX_RUN_ID")
+    body=$(printf '%s\n\n直せなかった: %s\n\nCI: %s/%s/actions/runs/%s\n\n<!-- coding-bot -->' \
+      "$marker" "$reason" "${GITHUB_SERVER_URL:-https://github.com}" "$GITHUB_REPOSITORY" "$CI_AUTOFIX_RUN_ID")
     gh issue comment "$TRUSTED_LINKED_ISSUE" --repo "$GITHUB_REPOSITORY" --body "$body" || return 1
     gh issue edit "$TRUSTED_LINKED_ISSUE" --repo "$GITHUB_REPOSITORY" --add-label awaiting-reply || return 1
     : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported"
@@ -80,7 +87,8 @@ ci_autofix_prepare() {
 }
 
 ci_autofix_finish() {
-  local reason="" pr_data new_sha summary body auto_merge_note="" changes
+  local reason="" pr_data new_sha summary body auto_merge_note="" changes marker
+  marker=$(ci_autofix_red_marker "$ISSUE_NUMBER" "$CI_AUTOFIX_HEAD_SHA" "$CI_AUTOFIX_RUN_ID")
   new_sha=$(git rev-parse HEAD) || return 1
   if [ "$ENGINE_EXIT_CODE" -ne 0 ]; then
     reason="agent が正常終了しませんでした（exit $ENGINE_EXIT_CODE）。"
@@ -117,18 +125,20 @@ ci_autofix_finish() {
   body=$(printf '何が落ちていたか: %s\n\nCI: https://github.com/%s/actions/runs/%s\n' \
     "$summary" "$GITHUB_REPOSITORY" "$CI_AUTOFIX_RUN_ID")
   if [ -n "$reason" ]; then
-    body=$(printf '直せなかった: %s\n\n%s\n\n%s\n\n%s\n\n<!-- coding-bot -->' \
-      "$reason" "$body" "$CLAUDE_OUTPUT" "$auto_merge_note")
+    body=$(printf '%s\n\n直せなかった: %s\n\n%s\n\n%s\n\n%s\n\n<!-- coding-bot -->' \
+      "$marker" "$reason" "$body" "$CLAUDE_OUTPUT" "$auto_merge_note")
     gh issue comment "$TRUSTED_LINKED_ISSUE" --repo "$GITHUB_REPOSITORY" --body "$body" || return 1
     gh issue edit "$TRUSTED_LINKED_ISSUE" --repo "$GITHUB_REPOSITORY" --add-label awaiting-reply || return 1
     gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID" \
-      -f body="直せなかった。理由は #$TRUSTED_LINKED_ISSUE に報告しました。
+      -f body="$marker
+
+直せなかった。理由は #$TRUSTED_LINKED_ISSUE に報告しました。
 
 <!-- coding-bot -->" || return 1
   else
     changes=$(git log --format='- %s' "$CI_AUTOFIX_START_SHA..HEAD") || return 1
-    body=$(printf '%s\n\n何を直したか:\n%s\n\n%s\n\n%s\n\n修正 commit: %s\n\nCI の結果を確認し、緑なら Merge してください。\n\n<!-- coding-bot -->' \
-      "$body" "$CLAUDE_OUTPUT" "$changes" "$auto_merge_note" "$new_sha")
+    body=$(printf '%s\n\n%s\n\n何を直したか:\n%s\n\n%s\n\n%s\n\n修正 commit: %s\n\nCI の結果を確認し、緑なら Merge してください。\n\n<!-- coding-bot -->' \
+      "$marker" "$body" "$CLAUDE_OUTPUT" "$changes" "$auto_merge_note" "$new_sha")
     gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID" -f body="$body" || return 1
   fi
   : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported"

@@ -9,7 +9,7 @@ post_error_comment() {
   if [ -n "$PROGRESS_COMMENT_ID" ] && [ -n "$GITHUB_REPOSITORY" ] && [ -n "$ISSUE_NUMBER" ]; then
     echo "📝 Posting error comment..."
     gh api -X PATCH repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID \
-      -f body="## ❌ Error Occurred
+      -f body="${CI_RED_MARKER:+$CI_RED_MARKER$'\n\n'}## ❌ Error Occurred
 
 $error_message
 
@@ -154,6 +154,7 @@ echo "📝 Fetching Issue/PR data..."
 # その場合は対象番号が実際に PR かどうかを gh で確認する（PR への 🤖 コメントを
 # PR 扱いにし、PR の head ブランチで作業 + _pr.md を読むため）。
 IS_PR=false
+CI_RED_MARKER=""
 if [[ "$EVENT_TYPE" == "pull_request"* ]] || [ "$EVENT_TYPE" = workflow_run ]; then
   IS_PR=true
 elif [[ "$EVENT_TYPE" == "issue_comment" ]] && gh pr view "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --json number >/dev/null 2>&1; then
@@ -161,7 +162,7 @@ elif [[ "$EVENT_TYPE" == "issue_comment" ]] && gh pr view "$ISSUE_NUMBER" --repo
 fi
 
 # PR head SHA に対する直近の CI run を引き、失敗していれば
-# 失敗サマリ + 生ログ末尾を返す（成功 / 実行中 / run 無し なら空文字）。head SHA で引くのは、
+# CI_SECTION に失敗サマリ + 生ログ末尾を設定する（成功 / 実行中 / run 無し なら空文字）。head SHA で引くのは、
 # agent がこの後 origin/$BASE_BRANCH を merge して push し直す前の「ユーザが 🤖 を押した時点で見えて
 # いた失敗 run」を確実に捕まえるため。全文ログは prompt に入れず、agent が run id 経由で
 # `gh run view <id> --log-failed` で自前取得できるよう run id と取得手段を併記する。
@@ -172,10 +173,15 @@ fi
 # (`FAILED ...` / `Passed: N / M`) がノイズに押し出される。そこで失敗 signal 行を grep で
 # 抽出して <ci-failure-summary> として先頭に置き、生ログは末尾 400 行だけを併記する。
 build_ci_section() {
-  local branch="$1" head_sha="$2"
+  local branch="$1" head_sha="$2" marker_sha="$2"
   local run_id conclusion raw summary tail_block summary_block
+  CI_SECTION=""
+  CI_RED_MARKER=""
   run_id="${CI_AUTOFIX_RUN_ID:-}"
-  if [ -z "$run_id" ]; then
+  if [ -n "$run_id" ]; then
+    # 明示 run の SHA は、取得時点の PR head と異なる場合もある。
+    marker_sha="$CI_AUTOFIX_HEAD_SHA"
+  else
     run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$CI_WORKFLOW" \
     --branch "$branch" --json databaseId,headSha,status --limit 30 2>/dev/null \
     | jq -r --arg sha "$head_sha" \
@@ -200,7 +206,7 @@ build_ci_section() {
 $summary
 </ci-failure-summary>
 "
-  cat <<EOF
+  CI_SECTION=$(cat <<EOF
 
 ---
 
@@ -222,6 +228,9 @@ ${summary_block}
 $tail_block
 </ci-failed-log-tail>
 EOF
+)
+  # agent の作業で head が変わっても、注入した CI の識別情報を報告に残す。
+  CI_RED_MARKER=$(ci_autofix_red_marker "$ISSUE_NUMBER" "$marker_sha" "$run_id")
 }
 
 if [ "$IS_PR" = true ]; then
@@ -259,7 +268,8 @@ if [ "$IS_PR" = true ]; then
   PR_DIFF=$(gh pr diff $ISSUE_NUMBER --repo $GITHUB_REPOSITORY | head -1000 || echo "")
 
   # PR head に対する直近 CI (test-all) が失敗していれば失敗ログ末尾を context に注入する。
-  CI_SECTION="$(build_ci_section "$BRANCH_NAME" "$HEAD_SHA")"
+  # command substitution にすると、最終報告用の CI_RED_MARKER が subshell に消える。
+  build_ci_section "$BRANCH_NAME" "$HEAD_SHA"
   # 観測用: 注入有無を workflow ログに残す（内容は出さず長さのみ）。0 bytes = 失敗 CI 無し。
   echo "🔎 build_ci_section: ${#CI_SECTION} bytes injected for $BRANCH_NAME @ ${HEAD_SHA:0:7}"
 
@@ -1211,7 +1221,7 @@ ${IMG_NOTE}"
 
   # 最終結果を投稿（ブランチ情報付き）
   gh api -X PATCH repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID \
-    -f body="$CLAUDE_OUTPUT_CLEAN
+    -f body="${CI_RED_MARKER:+$CI_RED_MARKER$'\n\n'}$CLAUDE_OUTPUT_CLEAN
 
 ---
 
@@ -1247,7 +1257,7 @@ else
   # POST ERROR REPORT TO GITHUB
   # =========================================================================
   gh api -X PATCH repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID \
-    -f body="$ERROR_DETAILS
+    -f body="${CI_RED_MARKER:+$CI_RED_MARKER$'\n\n'}$ERROR_DETAILS
 
 ---
 
