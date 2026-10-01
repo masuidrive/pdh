@@ -124,10 +124,16 @@ if [ -f "$f" ]; then
     printf 'github-bot: %s に認証失敗（refresh の失敗・401）の検出が無い\n' "$f" >&2
     failed=1
   fi
-  if ! grep -q 'gh secret set CODING_BOT_CODEX_AUTH_JSON' "$f"; then
-    printf 'github-bot: %s に更新された token の書き戻しが無い\n' "$f" >&2
-    failed=1
-  fi
+fi
+# token の更新と書き戻しは、毎日動く更新の workflow だけが行う（run は更新しない）
+f="github-bot/.github/coding-bot/codex-refresh.py"
+if [ ! -f "$f" ] || ! grep -q "'gh', 'secret', 'set'" "$f"; then
+  printf 'github-bot: %s に更新された token の書き戻しが無い\n' "$f" >&2
+  failed=1
+fi
+if ! grep -q 'queue: max' github-bot/.github/workflows/coding-bot-codex-auth.yml 2>/dev/null; then
+  printf 'github-bot: coding-bot-codex-auth.yml が更新を 1 本ずつ流していない（queue: max）\n' >&2
+  failed=1
 fi
 
 # --- 移植性パッチ: devcontainer の workspaceFolder が固定パスか（re-sync で戻ると任意 repo で落ちる）---

@@ -122,9 +122,21 @@ engine 別の認証 secret:
   d=$(mktemp -d) && CODEX_HOME="$d" codex login && jq -e . "$d/auth.json" >/dev/null && jq -c . "$d/auth.json" | gh secret set CODING_BOT_CODEX_AUTH_JSON; rm -rf "$d"
   ```
   ⚠ 手元の `codex` や別用途の secret と同じログインを共有しない。片方が refresh した時点でもう片方の refresh token が失効する（`refresh token was already used`）。
-  run は codex が更新した `auth.json` をこの secret へ書き戻す（`codex-auth.sh`）。⚠ **書き戻しには `CODING_BOT_GH_PAT` に Secrets の Read and write が要る。**無いと更新が捨てられ、次の run で失効する。
-  認証が切れると、run が Issue / PR に «⚠ codex の認証が切れています» のコメントで上の手順を出す。
+  ⚠ **run は token を更新しない。**run には refresh token を抜いた写し（`auth_mode: "chatgptAuthTokens"`）だけを渡す。token の更新と secret への書き戻しは、毎日動く `coding-bot-codex-auth.yml` だけが行う（同時に動く run が refresh token を取り合わないため）。この workflow を default branch に置き、**置いたらすぐ `gh workflow run coding-bot-codex-auth.yml` で 1 回起こす**（この版を取り込んだ時点から run は書き戻しをやめるので、最初の更新を待たずに通しておく。secret の `last_refresh` が 3 日を超えると `codex-auth` の Issue、8 日を超えると run は codex を使わない）。
+  認証が切れる・更新に失敗すると、ラベル `codex-auth` の Issue 1 つと、止まった run の Issue / PR に再ログインの手順が出る。
   codex は API key 課金では動かさない。container の `/etc/codex/requirements.toml` に `allowed_login_methods = ["chatgpt"]` を置く（`codex-requirements.sh`）。`CODING_BOT_OPENAI_API_KEY` は codex の認証には使われない（project のテストが OpenAI を呼ぶための key としてだけ渡る）。
+- **codex（Sign in with ChatGPT = SIWC）**: `CODING_BOT_CODEX_SIWC_JSON`。ChatGPT の利用枠を他のアプリで使う OpenAI のログインで、ChatGPT の設定画面（Usage → App limits）で bot だけの週の上限を決められる。secret があれば SIWC を使う（両方あるときは変数 `CODING_BOT_CODEX_AUTH_MODE` = `siwc` / `codex-login` で選ぶ）。管理者がブラウザを開く手元で:
+  ```bash
+  openssl rand -hex 32 | gh secret set CODING_BOT_CODEX_SIWC_KEY --repo OWNER/REPO   # 初回だけ
+  python3 .github/coding-bot/siwc-login.py --repo OWNER/REPO --secret CODING_BOT_CODEX_SIWC_JSON
+  gh workflow run coding-bot-codex-auth.yml --repo OWNER/REPO
+  ```
+  - 受け取り先は `http://127.0.0.1:1455/callback` だけ（`localhost` や外の URL は使えない）。devcontainer では VS Code の port 転送で受け取り、届かなければブラウザのアドレス欄の URL を丸ごと端末に貼る
+  - refresh token を持つのは `coding-bot-codex-auth.yml` だけ。run には、この workflow が暗号化して変数 `CODING_BOT_CODEX_SIWC_ACCESS` に置いた 1 時間の access token だけが届く。run は残りが 20 分を切ると workflow を起こして入れ替える
+  - API key 課金へ流れないよう、SIWC の provider と `model_provider` を `requirements.toml` に固定する。固定できない・`openssl` や復号鍵が無いときは codex を使わない
+  - 再ログインは `siwc-login.py` と `gh workflow run` の 2 行だけを実行する（復号鍵はそのまま）
+- **両方の方式に共通**: `CODING_BOT_GH_PAT` に **Secrets と Variables の Read and write** が要る（書き戻しと access token の配布）。workflow の起動は job の `GITHUB_TOKEN`（`actions: write`）で行う。
+- **別の workflow の codex login も毎日更新させる（任意）**: 変数 `CODING_BOT_CODEX_EXTRA_LOGIN_SECRET` に、その secret の名前を 1 つ入れる。その workflow の側は、refresh token を抜いた写しで codex を動かし、自分では書き戻さない
 
 project 固有の env が要るテストがあるなら、まとめて 1 つの secret に:
 ```bash

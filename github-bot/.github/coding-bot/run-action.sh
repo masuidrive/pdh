@@ -59,6 +59,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/trigger-source.sh"
 source "$SCRIPT_DIR/ci-autofix-result.sh"
 source "$SCRIPT_DIR/codex-auth.sh"
+codex_snapshot_helpers
+source "$CODING_BOT_AUTH_HELPERS_DIR/codex-auth.sh"
 TRUSTED_LINKED_ISSUE=""
 TRUSTED_PR_BRANCH=""
 TRIGGER_ERROR=""
@@ -598,7 +600,7 @@ case "$RUN_TIMEOUT_SECONDS" in ''|*[!0-9]*) echo "❌ CODING_BOT_TIMEOUT must be
 RUN_START_UNIX=$(date +%s)
 RUN_DEADLINE_UNIX=$((RUN_START_UNIX + RUN_TIMEOUT_SECONDS))
 
-# gh の既定は GITHUB_TOKEN（bot 名義）。PAT は push・PR 作成・認証の書き戻しだけに局所指定する。
+# gh の既定は GITHUB_TOKEN（bot 名義）。PAT は push・PR 作成・SIWC access 変数の読取りに局所指定する。
 export GH_TOKEN="$GITHUB_TOKEN"
 
 # ⚠ 人の依頼の pr-merge では origin の git 認証を、agent が走る前に CODING_BOT_GH_PAT へ差し替える。

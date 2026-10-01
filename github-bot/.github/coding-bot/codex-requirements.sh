@@ -10,6 +10,21 @@ codex_place_login_requirement() {
   if cmp -s "$directory/requirements.toml" <(printf '%s\n' "$requirement"); then
     return 0
   fi
+  # Reused containers can change login mode. Replace only the exact legacy bot
+  # policy or our complete generated policy; administrator additions are kept.
+  if [ -f "$directory/requirements.toml" ] &&
+     { cmp -s "$directory/requirements.toml" <(printf 'allowed_login_methods = ["chatgpt"]\n') ||
+       { grep -q '^# Managed by coding-bot: subscription provider$' "$directory/requirements.toml" &&
+         python3 "$(dirname "${BASH_SOURCE[0]}")/siwc-config.py" --owns "$directory/requirements.toml"; }; }; then
+    local temporary
+    temporary=$(mktemp "$directory/.requirements.XXXXXX") || return 1
+    if printf '%s\n' "$requirement" > "$temporary" && chmod 644 "$temporary" &&
+       mv -f "$temporary" "$directory/requirements.toml"; then
+      return 0
+    fi
+    rm -f "$temporary"
+    return 1
+  fi
   # Existing administrator requirements may include unrelated restrictions.
   # Leave them intact and let the caller retain the config.toml guard instead.
   ( umask 022; set -o noclobber
@@ -20,8 +35,12 @@ codex_place_login_requirement() {
 codex_install_login_requirement() {
   local directory="$1"
   shift
-  local requirement='allowed_login_methods = ["chatgpt"]' diagnostic status=0
-  if cmp -s "$directory/requirements.toml" <(printf '%s\n' "$requirement"); then
+  local requirement='allowed_login_methods = ["chatgpt"]' diagnostic status=0 siwc=false
+  if [ "${CODING_BOT_CODEX_AUTH_MODE:-}" = siwc ]; then
+    siwc=true
+    requirement=$(python3 "$(dirname "${BASH_SOURCE[0]}")/siwc-config.py") || return 1
+  fi
+  if ! "$siwc" && cmp -s "$directory/requirements.toml" <(printf '%s\n' "$requirement"); then
     return 0
   fi
   # Only file placement needs root. Keep Codex and its interpreter on the bot's
@@ -32,6 +51,7 @@ codex_install_login_requirement() {
   else
     codex_place_login_requirement "$directory" "$requirement" || return 1
   fi
+  cmp -s "$directory/requirements.toml" <(printf '%s\n' "$requirement") || return 1
   # This local-only command reads managed requirements before checking login state.
   # Not logged in (exit 1) is fine; only a requirements loading error rolls back.
   diagnostic=$(codex login status 2>&1) || status=$?
@@ -46,8 +66,13 @@ codex_install_login_requirement() {
   fi
   if [ "$status" -ne 0 ] &&
      { [ "$status" -ne 1 ] || ! grep -qi '^Not logged in' <<< "$diagnostic"; }; then
+    if "$siwc"; then
+      echo "::error::SIWC の requirements を確認できないため Codex を使いません（終了コード: $status）。"
+      return 1
+    fi
     echo "::warning::Codex が requirements を読み込めるか確認できなかったため、配置したまま続けます（終了コード: $status）。"
   fi
+  cmp -s "$directory/requirements.toml" <(printf '%s\n' "$requirement") || return 1
   return 0
 }
 

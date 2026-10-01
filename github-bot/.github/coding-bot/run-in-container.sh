@@ -1,6 +1,15 @@
 #!/bin/bash
 # bot の container 内の入口。workflow_dispatch は smoke 専用。
 set -euo pipefail
+source .github/coding-bot/codex-auth.sh
+codex_snapshot_helpers
+source "$CODING_BOT_AUTH_HELPERS_DIR/codex-auth.sh"
+# Invalid Codex configuration is reported by codex_prepare_auth after checkout.
+# Claude-main can still run and leave the AC 8 note.
+codex_select_auth_mode || true
+if [ "$CODING_BOT_CODEX_AUTH_MODE" = siwc ]; then
+  codex_prepare_siwc_home
+fi
 if [ "${EVENT_TYPE:-}" = workflow_dispatch ]; then
   if [ "${VERIFY_ONLY:-}" != true ]; then
     echo "workflow_dispatch is verify-only: re-run with verify_only=true." >&2
@@ -14,7 +23,13 @@ if [ "${EVENT_TYPE:-}" = workflow_dispatch ]; then
       ;;
     codex)
       command -v codex >/dev/null
-      test -n "${CODING_BOT_CODEX_AUTH_JSON:-}"
+      if [ "$CODING_BOT_CODEX_AUTH_MODE" = siwc ]; then
+        command -v openssl >/dev/null
+        test -n "${CODING_BOT_CODEX_SIWC_KEY:-}"
+        test -n "${CODING_BOT_GH_PAT:-}"
+      else
+        test -n "${CODING_BOT_CODEX_AUTH_JSON:-}"
+      fi
       ;;
     *) echo "Set CODING_BOT_ENGINE to claude or codex" >&2; exit 1 ;;
   esac
@@ -38,8 +53,13 @@ if [ "${EVENT_TYPE:-}" = workflow_dispatch ]; then
   exit 0
 fi
 source .github/coding-bot/update-tools.sh
-if [ -n "${CODING_BOT_CODEX_AUTH_JSON:-}" ]; then
-  if ! bash .github/coding-bot/codex-requirements.sh; then
+export CODING_BOT_CODEX_REQUIREMENTS_OK=false
+if [ "$CODING_BOT_CODEX_AUTH_MODE" = siwc ] || [ -n "${CODING_BOT_CODEX_AUTH_JSON:-}" ]; then
+  if bash "$CODING_BOT_AUTH_HELPERS_DIR/codex-requirements.sh"; then
+    export CODING_BOT_CODEX_REQUIREMENTS_OK=true
+  elif [ "$CODING_BOT_CODEX_AUTH_MODE" = siwc ]; then
+    echo '::error::SIWC の managed provider を固定できないため Codex を使いません。'
+  else
     echo '::warning::Codex の managed ログイン制限を配置できません（既存設定または権限）。config.toml の ChatGPT 制限を使います。'
   fi
 fi

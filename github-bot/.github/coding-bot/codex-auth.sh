@@ -1,50 +1,87 @@
 # shellcheck shell=bash
 # Codex main / delegated workers share this ChatGPT login and its refresh lifecycle.
 
-codex_auth_hash() {
-  ( set -o pipefail; jq -cS . "$CODEX_AUTH_FILE" 2>/dev/null | sha256sum | cut -d' ' -f1 )
+source "$(dirname "${BASH_SOURCE[0]}")/codex-auth-issue.sh"
+
+# Run from the trusted default-branch checkout before switching to agent/PR head.
+codex_snapshot_helpers() {
+  [ -z "${CODING_BOT_AUTH_HELPERS_DIR:-}" ] || return 0
+  local source_dir name
+  source_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  CODING_BOT_AUTH_HELPERS_DIR=$(mktemp -d /tmp/coding-bot-auth.XXXXXX)
+  for name in codex-auth.sh codex-auth-issue.sh codex-login-state.py codex-requirements.sh siwc-config.py siwc-poll.py siwc-token.py; do
+    if [ "${GITHUB_ACTIONS:-false}" = true ]; then
+      git show "origin/${GITHUB_DEFAULT_BRANCH:?}:.github/coding-bot/$name" > "$CODING_BOT_AUTH_HELPERS_DIR/$name" || return 1
+    else
+      # Local test/terminal entry points have no Actions default-branch ref.
+      cp "$source_dir/$name" "$CODING_BOT_AUTH_HELPERS_DIR/$name" || return 1
+    fi
+  done
+  export CODING_BOT_AUTH_HELPERS_DIR
+}
+
+codex_prepare_siwc_home() {
+  if [ -z "${CODEX_RUNTIME_HOME:-}" ]; then
+    local operator_home="${CODEX_HOME:-}"
+    CODEX_RUNTIME_HOME=$(mktemp -d)
+    export CODEX_RUNTIME_HOME
+    if [ -n "$operator_home" ] && [ -f "$operator_home/config.toml" ]; then
+      cp "$operator_home/config.toml" "$CODEX_RUNTIME_HOME/config.toml"
+    fi
+  fi
+  export CODEX_HOME="$CODEX_RUNTIME_HOME"
+}
+
+codex_select_auth_mode() {
+  case "${CODING_BOT_CODEX_AUTH_MODE:-}" in
+    siwc|codex-login) ;;
+    '')
+      if [ "${CODING_BOT_CODEX_SIWC_PRESENT:-false}" = true ]; then
+        CODING_BOT_CODEX_AUTH_MODE=siwc
+      else
+        CODING_BOT_CODEX_AUTH_MODE=codex-login
+      fi
+      ;;
+    *) echo '::warning::CODING_BOT_CODEX_AUTH_MODE must be siwc or codex-login; Codex is unavailable.'; return 1 ;;
+  esac
+  export CODING_BOT_CODEX_AUTH_MODE
 }
 
 codex_auth_is_chatgpt() {
-  jq -e '(.auth_mode == null or .auth_mode == "chatgpt") and
+  jq -e '(.auth_mode == null or .auth_mode == "chatgpt" or .auth_mode == "chatgptAuthTokens") and
     (.tokens.access_token | strings | length > 0) and
-    (.tokens.refresh_token | strings | length > 0)' "$CODEX_AUTH_FILE" >/dev/null 2>&1
+    (if .auth_mode == "chatgptAuthTokens" then .tokens.refresh_token == ""
+     else (.tokens.refresh_token | strings | length > 0) end)' "$CODEX_AUTH_FILE" >/dev/null 2>&1
 }
 
-codex_save_refreshed_auth() {
-  local current_hash current_refresh current_account
-  [ "${CODEX_AUTH_SEEDED:-false}" = true ] || return 0
-  [ -n "${CODEX_AUTH_INITIAL_HASH:-}" ] && [ -f "${CODEX_AUTH_FILE:-}" ] || return 0
-  if ! current_hash=$(codex_auth_hash); then
-    echo '::error::更新後の Codex auth.json を読めないため書き戻せません。'
-    return 0
+codex_cleanup_auth() {
+  if [ -n "${CODEX_SIWC_POLL_PID:-}" ]; then
+    kill "$CODEX_SIWC_POLL_PID" 2>/dev/null || true
+    wait "$CODEX_SIWC_POLL_PID" 2>/dev/null || true
   fi
-  [ "$current_hash" != "$CODEX_AUTH_INITIAL_HASH" ] || return 0
-  if ! codex_auth_is_chatgpt; then
-    echo '::error::更新後の auth.json が ChatGPT ログインの形ではないため書き戻しません。'
-    return 0
+  if [ -n "${CODEX_RUNTIME_HOME:-}" ]; then
+    rm -rf "$CODEX_RUNTIME_HOME"
   fi
-  current_refresh=$(jq -r '.tokens.refresh_token' "$CODEX_AUTH_FILE" 2>/dev/null) || return 0
-  current_account=$(jq -c '.tokens.account_id // null' "$CODEX_AUTH_FILE" 2>/dev/null) || return 0
-  [ "$current_refresh" != "$CODEX_AUTH_INITIAL_REFRESH" ] || return 0
-  if [ "$CODEX_AUTH_INITIAL_ACCOUNT" != null ] && [ "$current_account" != "$CODEX_AUTH_INITIAL_ACCOUNT" ]; then
-    echo '::error::更新後の auth.json の account が変わったため書き戻しません。'
-    return 0
-  fi
-  if [ -z "${CODING_BOT_GH_PAT:-}" ]; then
-    echo '::error::CODING_BOT_GH_PAT が無いため、更新された Codex token を書き戻せません。'
-  elif ( set -o pipefail
-    jq -c . "$CODEX_AUTH_FILE" 2>/dev/null | GH_TOKEN="$CODING_BOT_GH_PAT" \
-      timeout -k 5 60 gh secret set CODING_BOT_CODEX_AUTH_JSON --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1
-  ); then
-    echo '更新された token を CODING_BOT_CODEX_AUTH_JSON へ書き戻しました。'
-    CODEX_AUTH_INITIAL_HASH="$current_hash"
-    CODEX_AUTH_INITIAL_REFRESH="$current_refresh"
-  else
-    echo '::error::CODING_BOT_CODEX_AUTH_JSON への書き戻しに失敗しました。'
-  fi
-  # EXIT trap must preserve the run's original conclusion, even if gh fails.
-  return 0
+}
+
+codex_mask() {
+  [ "${GITHUB_ACTIONS:-false}" = true ] || return 0
+  local value="$1"
+  value="${value//'%'/'%25'}"
+  value="${value//$'\r'/'%0D'}"
+  value="${value//$'\n'/'%0A'}"
+  printf '::add-mask::%s\n' "$value"
+}
+
+codex_auth_log_is_failure() {
+  jq -Rr '
+      . as $line | (try fromjson catch $line) |
+      if type == "object" then
+        if .type == "error" then .message
+        elif .type == "turn.failed" then .error.message
+        else empty end | strings
+      elif type == "string" then . else empty end
+    ' "$1" | grep -iE 'status([ _-]code)?[[:space:]:=]+401([^0-9]|$)|(^|[^[:alnum:]_-])401[[:space:]]+Unauthorized|refresh token|not logged in|Could not parse your authentication token|ChatGPT login is required|could not be refreshed|sign in again|log out and sign in|invalid ID token|ChatGPT account ID not available|Token data is not available|auth data is not available|SIWC token failed: invalid credentials|SIWC access credentials unusable' >/dev/null;
 }
 
 codex_auth_recovery_message() {
@@ -62,12 +99,15 @@ EOF
 }
 
 codex_auth_recovery_steps() {
+  local command
+  command=$(codex_auth_relogin_command "${CODING_BOT_CODEX_AUTH_MODE:-codex-login}")
   cat <<EOF
 ### 直し方（secret を管理している人が、手元の端末で行う）
-1. 使い捨ての CODEX_HOME にログインし、ブラウザで承認して secret に登録する:
-   \`d=\$(mktemp -d) && CODEX_HOME="\$d" codex login && jq -e . "\$d/auth.json" >/dev/null && jq -c . "\$d/auth.json" | gh secret set CODING_BOT_CODEX_AUTH_JSON --repo $GITHUB_REPOSITORY; rm -rf "\$d"\`
+1. 手元の端末でログインし、ブラウザで承認して secret に登録する:
+   \`$command\`
    手元の普段の codex ログインとも、別の用途の secret とも共有しない（片方の token 更新がもう片方を切るため）。
-2. この Issue / PR に 🤖 とコメントして、bot をやり直す。
+2. SIWC では上のコマンドが updater を起動して新しい access の公開を待つ。成功するまで bot を再実行しない。
+3. この Issue / PR に 🤖 とコメントして、bot をやり直す。
 EOF
 }
 
@@ -79,21 +119,31 @@ codex_probe_failure_message() {
   cat <<EOF
 ## ⚠ codex が使えるかを確かめられませんでした
 この run では codex を使えません。$consequence
-利用上限・ネットワークなら、しばらくして 🤖 でやり直せば直る。同じ表示が続くなら、下の再ログインの手順を行う。
+原因: ${CODEX_AUTH_CAUSE:-利用上限・ネットワーク・timeout}。
+workflow の状態・設定・利用上限・ネットワークを確認し、しばらくして 🤖 でやり直してください。
 
 EOF
-  codex_auth_recovery_steps
 }
 
 codex_report_auth_failure() {
   [ "${CODEX_AUTH_REPORTED:-false}" = true ] && return 0
   local message
+  local report_mode="${CODING_BOT_CODEX_AUTH_MODE:-codex-login}" kind=auth
+  case "$report_mode" in siwc|codex-login) ;; *) report_mode=codex-login ;; esac
+  [ "${CODEX_AUTH_FAILURE:-auth}" = auth ] || kind=operational
+  codex_auth_issue "$report_mode" "${CODEX_AUTH_CAUSE:-Codex authentication or preflight failed}" "$kind" || echo '::error::codex-auth Issue を依頼できませんでした。'
   if [ "${CODEX_AUTH_FAILURE:-auth}" = auth ]; then
     message=$(codex_auth_recovery_message)
   else
     message=$(codex_probe_failure_message)
   fi
-  if gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments" \
+  if [ "$kind" = operational ]; then
+    if codex_post_operational_note "$report_mode" "$message"; then
+      CODEX_AUTH_REPORTED=true
+    else
+      echo '::error::Codex の事前確認エラーのコメントを投稿できませんでした。'
+    fi
+  elif gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments" \
     -f body="$message" >/dev/null 2>&1; then
     CODEX_AUTH_REPORTED=true
   else
@@ -102,53 +152,127 @@ codex_report_auth_failure() {
 }
 
 codex_prepare_auth() {
-  # Keep OPENAI_API_KEY for provider tests; the shared config bars Codex API billing.
-  if [ "${ENGINE:-}" = codex ] && [ -n "${CODING_BOT_CODEX_AUTH_JSON:-}" ]; then
-    export CODEX_HOME="${CODEX_HOME:-/tmp/codex-home}"
-  else
-    export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-  fi
-  CODEX_AUTH_FILE="$CODEX_HOME/auth.json"
-  CODEX_AUTH_INITIAL_HASH=''
-  CODEX_AUTH_INITIAL_REFRESH=''
-  CODEX_AUTH_INITIAL_ACCOUNT=null
-  CODEX_AUTH_SEEDED=false
+  local bot_dir invalid=false
+  bot_dir="${CODING_BOT_AUTH_HELPERS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
   CODEX_AUTH_FAILURE=auth
   CODEX_AUTH_REPORTED=false
   CODEX_AUTH_STATUS='無い'
-  local invalid=false
-  if [ -n "${CODING_BOT_CODEX_AUTH_JSON:-}" ]; then
-    if printf '%s' "$CODING_BOT_CODEX_AUTH_JSON" | jq -e 'type == "object"' >/dev/null 2>&1; then
-      mkdir -p "$CODEX_HOME"
-      ( umask 077; printf '%s' "$CODING_BOT_CODEX_AUTH_JSON" | jq -c . > "$CODEX_AUTH_FILE" )
-      chmod 600 "$CODEX_AUTH_FILE"
-      CODEX_AUTH_SEEDED=true
-      CODEX_AUTH_INITIAL_HASH=$(codex_auth_hash) || invalid=true
-      CODEX_AUTH_INITIAL_REFRESH=$(jq -r '.tokens.refresh_token // empty' "$CODEX_AUTH_FILE" 2>/dev/null) || invalid=true
-      CODEX_AUTH_INITIAL_ACCOUNT=$(jq -c '.tokens.account_id // null' "$CODEX_AUTH_FILE" 2>/dev/null) || invalid=true
-      # Only bot-owned config is changed; existing operator logins are not saved.
-      local config_tmp
-      config_tmp=$(mktemp "$CODEX_HOME/config.toml.XXXXXX")
-      { printf 'forced_login_method = "chatgpt"\n'
-        if [ -f "$CODEX_HOME/config.toml" ]; then
-          awk '/^[[:space:]]*\[/{table=1} !table && /^[[:space:]]*forced_login_method[[:space:]]*=/{next} {print}' \
-            "$CODEX_HOME/config.toml"
-        fi
-      } > "$config_tmp"
-      mv "$config_tmp" "$CODEX_HOME/config.toml"
-      # A failed probe may rotate credentials too. Keep the original run status.
-      trap 'codex_save_refreshed_auth' EXIT
-      trap 'exit 130' INT
-      trap 'exit 143' TERM
-      if [ -z "${CODING_BOT_GH_PAT:-}" ]; then
-        echo '::warning::CODING_BOT_GH_PAT が無いため、Codex が token を更新しても secret へ書き戻せません。'
-      fi
+  CODEX_AUTH_CAUSE='Codex login missing, invalid, or rejected'
+  if ! codex_select_auth_mode; then
+    CODEX_AUTH_CAUSE='Invalid CODING_BOT_CODEX_AUTH_MODE'
+    CODEX_AUTH_FAILURE=probe
+    codex_report_auth_failure
+    return 0
+  fi
+  if [ "$CODING_BOT_CODEX_AUTH_MODE" = siwc ]; then
+    echo '::notice::Codex login mode: SIWC'
+    codex_prepare_siwc_home
+  else
+    echo '::notice::Codex login mode: codex login'
+    if [ "${ENGINE:-}" = codex ] && [ -n "${CODING_BOT_CODEX_AUTH_JSON:-}" ]; then
+      export CODEX_HOME="${CODEX_HOME:-/tmp/codex-home}"
     else
-      invalid=true
+      export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
     fi
   fi
-  if [ ! -f "$CODEX_AUTH_FILE" ] && [ "$invalid" = false ]; then
-    return 0
+  CODEX_AUTH_FILE="$CODEX_HOME/auth.json"
+  if [ "$CODING_BOT_CODEX_AUTH_MODE" = siwc ]; then
+    CODEX_AUTH_FAILURE=probe
+    CODEX_AUTH_CAUSE='SIWC provider requirements, openssl, key, or access distribution unavailable'
+    if [ "${CODING_BOT_CODEX_SIWC_PRESENT:-false}" != true ]; then
+      CODEX_AUTH_FAILURE=auth
+      CODEX_AUTH_CAUSE='CODING_BOT_CODEX_AUTH_MODE=siwc but CODING_BOT_CODEX_SIWC_JSON is missing'
+      invalid=true
+    elif [ "${CODING_BOT_CODEX_REQUIREMENTS_OK:-false}" != true ] ||
+       ! command -v openssl >/dev/null || [ -z "${CODING_BOT_CODEX_SIWC_KEY:-}" ] ||
+       [ -z "${CODING_BOT_GH_PAT:-}" ]; then
+      invalid=true
+    else
+      mkdir -p "$CODEX_HOME"
+      codex_mask "$CODING_BOT_CODEX_SIWC_KEY"
+      # No ChatGPT login in this home: auth.command is the sole bearer source.
+      rm -f "$CODEX_AUTH_FILE" "$CODEX_HOME/siwc-access.json"
+      python3 "$bot_dir/siwc-poll.py" --creds "$CODEX_HOME/siwc-access.json" &
+      CODEX_SIWC_POLL_PID=$!
+      trap 'codex_cleanup_auth' EXIT
+      trap 'exit 130' INT
+      trap 'exit 143' TERM
+      local deadline=$((SECONDS + 600))
+      until python3 "$bot_dir/siwc-token.py" --creds "$CODEX_HOME/siwc-access.json" >/dev/null 2>&1; do
+        if [ "$SECONDS" -ge "$deadline" ] || ! kill -0 "$CODEX_SIWC_POLL_PID" 2>/dev/null; then
+          CODEX_AUTH_CAUSE='SIWC access publication did not complete; check coding-bot-codex-auth workflow queue and Variables/key permissions'
+          invalid=true
+          break
+        fi
+        sleep 2
+      done
+    fi
+  else
+    if [ -n "${CODING_BOT_CODEX_AUTH_JSON:-}" ]; then
+      if printf '%s' "$CODING_BOT_CODEX_AUTH_JSON" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        mkdir -p "$CODEX_HOME"
+        ( umask 077; printf '%s' "$CODING_BOT_CODEX_AUTH_JSON" | jq -c . > "$CODEX_AUTH_FILE" )
+        chmod 600 "$CODEX_AUTH_FILE"
+        # Mark individual tokens before they can reach shell/model output.
+        local token
+        while IFS= read -r token; do
+          codex_mask "$token"
+        done < <(jq -r '.tokens // {} | .[] | strings' "$CODEX_AUTH_FILE")
+        local config_tmp
+        config_tmp=$(mktemp "$CODEX_HOME/config.toml.XXXXXX")
+        { printf 'forced_login_method = "chatgpt"\n'
+          if [ -f "$CODEX_HOME/config.toml" ]; then
+            awk '/^[[:space:]]*\[/{table=1} !table && /^[[:space:]]*forced_login_method[[:space:]]*=/{next} {print}' \
+              "$CODEX_HOME/config.toml"
+          fi
+        } > "$config_tmp"
+        mv "$config_tmp" "$CODEX_HOME/config.toml"
+      else
+        invalid=true
+      fi
+    fi
+    if [ ! -f "$CODEX_AUTH_FILE" ] && [ "$invalid" = false ]; then
+      return 0
+    fi
+    if [ "$invalid" = false ]; then
+      local state_rc=0
+      if [ ! -f "$bot_dir/codex-login-state.py" ]; then
+        state_rc=1
+        CODEX_AUTH_FAILURE=probe
+        CODEX_AUTH_CAUSE='codex-login-state.py helper is missing; restore trusted coding-bot helpers'
+      else
+        python3 "$bot_dir/codex-login-state.py" "$CODEX_AUTH_FILE" || state_rc=$?
+      fi
+      if [ "$state_rc" -eq 2 ]; then
+        echo '::warning::codex login last_refresh is older than 3 days; daily refresh needs attention.'
+        codex_auth_issue codex-login 'codex login last_refresh is older than 3 days; daily refresh needs attention' stale || true
+      elif [ "$state_rc" -ne 0 ]; then
+        if [ "$CODEX_AUTH_FAILURE" = auth ]; then
+          CODEX_AUTH_CAUSE='codex login last_refresh invalid or at least 8 days old, or access token expires during this run; daily refresh needs attention'
+        fi
+        invalid=true
+      fi
+    fi
+    if [ "$invalid" = false ] && codex_auth_is_chatgpt; then
+      # Ordinary ChatGPT auth rotates even on 401 with a recent last_refresh.
+      # Keep the refresh owner in the updater; Codex's supported external-auth
+      # representation never consumes a refresh token, including 401 recovery.
+      # Existing operator homes stay untouched when no secret seeded this run.
+      if [ -z "${CODING_BOT_CODEX_AUTH_JSON:-}" ]; then
+        CODEX_RUNTIME_HOME=$(mktemp -d)
+        [ ! -f "$CODEX_HOME/config.toml" ] || cp "$CODEX_HOME/config.toml" "$CODEX_RUNTIME_HOME/config.toml"
+        cp "$CODEX_AUTH_FILE" "$CODEX_RUNTIME_HOME/auth.json"
+        export CODEX_HOME="$CODEX_RUNTIME_HOME"
+        CODEX_AUTH_FILE="$CODEX_RUNTIME_HOME/auth.json"
+        trap 'codex_cleanup_auth' EXIT
+      fi
+      local snapshot
+      snapshot=$(mktemp "$CODEX_HOME/auth.json.XXXXXX")
+      jq '.auth_mode = "chatgptAuthTokens" | .tokens.refresh_token = ""' "$CODEX_AUTH_FILE" > "$snapshot"
+      chmod 600 "$snapshot"
+      mv "$snapshot" "$CODEX_AUTH_FILE"
+      unset CODING_BOT_CODEX_AUTH_JSON
+    fi
   fi
 
   # login status only reads local state. A minimal exec also verifies the server.
@@ -158,38 +282,35 @@ codex_prepare_auth() {
   if [ -n "${CODING_BOT_CODEX_MODEL:-}" ]; then
     model_args=(-m "$CODING_BOT_CODEX_MODEL")
   fi
-  if [ "$invalid" = false ] && codex_auth_is_chatgpt; then
+  if [ "$invalid" = false ] && { [ "$CODING_BOT_CODEX_AUTH_MODE" = siwc ] || codex_auth_is_chatgpt; }; then
     probe_dir=$(mktemp -d)
     probe_log=$(mktemp "$probe_dir/output.XXXXXX")
     timeout -k 5 45 codex exec --json --ephemeral --skip-git-repo-check \
       --sandbox read-only -C "$probe_dir" "${model_args[@]}" \
       -c 'forced_login_method="chatgpt"' -c 'model_reasoning_effort="low"' \
       'Reply only OK. Do not use tools.' </dev/null >"$probe_log" 2>&1 && probe_rc=0 || probe_rc=$?
-    codex_save_refreshed_auth
     CODEX_AUTH_FAILURE=probe
+    CODEX_AUTH_CAUSE="Codex $CODING_BOT_CODEX_AUTH_MODE preflight could not verify provider access (network, usage limit, or timeout)"
     # Match known auth diagnostics, never print provider output (it may contain tokens).
     # --json mixes event IDs with errors; only error payloads are diagnostic text.
     # Startup failures can also be plain stderr (e.g. invalid ID token format).
-    if jq -Rr '
-      . as $line | (try fromjson catch $line) |
-      if type == "object" then
-        if .type == "error" then .message
-        elif .type == "turn.failed" then .error.message
-        else empty end | strings
-      elif type == "string" then . else empty end
-    ' "$probe_log" | grep -iE 'status([ _-]code)?[[:space:]:=]+401([^0-9]|$)|(^|[^[:alnum:]_-])401[[:space:]]+Unauthorized|refresh token|not logged in|Could not parse your authentication token|ChatGPT login is required|could not be refreshed|sign in again|log out and sign in|invalid ID token|ChatGPT account ID not available|Token data is not available|auth data is not available' >/dev/null; then
+    if codex_auth_log_is_failure "$probe_log"; then
       CODEX_AUTH_FAILURE=auth
+      CODEX_AUTH_CAUSE="Codex $CODING_BOT_CODEX_AUTH_MODE authentication was rejected during preflight"
     fi
     rm -rf "$probe_dir"
   fi
   if [ "$probe_rc" -eq 0 ]; then
     CODEX_AUTH_STATUS='使える（ChatGPT ログイン）'
   else
+    if [ "$CODING_BOT_CODEX_AUTH_MODE" = siwc ]; then
+      codex_cleanup_auth
+    fi
     echo '::error::Codex の事前確認に失敗しました。'
     codex_report_auth_failure
     local reason='認証切れで使えない' notification='Issue / PR にコメント済み'
     if [ "$CODEX_AUTH_FAILURE" = probe ]; then
-      reason='利用可否を確認できないため使えない。同じ表示が続くなら再ログインの手順を行う'
+      reason='利用可否を確認できないため使えない。workflow・設定・利用上限・ネットワークを確認する'
     fi
     if [ "${CODEX_AUTH_REPORTED:-false}" != true ]; then
       notification='Issue / PR へのコメント投稿にも失敗'

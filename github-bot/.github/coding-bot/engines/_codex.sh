@@ -16,8 +16,8 @@
 #   {command,aggregated_output,exit_code,status} | file_change
 #   {changes:[{path,kind}],status} | reasoning {text|summary}
 #
-# Auth: writes CODING_BOT_CODEX_AUTH_JSON secret (single-line minified ~/.codex/auth.json)
-# to $CODEX_HOME/auth.json (ChatGPT login only).
+# Auth: SIWC uses the managed provider and read-only token command.
+# codex login seeds CODING_BOT_CODEX_AUTH_JSON into $CODEX_HOME/auth.json.
 # The secret must be minified to one line (jq -c) because
 # devcontainers/ci passes env as line-based KEY=VALUE; a multi-line value breaks it.
 #
@@ -226,7 +226,9 @@ Install it (\`npm install -g @openai/codex\`) and ensure the npm global bin is o
 
   # Priority 3: Authentication / token issues (heuristic — only after the
   # deterministic exit-code checks above have failed to match).
-  if grep -qi "unauthorized\|401\|invalid.*token\|invalid.*api.*key\|auth.*expired\|refresh.*token" "$JSON_OUTPUT_FILE" "$PROGRESS_OUTPUT_FILE" 2>/dev/null; then
+  if codex_auth_log_is_failure "$JSON_OUTPUT_FILE"; then
+    codex_auth_issue "${CODING_BOT_CODEX_AUTH_MODE:-codex-login}" 'Codex authentication failed during this run' || \
+      echo '::error::codex-auth Issue を依頼できませんでした。' >&2
     codex_auth_recovery_message
     return 0
   fi

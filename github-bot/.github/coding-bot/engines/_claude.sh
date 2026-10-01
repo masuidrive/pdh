@@ -54,6 +54,7 @@ For more information, see the [Claude Code documentation](https://docs.anthropic
 1. Set the repository variable \`CODING_BOT_ENGINE\` to \`codex\` at [Repository Variables Settings](https://github.com/$GITHUB_REPOSITORY/settings/variables/actions)
 2. Provide ChatGPT login credentials (subscription only):
    - Use a disposable CODEX_HOME: \`d=\$(mktemp -d) && CODEX_HOME=\"\$d\" codex login && jq -e . \"\$d/auth.json\" >/dev/null && jq -c . \"\$d/auth.json\" | gh secret set CODING_BOT_CODEX_AUTH_JSON --repo $GITHUB_REPOSITORY; rm -rf \"\$d\"\`
+   - Or use SIWC: \`python3 .github/coding-bot/siwc-login.py --repo $GITHUB_REPOSITORY --secret CODING_BOT_CODEX_SIWC_JSON\` (also configure CODING_BOT_CODEX_SIWC_KEY and run coding-bot-codex-auth.yml).
    - Do not share this login with your everyday Codex login or secrets for other uses.
 
 ---
