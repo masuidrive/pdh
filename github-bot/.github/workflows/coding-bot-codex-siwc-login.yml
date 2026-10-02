@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       callback_url:
-        description: '貼る URL（初回は空。承認後のブラウザのアドレス欄を丸ごと貼る）'
+        description: 'ChatGPT 認証後の localhost アドレス（初回は空のまま起動する。2 回目に、認証後に開けなかったページのアドレス欄を丸ごと貼る）'
         type: string
         required: false
         default: ''
       recreate_client:
-        description: '登録を作り直す（前の OpenAI の登録が使えないときだけ、URL を空にして選ぶ）'
+        description: '普段はチェックしない。ChatGPT の承認画面がエラーで開けないときだけ、チェックして localhost アドレスの欄は空のまま起動する（bot を OpenAI に登録し直す）'
         type: boolean
         default: false
 

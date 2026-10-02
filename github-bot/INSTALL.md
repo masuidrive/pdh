@@ -129,8 +129,8 @@ engine 別の認証 secret:
   1. Actions の画面で workflow «SIWC のログインを作る»（`coding-bot-codex-siwc-login.yml`）を、入力なしで default branch から起動する。復号鍵 `CODING_BOT_CODEX_SIWC_KEY` が無ければ、この run が作って保存する
   2. その run の summary に出る ChatGPT の承認画面の URL を開き、bot に使うアカウントで承認する
   3. 承認すると `http://127.0.0.1:…/callback` に移り «開けない» と表示される。それで正しい。アドレス欄の URL を丸ごとコピーする（15 分以内）
-  4. 同じ workflow を、入力欄にその URL を貼って起動する。run が token に交換して secret に保存し、access token も置く。summary に承認したアカウントが出る（前のログインと違うアカウントなら警告が出る。保存は止めない）
-  - OpenAI 側の bot の登録（client）と戻り先の port は、変数 `CODING_BOT_CODEX_SIWC_CLIENT` に置き、作り直しでも引き継ぐ（登録が増えない）。登録が使えなくなったときだけ、入力の «登録を作り直す» を選ぶ。2 回の起動の間の受け渡しの値は、鍵で暗号化して変数 `CODING_BOT_CODEX_SIWC_PENDING` に置く（15 分を過ぎたものは日次の更新が消す）
+  4. 同じ workflow の «Run workflow ▾» を開き、入力欄 «ChatGPT 認証後の localhost アドレス» にその URL を貼って起動する。run が token に交換して secret に保存し、access token も置く。summary に承認したアカウントが出る（前のログインと違うアカウントなら警告が出る。保存は止めない）
+  - OpenAI 側の bot の登録（client）と戻り先の port は、変数 `CODING_BOT_CODEX_SIWC_CLIENT` に置き、作り直しでも引き継ぐ（登録が増えない）。ChatGPT の承認画面がエラーで開けないときだけ、チェック欄 «普段はチェックしない。ChatGPT の承認画面がエラーで開けないときだけ…» を付けて、localhost アドレスの欄は空のまま起動する（bot を OpenAI に登録し直す）。2 回の起動の間の受け渡しの値は、鍵で暗号化して変数 `CODING_BOT_CODEX_SIWC_PENDING` に置く（15 分を過ぎたものは日次の更新が消す）
   - refresh token で token を取り直すのは `coding-bot-codex-auth.yml` だけ。run には、この workflow が暗号化して変数 `CODING_BOT_CODEX_SIWC_ACCESS` に置いた 1 時間の access token だけが届く。run は残りが 20 分を切ると workflow を起こして入れ替える
   - API key 課金へ流れないよう、SIWC の provider と `model_provider` を `requirements.toml` に固定する。固定できない・`openssl` や復号鍵が無いときは codex を使わない
   - ログインが切れたときの Issue と案内は、この workflow へのリンクを出す。再ログインも上の手順 1〜4 をもう一度行う

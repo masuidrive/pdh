@@ -5,7 +5,7 @@
 codex_auth_relogin_command() {
   case "${1:-}" in
     siwc)
-      printf 'https://github.com/%s/actions/workflows/coding-bot-codex-siwc-login.yml — 「SIWC のログインを作る」を入力なしで起動し、summary の URL で承認してください。127.0.0.1 のページが開けない表示になったら、アドレス欄の URL を丸ごと「貼る URL」に貼って同じ workflow を起動してください。鍵も自動で作ります。\n' "$GITHUB_REPOSITORY"
+      printf 'https://github.com/%s/actions/workflows/coding-bot-codex-siwc-login.yml — 「SIWC のログインを作る」を入力なしで起動し、summary の URL で承認してください。127.0.0.1 のページが開けない表示になったら、アドレス欄の URL を丸ごと「ChatGPT 認証後の localhost アドレス」に貼って同じ workflow を起動してください。鍵も自動で作ります。\n' "$GITHUB_REPOSITORY"
       ;;
     codex-login)
       local secret="${CODING_BOT_CODEX_LOGIN_SECRET:-CODING_BOT_CODEX_AUTH_JSON}"

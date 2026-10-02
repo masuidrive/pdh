@@ -23,9 +23,12 @@ def load(name):
 login = load('siwc-login')
 refresh = load('codex-refresh')
 REDIRECT_URI = f'http://127.0.0.1:{login.DEFAULT_PORT}/callback'
-RESTART = 'URL の入力欄を空にして、入力なしで起動し直すことをお願いします。'
+RESTART = '「ChatGPT 認証後の localhost アドレス」の欄を空にして、入力なしで起動し直すことをお願いします。'
 NEXT = ('承認すると `http://127.0.0.1:…` のページに移り、開けない（エラー）と表示されますが、それで正しい状態です。'
-        'そのときブラウザのアドレス欄にある URL を丸ごとコピーし、同じ workflow の「貼る URL」に貼って起動してください。')
+        'そのときブラウザのアドレス欄にある URL を丸ごとコピーしてください。\n\n'
+        '貼る場所: [この workflow のページ]({workflow_url}) を開き、run の一覧の上にある「Run workflow ▾」を押すと入力欄が開きます。'
+        '「ChatGPT 認証後の localhost アドレス」にコピーした URL を貼り、緑の「Run workflow」を押してください。'
+        'スマホの GitHub アプリにはこのボタンが無いので、ブラウザで開いてください。')
 
 
 def summary(message):
@@ -84,7 +87,8 @@ def prepare(recreate):
     url = login.authorization_url(redirect, state, verifier, nonce,
                                   identity['ext_agent_host_id'], identity.get('client_id'))
     # OAuth needs state/nonce in this URL. They are never logged separately.
-    summary(f'[ChatGPT の承認画面を開く]({url})\n\n{NEXT}\n\n承認 URL は 15 分間有効です。最後に入力なしで起動したログインだけが使えます。')
+    workflow_url = f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/actions/workflows/coding-bot-codex-siwc-login.yml"
+    summary(f'[ChatGPT の承認画面を開く]({url})\n\n{NEXT.format(workflow_url=workflow_url)}\n\n承認 URL は 15 分間有効です。最後に入力なしで起動したログインだけが使えます。')
     return 0
 
 
