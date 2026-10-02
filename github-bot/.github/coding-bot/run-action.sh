@@ -1,6 +1,31 @@
 #!/bin/bash
 set -e
 
+branch_footer() {
+  local remote_status
+  if timeout 30 git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
+    printf '%s' "
+
+---
+
+🌿 Branch: \`$BRANCH_NAME\`
+📝 [View changes](https://github.com/$GITHUB_REPOSITORY/compare/$BASE_BRANCH...$BRANCH_NAME)$PR_LINK"
+  else
+    remote_status=$?
+    if [ "$remote_status" -ne 2 ]; then
+      printf 'Warning: could not check branch %s on origin (exit %s); omitting branch footer\n' \
+        "$BRANCH_NAME" "$remote_status" >&2
+    fi
+    if [ -n "$PR_LINK" ]; then
+      printf '%s' "
+
+---
+
+⚠ branch \`$BRANCH_NAME\` は push されていません（PR を作るリンクは出せません）。"
+    fi
+  fi
+}
+
 # Function to post error comments
 post_error_comment() {
   local error_message="$1"
@@ -1008,9 +1033,9 @@ if [ $ENGINE_EXIT_CODE -eq 0 ]; then
   CLAUDE_OUTPUT_CLEAN=$(echo "$CLAUDE_OUTPUT" | sed '/{{{{{pull-request-title/,/pull-request-title}}}}}/d' | sed '/{{{{{pull-request-body/,/pull-request-body}}}}}/d')
 
   # Strip trailing blank/separator lines AND any branch-footer block the agent
-  # may have written (`🌿 Branch:` / `📝 [View changes]` / `📋 [Create Pull
-  # Request]`). The harness ALWAYS appends its canonical footer below, so any
-  # agent-authored footer would duplicate. python is used because POSIX awk
+  # may have written (branch / View changes / Create Pull Request lines).
+  # The runner appends its canonical footer when the branch has been pushed,
+  # so an agent-authored footer would duplicate. python is used because POSIX awk
   # regex on multibyte emoji is not portable.
   CLAUDE_OUTPUT_CLEAN=$(python3 - "$CLAUDE_OUTPUT_CLEAN" <<'PYEOF'
 import sys, re
@@ -1221,12 +1246,7 @@ ${IMG_NOTE}"
 
   # 最終結果を投稿（ブランチ情報付き）
   gh api -X PATCH repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID \
-    -f body="${CI_RED_MARKER:+$CI_RED_MARKER$'\n\n'}$CLAUDE_OUTPUT_CLEAN
-
----
-
-🌿 Branch: \`$BRANCH_NAME\`
-📝 [View changes](https://github.com/$GITHUB_REPOSITORY/compare/$BASE_BRANCH...$BRANCH_NAME)$PR_LINK"
+    -f body="${CI_RED_MARKER:+$CI_RED_MARKER$'\n\n'}$CLAUDE_OUTPUT_CLEAN$(branch_footer)"
 
   # ⚠ 最終レポートを投稿した印。coding-bot.yml の «Report if the run left nothing» が
   # これを見て二重投稿を避ける。置かないと、そちらが必ずもう 1 通出す。

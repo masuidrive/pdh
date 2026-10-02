@@ -74,9 +74,9 @@ happened).
 **Do NOT end the report with a branch footer** like
 `🌿 Branch: \`agent/issue-N\`` / `📝 [View changes](...)` /
 `📋 [Create Pull Request](...)`. Past bot comments in
-`<conversation-history>` show those lines because the **harness appends
-them automatically** below your report. If you also write them, they
-appear twice. Stop after Summary / PR markers and let the harness add
+`<conversation-history>` show those lines because the **runner automatically
+appends them below your report only when the branch has been pushed**. If you also write them, they
+appear twice. Stop after Summary / PR markers and let the runner add
 the footer.
 
 ### `/tmp/agent-plan-summary-<ISSUE_NUMBER>.txt` — plan summary (recommended)
