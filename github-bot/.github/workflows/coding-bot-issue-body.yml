@@ -1,0 +1,31 @@
+name: coding-bot-issue-body
+
+on:
+  issues:
+    types: [opened, edited]
+
+# Serialize comment lookup + mutation so simultaneous edits cannot post twice.
+concurrency:
+  group: coding-bot-issue-body-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: ${{ github.event.action == 'opened' || github.event.changes.body != null }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/coding-bot
+      - name: Check explanatory text and update the warning
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          bash .github/coding-bot/issue-body-check.sh
