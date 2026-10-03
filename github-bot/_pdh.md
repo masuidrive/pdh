@@ -103,6 +103,20 @@ COUNT=$(printf '%s\n' "$NAMED" | grep -c . || true)
 **使ったチケットは、その Issue のものとして最後まで扱う。**close も `tickets/done/` への移動も
 通常どおりで、`issue-<N>` という名前のチケットは作らない。
 
+**引き継いだチケットの解き方と AC は、下書きとして扱う。**守るのは «書かれた時点の前提のまま、
+今のコードで成り立たない解き方が承認へ進まないこと» と «前に調べたことを捨てて、同じ調査を
+やり直さないこと» の両方である。
+
+- 書き直す前に、`ticket.md` に加えて同じ dir の `note.md`（Confirmed Facts・Prior Findings・
+  Discoveries・Open Questions）と `progress.md` を全部読む。そこにある実測と判断は、確かめ直す
+  対象であって、捨てる対象ではない
+- 課題（Why）は依頼者のものなので、そのまま使う。解き方・AC・前提は、今のコードと実測で
+  確かめ直し、成り立つものは残し、成り立たないものだけ直す。⚠ **一から組み直さない**
+- 何を残し、何をなぜ直したかを `progress.md` に 1 行ずつ書く。判断ボードの «解き方» と
+  «他案» にも、元の解き方から変えた点を出す — 承認者が、前の案との違いを見て決められるように
+- 数える機構は置けない（読んだかどうかは repo に残らない）。`progress.md` の «残した・直した» の
+  行が無ければ、reviewer はそれを欠落として指摘する
+
 生成後、本体の各セクション（Why / What + Acceptance Criteria / Architectural Invariants check / Design Decisions / Out-of-scope）を Issue・`product-brief.md` から埋める。`progress.md` は `ticket_files` により `new` が作る。経緯はここへ追記し、note は現在値だけにする（`_reference.md`「ticket / note / progress の役割分担」）。旧 ticket.sh で作られて `progress.md` が無い ticket は、stage の入口で作る。`started_at` は `start` が、`closed_at` は `close` が入れる。
 
 ## checklist gate と close
