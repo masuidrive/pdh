@@ -75,7 +75,7 @@ jobs:
 
   agent:
     needs: ci-autofix
-    # 🤖 / :robot: だけが起動の合図。bot 自身と marker 付き投稿は除外する。
+    # 🤖 / :robot: だけが起動の合図（issue の作成ではタイトルだけを見る）。bot 自身と marker 付き投稿は除外する。
     # awaiting-reply は状態表示であり、ラベルの有無では起動しない。
     if: |
       always() && !cancelled() && (needs.ci-autofix.outputs.repair == 'true' ||
@@ -86,7 +86,7 @@ jobs:
       (github.event_name == 'issue_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||
       (github.event_name == 'pull_request_review_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||
       (github.event_name == 'pull_request_review' && (contains(github.event.review.body, ':robot:') || contains(github.event.review.body, '🤖'))) ||
-      (github.event_name == 'issues' && !contains(github.event.issue.body || '', '<!-- coding-bot -->') && (contains(github.event.issue.body, ':robot:') || contains(github.event.issue.body, '🤖') || contains(github.event.issue.title, ':robot:') || contains(github.event.issue.title, '🤖')))
+      (github.event_name == 'issues' && !contains(github.event.issue.body || '', '<!-- coding-bot -->') && (contains(github.event.issue.title, ':robot:') || contains(github.event.issue.title, '🤖')))
       )))
 
     runs-on: ${{ vars.CODING_BOT_RUNNER || 'ubuntu-latest' }}
