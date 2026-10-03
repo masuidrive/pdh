@@ -1,6 +1,158 @@
 #!/bin/bash
 set -e
 
+install_pdh_pre_push_hook() {
+  [ -f scripts/check-pdh-ticket.sh ] || return 0
+  local hooks_dir hook_temp
+  hooks_dir=$(git rev-parse --git-path hooks) || return 1
+  if { [ -e "$hooks_dir/pre-push" ] || [ -L "$hooks_dir/pre-push" ]; } && \
+     ! grep -qxF '# coding-bot-pdh-pre-push' "$hooks_dir/pre-push"; then
+    echo "coding-bot: existing pre-push hook; skipping PDH hook installation"
+    return 0
+  fi
+  mkdir -p "$hooks_dir" || return 1
+  hook_temp=$(mktemp "$hooks_dir/.pre-push.XXXXXX") || return 1
+  if ! cat > "$hook_temp" <<'PDH_PRE_PUSH'
+#!/usr/bin/env bash
+# coding-bot-pdh-pre-push
+set -euo pipefail
+# Git's hook environment can pin commands to the pushing checkout's index/HEAD.
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+unset $(git rev-parse --local-env-vars)
+temp_dir=''
+cleanup() { if [ -n "$temp_dir" ]; then git worktree remove --force "$temp_dir/tree" >/dev/null 2>&1 || true; rm -rf "$temp_dir"; fi; }
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+diagnostics() {
+  # Keep each missing item under its headline; line shifts are not new failures.
+  awk '
+    /^check-pdh-ticket: FAILED$/ ||
+    /^check-pdh-ticket: 検査対象の ticket なし・起票先の検査を通過$/ ||
+    /^check-pdh-ticket: progress.md・gate の待ち行・close 前 review の記録と区間・起票先・導入後の Why の根拠の検査を通過$/ {
+      headline=""; next
+    }
+    /^check-pdh-ticket:/ { headline=$0; print; next }
+    headline && NF {
+      sub(/^[[:space:]]*/, ""); sub(/[[:space:]]*$/, "")
+      print headline " | " $0
+    }
+  ' "$1" \
+    | sed -E 's@([^[:space:]:]*/[^[:space:]:]+|[^[:space:]:]+\.[^[:space:]:]+):[0-9]+(:|[[:space:]]|$)@\1\2@g' \
+    | LC_ALL=C sort -u
+  }
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ "$local_sha" =~ ^0+$ ]] && continue
+  push_branch=''
+  case "$remote_ref" in
+    refs/heads/*) push_branch=${remote_ref#refs/heads/} ;;
+  esac
+  temp_dir=$(mktemp -d)
+  git worktree add --quiet --detach "$temp_dir/tree" "$local_sha" </dev/null
+  if [ ! -f "$temp_dir/tree/scripts/check-pdh-ticket.sh" ]; then
+    cleanup
+    temp_dir=''
+    continue
+  fi
+  # Resolve from the pushed tree, as the checker does. Base destinations have
+  # no ticket branch to check, even when local base work is ahead of origin.
+  base_ref=$(
+    cd "$temp_dir/tree" || exit 1
+    if [ -f scripts/pdh-review-range.sh ]; then
+      source scripts/pdh-review-range.sh || exit 1
+      pdh_review_base_tip || exit 1
+    fi
+    printf '%s\n' "${pdh_review_base:-origin/HEAD}"
+  ) || base_ref=''
+  base_branch=${GITHUB_BASE_REF:-$base_ref}
+  if [ "$base_branch" = origin/HEAD ]; then
+    base_branch=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD) || base_branch=''
+  fi
+  base_branch=${base_branch#origin/}
+  if [ -n "$base_branch" ] && [ "$remote_ref" = "refs/heads/$base_branch" ]; then
+    cleanup
+    temp_dir=''
+    continue
+  fi
+  # Shared refs and the inherited GITHUB_BASE_REF preserve pdh_review_base_tip.
+  # Preserve ticket ownership when check-pdh-ticket runs with a detached HEAD.
+  if (cd "$temp_dir/tree" && GITHUB_HEAD_REF="$push_branch" \
+      bash scripts/check-pdh-ticket.sh </dev/null) > "$temp_dir/push-check.log" 2>&1; then
+    cat "$temp_dir/push-check.log"
+  else
+    cat "$temp_dir/push-check.log" >&2
+    if merge_base=$(git merge-base "$local_sha" "$base_ref") && \
+       [ "$merge_base" != "$local_sha" ] && \
+       git -C "$temp_dir/tree" checkout --quiet --detach "$merge_base" </dev/null; then
+      if [ -f "$temp_dir/tree/scripts/check-pdh-ticket.sh" ]; then
+        base_status=0
+        (cd "$temp_dir/tree" && GITHUB_HEAD_REF="$push_branch" \
+          bash scripts/check-pdh-ticket.sh </dev/null) > "$temp_dir/base-check.log" 2>&1 || base_status=$?
+        cat "$temp_dir/base-check.log" >&2
+        diagnostics "$temp_dir/push-check.log" > "$temp_dir/push-diagnostics"
+        diagnostics "$temp_dir/base-check.log" > "$temp_dir/base-diagnostics"
+        LC_ALL=C comm -23 "$temp_dir/push-diagnostics" "$temp_dir/base-diagnostics" > "$temp_dir/new-diagnostics"
+        if [ "$base_status" -ne 0 ] && [ "$base_status" -ne 127 ] && \
+           [ -s "$temp_dir/push-diagnostics" ] && [ ! -s "$temp_dir/new-diagnostics" ]; then
+          echo 'coding-bot: warning: pre-existing failure on the base branch; allowing push' >&2
+          cleanup
+          temp_dir=''
+          continue
+        fi
+        if [ -s "$temp_dir/new-diagnostics" ]; then
+          echo 'coding-bot: new diagnostics:' >&2
+          cat "$temp_dir/new-diagnostics" >&2
+        fi
+      else
+        echo 'coding-bot: base checker is missing; no pre-existing failure allowance' >&2
+      fi
+    fi
+    echo 'coding-bot: push refused; fix the ticket/note in a new commit and push again. Do not use --no-verify.' >&2
+    exit 1
+  fi
+  cleanup
+  temp_dir=''
+done
+PDH_PRE_PUSH
+  then
+    rm -f "$hook_temp"
+    return 1
+  fi
+  if ! chmod +x "$hook_temp" || ! mv -f "$hook_temp" "$hooks_dir/pre-push"; then
+    rm -f "$hook_temp"
+    return 1
+  fi
+}
+
+save_unpushed_commits() {
+  RUNNER_PUSH_NOTE=''
+  RUNNER_SAVED_PUSH=0
+  # ci_autofix_finish owns the guarded push (PR head and auto-merge checks).
+  if [ "${EVENT_TYPE:-}" = workflow_run ] || [ -n "${CI_AUTOFIX_RUN_ID:-}" ]; then return 0; fi
+  local baseline count
+  if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME"; then
+    baseline="refs/remotes/origin/$BRANCH_NAME"
+  else
+    baseline="$CI_AUTOFIX_START_SHA"
+  fi
+  # Use existing tracking refs only: fetching could change the run's context.
+  if ! count=$(git rev-list --count "$baseline..refs/heads/$BRANCH_NAME"); then
+    echo 'Warning: could not inspect unpushed commits' >&2
+    RUNNER_PUSH_NOTE='⚠ push していない commit があるかを確かめられませんでした。作業が runner にだけ残り、消えた可能性があります。'
+    return 0
+  fi
+  [ "$count" -gt 0 ] || return 0
+  # The caller has restored origin's PAT auth when ORIGIN_PUSH_AUTH is pat.
+  if git push --no-verify origin "refs/heads/$BRANCH_NAME:refs/heads/$BRANCH_NAME"; then
+    RUNNER_SAVED_PUSH=1
+    RUNNER_PUSH_NOTE='⚠ agent が push していなかった commit を、ticket の検査を通さずに push しました。PR の CI が赤くなることがあります。'
+  else
+    echo 'Warning: failed to save unpushed commits' >&2
+    RUNNER_PUSH_NOTE='⚠ agent が push していなかった commit を push できませんでした。その作業は残っていません。'
+  fi
+  return 0
+}
+
 branch_footer() {
   local remote_status
   if timeout 30 git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
@@ -822,6 +974,8 @@ TASK_STATUS_FILE="/tmp/agent-tasks-$ISSUE_NUMBER.txt"         # タスク状態�
 # injected into the agent prompt; reuse them for the rest of the harness.
 TIMEOUT_VALUE=$RUN_TIMEOUT_SECONDS
 
+install_pdh_pre_push_hook || echo "Warning: failed to install the PDH pre-push hook"
+
 # 実行（エンジン実装に委譲）。バックグラウンドで起動し ENGINE_PID をセットする。
 CI_AUTOFIX_START_SHA=$(git rev-parse HEAD)
 engine_run
@@ -927,6 +1081,7 @@ rm -f -- "$CODING_BOT_NOTIFY_FILE" || true
 HEAD_BEFORE_POST=$(git rev-parse HEAD 2>/dev/null || echo "")
 # agent が origin の認証を戻していても、後処理の push は PAT で出す。
 if [ "$ORIGIN_PUSH_AUTH" = pat ]; then use_pat_for_origin; fi
+save_unpushed_commits
 
 # 空ファイルの tail は成功するので || では切り替わらない。中身がある出力を選ぶ。
 engine_output_tail() {
@@ -951,6 +1106,7 @@ engine_extract_result
 
 # 最終結果を投稿（text outputのみ、thinkingは除外）
 CLAUDE_OUTPUT=$(cat "$RESULT_OUTPUT_FILE")
+if [ -n "$RUNNER_PUSH_NOTE" ]; then CLAUDE_OUTPUT+=$'\n\n'"$RUNNER_PUSH_NOTE"; fi
 
 # CI 自動修正では、agent は commit まで。push 前の auto-merge 解除と結果の報告を保証する。
 if [ "$EVENT_TYPE" = workflow_run ]; then
@@ -1097,9 +1253,9 @@ PYEOF
       done <<< "$IMG_FILES"
       if ! git -C "$BA_W" diff --cached --quiet 2>/dev/null \
          && git -C "$BA_W" commit -q -m "artifacts: issue-${ISSUE_NUMBER}"; then
-        if git -C "$BA_W" -c "http.https://github.com/.extraheader=" push -q "$BA_REMOTE" \
+        if git -C "$BA_W" -c "http.https://github.com/.extraheader=" push --no-verify -q "$BA_REMOTE" \
              HEAD:refs/heads/bot-artifacts \
-           || git -C "$BA_W" push -q origin HEAD:refs/heads/bot-artifacts; then
+           || git -C "$BA_W" push --no-verify -q origin HEAD:refs/heads/bot-artifacts; then
           BA_PUSHED=1
         else
           echo "Warning: bot-artifacts push failed"
@@ -1126,11 +1282,11 @@ PYEOF
       git commit -q -m "chore: move review image artifacts off $BRANCH_NAME to bot-artifacts"
       # PAT があれば後処理の push にも使う。checkout の extraheader はこの操作だけ無効にする。
       if git -c "http.https://github.com/.extraheader=" \
-           push -q "https://x-access-token:${ARTIFACTS_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+           push --no-verify -q "https://x-access-token:${ARTIFACTS_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
            "HEAD:$BRANCH_NAME" 2>/dev/null; then
         ARTIFACT_PUSH_AUTH=pat
         [ -n "${CODING_BOT_GH_PAT:-}" ] || ARTIFACT_PUSH_AUTH=github_token
-      elif git push -q origin "$BRANCH_NAME" 2>/dev/null; then
+      elif git push --no-verify -q origin "$BRANCH_NAME" 2>/dev/null; then
         ARTIFACT_PUSH_AUTH="$ORIGIN_PUSH_AUTH"
       else
         echo "Warning: failed to push artifact cleanup"
@@ -1231,14 +1387,17 @@ ${IMG_NOTE}"
       && [ -n "$HOOKED" ] && CLAUDE_OUTPUT_CLEAN="$HOOKED" || echo "Warning: pdh-hooks.sh failed; posting report unchanged"
   fi
 
-  # 後処理で head が変わったとき、PAT push なら CI は既に起動するので重複 dispatch しない。
+  # 保存 push か後処理の head 更新があれば CI を起動する。PAT push は重複 dispatch しない。
   HEAD_AFTER_POST=$(git rev-parse HEAD 2>/dev/null || echo "")
-  if [ -n "$HEAD_BEFORE_POST" ] && [ -n "$HEAD_AFTER_POST" ] \
-     && [ "$HEAD_BEFORE_POST" != "$HEAD_AFTER_POST" ]; then
-    if [ "${ARTIFACT_PUSH_AUTH:-$ORIGIN_PUSH_AUTH}" = pat ]; then
+  if { [ "${RUNNER_SAVED_PUSH:-0}" = 1 ] && [ "$ORIGIN_PUSH_AUTH" = github_token ]; } || \
+     { [ -n "$HEAD_BEFORE_POST" ] && [ -n "$HEAD_AFTER_POST" ] \
+       && [ "$HEAD_BEFORE_POST" != "$HEAD_AFTER_POST" ]; }; then
+    if [ "${ARTIFACT_PUSH_AUTH:-$ORIGIN_PUSH_AUTH}" = pat ] && \
+       ! { [ "${RUNNER_SAVED_PUSH:-0}" = 1 ] && [ "$ORIGIN_PUSH_AUTH" = github_token ] \
+           && [ "$HEAD_BEFORE_POST" = "$HEAD_AFTER_POST" ]; }; then
       echo "head moved ($HEAD_BEFORE_POST -> $HEAD_AFTER_POST); PAT push already started CI — not dispatching"
     else
-      echo "⚠️ head moved after the engine finished ($HEAD_BEFORE_POST -> $HEAD_AFTER_POST); re-dispatching CI"
+      echo "⚠️ runner pushed commits after the engine finished ($HEAD_BEFORE_POST -> $HEAD_AFTER_POST); re-dispatching CI"
       gh workflow run "$CI_WORKFLOW" --ref "$BRANCH_NAME" --repo "$GITHUB_REPOSITORY" \
         || echo "Warning: failed to re-dispatch CI for $BRANCH_NAME"
     fi
@@ -1271,6 +1430,7 @@ else
 
   # エラー詳細はエンジン実装が生成する
   ERROR_DETAILS="$(engine_error_details)"
+  if [ -n "$RUNNER_PUSH_NOTE" ]; then ERROR_DETAILS+=$'\n\n'"$RUNNER_PUSH_NOTE"; fi
   TIMEOUT_MINUTES=$((TIMEOUT_VALUE / 60))
 
   # =========================================================================

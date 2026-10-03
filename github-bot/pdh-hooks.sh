@@ -365,7 +365,7 @@ fi
 if [ "$changed" -eq 1 ]; then
   git add "$note" 2>/dev/null
   if git -c user.name="pdh-hooks" -c user.email="pdh-hooks@users.noreply.github.com" commit -q -m "chore(pdh-hooks): gate の待ち行を補う（issue #${ISSUE}）" 2>/dev/null; then
-    git push -q origin "$BRANCH" 2>/dev/null || log "push に失敗（ローカルには commit 済み）"
+    git push --no-verify -q origin "$BRANCH" 2>/dev/null || log "push に失敗（ローカルには commit 済み）"
   fi
 fi
 

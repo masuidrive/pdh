@@ -115,6 +115,11 @@ note の待ち行と両方のコメントを読み、どの設問への返答か
 
 Actions の run は 1 回ごとに記憶を失う。gate や質問で停止するときは、**停止する同じ commit で note の `## Checklist` に「何の答えを待つか」と発行先（gate コメントか板の URL）を 1 行書く**（`docs/PDH-AGENTS.md`「Handover Routes」）。次の 🤖 で起動した run は、まずこの行を読んで自分が何を待っていたかを知る。トリガーコメントがどの設問への答えか一意に決まる場合だけ ticket へ反映し、対応する行を `[x]` にする。machinery の状態ファイルは同じコメントを二度処理しないための印であり、待っているかどうかの真ではない。経緯（それまでの stage 遷移・Findings・gate の答え）は同じ dir の `progress.md` を読む。
 
+待ち行の `発行先:` には、push 前に分かる URL を書く。発行済みの板の URL、無ければ issue の URL（`https://github.com/<repo>/issues/<n>`）か PR の URL を使う。
+コメントの URL を待って、Status の変更と待ち行を別々の commit にしない。同じ commit に書く。
+bot が pre-push 検査を設置している場合、検査に通らない push は拒否され、拒否メッセージに失敗が列挙される。
+拒否されたら ticket / note を新しい commit で直して push し直す。`--no-verify` で検査を迂回しない。
+
 ## 進捗コメントを無意味に増やさない
 
 - run 中の「🤖 **作業中...**」コメントは **1 個を編集し続ける**（machinery の `PROGRESS_COMMENT_ID` が担う）。stage が進むたびに新規コメントを立てない。

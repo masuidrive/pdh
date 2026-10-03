@@ -116,7 +116,7 @@ ci_autofix_finish() {
   if [ -z "$reason" ]; then
     use_pat_for_origin
     # 通常の fast-forward push。並行する人の push は上書きしない。
-    if ! git push origin "HEAD:$BRANCH_NAME"; then
+    if ! git push --no-verify origin "HEAD:$BRANCH_NAME"; then
       reason="修正 commit を push できませんでした。"
     fi
   fi
