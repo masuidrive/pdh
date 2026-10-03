@@ -6,6 +6,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -29,7 +30,12 @@ def gh_api(arguments, credential):
         # Treat only the observed missing-variable status as bootstrap.
         if "HTTP 404" in result.stderr and "variables/" in arguments[0]:
             return ""
-        raise RuntimeError("GitHub API failed (response suppressed)")
+        error = RuntimeError("GitHub API failed (response suppressed)")
+        # gh ends its error line with "(HTTP 403)"; take only that trailing status.
+        status = re.search(r"\(HTTP ([0-9]{3})\)\s*$", result.stderr)
+        if status:
+            error.http_status = status.group(1)
+        raise error
     return result.stdout.strip()
 
 
@@ -68,30 +74,39 @@ def read_access(encrypted):
 
 
 def poll_once(path, previous, dispatched_at):
-    repo = os.environ["GITHUB_REPOSITORY"]
-    encrypted = gh_api([f"repos/{repo}/actions/variables/{VARIABLE}", "--jq", ".value"],
-                       os.environ["CODING_BOT_GH_PAT"])
-    remaining = 0
-    if encrypted:
-        access, remaining = read_access(encrypted)
-        if access is not None and encrypted != previous and remaining > 360:
-            # The auth.command output goes only to Codex. Mask it before any model
-            # process starts, including delegated Codex workers.
-            if os.environ.get("GITHUB_ACTIONS") == "true":
-                print("::add-mask::" + access["access_token"], flush=True)
-            token.atomic_write(path, access)
-            if previous is not None:
-                print("::notice::SIWC access token replaced during this run.", flush=True)
-            previous = encrypted
-            dispatched_at = 0
-    # Do not wait inside auth.command. The poller requests an update and keeps
-    # serving the current file while the workflow runs. Retry dispatch after
-    # five minutes if the queued run has not published a replacement.
-    now = time.time()
-    if remaining < REFRESH_AHEAD and now - dispatched_at >= 300:
-        dispatch_refresh()
-        dispatched_at = now
-        print("::notice::SIWC access renewal requested.", flush=True)
+    stage = "read_variable"
+    try:
+        repo = os.environ["GITHUB_REPOSITORY"]
+        encrypted = gh_api([f"repos/{repo}/actions/variables/{VARIABLE}", "--jq", ".value"],
+                           os.environ["CODING_BOT_GH_PAT"])
+        remaining = 0
+        if encrypted:
+            stage = "decrypt"
+            access, remaining = read_access(encrypted)
+            if access is not None and encrypted != previous and remaining > 360:
+                stage = "install"
+                # The auth.command output goes only to Codex. Mask it before any model
+                # process starts, including delegated Codex workers.
+                if os.environ.get("GITHUB_ACTIONS") == "true":
+                    print("::add-mask::" + access["access_token"], flush=True)
+                token.atomic_write(path, access)
+                if previous is not None:
+                    print("::notice::SIWC access token replaced during this run.", flush=True)
+                previous = encrypted
+                dispatched_at = 0
+        # Do not wait inside auth.command. The poller requests an update and keeps
+        # serving the current file while the workflow runs. Retry dispatch after
+        # five minutes if the queued run has not published a replacement.
+        stage = "dispatch"
+        now = time.time()
+        if remaining < REFRESH_AHEAD and now - dispatched_at >= 300:
+            dispatch_refresh()
+            dispatched_at = now
+            print("::notice::SIWC access renewal requested.", flush=True)
+    except Exception as error:
+        # Carry only a fixed stage label to the loop; preserve the exception type.
+        error.siwc_stage = stage
+        raise
     return previous, dispatched_at
 
 
@@ -122,15 +137,22 @@ def main():
         try:
             previous, dispatched_at = poll_once(args.creds, previous, dispatched_at)
             # Keep the report latch across recovery/flapping for this run.
-        except Exception:
+        except Exception as error:
             # Endpoint data, exception text, and decrypted payloads are secret.
-            print("::error::SIWC access polling failed (details suppressed).", flush=True)
+            stage = getattr(error, "siwc_stage", "unknown")
+            kind = type(error).__name__
+            status = getattr(error, "http_status", None)
+            if isinstance(status, str) and len(status) == 3 and status.isdigit():
+                kind += f", HTTP {status}"
+            print(f"::error::SIWC access polling failed at stage={stage} "
+                  f"({kind}; details suppressed).", flush=True)
             if not reported:
                 try:
                     report_failure()
                     reported = True
-                except Exception:
-                    print("::error::SIWC auth Issue could not be requested.", flush=True)
+                except Exception as report_error:
+                    print("::error::SIWC auth Issue could not be requested "
+                          f"({type(report_error).__name__}; details suppressed).", flush=True)
         # A queued updater can publish between slow polls. Observe bootstrap
         # and requested replacements promptly while ordinary polling stays slow.
         if previous is None or dispatched_at:
