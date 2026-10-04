@@ -129,7 +129,7 @@ save_unpushed_commits() {
   RUNNER_SAVED_PUSH=0
   # ci_autofix_finish owns the guarded push (PR head and auto-merge checks).
   if [ "${EVENT_TYPE:-}" = workflow_run ] || [ -n "${CI_AUTOFIX_RUN_ID:-}" ]; then return 0; fi
-  local baseline count
+  local baseline count open_pr
   if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME"; then
     baseline="refs/remotes/origin/$BRANCH_NAME"
   else
@@ -145,7 +145,11 @@ save_unpushed_commits() {
   # The caller has restored origin's PAT auth when ORIGIN_PUSH_AUTH is pat.
   if git push --no-verify origin "refs/heads/$BRANCH_NAME:refs/heads/$BRANCH_NAME"; then
     RUNNER_SAVED_PUSH=1
-    RUNNER_PUSH_NOTE='⚠ agent が push していなかった commit を、ticket の検査を通さずに push しました。PR の CI が赤くなることがあります。'
+    echo "coding-bot: saved unpushed commits for $BRANCH_NAME"
+    # Keep the warning when PR lookup fails; only a confirmed absence suppresses it.
+    if ! open_pr=$(gh pr list --head "$BRANCH_NAME" --state open --json number -q '.[0].number') || [ -n "$open_pr" ]; then
+      RUNNER_PUSH_NOTE='⚠ agent が push していなかった commit を、ticket の検査を通さずに push しました。PR の CI が赤くなることがあります。'
+    fi
   else
     echo 'Warning: failed to save unpushed commits' >&2
     RUNNER_PUSH_NOTE='⚠ agent が push していなかった commit を push できませんでした。その作業は残っていません。'
