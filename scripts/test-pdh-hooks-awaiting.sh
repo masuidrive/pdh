@@ -36,6 +36,9 @@ set -uo pipefail
 { printf '%q\t' "$@"; printf '\n'; } >> "$GH_LOG"
 case "${1:-} ${2:-}" in
   'pr list') printf '%s\n' "${FAKE_OPEN_PR:-}" ;;
+  'issue view')
+    [ "${FAKE_ISSUE_STATE-OPEN}" != fail ] || exit 1
+    printf '%s\n' "${FAKE_ISSUE_STATE-OPEN}" ;;
   'issue edit') ;;
   'label list')
     printf '%s\n' PDH-open PDH-ticket-review PDH-ticket-human-review \
@@ -51,7 +54,7 @@ export GH_LOG="$TMP_DIR/gh.log"
 
 expect() {
   local label=$1 cmd=$2 pr=$3 ticket=$4 expected=$5
-  local repo output rc
+  local repo output rc notify_kind
   checks=$((checks + 1))
   repo="$TMP_DIR/repo-$checks"
   must mkdir -p "$repo/tickets"
@@ -74,7 +77,7 @@ expect() {
   fi
   : > "$GH_LOG"
   # final は stdin から最終レポートを読む。repo に remote は設定しない。
-  output=$(cd "$repo" && FAKE_OPEN_PR="$pr" bash "$HOOKS" "$cmd" 1 test-branch 100 2>&1 <<'REPORT'
+  output=$(cd "$repo" && FAKE_OPEN_PR="$pr" CODING_BOT_NOTIFY_FILE="$repo/notify" bash "$HOOKS" "$cmd" 1 test-branch 100 2>&1 <<'REPORT'
 確認した結果を報告します。
 REPORT
   ); rc=$?
@@ -83,6 +86,15 @@ REPORT
     return
   fi
   expect_labels "$label" "$expected"
+  if [ "$#" -ge 6 ]; then
+    checks=$((checks + 1))
+    notify_kind=$(sed -n 's/^kind=//p' "$repo/notify" 2>/dev/null)
+    if [ "$notify_kind" != "$6" ]; then
+      fail "$label: 通知 kind は <$6> を期待、実際は <$notify_kind>"
+    else
+      printf 'PASS: %s（通知 kind）\n' "$label"
+    fi
+  fi
 }
 
 expect_labels() {
@@ -160,7 +172,10 @@ expect '4. start + PR 無し' start '' none '1 remove'
 expect '5. final（待ち行あり）+ open PR 11' final 11 waiting $'1 remove\n11 add'
 expect '6. final（待ち行あり）+ PR 無し' final '' waiting '1 add'
 expect '7. final（待ち行なし）+ open PR 11' final 11 none $'1 remove\n11 remove'
-expect '8. final（ticket 未作成）+ PR 無し' final '' missing '1 add'
+expect '8. final（ticket 未作成）+ PR 無し' final '' missing '1 add' question
+FAKE_ISSUE_STATE=CLOSED expect '15. final（ticket 未作成）+ issue CLOSED' final '' missing '1 remove' ''
+FAKE_ISSUE_STATE=fail expect '16. final（ticket 未作成）+ view 失敗' final '' missing '1 add' question
+FAKE_ISSUE_STATE='' expect '17. final（ticket 未作成）+ view 空' final '' missing '1 add' question
 expect '13. final（done 済みの close gate）+ open PR 11' final 11 done $'1 remove\n11 add'
 expect '14. final（done 済み）+ PR 無し' final '' done ''
 

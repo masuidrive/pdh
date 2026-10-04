@@ -208,9 +208,16 @@ if [ "$TICKET_STATE" != active ]; then
   #                なら待ち印を PR に付ける（start が Issue と PR の両方から外しているため）
   #   未作成     : どちらも無い。bot が «足りないことを聞く» 段で止まっている（_issue.md A0）
   # 後者でラベルを付けないと、依頼者の画面に «あなたの番» が 1 つも出ない。
+  # ただし、ticket を作らずに issue を閉じた場合は人の番ではないので、待ち印を外し通知しない。
+  # issue の状態を読めないときは、依頼者の «あなたの番» を消さないように待ち印を付ける。
   if [ -z "$TICKET_STATE" ]; then
-    set_awaiting add "$ISSUE" "$BRANCH" "ticket 未作成のまま run が終わった＝人に聞いている"
-    write_notify "$ISSUE" question "" "$CID" "$AWAITING_PR"
+    issue_state=$(gh issue view "$ISSUE" --repo "$REPO" --json state -q .state 2>/dev/null) || issue_state=""
+    if [ "$issue_state" = CLOSED ]; then
+      set_awaiting remove "$ISSUE" "$BRANCH" "ticket を作らずに issue を閉じた"
+    else
+      set_awaiting add "$ISSUE" "$BRANCH" "ticket 未作成のまま run が終わった＝人に聞いている"
+      write_notify "$ISSUE" question "" "$CID" "$AWAITING_PR"
+    fi
   else
     log "issue #$ISSUE は done 済み。補正なし"
     status=$(read_status "$dir/note.md")
