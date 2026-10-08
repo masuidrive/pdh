@@ -38,6 +38,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          # merge された PR は、もう誰の返事も待っていない。PR の待ち印を外す。
+          # ⚠ PR が開いている間、待ち印は PR にだけ付く（pdh-hooks.sh）。merge せずに閉じたときは
+          # closed-unmerged が外すが、merge の経路で外す処理が無く、merge 済みの PR に残っていた。
+          # 下の早い exit（Issue が閉じ済み・ticket が done に無い など）より前に置く。
+          gh issue edit "$PR_NUMBER" --repo "$REPO" --remove-label awaiting-reply >/dev/null 2>&1 \
+            && echo "PR #$PR_NUMBER の awaiting-reply を外した" || true
+
           # head ref 'agent/issue-<N>' から Issue 番号を取り出す
           ISSUE_NUMBER="${HEAD_REF##*issue-}"
           if ! printf '%s' "$ISSUE_NUMBER" | grep -qE '^[0-9]+$'; then
