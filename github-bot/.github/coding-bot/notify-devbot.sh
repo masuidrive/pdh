@@ -13,7 +13,7 @@ if ! [[ "$issue" =~ ^[0-9]+$ ]] ||
    { [ -n "$stage" ] && ! [[ "$stage" =~ ^PDH-[a-z-]+$ ]]; }; then
   warn '不正な引数。送信しない'; exit 0
 fi
-case "$kind" in question|ticket_gate|close_gate|blocked|failed|merged|deployed|deploy_failed) ;;
+case "$kind" in question|ticket_gate|close_gate|blocked|failed|mergeable|merged|deployed|deploy_failed) ;;
   *) warn '不正な kind。送信しない'; exit 0 ;;
 esac
 body=$(jq -cn --arg issue "$issue" --arg kind "$kind" --arg stage "$stage" \
