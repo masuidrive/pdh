@@ -2,7 +2,7 @@ name: coding-bot-finalize
 
 # pr-merge は merge を close 承認とし、API で Issue と stage ラベルを更新する。
 # merge / pr の Issue close は bot の次の run に任せる。
-# checkout・repo のコード実行・default branch への push は行わない。
+# checkout は slack-desk への通知 script（notify-devbot.sh）だけ。repo のほかのコードは実行せず、default branch へ push しない。
 # done への移動は PR 作成後、ready にする前にその PR の差分へ載せる。
 
 on:
@@ -25,6 +25,7 @@ jobs:
       # 下の delete-branch job が読む。ticket が done/ へ入っていない PR の branch は消さない
       # — そのときの直し方が «branch 上で close をやり直す» だからである（下のコメント参照）。
       landed: ${{ steps.check.outputs.landed }}
+      issue: ${{ steps.check.outputs.issue }}
 
     steps:
       - name: Close the issue if the ticket actually landed
@@ -52,6 +53,7 @@ jobs:
             exit 0
           fi
           echo "Issue #$ISSUE_NUMBER (head: $HEAD_REF, PR: #$PR_NUMBER)"
+          echo "issue=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
 
           # ⚠ ここは «実行» ではなく «検査» である。ticket を done/ へ移すのは PR の仕事で、
           # この job はそれが本当に入っていたかだけを見る。入っていなければ Issue を閉じない
@@ -131,6 +133,25 @@ jobs:
           else
             echo "Warning: gh issue close failed; issue stays open."
           fi
+
+      # merge されたことを slack-desk に知らせる（依頼した人の Slack のスレッドに書かれる）。
+      # 本番の deploy が走らない変更では本番に出た報告が来ないので、ここが依頼した人への最後の知らせになる。
+      # 通知の失敗は job の成否を変えない（notify-devbot.sh が吸収する）。URL か秘密が無ければ送らない。
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        if: steps.check.outputs.issue != ''
+        with:
+          sparse-checkout: .github/coding-bot/notify-devbot.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Tell slack-desk that the PR was merged
+        if: steps.check.outputs.issue != ''
+        env:
+          ISSUE_NUMBER: ${{ steps.check.outputs.issue }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CODING_BOT_NOTIFY_URL: ${{ vars.CODING_BOT_NOTIFY_URL }}
+          CODING_BOT_NOTIFY_SECRET: ${{ secrets.CODING_BOT_NOTIFY_SECRET }}
+        run: bash .github/coding-bot/notify-devbot.sh "$ISSUE_NUMBER" merged "" "" "$PR_NUMBER" "$RUN_URL"
 
   # merge されずに閉じた agent/issue-<N> の PR。
   #
