@@ -26,6 +26,12 @@ on:
         description: "Only verify the prebuilt-image devcontainer path (no agent run)"
         type: boolean
         default: true
+      # bot の run が起票した 🤖 issue を、issue の作成と同じに動かす。GITHUB_TOKEN で作った issue は
+      # issues: opened を起こさない（GitHub が workflow の連鎖を止める）ので、run の終わりにここから呼ぶ
+      issue:
+        description: "Run the agent for this issue as if it had just been opened (verify_only is ignored)"
+        type: string
+        default: ''
 
 # ⚠ 同じ issue で 2 つの run を同時に走らせない。走らせると 2 つの agent が同じ
 # agent/issue-<N> ブランチへ push を取り合い、進捗コメントを奪い合い、ラベルが往復し、
@@ -34,7 +40,7 @@ on:
 # cancel-in-progress: false — 走っている方を殺さず、次を待たせる。人の 🤖 コメントは
 # «前の作業を捨てて» の意味ではないため。
 concurrency:
-  group: coding-bot-${{ inputs.ci_autofix_pr || github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  group: coding-bot-${{ inputs.ci_autofix_pr || inputs.issue || github.event.issue.number || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: false
   # 判定と修正を同じロックの中に置く。single では待機 run が押し出され、
   # count だけ残って修正が走らない／緑を見落とすため max にする。
@@ -98,6 +104,9 @@ jobs:
       CODING_BOT_SERVICE: ${{ vars.CODING_BOT_SERVICE || 'app' }}
       CODING_BOT_USER: ${{ vars.CODING_BOT_USER || 'node' }}
       CODING_BOT_POST_CREATE: ${{ vars.CODING_BOT_POST_CREATE || '' }}
+      # workflow_dispatch で issue を渡されたら、その issue が作られたときと同じに扱う
+      BOT_EVENT: ${{ github.event_name == 'workflow_dispatch' && inputs.issue != '' && 'issues' || github.event_name }}
+      BOT_ISSUE: ${{ inputs.ci_autofix_pr || inputs.issue || github.event.issue.number || github.event.pull_request.number }}
     permissions:
       contents: write
       pull-requests: write
@@ -109,20 +118,22 @@ jobs:
       # ステップ1: 即座に 👀 リアクションを追加
       - name: Add eyes reaction to comment
         run: |
+          # この run が起票した issue を、終わりに見分けるための時刻
+          echo "BOT_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
           # イベントタイプに応じてコメントIDとURLを設定
-          if [ "${{ github.event_name }}" = "issue_comment" ] || [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
+          if [ "$BOT_EVENT" = "issue_comment" ] || [ "$BOT_EVENT" = "pull_request_review_comment" ]; then
             COMMENT_ID="${{ github.event.comment.id }}"
             REACTION_URL="https://api.github.com/repos/${{ github.repository }}/issues/comments/$COMMENT_ID/reactions"
-          elif [ "${{ github.event_name }}" = "pull_request_review" ]; then
+          elif [ "$BOT_EVENT" = "pull_request_review" ]; then
             COMMENT_ID="${{ github.event.review.id }}"
             REACTION_URL="https://api.github.com/repos/${{ github.repository }}/pulls/comments/$COMMENT_ID/reactions"
-          elif [ "${{ github.event_name }}" = "issues" ]; then
-            COMMENT_ID="${{ github.event.issue.number }}"
+          elif [ "$BOT_EVENT" = "issues" ]; then
+            COMMENT_ID="$BOT_ISSUE"
             REACTION_URL="https://api.github.com/repos/${{ github.repository }}/issues/$COMMENT_ID/reactions"
           fi
 
           if [ -n "$COMMENT_ID" ]; then
-            echo "Adding 👀 reaction (event: ${{ github.event_name }}, id: $COMMENT_ID)"
+            echo "Adding 👀 reaction (event: $BOT_EVENT, id: $COMMENT_ID)"
             curl -X POST \
               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
@@ -239,16 +250,16 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GITHUB_RUN_ID: ${{ github.run_id }}
-          ISSUE_NUMBER: ${{ inputs.ci_autofix_pr || github.event.issue.number || github.event.pull_request.number }}
+          ISSUE_NUMBER: ${{ env.BOT_ISSUE }}
           CI_AUTOFIX_RUN_ID: ${{ needs.ci-autofix.outputs.run_id }}
           CI_AUTOFIX_HEAD_SHA: ${{ needs.ci-autofix.outputs.head_sha }}
-          EVENT_TYPE: ${{ github.event_name }}
+          EVENT_TYPE: ${{ env.BOT_EVENT }}
           COMMENT_ID: ${{ github.event.comment.id || github.event.review.id }}
           DEVCONTAINER_CONFIG_PATH: .devcontainer/devcontainer.json
           CODING_BOT_CI_WORKFLOW: ${{ vars.CODING_BOT_CI_WORKFLOW || 'ci.yml' }}
           CODING_BOT_PROGRESS_INTERVAL: ${{ vars.CODING_BOT_PROGRESS_INTERVAL || 60 }}
           CODING_BOT_TIMEOUT: ${{ vars.CODING_BOT_TIMEOUT || 5400 }}
-          VERIFY_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_only && 'true' || '' }}
+          VERIFY_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.issue == '' && inputs.verify_only && 'true' || '' }}
         run: |
           set -euo pipefail
           compose_args=(-p "$CODING_BOT_COMPOSE_PROJECT" -f "$CODING_BOT_COMPOSE_FILE")
@@ -291,26 +302,26 @@ jobs:
         if: failure()
         run: |
           # イベントタイプに応じてコメントIDとURLを設定
-          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+          if [ "$BOT_EVENT" = "issue_comment" ]; then
             COMMENT_ID="${{ github.event.comment.id }}"
             REACTIONS_URL="https://api.github.com/repos/${{ github.repository }}/issues/comments/$COMMENT_ID/reactions"
             DELETE_URL_PREFIX="https://api.github.com/repos/${{ github.repository }}/issues/comments/$COMMENT_ID/reactions"
-          elif [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
+          elif [ "$BOT_EVENT" = "pull_request_review_comment" ]; then
             COMMENT_ID="${{ github.event.comment.id }}"
             REACTIONS_URL="https://api.github.com/repos/${{ github.repository }}/pulls/comments/$COMMENT_ID/reactions"
             DELETE_URL_PREFIX="https://api.github.com/repos/${{ github.repository }}/pulls/comments/$COMMENT_ID/reactions"
-          elif [ "${{ github.event_name }}" = "pull_request_review" ]; then
+          elif [ "$BOT_EVENT" = "pull_request_review" ]; then
             COMMENT_ID="${{ github.event.review.id }}"
             REACTIONS_URL="https://api.github.com/repos/${{ github.repository }}/pulls/comments/$COMMENT_ID/reactions"
             DELETE_URL_PREFIX="https://api.github.com/repos/${{ github.repository }}/pulls/comments/$COMMENT_ID/reactions"
-          elif [ "${{ github.event_name }}" = "issues" ]; then
-            COMMENT_ID="${{ github.event.issue.number }}"
+          elif [ "$BOT_EVENT" = "issues" ]; then
+            COMMENT_ID="$BOT_ISSUE"
             REACTIONS_URL="https://api.github.com/repos/${{ github.repository }}/issues/$COMMENT_ID/reactions"
             DELETE_URL_PREFIX="https://api.github.com/repos/${{ github.repository }}/issues/$COMMENT_ID/reactions"
           fi
 
           if [ -n "$COMMENT_ID" ]; then
-            echo "Handling error (event: ${{ github.event_name }}, id: $COMMENT_ID)"
+            echo "Handling error (event: $BOT_EVENT, id: $COMMENT_ID)"
 
             # 既存のリアクションを取得して 👀 を見つける
             REACTIONS=$(curl -s \
@@ -344,11 +355,11 @@ jobs:
       # workspace の通知ファイルとは別に、イベントと GitHub API から依頼 issue を決める。
       - name: Resolve devbot notification issue
         id: notification_context
-        if: always() && github.event_name != 'workflow_dispatch'
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.issue != '')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          EVENT_NUMBER: ${{ inputs.ci_autofix_pr || github.event.issue.number || github.event.pull_request.number }}
+          EVENT_NUMBER: ${{ env.BOT_ISSUE }}
           EVENT_IS_PR: ${{ github.event_name == 'workflow_run' || github.event.issue.pull_request != null || github.event.pull_request != null }}
         run: |
           set -uo pipefail
@@ -384,7 +395,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          ISSUE: ${{ inputs.ci_autofix_pr || github.event.issue.number || github.event.pull_request.number }}
+          ISSUE: ${{ env.BOT_ISSUE }}
           TRUSTED_ISSUE: ${{ steps.notification_context.outputs.issue }}
           TRUSTED_PR: ${{ steps.notification_context.outputs.pr }}
           CONCLUSION: ${{ job.status }}
@@ -425,7 +436,7 @@ jobs:
           fi
 
       - name: Tell devbot why the run stopped
-        if: always() && github.event_name != 'workflow_dispatch'
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.issue != '')
         env:
           TRUSTED_ISSUE: ${{ steps.notification_context.outputs.issue }}
           TRUSTED_PR: ${{ steps.notification_context.outputs.pr }}
@@ -470,4 +481,31 @@ jobs:
             fi
           fi
           "$RUNNER_TEMP/notify-devbot.sh" "$issue" "$kind" "$stage" "$comment_id" "$pr" "$RUN_URL" || true
+          exit 0
+
+      # ⚠ この run が起票した 🤖 issue を動かす。run の中の起票は GITHUB_TOKEN で行うので、GitHub は
+      #   issues: opened から workflow を起こさない（workflow の連鎖を止める決まり）。そのままだと、
+      #   🤖 付きでも誰も気づかないまま止まる。workflow_dispatch は GITHUB_TOKEN からでも起動できるので、
+      #   issue の番号を渡して、作られたときと同じ作業を始めさせる。
+      #   ⚠ 同じ時間に別の run も起票していると、両方の run が同じ issue を見つける。
+      #   👀（作業を始めた印）が付いていれば、もう動いているとみなして呼ばない。
+      - name: Start runs for 🤖 issues this run opened
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.issue != '')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          [ -n "${BOT_STARTED_AT:-}" ] || { echo "開始時刻が無い。何もしない"; exit 0; }
+          gh issue list --repo "$REPO" --state open --author app/github-actions \
+            --search "created:>=$BOT_STARTED_AT" --json number,title,body --limit 20 \
+            | jq -r '.[] | select((.title | test("🤖|:robot:")) and ((.body // "") | contains("<!-- coding-bot -->") | not)) | .number' \
+            | while read -r n; do
+                [ "$n" = "${BOT_ISSUE:-}" ] && continue
+                eyes=$(gh api "repos/$REPO/issues/$n/reactions" --jq '[.[] | select(.content == "eyes")] | length' 2>/dev/null || echo 0)
+                if [ "${eyes:-0}" != 0 ]; then echo "#$n はもう動いている"; continue; fi
+                echo "#$n の作業を始めさせる"
+                gh workflow run coding-bot.yml --repo "$REPO" -f issue="$n" -f verify_only=false \
+                  || echo "::warning::#$n の coding-bot を起動できませんでした。issue に 🤖 でコメントすると始まります"
+              done
           exit 0

@@ -177,6 +177,7 @@ bot は stage 遷移に応じて **issue の PDH stage ラベルを更新する*
   - Slack などから起票する仕組み（devbot）も同じ既定にする
   - ⚠ **上の local（`github_bot.create_issue`）で作る issue には付けない。**端末の session が続きを持っている ticket なので、付けると bot が同じ ticket で並行して動き出す
   - 数える機構は置けない。`gh issue create` は repo の差分に残らない
+  - ⚠ **bot の run の中で起票した 🤖 issue は、その場では動かない。**run の中の `gh issue create` は `GITHUB_TOKEN` で行うので、GitHub は `issues: opened` から workflow を起こさない（workflow の連鎖を止める決まり）。`coding-bot.yml` の最後の step が、この run が起票した 🤖 issue を見つけて `workflow_dispatch`（`issue` に番号を渡す）で作業を始めさせる。agent は自分で起動しようとしない
 
 ## bot への依頼には、手順を書かない
 
