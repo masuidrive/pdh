@@ -1,15 +1,55 @@
 #!/bin/bash
 set -e
 
+report_pr_task_result() {
+  local body="$1" attempt
+  for attempt in 1 2; do
+    if gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID" -f body="$body"; then
+      : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported"
+      return 0
+    fi
+  done
+  echo 'Warning: could not update task progress; workflow fallback will retry' >&2
+  return 1
+}
+
+dispatch_branch_ci() {
+  gh workflow run "$CI_WORKFLOW" --ref "$BRANCH_NAME" --repo "$GITHUB_REPOSITORY" \
+    || echo "Warning: failed to re-dispatch CI for $BRANCH_NAME"
+}
+
+
+exclude_runner_markers() {
+  local exclude_file marker
+  exclude_file=$(git rev-parse --git-path info/exclude) || return 1
+  mkdir -p "$(dirname "$exclude_file")" || return 1
+  touch "$exclude_file" || return 1
+  for marker in /.coding-bot-task-progress /.coding-bot-reported /.coding-bot-notify; do
+    grep -qxF "$marker" "$exclude_file" || printf '%s\n' "$marker" >> "$exclude_file" || return 1
+  done
+}
+
+
 install_pdh_pre_push_hook() {
-  [ -f scripts/check-pdh-ticket.sh ] || return 0
   local hooks_dir hook_temp
   hooks_dir=$(git rev-parse --git-path hooks) || return 1
-  if { [ -e "$hooks_dir/pre-push" ] || [ -L "$hooks_dir/pre-push" ]; } && \
-     ! grep -qxF '# coding-bot-pdh-pre-push' "$hooks_dir/pre-push"; then
-    echo "coding-bot: existing pre-push hook; skipping PDH hook installation"
+  if [ -e "$hooks_dir/pre-push" ] || [ -L "$hooks_dir/pre-push" ]; then
+    if grep -qxE '# coding-bot-(pdh|pr-scope)-pre-push' "$hooks_dir/pre-push"; then
+      rm -f -- "$hooks_dir/pre-push" || return 1
+    else
+      if [ -n "${PR_INSTRUCTION:-}" ]; then
+        echo "coding-bot: cannot install PR scope hook: existing foreign pre-push hook" >&2
+        return 1
+      fi
+      echo "coding-bot: existing pre-push hook; skipping hook installation"
+      return 0
+    fi
+  fi
+  if [ -n "${PR_INSTRUCTION:-}" ]; then
+    python3 "$SCRIPT_DIR/pr-instruction-scope.py" install "$BRANCH_NAME" "$HEAD_SHA" "$PR_ALLOWED_PATHS" || return $?
     return 0
   fi
+  [ -f scripts/check-pdh-ticket.sh ] || return 0
   mkdir -p "$hooks_dir" || return 1
   hook_temp=$(mktemp "$hooks_dir/.pre-push.XXXXXX") || return 1
   if ! cat > "$hook_temp" <<'PDH_PRE_PUSH'
@@ -127,6 +167,8 @@ PDH_PRE_PUSH
 save_unpushed_commits() {
   RUNNER_PUSH_NOTE=''
   RUNNER_SAVED_PUSH=0
+  # A dispatched task owns its push boundary; never save an unvalidated partial result.
+  if [ -n "${PR_INSTRUCTION:-}" ]; then return 0; fi
   # ci_autofix_finish owns the guarded push (PR head and auto-merge checks).
   if [ "${EVENT_TYPE:-}" = workflow_run ] || [ -n "${CI_AUTOFIX_RUN_ID:-}" ]; then return 0; fi
   local baseline count open_pr
@@ -186,6 +228,13 @@ branch_footer() {
 post_error_comment() {
   local error_message="$1"
   local workflow_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+  if [ -n "${PR_INSTRUCTION:-}" ] && [ -n "${PROGRESS_COMMENT_ID:-}" ]; then
+    report_pr_task_result "## ❌ 指定仕事の失敗
+$error_message
+
+[実行ログ]($workflow_url)" || true
+    return 0
+  fi
 
   if [ -n "$PROGRESS_COMMENT_ID" ] && [ -n "$GITHUB_REPOSITORY" ] && [ -n "$ISSUE_NUMBER" ]; then
     echo "📝 Posting error comment..."
@@ -236,6 +285,22 @@ trap 'handle_unexpected_error $LINENO' ERR
 
 # Resolve this script's directory before any cd, so we can source engine files.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Keep trusted runner/engine/hooks before any run checks out an older PR branch.
+RUNNER_DIR=$(mktemp -d)
+cp -R "$SCRIPT_DIR/." "$RUNNER_DIR/"
+SCRIPT_DIR="$RUNNER_DIR"
+exclude_runner_markers
+if [ -n "${PR_INSTRUCTION:-}" ]; then
+  rm -f -- "${GITHUB_WORKSPACE:-.}/.coding-bot-task-progress" "${GITHUB_WORKSPACE:-.}/.coding-bot-reported"
+fi
+# Capture the dispatched-task rules before checking out an older PR branch.
+PR_TASK_RULES=""
+if [ -n "${PR_INSTRUCTION:-}" ]; then
+  PR_TASK_RULES=$(cat "$SCRIPT_DIR/_instruction.md")
+  # Read repository policy from the trusted checkout, before switching to PR code.
+  # Dispatch instructions cannot widen this allowlist.
+  PR_ALLOWED_PATHS=$(python3 "$SCRIPT_DIR/pr-instruction-scope.py" policy .github/pr-instruction-policy.json "${PR_TASK_ALLOWED_PATHS:-}")
+fi
 # トリガーの出どころを正しく取る 2 つ（event 別の API / PR の出自）。承認判定とは無関係。
 source "$SCRIPT_DIR/trigger-source.sh"
 source "$SCRIPT_DIR/ci-autofix-result.sh"
@@ -450,7 +515,8 @@ if [ "$IS_PR" = true ]; then
 
   # PR head に対する直近 CI (test-all) が失敗していれば失敗ログ末尾を context に注入する。
   # command substitution にすると、最終報告用の CI_RED_MARKER が subshell に消える。
-  build_ci_section "$BRANCH_NAME" "$HEAD_SHA"
+  CI_SECTION=""
+  if [ -z "${PR_INSTRUCTION:-}" ]; then build_ci_section "$BRANCH_NAME" "$HEAD_SHA"; fi
   # 観測用: 注入有無を workflow ログに残す（内容は出さず長さのみ）。0 bytes = 失敗 CI 無し。
   echo "🔎 build_ci_section: ${#CI_SECTION} bytes injected for $BRANCH_NAME @ ${HEAD_SHA:0:7}"
 
@@ -511,7 +577,14 @@ fi
 # COMMENT_ID が設定されている場合、そのコメントがトリガー（＝ユーザの指示）
 # それ以外のコメントは過去の会話ログとして参考情報扱い
 
-if [ "$EVENT_TYPE" = workflow_run ]; then
+if [ -n "${PR_INSTRUCTION:-}" ]; then
+  USER_REQUEST="$PR_INSTRUCTION"
+  TRIGGER_COMMENT=""
+  TRIGGER_AUTHOR=""
+  COMMENT_ID=""
+  # Task input is the sole request. PR comments are not forwarded as instructions/history.
+  ALL_COMMENTS_JSON='[]'
+elif [ "$EVENT_TYPE" = workflow_run ]; then
   USER_REQUEST="CI の失敗を直す。指定された run の失敗を再現し、コードかテストを直す commit を作ってください。"
   TRIGGER_COMMENT=""
   TRIGGER_AUTHOR=""
@@ -558,7 +631,9 @@ fi
 
 # main を merge
 echo "🔀 Merging origin/$BASE_BRANCH into $BRANCH_NAME..."
-MERGE_OUTPUT=$(git merge origin/$BASE_BRANCH --no-edit 2>&1) || MERGE_EXIT_CODE=$?
+if [ -z "${PR_INSTRUCTION:-}" ]; then
+  MERGE_OUTPUT=$(git merge origin/$BASE_BRANCH --no-edit 2>&1) || MERGE_EXIT_CODE=$?
+fi
 MERGE_EXIT_CODE=${MERGE_EXIT_CODE:-0}
 
 CONFLICT_SECTION=""
@@ -765,14 +840,18 @@ $extra"
 }
 
 # コンテキスト別の追加プロンプト: PR なら _pr.md、Issue なら _issue.md
-if [ "${IS_PR:-false}" = "true" ]; then
+if [ -n "${PR_INSTRUCTION:-}" ]; then
+  SYSTEM_PROMPT="$SYSTEM_PROMPT
+
+$PR_TASK_RULES"
+elif [ "${IS_PR:-false}" = "true" ]; then
   append_prompt "$SCRIPT_DIR/_pr.md"
 else
   append_prompt "$SCRIPT_DIR/_issue.md"
 fi
 
 # _github-issue.md も prompt に連結し、コメントの規則を必ず届ける。
-if [ -f product-brief.md ] && [ -d tickets ]; then
+if [ -z "${PR_INSTRUCTION:-}" ] && [ -f product-brief.md ] && [ -d tickets ]; then
   append_prompt "$SCRIPT_DIR/_pdh.md"
   append_prompt "$SCRIPT_DIR/_github-issue.md"
 fi
@@ -817,6 +896,7 @@ fi
 if [ -n "${CI_AUTOFIX_RUN_ID:-}" ]; then
   ci_autofix_prepare || { echo 'auto-merge の解除または PR への通知に失敗したため、agent を起動しません。' >&2; exit 1; }
 fi
+export ORIGIN_PUSH_AUTH
 
 source "$ENGINE_FILE"
 
@@ -826,6 +906,9 @@ PROGRESS_COMMENT_ID=$(gh api repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comme
   -f body="🤖 **作業中...**" --jq '.id')
 
 echo "Progress comment ID: $PROGRESS_COMMENT_ID"
+if [ -n "${PR_INSTRUCTION:-}" ]; then
+  printf '%s\n' "$PROGRESS_COMMENT_ID" > "${GITHUB_WORKSPACE:-.}/.coding-bot-task-progress"
+fi
 
 # CI 環境でのエンジン認証設定（エンジン実装に委譲）
 engine_setup_auth
@@ -978,7 +1061,11 @@ TASK_STATUS_FILE="/tmp/agent-tasks-$ISSUE_NUMBER.txt"         # タスク状態�
 # injected into the agent prompt; reuse them for the rest of the harness.
 TIMEOUT_VALUE=$RUN_TIMEOUT_SECONDS
 
-install_pdh_pre_push_hook || echo "Warning: failed to install the PDH pre-push hook"
+if [ -n "${PR_INSTRUCTION:-}" ]; then
+  install_pdh_pre_push_hook
+else
+  install_pdh_pre_push_hook || echo "Warning: failed to install the PDH pre-push hook"
+fi
 
 # 実行（エンジン実装に委譲）。バックグラウンドで起動し ENGINE_PID をセットする。
 CI_AUTOFIX_START_SHA=$(git rev-parse HEAD)
@@ -1105,12 +1192,35 @@ if [ "$ENGINE_EXIT_CODE" -ne 0 ]; then
   echo "---- end engine output ----"
 fi
 
+# Inspect the pushed tree too, even if the agent bypassed the local hook.
+PR_SCOPE_RESULT=''
+if [ -n "${PR_INSTRUCTION:-}" ]; then
+  if ! git fetch origin "refs/heads/$BRANCH_NAME:refs/remotes/origin/$BRANCH_NAME" ||
+     ! python3 "$SCRIPT_DIR/pr-instruction-scope.py" verify "$BRANCH_NAME" "$HEAD_SHA" "$PR_ALLOWED_PATHS"; then
+    ENGINE_EXIT_CODE=1
+    PR_SCOPE_RESULT="指定仕事のpush結果がrunnerの範囲検査を通りませんでした。[実行ログ](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+  fi
+fi
+
 # 最終結果を RESULT_OUTPUT_FILE に抽出（エンジン実装に委譲）
 engine_extract_result
 
 # 最終結果を投稿（text outputのみ、thinkingは除外）
 CLAUDE_OUTPUT=$(cat "$RESULT_OUTPUT_FILE")
+if [ -n "${PR_SCOPE_RESULT:-}" ]; then CLAUDE_OUTPUT+=$'\n\n'"$PR_SCOPE_RESULT"; fi
 if [ -n "$RUNNER_PUSH_NOTE" ]; then CLAUDE_OUTPUT+=$'\n\n'"$RUNNER_PUSH_NOTE"; fi
+
+# A limited PR task must not enter normal ticket/label/artifact post-processing.
+if [ -n "${PR_INSTRUCTION:-}" ]; then
+  if [ "${ORIGIN_PUSH_AUTH:-}" = github_token ]; then
+    PR_HEAD_AFTER=$(git rev-parse "refs/remotes/origin/$BRANCH_NAME" 2>/dev/null || echo "")
+    if [ -n "$PR_HEAD_AFTER" ] && [ "$PR_HEAD_AFTER" != "$HEAD_SHA" ]; then
+      dispatch_branch_ci
+    fi
+  fi
+  if ! report_pr_task_result "$CLAUDE_OUTPUT"; then ENGINE_EXIT_CODE=1; fi
+  exit "$ENGINE_EXIT_CODE"
+fi
 
 # CI 自動修正では、agent は commit まで。push 前の auto-merge 解除と結果の報告を保証する。
 if [ "$EVENT_TYPE" = workflow_run ]; then
@@ -1402,8 +1512,7 @@ ${IMG_NOTE}"
       echo "head moved ($HEAD_BEFORE_POST -> $HEAD_AFTER_POST); PAT push already started CI — not dispatching"
     else
       echo "⚠️ runner pushed commits after the engine finished ($HEAD_BEFORE_POST -> $HEAD_AFTER_POST); re-dispatching CI"
-      gh workflow run "$CI_WORKFLOW" --ref "$BRANCH_NAME" --repo "$GITHUB_REPOSITORY" \
-        || echo "Warning: failed to re-dispatch CI for $BRANCH_NAME"
+      dispatch_branch_ci
     fi
   fi
 

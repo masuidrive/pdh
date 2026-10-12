@@ -12,8 +12,8 @@ on:
   # Manual run used to validate the prebuilt-image path (pull → up → exec) from a
   # branch before merge. issue_comment/etc. always run the main-branch workflow
   # definition, so changes to this file can't be exercised via 🤖 until merged.
-  # When dispatched, the devcontainer is started against the given issue number but
-  # the agent step is a no-op smoke command (see "verify_only").
+  # Without issue/pr, verify_only starts a smoke command. With issue or pr, dispatch
+  # runs the agent for that issue or continues the existing PR with instruction.
   # CI の受け口が PR 番号を解決してから呼ぶ。github.event は呼び出し元を保持する。
   workflow_call:
     inputs:
@@ -32,6 +32,19 @@ on:
         description: "Run the agent for this issue as if it had just been opened (verify_only is ignored)"
         type: string
         default: ''
+      pr:
+        description: "Continue an existing bot PR (requires instruction; mutually exclusive with issue)"
+        type: string
+        default: ''
+      instruction:
+        description: "Task for the existing PR; overrides the normal ticket implementation flow"
+        type: string
+        default: ''
+
+      allowed_paths:
+        description: "JSON array of task file paths; intersected with default-branch repository policy"
+        type: string
+        default: ''
 
 # ⚠ 同じ issue で 2 つの run を同時に走らせない。走らせると 2 つの agent が同じ
 # agent/issue-<N> ブランチへ push を取り合い、進捗コメントを奪い合い、ラベルが往復し、
@@ -40,7 +53,7 @@ on:
 # cancel-in-progress: false — 走っている方を殺さず、次を待たせる。人の 🤖 コメントは
 # «前の作業を捨てて» の意味ではないため。
 concurrency:
-  group: coding-bot-${{ inputs.ci_autofix_pr || inputs.issue || github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  group: coding-bot-${{ inputs.ci_autofix_pr || inputs.pr || inputs.issue || github.event.issue.number || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: false
   # 判定と修正を同じロックの中に置く。single では待機 run が押し出され、
   # count だけ残って修正が走らない／緑を見落とすため max にする。
@@ -105,8 +118,8 @@ jobs:
       CODING_BOT_USER: ${{ vars.CODING_BOT_USER || 'node' }}
       CODING_BOT_POST_CREATE: ${{ vars.CODING_BOT_POST_CREATE || '' }}
       # workflow_dispatch で issue を渡されたら、その issue が作られたときと同じに扱う
-      BOT_EVENT: ${{ github.event_name == 'workflow_dispatch' && inputs.issue != '' && 'issues' || github.event_name }}
-      BOT_ISSUE: ${{ inputs.ci_autofix_pr || inputs.issue || github.event.issue.number || github.event.pull_request.number }}
+      BOT_EVENT: ${{ github.event_name == 'workflow_dispatch' && inputs.pr != '' && 'pull_request' || github.event_name == 'workflow_dispatch' && inputs.issue != '' && 'issues' || github.event_name }}
+      BOT_ISSUE: ${{ inputs.ci_autofix_pr || inputs.pr || inputs.issue || github.event.issue.number || github.event.pull_request.number }}
     permissions:
       contents: write
       pull-requests: write
@@ -147,6 +160,21 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate dispatch task
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          DISPATCH_ISSUE: ${{ inputs.issue }}
+          DISPATCH_PR: ${{ inputs.pr }}
+          PR_INSTRUCTION: ${{ inputs.instruction }}
+          PR_TASK_ALLOWED_PATHS: ${{ inputs.allowed_paths }}
+        run: |
+          source .github/coding-bot/trigger-source.sh
+          validate_dispatch_request "$DISPATCH_ISSUE" "$DISPATCH_PR" "$PR_INSTRUCTION"
+          if [ -n "$DISPATCH_PR" ] && [ -z "$PR_TASK_ALLOWED_PATHS" ]; then
+            echo '::error::allowed_paths is required for a PR instruction task (non-empty JSON array of paths)'
+            exit 1
+          fi
 
       # ⚠ agent が書き換えられる workspace の script を、秘密付きで実行しない。
       # container に mount されない場所へ、default branch の版を git から直接退避する。
@@ -254,12 +282,14 @@ jobs:
           CI_AUTOFIX_RUN_ID: ${{ needs.ci-autofix.outputs.run_id }}
           CI_AUTOFIX_HEAD_SHA: ${{ needs.ci-autofix.outputs.head_sha }}
           EVENT_TYPE: ${{ env.BOT_EVENT }}
+          PR_INSTRUCTION: ${{ inputs.pr != '' && inputs.instruction || '' }}
+          PR_TASK_ALLOWED_PATHS: ${{ inputs.allowed_paths }}
           COMMENT_ID: ${{ github.event.comment.id || github.event.review.id }}
           DEVCONTAINER_CONFIG_PATH: .devcontainer/devcontainer.json
           CODING_BOT_CI_WORKFLOW: ${{ vars.CODING_BOT_CI_WORKFLOW || 'ci.yml' }}
           CODING_BOT_PROGRESS_INTERVAL: ${{ vars.CODING_BOT_PROGRESS_INTERVAL || 60 }}
           CODING_BOT_TIMEOUT: ${{ vars.CODING_BOT_TIMEOUT || 5400 }}
-          VERIFY_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.issue == '' && inputs.verify_only && 'true' || '' }}
+          VERIFY_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.issue == '' && inputs.pr == '' && inputs.verify_only && 'true' || '' }}
         run: |
           set -euo pipefail
           compose_args=(-p "$CODING_BOT_COMPOSE_PROJECT" -f "$CODING_BOT_COMPOSE_FILE")
@@ -291,6 +321,8 @@ jobs:
             -e CI_AUTOFIX_RUN_ID \
             -e CI_AUTOFIX_HEAD_SHA \
             -e EVENT_TYPE \
+            -e PR_INSTRUCTION \
+            -e PR_TASK_ALLOWED_PATHS \
             -e COMMENT_ID \
             -e DEVCONTAINER_CONFIG_PATH \
             -e CODING_BOT_TIMEOUT \
@@ -393,6 +425,8 @@ jobs:
       - name: Report if the run left nothing
         if: always()
         env:
+          PR_INSTRUCTION: ${{ inputs.pr != '' && inputs.instruction || '' }}
+          PR: ${{ inputs.pr }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           ISSUE: ${{ env.BOT_ISSUE }}
@@ -402,11 +436,27 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -uo pipefail
-          if [ -z "${ISSUE:-}" ]; then
-            echo "issue 番号が取れない（workflow_dispatch など）。何もしない"; exit 0
-          fi
           if [ -f "$GITHUB_WORKSPACE/.coding-bot-reported" ]; then
             echo "run-action.sh が最終レポートを投稿済み。何もしない"; exit 0
+          fi
+          if [ -n "${PR_INSTRUCTION:-}" ]; then
+            body="指定仕事が結果を残さずに終了（${CONCLUSION}）。[実行ログ]($RUN_URL)"
+            echo "$body" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            # The runner saves the exact progress ID before starting the agent.
+            progress_file="$GITHUB_WORKSPACE/.coding-bot-task-progress"
+            progress_id=""
+            if [ -f "$progress_file" ]; then progress_id=$(cat "$progress_file"); fi
+            if [[ "$progress_id" =~ ^[1-9][0-9]*$ ]]; then
+              gh api -X PATCH "repos/$REPO/issues/comments/$progress_id" -f body="$body" || \
+                echo 'Could not update task progress; see logs/summary' >&2
+            elif [[ "${PR:-}" =~ ^[1-9][0-9]*$ ]]; then
+              gh api "repos/$REPO/issues/$PR/comments" -f body="$body" || \
+                echo 'Could not post task result; see logs/summary' >&2
+            fi
+            exit 0
+          fi
+          if [ -z "${ISSUE:-}" ]; then
+            echo "issue 番号が取れない（workflow_dispatch など）。何もしない"; exit 0
           fi
           echo "最終レポートが投稿されていない（job.status=${CONCLUSION}）。1 行残す"
           BODY=$(printf '%s\n\n%s\n\n- %s\n- %s\n\n%s' \

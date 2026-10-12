@@ -358,6 +358,40 @@ jobs:
 - ⚠ **vCPU に比例して課金される。**4 vCPU の label にすると 1 分の単価が 2 倍になる。テストの並列度を `nproc` から決めている repo では、vCPU を増やすと速くなる代わりに単価も上がる
 - `coding-bot.yml` の devcontainer（`docker compose`）は Blacksmith の Ubuntu 24.04 image でも動く（GitHub の runner image と同じ software を入れる、と Blacksmith の docs にある）。workspace の所有者を job の中で揃えている場合は、runner の uid に依存しない
 
+## 任意: 既存の bot PR に決まった仕事を渡す（`pr` / `instruction` / `allowed_paths`）
+
+**守るのは «既存の bot PR に頼んだ仕事が、許したファイル以外を変えないこと» である。**別の workflow（たとえば PR へのコメントを受ける workflow）が、既存の bot PR に決まった仕事を 1 つ頼むための入口。`coding-bot.yml` の `workflow_dispatch` が受ける。
+
+| 入力 | 契約 |
+|---|---|
+| `pr` | 正の PR 番号。`instruction` と必ず組にし、`issue` とは同時に指定しない |
+| `instruction` | その PR の agent に渡す仕事の指示。`pr` 無しでは指定できない |
+| `allowed_paths` | 呼出元が確定した対象ファイルの、空でない JSON 配列。必須。既定 branch の policy を上限として交差させる |
+| `issue` | 従来どおり Issue の実装を起動する。`pr` / `instruction` と排他 |
+
+- **対象**: 同じ repository の open な `agent/issue-<N>` PR だけ。対応する Issue が実在することも確かめる。fork・closed・別形式の branch は拒否する
+- **policy**: 導入先は既定 branch に `.github/pr-instruction-policy.json` を置き、許す変更パスを Python 正規表現で書く（`re.fullmatch`）。空・欠落・不正な正規表現は拒否する。runner は PR を checkout する前に、既定 branch の版を読む。導入先固有のパスは共有 runner に書かない
+  ```json
+  {"allowed_paths": "task-output/(?:result\\.json|report\\.md)"}
+  ```
+- **`allowed_paths` の扱い**: literal のパス集合として policy と交差させる（正規表現としては評価しない）。空・不正な JSON・相対ファイルパスでない値・交差が空の指定は拒否する。`instruction` は上限を広げられない。agent には環境変数 `PR_TASK_ALLOWED_PATHS` で渡す
+- **このモードでしないこと**: 通常の ticket 実装、base branch の merge、衝突解消、既存 CI の修正、未 push commit の救済 push、ticket・ラベル・画像の後処理
+- **push の前の検査（pre-push hook）**: 通常の PDH ticket 検査を置き換え、次をすべて確かめる
+  - remote は `origin`、送り先は対象 PR の `refs/heads/<branch>` 1 本だけ
+  - 開始時の PR head の直接の子で、変更を持つ 1 commit だけ（merge・空 commit は拒否）
+  - 変更パスがすべて交差後の許可集合に入っている。通常ファイルの追加・変更だけを許す（削除・symlink・型変更は拒否）
+  - remote の head が、開始時の PR head か自分の push した SHA と一致する
+- **既存の pre-push hook**: coding-bot の印がある hook は消してから入れ直す。印の無い独自の hook（`core.hooksPath` を使う husky など）があると、通常の run は従来どおり残すが、**このモードでは agent を起動する前にエラーで止める**
+- **終了時の検査**: run の終わりに origin の PR branch を取り直し、同じ commit・パスの契約を確かめる。外れていれば run を失敗にする。⚠ 検出するだけで、送った変更は戻さない
+- **CI**: PR branch の head が動き、`ORIGIN_PUSH_AUTH=github_token`（PAT 無し）なら、runner が `CODING_BOT_CI_WORKFLOW`（既定 `ci.yml`）をその branch へ dispatch する。PAT の push では CI が自然に動くので重ねない
+- **結果の報告**: runner は agent を起動する前に進捗コメントを作り、その ID を `.coding-bot-task-progress` に保存する。正常終了・異常終了とも、そのコメントを結果で書き換える。進捗コメントを作る前に run が落ちたときは、host 側の fallback step が `inputs.pr` へ新しいコメントで知らせる。通常の返信待ちの案内やラベル変更は行わない
+- runner が置く `.coding-bot-task-progress` / `.coding-bot-reported` / `.coding-bot-notify` は `.git/info/exclude` に入れるので、agent の `git add -A` に混ざらない
+- **呼出元の責任**: その仕事に要る timeout・状態の回収・失敗の通知は、呼出元が持つ
+
+⚠ **これは sandbox ではない。**`--no-verify`、`core.hooksPath` の変更、hook や policy の書き換え、`gh api` の refs/contents API は hook を迂回できる。終了時の検査は PR branch の最終状態だけを見る。呼出元が後続の workflow を dispatch するなら、それは終了時の検査より先に起きる。
+
+⚠ **起動できる人が広がる。**`actions: write` を持つ呼出元は、任意の `instruction` を既存 PR の agent に直接渡せる（Issue を作らずに済むぶん、`issue` 入力より自由度が広い。agent の token・secret の権限は増えない）。PR へのコメントを入口にするなら、呼出元でコメントした人の repository 権限を確かめ、承認済みの固定の指示を組み立てる。**コメント本文をそのまま `instruction` に渡さない。**
+
 ## 必要なラベル
 
 stage ラベル 8 段（`PDH-open` … `PDH-close`）に加えて、**`awaiting-reply`** を作る。

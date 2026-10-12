@@ -1,6 +1,16 @@
 #!/bin/bash
 # トリガーの本文と PR の出自を取得する。gate の承認判定とは分離する。
 
+# dispatch は Actions の実行権限で認可される。入力を shell として評価しない。
+validate_dispatch_request() {
+  local issue="$1" pr="$2" instruction="$3"
+  if [ -n "$pr" ]; then
+    [[ "$pr" =~ ^[1-9][0-9]*$ ]] && [ -z "$issue" ] && [ -n "$instruction" ] || return 1
+  else
+    [ -z "$instruction" ] || return 1
+  fi
+}
+
 fetch_trigger_context() {
   local event_type="$1" repository="$2" issue_number="$3" comment_id="$4"
   case "$event_type" in
@@ -26,6 +36,10 @@ fetch_trigger_context() {
 validate_pr_context() {
   local repository="$1" pr_number="$2" data head_repo head_ref linked issue
   data=$(gh api "repos/$repository/pulls/$pr_number" 2>/dev/null) || { TRIGGER_ERROR="PR context API unavailable"; return 1; }
+  if [ -n "${PR_INSTRUCTION:-}" ] && [ "$(printf '%s' "$data" | jq -r '.state')" != open ]; then
+    TRIGGER_ERROR="dispatched tasks require an open PR"
+    return 1
+  fi
   head_repo=$(printf '%s' "$data" | jq -r '.head.repo.full_name // empty') || return 1
   head_ref=$(printf '%s' "$data" | jq -r '.head.ref // empty') || return 1
   [ "$head_repo" = "$repository" ] || { TRIGGER_ERROR="fork PRs cannot drive coding-bot"; return 1; }

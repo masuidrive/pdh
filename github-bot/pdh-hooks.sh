@@ -25,6 +25,9 @@
 # 依存: bash / git / awk / grep / sed / gh。GITHUB_REPOSITORY を使う（setup は引数でも可）。
 set -uo pipefail
 
+# A dispatched PR instruction owns only its specified task, not ticket stages or labels.
+if [ -n "${PR_INSTRUCTION:-}" ]; then exit 0; fi
+
 REPO="${GITHUB_REPOSITORY:-}"
 STAGES="PDH-open PDH-ticket-review PDH-ticket-human-review PDH-implement PDH-review PDH-verify PDH-human-review PDH-close"
 # ⚠ stage ラベルとは別系統。stage は «どこにいるか» しか言わないので、gate でない場所で
