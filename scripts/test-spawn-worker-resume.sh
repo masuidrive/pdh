@@ -32,6 +32,9 @@ n=$((n + 1))
 printf '%s\n' "$n" > "$FAKE_DIR/count"
 printf '%s\0' "$@" > "$FAKE_DIR/argv.$n"
 cat > "$FAKE_DIR/stdin.$n"
+if [ "$n" = 1 ] && [ -n "${FAKE_MUTATE_STDIN:-}" ]; then
+  printf '初回実行中に書き換えた指示\n' > "$FAKE_MUTATE_STDIN"
+fi
 printf '%s\n' "$PWD" > "$FAKE_DIR/cwd.$n"
 date +%s > "$FAKE_DIR/started.$n"
 step=$(printf '%s\n' "$FAKE_PLAN" | awk -F, -v n="$n" '{if (n <= NF) print $n; else print $NF}')
@@ -203,6 +206,7 @@ same "$out/stderr.1.txt" "$out/stderr.txt"
 contains "$out/resume.log" 'round=0 started_at='
 contains "$out/resume.log" 'wait=0s rc=1'
 contains "$out/resume.log" 'wait=0s rc=0'
+contains "$out/resume.log" 'action=exec-resume'
 report_case
 
 new_case 'AC1/2: 引数 prompt・長い option 名・相対 cd・絶対 executable'
@@ -219,20 +223,66 @@ report_case
 for scope in base commit uncommitted; do
   for with_prompt in yes no; do
     new_case "AC1/2: review --$scope（指示文=$with_prompt）"
-    review_args=(review -c 'sandbox_mode="read-only"' -m chosen-model -o "$case_dir/review.txt")
+    review_args=(review -c 'sandbox_mode="read-only"' -m chosen-model -o review.txt)
     case "$scope" in
-      base) review_args+=(--base feature/base); expected_scope=$'--base feature/base\n' ;;
-      commit) review_args+=(--commit abc123); expected_scope=$'--commit abc123\n' ;;
-      uncommitted) review_args+=(--uncommitted); expected_scope=$'--uncommitted\n' ;;
+      base) review_args+=(--base feature/base) ;;
+      commit) review_args+=(--commit=abc123) ;;
+      uncommitted) review_args+=(--uncommitted) ;;
     esac
     review_prompt=""
     if [ "$with_prompt" = yes ]; then review_prompt=$'レビューの範囲\nそのまま'; review_args+=("$review_prompt"); fi
-    launch capacity,success "$SCRIPT" "$out" -- codex exec "${review_args[@]}"
+    (cd "$case_dir" && launch capacity,success "$SCRIPT" "$out" -- \
+      codex exec --sandbox read-only -C 'work dir' "${review_args[@]}")
     done_worker
-    expect_args exec resume "$sid" -c 'sandbox_mode="read-only"' -m chosen-model -o "$case_dir/review.txt" -
-    expect_prompt "$expected_scope" "$review_prompt"
+    eq rc 0 "$(cat "$out/rc.txt")"
+    eq '--wait' 'DONE rc=0 resumes=1' "$wait_output"
+    same "$trace/argv.1" "$trace/argv.2"
+    eq cwd "$case_dir" "$(cat "$trace/cwd.1")"
+    same "$trace/cwd.1" "$trace/cwd.2"
+    must test ! -s "$trace/stdin.1"
+    same "$trace/stdin.1" "$trace/stdin.2"
+    absent "$out/resume-1.prompt.txt"
+    same "$out/stdout.1.txt" "$out/stdout.txt"
+    same "$out/stderr.1.txt" "$out/stderr.txt"
+    contains "$out/resume.log" 'action=review-restart'
     report_case
   done
+done
+
+for input_kind in stdin argument-and-stdin; do
+  new_case "AC1/2: review の元の stdin を保存して再実行 ($input_kind)"
+  prompt=$'レビュー指示\n引用 " と $ と `\n\n'
+  printf '%s' "$prompt" > "$case_dir/input.txt"
+  review_args=(exec review --uncommitted -)
+  if [ "$input_kind" = argument-and-stdin ]; then review_args=(exec review '引数の指示'); fi
+  FAKE_MUTATE_STDIN="$case_dir/input.txt" launch capacity,success "$SCRIPT" \
+    --stdin "$case_dir/input.txt" "$out" -- "$TMP_DIR/bin/codex" "${review_args[@]}"
+  done_worker
+  eq rc 0 "$(cat "$out/rc.txt")"
+  eq '起動回数' 2 "$(cat "$trace/count")"
+  same "$trace/argv.1" "$trace/argv.2"
+  same "$trace/cwd.1" "$trace/cwd.2"
+  printf '%s' "$prompt" > "$case_dir/expected-stdin"
+  same "$case_dir/expected-stdin" "$trace/stdin.1"
+  same "$case_dir/expected-stdin" "$trace/stdin.2"
+  contains "$case_dir/input.txt" '初回実行中に書き換えた指示'
+  absent "$out/resume-1.prompt.txt"
+  report_case
+done
+
+for output_mode in text json; do
+  new_case "AC1: review は session id が無くても元の argv で再実行 ($output_mode)"
+  review_args=(exec review --ephemeral --title 'review title' --commit abc123)
+  if [ "$output_mode" = json ]; then review_args+=(--json); fi
+  launch capacity-no-id,success "$SCRIPT" "$out" -- codex "${review_args[@]}"
+  done_worker
+  eq rc 0 "$(cat "$out/rc.txt")"
+  eq '--wait' 'DONE rc=0 resumes=1' "$wait_output"
+  eq '起動回数' 2 "$(cat "$trace/count")"
+  same "$trace/argv.1" "$trace/argv.2"
+  absent "$out/resume-1.prompt.txt"
+  contains "$out/resume.log" 'action=review-restart'
+  report_case
 done
 
 for plan in failure capacity,failure; do
@@ -292,46 +342,62 @@ eq rc 42 "$(cat "$out/rc.txt")"
 contains "$out/resume.log" '再開の 1 回目が混雑以外で終わった'
 report_case
 
-new_case 'AC4: 既定4回で上限停止・最後のrcと各回出力'
-unset PDH_CODEX_RESUME_MAX
-launch capacity "$SCRIPT" "$out" -- codex exec '最初の指示'
-done_worker
-eq '起動回数' 5 "$(cat "$trace/count")"
-eq rc 5 "$(cat "$out/rc.txt")"
-eq '--wait' 'DONE rc=5 resumes=4' "$wait_output"
-contains "$out/resume.log" 'モデルの混雑で 4 回再開したが終わらなかった'
-for round in 0 1 2 3 4; do
-  contains "$out/stdout.$round.txt" "stdout attempt=$((round + 1))"
-  contains "$out/stderr.$round.txt" 'Selected model is at capacity'
-  contains "$out/resume.log" "wait=0s rc=$((round + 1))"
-  if [ "$round" -gt 0 ]; then expect_prompt '' '最初の指示' "$round"; fi
+for worker_kind in exec review; do
+  worker_args=(exec)
+  if [ "$worker_kind" = review ]; then worker_args+=(review); fi
+  new_case "AC4: 既定4回で上限停止・最後のrcと各回出力 ($worker_kind)"
+  unset PDH_CODEX_RESUME_MAX
+  launch capacity "$SCRIPT" "$out" -- codex "${worker_args[@]}" '最初の指示'
+  done_worker
+  eq '起動回数' 5 "$(cat "$trace/count")"
+  eq rc 5 "$(cat "$out/rc.txt")"
+  eq '--wait' 'DONE rc=5 resumes=4' "$wait_output"
+  contains "$out/resume.log" 'モデルの混雑で 4 回再開したが終わらなかった'
+  for round in 0 1 2 3 4; do
+    contains "$out/stdout.$round.txt" "stdout attempt=$((round + 1))"
+    contains "$out/stderr.$round.txt" 'Selected model is at capacity'
+    contains "$out/resume.log" "wait=0s rc=$((round + 1))"
+    if [ "$round" -gt 0 ]; then
+      if [ "$worker_kind" = exec ]; then
+        expect_prompt '' '最初の指示' "$round"
+      else
+        same "$trace/argv.1" "$trace/argv.$((round + 1))"
+        same "$trace/stdin.1" "$trace/stdin.$((round + 1))"
+        absent "$out/resume-$round.prompt.txt"
+      fi
+    fi
+  done
+  same "$out/stdout.4.txt" "$out/stdout.txt"
+  same "$out/stderr.4.txt" "$out/stderr.txt"
+  report_case
+  export PDH_CODEX_RESUME_MAX=4
 done
-same "$out/stdout.4.txt" "$out/stdout.txt"
-same "$out/stderr.4.txt" "$out/stderr.txt"
-report_case
-export PDH_CODEX_RESUME_MAX=4
 
-new_case 'AC4: 環境変数による上限と1→2秒の待機・RUNNING 書式'
-export PDH_CODEX_RESUME_MAX=2 PDH_CODEX_RESUME_DELAY_SECONDS=1
-launch capacity "$SCRIPT" "$out" -- codex exec '指示'
-await_file "$out/resume.log"
-running_output=$(bash "$SCRIPT" --wait "$out" 0); running_rc=$?
-eq '--wait RUNNING exit' 75 "$running_rc"
-contains "$case_dir/launch.txt" 'SPAWNED pid='
-case "$running_output" in
-  "RUNNING pid="*" alive=yes waited=0s resumes=0 — もう一度 --wait を呼ぶ") ;;
-  *) fail "RUNNING 書式: $running_output" ;;
-esac
-done_worker
-eq '起動回数' 3 "$(cat "$trace/count")"
-eq rc 3 "$(cat "$out/rc.txt")"
-contains "$out/resume.log" 'wait=1s rc=2'
-contains "$out/resume.log" 'wait=2s rc=3'
-must test "$(( $(cat "$trace/started.2") - $(cat "$trace/ended.1") ))" -ge 1
-must test "$(( $(cat "$trace/started.3") - $(cat "$trace/ended.2") ))" -ge 2
-contains "$out/resume.log" 'モデルの混雑で 2 回再開したが終わらなかった'
-report_case
-export PDH_CODEX_RESUME_MAX=4 PDH_CODEX_RESUME_DELAY_SECONDS=0
+for worker_kind in exec review; do
+  worker_args=(exec)
+  if [ "$worker_kind" = review ]; then worker_args+=(review); fi
+  new_case "AC4: 環境変数による上限と1→2秒の待機・RUNNING 書式 ($worker_kind)"
+  export PDH_CODEX_RESUME_MAX=2 PDH_CODEX_RESUME_DELAY_SECONDS=1
+  launch capacity "$SCRIPT" "$out" -- codex "${worker_args[@]}" '指示'
+  await_file "$out/resume.log"
+  running_output=$(bash "$SCRIPT" --wait "$out" 0); running_rc=$?
+  eq '--wait RUNNING exit' 75 "$running_rc"
+  contains "$case_dir/launch.txt" 'SPAWNED pid='
+  case "$running_output" in
+    "RUNNING pid="*" alive=yes waited=0s resumes=0 — もう一度 --wait を呼ぶ") ;;
+    *) fail "RUNNING 書式: $running_output" ;;
+  esac
+  done_worker
+  eq '起動回数' 3 "$(cat "$trace/count")"
+  eq rc 3 "$(cat "$out/rc.txt")"
+  contains "$out/resume.log" 'wait=1s rc=2'
+  contains "$out/resume.log" 'wait=2s rc=3'
+  must test "$(( $(cat "$trace/started.2") - $(cat "$trace/ended.1") ))" -ge 1
+  must test "$(( $(cat "$trace/started.3") - $(cat "$trace/ended.2") ))" -ge 2
+  contains "$out/resume.log" 'モデルの混雑で 2 回再開したが終わらなかった'
+  report_case
+  export PDH_CODEX_RESUME_MAX=4 PDH_CODEX_RESUME_DELAY_SECONDS=0
+done
 
 for plan in failure tool-failure stale-capacity capacity-no-id capacity-empty-id stdout-capacity success-capacity signal-capacity; do
   new_case "AC3: $plan は再開しない"
@@ -378,16 +444,20 @@ eq '--wait' 'DONE rc=1' "$wait_output"
 same "$case_dir/input.txt" "$trace/stdin.1"
 report_case
 
-new_case 'AC3/DD: 再開が混雑以外で失敗した診断を log と --wait に出す'
-launch capacity,failure "$SCRIPT" "$out" -- codex exec '指示'
-done_worker
-eq '起動回数' 2 "$(cat "$trace/count")"
-eq rc 42 "$(cat "$out/rc.txt")"
-diagnostic='再開の 1 回目が混雑以外で終わった（rc=42）。`stderr.1.txt` を見る'
-contains "$out/resume.log" "$diagnostic"
-eq '--wait 診断全文' "DONE rc=42 resumes=1"$'\n'"$diagnostic" "$wait_output"
-same "$out/stderr.1.txt" "$out/stderr.txt"
-report_case
+for worker_kind in exec review; do
+  worker_args=(exec)
+  if [ "$worker_kind" = review ]; then worker_args+=(review); fi
+  new_case "AC3/DD: 再開が混雑以外で失敗した診断を log と --wait に出す ($worker_kind)"
+  launch capacity,failure "$SCRIPT" "$out" -- codex "${worker_args[@]}" '指示'
+  done_worker
+  eq '起動回数' 2 "$(cat "$trace/count")"
+  eq rc 42 "$(cat "$out/rc.txt")"
+  diagnostic='再開の 1 回目が混雑以外で終わった（rc=42）。`stderr.1.txt` を見る'
+  contains "$out/resume.log" "$diagnostic"
+  eq '--wait 診断全文' "DONE rc=42 resumes=1"$'\n'"$diagnostic" "$wait_output"
+  same "$out/stderr.1.txt" "$out/stderr.txt"
+  report_case
+done
 
 # setsid 分岐は非対話 bash の background 起動で SIGINT の無視を継承する。
 # INT handler は、SIGINT を受け取れる set -m 分岐を実際に起動して検査する。
@@ -397,44 +467,52 @@ for utility in bash env mkdir dirname basename rm date ps tr cat grep cp sleep h
   must ln -s "$(command -v "$utility")" "$no_setsid_path/$utility"
 done
 
-for signame in TERM INT HUP; do
-  new_case "AC3/4/DD: 待機中の $signame を記録して停止"
-  export PDH_CODEX_RESUME_DELAY_SECONDS=2
-  if [ "$signame" = INT ]; then
-    PATH="$TMP_DIR/bin:$no_setsid_path" launch capacity "$SCRIPT" "$out" -- codex exec '指示'
-  else
-    launch capacity "$SCRIPT" "$out" -- codex exec '指示'
-  fi
+for worker_kind in exec review; do
+  worker_args=(exec)
+  if [ "$worker_kind" = review ]; then worker_args+=(review); fi
+  for signame in TERM INT HUP; do
+    new_case "AC3/4/DD: 待機中の $signame を記録して停止 ($worker_kind)"
+    export PDH_CODEX_RESUME_DELAY_SECONDS=2
+    if [ "$signame" = INT ]; then
+      PATH="$TMP_DIR/bin:$no_setsid_path" launch capacity "$SCRIPT" "$out" -- codex "${worker_args[@]}" '指示'
+    else
+      launch capacity "$SCRIPT" "$out" -- codex "${worker_args[@]}" '指示'
+    fi
+    await_file "$out/resume.log"
+    i=0
+    while ! grep -q 'phase=waiting' "$out/resume.log" && [ "$i" -lt 100 ]; do sleep 0.01; i=$((i + 1)); done
+    must grep -q 'phase=waiting' "$out/resume.log"
+    must kill -s "$signame" "$(cat "$out/pid.txt")"
+    done_worker
+    case "$signame" in TERM) expected_rc=143 ;; INT) expected_rc=130 ;; HUP) expected_rc=129 ;; esac
+    eq rc "$expected_rc" "$(cat "$out/rc.txt")"
+    contains "$out/resume.log" "round=1 phase=waiting"
+    contains "$out/resume.log" "signal=$signame rc=$expected_rc"
+    eq '起動回数' 1 "$(cat "$trace/count")"
+    eq '--wait' "DONE rc=$expected_rc resumes=0" "$wait_output"
+    absent "$out/resume-1.prompt.txt"
+    report_case
+  done
+  export PDH_CODEX_RESUME_DELAY_SECONDS=0
+done
+
+for worker_kind in exec review; do
+  worker_args=(exec)
+  if [ "$worker_kind" = review ]; then worker_args+=(review); fi
+  new_case "AC3/4: 再開実行中のsignalで --wait の再開回数を二重に数えない ($worker_kind)"
+  launch capacity,slow-success "$SCRIPT" "$out" -- codex "${worker_args[@]}" '指示'
   await_file "$out/resume.log"
   i=0
-  while ! grep -q 'phase=waiting' "$out/resume.log" && [ "$i" -lt 100 ]; do sleep 0.01; i=$((i + 1)); done
-  must grep -q 'phase=waiting' "$out/resume.log"
-  must kill -s "$signame" "$(cat "$out/pid.txt")"
+  while [ ! -f "$trace/started.2" ] && [ "$i" -lt 100 ]; do sleep 0.01; i=$((i + 1)); done
+  must test -f "$trace/started.2"
+  must kill -TERM "$(cat "$out/pid.txt")"
   done_worker
-  case "$signame" in TERM) expected_rc=143 ;; INT) expected_rc=130 ;; HUP) expected_rc=129 ;; esac
-  eq rc "$expected_rc" "$(cat "$out/rc.txt")"
-  contains "$out/resume.log" "round=1 phase=waiting"
-  contains "$out/resume.log" "signal=$signame rc=$expected_rc"
-  eq '起動回数' 1 "$(cat "$trace/count")"
-  eq '--wait' "DONE rc=$expected_rc resumes=0" "$wait_output"
-  absent "$out/resume-1.prompt.txt"
+  eq rc 143 "$(cat "$out/rc.txt")"
+  eq '--wait' 'DONE rc=143 resumes=1' "$wait_output"
+  contains "$out/resume.log" 'round=1 phase=started'
+  contains "$out/resume.log" 'signal=TERM rc=143'
   report_case
 done
-export PDH_CODEX_RESUME_DELAY_SECONDS=0
-
-new_case 'AC3/4: 再開実行中のsignalで --wait の再開回数を二重に数えない'
-launch capacity,slow-success "$SCRIPT" "$out" -- codex exec '指示'
-await_file "$out/resume.log"
-i=0
-while [ ! -f "$trace/started.2" ] && [ "$i" -lt 100 ]; do sleep 0.01; i=$((i + 1)); done
-must test -f "$trace/started.2"
-must kill -TERM "$(cat "$out/pid.txt")"
-done_worker
-eq rc 143 "$(cat "$out/rc.txt")"
-eq '--wait' 'DONE rc=143 resumes=1' "$wait_output"
-contains "$out/resume.log" 'round=1 phase=started'
-contains "$out/resume.log" 'signal=TERM rc=143'
-report_case
 
 new_case 'AC4: 既定の初回待機は60秒（待機開始直後にsignalで停止）'
 unset PDH_CODEX_RESUME_DELAY_SECONDS
@@ -463,16 +541,20 @@ for setting in max delay; do
   export PDH_CODEX_RESUME_MAX=4 PDH_CODEX_RESUME_DELAY_SECONDS=0
 done
 
-new_case 'AC4: 上限0で自動再開を無効化'
-export PDH_CODEX_RESUME_MAX=0
-launch capacity "$SCRIPT" "$out" -- codex exec '指示'
-done_worker
-eq '起動回数' 1 "$(cat "$trace/count")"
-eq rc 1 "$(cat "$out/rc.txt")"
-expect_single
-eq '--wait' 'DONE rc=1' "$wait_output"
-report_case
-export PDH_CODEX_RESUME_MAX=4
+for worker_kind in exec review; do
+  worker_args=(exec)
+  if [ "$worker_kind" = review ]; then worker_args+=(review); fi
+  new_case "AC4: 上限0で自動再開を無効化 ($worker_kind)"
+  export PDH_CODEX_RESUME_MAX=0
+  launch capacity "$SCRIPT" "$out" -- codex "${worker_args[@]}" '指示'
+  done_worker
+  eq '起動回数' 1 "$(cat "$trace/count")"
+  eq rc 1 "$(cat "$out/rc.txt")"
+  expect_single
+  eq '--wait' 'DONE rc=1' "$wait_output"
+  report_case
+  export PDH_CODEX_RESUME_MAX=4
+done
 
 # AC5: ファイル名を全部比較し、全ファイルを時刻・PID だけ正規化して比較する。
 # 起動時の command= や stdout/stderr/stdin は正規化しない。
