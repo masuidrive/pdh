@@ -192,7 +192,7 @@ else
   git clone https://github.com/masuidrive/pdh.git tmp/pdh
 fi
 PDH_BACKUP=$(mktemp -d tmp/pdh-backup.XXXXXX)
-for path in AGENTS.md PDH-AGENTS.md product-brief.md technical-reference.md .ticket-config.yaml docs/product-delivery-hierarchy.md scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh scripts/pdh-review-range.sh; do
+for path in AGENTS.md PDH-AGENTS.md product-brief.md technical-reference.md .ticket-config.yaml docs/product-delivery-hierarchy.md scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh scripts/pdh-review-range.sh scripts/spawn-worker.sh; do
   [ ! -e "$path" ] || cp -Rp "$path" "$PDH_BACKUP/"
 done
 [ ! -d .agents/skills ] || cp -Rp .agents/skills "$PDH_BACKUP/agents-skills"
@@ -249,6 +249,7 @@ fi
 - `scripts/checks/`
 - `scripts/dev-server.sh`
 - `scripts/seed-pdh-verify.sh`
+- `scripts/spawn-worker.sh`（[既知の移行手順](#既知の移行手順)で確認・更新する）
 - `scripts/test-ticket-local.sh`
 - `scripts/check-pdh-ticket.sh` と `scripts/pdh-review-range.sh` と `scripts/check-ticket-template-drift.sh`（上流の版で置き換えてよい。project 固有の変更を持たない）
 
@@ -305,6 +306,26 @@ grep -q '再現か実測:' .ticket-config.yaml && echo "テンプレ: 適用済�
 `.ticket-config.yaml` の `default_content` の «### Design Decisions» に、影響 6 項目（DB schema / Public API / CLI・SDK・file format・event schema / Backward compatibility / Migration・rollout・rollback / Docs・generated artifacts）の欄が 2026-09-29 以降に入った。`grep -q 'Backward compatibility:' .ticket-config.yaml` で行が無ければ、template の 7 行と Checklist の PDH-ticket-review 行を写す。既存の ticket は書き換えない。
 
 `scripts/checks/README.md` の «Adding a check» に、grep で表せない不変則（要素間の関係・算術・状態遷移）は `.check` にせず決定論テストで固定し、その選択を ticket の note に 1 行書く、が 2026-09-29 以降に入った。`grep -q 'deterministic test instead' scripts/checks/README.md || cp tmp/pdh/codex/templates/checks/README.md scripts/checks/README.md` で揃える（project 固有のカスタマイズを持たないので上書きしてよい）。
+
+### 既知の移行手順
+
+#### worker の混雑時の自動再開を導入する
+
+`scripts/spawn-worker.sh` は `Based on` 行を持たないため、通常の差分マージだけでは更新されない。適用済みかの確認（冪等）:
+
+```bash
+grep -q PDH_CODEX_RESUME_MAX scripts/spawn-worker.sh 2>/dev/null && echo "worker 自動再開: 適用済み" || echo "worker 自動再開: 要適用"
+```
+
+「要適用」なら、既存ファイルを backup してから次を実行する。既に自動再開がある場合も、上流との差分を確認して今回の修正を反映する。project 固有の変更があれば、その変更を保持してマージする。
+
+```bash
+mkdir -p scripts
+cp tmp/pdh/codex/templates/spawn-worker.sh scripts/spawn-worker.sh
+chmod +x scripts/spawn-worker.sh
+```
+
+適用後に確認コマンドを再実行する。同じ版を再度コピーしても差分は出ない。
 
 ### 3.5 close 済みでない ticket
 

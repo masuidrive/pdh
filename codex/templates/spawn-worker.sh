@@ -36,7 +36,10 @@
 # codex exec / codex exec review の混雑時は、同じ session を自動再開する。
 #   PDH_CODEX_RESUME_MAX=4                    再開の上限（0 で無効）
 #   PDH_CODEX_RESUME_DELAY_SECONDS=60         最初の待ち秒数。以後は倍増（60/120/240/480）
-#   値は非負整数。不正値なら再開しない。
+#   値は非負整数。不正値なら再開せず、混雑時だけ supervisor.log に理由を1行残す。
+#   0 で無効にした場合は記録ファイルを追加せず、--wait の表示も従来どおり。
+#   判定は stderr の最後の30行にある行頭 ERROR: Selected model is at capacity。
+#   --json は stdout の thread.started の id と最後の error / turn.failed を使う。
 #   初回=0、再開=1〜。混雑時だけ resume.log、stdout.<回>.txt / stderr.<回>.txt、
 #   resume-<回>.prompt.txt を追加する。stdout.txt / stderr.txt は最後の回。
 #   再開指示は「モデルの混雑で止まったので、最初の指示の範囲だけで続けて終えて」
@@ -192,10 +195,25 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
             [ "$review" = 0 ] && [ "$positional" = 0 ] || return 1
             review=1; continue ;;
           --) options=0; continue ;;
-          -c|--config|-m|--model|-o|--output-last-message)
+          -c|--config|-m|--model|--output-schema|-i|--image|--enable|--disable)
             [ "$#" -gt 0 ] || return 1
             resume_command+=("$arg" "$1"); shift; continue ;;
-          --config=*|--model=*|--output-last-message=*|--json)
+          -o|--output-last-message|--output-last-message=*)
+            if [ "$arg" = "${arg#*=}" ]; then
+              [ "$#" -gt 0 ] || return 1
+              value="$1"; shift
+            else
+              value="${arg#*=}"
+            fi
+            # exec は -C の先ではなく、プロセスの cwd を基準に -o を解決する。
+            case "$value" in /*) ;; *) value="$PWD/$value" ;; esac
+            if [ "$arg" = "${arg#*=}" ]; then
+              resume_command+=("$arg" "$value")
+            else
+              resume_command+=("--output-last-message=$value")
+            fi
+            continue ;;
+          --config=*|--model=*|--output-schema=*|--image=*|--enable=*|--disable=*|--json|--skip-git-repo-check|--dangerously-bypass-approvals-and-sandbox)
             resume_command+=("$arg"); continue ;;
           -s|--sandbox|--sandbox=*)
             if [ "$arg" = "${arg#*=}" ]; then
@@ -234,25 +252,105 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
       original_prompt="$arg"
       positional=1
     done
+    # stdin と引数 prompt は exec 側で合成される。再現できない形は落とさず止める。
+    if [ -n "$_child_stdin" ] && [ "$positional" = 1 ] && [ "$original_prompt" != - ]; then return 1; fi
     [ -d "$resume_cwd" ] || return 1
     resume_command+=(-)
   }
 
-  is_capacity() {
-    # signal による終了は、混雑の文言が残っていても再開しない。
-    [ "$rc" -gt 0 ] && [ "$rc" -lt 128 ] && grep -qF 'Selected model is at capacity' "$out/stderr.txt"
+  json_mode=0
+  # option の値や -- の後の prompt を --json と取り違えない。
+  json_options=1
+  json_value=0
+  for arg in "${@:3}"; do
+    [ "$json_options" = 1 ] || break
+    if [ "$json_value" = 1 ]; then json_value=0; continue; fi
+    case "$arg" in
+      --) json_options=0 ;;
+      --json) json_mode=1 ;;
+      -c|--config|-m|--model|-o|--output-last-message|-s|--sandbox|-C|--cd|--base|--commit|--output-schema|-i|--image|--enable|--disable) json_value=1 ;;
+    esac
+  done
+
+  json_events() {
+    # Codex の JSONL を文字列・階層ごとに読む。ツール出力内の JSON や文言は判定しない。
+    # 対象は実 CLI の thread.started / error / turn.failed。未知の error は停止側に倒す。
+    awk -v mode="$1" '
+      function string_value(    c, value) {
+        value=""
+        for (pos++; pos <= length($0); pos++) {
+          c=substr($0,pos,1)
+          if (c == "\"") return value
+          if (c == "\\") {
+            c=substr($0,++pos,1)
+            if (c == "n") c="\n"
+            else if (c == "r") c="\r"
+            else if (c == "t") c="\t"
+          }
+          value=value c
+        }
+        malformed=1
+        return value
+      }
+      {
+        depth=0; event=""; id=""; message=""; nested_message=""; malformed=0
+        for (pos=1; pos <= length($0); pos++) {
+          c=substr($0,pos,1)
+          if (c == "{" || c == "[") {depth++; key[depth]=""; value_next[depth]=0}
+          else if (c == "}" || c == "]") depth--
+          else if (c == ":") value_next[depth]=1
+          else if (c == ",") {key[depth]=""; value_next[depth]=0}
+          else if (c == "\"") {
+            value=string_value()
+            if (!value_next[depth]) key[depth]=value
+            else if (depth == 1) {
+              if (key[1] == "type") event=value
+              else if (key[1] == "thread_id") id=value
+              else if (key[1] == "message") message=value
+            } else if (depth == 2 && key[1] == "error" && key[2] == "message") nested_message=value
+          }
+        }
+        if (depth != 0 || malformed) next
+        if (mode == "session" && event == "thread.started") {print id; exit}
+        if (event == "error") last_error=message
+        else if (event == "turn.failed") last_error=nested_message
+      }
+      END {
+        if (mode == "capacity") {
+          exit !(last_error ~ /^(stream disconnected before completion: )?Selected model is at capacity([. ]|$)/)
+        }
+      }
+    ' "$out/stdout.txt"
   }
 
-  if is_capacity; then
-    session_id="$(awk '/^[[:space:]]*session id:/ {sub(/^[[:space:]]*session id:[[:space:]]*/, ""); print $1; exit}' "$out/stderr.txt")"
-    resume_max="${PDH_CODEX_RESUME_MAX:-4}"
-    resume_delay="${PDH_CODEX_RESUME_DELAY_SECONDS:-60}"
+  is_capacity() {
+    # signal による終了は、混雑の文言が残っていても再開しない。
+    [ "$rc" -gt 0 ] && [ "$rc" -lt 128 ] || return 1
+    if [ "$json_mode" = 1 ]; then
+      json_events capacity
+    else
+      tail -n 30 "$out/stderr.txt" | grep -q '^ERROR: Selected model is at capacity'
+    fi
+  }
+
+  if [ "${1##*/}" = codex ] && [ "${2:-}" = exec ] && is_capacity; then
+    if [ "$json_mode" = 1 ]; then
+      session_id="$(json_events session)"
+    else
+      session_id="$(awk '/^[[:space:]]*session id:/ {sub(/^[[:space:]]*session id:[[:space:]]*/, ""); print $1; exit}' "$out/stderr.txt")"
+    fi
+    resume_max="${PDH_CODEX_RESUME_MAX-4}"
+    resume_delay="${PDH_CODEX_RESUME_DELAY_SECONDS-60}"
     valid_settings=1
     case "$resume_max" in ''|*[!0-9]*) valid_settings=0 ;; esac
     case "$resume_delay" in ''|*[!0-9]*) valid_settings=0 ;; esac
-    if [ -n "$session_id" ] && [ "$valid_settings" = 1 ] && build_resume "$@"; then
+    if [ "$valid_settings" = 0 ]; then
+      printf '自動再開しない: PDH_CODEX_RESUME_MAX=<%s> / PDH_CODEX_RESUME_DELAY_SECONDS=<%s> は非負整数が必要\n' "$resume_max" "$resume_delay"
+    else
       resume_max=$((10#$resume_max))
       resume_delay=$((10#$resume_delay))
+    fi
+    if [ "$valid_settings" = 1 ] && [ "$resume_max" -gt 0 ] && [ -n "$session_id" ] && build_resume "$@"; then
       resume_active=1
       printf 'round=0 started_at=%s wait=0s rc=%s\n' "$started_at" "$rc" > "$out/resume.log"
       cp "$out/stdout.txt" "$out/stdout.0.txt"

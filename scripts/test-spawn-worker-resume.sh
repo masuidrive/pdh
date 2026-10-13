@@ -48,7 +48,9 @@ if [ "${FAKE_OUTPUT_TRACK:-0}" = 1 ] && [ -n "$output_file" ]; then
   printf '%s/%s\n' "$PWD" "$output_file" > "$FAKE_DIR/output.$n"
 fi
 if [ "$json" = 1 ]; then
-  printf '{"type":"thread.started","thread_id":"11111111-1111-1111-1111-111111111111"}\n'
+  if [ "$step" != capacity-no-id ]; then
+    printf '{"type":"thread.started","thread_id":"11111111-1111-1111-1111-111111111111"}\n'
+  fi
   printf '{"type":"turn.started"}\n'
   case "$step" in
     capacity*)
@@ -86,6 +88,10 @@ case "$step" in
     printf 'ERROR: Selected model is at capacity. Please try a different model.\ntokens used\n123\n' >&2
     date +%s > "$FAKE_DIR/ended.$n"
     exit "$n" ;;
+  tool-failure) printf 'diff contains Selected model is at capacity\nERROR: authentication failed\n' >&2; exit 42 ;;
+  stale-capacity) printf 'ERROR: Selected model is at capacity\n' >&2
+    for ((line=0; line<40; line++)); do printf 'tool output %s\n' "$line" >&2; done
+    printf 'ERROR: authentication failed\n' >&2; exit 42 ;;
   signal-capacity)
     printf 'ERROR: Selected model is at capacity\n' >&2
     kill -TERM "$$" ;;
@@ -268,14 +274,23 @@ eq '--wait' 'DONE rc=0 resumes=1' "$wait_output"
 expect_args exec resume "$sid" --json -
 contains "$out/stdout.0.txt" '"type":"turn.failed"'
 report_case
-for plan in json-tool-failure json-last-failure; do
+for plan in json-tool-failure json-last-failure capacity-no-id; do
   new_case "M-3: JSON の指示・ツール文言や過去の error を混雑と判定しない ($plan)"
   launch "$plan" "$SCRIPT" "$out" -- codex exec --json 'Selected model is at capacity'
   done_worker
   expect_single
-  eq rc 42 "$(cat "$out/rc.txt")"
+  if [ "$plan" = capacity-no-id ]; then expected_rc=1; else expected_rc=42; fi
+  eq rc "$expected_rc" "$(cat "$out/rc.txt")"
   report_case
 done
+
+new_case 'JSON の再開回が別のエラーで終わったら診断して停止'
+launch capacity,json-last-failure "$SCRIPT" "$out" -- codex exec --json 'Selected model is at capacity'
+done_worker
+eq '起動回数' 2 "$(cat "$trace/count")"
+eq rc 42 "$(cat "$out/rc.txt")"
+contains "$out/resume.log" '再開の 1 回目が混雑以外で終わった'
+report_case
 
 new_case 'AC4: 既定4回で上限停止・最後のrcと各回出力'
 unset PDH_CODEX_RESUME_MAX
@@ -318,13 +333,13 @@ contains "$out/resume.log" 'モデルの混雑で 2 回再開したが終わら�
 report_case
 export PDH_CODEX_RESUME_MAX=4 PDH_CODEX_RESUME_DELAY_SECONDS=0
 
-for plan in failure capacity-no-id capacity-empty-id stdout-capacity success-capacity signal-capacity; do
+for plan in failure tool-failure stale-capacity capacity-no-id capacity-empty-id stdout-capacity success-capacity signal-capacity; do
   new_case "AC3: $plan は再開しない"
   launch "$plan" "$SCRIPT" "$out" -- codex exec '指示'
   done_worker
   expect_single
   case "$plan" in
-    failure|stdout-capacity) expected_rc=42 ;;
+    failure|tool-failure|stale-capacity|stdout-capacity) expected_rc=42 ;;
     signal-capacity) expected_rc=143 ;;
     success-capacity) expected_rc=0 ;;
     *) expected_rc=1 ;;
@@ -334,7 +349,7 @@ for plan in failure capacity-no-id capacity-empty-id stdout-capacity success-cap
   report_case
 done
 
-for unsupported in '--unknown-option' '--sandbox=unsupported' '--cd=/missing/pdh-work-dir' '-m'; do
+for unsupported in '--unknown-option' '--sandbox=unsupported' '--cd=/missing/pdh-work-dir' '-m' '--ephemeral'; do
   new_case "AC3: 組み立てられない引数 $unsupported"
   launch capacity "$SCRIPT" "$out" -- codex exec "$unsupported"
   done_worker
@@ -342,6 +357,26 @@ for unsupported in '--unknown-option' '--sandbox=unsupported' '--cd=/missing/pdh
   eq rc 1 "$(cat "$out/rc.txt")"
   report_case
 done
+
+new_case '再開できる引数を落とさずそのまま渡す'
+forwarded=(--skip-git-repo-check --dangerously-bypass-approvals-and-sandbox
+  --output-schema "$case_dir/schema.json" -i "$case_dir/image.png"
+  --image="$case_dir/other.png" --enable feature_one --disable feature_two
+  --output-schema="$case_dir/other-schema.json" --enable=feature_three --disable=feature_four)
+launch capacity,success "$SCRIPT" "$out" -- codex exec "${forwarded[@]}" '指示'
+done_worker
+eq rc 0 "$(cat "$out/rc.txt")"
+expect_args exec resume "$sid" "${forwarded[@]}" -
+report_case
+
+new_case 'stdin と引数 prompt を併用した混雑は組み立てられないため停止'
+printf 'stdin の指示\n' > "$case_dir/input.txt"
+launch capacity "$SCRIPT" --stdin "$case_dir/input.txt" "$out" -- codex exec '引数の指示'
+done_worker
+expect_single
+eq '--wait' 'DONE rc=1' "$wait_output"
+same "$case_dir/input.txt" "$trace/stdin.1"
+report_case
 
 new_case 'AC3/DD: 再開が混雑以外で失敗した診断を log と --wait に出す'
 launch capacity,failure "$SCRIPT" "$out" -- codex exec '指示'
@@ -358,7 +393,7 @@ report_case
 # INT handler は、SIGINT を受け取れる set -m 分岐を実際に起動して検査する。
 no_setsid_path="$TMP_DIR/no-setsid-bin"
 must mkdir -p "$no_setsid_path"
-for utility in bash env mkdir dirname basename rm date ps tr cat grep cp sleep head pgrep awk; do
+for utility in bash env mkdir dirname basename rm date ps tr cat grep cp sleep head pgrep awk tail; do
   must ln -s "$(command -v "$utility")" "$no_setsid_path/$utility"
 done
 
@@ -422,6 +457,8 @@ for setting in max delay; do
   done_worker
   expect_single
   eq rc 1 "$(cat "$out/rc.txt")"
+  contains "$out/supervisor.log" '自動再開しない: PDH_CODEX_RESUME_MAX='
+  eq '不正設定の診断は1行' 1 "$(wc -l < "$out/supervisor.log" | tr -d ' ')"
   report_case
   export PDH_CODEX_RESUME_MAX=4 PDH_CODEX_RESUME_DELAY_SECONDS=0
 done
@@ -432,7 +469,8 @@ launch capacity "$SCRIPT" "$out" -- codex exec '指示'
 done_worker
 eq '起動回数' 1 "$(cat "$trace/count")"
 eq rc 1 "$(cat "$out/rc.txt")"
-contains "$out/resume.log" 'モデルの混雑で 0 回再開したが終わらなかった'
+expect_single
+eq '--wait' 'DONE rc=1' "$wait_output"
 report_case
 export PDH_CODEX_RESUME_MAX=4
 
@@ -446,12 +484,14 @@ normalize() {
     *) cat "$file" ;;
   esac
 }
-for command_kind in other success failure; do
+for command_kind in other success failure capacity; do
   for input_kind in stdin no-stdin; do
     new_case "AC5: 旧版比較 $command_kind / $input_kind（ファイル全件・--wait・stdin）"
     printf 'stdin の全文\n末尾の改行\n\n' > "$case_dir/input.txt"
     command_args=(codex exec '引数の指示')
     plan="$command_kind"
+    # 無効化した混雑でも出力のファイル全件と内容が旧版と同じ。
+    if [ "$command_kind" = capacity ]; then export PDH_CODEX_RESUME_MAX=0; else export PDH_CODEX_RESUME_MAX=4; fi
     if [ "$command_kind" = other ]; then
       command_args=(bash -c 'printf "other stdout\n"; cat; printf "other stderr\n" >&2; exit 7')
       plan=success

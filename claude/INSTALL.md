@@ -403,7 +403,7 @@ rm -rf tmp/pdh
      - ⚠ **残りの machinery は «diff してから» 反映する** — `.github/coding-bot/system.md` `_issue.md` `_pr.md` `run-action.sh` `engines/`、`.github/workflows/coding-bot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**導入先はここを意図して変えていることがある（repo 固有の規則を書いた節・action の SHA 固定・timeout・既存 devcontainer とのマージ結果）。**上流だけにある行を見て、取るべきものだけ取る。**
        ⚠ **2026-09-17 に所有者が変わってから、この節は «触らない» ではなくなった。**それまで machinery は外部 repo からの vendoring で「この手順では触らない」ものだったので、導入先が書き足した節も自動的に守られていた。**いまは守られない。**
    - **CLAUDE.md**: `Based on` 行の commit ID 間の差分を取り、プロジェクト固有の設定（テストコマンド、ディレクトリ構造、チーム構成テーブル等）を保持しつつテンプレートの変更を反映する
-   - **`Based on` 行を持たない配布物のうち、上書きでないもの (`scripts/fast-checks.sh` / `scripts/checks/README.md` / `scripts/hookbus.js`)**: この手順では拾えない。該当する変更は[既知の移行手順](#既知の移行手順)で個別に扱う
+   - **`Based on` 行を持たない配布物のうち、上書きでないもの (`scripts/fast-checks.sh` / `scripts/checks/README.md` / `scripts/hookbus.js` / `scripts/spawn-worker.sh`)**: この手順では拾えない。該当する変更は[既知の移行手順](#既知の移行手順)で個別に扱う
    - **`.ticket-config.yaml`**: ⚠ **`note_content` を独自化していないなら、差分マージより «テンプレートで全置換してから固有設定を戻す» ほうが確実。**戻すのは `tickets_dir` / `default_branch` / `branch_prefix` / `repository` / `auto_push` / `delete_remote_on_close` / `worktree_copy_files` / 各 `*_success_message`。⚠ **`note_content` に独自の節を足しているなら全置換してはならない** — その節がまるごと消える。その場合は差分マージにし、下の[既知の移行手順](#既知の移行手順)の確認コマンドで**トップレベルのキーを 1 つずつ見る。**大きなブロック（`note_content`）と数行のキーが同居するファイルを行単位で diff マージすると、**ブロックだけが入ってキーが落ちる**（実際に落ちた配布先がある）
    - **本ガイドが指定する設定 (settings.json / vitest.config.ts / scripts/test-all.sh)**: プロジェクト固有のカスタマイズが入っているので上書きしない。代わりに本ガイドの「.claude/settings.json を設定する」「scripts/test-all.sh を作成する」「vitest in-source testing を有効化」と README「tmux Director」で推奨される項目が含まれているかをレビューし、抜けていたら追加する
 6. **削除されたファイルの撤去**: 旧 commit から HEAD で `D` (削除) になったファイルがあれば、プロジェクト側から除去する。該当する設定 (settings.json / vitest.config.ts / scripts/test-all.sh) も必要なら撤去。上の表の逆手順。**過去の major refactor で `epics/` ディレクトリ / `epic-creator` skill / Light Full flow / PD-A / PD-B / PD-D / PD-C-2/3/4/5/8 phase は廃止された**。旧バージョンから upgrade する場合は project 側からこれらの参照を撤去する
@@ -424,6 +424,24 @@ rm -rf tmp/pdh
 11. 後片付け: `rm -rf tmp/pdh`
 
 ### 既知の移行手順
+
+#### worker の混雑時の自動再開を導入する
+
+`scripts/spawn-worker.sh` は `Based on` 行を持たないため、通常の差分マージだけでは更新されない。適用済みかの確認（冪等）:
+
+```bash
+grep -q PDH_CODEX_RESUME_MAX scripts/spawn-worker.sh 2>/dev/null && echo "worker 自動再開: 適用済み" || echo "worker 自動再開: 要適用"
+```
+
+「要適用」なら、既存ファイルを backup してから次を実行する。既に自動再開がある場合も、上流との差分を確認して今回の修正を反映する。project 固有の変更があれば、その変更を保持してマージする。
+
+```bash
+mkdir -p scripts
+cp tmp/pdh/claude/templates/spawn-worker.sh scripts/spawn-worker.sh
+chmod +x scripts/spawn-worker.sh
+```
+
+適用後に確認コマンドを再実行する。同じ版を再度コピーしても差分は出ない。
 
 #### `.ticket-config.yaml` のテンプレ本文と上流の差を数える script が入った（2026-09-29 以降）
 
