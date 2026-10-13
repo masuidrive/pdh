@@ -38,8 +38,8 @@
 #   PDH_CODEX_RESUME_DELAY_SECONDS=60         最初の待ち秒数。以後は倍増（60/120/240/480）
 #   値は非負整数。不正値なら再開せず、混雑時だけ supervisor.log に理由を1行残す。
 #   0 で無効にした場合は記録ファイルを追加せず、--wait の表示も従来どおり。
-#   判定は stderr の最後の見出しより後の、最後の行頭 ERROR: が Selected model is at capacity のとき。
-#   --json は stdout の最後の error / turn.failed を判定し、exec は thread.started の id を使う。
+#   判定は stderr の最後の見出しより後の、最後の行頭 ERROR: が Selected model is at capacity を含むとき。
+#   --json は stdout の最後の error / turn.failed の message に同じ文言を含むか判定し、exec は thread.started の id を使う。
 #   初回=0、再開/起動し直し=1〜。混雑時だけ resume.log、stdout.<回>.txt / stderr.<回>.txt
 #   を追加する。stdout.txt / stderr.txt は最後の回。resume.log の各回の行には
 #   action=exec-resume / action=review-restart を付ける。
@@ -319,7 +319,7 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
       }
       END {
         if (mode == "capacity") {
-          exit !(last_error ~ /^(stream disconnected before completion: )?Selected model is at capacity([. ]|$)/)
+          exit !(index(last_error, "Selected model is at capacity") > 0)
         }
       }
     '
@@ -335,7 +335,7 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
       awk '
         /^(user|codex|exec|thinking)$/ {last_heading=NR}
         /^ERROR:/ {last_error=$0; error_line=NR}
-        END {exit !(error_line > last_heading && last_error ~ /^ERROR: Selected model is at capacity([. ]|$)/)}
+        END {exit !(error_line > last_heading && index(last_error, "Selected model is at capacity") > 0)}
       ' "$out/stderr.txt"
     fi
   }
