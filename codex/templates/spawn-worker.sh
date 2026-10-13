@@ -38,7 +38,7 @@
 #   PDH_CODEX_RESUME_DELAY_SECONDS=60         最初の待ち秒数。以後は倍増（60/120/240/480）
 #   値は非負整数。不正値なら再開せず、混雑時だけ supervisor.log に理由を1行残す。
 #   0 で無効にした場合は記録ファイルを追加せず、--wait の表示も従来どおり。
-#   判定は stderr の行頭 ERROR: の最後の1行が Selected model is at capacity のとき。
+#   判定は stderr の最後の見出しより後の、最後の行頭 ERROR: が Selected model is at capacity のとき。
 #   --json は stdout の最後の error / turn.failed を判定し、exec は thread.started の id を使う。
 #   初回=0、再開/起動し直し=1〜。混雑時だけ resume.log、stdout.<回>.txt / stderr.<回>.txt
 #   を追加する。stdout.txt / stderr.txt は最後の回。resume.log の各回の行には
@@ -270,7 +270,7 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
     # Codex の JSONL を文字列・階層ごとに読む。ツール出力内の JSON や文言は判定しない。
     # 対象は実 CLI の thread.started / error / turn.failed。未知の error は停止側に倒す。
     # 大きなツール本文は parser に渡さない。候補でも階層は awk で検査する。
-    grep -E '"type"[[:space:]]*:[[:space:]]*"(thread\.started|error|turn\.failed)"' "$out/stdout.txt" | awk -v mode="$1" '
+    grep -aE '"type"[[:space:]]*:[[:space:]]*"(thread\.started|error|turn\.failed)"' "$out/stdout.txt" | awk -v mode="$1" '
       function string_value(    c, value) {
         value=""
         for (pos++; pos <= length($0); pos++) {
@@ -324,8 +324,12 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
     if [ "$json_mode" = 1 ]; then
       json_events capacity
     else
-      # ERROR の後に tracing や token 数が続いても、最後の ERROR だけで決める。
-      awk '/^ERROR:/ {last_error=$0} END {exit !(last_error ~ /^ERROR: Selected model is at capacity([. ]|$)/)}' "$out/stderr.txt"
+      # 指示・ツール出力の引用を除き、tracing や token 数が続く終端 ERROR は拾う。
+      awk '
+        /^(user|codex|exec|thinking)$/ {last_heading=NR}
+        /^ERROR:/ {last_error=$0; error_line=NR}
+        END {exit !(error_line > last_heading && last_error ~ /^ERROR: Selected model is at capacity([. ]|$)/)}
+      ' "$out/stderr.txt"
     fi
   }
 
