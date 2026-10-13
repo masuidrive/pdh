@@ -40,15 +40,23 @@ date +%s > "$FAKE_DIR/started.$n"
 step=$(printf '%s\n' "$FAKE_PLAN" | awk -F, -v n="$n" '{if (n <= NF) print $n; else print $NF}')
 json=0
 output_file=""
+input_file=""
 previous=""
 for arg in "$@"; do
   case "$arg" in --json) json=1 ;; --output-last-message=*) output_file="${arg#*=}" ;; esac
-  case "$previous" in -o|--output-last-message) output_file="$arg" ;; esac
+  case "$arg" in --output-schema=*|--image=*|-i=*) input_file="${arg#*=}" ;; esac
+  case "$previous" in
+    -o|--output-last-message) output_file="$arg" ;;
+    --output-schema|-i|--image) input_file="$arg" ;;
+  esac
   previous="$arg"
 done
 if [ "${FAKE_OUTPUT_TRACK:-0}" = 1 ] && [ -n "$output_file" ]; then
   printf 'attempt=%s\n' "$n" > "$output_file"
   printf '%s/%s\n' "$PWD" "$output_file" > "$FAKE_DIR/output.$n"
+fi
+if [ "${FAKE_INPUT_TRACK:-0}" = 1 ] && [ -n "$input_file" ]; then
+  cat "$input_file" > "$FAKE_DIR/input.$n" || exit 42
 fi
 if [ "$json" = 1 ]; then
   if [ "$step" != capacity-no-id ]; then
@@ -56,6 +64,21 @@ if [ "$json" = 1 ]; then
   fi
   printf '{"type":"turn.started"}\n'
   case "$step" in
+    json-large-*)
+      # 2 MB のツール文字列を3本。awk の文字ごとの連結を回帰させると期限内に終わらない。
+      for ((item=0; item<3; item++)); do
+        printf '{"type":"item.completed","item":{"type":"command_execution","aggregated_output":"'
+        head -c 2000000 /dev/zero | tr '\0' x
+        printf '"}}\n'
+      done
+      if [ "$step" = json-large-failure ]; then
+        printf '{"type":"turn.failed","error":{"message":"authentication failed"}}\n'; exit 42
+      fi
+      printf '{"type":"turn.failed","error":{"message":"Selected model is at capacity"}}\n'; exit 1 ;;
+    json-nested-failure)
+      printf '{"type":"item.completed","item":{"type":"error","message":"Selected model is at capacity"}}\n'
+      printf '{"type":"item.completed","item":{"type":"command_execution","aggregated_output":"quoted \\"type\\":\\"error\\" and \\"Selected model is at capacity\\""}}\n'
+      exit 42 ;;
     capacity*)
       printf '{"type":"error","message":"stream disconnected before completion: Selected model is at capacity. Please try a different model."}\n'
       printf '{"type":"turn.failed","error":{"message":"stream disconnected before completion: Selected model is at capacity. Please try a different model."}}\n'
@@ -85,8 +108,17 @@ esac
 printf 'user\n' >&2
 if [ "${!#}" = - ]; then cat "$FAKE_DIR/stdin.$n" >&2; else printf '%s\n' "${!#}" >&2; fi
 # 実 worker の処理を模した長い出力。指示の ERROR 行を末尾の error と取り違えない。
-for ((line=0; line<40; line++)); do printf 'working line %s\n' "$line" >&2; done
+if [ "$step" != echo-auth ]; then
+  for ((line=0; line<40; line++)); do printf 'working line %s\n' "$line" >&2; done
+fi
 case "$step" in
+  echo-auth) printf 'ERROR: auth\n' >&2; exit 42 ;;
+  capacity-then-auth)
+    printf 'ERROR: Selected model is at capacity. Please try a different model.\nERROR: auth\ntokens used\n123\n' >&2; exit 42 ;;
+  capacity-tracing)
+    printf 'ERROR: Selected model is at capacity. Please try a different model.\n' >&2
+    for ((line=0; line<40; line++)); do printf 'tracing event %s\n' "$line" >&2; done
+    printf 'tokens used\n123\n' >&2; exit "$n" ;;
   capacity*)
     printf 'ERROR: Selected model is at capacity. Please try a different model.\ntokens used\n123\n' >&2
     date +%s > "$FAKE_DIR/ended.$n"
@@ -303,6 +335,23 @@ for plan in failure capacity,failure; do
   report_case
 done
 
+for plan in echo-auth capacity-then-auth; do
+  new_case "M-1: 最後の ERROR が認証エラーなら再開しない ($plan)"
+  launch "$plan" "$SCRIPT" "$out" -- codex exec $'指示の引用\nERROR: Selected model is at capacity. Please try a different model.'
+  done_worker
+  eq rc 42 "$(cat "$out/rc.txt")"
+  expect_single
+  eq '--wait' 'DONE rc=42' "$wait_output"
+  report_case
+done
+
+new_case 'M-1: 最後の混雑 ERROR の後に長い tracing があっても再開する'
+launch capacity-tracing,success "$SCRIPT" "$out" -- codex exec '指示'
+done_worker
+eq rc 0 "$(cat "$out/rc.txt")"
+eq '起動回数' 2 "$(cat "$trace/count")"
+report_case
+
 for output_option in -o --output-last-message --output-last-message=; do
   new_case "M-2: -C と相対 $output_option は同じ出力ファイルに書く"
   output_args=("$output_option" result.txt)
@@ -316,6 +365,26 @@ for output_option in -o --output-last-message --output-last-message=; do
   report_case
 done
 
+for input_option in --output-schema --output-schema= -i -i= --image --image=; do
+  new_case "M-2: -C と相対 $input_option は同じ入力ファイルを読む"
+  printf 'original input\n' > "$case_dir/input.dat"
+  printf 'wrong input\n' > "$case_dir/work dir/input.dat"
+  input_args=("$input_option" input.dat)
+  expected_args=("$input_option" "$case_dir/input.dat")
+  if [ "$input_option" != "${input_option%=}" ]; then
+    input_args=("${input_option}input.dat")
+    expected_args=("${input_option}$case_dir/input.dat")
+  fi
+  (cd "$case_dir" && FAKE_INPUT_TRACK=1 launch capacity,success "$SCRIPT" "$out" -- \
+    codex exec -C 'work dir' "${input_args[@]}" '指示')
+  done_worker
+  eq rc 0 "$(cat "$out/rc.txt")"
+  same "$trace/input.1" "$trace/input.2"
+  expect_args exec resume "$sid" "${expected_args[@]}" -
+  eq cwd "$case_dir/work dir" "$(cat "$trace/cwd.2")"
+  report_case
+done
+
 new_case 'M-3: JSON の thread.started と最後の混雑エラーで同じ会話を再開'
 launch capacity,success "$SCRIPT" "$out" -- codex exec --json '指示'
 done_worker
@@ -324,13 +393,40 @@ eq '--wait' 'DONE rc=0 resumes=1' "$wait_output"
 expect_args exec resume "$sid" --json -
 contains "$out/stdout.0.txt" '"type":"turn.failed"'
 report_case
-for plan in json-tool-failure json-last-failure capacity-no-id; do
+for plan in json-tool-failure json-last-failure json-nested-failure capacity-no-id; do
   new_case "M-3: JSON の指示・ツール文言や過去の error を混雑と判定しない ($plan)"
   launch "$plan" "$SCRIPT" "$out" -- codex exec --json 'Selected model is at capacity'
   done_worker
   expect_single
   if [ "$plan" = capacity-no-id ]; then expected_rc=1; else expected_rc=42; fi
   eq rc "$expected_rc" "$(cat "$out/rc.txt")"
+  report_case
+done
+
+for plan in json-large-capacity json-large-failure; do
+  new_case "M-3: 2MB×3 の JSON ツール出力でも5秒以内に rc.txt を残す ($plan)"
+  started=$(date +%s)
+  launch "$plan,success" "$SCRIPT" "$out" -- codex exec --json '指示'
+  deadline=$((started + 5))
+  while [ ! -f "$out/rc.txt" ] && [ "$(date +%s)" -lt "$deadline" ]; do sleep 0.05; done
+  if [ ! -f "$out/rc.txt" ]; then
+    fail "$label: rc.txt が5秒以内に作られなかった"
+    # 遅い parser も止める。supervisor の trap は最後の rc を残す。
+    parser_pids=$(pgrep -P "$(cat "$out/pid.txt")" || true)
+    if [ -n "$parser_pids" ]; then kill -TERM $parser_pids 2>/dev/null || true; fi
+    kill -TERM "$(cat "$out/pid.txt")" 2>/dev/null || true
+    await_file "$out/rc.txt"
+  else
+    done_worker
+    printf 'JSON completion: %ss (%s)\n' "$(( $(date +%s) - started ))" "$plan"
+    if [ "$plan" = json-large-capacity ]; then
+      eq rc 0 "$(cat "$out/rc.txt")"
+      eq '起動回数' 2 "$(cat "$trace/count")"
+    else
+      eq rc 42 "$(cat "$out/rc.txt")"
+      expect_single
+    fi
+  fi
   report_case
 done
 
@@ -426,6 +522,7 @@ done
 
 new_case '再開できる引数を落とさずそのまま渡す'
 forwarded=(--skip-git-repo-check --dangerously-bypass-approvals-and-sandbox
+  --strict-config --ignore-user-config --ignore-rules --dangerously-bypass-hook-trust
   --output-schema "$case_dir/schema.json" -i "$case_dir/image.png"
   --image="$case_dir/other.png" --enable feature_one --disable feature_two
   --output-schema="$case_dir/other-schema.json" --enable=feature_three --disable=feature_four)
