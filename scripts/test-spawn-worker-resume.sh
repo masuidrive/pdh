@@ -59,6 +59,8 @@ if [ "${FAKE_INPUT_TRACK:-0}" = 1 ] && [ -n "$input_file" ]; then
   cat "$input_file" > "$FAKE_DIR/input.$n" || exit 42
 fi
 if [ "$json" = 1 ]; then
+  # JSON イベントと別の NUL 含み出力が混在してもイベント行を読めること。
+  if [ "$step" = json-nul-capacity ]; then printf '\0\n'; fi
   if [ "$step" != capacity-no-id ]; then
     printf '{"type":"thread.started","thread_id":"11111111-1111-1111-1111-111111111111"}\n'
   fi
@@ -79,7 +81,7 @@ if [ "$json" = 1 ]; then
       printf '{"type":"item.completed","item":{"type":"error","message":"Selected model is at capacity"}}\n'
       printf '{"type":"item.completed","item":{"type":"command_execution","aggregated_output":"quoted \\"type\\":\\"error\\" and \\"Selected model is at capacity\\""}}\n'
       exit 42 ;;
-    capacity*)
+    capacity*|json-nul-capacity)
       printf '{"type":"error","message":"stream disconnected before completion: Selected model is at capacity. Please try a different model."}\n'
       printf '{"type":"turn.failed","error":{"message":"stream disconnected before completion: Selected model is at capacity. Please try a different model."}}\n'
       exit "$n" ;;
@@ -112,6 +114,12 @@ if [ "$step" != echo-auth ]; then
   for ((line=0; line<40; line++)); do printf 'working line %s\n' "$line" >&2; done
 fi
 case "$step" in
+  tool-panic)
+    printf 'exec\nERROR: Selected model is at capacity. Please try a different model.\nthinking\nthread panicked\n' >&2
+    exit 101 ;;
+  prompt-panic)
+    printf 'codex\nthread panicked\n' >&2
+    exit 101 ;;
   echo-auth) printf 'ERROR: auth\n' >&2; exit 42 ;;
   capacity-then-auth)
     printf 'ERROR: Selected model is at capacity. Please try a different model.\nERROR: auth\ntokens used\n123\n' >&2; exit 42 ;;
@@ -345,6 +353,16 @@ for plan in echo-auth capacity-then-auth; do
   report_case
 done
 
+for plan in tool-panic prompt-panic; do
+  new_case "非 JSON: 引用の混雑 ERROR の後に見出しがあり panic 終了なら再開しない ($plan)"
+  launch "$plan,success" "$SCRIPT" "$out" -- codex exec $'指示の引用\nERROR: Selected model is at capacity. Please try a different model.'
+  done_worker
+  eq rc 101 "$(cat "$out/rc.txt")"
+  expect_single
+  eq '--wait' 'DONE rc=101' "$wait_output"
+  report_case
+done
+
 new_case 'M-1: 最後の混雑 ERROR の後に長い tracing があっても再開する'
 launch capacity-tracing,success "$SCRIPT" "$out" -- codex exec '指示'
 done_worker
@@ -392,6 +410,14 @@ eq rc 0 "$(cat "$out/rc.txt")"
 eq '--wait' 'DONE rc=0 resumes=1' "$wait_output"
 expect_args exec resume "$sid" --json -
 contains "$out/stdout.0.txt" '"type":"turn.failed"'
+report_case
+new_case 'JSON: NUL が混在しても混雑エラーで同じ会話を再開'
+launch json-nul-capacity,success "$SCRIPT" "$out" -- codex exec --json '指示'
+done_worker
+eq rc 0 "$(cat "$out/rc.txt")"
+eq '起動回数' 2 "$(cat "$trace/count")"
+eq '--wait' 'DONE rc=0 resumes=1' "$wait_output"
+expect_args exec resume "$sid" --json -
 report_case
 for plan in json-tool-failure json-last-failure json-nested-failure capacity-no-id; do
   new_case "M-3: JSON の指示・ツール文言や過去の error を混雑と判定しない ($plan)"
