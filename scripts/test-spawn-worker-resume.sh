@@ -271,10 +271,22 @@ eq '--wait 診断全文' "DONE rc=42 resumes=1"$'\n'"$diagnostic" "$wait_output"
 same "$out/stderr.1.txt" "$out/stderr.txt"
 report_case
 
+# setsid 分岐は非対話 bash の background 起動で SIGINT の無視を継承する。
+# INT handler は、SIGINT を受け取れる set -m 分岐を実際に起動して検査する。
+no_setsid_path="$TMP_DIR/no-setsid-bin"
+must mkdir -p "$no_setsid_path"
+for utility in bash env mkdir dirname basename rm date ps tr cat grep cp sleep head pgrep awk; do
+  must ln -s "$(command -v "$utility")" "$no_setsid_path/$utility"
+done
+
 for signame in TERM INT HUP; do
   new_case "AC3/4/DD: 待機中の $signame を記録して停止"
   export PDH_CODEX_RESUME_DELAY_SECONDS=2
-  launch capacity "$SCRIPT" "$out" -- codex exec '指示'
+  if [ "$signame" = INT ]; then
+    PATH="$TMP_DIR/bin:$no_setsid_path" launch capacity "$SCRIPT" "$out" -- codex exec '指示'
+  else
+    launch capacity "$SCRIPT" "$out" -- codex exec '指示'
+  fi
   await_file "$out/resume.log"
   i=0
   while ! grep -q 'phase=waiting' "$out/resume.log" && [ "$i" -lt 100 ]; do sleep 0.01; i=$((i + 1)); done

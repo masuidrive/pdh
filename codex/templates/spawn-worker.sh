@@ -9,7 +9,7 @@
 #   OOM でもなく «親の codex プロセス» で、2 件とも «自分が起動してから» 181 秒・
 #   183 秒だった（起動時刻は 73 秒ずれていたので、全体の締切ではない）。
 #
-# したがって worker は別 process group へ出し、
+# したがって worker は別 session（`setsid` が無ければ別 process group）へ出し、
 # この script は即座に返る。
 # 呼び出し側は --wait で «短く区切って» 待ち、まだなら何度でも呼び直す。
 # ⚠ 1 回の --wait を長くしても意味がない。長くした分だけ shell tool の timeout に
@@ -311,13 +311,21 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
   exit "$rc"
 fi
 
-# ---- ここからが入口。別 process group へ出し、即座に返る。
-# macOS にもある job control で、呼び出し側の group の signal から切り離す。
-set -m
-_SPAWN_WORKER_SUPERVISOR=1 _SPAWN_WORKER_STDIN="$stdin_file" \
-  bash "$0" "$out" -- "$@" < /dev/null \
-  > "$out/supervisor.log" 2>&1 &
-set +m
+# ---- ここからが入口。別 session / 別 process group へ出し、即座に返る。
+# ⚠ `setsid` は macOS に無い。あれば別 session（いちばん強い切り離し）、無ければ
+# `set -m` で別 process group へ出す（`_execution-team.md`「並行起動」が定める方法）。
+# 後者でも «呼び出し側の group へ送られた signal が worker へ届かない» は満たす。
+if command -v setsid >/dev/null 2>&1; then
+  _SPAWN_WORKER_SUPERVISOR=1 _SPAWN_WORKER_STDIN="$stdin_file" \
+    setsid bash "$0" "$out" -- "$@" < /dev/null \
+    > "$out/supervisor.log" 2>&1 &
+else
+  set -m
+  _SPAWN_WORKER_SUPERVISOR=1 _SPAWN_WORKER_STDIN="$stdin_file" \
+    bash "$0" "$out" -- "$@" < /dev/null \
+    > "$out/supervisor.log" 2>&1 &
+  set +m
+fi
 sv=$!
 disown "$sv" 2>/dev/null || true
 printf '%s\n' "$sv" > "$out/pid.txt"
