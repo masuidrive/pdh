@@ -58,6 +58,10 @@ fi
 if [ "${FAKE_INPUT_TRACK:-0}" = 1 ] && [ -n "$input_file" ]; then
   cat "$input_file" > "$FAKE_DIR/input.$n" || exit 42
 fi
+case "$step" in
+  capacity-stream-wrapped) capacity_message='stream disconnected before completion: Selected model is at capacity. Please try a different model.' ;;
+  capacity-http-wrapped) capacity_message='unexpected status 503 Service Unavailable: Selected model is at capacity, please try again later.' ;;
+esac
 if [ "$json" = 1 ]; then
   # JSON イベントと別の NUL 含み出力が混在してもイベント行を読めること。
   if [ "$step" = json-nul-capacity ]; then printf '\0\n'; fi
@@ -81,6 +85,10 @@ if [ "$json" = 1 ]; then
       printf '{"type":"item.completed","item":{"type":"error","message":"Selected model is at capacity"}}\n'
       printf '{"type":"item.completed","item":{"type":"command_execution","aggregated_output":"quoted \\"type\\":\\"error\\" and \\"Selected model is at capacity\\""}}\n'
       exit 42 ;;
+    capacity-stream-wrapped|capacity-http-wrapped)
+      printf '{"type":"error","message":"%s"}\n' "$capacity_message"
+      printf '{"type":"turn.failed","error":{"message":"%s"}}\n' "$capacity_message"
+      exit "$n" ;;
     capacity*|json-nul-capacity)
       printf '{"type":"error","message":"stream disconnected before completion: Selected model is at capacity. Please try a different model."}\n'
       printf '{"type":"turn.failed","error":{"message":"stream disconnected before completion: Selected model is at capacity. Please try a different model."}}\n'
@@ -127,6 +135,9 @@ case "$step" in
     printf 'ERROR: Selected model is at capacity. Please try a different model.\n' >&2
     for ((line=0; line<40; line++)); do printf 'tracing event %s\n' "$line" >&2; done
     printf 'tokens used\n123\n' >&2; exit "$n" ;;
+  capacity-stream-wrapped|capacity-http-wrapped)
+    printf 'ERROR: %s\ntokens used\n123\n' "$capacity_message" >&2
+    exit "$n" ;;
   capacity*)
     printf 'ERROR: Selected model is at capacity. Please try a different model.\ntokens used\n123\n' >&2
     date +%s > "$FAKE_DIR/ended.$n"
@@ -341,6 +352,23 @@ for plan in failure capacity,failure; do
     eq '--wait' "DONE rc=42 resumes=1"$'\n'"$diagnostic" "$wait_output"
   fi
   report_case
+done
+
+for mode in text json; do
+  mode_args=()
+  if [ "$mode" = json ]; then mode_args=(--json); fi
+  for wrapper in stream http; do
+    new_case "AC1: 最後の混雑エラーに $wrapper wrapper があっても同じ会話を再開 ($mode)"
+    launch "capacity-$wrapper-wrapped,success" "$SCRIPT" "$out" -- codex exec "${mode_args[@]}" '指示'
+    done_worker
+    eq rc 0 "$(cat "$out/rc.txt")"
+    eq '起動回数' 2 "$(cat "$trace/count")"
+    eq '--wait' 'DONE rc=0 resumes=1' "$wait_output"
+    expect_args exec resume "$sid" "${mode_args[@]}" -
+    printf '%s\n指示' "$prefix" > "$case_dir/expected-prompt"
+    same "$case_dir/expected-prompt" "$trace/stdin.2"
+    report_case
+  done
 done
 
 for plan in echo-auth capacity-then-auth; do
