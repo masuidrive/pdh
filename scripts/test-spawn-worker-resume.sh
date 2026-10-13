@@ -267,6 +267,20 @@ for signame in TERM INT HUP; do
 done
 export PDH_CODEX_RESUME_DELAY_SECONDS=0
 
+new_case 'AC3/4: 再開実行中のsignalで --wait の再開回数を二重に数えない'
+launch capacity,slow-success "$SCRIPT" "$out" -- codex exec '指示'
+await_file "$out/resume.log"
+i=0
+while [ ! -f "$trace/started.2" ] && [ "$i" -lt 100 ]; do sleep 0.01; i=$((i + 1)); done
+must test -f "$trace/started.2"
+must kill -TERM "$(cat "$out/pid.txt")"
+done_worker
+eq rc 143 "$(cat "$out/rc.txt")"
+eq '--wait' 'DONE rc=143 resumes=1' "$wait_output"
+contains "$out/resume.log" 'round=1 phase=started'
+contains "$out/resume.log" 'signal=TERM rc=143'
+report_case
+
 new_case 'AC4: 既定の初回待機は60秒（待機開始直後にsignalで停止）'
 unset PDH_CODEX_RESUME_DELAY_SECONDS
 launch capacity "$SCRIPT" "$out" -- codex exec '指示'

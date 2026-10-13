@@ -53,7 +53,7 @@ if [ "${1:-}" = "--wait" ]; then
   secs="${3:-150}"
   resume_status() {
     if [ -f "$out/resume.log" ]; then
-      awk '$2 == "phase=started" {n++} END {printf " resumes=%d", n}' "$out/resume.log"
+      awk '$2 == "phase=started" && $3 ~ /^started_at=/ {n++} END {printf " resumes=%d", n}' "$out/resume.log"
     fi
   }
   waited=0
@@ -286,7 +286,7 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
           "$started_at" "$resume_delay" >> "$out/resume.log"
         (
           cd "$resume_cwd" || exit 1
-          "${resume_command[@]}"
+          exec "${resume_command[@]}"
         ) < "$out/resume-$resume_round.prompt.txt" > "$out/stdout.txt" 2> "$out/stderr.txt" &
         child=$!
         printf '%s\n' "$child" > "$out/child-pid.txt" 2>/dev/null || true

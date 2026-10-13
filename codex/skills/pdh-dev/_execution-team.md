@@ -65,6 +65,8 @@ grep -cE '^bwrap: ' "$d/stderr.log"   # 0 でなければ、review は実行さ�
 
 ⚠ **配布物に実装がある** — `scripts/spawn-worker.sh` が、この切り離しと «終わり方の記録»（rc・受けた signal・親子関係）をまとめて行う。`bash scripts/spawn-worker.sh <out-dir> -- <cmd...>` で起動して即座に返り、`bash scripts/spawn-worker.sh --wait <out-dir> [秒]` で短く区切って待つ（`75` = まだ走っている、`0` = 終了して `rc.txt` にある）。prompt は `--stdin <file>` で渡す — ⚠ **切り離した先は呼び出し側の stdin を継承しないので、`-- cmd < prompt.txt` と書くとその `<` は spawn-worker.sh 自身に掛かり worker には届かない。**
 
+⚠ **codex の混雑は同じ会話で自動再開する。**`codex exec` / `codex exec review` が non-zero で終わり、stderr に `Selected model is at capacity` があるときだけ働く。`PDH_CODEX_RESUME_MAX` は既定 `4`（`0` で無効）、`PDH_CODEX_RESUME_DELAY_SECONDS` は既定 `60` 秒で、待ち時間は `60 / 120 / 240 / 480` 秒と倍増する。値は非負整数を指定する。初回を `0`、再開を `1` 以降とし、out-dir に `resume.log`（開始時刻・待ち時間・rc・停止理由）、`stdout.<回>.txt` / `stderr.<回>.txt`、`resume-<回>.prompt.txt` を残す。`stdout.txt` / `stderr.txt` は最後の回の出力。再開指示は「モデルの混雑で止まったので、最初の指示の範囲だけで続けて終えて」に改行と最初の指示全文（review は `--base` / `--commit` / `--uncommitted` の範囲指定も）を続け、保存した prompt を stdin で渡す。**`--wait` は再開記録がある場合、`DONE rc=<rc> resumes=<回数>` / `RUNNING pid=<pid> alive=<yes/no> waited=<秒>s resumes=<回数> — もう一度 --wait を呼ぶ` と実際に再開した回数を添える。**混雑以外の失敗・signal・session id 欠落・組み立てられない引数・不正な環境変数・上限到達で止まり、モデルや engine は変えない。再開した回が混雑以外で失敗したら、`resume.log` と `--wait` に「再開の <回> 回目が混雑以外で終わった（rc=<rc>）。`stderr.<回>.txt` を見る」と出るので、その stderr を確認する。待機中の signal も `resume.log` に記録し、`rc.txt` は `128+signo` となる。混雑が無ければ、出力と stdin の渡し方は従来どおり。
+
 ## 各 stage の出口
 
 - **PDH-implement**: 実装担当が調査・実装・必要な検証を完遂する。QA には未確認の経路と既存の実行証拠を渡し、同じテストを理由なく重複させない。
