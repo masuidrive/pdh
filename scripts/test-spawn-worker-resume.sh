@@ -34,9 +34,40 @@ printf '%s\0' "$@" > "$FAKE_DIR/argv.$n"
 cat > "$FAKE_DIR/stdin.$n"
 printf '%s\n' "$PWD" > "$FAKE_DIR/cwd.$n"
 date +%s > "$FAKE_DIR/started.$n"
+step=$(printf '%s\n' "$FAKE_PLAN" | awk -F, -v n="$n" '{if (n <= NF) print $n; else print $NF}')
+json=0
+output_file=""
+previous=""
+for arg in "$@"; do
+  case "$arg" in --json) json=1 ;; --output-last-message=*) output_file="${arg#*=}" ;; esac
+  case "$previous" in -o|--output-last-message) output_file="$arg" ;; esac
+  previous="$arg"
+done
+if [ "${FAKE_OUTPUT_TRACK:-0}" = 1 ] && [ -n "$output_file" ]; then
+  printf 'attempt=%s\n' "$n" > "$output_file"
+  printf '%s/%s\n' "$PWD" "$output_file" > "$FAKE_DIR/output.$n"
+fi
+if [ "$json" = 1 ]; then
+  printf '{"type":"thread.started","thread_id":"11111111-1111-1111-1111-111111111111"}\n'
+  printf '{"type":"turn.started"}\n'
+  case "$step" in
+    capacity*)
+      printf '{"type":"error","message":"stream disconnected before completion: Selected model is at capacity. Please try a different model."}\n'
+      printf '{"type":"turn.failed","error":{"message":"stream disconnected before completion: Selected model is at capacity. Please try a different model."}}\n'
+      exit "$n" ;;
+    json-tool-failure)
+      printf '{"type":"item.completed","item":{"type":"command_execution","aggregated_output":"Selected model is at capacity"}}\n'
+      printf '{"type":"turn.failed","error":{"message":"authentication failed"}}\n'; exit 42 ;;
+    json-last-failure)
+      printf '{"type":"error","message":"Selected model is at capacity"}\n'
+      printf '{"error":{"message":"authentication failed"},"type":"turn.failed"}\n'; exit 42 ;;
+    failure) printf '{"type":"turn.failed","error":{"message":"authentication failed"}}\n'; exit 42 ;;
+    success) printf '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n'; exit 0 ;;
+  esac
+fi
 printf 'stdout attempt=%s\n' "$n"
 cat "$FAKE_DIR/stdin.$n"
-step=$(printf '%s\n' "$FAKE_PLAN" | awk -F, -v n="$n" '{if (n <= NF) print $n; else print $NF}')
+printf 'OpenAI Codex (test double)\n--------\nworkdir: %s\n' "$PWD" >&2
 case "$step" in
   capacity-no-id) ;;
   capacity-empty-id) printf 'session id: \n' >&2 ;;
@@ -46,9 +77,13 @@ case "$step" in
   capacity-multi|capacity-empty-id)
     printf 'session id: 22222222-2222-2222-2222-222222222222\n' >&2 ;;
 esac
+printf 'user\n' >&2
+if [ "${!#}" = - ]; then cat "$FAKE_DIR/stdin.$n" >&2; else printf '%s\n' "${!#}" >&2; fi
+# 実 worker の処理を模した長い出力。指示の ERROR 行を末尾の error と取り違えない。
+for ((line=0; line<40; line++)); do printf 'working line %s\n' "$line" >&2; done
 case "$step" in
   capacity*)
-    printf 'ERROR: Selected model is at capacity. Please try a different model.\n' >&2
+    printf 'ERROR: Selected model is at capacity. Please try a different model.\ntokens used\n123\n' >&2
     date +%s > "$FAKE_DIR/ended.$n"
     exit "$n" ;;
   signal-capacity)
@@ -149,12 +184,12 @@ prompt=$'最初の範囲だけ\n引用 " と $ と ` をそのまま\n\n'
 printf '%s' "$prompt" > "$case_dir/input.txt"
 launch capacity-multi,success "$SCRIPT" --stdin "$case_dir/input.txt" "$out" -- \
   codex exec --sandbox danger-full-access -C "$case_dir/work dir" \
-  -c 'model_reasoning_effort="high"' -m chosen-model -o result.txt -
+  -c 'model_reasoning_effort="high"' -m chosen-model -o "$case_dir/result.txt" -
 done_worker
 eq rc 0 "$(cat "$out/rc.txt")"
 eq '--wait' 'DONE rc=0 resumes=1' "$wait_output"
 expect_args exec resume "$sid" -c 'sandbox_mode="danger-full-access"' \
-  -c 'model_reasoning_effort="high"' -m chosen-model -o result.txt -
+  -c 'model_reasoning_effort="high"' -m chosen-model -o "$case_dir/result.txt" -
 eq cwd "$case_dir/work dir" "$(cat "$trace/cwd.2")"
 expect_prompt '' "$prompt"
 same "$out/stdout.1.txt" "$out/stdout.txt"
@@ -167,10 +202,10 @@ report_case
 new_case 'AC1/2: 引数 prompt・長い option 名・相対 cd・絶対 executable'
 launch capacity,success "$SCRIPT" "$out" -- "$TMP_DIR/bin/codex" exec \
   --sandbox=workspace-write --cd=. --config 'model_reasoning_effort="low"' \
-  --model=chosen-model --output-last-message=result.txt --json $'指示\n末尾\n'
+  --model=chosen-model --output-last-message="$case_dir/result.txt" --json $'指示\n末尾\n'
 done_worker
 expect_args exec resume "$sid" -c 'sandbox_mode="workspace-write"' \
-  --config 'model_reasoning_effort="low"' --model=chosen-model --output-last-message=result.txt --json -
+  --config 'model_reasoning_effort="low"' --model=chosen-model --output-last-message="$case_dir/result.txt" --json -
 eq cwd "$PWD" "$(cat "$trace/cwd.2")"
 expect_prompt '' $'指示\n末尾\n'
 report_case
@@ -178,7 +213,7 @@ report_case
 for scope in base commit uncommitted; do
   for with_prompt in yes no; do
     new_case "AC1/2: review --$scope（指示文=$with_prompt）"
-    review_args=(review -c 'sandbox_mode="read-only"' -m chosen-model -o review.txt)
+    review_args=(review -c 'sandbox_mode="read-only"' -m chosen-model -o "$case_dir/review.txt")
     case "$scope" in
       base) review_args+=(--base feature/base); expected_scope=$'--base feature/base\n' ;;
       commit) review_args+=(--commit abc123); expected_scope=$'--commit abc123\n' ;;
@@ -188,10 +223,58 @@ for scope in base commit uncommitted; do
     if [ "$with_prompt" = yes ]; then review_prompt=$'レビューの範囲\nそのまま'; review_args+=("$review_prompt"); fi
     launch capacity,success "$SCRIPT" "$out" -- codex exec "${review_args[@]}"
     done_worker
-    expect_args exec resume "$sid" -c 'sandbox_mode="read-only"' -m chosen-model -o review.txt -
+    expect_args exec resume "$sid" -c 'sandbox_mode="read-only"' -m chosen-model -o "$case_dir/review.txt" -
     expect_prompt "$expected_scope" "$review_prompt"
     report_case
   done
+done
+
+for plan in failure capacity,failure; do
+  new_case "M-1: 指示に混雑文言があっても末尾の認証エラーで止まる ($plan)"
+  prompt=$'この文言を調べる\nERROR: Selected model is at capacity. Please try a different model.\n範囲を守る'
+  launch "$plan" "$SCRIPT" "$out" -- codex exec "$prompt"
+  done_worker
+  eq rc 42 "$(cat "$out/rc.txt")"
+  if [ "$plan" = failure ]; then
+    expect_single
+    eq '--wait' 'DONE rc=42' "$wait_output"
+  else
+    eq '起動回数' 2 "$(cat "$trace/count")"
+    diagnostic='再開の 1 回目が混雑以外で終わった（rc=42）。`stderr.1.txt` を見る'
+    contains "$out/resume.log" "$diagnostic"
+    eq '--wait' "DONE rc=42 resumes=1"$'\n'"$diagnostic" "$wait_output"
+  fi
+  report_case
+done
+
+for output_option in -o --output-last-message --output-last-message=; do
+  new_case "M-2: -C と相対 $output_option は同じ出力ファイルに書く"
+  output_args=("$output_option" result.txt)
+  if [ "$output_option" = --output-last-message= ]; then output_args=(--output-last-message=result.txt); fi
+  (cd "$case_dir" && FAKE_OUTPUT_TRACK=1 launch capacity,success "$SCRIPT" "$out" -- \
+    codex exec -C "$case_dir/work dir" "${output_args[@]}" '指示')
+  done_worker
+  eq '同じ実体へ上書き' 'attempt=2' "$(cat "$case_dir/result.txt")"
+  absent "$case_dir/work dir/result.txt"
+  eq cwd "$case_dir/work dir" "$(cat "$trace/cwd.2")"
+  report_case
+done
+
+new_case 'M-3: JSON の thread.started と最後の混雑エラーで同じ会話を再開'
+launch capacity,success "$SCRIPT" "$out" -- codex exec --json '指示'
+done_worker
+eq rc 0 "$(cat "$out/rc.txt")"
+eq '--wait' 'DONE rc=0 resumes=1' "$wait_output"
+expect_args exec resume "$sid" --json -
+contains "$out/stdout.0.txt" '"type":"turn.failed"'
+report_case
+for plan in json-tool-failure json-last-failure; do
+  new_case "M-3: JSON の指示・ツール文言や過去の error を混雑と判定しない ($plan)"
+  launch "$plan" "$SCRIPT" "$out" -- codex exec --json 'Selected model is at capacity'
+  done_worker
+  expect_single
+  eq rc 42 "$(cat "$out/rc.txt")"
+  report_case
 done
 
 new_case 'AC4: 既定4回で上限停止・最後のrcと各回出力'
