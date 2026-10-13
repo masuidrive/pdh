@@ -46,6 +46,7 @@
 #   再開指示は「モデルの混雑で止まったので、最初の指示の範囲だけで続けて終えて」
 #   + 改行 + 最初の指示全文を resume-<回>.prompt.txt に保存し、stdin で渡す。
 #   review は元の引数・cwd・起動時に保存した stdin で起動し直し、再開指示は作らない。
+#   --stdin が通常ファイル以外なら初回だけに渡し、混雑しても再開/起動し直しをしない。
 #   --wait は DONE / RUNNING に resumes=<実際に再開した回数> を添える。
 #   上限・signal・混雑以外の失敗で止まる。exec は session id 欠落や組み立てられない
 #   引数でも止まる。review の起動し直しには session id は要らない。
@@ -160,10 +161,16 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
   _child_stdin="${_SPAWN_WORKER_STDIN:-}"
   unset _SPAWN_WORKER_SUPERVISOR _SPAWN_WORKER_STDIN
   original_stdin=""
+  retry_stdin_ready=1
   if [ "${1##*/}" = codex ] && [ "${2:-}" = exec ] && [ -n "$_child_stdin" ]; then
-    # 末尾の改行も保存する。初回の worker がファイルを書き換えても最初の指示を使う。
-    original_stdin="$(cat "$_child_stdin"; printf '.')"
-    original_stdin="${original_stdin%.}"
+    # ストリームを先読みすると初回の指示を消費する。保存できなければ再開しない。
+    retry_stdin_ready=0
+    if [ -f "$_child_stdin" ]; then
+      # 末尾の改行も保存する。初回の worker がファイルを書き換えても最初の指示を使う。
+      original_stdin="$(cat "$_child_stdin"; printf '.')"
+      original_stdin="${original_stdin%.}"
+      retry_stdin_ready=1
+    fi
   fi
   started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   if [ -n "$_child_stdin" ]; then
@@ -354,7 +361,7 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
       resume_delay=$((10#$resume_delay))
     fi
     retry_ready=0
-    if [ "$valid_settings" = 1 ] && [ "$resume_max" -gt 0 ]; then
+    if [ "$valid_settings" = 1 ] && [ "$resume_max" -gt 0 ] && [ "$retry_stdin_ready" = 1 ]; then
       if [ "$retry_action" = review-restart ]; then
         retry_ready=1
       elif [ -n "$session_id" ] && build_resume "$@"; then

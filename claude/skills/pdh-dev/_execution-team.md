@@ -131,7 +131,7 @@ worker ごとに rc と stderr 末尾を診断証跡へ残す。non-zero rc ま�
 
 同時worker数が多い場合はbatch分割して起動上限を設ける。
 
-⚠ **codex の混雑時は自動で続きを走らせる。**`scripts/spawn-worker.sh` は 0 以外で終わり、最後のエラーがモデルの混雑なら、`codex exec` を同じ会話で再開し、`codex exec review` を元の引数・cwd・起動時に保存した stdin で最初から起動し直す（`--json` も対象）。review の起動し直しには session id は要らず、再開指示のファイルは作らない。`resume.log` の各回の行で `action=exec-resume` / `action=review-restart` を区別する。既定は最大 4 回、待ち時間は 1・2・4・8 分。`PDH_CODEX_RESUME_MAX=0` で無効にでき、上限と最初の待ち秒数は `PDH_CODEX_RESUME_MAX` / `PDH_CODEX_RESUME_DELAY_SECONDS` に非負整数を指定して変えられる。`--wait` は再開が有効になったとき、実際に再開した回数を `resumes=<回数>` で添える。再開が混雑以外で失敗したら `--wait` の診断に従って `stderr.<回>.txt` を確認する。
+⚠ **codex の混雑時は自動で続きを走らせる。**`scripts/spawn-worker.sh` は 0 以外で終わり、最後のエラーがモデルの混雑なら、`codex exec` を同じ会話で再開し、`codex exec review` を元の引数・cwd・起動時に保存した stdin で最初から起動し直す（`--json` も対象）。review の起動し直しには session id は要らず、再開指示のファイルは作らない。初回を 0、再開・起動し直しを 1 から数える。exec の再開指示は `resume-<回>.prompt.txt` に保存し、stdin で渡す。`--stdin` が通常ファイル以外なら、混雑しても再開・起動し直しをしない。`resume.log` の各回の行で `action=exec-resume` / `action=review-restart` を区別する。既定は最大 4 回、待ち時間は 1・2・4・8 分。`PDH_CODEX_RESUME_MAX=0` で無効にでき、上限と最初の待ち秒数は `PDH_CODEX_RESUME_MAX` / `PDH_CODEX_RESUME_DELAY_SECONDS` に非負整数を指定して変えられる。`--wait` は再開が有効になったとき、実際に再開した回数を `resumes=<回数>` で添える。再開が混雑以外で失敗したら `--wait` の診断に従って `stderr.<回>.txt` を確認する。
 
 ## team での各 PDH stage 実行手順
 
