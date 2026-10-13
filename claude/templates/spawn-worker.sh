@@ -33,19 +33,22 @@
 #   spawn.txt  起動時の親子関係（1 回だけ）
 #   stdout.txt / stderr.txt  worker の出力（切り離すので呼び出し側の端末には出ない）
 #
-# codex exec / codex exec review の混雑時は、同じ session を自動再開する。
+# 混雑時は codex exec を同じ session で再開し、codex exec review は最初から起動し直す。
 #   PDH_CODEX_RESUME_MAX=4                    再開の上限（0 で無効）
 #   PDH_CODEX_RESUME_DELAY_SECONDS=60         最初の待ち秒数。以後は倍増（60/120/240/480）
 #   値は非負整数。不正値なら再開せず、混雑時だけ supervisor.log に理由を1行残す。
 #   0 で無効にした場合は記録ファイルを追加せず、--wait の表示も従来どおり。
 #   判定は stderr の最後の30行にある行頭 ERROR: Selected model is at capacity。
-#   --json は stdout の thread.started の id と最後の error / turn.failed を使う。
-#   初回=0、再開=1〜。混雑時だけ resume.log、stdout.<回>.txt / stderr.<回>.txt、
-#   resume-<回>.prompt.txt を追加する。stdout.txt / stderr.txt は最後の回。
+#   --json は stdout の最後の error / turn.failed を判定し、exec は thread.started の id を使う。
+#   初回=0、再開/起動し直し=1〜。混雑時だけ resume.log、stdout.<回>.txt / stderr.<回>.txt
+#   を追加する。stdout.txt / stderr.txt は最後の回。resume.log の各回の行には
+#   action=exec-resume / action=review-restart を付ける。
 #   再開指示は「モデルの混雑で止まったので、最初の指示の範囲だけで続けて終えて」
-#   + 改行 + 最初の指示全文（review は範囲指定も）を保存し、stdin で渡す。
+#   + 改行 + 最初の指示全文を resume-<回>.prompt.txt に保存し、stdin で渡す。
+#   review は元の引数・cwd・起動時に保存した stdin で起動し直し、再開指示は作らない。
 #   --wait は DONE / RUNNING に resumes=<実際に再開した回数> を添える。
-#   上限・session id 欠落・組み立てられない引数・signal・混雑以外の失敗で止まる。
+#   上限・signal・混雑以外の失敗で止まる。exec は session id 欠落や組み立てられない
+#   引数でも止まる。review の起動し直しには session id は要らない。
 #   再開した回の混雑以外の失敗は resume.log と --wait に同じ診断を出す。
 set -u
 
@@ -136,8 +139,8 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
 
     [ -n "$child" ] && kill -s "$signame" "$child" 2>/dev/null
     if [ "$resume_active" = 1 ]; then
-      printf 'round=%s phase=%s at=%s signal=%s rc=%s\n' "$resume_pending" "$resume_phase" \
-        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$signame" "$((128 + signo))" >> "$out/resume.log"
+      printf 'round=%s phase=%s at=%s signal=%s rc=%s action=%s\n' "$resume_pending" "$resume_phase" \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$signame" "$((128 + signo))" "$retry_action" >> "$out/resume.log"
       if [ "$resume_phase" = started ]; then
         cp "$out/stdout.txt" "$out/stdout.$resume_round.txt"
         cp "$out/stderr.txt" "$out/stderr.$resume_round.txt"
@@ -176,7 +179,7 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
 
   # 未対応の引数は落とさず、再開しない。初回の実行には干渉しない。
   build_resume() {
-    local executable="$1" arg value review=0 positional=0 options=1
+    local executable="$1" arg value positional=0 options=1
     [ "${executable##*/}" = codex ] && [ "${2:-}" = exec ] || return 1
     case "$executable" in
       */*) executable="$(cd "$(dirname "$executable")" && pwd)/$(basename "$executable")" ;;
@@ -184,16 +187,12 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
     resume_command=("$executable" exec resume "$session_id")
     resume_cwd="$PWD"
     original_prompt=""
-    review_scope=""
     shift 2
     while [ "$#" -gt 0 ]; do
       arg="$1"
       shift
       if [ "$options" = 1 ]; then
         case "$arg" in
-          review)
-            [ "$review" = 0 ] && [ "$positional" = 0 ] || return 1
-            review=1; continue ;;
           --) options=0; continue ;;
           -c|--config|-m|--model|--output-schema|-i|--image|--enable|--disable)
             [ "$#" -gt 0 ] || return 1
@@ -232,18 +231,6 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
               value="${arg#*=}"
             fi
             resume_cwd="$value"; continue ;;
-          --base|--commit|--base=*|--commit=*)
-            [ "$review" = 1 ] || return 1
-            if [ "$arg" = "${arg#*=}" ]; then
-              [ "$#" -gt 0 ] || return 1
-              review_scope="${review_scope}${arg} $1"$'\n'; shift
-            else
-              review_scope="${review_scope}${arg}"$'\n'
-            fi
-            continue ;;
-          --uncommitted)
-            [ "$review" = 1 ] || return 1
-            review_scope="${review_scope}${arg}"$'\n'; continue ;;
           -) ;;
           -*) return 1 ;;
         esac
@@ -259,16 +246,23 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
   }
 
   json_mode=0
-  # option の値や -- の後の prompt を --json と取り違えない。
+  # option の値や -- の後の prompt を --json や review subcommand と取り違えない。
   json_options=1
   json_value=0
+  retry_action=exec-resume
+  command_position=1
   for arg in "${@:3}"; do
     [ "$json_options" = 1 ] || break
     if [ "$json_value" = 1 ]; then json_value=0; continue; fi
     case "$arg" in
       --) json_options=0 ;;
       --json) json_mode=1 ;;
-      -c|--config|-m|--model|-o|--output-last-message|-s|--sandbox|-C|--cd|--base|--commit|--output-schema|-i|--image|--enable|--disable) json_value=1 ;;
+      -c|--config|-m|--model|-o|--output-last-message|-s|--sandbox|-C|--cd|--base|--commit|--output-schema|-i|--image|--enable|--disable|-p|--profile|--local-provider|--add-dir|--thread-source|--cyber-access-program|--color|--title) json_value=1 ;;
+      review)
+        if [ "$command_position" = 1 ]; then retry_action=review-restart; fi
+        command_position=0 ;;
+      -*) ;;
+      *) command_position=0 ;;
     esac
   done
 
@@ -334,10 +328,13 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
   }
 
   if [ "${1##*/}" = codex ] && [ "${2:-}" = exec ] && is_capacity; then
-    if [ "$json_mode" = 1 ]; then
-      session_id="$(json_events session)"
-    else
-      session_id="$(awk '/^[[:space:]]*session id:/ {sub(/^[[:space:]]*session id:[[:space:]]*/, ""); print $1; exit}' "$out/stderr.txt")"
+    session_id=""
+    if [ "$retry_action" = exec-resume ]; then
+      if [ "$json_mode" = 1 ]; then
+        session_id="$(json_events session)"
+      else
+        session_id="$(awk '/^[[:space:]]*session id:/ {sub(/^[[:space:]]*session id:[[:space:]]*/, ""); print $1; exit}' "$out/stderr.txt")"
+      fi
     fi
     resume_max="${PDH_CODEX_RESUME_MAX-4}"
     resume_delay="${PDH_CODEX_RESUME_DELAY_SECONDS-60}"
@@ -350,9 +347,17 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
       resume_max=$((10#$resume_max))
       resume_delay=$((10#$resume_delay))
     fi
-    if [ "$valid_settings" = 1 ] && [ "$resume_max" -gt 0 ] && [ -n "$session_id" ] && build_resume "$@"; then
+    retry_ready=0
+    if [ "$valid_settings" = 1 ] && [ "$resume_max" -gt 0 ]; then
+      if [ "$retry_action" = review-restart ]; then
+        retry_ready=1
+      elif [ -n "$session_id" ] && build_resume "$@"; then
+        retry_ready=1
+      fi
+    fi
+    if [ "$retry_ready" = 1 ]; then
       resume_active=1
-      printf 'round=0 started_at=%s wait=0s rc=%s\n' "$started_at" "$rc" > "$out/resume.log"
+      printf 'round=0 started_at=%s wait=0s rc=%s action=%s\n' "$started_at" "$rc" "$retry_action" > "$out/resume.log"
       cp "$out/stdout.txt" "$out/stdout.0.txt"
       cp "$out/stderr.txt" "$out/stderr.0.txt"
       while is_capacity; do
@@ -362,30 +367,37 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
         fi
         resume_pending=$((resume_round + 1))
         resume_phase=waiting
-        printf 'round=%s phase=waiting at=%s wait=%ss\n' "$resume_pending" \
-          "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$resume_delay" >> "$out/resume.log"
+        printf 'round=%s phase=waiting at=%s wait=%ss action=%s\n' "$resume_pending" \
+          "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$resume_delay" "$retry_action" >> "$out/resume.log"
         sleep "$resume_delay" &
         child=$!
         wait "$child"
         child=""
         resume_round="$resume_pending"
-        {
-          printf 'モデルの混雑で止まったので、最初の指示の範囲だけで続けて終えて\n'
-          printf '%s' "$review_scope"
-          if [ -n "$_child_stdin" ]; then
-            printf '%s' "$original_stdin"
-          elif [ "$original_prompt" != - ]; then
-            printf '%s' "$original_prompt"
-          fi
-        } > "$out/resume-$resume_round.prompt.txt"
+        if [ "$retry_action" = exec-resume ]; then
+          {
+            printf 'モデルの混雑で止まったので、最初の指示の範囲だけで続けて終えて\n'
+            if [ -n "$_child_stdin" ]; then
+              printf '%s' "$original_stdin"
+            elif [ "$original_prompt" != - ]; then
+              printf '%s' "$original_prompt"
+            fi
+          } > "$out/resume-$resume_round.prompt.txt"
+        fi
         started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         resume_phase=started
-        printf 'round=%s phase=started started_at=%s wait=%ss\n' "$resume_round" \
-          "$started_at" "$resume_delay" >> "$out/resume.log"
-        (
-          cd "$resume_cwd" || exit 1
-          exec "${resume_command[@]}"
-        ) < "$out/resume-$resume_round.prompt.txt" > "$out/stdout.txt" 2> "$out/stderr.txt" &
+        printf 'round=%s phase=started started_at=%s wait=%ss action=%s\n' "$resume_round" \
+          "$started_at" "$resume_delay" "$retry_action" >> "$out/resume.log"
+        if [ "$retry_action" = review-restart ]; then
+          # resume は reviewer の指示と元の review prompt を引き継がない。
+          # ファイルを読み直さず、初回起動時に保存した stdin をそのまま渡す。
+          "$@" < <(printf '%s' "$original_stdin") > "$out/stdout.txt" 2> "$out/stderr.txt" &
+        else
+          (
+            cd "$resume_cwd" || exit 1
+            exec "${resume_command[@]}"
+          ) < "$out/resume-$resume_round.prompt.txt" > "$out/stdout.txt" 2> "$out/stderr.txt" &
+        fi
         child=$!
         printf '%s\n' "$child" > "$out/child-pid.txt" 2>/dev/null || true
         wait "$child"
@@ -393,8 +405,8 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
         child=""
         cp "$out/stdout.txt" "$out/stdout.$resume_round.txt"
         cp "$out/stderr.txt" "$out/stderr.$resume_round.txt"
-        printf 'round=%s started_at=%s wait=%ss rc=%s\n' "$resume_round" \
-          "$started_at" "$resume_delay" "$rc" >> "$out/resume.log"
+        printf 'round=%s started_at=%s wait=%ss rc=%s action=%s\n' "$resume_round" \
+          "$started_at" "$resume_delay" "$rc" "$retry_action" >> "$out/resume.log"
         if [ "$rc" -ne 0 ] && ! is_capacity; then
           printf '再開の %s 回目が混雑以外で終わった（rc=%s）。`stderr.%s.txt` を見る\n' \
             "$resume_round" "$rc" "$resume_round" >> "$out/resume.log"

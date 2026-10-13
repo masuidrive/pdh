@@ -65,7 +65,7 @@ grep -cE '^bwrap: ' "$d/stderr.log"   # 0 でなければ、review は実行さ�
 
 ⚠ **配布物に実装がある** — `scripts/spawn-worker.sh` が、この切り離しと «終わり方の記録»（rc・受けた signal・親子関係）をまとめて行う。`bash scripts/spawn-worker.sh <out-dir> -- <cmd...>` で起動して即座に返り、`bash scripts/spawn-worker.sh --wait <out-dir> [秒]` で短く区切って待つ（`75` = まだ走っている、`0` = 終了して `rc.txt` にある）。prompt は `--stdin <file>` で渡す — ⚠ **切り離した先は呼び出し側の stdin を継承しないので、`-- cmd < prompt.txt` と書くとその `<` は spawn-worker.sh 自身に掛かり worker には届かない。**
 
-⚠ **codex の混雑は同じ会話で自動再開する。**`scripts/spawn-worker.sh` は `codex exec` / `codex exec review` が 0 以外で終わり、最後のエラーがモデルの混雑なら、最初の指示の範囲で再開する（`--json` も対象）。既定は最大 4 回、待ち時間は 1・2・4・8 分。`PDH_CODEX_RESUME_MAX=0` で無効にでき、上限と最初の待ち秒数は `PDH_CODEX_RESUME_MAX` / `PDH_CODEX_RESUME_DELAY_SECONDS` に非負整数を指定して変えられる。`--wait` は再開が有効になったとき、実際に再開した回数を `resumes=<回数>` で添える。再開が混雑以外で失敗したら `--wait` の診断に従って `stderr.<回>.txt` を確認する。
+⚠ **codex の混雑時は自動で続きを走らせる。**`scripts/spawn-worker.sh` は 0 以外で終わり、最後のエラーがモデルの混雑なら、`codex exec` を同じ会話で再開し、`codex exec review` を元の引数・cwd・起動時に保存した stdin で最初から起動し直す（`--json` も対象）。review の起動し直しには session id は要らず、再開指示のファイルは作らない。`resume.log` の各回の行で `action=exec-resume` / `action=review-restart` を区別する。既定は最大 4 回、待ち時間は 1・2・4・8 分。`PDH_CODEX_RESUME_MAX=0` で無効にでき、上限と最初の待ち秒数は `PDH_CODEX_RESUME_MAX` / `PDH_CODEX_RESUME_DELAY_SECONDS` に非負整数を指定して変えられる。`--wait` は再開が有効になったとき、実際に再開した回数を `resumes=<回数>` で添える。再開が混雑以外で失敗したら `--wait` の診断に従って `stderr.<回>.txt` を確認する。
 
 ## 各 stage の出口
 
