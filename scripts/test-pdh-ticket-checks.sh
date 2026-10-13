@@ -572,4 +572,101 @@ printf -- '---\nbranch: features/y-ticket\n---\n### Why\n本文\n' > tickets/x-t
 expect 1 'frontmatter の branch: が一致すれば検査する' bash scripts/check-pdh-ticket.sh
 contains 'tickets/x-ticket'
 
+# review の記録と遮断器の受け渡しは、導入日時を持つ独立した repo で検査する。
+must mkdir -p "$TMP_DIR/review-repo/scripts" "$TMP_DIR/review-repo/tickets/sample"
+must cp "$TEMPLATES/check-pdh-ticket.sh" "$TEMPLATES/pdh-review-range.sh" "$TMP_DIR/review-repo/scripts/"
+must cd "$TMP_DIR/review-repo"
+must git init -q -b main
+printf 'default_branch: main\nbranch_prefix: features/\n' > .ticket-config.yaml
+printf -- '---\ncreated_at: "2026-02-01T00:00:01Z"\n---\n### Why\n本文\n' > tickets/sample/ticket.md
+printf '## Status: PDH-implement\n## Checklist\n' > tickets/sample/note.md
+: > tickets/sample/progress.md
+export GIT_COMMITTER_DATE='2026-01-01T00:00:00Z'
+commit 遮断器の検査がない版
+review_anchor=$(git rev-parse HEAD)
+printf 'close-gate-sha: %s\n' "$review_anchor" > tickets/sample/progress.md
+expect 0 '遮断器の導入語がない履歴は対象外' env GITHUB_HEAD_REF=features/sample bash scripts/check-pdh-ticket.sh
+printf 'note_content: |\n  足した部品の一覧\n' >> .ticket-config.yaml
+expect 0 '遮断器の導入語が未 commit なら対象外' env GITHUB_HEAD_REF=features/sample bash scripts/check-pdh-ticket.sh
+export GIT_COMMITTER_DATE='2026-02-01T09:00:00+09:00'
+commit 遮断器の記録検査を導入
+must git checkout -qb features/sample
+expect 1 'close gate はあるが review が 0 行' env TZ=JST-9 bash scripts/check-pdh-ticket.sh
+contains 'tickets/sample は close-gate-sha: があるのに review-sha: が 0 行'
+contains 'progress.md に review-sha:'
+excludes 'close 前 review を回していない'
+printf 'review-sha: %s\n- review-sha: %s 2 巡目\nreview-sha: %s 3 巡目\n' "$review_anchor" "${review_anchor:0:7}" "$review_anchor" > tickets/sample/progress.md
+expect 0 'review 3 行でも 2 巡目の Findings がない追加探索は通る' bash scripts/check-pdh-ticket.sh
+printf '### Findings (PDH-review-1)\n' >> tickets/sample/progress.md
+expect 0 '初回 Findings だけなら遮断器の対象外' bash scripts/check-pdh-ticket.sh
+printf '### Findings (PDH-review-2)\n' >> tickets/sample/progress.md
+printf '## Status: PDH-implement\n## Checklist\n- [x] 実装前 gate の回答を反映 発行先: /board\n' > tickets/sample/note.md
+expect 1 'review 3 行と 2 巡目 Findings があっても板の発行先だけでは拒否' bash scripts/check-pdh-ticket.sh
+contains 'tickets/sample は review-sha: が 3 行あり、2 巡目の Findings 見出しがあるのに'
+contains 'Checklist に «発行先:» と «設計の見直し» の両方を含む行が無い'
+for checkbox in '[ ]' '[x]'; do
+  printf '## Status: PDH-implement\n## Checklist\n- %s 設計の見直しの回答待ち 発行先: /board\n' "$checkbox" > tickets/sample/note.md
+  expect 0 "review 3 行と 2 巡目 Findings と $checkbox の設計の見直しの発行先行は通る" bash scripts/check-pdh-ticket.sh
+done
+printf '## Status: PDH-implement\n## Checklist\n' > tickets/sample/note.md
+expect 1 '2 巡目 Findings があれば発行先なしも拒否' bash scripts/check-pdh-ticket.sh
+for attempt in 3 10 20; do
+  printf 'review-sha: %s\nreview-sha: %s\nreview-sha: %s\n### Findings (PDH-review-%s)\n' "$review_anchor" "$review_anchor" "$review_anchor" "$attempt" > tickets/sample/progress.md
+  expect 0 "$attempt 巡目 Findings だけなら 2 巡目に finding がない追加探索として通る" bash scripts/check-pdh-ticket.sh
+done
+for heading in '### Findings (PDH-review-2) 修正確認での追加' '### Findings (PDH-review-2 / round 2 fixes)' '### Findings（PDH-review-2）' '### Findings （PDH-review-2）'; do
+  printf 'review-sha: %s\nreview-sha: %s\nreview-sha: %s\n%s\n' "$review_anchor" "$review_anchor" "$review_anchor" "$heading" > tickets/sample/progress.md
+  expect 1 "接尾文・全角括弧の 2 巡目 Findings を拒否: $heading" bash scripts/check-pdh-ticket.sh
+done
+printf 'review-sha: %s\nreview-sha: %s\nreview-sha: %s\n### Findings（PDH-review-2）\n' "$review_anchor" "$review_anchor" "$review_anchor" > tickets/sample/progress.md
+expect 1 'C ロケールでも全角括弧の 2 巡目 Findings を拒否' env LC_ALL=C bash scripts/check-pdh-ticket.sh
+printf 'review-sha: %s\nreview-sha: %s\nreview-sha: %s\n#### Findings (PDH-review-2)\n' "$review_anchor" "$review_anchor" "$review_anchor" > tickets/sample/progress.md
+expect 1 '4 段の 2 巡目 Findings を発行先なしなら拒否' bash scripts/check-pdh-ticket.sh
+printf 'review-sha: %s\nreview-sha: %s\nreview-sha: %s\n### Findings (PDH-review-2)\n' "$review_anchor" "$review_anchor" "$review_anchor" > tickets/sample/progress.md
+printf '## Status: PDH-implement\n## Checklist\n- [x] 設計の見直しの回答を反映\n- [x] 発行先: /board\n' > tickets/sample/note.md
+expect 1 '設計の見直しと発行先が別の行なら拒否' bash scripts/check-pdh-ticket.sh
+printf '## Status: PDH-implement\n## Checklist\n## 別の節\n- [x] 設計の見直し 発行先: /board\n' > tickets/sample/note.md
+expect 1 'Checklist の外の発行先を数えない' bash scripts/check-pdh-ticket.sh
+printf '## Status: PDH-implement\n## Checklist\n<!-- - [x] 設計の見直し 発行先: /board -->\n' > tickets/sample/note.md
+expect 1 'コメント内の発行先を数えない' bash scripts/check-pdh-ticket.sh
+printf '## Status: PDH-implement\n## Checklist\n' > tickets/sample/note.md
+printf 'review-sha: %s\n- review-sha: %s 説明\n' "$review_anchor" "${review_anchor:0:7}" > tickets/sample/progress.md
+expect 0 'review が 2 行なら発行先なしでも通る' bash scripts/check-pdh-ticket.sh
+printf '### Findings (PDH-review-2)\n' >> tickets/sample/progress.md
+expect 0 'review 2 行と 2 巡目 Findings なら発行先なしでも通る' bash scripts/check-pdh-ticket.sh
+printf -- '- close-gate-sha: %s close 前\nreview-sha: %s review 済み\n' "${review_anchor:0:7}" "$review_anchor" > tickets/sample/progress.md
+expect 0 'review と close gate があれば通る' bash scripts/check-pdh-ticket.sh
+: > tickets/sample/progress.md
+expect 0 'review も close gate もない実装中は通る' bash scripts/check-pdh-ticket.sh
+printf 'close-gate-sha: %s\n' "$review_anchor" > tickets/sample/progress.md
+for created in '"2026-01-31T23:59:59Z"' '2026-02-01T00:00:00Z'; do
+  printf -- '---\ncreated_at: %s\n---\n### Why\n本文\n' "$created" > tickets/sample/ticket.md
+  expect 0 '開始日時の直前または同時は review なしでも通る' bash scripts/check-pdh-ticket.sh
+done
+printf -- "---\ncreated_at: '2026-02-01T00:00:01Z' # 作成日時\n---\n### Why\n本文\n" > tickets/sample/ticket.md
+expect 1 '開始日時の直後は名前に依らず review なしを拒否' bash scripts/check-pdh-ticket.sh
+# 同じ導入語を後から追加しても、最古の commit を開始日時にする。
+printf '  足した部品の一覧: 追加の見本\n' >> .ticket-config.yaml
+export GIT_COMMITTER_DATE='2026-03-01T00:00:00Z'
+commit 後から導入語を追加
+expect 1 '遮断器の開始日時を後の変更でずらさない' bash scripts/check-pdh-ticket.sh
+must git clone -q --depth=1 "file://$TMP_DIR/review-repo" "$TMP_DIR/review-shallow"
+must cd "$TMP_DIR/review-shallow"
+expect 0 'shallow で開始日時が後ろへずれたら対象が減る' bash scripts/check-pdh-ticket.sh
+must cd "$TMP_DIR/review-repo"
+# branch 自身が done へ移した ticket は新検査でも見る。
+printf 'close-gate-sha: %s\n' "$(git rev-parse HEAD)" > tickets/sample/progress.md
+must mkdir -p tickets/done
+must git mv tickets/sample tickets/done/sample
+commit review記録なしでdoneへ移動
+expect 1 'branch 自身の done も review 0 行を拒否' bash scripts/check-pdh-ticket.sh
+contains 'tickets/done/sample は close-gate-sha: があるのに review-sha: が 0 行'
+printf -- '---\ncreated_at: "2026-01-31T23:59:59Z"\n---\n### Why\n本文\n' > tickets/done/sample/ticket.md
+expect 0 '導入前の done は review なしでも通る' bash scripts/check-pdh-ticket.sh
+must git restore tickets/done/sample/ticket.md
+must git checkout -q main
+must git merge -q --ff-only features/sample
+expect 0 'base に既にある done を新検査で落とさない' bash scripts/check-pdh-ticket.sh
+
+
 printf 'PASS: check-pdh-ticket (%s, %s 件)\n' "$distribution_set" "$checks"

@@ -92,7 +92,7 @@ note_content: |
   - [ ] PDH-implement: ticket の AC / Architectural Invariants / out-of-scope が implementor によって書き換えられていない
   - [ ] PDH-review: 確定判断が 1 件ずつ実装に落ちている（対応する実体を名指しできない判断は未実装）
   - [ ] PDH-review: 採用した Critical/Major 1 件につき、指摘を再現する ticket-local-test を修正 commit より先に置いた（件数を突き合わせられる）
-  - [ ] PDH-review: 指摘を直すとき、壊していない側の入力を 1 つ選んで前後の出力を記録した
+  - [ ] PDH-review: 指摘を直すとき、壊していない側の入力を 1 つ選んで前後の出力と、足した部品の一覧（状態の項目・フラグ・分岐・見張りの job・後始末）と、そのうち別の部品の欠陥を補うもの（無ければ 0 件）を記録した
   - [ ] PDH-review: Directorが採用したCritical/Majorが解消し、非採用findingの分類根拠を記録
   - [ ] PDH-verify: AC 裏取り Agent が各 AC の実質達成を verify 済み
   - [ ] PDH-verify: Surface Observer 観察済み (純 backend ticket では skip 可、判断を 1 行記録)

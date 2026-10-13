@@ -20,12 +20,12 @@ description: "QA / AC 裏取り / Surface Observer / AC 読み手が、検証の
 - **doc sweep** — 変更した identifier / field / API path / enum 値の旧名を、doc・spec・README・sample・comment で grep し、**出力をそのまま貼る**（0 件なら 0 件と貼る）
 - **実 provider / 外部 API を経由する path** — 1 経路以上を実 API で叩き、**status と body 抜粋を貼る**。credential が無ければ「無い」と書く（自己判断で skip しない）
 - **終端のユーザ操作** — リンク・通知・画面遷移・外部副作用が目的なら、**着地まで実際に操作する**。「描画された」で終えない。⚠ **途中で URL や port を手で書き換えたなら、それは finding である**（書き換えないと着かない状態が出荷される）
-- **修正の前後出力** — 採用した指摘の修正について、`pdh-coding`「指摘を直すときは、壊していないことを反例で固定する」が要求する前後の出力が揃っているか確かめ、**無ければ「無い」と報告する**
+- **修正の前後出力** — 採用した指摘の修正について、`pdh-coding`「指摘を直すときは、壊していないことを反例で固定し、足した部品を報告する」が要求する前後の出力が揃っているか確かめ、**無ければ「無い」と報告する**
 - ⚠ **恒久テストが追加・変更されているなら、そのテスト自身を検査する**（下の「追加された恒久テストの検査」）
 
 ### 追加された恒久テストの検査
 
-⚠ **恒久テストの追加は高リスク変更として扱う。**実測（1 ticket で数えた）では、修正が持ち込んだ Critical / Major 5 件のうち **3 件が追加したテスト自身の欠陥**だった — 契約違反・共有 state への干渉・flaky。**製品コードではなく、テストが壊していた。**
+⚠ **恒久テストの追加は高リスク変更として扱う。**実測（1 ticket で数えた）では、修正起因の Critical / Major 5 件のうち **3 件が追加したテスト自身の欠陥**だった — 契約違反・共有 state への干渉・flaky。**製品コードではなく、テストが壊していた。**
 
 - repo が test の**契約テスト**を持つなら、それを回す（「この test はこの marker を宣言していること」等）
 - **追加・変更したテストだけを 3 回連続で実行する。**⚠ **1 回通っただけでは flaky を見つけられない。**全体スイートを待つ必要はなく、対象だけなら数分で済む
@@ -51,4 +51,4 @@ description: "QA / AC 裏取り / Surface Observer / AC 読み手が、検証の
 - 登場人物は `What` 冒頭の 1 文から補う。AC 1 件ごとに書かれている必要はない
 - 復元できた AC には «復元できた» だけを返す。書き直し・改善案・AC の追加を挙げない
 
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/skills/pdh-verifying/SKILL.md
+Based on https://github.com/masuidrive/pdh/blob/0deb6b6/claude/skills/pdh-verifying/SKILL.md

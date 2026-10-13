@@ -8,8 +8,10 @@
 #   3. close 前 review の後に、ticket 自身の未 review の commit が残っていない
 #   4. 未完了 ticket の note の Checklist に書かれた起票先が実在する
 #   5. 根拠欄の導入後に作られた未完了 ticket の Why に根拠の 2 行がある
+#   6. 導入後の ticket は close gate に review 記録があり、3 本以上 + 2 巡目の Findings なら Checklist に設計の見直しの発行先がある（done は branch 自身の追加だけ）
+# headline 3 行（check-pdh-ticket: FAILED / 検査対象の ticket なし・起票先の検査を通過 / progress.md・gate の待ち行・…を検査）は .github/coding-bot/run-action.sh が行頭一致で読む。文言を変えない。
 #
-# tickets/done/ は、この branch 自身が直下へ追加した ticket の 1・3 だけを見る。
+# tickets/done/ は、この branch 自身が直下へ追加した ticket の 1・3・6 だけを見る。
 #
 # 追記のみの検査は ticket.sh の append_only_files（check / close）が担う。
 # bash / awk / grep / sed / git だけ。BSD / GNU 両対応。
@@ -142,6 +144,50 @@ check_ticket_why_intake_evidence() {
   fi
 }
 
+# 遮断器の記録検査を導入した後に作られた ticket だけを検査する。
+check_ticket_review_handover() {
+  local f=$1 d=${1%/ticket.md} created reviews
+  [ "$git_ready" -eq 1 ] || return 0
+  # 検査 5 と同じ committer 日時の gate。shallow では対象が減る側に倒れる。
+  if [ -z "${review_start+x}" ]; then
+    review_start=$(TZ=UTC git log --format=%cd --date=format-local:%Y%m%d%H%M%S \
+      -S'足した部品の一覧' -- .ticket-config.yaml | awk 'END { print }') || {
+      printf 'check-pdh-ticket: 遮断器の記録検査の開始日時を読めない（.ticket-config.yaml の履歴を確認する）\n' >&2
+      failed=1
+      return
+    }
+  fi
+  [ -n "$review_start" ] || return 0
+  created=$(awk '
+    NR == 1 && $0 != "---" { exit }
+    NR > 1 && $0 == "---" { exit }
+    /^created_at:/ {
+      sub(/^created_at:[[:space:]]*/, "")
+      value=$1; gsub(/["\047TZ:-]/, "", value)
+      print value; exit
+    }
+  ' "$f") || { failed=1; return; }
+  [[ "$created" =~ ^[0-9]{14}$ && "$created" > "$review_start" ]] || return 0
+  [ -f "$d/progress.md" ] || return 0
+  reviews=$(grep -Ec '^(- )?review-sha:' "$d/progress.md")
+  if grep -Eq '^(- )?close-gate-sha:' "$d/progress.md" && [ "$reviews" -eq 0 ]; then
+    printf 'check-pdh-ticket: %s は close-gate-sha: があるのに review-sha: が 0 行（各巡で reviewer が読んだ SHA を progress.md に review-sha: <SHA> として追記する）\n' "$d" >&2
+    failed=1
+  fi
+  if [ "$reviews" -ge 3 ] &&
+    grep -Eq '^###+ Findings ?(（|\()PDH-review-2([^0-9]|$)' "$d/progress.md" &&
+    ! { [ -f "$d/note.md" ] &&
+    ticket_visible_lines "$d/note.md" | awk '
+      /^## Checklist([[:space:]]|$)/ { f=1; next }
+      /^## / { f=0 }
+      f && /発行先:/ && /設計の見直し/ { found=1 }
+      END { exit !found }
+    '; }; then
+    printf 'check-pdh-ticket: %s は review-sha: が %s 行あり、2 巡目の Findings 見出しがあるのに Checklist に «発行先:» と «設計の見直し» の両方を含む行が無い（設計の見直しの結論を添えて人へ渡し、note の Checklist に待つ答えと発行先を記録する）\n' "$d" "$reviews" >&2
+    failed=1
+  fi
+}
+
 # base から分岐した後、branch 自身の commit が done へ移した ticket も検査する。
 done_tickets=()
 git_ready=0
@@ -222,6 +268,7 @@ for t in tickets/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
   d=${t%/ticket.md}
   ticket_is_on_this_branch "$d" || continue
   seen=1
+  check_ticket_review_handover "$t"
 
   if [ ! -f "$d/progress.md" ]; then
     printf 'check-pdh-ticket: %s/progress.md が無い（経緯は progress.md へ。1 行目は "# Progress: <ticket-name>"）\n' "$d" >&2
