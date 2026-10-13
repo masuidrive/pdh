@@ -119,6 +119,31 @@ expect_single() {
   absent "$out/stderr.0.txt"
 }
 
+new_case '退行: setsid があれば別 session、無ければ別 process group へ切り離す'
+# ps で測り終えるまで worker を生存させ、終了した PID の比較を避ける。
+launch success "$SCRIPT" "$out" -- bash -c \
+  'while [ ! -f "$1" ]; do sleep 0.05; done' bash "$case_dir/release"
+await_file "$out/child-pid.txt"
+supervisor_pid=$(cat "$out/pid.txt")
+if command -v setsid >/dev/null 2>&1; then
+  identity=sid
+else
+  identity=pgid
+fi
+caller_identity=$(ps -o "$identity=" -p "$$" | tr -d '[:space:]')
+supervisor_identity=$(ps -o "$identity=" -p "$supervisor_pid" | tr -d '[:space:]')
+case "$caller_identity:$supervisor_identity" in
+  *[!0-9:]*|:*|*:) fail "$identity を取得できない: caller=<$caller_identity> supervisor=<$supervisor_identity>" ;;
+  *)
+    [ "$caller_identity" != "$supervisor_identity" ] || \
+      fail "切り離し ($identity): caller=<$caller_identity> supervisor=<$supervisor_identity>（同一）"
+    ;;
+esac
+must touch "$case_dir/release"
+done_worker
+eq rc 0 "$(cat "$out/rc.txt")"
+report_case
+
 new_case 'AC1/2: exec 引数・同一 session・stdin 全文・sandbox/cd 変換'
 prompt=$'最初の範囲だけ\n引用 " と $ と ` をそのまま\n\n'
 printf '%s' "$prompt" > "$case_dir/input.txt"
