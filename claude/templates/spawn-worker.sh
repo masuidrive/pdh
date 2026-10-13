@@ -38,7 +38,7 @@
 #   PDH_CODEX_RESUME_DELAY_SECONDS=60         最初の待ち秒数。以後は倍増（60/120/240/480）
 #   値は非負整数。不正値なら再開せず、混雑時だけ supervisor.log に理由を1行残す。
 #   0 で無効にした場合は記録ファイルを追加せず、--wait の表示も従来どおり。
-#   判定は stderr の最後の30行にある行頭 ERROR: Selected model is at capacity。
+#   判定は stderr の行頭 ERROR: の最後の1行が Selected model is at capacity のとき。
 #   --json は stdout の最後の error / turn.failed を判定し、exec は thread.started の id を使う。
 #   初回=0、再開/起動し直し=1〜。混雑時だけ resume.log、stdout.<回>.txt / stderr.<回>.txt
 #   を追加する。stdout.txt / stderr.txt は最後の回。resume.log の各回の行には
@@ -194,25 +194,25 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
       if [ "$options" = 1 ]; then
         case "$arg" in
           --) options=0; continue ;;
-          -c|--config|-m|--model|--output-schema|-i|--image|--enable|--disable)
+          -c|--config|-m|--model|--enable|--disable)
             [ "$#" -gt 0 ] || return 1
             resume_command+=("$arg" "$1"); shift; continue ;;
-          -o|--output-last-message|--output-last-message=*)
+          -o|--output-last-message|--output-last-message=*|--output-schema|--output-schema=*|-i|-i=*|--image|--image=*)
             if [ "$arg" = "${arg#*=}" ]; then
               [ "$#" -gt 0 ] || return 1
               value="$1"; shift
             else
               value="${arg#*=}"
             fi
-            # exec は -C の先ではなく、プロセスの cwd を基準に -o を解決する。
+            # exec は出力・schema・画像のパスを -C の先でなく、プロセスの cwd 基準で解決する。
             case "$value" in /*) ;; *) value="$PWD/$value" ;; esac
             if [ "$arg" = "${arg#*=}" ]; then
               resume_command+=("$arg" "$value")
             else
-              resume_command+=("--output-last-message=$value")
+              resume_command+=("${arg%%=*}=$value")
             fi
             continue ;;
-          --config=*|--model=*|--output-schema=*|--image=*|--enable=*|--disable=*|--json|--skip-git-repo-check|--dangerously-bypass-approvals-and-sandbox)
+          --config=*|--model=*|--enable=*|--disable=*|--json|--skip-git-repo-check|--dangerously-bypass-approvals-and-sandbox|--strict-config|--ignore-user-config|--ignore-rules|--dangerously-bypass-hook-trust)
             resume_command+=("$arg"); continue ;;
           -s|--sandbox|--sandbox=*)
             if [ "$arg" = "${arg#*=}" ]; then
@@ -269,7 +269,8 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
   json_events() {
     # Codex の JSONL を文字列・階層ごとに読む。ツール出力内の JSON や文言は判定しない。
     # 対象は実 CLI の thread.started / error / turn.failed。未知の error は停止側に倒す。
-    awk -v mode="$1" '
+    # 大きなツール本文は parser に渡さない。候補でも階層は awk で検査する。
+    grep -E '"type"[[:space:]]*:[[:space:]]*"(thread\.started|error|turn\.failed)"' "$out/stdout.txt" | awk -v mode="$1" '
       function string_value(    c, value) {
         value=""
         for (pos++; pos <= length($0); pos++) {
@@ -314,7 +315,7 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
           exit !(last_error ~ /^(stream disconnected before completion: )?Selected model is at capacity([. ]|$)/)
         }
       }
-    ' "$out/stdout.txt"
+    '
   }
 
   is_capacity() {
@@ -323,7 +324,8 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
     if [ "$json_mode" = 1 ]; then
       json_events capacity
     else
-      tail -n 30 "$out/stderr.txt" | grep -q '^ERROR: Selected model is at capacity'
+      # ERROR の後に tracing や token 数が続いても、最後の ERROR だけで決める。
+      awk '/^ERROR:/ {last_error=$0} END {exit !(last_error ~ /^ERROR: Selected model is at capacity([. ]|$)/)}' "$out/stderr.txt"
     fi
   }
 
