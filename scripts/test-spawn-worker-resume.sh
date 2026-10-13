@@ -570,6 +570,21 @@ report_case
 for worker_kind in exec review; do
   worker_args=(exec)
   if [ "$worker_kind" = review ]; then worker_args+=(review); fi
+  new_case "AC3: 通常ファイル以外の stdin は混雑しても再開しない ($worker_kind)"
+  printf 'ストリームの指示\n末尾の改行\n\n' > "$case_dir/input.txt"
+  launch capacity,success "$SCRIPT" --stdin <(cat "$case_dir/input.txt") "$out" -- \
+    codex "${worker_args[@]}" -
+  done_worker
+  expect_single
+  eq rc 1 "$(cat "$out/rc.txt")"
+  eq '--wait' 'DONE rc=1' "$wait_output"
+  same "$case_dir/input.txt" "$trace/stdin.1"
+  report_case
+done
+
+for worker_kind in exec review; do
+  worker_args=(exec)
+  if [ "$worker_kind" = review ]; then worker_args+=(review); fi
   new_case "AC3/DD: 再開が混雑以外で失敗した診断を log と --wait に出す ($worker_kind)"
   launch capacity,failure "$SCRIPT" "$out" -- codex "${worker_args[@]}" '指示'
   done_worker
@@ -690,7 +705,7 @@ normalize() {
   esac
 }
 for command_kind in other success failure capacity; do
-  for input_kind in stdin no-stdin; do
+  for input_kind in stdin no-stdin process-substitution fifo; do
     new_case "AC5: 旧版比較 $command_kind / $input_kind（ファイル全件・--wait・stdin）"
     printf 'stdin の全文\n末尾の改行\n\n' > "$case_dir/input.txt"
     command_args=(codex exec '引数の指示')
@@ -701,6 +716,7 @@ for command_kind in other success failure capacity; do
       command_args=(bash -c 'printf "other stdout\n"; cat; printf "other stderr\n" >&2; exit 7')
       plan=success
     fi
+    completed=1
     for version in old new; do
       out="$case_dir/$version-out"
       trace="$case_dir/$version-trace"
@@ -708,12 +724,32 @@ for command_kind in other success failure capacity; do
       if [ "$version" = old ]; then script="$BASELINE"; else script="$SCRIPT"; fi
       input_args=()
       if [ "$input_kind" = stdin ]; then input_args=(--stdin "$case_dir/input.txt"); fi
-      launch "$plan" "$script" ${input_args[@]+"${input_args[@]}"} "$out" -- "${command_args[@]}"
+      case "$input_kind" in
+        process-substitution)
+          launch "$plan" "$script" --stdin <(cat "$case_dir/input.txt") "$out" -- "${command_args[@]}" ;;
+        fifo)
+          must mkfifo "$case_dir/$version.fifo"
+          cat "$case_dir/input.txt" > "$case_dir/$version.fifo" &
+          writer=$!
+          launch "$plan" "$script" --stdin "$case_dir/$version.fifo" "$out" -- "${command_args[@]}"
+          wait "$writer"
+          ;;
+        *) launch "$plan" "$script" ${input_args[@]+"${input_args[@]}"} "$out" -- "${command_args[@]}" ;;
+      esac
+      # FIFO の二重読みで停止する退行も検出し、残った worker を片付ける。
+      i=0
+      while [ ! -f "$out/rc.txt" ] && [ "$i" -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+      if [ ! -f "$out/rc.txt" ]; then
+        fail "$label: $version が stdin を受け取って終了しない"
+        must kill -TERM "$(cat "$out/pid.txt")"
+        completed=0
+      fi
       await_file "$out/rc.txt"
       result=$(bash "$script" --wait "$out" 2); result_rc=$?
       printf '%s\n%s\n' "$result_rc" "$result" > "$case_dir/$version-wait"
       (cd "$out" && printf '%s\n' * | LC_ALL=C sort) > "$case_dir/$version-files"
     done
+    [ "$completed" = 1 ] || continue
     same "$case_dir/old-files" "$case_dir/new-files"
     same "$case_dir/old-wait" "$case_dir/new-wait"
     while IFS= read -r filename; do
@@ -724,7 +760,7 @@ for command_kind in other success failure capacity; do
     if [ "$command_kind" != other ]; then
       same "$case_dir/old-trace/stdin.1" "$case_dir/new-trace/stdin.1"
       same "$case_dir/old-trace/argv.1" "$case_dir/new-trace/argv.1"
-      if [ "$input_kind" = stdin ]; then same "$case_dir/input.txt" "$case_dir/new-trace/stdin.1"; else must test ! -s "$case_dir/new-trace/stdin.1"; fi
+      if [ "$input_kind" = no-stdin ]; then must test ! -s "$case_dir/new-trace/stdin.1"; else same "$case_dir/input.txt" "$case_dir/new-trace/stdin.1"; fi
     fi
     report_case
   done
