@@ -30,7 +30,7 @@ PDH を変える提案は、次の原則と照らし合わせる。原則を外�
 
 | 違い | 書く場所 |
 |---|---|
-| project 固有の規則（全員が読む） | `AGENTS.md`（codex には `AGENTS.md` として生成される） |
+| project 固有の規則（全員が読む） | `AGENTS.md` |
 | PM だけが読む規則・環境の事実 | `AGENTS.md` が名前で指すファイル |
 | ticket.sh の振る舞い | `.ticket-config.yaml` の設定キー（`tickets_dir`・`require_checklist` など） |
 | coding-bot の振る舞いと環境の値 | `.ticket-config.yaml` の `github_bot:`、Actions の変数 `CODING_BOT_*` |

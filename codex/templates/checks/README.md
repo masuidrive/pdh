@@ -179,11 +179,9 @@ can still recur.
 
 ## Examples
 
-`codex-agents-generated.check` runs `scripts/gen-codex-agents.sh --check` once
-through a linter wrapper to compare all `.codex/agents/pdh-*.toml` files with
-their canonical `.codex/agents/pdh-*.toml` sources. Regenerate them with
-`bash scripts/gen-codex-agents.sh`. `required-pdh-files.check` also guards the
-source and generated files against deletion.
+`required-pdh-files.check` guards the standalone skill bodies and native
+`.codex/agents/pdh-*.toml` role definitions against deletion.
+Update those files from the Codex distribution; no local generation is needed.
 
 The registry ships three examples. Adjust their globs and excludes for the
 project, or delete examples that do not fit:

@@ -83,7 +83,7 @@ case "$stage" in
     printf 'usage: %s <PDH-stage> [--enter <note>] | --show [<note>]（PDH-stage の名前が違う: %s）\n' "$0" "$stage" >&2; exit 2 ;;
 esac
 file=''
-for d in .agents/skills .agents/skills; do
+for d in .agents/skills; do
   [ -f "$root/$d/$skill/SKILL.md" ] && { file="$root/$d/$skill/SKILL.md"; break; }
 done
 [ -n "$file" ] || { printf 'pdh-stage-checklist: skill %s が見つからない\n' "$skill" >&2; exit 1; }

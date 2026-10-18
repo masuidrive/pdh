@@ -3,10 +3,7 @@
 # 消失になる。pattern / max_lines / linter_command 型は glob が 0 件になると沈黙する
 # ので、消失は「合格」として通る。存在を表明できるのは required_paths だけである。
 #
-# `.agents/skills/` は `.agents/skills/` への symlink だが、これも列挙してよい。
-# required_paths の判定は `-e` で symlink を辿るので、実体が消えれば symlink 側も
-# 「無い」と判定される（測定済み: 実体削除・symlink 削除・index に残る rm の 3 状態
-# すべてで exit 1）。壊れた symlink が「存在」として通ることはない。
+# `.agents/skills/` の実ファイルと `.codex/agents/` の役割定義を列挙する。
 #
 # ⚠ 既定は「全部入れる」である。Codex CLI を使うかは導入先ごとに変わり、あとから
 # 変わることもある。入れておけば使い始めた日から守られ、使わないなら 1 度落ちて
@@ -17,4 +14,4 @@
 # 列挙の更新は pdh-update が行う（`pdh-update` skill 手順 2）。手で skill を
 # 増減したときは、この行も同じ commit で直す。
 reason=PDH 配布物が消えている。pdh-update は上書きコピーなので、消失は差分マージでは検出できない
-required_paths=.agents/skills/pdh-check-writing/SKILL.md,.agents/skills/pdh-close/SKILL.md,.agents/skills/pdh-decision-board/SKILL.md,.agents/skills/pdh-implement/SKILL.md,.agents/skills/pdh-open/SKILL.md,.agents/skills/pdh-pm/SKILL.md,.agents/skills/pdh-pm/_open-ticket.md,.agents/skills/pdh-resume/SKILL.md,.agents/skills/pdh-review/SKILL.md,.agents/skills/pdh-change/SKILL.md,.agents/skills/pdh-ticket-review/SKILL.md,.agents/skills/pdh-ticket-write/SKILL.md,.agents/skills/pdh-update/SKILL.md,.agents/skills/pdh-verify/SKILL.md,.agents/skills/pdh-check-writing,.agents/skills/pdh-close,.agents/skills/pdh-decision-board,.agents/skills/pdh-implement,.agents/skills/pdh-open,.agents/skills/pdh-pm,.agents/skills/pdh-resume,.agents/skills/pdh-review,.agents/skills/pdh-change,.agents/skills/pdh-ticket-review,.agents/skills/pdh-ticket-write,.agents/skills/pdh-update,.agents/skills/pdh-verify,.codex/agents/pdh-ac-reader.md,.codex/agents/pdh-ac-reader.toml,.codex/agents/pdh-ac-verifier.toml,.codex/agents/pdh-coding-engineer.toml,.codex/agents/pdh-qa.toml,.codex/agents/pdh-reviewer-lens1.toml,.codex/agents/pdh-reviewer.toml,.codex/agents/pdh-surface-observer.toml,scripts/pdh-stage-checklist.sh
+required_paths=.agents/skills/pdh-check-writing/SKILL.md,.agents/skills/pdh-close/SKILL.md,.agents/skills/pdh-decision-board/SKILL.md,.agents/skills/pdh-implement/SKILL.md,.agents/skills/pdh-open/SKILL.md,.agents/skills/pdh-pm/SKILL.md,.agents/skills/pdh-pm/_open-ticket.md,.agents/skills/pdh-resume/SKILL.md,.agents/skills/pdh-review/SKILL.md,.agents/skills/pdh-change/SKILL.md,.agents/skills/pdh-ticket-review/SKILL.md,.agents/skills/pdh-ticket-write/SKILL.md,.agents/skills/pdh-update/SKILL.md,.agents/skills/pdh-verify/SKILL.md,.codex/agents/pdh-ac-reader.toml,.codex/agents/pdh-ac-verifier.toml,.codex/agents/pdh-coding-engineer.toml,.codex/agents/pdh-qa.toml,.codex/agents/pdh-reviewer-lens1.toml,.codex/agents/pdh-reviewer.toml,.codex/agents/pdh-surface-observer.toml,scripts/pdh-stage-checklist.sh

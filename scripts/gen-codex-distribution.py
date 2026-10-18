@@ -17,12 +17,27 @@ if sys.argv[1:] not in ([], ['--check']):
 
 
 def native(text):
+    # Translate engine-specific statements before replacing their path names.
+    text = text.replace('`CLAUDE.md`（codex には `AGENTS.md` として生成される）', '`AGENTS.md`')
+    text = text.replace('for d in .claude/skills .agents/skills; do', 'for d in .agents/skills; do')
+    text = text.replace('Codex用symlink一覧を現行skill一式へ揃える', 'Codex の実ディレクトリを現行 skill 一式へ揃える')
+    start = text.find('`codex-agents-generated.check` runs ')
+    end = text.find('\n\nThe registry ships', start)
+    if start >= 0 and end >= 0:
+        text = text[:start] + ('`required-pdh-files.check` guards the standalone skill bodies and native\n'
+                               '`.codex/agents/pdh-*.toml` role definitions against deletion.\n'
+                               'Update those files from the Codex distribution; no local generation is needed.') + text[end:]
+    text = text.replace('# `.agents/skills/` は `.claude/skills/` への symlink だが、これも列挙してよい。\n'
+                        '# required_paths の判定は `-e` で symlink を辿るので、実体が消えれば symlink 側も\n'
+                        '# 「無い」と判定される（測定済み: 実体削除・symlink 削除・index に残る rm の 3 状態\n'
+                        '# すべてで exit 1）。壊れた symlink が「存在」として通ることはない。',
+                        '# `.agents/skills/` の実ファイルと `.codex/agents/` の役割定義を列挙する。')
     text = text.replace('`CLAUDE.md`（codex では `AGENTS.md`）', '`AGENTS.md`')
     text = text.replace('CLAUDE.local.md', 'AGENTS.local.md')
     text = text.replace("('.claude', 'agents')", "('.codex', 'agents')").replace("('.claude', 'skills')", "('.agents', 'skills')")
     text = text.replace("and p.suffix == '.md'", "and p.suffix in ('.md', '.toml')")
     text = text.replace('CLAUDE.md', 'AGENTS.md').replace('.claude/skills', '.agents/skills')
-    text = re.sub(r'\.claude/agents/([^`\s"\']+)\.md', r'.codex/agents/\1.toml', text)
+    text = re.sub(r'\.claude/agents/([^,`\s"\']+?)\.md', r'.codex/agents/\1.toml', text)
     text = text.replace('claude/INSTALL.md', 'codex/INSTALL.md').replace('claude/lock-map.tsv', 'codex/lock-map.tsv')
     text = text.replace('tmp/pdh/claude/', 'tmp/pdh/codex/')
     text = text.replace('/blob/main/claude/', '/blob/main/codex/')
@@ -69,7 +84,7 @@ if p in outputs:
     text=outputs[p].decode()
     line=next(x for x in text.splitlines() if x.startswith('required_paths='))
     paths=line.partition('=')[2].split(',')
-    paths=list(dict.fromkeys(x for x in paths if not x.startswith('.claude/')))
+    paths=list(dict.fromkeys(x for x in paths if not x.startswith('.claude/') and not re.fullmatch(r'\.agents/skills/[^/]+', x)))
     text=text.replace(line,'required_paths='+','.join(paths))
     outputs[p]=text.encode()
 expected=set(outputs)
