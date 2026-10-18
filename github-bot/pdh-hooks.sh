@@ -29,7 +29,7 @@ set -uo pipefail
 if [ -n "${PR_INSTRUCTION:-}" ]; then exit 0; fi
 
 REPO="${GITHUB_REPOSITORY:-}"
-STAGES="PDH-open PDH-ticket-review PDH-ticket-human-review PDH-implement PDH-review PDH-verify PDH-human-review PDH-close"
+STAGES="PDH-ticket-write PDH-open PDH-ticket-review PDH-ticket-human-review PDH-implement PDH-review PDH-verify PDH-human-review PDH-close"
 # ⚠ stage ラベルとは別系統。stage は «どこにいるか» しか言わないので、gate でない場所で
 # 止まったとき（非収束での escalate・blocker・質問）に «自分の番か» が一覧から分からない。
 # STAGES に入れてはならない — 入れると stage を付けるときに他として外される。
@@ -112,7 +112,7 @@ setup_check() {
     printf '%s\n' "- stage ラベルを確認できない（gh label list が失敗）"
   else
     for s in $STAGES $AWAITING_LABEL; do
-      printf '%s\n' "$have" | grep -qx "$s" || missing="$missing $s"
+      grep -qx "$s" <<<"$have" || missing="$missing $s"
     done
     [ -z "$missing" ] || printf '%s\n' "- ラベルが無い:${missing}（github-bot/INSTALL.md「3. stage ラベルを作る」）"
   fi
@@ -133,10 +133,10 @@ ac_progress_block() {
   [ "$TICKET_STATE" = active ] || return 0
   dir="$TICKET_DIR"
   lines=$(awk '
-    /^#+ .*Acceptance Criteria/ {f=1; next}
-    f && /^#+ / {exit}
+    /^#+[[:space:]]+(What([[:space:]]|$)|.*Acceptance Criteria)/ {f=1; next}
+    f && /^#+[[:space:]]/ {exit}
     f && /^- \[[ x]\]/ {print}
-  ' "$dir/ticket.md" | head -12)
+  ' "$dir/ticket.md" | awk 'NR <= 12')
   [ -n "$lines" ] || return 0
   total=$(printf '%s\n' "$lines" | grep -c '^- \[')
   done_n=$(printf '%s\n' "$lines" | grep -c '^- \[x\]')
@@ -163,10 +163,37 @@ read_status() {
   local note="$1" status=""
   if [ -f "$note" ]; then
     status=$(grep -m1 '^## Status:' "$note" | sed -E 's/^## Status:[[:space:]]*(PDH-[a-z-]+).*/\1/')
-    [ -n "$status" ] || status=$(awk '/^## Status[[:space:]]*$/{getline; while ($0 ~ /^[[:space:]]*$/ || $0 ~ /^<!--/) getline; print; exit}' "$note" | sed -E 's/.*(PDH-[a-z-]+).*/\1/')
     case "$status" in PDH-*) ;; *) status="" ;; esac
   fi
   printf '%s' "$status"
+}
+
+set_stage_label() {
+  local status="$1" issue="$2" have others
+  if [ -n "$status" ] && grep -qx "$status" <<<"${STAGES// /$'\n'}"; then
+    have=$(gh label list --repo "$REPO" --limit 200 --json name -q '.[].name' 2>/dev/null || true)
+    if grep -qx "$status" <<<"$have"; then
+      others=$(printf '%s\n' $STAGES | grep -vx "$status" | paste -sd, -)
+      if gh issue edit "$issue" --repo "$REPO" --remove-label "$others" --add-label "$status" >/dev/null 2>&1; then
+        log "ラベルを $status にした"
+      else
+        log "ラベル更新に失敗（続行）"
+      fi
+    fi
+  fi
+}
+
+# active ticket の無い run は、閉じた issue だけ回答待ちを外す。
+# 状態が読めない・空のときも、依頼者の «あなたの番» を消さない。
+finalize_without_active_ticket() {
+  local issue_state
+  issue_state=$(gh issue view "$ISSUE" --repo "$REPO" --json state -q .state 2>/dev/null) || issue_state=""
+  if [ "$issue_state" = CLOSED ]; then
+    set_awaiting remove "$ISSUE" "$BRANCH" "active ticket の無い issue を閉じた"
+  else
+    set_awaiting add "$ISSUE" "$BRANCH" "active ticket の無いまま run が終わった＝人に聞いている"
+    write_notify "$ISSUE" question "" "$CID" "$AWAITING_PR"
+  fi
 }
 
 cmd="${1:-}"
@@ -175,7 +202,7 @@ case "$cmd" in
     repo="${2:-$REPO}"; [ -n "$repo" ] || { log "owner/repo が要る"; exit 2; }
     out=$(setup_check "$repo")
     if [ -n "$out" ]; then printf '%s\n' "$out"; exit 1; fi
-    echo "pdh-hooks setup: ok（ラベル 8 段・PR 作成許可）"; exit 0 ;;
+    echo "pdh-hooks setup: ok（ラベル 9 段・PR 作成許可）"; exit 0 ;;
   progress)
     issue="${2:-}"; [ -n "$issue" ] || exit 0
     ac_progress_block "$issue"; exit 0 ;;
@@ -206,30 +233,25 @@ report=$(cat)
 find_ticket "$ISSUE"
 dir="$TICKET_DIR"
 if [ "$TICKET_STATE" != active ]; then
-  # ⚠ ticket dir が無いのは 2 通りあり、扱いが逆になる。
-  #   done 済み  : 対応する ticket が tickets/done/ に在る。stage ラベルは補正しない。PR の Merge を待つ close gate
-  #                なら待ち印を PR に付ける（start が Issue と PR の両方から外しているため）
-  #   未作成     : どちらも無い。bot が «足りないことを聞く» 段で止まっている（_issue.md A0）
-  # 後者でラベルを付けないと、依頼者の画面に «あなたの番» が 1 つも出ない。
-  # ただし、ticket を作らずに issue を閉じた場合は人の番ではないので、待ち印を外し通知しない。
-  # issue の状態を読めないときは、依頼者の «あなたの番» を消さないように待ち印を付ける。
+  # active ticket が無いとき、done の PDH-human-review かつ open PR があれば Merge 待ち。
+  # それ以外は未作成・done とも質問への回答待ちとして扱う。
+  # done の古い ticket が残る再依頼でも、依頼者に «あなたの番» を表示する。
   if [ -z "$TICKET_STATE" ]; then
-    issue_state=$(gh issue view "$ISSUE" --repo "$REPO" --json state -q .state 2>/dev/null) || issue_state=""
-    if [ "$issue_state" = CLOSED ]; then
-      set_awaiting remove "$ISSUE" "$BRANCH" "ticket を作らずに issue を閉じた"
-    else
-      set_awaiting add "$ISSUE" "$BRANCH" "ticket 未作成のまま run が終わった＝人に聞いている"
-      write_notify "$ISSUE" question "" "$CID" "$AWAITING_PR"
-    fi
+    finalize_without_active_ticket
   else
-    log "issue #$ISSUE は done 済み。補正なし"
+    log "issue #$ISSUE は done 済み。note の Status をラベルへ反映する"
     status=$(read_status "$dir/note.md")
     if [ "$status" = "PDH-human-review" ]; then
       pr=$(gh pr list --head "$BRANCH" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
       if [[ "$pr" =~ ^[0-9]+$ ]]; then
+        set_stage_label "$status" "$ISSUE"
         set_awaiting add "$ISSUE" "$BRANCH" "close gate: PR #$pr の Merge 待ち"
         write_notify "$ISSUE" close_gate "$status" "$CID" "$pr"
+      else
+        finalize_without_active_ticket
       fi
+    else
+      finalize_without_active_ticket
     fi
   fi
   printf '%s' "$report"; exit 0
@@ -237,24 +259,11 @@ fi
 note="$dir/note.md"; changed=0
 
 # --- Status ---
-# ⚠ note の Status は見出しと同じ行・次の行の 2 通りの書き方がある。両方を読む。
-# 片方しか読まないと status が空になり、gate=0 になって **ラベルも承認導線も待ち行も
-# 足されない**。
+# note の Status は «## Status: PDH-stage» の行から読む。
 status=$(read_status "$note")
 gate=0; case "$status" in PDH-ticket-human-review|PDH-human-review) gate=1 ;; esac
 
-# --- 1. stage ラベル ---
-if [ -n "$status" ] && printf '%s\n' $STAGES | grep -qx "$status"; then
-  have=$(gh label list --repo "$REPO" --limit 200 --json name -q '.[].name' 2>/dev/null || true)
-  if printf '%s\n' "$have" | grep -qx "$status"; then
-    others=$(printf '%s\n' $STAGES | grep -vx "$status" | paste -sd, -)
-    if gh issue edit "$ISSUE" --repo "$REPO" --remove-label "$others" --add-label "$status" >/dev/null 2>&1; then
-      log "ラベルを $status にした"
-    else
-      log "ラベル更新に失敗（続行）"
-    fi
-  fi
-fi
+set_stage_label "$status" "$ISSUE"
 
 # --- 2. 承認導線 ---
 # close gate の答え方は `github_bot.close` で変わる。⚠ `pr-merge` では merge そのものが
@@ -269,7 +278,7 @@ close_mode=$(awk '
   }' .ticket-config.yaml 2>/dev/null)
 if [ "$status" = "PDH-ticket-human-review" ]; then
   word="🤖 承認"
-  guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。板を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。⚠ **返信には必ず 🤖 を付けてください** — 付いていないコメントは bot に届きません（この Issue では人同士の会話やメモも書かれるため、🤖 が唯一の合図です）。"
+  guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。decision-board を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。⚠ **返信には必ず 🤖 を付けてください** — 付いていないコメントは bot に届きません（この Issue では人同士の会話やメモも書かれるため、🤖 が唯一の合図です）。"
 elif [ "$close_mode" = "pr-merge" ]; then
   # ⚠ 単語 `merge` で判定すると、説明文に一度出ただけで導線追加が抑止される。
   # 導線そのものの文を目印にする。
@@ -284,13 +293,13 @@ elif [ "$close_mode" = "pr-merge" ]; then
   fi
 else
   word="🤖 クローズ承認"
-  guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。板を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。⚠ **返信には必ず 🤖 を付けてください** — 付いていないコメントは bot に届きません（この Issue では人同士の会話やメモも書かれるため、🤖 が唯一の合図です）。"
+  guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。decision-board を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。⚠ **返信には必ず 🤖 を付けてください** — 付いていないコメントは bot に届きません（この Issue では人同士の会話やメモも書かれるため、🤖 が唯一の合図です）。"
 fi
-# 板が backtick 付きの 🤖 回答手順を持つときは、別の承認語を追加しない。
+# decision-board が backtick 付きの 🤖 回答手順を持つときは、別の承認語を追加しない。
 has_answer_path() {
-  printf '%s' "$report" | grep -qF "$word" && return 0
+  grep -qF "$word" <<<"$report" && return 0
   [ "$status" = "PDH-ticket-human-review" ] || [ "$close_mode" != "pr-merge" ] || return 1
-  printf '%s' "$report" | grep -q '`🤖'
+  grep -q '`🤖' <<<"$report"
 }
 if [ "$gate" -eq 1 ] && ! has_answer_path; then
   report="$report
@@ -316,33 +325,46 @@ if [ "$gate" -eq 1 ]; then
   [ -n "$n" ] && { log "⚠ board に process 語が漏れている: $n"; leak=1; }
   n=$(printf '%s' "$report" | grep -oE 'tickets/[A-Za-z0-9./-]+' | sort -u | paste -sd, - )
   [ -n "$n" ] && { log "⚠ board に ticket のパスが漏れている: $n"; leak=1; }
-  n=$(printf '%s' "$report" | grep -oE '(SKILL\.md|PDH-AGENTS\.md|_flow\.md|pdh-dev)' | sort -u | paste -sd, - )
+  n=$(printf '%s' "$report" | grep -oE '(SKILL\.md|PDH-AGENTS\.md|_flow\.md|pdh-pm|pdh-pm)' | sort -u | paste -sd, - )
   [ -n "$n" ] && { log "⚠ board に skill のファイルが漏れている: $n"; leak=1; }
   n=$(printf '%s' "$report" | grep -owE 'AC' | sort -u | paste -sd, - )
   [ -n "$n" ] && { log "⚠ board に AC という語が漏れている（依頼者の語ではない）"; leak=1; }
   [ "$leak" -eq 0 ] && log "board の process 語: 漏れなし"
 fi
 
-# note の Checklist に «未了 + 発行先:» の行があるか。PDH-AGENTS.md「Handover Routes」が
+# note の Checklist に «未了 + 発行先:» の行があるか。PDH-AGENTS.md「受け渡し経路」が
 # «待つものを出したらこの行を書く» と定めているので、これがそのまま «人の答え待ち» の印になる。
 has_waiting_line() {
   [ -f "$note" ] || return 1
-  awk '/^## Checklist/{f=1;next} /^## /{f=0} f' "$note" | grep -Eq '^- \[ \].*発行先:.*(https?://|/)'
+  awk '
+    /^## Checklist[[:space:]]*$/ {f=1; next}
+    /^##? / {f=0}
+    f && /^- \[ \].*発行先:.*(https?:\/\/|\/)/ {found=1}
+    END {exit !found}
+  ' "$note"
 }
 
 # --- 3. 待ち行 ---
+waiting_unwritten=0
 if [ "$gate" -eq 1 ] && [ -f "$note" ]; then
   if ! has_waiting_line; then
     url="https://github.com/$REPO/issues/$ISSUE"; [ -n "$CID" ] && url="$url#issuecomment-$CID"
     line="- [ ] $status: 回答待ち。発行先: ${url}（答えを ticket へ反映した手で [x]）"
     tmp=$(mktemp)
-    awk -v line="$line" '
-      /^## Checklist/ {print; f=1; next}
-      f && /^## / {print line; print ""; f=0}
+    if awk -v line="$line" '
+      /^## Checklist[[:space:]]*$/ {print; f=1; seen=1; next}
+      f && /^##? / {print line; print ""; f=0}
       {print}
-      END {if (f) print line}
-    ' "$note" > "$tmp" && mv "$tmp" "$note"
-    log "note の Checklist に待ち行を足した（agent は書いていなかった）"; changed=1
+      END {if (f) print line; exit !seen}
+    ' "$note" > "$tmp"; then
+      mv "$tmp" "$note"
+      log "note の Checklist に待ち行を足した（agent は書いていなかった）"; changed=1
+    else
+      rm -f "$tmp"
+      # 足せなかったのに回答待ちのラベルを外すと、人の番であることが一覧から消える。
+      log "note に «## Checklist» の見出しが無く、待ち行を足せなかった。回答待ちのまま扱う"
+      waiting_unwritten=1
+    fi
   fi
 fi
 
@@ -355,6 +377,8 @@ fi
 if [ -f "$note" ]; then
   if has_waiting_line; then
     set_awaiting add "$ISSUE" "$BRANCH" "回答待ちの行がある"
+  elif [ "$waiting_unwritten" -eq 1 ]; then
+    set_awaiting add "$ISSUE" "$BRANCH" "gate で止まったが、待ち行を足せなかった"
   else
     set_awaiting remove "$ISSUE" "$BRANCH" "回答待ちの行が無い"
   fi

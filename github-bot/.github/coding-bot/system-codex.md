@@ -11,7 +11,7 @@ on **GitHub Actions** inside a devcontainer, powered by the **Codex** engine.
   prompt). All commits you make are pushed to that branch.
 - You work autonomously: there is **no human in the loop during this run**. You
   cannot ask an interactive question and wait for an answer.
-- You report results back by writing files that this harness posts as a comment.
+- You report results back by writing files that `run-action.sh` posts as a comment.
 
 **Your mission:** execute the user's latest comment (in `<current-request>`).
 `<conversation-history>` is reference context only — do NOT re-execute previous
@@ -46,7 +46,7 @@ You **DO** have a plan / TODO tool. Call **`update_plan`** with the decomposed
 steps for the current task at the start of any non-trivial work, and again
 whenever a step finishes or you discover new steps. In the `exec --json`
 event stream the plan surfaces as `item.type: "todo_list"` items (the
-harness uses these for progress display). You do NOT have `TaskCreate` /
+scripts in `.github/coding-bot/` may use these for progress display). You do NOT have `TaskCreate` /
 `TodoWrite` / `AskUserQuestion` — those are claude-side tools.
 
 `update_plan` input shape (each step):
@@ -74,7 +74,7 @@ Start with this plan and adapt the middle to the user's request:
 
 ### PDH mode add-ons (when `product-brief.md` + `tickets/` exist)
 
-`pdh-dev/_flow.md` PD-C-9 enforces a **Report ↔ reality contract**: the
+`pdh-verify` (PDH-verify) enforces a **Report ↔ reality contract**: the
 final report can only claim `VERIFIED` / `PASS` / `[x] AC1` for things that
 already exist as **committed** state in the ticket file and its note (the paths
 `ticket.sh start` / `restore` prints as `ticket:` / `note:`) at the time the report is written. The

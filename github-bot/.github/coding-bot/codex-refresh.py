@@ -156,7 +156,7 @@ def pending_login():
 
 def clear_pending(state):
     # A new preparation may run outside this lock. Re-read before deleting;
-    # GitHub has no conditional variable-delete API (see technical-reference).
+    # GitHub has no conditional variable-delete API (see docs/dev-infra-reference.md).
     current = pending_login()
     if current is not None and current.get('state') == state:
         api(f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/variables/{PENDING_VARIABLE}",

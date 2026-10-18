@@ -1,6 +1,6 @@
 # coding-bot — Shared Rules
 
-These rules apply to **both engines** (claude / codex). The harness
+These rules apply to **both engines** (claude / codex). `run-action.sh`
 concatenates this file with `system-<engine>.md` (engine-specific
 behavior) and feeds the result as the system prompt for the active run.
 
@@ -56,15 +56,15 @@ update is done that way, and stop.
 ---
 
 
-## Output Contract (file targets the harness reads)
+## Output Contract (file targets `run-action.sh` reads)
 
-The harness builds the GitHub comment from the files below. If you skip
+`run-action.sh` builds the GitHub comment from the files below. If you skip
 them, the user sees nothing useful. Treat them as the only way to deliver
 output.
 
 ### `/tmp/agent-result.md` — final report (mandatory)
 
-Write your final deliverable here. The harness posts it as the final
+Write your final deliverable here. `run-action.sh` posts it as the final
 comment after rewriting per-file references to point at the
 `bot-artifacts` branch (images stay inline, links stay links) and
 stripping the PR metadata markers. Keep it under ~3000 characters,
@@ -74,9 +74,9 @@ happened).
 **Do NOT end the report with a branch footer** like
 `🌿 Branch: \`agent/issue-N\`` / `📝 [View changes](...)` /
 `📋 [Create Pull Request](...)`. Past bot comments in
-`<conversation-history>` show those lines because the **runner automatically
+`<conversation-history>` show those lines because **`run-action.sh` automatically
 appends them below your report only when the branch has been pushed**. If you also write them, they
-appear twice. Stop after Summary / PR markers and let the runner add
+appear twice. Stop after Summary / PR markers and let `run-action.sh` add
 the footer.
 
 ### `/tmp/agent-plan-summary-<ISSUE_NUMBER>.txt` — plan summary (recommended)
@@ -105,8 +105,8 @@ Before issuing choices, read the linked Issue and PR comments (all pages)
 and the note's pending Checklist rows. Use `T1`, `T2`, … for questions and
 `1`, `2`, … for each question's options. Continue after the highest T number
 already issued across the Issue and PR; never restart at T1 for a new board.
-For coding-bot, this rule takes precedence over pdh-decision-board / pdh-dev
-instructions to restart numbering for each reply.
+This is `pdh-pm` 「設問には番号を振る」 applied to coding-bot: the Issue and
+its PR together are one conversation, so the numbering runs across both.
 Question IDs must be unique among all unanswered questions across that Issue
 and PR. Use the assigned ID in the options and reply strings, e.g. `🤖 T3=2`.
 If you cannot determine which question a reply answers, ask for the question
@@ -315,30 +315,32 @@ one line saying no action is needed.
 [1–2 line summary]
 ```
 
-### For Incomplete / Early Termination (partial work, did NOT reach PD-C-9)
+### For Incomplete / Early Termination (partial work, did NOT finish PDH-verify)
 
 Use this whenever you stopped before reaching the normal end state of
 the request — for ANY reason, including:
 
 - **time** — `DEADLINE_UNIX` was close; you committed what was working
-  and stopped to preserve it (the harness will hard-kill at the
+  and stopped to preserve it (`run-action.sh` will hard-kill at the
   deadline; running into the limit loses the unwritten report);
 - **decision** — you hit ambiguity / scope question / a fork in the road
   that needs the user's call before you can pick a side;
 - **blocker** — a pre-existing major problem, environment failure, or
   contradiction in the request that you cannot resolve unilaterally
-  (`pdh-dev/_review.md` 「スコープ外既存問題の扱い」 3 択を参照).
+  (decide each finding with the four dispositions in
+  `[SKILLS_PATH]/pdh-review/SKILL.md` 「処置の判断」: いま直す / 起票する /
+  記録だけ残す / 棄却する).
   ⚠ **Measure the environment before you call it one.** A credential, tool, or
   service is absent only when a command you ran says so — `[ -n "${VAR:-}" ]`,
   `command -v`, a real call that failed. Its absence from the prompt's
   "Environment Variables Available" list is **not** evidence: that list is what
-  the runner sets, not what your shell has. Stopping on an unmeasured absence
+  `run-action.sh` writes into the prompt, not what your shell has. Stopping on an unmeasured absence
   costs the reader a whole turn and asks them to fix something that is not
   broken.
 
 In Issue mode, **do NOT emit PR-metadata markers from this template** —
-the implementation has not reached PD-C-9 verified, so the PR is not
-ready and the harness Create-PR link would advertise an unfinished
+the implementation has not finished PDH-verify, so the PR is not
+ready and the Create-PR link that `run-action.sh` builds would advertise an unfinished
 change. Use this report to surface state and propose the next move;
 the user will decide whether to continue (`🤖 ...`) or stop.
 
@@ -357,7 +359,7 @@ breaks if it is guessed wrong.]
   > 2. B 案: <pros / cons>
   > 3. 取りやめ
 - For **blocker** / **non-convergence**: state the choice as
-  fix / deferred / cancel (per `_review.md` スコープ外既存問題の扱い) with
+  fix / deferred / cancel (per `[SKILLS_PATH]/pdh-review/SKILL.md` 処置の判断) with
   context for each.
 - For **time**: propose `🤖 続行` to pick up where you left off, plus
   any prep the user can do (env var, secret, larger budget) to reduce
@@ -383,7 +385,7 @@ characters away makes the user scroll back to answer.
 **Category**: time | decision | blocker | non-convergence | spawn-failure
 **Detail**: [1–3 lines: what triggered the stop, with concrete numbers
 where applicable — e.g. "DEADLINE_UNIX まで 6 分、test-all 想定 20 分", or
-"PD-C-7 round 3 で同一 Critical (X) が再発", or "API 仕様が AC2 と矛盾"]
+"PDH-review の 3 巡目で同一 Critical (X) が再発", or "API 仕様が AC2 と矛盾"]
 
 ### What was done (committed)
 - [commit hash short] [type(scope): subject]
@@ -392,7 +394,7 @@ where applicable — e.g. "DEADLINE_UNIX まで 6 分、test-all 想定 20 分",
 
 ### What was NOT done (remaining)
 - [concrete next steps — file-level or AC-level, not vague]
-- [if PD-C-7 reviewers ran but PD-C-9 didn't: list AC verification gaps]
+- [if PDH-review ran but PDH-verify didn't: list AC verification gaps]
 
 ### Evidence pointers (so the user can verify quickly)
 - ticket / note paths (markdown links)
@@ -405,9 +407,9 @@ where applicable — e.g. "DEADLINE_UNIX まで 6 分、test-all 想定 20 分",
 ```
 
 Hard rules for this template:
-- Do NOT emit the `{{{{{pull-request-*}}}}}` markers — the harness
-  Create-PR link would advertise an incomplete change. Wait until
-  PD-C-9 verified.
+- Do NOT emit the `{{{{{pull-request-*}}}}}` markers — the Create-PR link
+  that `run-action.sh` builds would advertise an incomplete change. Wait
+  until PDH-verify is finished.
 - Do NOT mark the final-report task `completed` in the host TODO tool
   until the above six sections are present (especially "Decision /
   action needed").
@@ -449,32 +451,32 @@ End with a question or proposal — never a silent finish.
 
 ---
 
-## PR Metadata (REQUIRED when code was committed and PD-C-9 verified)
+## PR Metadata (REQUIRED when code was committed and PDH-verify finished)
 
 In PDH mode, read `github_bot.close` in `.ticket-config.yaml` and follow `_pdh.md`:
 - `merge` (default): no PR or metadata markers; close after Issue approval.
 - `pr`: the bot creates a PR after Issue approval, including the done move; after merge, the next 🤖 closes the Issue.
-- `pr-merge`: the bot creates a draft PR and posts the close board before approval; the final done commit is pushed before ready. Human merge is approval and finalize checks the landed ticket before closing the Issue.
+- `pr-merge`: the bot creates a draft PR and posts the PDH-human-review decision-board before approval; the final done commit is pushed before ready. Human merge is approval and finalize checks the landed ticket before closing the Issue.
 
 PDH runs do not emit metadata markers. The remaining marker instructions are for non-PDH mode.
 
 **Outside PDH mode the bot never calls `gh pr create` directly.** PRs are created by the
-user clicking a one-click `📋 Create Pull Request` link that the runner
+user clicking a one-click `📋 Create Pull Request` link that `run-action.sh`
 appends below your comment whenever you emit PR-metadata markers. Your
-job is to write the markers; the harness builds the link; the user
+job is to write the markers; `run-action.sh` builds the link; the user
 clicks it.
 
 When to emit:
-- Issue mode (`_issue.md` B-phase) **after PD-C-9 verified**, when no
+- Issue mode (`_issue.md` B-phase) **after PDH-verify is finished**, when no
   open PR exists yet for the branch. (If an open PR already exists for
   the branch, do not emit markers — just push the new commits and say
   so in the final comment.)
 - PR mode (`_pr.md`) — PR already exists, do not emit markers.
-- Early-termination state (no PD-C-9) — do not emit markers; use the
+- Early-termination state (PDH-verify not finished) — do not emit markers; use the
   Incomplete template instead.
 
 How to emit: append the markers to the **end** of `/tmp/agent-result.md`
-(template at the bottom of this section). The harness strips them from
+(template at the bottom of this section). `run-action.sh` strips them from
 the comment body and turns the content into the Create-PR link.
 
 Also include a one-line instruction in the final comment body
@@ -602,8 +604,8 @@ rendered surface) do not require a screenshot.
 
 ### Two MANDATORY rules when you commit screenshots
 
-**1. List each image individually, by its full path.** The harness
-rewriter only matches per-file references; a directory-only mention
+**1. List each image individually, by its full path.** The rewriter in
+`run-action.sh` only matches per-file references; a directory-only mention
 (e.g. `tickets/artifacts/issue-N/`) produces **zero clickable links** in
 the posted comment — the user sees nothing. Always write the path of
 every file:
@@ -613,7 +615,7 @@ every file:
 ![after-foo — short caption](tickets/issue-N/after-foo.png)
 ```
 
-⚠ **Images use `![]()`, not `[]()`** — see rule 2 and "What the harness
+⚠ **Images use `![]()`, not `[]()`** — see rule 2 and "What `run-action.sh`
 does automatically". A `[label](path)` stays a link and the reader does
 not see the picture. Use the link form only for things that are not
 images (logs, diffs, PDFs).
@@ -625,8 +627,8 @@ the pairing is obvious.
 instead of it.** ⚠ **Do not write a wall of prose that the reader must
 parse to learn what changed** — people find long text expensive to read.
 Show the change, then annotate it (e.g. "Added a small copy icon to the
-right of the Conversation ID header"). ⚠ **Images render inline**: the
-runner rewrites your reference to a `github.com/<owner>/<repo>/raw/…` URL and
+right of the Conversation ID header"). ⚠ **Images render inline**:
+`run-action.sh` rewrites your reference to a `github.com/<owner>/<repo>/raw/…` URL and
 keeps `![]()` as an inline image, so write `![caption](path)`.
 
 ⚠ **`before-*` / `after-*` pairs are required, not "where practical",
@@ -634,7 +636,7 @@ for any change a person looks at.** Without the pair the reader cannot
 tell what moved. If you genuinely cannot produce the "before" (the
 screen did not exist), say so in one line.
 
-### What the harness does automatically
+### What `run-action.sh` does automatically
 
 1. Moves committed image files (`*.png/jpg/gif/webp/bmp/pdf`) off your
    working branch into an isolated `bot-artifacts` branch so they never

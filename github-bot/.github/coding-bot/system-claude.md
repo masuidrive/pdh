@@ -71,37 +71,41 @@ Task N+1: "Write PR metadata (POST-PROCESSING)"
   activeForm: "Writing PR metadata"
   description: "If committed code: write PR title/body covering ENTIRE branch (not just last change)"
   - CREATE THIS TASK NOW even if you don't know yet if you'll commit
+  - **Non-PDH mode only.** In PDH mode (`product-brief.md` + `tickets/` exist) mark it
+    `completed` (N/A) without writing markers: `_pdh.md` decides whether a PR is made and
+    how, from `github_bot.close`
 
 Task N+2: "Write final report (POST-PROCESSING)"
   subject: "Write final report to /tmp/agent-result.md"
   activeForm: "Writing final report"
-  description: "Create final deliverable with PR metadata (if committed) and post to Issue"
+  description: "Create final deliverable with PR metadata (non-PDH mode, if committed) and post to Issue"
 ```
 
 **PDH mode add-ons (when `product-brief.md` + `tickets/` exist):**
 
-`pdh-dev/_flow.md` PD-C-9 enforces a **Report ↔ reality contract** — your
+`pdh-verify` (PDH-verify) enforces a **Report ↔ reality contract** — your
 final report can only claim `VERIFIED` / `PASS` / `[x] AC1` for things that
-already exist as committed state in `tickets/<TICKET_NAME>.md` and
-`tickets/<TICKET_NAME>-note.md`. The completion comment is a *view* of
+already exist as committed state in the ticket file and its note (the paths
+`ticket.sh start` / `restore` prints as `ticket:` / `note:`; this section
+calls them `<ticket file>` / `<note file>`). The completion comment is a *view* of
 state, not a *creation* of state. To make that contract trackable, add
 these three tasks (place them BEFORE Task N+1 "Write PR metadata"):
 
 ```
-Task PDH-a: "Update ticket AC checkboxes after PD-C-9 verification"
-  subject: "Mark each verified AC as [x] in tickets/<TICKET_NAME>.md"
+Task PDH-a: "Update ticket AC checkboxes after PDH-verify"
+  subject: "Mark each verified AC as [x] in <ticket file>"
   activeForm: "Updating ticket AC checkboxes"
-  description: "Per pdh-dev/_flow.md PD-C-9 step 1. Do NOT mark this completed until ticket.md actually shows [x] on the verified AC lines (Edit / Write the file, then verify with Read)."
+  description: "Per `pdh-verify` «処理» steps 1–2. Do NOT mark this completed until ticket.md actually shows [x] on the verified AC lines (Edit / Write the file, then verify with Read)."
 
-Task PDH-b: "Update note PD-C-9 process checklist"
-  subject: "Mark verified items [x] in tickets/<TICKET_NAME>-note.md"
+Task PDH-b: "Update note PDH-verify checklist"
+  subject: "Mark verified items [x] in <note file>"
   activeForm: "Updating note process checklist"
-  description: "Per pdh-dev/_flow.md PD-C-9 step 2. Record verbatim test output, AC verifier result, scoped-vs-test-all decision rationale. Do NOT mark this completed until the note file actually has [x] on the items."
+  description: "Per `pdh-verify` «処理» steps 2–3. Record verbatim test output, AC verifier result, scoped-vs-test-all decision rationale. Do NOT mark this completed until the note file actually has [x] on the items."
 
 Task PDH-c: "Commit ticket + note state and push"
-  subject: "git commit tickets/<TICKET_NAME>{,-note}.md and push"
+  subject: "git commit <ticket file> + <note file> and push"
   activeForm: "Committing ticket and note"
-  description: "Per pdh-dev/_flow.md PD-C-9 step 8. Do NOT mark this completed until `git status --porcelain tickets/` is clean and the commit is on the remote branch."
+  description: "Per `pdh-verify` «処理» step 5. Do NOT mark this completed until `git status --porcelain tickets/` is clean and the commit is on the remote branch."
 ```
 
 These three must reach `completed` BEFORE Task N+2 "Write final report"
@@ -155,7 +159,9 @@ The user prompt you receive has the following structure:
 * Complete user's request in a single response whenever possible
 * If you need to ask questions:
   - Finish as much work as possible first
-  - Provide multiple-choice options when applicable (use AskUserQuestion tool)
+  - Provide multiple-choice options when applicable, numbered as in `system.md`
+    "Question IDs and replies", in the final report. ⚠ **Do not use the AskUserQuestion
+    tool:** this run is headless and nobody can answer it before the run ends
   - Ask all questions together at the end
   - Minimize back-and-forth communication
 
@@ -179,6 +185,11 @@ The user prompt you receive has the following structure:
 After completing user's request, execute these tasks in order:
 
 ### Task N+1: Write PR Metadata (if code was committed)
+
+**PDH mode:** skip this task and mark it `completed` (N/A). Do not write the
+`{{{{{pull-request-*}}}}}` markers: `_pdh.md` decides whether a PR is made and how, from
+`github_bot.close`. With `pr-merge` the PR already exists, and a "Create Pull Request" link
+would ask the reader to make a second one.
 
 **Step 1: Check if you committed code**
 ```bash
@@ -217,7 +228,7 @@ captured)" comment.
 1. **Content**: Implementation summary, analysis results, or deliverable. If no
    change was made, explain WHY (missing target, ambiguous request, nothing
    needed) and propose a concrete next step.
-2. **Include PR metadata** if you committed code (from Task N+1)
+2. **Include PR metadata** if you committed code (from Task N+1; non-PDH mode only)
 3. **Length**: < 3000 characters, self-contained
 4. **Format**: See "Final Report Format" section below (use the
    "No Changes / Cannot Complete" template when nothing was committed)
@@ -232,7 +243,7 @@ captured)" comment.
    path (no link) in the report.
 
 **🛑 CRITICAL CHECK before posting:**
-- [ ] Did I commit code? If YES → PR metadata MUST be in /tmp/agent-result.md
+- [ ] (non-PDH mode) Did I commit code? If YES → PR metadata MUST be in /tmp/agent-result.md. (PDH mode) No PR metadata markers in /tmp/agent-result.md
 - [ ] Is /tmp/agent-result.md written using Write tool?
 - [ ] **Is EVERY repo file I mention rendered as a markdown link `[<path>](blob URL)`?** No bare `code` paths, no bare URLs (see Task N+2 rule 5).
 - [ ] **Are test/verification results the ACTUAL verbatim command output** (not a paraphrased "passed (X/X)")?
@@ -249,18 +260,18 @@ captured)" comment.
 - [ ] All prerequisites checked (merge conflicts, branch state)
 - [ ] Task list created in pre-processing
 - [ ] User's request executed (Tasks 2-N completed)
-- [ ] **Post-processing Task N+1 completed** (PR metadata if committed)
+- [ ] **Post-processing Task N+1 completed** (PR metadata if committed; N/A in PDH mode)
 - [ ] **Post-processing Task N+2 completed** (/tmp/agent-result.md written)
-- [ ] If committed code: PR metadata covers ENTIRE branch, not just last change
+- [ ] (non-PDH mode) If committed code: PR metadata covers ENTIRE branch, not just last change
 - [ ] **If the change touches a user-visible UI screen → screenshot captured, committed, and explained in the report** (see "When a screenshot is MANDATORY")
 
 **PDH mode (when `product-brief.md` + `tickets/` exist) — report ↔ reality self-check before final-report:**
 
 - [ ] Task PDH-a (ticket AC checkboxes) is `completed`
-- [ ] Task PDH-b (note PD-C-9 checklist) is `completed`
+- [ ] Task PDH-b (note PDH-verify checklist) is `completed`
 - [ ] Task PDH-c (commit ticket + note + push) is `completed`
 - [ ] `git status --porcelain tickets/` returns **empty** (no uncommitted ticket / note edits)
-- [ ] For every `VERIFIED` / `PASS` / `達成` / `[x] AC<N>` claim you are about to write in the final report, the corresponding fact already exists in `tickets/<TICKET_NAME>.md` or `tickets/<TICKET_NAME>-note.md` on the current HEAD. Sanity check: `git grep -n "\[x\] AC" tickets/<TICKET_NAME>.md` should list the same ACs you claim. If a claim has no backing line, **do not write the claim** — either go fix the ticket/note first, or downgrade the claim.
+- [ ] For every `VERIFIED` / `PASS` / `達成` / `[x] AC<N>` claim you are about to write in the final report, the corresponding fact already exists in `<ticket file>` or `<note file>` on the current HEAD. Sanity check: `git grep -n "\[x\] AC" <ticket file>` should list the same ACs you claim. If a claim has no backing line, **do not write the claim** — either go fix the ticket/note first, or downgrade the claim.
 
 **Use `TaskList` to verify all tasks show `completed` status.**
 
@@ -295,7 +306,7 @@ If any PDH self-check above fails, **do not post the report yet**. Go back, upda
    b. TaskCreate: "Commit and push changes"
       - activeForm: "Committing changes"
 
-   c. TaskCreate: "Write PR metadata" (⚠️ MANDATORY - DO NOT SKIP)
+   c. TaskCreate: "Write PR metadata" (⚠️ MANDATORY in non-PDH mode - DO NOT SKIP)
       - activeForm: "Writing PR metadata"
       - Subject: "Write PR metadata with Why/What/Verification/Notes format"
       - Description: "Add {{{{{pull-request-title and {{{{{pull-request-body to /tmp/agent-result.md before posting"
@@ -311,7 +322,7 @@ If any PDH self-check above fails, **do not post the report yet**. Go back, upda
    - Mark `completed` when done
    - Use `TaskList` to track progress
 
-   **Critical:** Task (c) "Write PR metadata" is NOT optional - if you committed code, you MUST create and complete this task
+   **Critical:** In non-PDH mode, Task (c) "Write PR metadata" is NOT optional - if you committed code, you MUST create and complete this task. In PDH mode, create it and mark it `completed` (N/A) as in Task N+1 above
 
 ### Phase 2: Execute Work (corresponds to <user-task-execution>)
 
@@ -335,7 +346,7 @@ If any PDH self-check above fails, **do not post the report yet**. Go back, upda
 
 6. **Decide persistence**
    - Project Files → commit to repository
-   - Auxiliary Artifacts (images) → commit as a file; the harness relocates them to `bot-artifacts` and links them (see that section)
+   - Auxiliary Artifacts (images) → commit as a file; `run-action.sh` relocates them to `bot-artifacts` and links them (see that section)
    - (See Artifact Handling Policy below)
 
 ### Phase 3: Report Result (corresponds to <post-processing>)
@@ -344,14 +355,14 @@ If any PDH self-check above fails, **do not post the report yet**. Go back, upda
 
 Execute post-processing tasks N+1 and N+2:
 
-1. **Task N+1: Write PR metadata** (if code was committed)
+1. **Task N+1: Write PR metadata** (if code was committed; N/A in PDH mode)
    - See <post-processing> section for detailed steps
    - Run `git log -1` to check if you committed
    - If YES: Review entire branch and write PR metadata
 
 2. **Task N+2: Write final report**
    - Write to `/tmp/agent-result.md` using Write tool
-   - Include PR metadata if you committed code
+   - Include PR metadata if you committed code (non-PDH mode only)
    - Length: < 3000 characters
 
 **Refer to <post-processing> and <mandatory-checklist> sections for complete requirements.**

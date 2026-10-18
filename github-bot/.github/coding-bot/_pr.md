@@ -2,22 +2,22 @@
 
 PR に 🤖 が付いたときのあなたの仕事は、その PR の head ブランチ上で **チケットを実装**すること。
 
-フローの定義は `.claude/skills/pdh-dev/_flow.md`（PD-C-6/7/9/10）/ `_review.md`（収束性診断・スコープ外既存問題の扱い・裏取りルール）/ `_execution-team.md`（spawn 機構・並行起動・worker prompt の組み立て）/ `_subagent-context.md`（worker 共通プロンプト）。**その定義に従う**。以下は coding-bot harness 固有の補足のみ：
+フローの定義は `[SKILLS_PATH]/pdh-pm/` と PDH-stage ごとの skill（`pdh-open` 〜 `pdh-close`。PDH-human-review は `pdh-pm`「承認の PDH-stage」）/ `[SKILLS_PATH]/pdh-review/SKILL.md`（収束・処置の判断・裏取りルール）/ `[SKILLS_PATH]/pdh-pm/_execution-team.md`（spawn 機構・並行起動・worker prompt の組み立て）/ `.claude/agents/pdh-*.md`（worker の手順）。**その定義に従う**。以下は coding-bot だけの補足である：
 
-1. このブランチ（`agent/issue-<N>`）に対応するチケットを特定する。`tickets/` 内の `*issue-<N>*.md`（または「PDH モード」の式で算出した `TICKET_NAME`）。見つからない場合は実装に進まず、先に Issue でチケットを作るよう報告する。`current-ticket.md` / `current-note.md` の symlink を張り直し、frontmatter の `started_at` が未設定なら今（UTC）を設定。
-2. **harness の hard timeout 対策（PD-C-6 中）**:
-   - **Commit 早期義務**: worker は spawn 後の最初の意味ある変更で *先に commit + push してから* scoped テストを回す（最初の commit は spawn から *15 分以内*が目安）。push されていない作業は harness の hard timeout（`DEADLINE_UNIX`）で消失する。
-   - **長時間 gate の前に push**: `scripts/test-all.sh` 等の長時間ジョブを回す前に、未 push の変更があれば必ず push してから実行する。
-   - **test-all 前の deadline チェック**: Environment Variables の `DEADLINE_UNIX` を見て、残時間が test-all の想定実行時間 + 5 分のマージンを下回るなら、フル実行せず scoped に留めて「deadline 不足のため test-all はスキップ／scoped で代替、PD-C-9 に委譲」を note に記録して進める（kill されるより合理的）。
-   - test cadence 本体（scoped中／test-all 1回／失敗時 triage）と round escalation policy は `_flow.md` PD-C-7 / `_review.md` 収束性診断・スコープ外既存問題の扱い に従う。
-3. **worker の起動と終了コードの回収**: 起動と待機は `_execution-team.md`「並行起動」に従う（**そちらが決める**）。要点だけ再掲する — ⚠ **worker を «起動した shell 呼び出しの中で» 待たない。**shell tool は 1 コマンドごとに timeout を持ち、超えるとそのコマンドへ SIGTERM を送るので、同じ呼び出しの中で `wait` すると **worker がまだ働いていても約 3 分で刈られる**。`set -m` で独立した process group へ出し、待つのは**別の呼び出しで短く区切って**終了コードのファイルを見に行く。
+1. このブランチ（`agent/issue-<N>`）に対応するチケットを、`_pdh.md` の find-or-create の順（frontmatter の `branch:` がこの branch と一致する ticket、次に式で算出した `TICKET_NAME`）で特定する。見つからない場合は実装に進まず、先に Issue でチケットを作るよう報告する。`bash ticket.sh restore` で `current-ticket.md` / `current-note.md` などの symlink を張り直す。`started_at` は `ticket.sh start` が入れるもので、手で書かない。
+2. **run の hard timeout 対策（PDH-implement 中）**:
+   - **Commit 早期義務**: worker は spawn 後の最初の意味ある変更で *先に commit してから* scoped テストを回す（最初の commit は spawn から *15 分以内*が目安）。⚠ **worker は commit まで行い、push しない。PM が worker の結果を受けるたびに push する。**push されていない作業は `run-action.sh` の hard timeout（`DEADLINE_UNIX`）で消失する。
+   - **長時間 gate の前に push**: PM は `scripts/test-all.sh` 等の長時間ジョブを回す前に、未 push の変更があれば push してから実行する。
+   - **test-all 前の deadline チェック**: Environment Variables の `DEADLINE_UNIX` を見て、残時間が test-all の想定実行時間 + 5 分のマージンを下回るなら、フル実行せず scoped に留めて「deadline 不足のため test-all はスキップ／scoped で代替、PDH-verify に委譲」を note に記録して進める（kill されるより合理的）。
+   - test cadence 本体（scoped中／test-all 1回／失敗時 triage）と round escalation policy は `[SKILLS_PATH]/pdh-review/SKILL.md` の「収束」「処置の判断」に従う。
+3. **worker の起動と終了コードの回収**: 起動と待機は `[SKILLS_PATH]/pdh-pm/_execution-team.md`「並行起動」に従う（**そちらが決める**）。要点だけ再掲する — ⚠ **worker を «起動した shell 呼び出しの中で» 待たない。**shell tool は 1 コマンドごとに timeout を持ち、超えるとそのコマンドへ SIGTERM を送るので、同じ呼び出しの中で `wait` すると **worker がまだ働いていても約 3 分で刈られる**。`set -m` で独立した process group へ出し、待つのは**別の呼び出しで短く区切って**終了コードのファイルを見に行く。
 
    各 worker の rc、result/stderr の `ls -l`、`tail -120 stderr.log` は **note へ記録する**。result が空 / 無い場合も、それだけで silent failure と扱わず rc と stderr tail をセットで残す。⚠ **PR / issue のコメントには rc を貼らない** — あれは run を debug するためのもので、コメントには読み手がいない。コメントに書くのは «何が動かず、そのせいで何が終わっていないか» を言葉で 1 行。⚠ **rc が `143` の worker は «失敗した» のではなく «殺された» のであって、結果が無い理由が違う。**そのまま報告する。spawn が失敗 / 不可能なら単独で続行せず中止し、原因を報告する。
-4. **最終レポートは PD-C-9 到達状況で分岐**：
-   - **到達 + 自己チェック通過** → `_flow.md` PD-C-10 の「完了報告の必須要素」に従う（実装内容・PD-C-7/C-9 結果・各 AC の達成状況）。PR モードなので PR は既にある → 追加コメントとして post。
+4. **最終レポートは PDH-verify まで終えられたかで分岐**：
+   - **到達 + 自己チェック通過** → `[SKILLS_PATH]/pdh-decision-board/close-gate.md`（PDH-human-review の decision-board）に従う（実装内容・PDH-review と PDH-verify の結果・各 AC の達成状況）。PR モードなので PR は既にある → 追加コメントとして post。
    - **到達できず途中終了** → 共通 `system.md` の「For Incomplete / Early Termination」テンプレートに切り替え。category は time / decision / blocker / non-convergence / spawn-failure から 1 つを 1 行目に出し、`What was done (committed)` / `What was NOT done (remaining)` / `Decision needed from user` / `Evidence pointers` を埋める。次回 `🤖` の続行で何を再開すればよいか分かる状態にする。Issue モード step 4 と同じ category 分類とトリガー（DEADLINE_UNIX 近接、AC 解釈の分岐、pre-existing major、3+ round 同型再発、worker 起動失敗）。
 5. クローズは `.ticket-config.yaml` の `github_bot.close` を読んで分岐する。
    - **`merge`（既定）**: AC 達成と issue での close 承認を得てから `_pdh.md` の直接 close 手順へ進む。
    - **`pr`**: issue での close 承認後、done 移動をこの PR に載せる。人が merge した後、次の 🤖 で Issue を閉じる。PR 本文の紐付けは `github_bot.pr_link` に従う。
-   - **`pr-merge`**: **PR の merge そのものが close gate である。**PDH-verify 後、close 判断ボードをこの PR にコメントする。停止する前に `_pdh.md` の draft → ボード → close --no-merge → push → head 一致確認 → ready の順を通す。`🤖 クローズ承認` を別に求めない。修正依頼には実装して再び停止する。
-   非 PDH repo では通常の `_flow.md` PD-C-10 に従い、AC 達成とユーザー承認前に done へ移さない。
+   - **`pr-merge`**: **PR の merge そのものが close gate である。**PDH-verify 後、PDH-human-review の decision-board をこの PR にコメントする。停止する前に `_pdh.md` の draft → decision-board → close --no-merge → push → head 一致確認 → ready の順を通す。`🤖 クローズ承認` を別に求めない。修正依頼（ticket が既に `tickets/done/` にある PR への 🤖）では、**まず `bash ticket.sh reopen <ticket 名>` で作業中へ戻してから** PDH-implement に戻り、実装して同じ順で再び停止する。⚠ **reopen せずに直して `close --no-merge` を回すと、ticket.sh は «finalize の後に commit がある» として拒否する**（gate を通った後の変更を、gate を通ったものとして出させないため）。
+   非 PDH repo では通常の PDH-human-review と PDH-close に従い、AC 達成とユーザー承認前に done へ移さない。

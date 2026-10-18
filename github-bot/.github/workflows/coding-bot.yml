@@ -95,11 +95,14 @@ jobs:
   agent:
     needs: ci-autofix
     # 🤖 / :robot: だけが起動の合図（issue の作成ではタイトルだけを見る）。bot 自身と marker 付き投稿は除外する。
+    # bot の名義の投稿は除外する。ただし変数 CODING_BOT_TRUSTED_BOTS（カンマ区切りの login）に並べた bot は通す
+    # （例: 要望を受けて起票する Slack bot。人の依頼を代わりに書いている）。
     # awaiting-reply は状態表示であり、ラベルの有無では起動しない。
     if: |
       always() && !cancelled() && (needs.ci-autofix.outputs.repair == 'true' ||
       github.event_name == 'workflow_dispatch' || (
-      github.event.sender.type != 'Bot' &&
+      (github.event.sender.type != 'Bot' ||
+       contains(format(',{0},', vars.CODING_BOT_TRUSTED_BOTS), format(',{0},', github.event.sender.login))) &&
       !contains(github.event.comment.body || '', '<!-- coding-bot -->') &&
       !contains(github.event.review.body || '', '<!-- coding-bot -->') && (
       (github.event_name == 'issue_comment' && (contains(github.event.comment.body, ':robot:') || contains(github.event.comment.body, '🤖'))) ||

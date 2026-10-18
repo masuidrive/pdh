@@ -18,7 +18,7 @@ export GIT_AUTHOR_DATE='2026-01-01T00:00:00Z'
 export GIT_COMMITTER_DATE="$GIT_AUTHOR_DATE"
 unset CODING_BOT_NOTIFY_FILE
 
-ROOT_DIR=$(git -C "$(dirname "$0")" rev-parse --show-toplevel) || exit 1
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 HOOKS=""
 for candidate in github-bot/pdh-hooks.sh .github/coding-bot/pdh-hooks.sh; do
   if [ -f "$ROOT_DIR/$candidate" ]; then
@@ -60,18 +60,27 @@ expect() {
   must mkdir -p "$repo/tickets"
   must git -C "$repo" init -q -b main
   printf 'github_bot:\n  close: pr-merge\n' > "$repo/.ticket-config.yaml"
-  if [ "$ticket" = done ]; then
+  if [[ "$ticket" = done* ]]; then
     # pr-merge の close gate: ticket.sh close --no-merge で done へ移したあと、PR の Merge を待つ。
-    must mkdir -p "$repo/tickets/done/260101-000000-issue-1"
-    printf '# Issue 1\n' > "$repo/tickets/done/260101-000000-issue-1/ticket.md"
-    printf '## Status: PDH-human-review\n\n## Checklist\n' > "$repo/tickets/done/260101-000000-issue-1/note.md"
+    must mkdir -p "$repo/tickets/done/260101-000000-inherited"
+    printf '%s\n' '---' 'branch: agent/issue-1' '---' '# Issue 1' > "$repo/tickets/done/260101-000000-inherited/ticket.md"
+    printf '## Status: %s\n\n## Checklist\n' "${FAKE_DONE_STATUS:-PDH-human-review}" > "$repo/tickets/done/260101-000000-inherited/note.md"
   elif [ "$ticket" != missing ]; then
     must mkdir -p "$repo/tickets/260101-000000-issue-1"
     printf '# Issue 1\n' > "$repo/tickets/260101-000000-issue-1/ticket.md"
     {
-      printf '## Status: PDH-implement\n\n## Checklist\n'
-      if [ "$ticket" = waiting ]; then
+      if [ "$ticket" = gate-heading-variant ]; then
+        printf '## Status: PDH-human-review\n\n## Checklist:\n'
+      else
+        printf '## Status: PDH-implement\n\n## Checklist\n'
+      fi
+      [ "$ticket" != waiting-subheading ] || printf '### 詳細\n'
+      [ "$ticket" != waiting-outside ] || printf '# 次の節\n'
+      if [[ "$ticket" = waiting* ]]; then
         printf '%s\n' '- [ ] 回答待ち 発行先: https://github.com/example/project/issues/1#issuecomment-100'
+      fi
+      if [ "$ticket" = waiting-long ]; then
+        python3 -c 'print(("x" * 100 + "\n") * 3000)'
       fi
     } > "$repo/tickets/260101-000000-issue-1/note.md"
   fi
@@ -84,6 +93,11 @@ REPORT
   if [ "$rc" -ne 0 ]; then
     fail "$label: exit ${rc}（期待 0）: $output"
     return
+  fi
+  if [ "$cmd" = final ] && [ "$ticket" = done ] && [ -n "$pr" ]; then
+    if ! grep -q -- $'--add-label\tPDH-human-review' "$GH_LOG"; then
+      fail "$label: done の close 承認待ちを PDH-human-review ラベルに反映していない"
+    fi
   fi
   expect_labels "$label" "$expected"
   if [ "$#" -ge 6 ]; then
@@ -171,13 +185,26 @@ expect '3. start + open PR 11' start 11 none $'1 remove\n11 remove'
 expect '4. start + PR 無し' start '' none '1 remove'
 expect '5. final（待ち行あり）+ open PR 11' final 11 waiting $'1 remove\n11 add'
 expect '6. final（待ち行あり）+ PR 無し' final '' waiting '1 add'
+expect 'heading. final（小見出しの待ち行）' final 11 waiting-subheading $'1 remove\n11 add'
+expect 'outside. final（Checklist 節の外の行）' final 11 waiting-outside $'1 remove\n11 remove'
+expect 'long. final（30万字の待ち行あり）' final 11 waiting-long $'1 remove\n11 add'
+# 見出しが揺れて待ち行を足せないときは、回答待ちのラベルを外さない。
+expect 'heading-variant. final（gate・## Checklist: で待ち行を足せない）' final 11 gate-heading-variant $'1 remove\n11 add'
 expect '7. final（待ち行なし）+ open PR 11' final 11 none $'1 remove\n11 remove'
 expect '8. final（ticket 未作成）+ PR 無し' final '' missing '1 add' question
 FAKE_ISSUE_STATE=CLOSED expect '15. final（ticket 未作成）+ issue CLOSED' final '' missing '1 remove' ''
 FAKE_ISSUE_STATE=fail expect '16. final（ticket 未作成）+ view 失敗' final '' missing '1 add' question
 FAKE_ISSUE_STATE='' expect '17. final（ticket 未作成）+ view 空' final '' missing '1 add' question
-expect '13. final（done 済みの close gate）+ open PR 11' final 11 done $'1 remove\n11 add'
-expect '14. final（done 済み）+ PR 無し' final '' done ''
+expect '13. final（done 済みの close gate）+ open PR 11' final 11 done $'1 remove\n11 add' close_gate
+# done の古い ticket が残る再依頼も、close gate 以外は issue の状態で回答待ちを決める。
+for done_status in PDH-human-review PDH-close; do
+  FAKE_DONE_STATUS="$done_status" expect "done/$done_status: PR 無し + issue OPEN" final '' done '1 add' question
+  FAKE_DONE_STATUS="$done_status" FAKE_ISSUE_STATE=CLOSED expect "done/$done_status: PR 無し + issue CLOSED" final '' done '1 remove' ''
+  FAKE_DONE_STATUS="$done_status" FAKE_ISSUE_STATE=fail expect "done/$done_status: PR 無し + view 失敗" final '' done '1 add' question
+  FAKE_DONE_STATUS="$done_status" FAKE_ISSUE_STATE='' expect "done/$done_status: PR 無し + view 空" final '' done '1 add' question
+done
+FAKE_DONE_STATUS=PDH-close expect 'done/PDH-close: open PR 11 + issue OPEN' final 11 done-other $'1 remove\n11 add' question
+FAKE_DONE_STATUS=PDH-close FAKE_ISSUE_STATE=CLOSED expect 'done/PDH-close: open PR 11 + issue CLOSED' final 11 done-other $'1 remove\n11 remove' ''
 
 # 共通関数への集約を、コメント以外のラベル操作行が 2 行以下かで検査する。
 # --add-label / --remove-label と "--${action}-label" の両方を数える。

@@ -32,6 +32,7 @@ exclude_runner_markers() {
 
 install_pdh_pre_push_hook() {
   local hooks_dir hook_temp
+  # linked worktree でも共通の hooks dir を取得する。
   hooks_dir=$(git rev-parse --git-path hooks) || return 1
   if [ -e "$hooks_dir/pre-push" ] || [ -L "$hooks_dir/pre-push" ]; then
     if grep -qxE '# coding-bot-(pdh|pr-scope)-pre-push' "$hooks_dir/pre-push"; then
@@ -67,9 +68,9 @@ trap 'exit 1' HUP INT TERM
 diagnostics() {
   # Keep each missing item under its headline; line shifts are not new failures.
   awk '
+    # 通過の行は検査を足すたびに文言が変わるので、末尾だけで見分ける。
     /^check-pdh-ticket: FAILED$/ ||
-    /^check-pdh-ticket: 検査対象の ticket なし・起票先の検査を通過$/ ||
-    /^check-pdh-ticket: progress.md・gate の待ち行・close 前 review の記録と区間・起票先・導入後の Why の根拠の検査を通過$/ {
+    /^check-pdh-ticket: .*の検査を通過$/ {
       headline=""; next
     }
     /^check-pdh-ticket:/ { headline=$0; print; next }
@@ -117,7 +118,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # Shared refs and the inherited GITHUB_BASE_REF preserve pdh_review_base_tip.
   # Preserve ticket ownership when check-pdh-ticket runs with a detached HEAD.
   if (cd "$temp_dir/tree" && GITHUB_HEAD_REF="$push_branch" \
-      bash scripts/check-pdh-ticket.sh </dev/null) > "$temp_dir/push-check.log" 2>&1; then
+      bash scripts/check-pdh-ticket.sh --require-branch-ticket "$base_ref" </dev/null) > "$temp_dir/push-check.log" 2>&1; then
     cat "$temp_dir/push-check.log"
   else
     cat "$temp_dir/push-check.log" >&2
@@ -369,6 +370,8 @@ if [ ! -e .git ]; then
 fi
 [ -e .git ] || { echo "Cannot find git repository" >&2; exit 1; }
 
+# workflow が読む通知は元の workspace に置く。作業用 worktree へ移っても変えない。
+export GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-$(pwd)}"
 echo "📁 Working directory: $(pwd)"
 
 # 環境変数チェック
@@ -507,8 +510,8 @@ if [ "$IS_PR" = true ]; then
   HEAD_SHA=$(echo "$PR_DATA" | jq -r '.headRefOid')
   echo "📌 PR head branch: $BRANCH_NAME ($HEAD_SHA)"
 
-  git checkout "$BRANCH_NAME"
-  git pull origin "$BRANCH_NAME" || true
+  WORKTREE_ROOT=$(bash "$SCRIPT_DIR/enter-branch-worktree.sh" "$BRANCH_NAME" false)
+  cd "$WORKTREE_ROOT"
 
   # PR diff取得
   PR_DIFF=$(gh pr diff $ISSUE_NUMBER --repo $GITHUB_REPOSITORY | head -1000 || echo "")
@@ -539,13 +542,13 @@ else
   echo "📌 Issue branch: $BRANCH_NAME"
 
   if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
-    # ブランチが存在 → checkout
-    git checkout "$BRANCH_NAME"
-    git pull origin "$BRANCH_NAME" || true
+    # 既存 branch の worktree を開く。
+    WORKTREE_ROOT=$(bash "$SCRIPT_DIR/enter-branch-worktree.sh" "$BRANCH_NAME" false)
   else
-    # ブランチが存在しない → 作成
-    git checkout -b "$BRANCH_NAME"
+    # 元の checkout の HEAD を base にして作る。
+    WORKTREE_ROOT=$(bash "$SCRIPT_DIR/enter-branch-worktree.sh" "$BRANCH_NAME" true)
   fi
+  cd "$WORKTREE_ROOT"
 
   PR_DIFF=""
   CI_SECTION=""

@@ -6,7 +6,7 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 
 ## 前提
 
-- PDH core が導入済み（`.claude/skills/pdh-dev/` か `.codex/skills/pdh-dev/` がある）。無ければ先に core を入れる。
+- PDH core が導入済み（` .claude/skills/pdh-pm/` か `.agents/skills/pdh-pm/` がある）。無ければ先に core を入れる。
 - `gh` CLI が使えて、対象が GitHub repo であること。**このレイヤーでは `gh` を必須にする。**
 - ticket.sh が 20260916.084455 以降であること（`new --branch` / `ticket_files` / `append_only_files`、ticket 自身の branch 上での `start`。`bash ./ticket.sh selfupdate`）。
 - project root に `product-brief.md` と `tickets/` がある（bot はこれで PDH mode を判定する）。
