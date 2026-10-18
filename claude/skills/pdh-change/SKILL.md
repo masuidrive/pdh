@@ -126,7 +126,7 @@ PDH-stage の skill は、関数のように «入力・処理・出力・例外
 `docs/` にはソース（コード・テスト・設定・git の履歴）から作れない、repo の外の状態・作っていないものについての決定・人の意図と方針だけを置く。製品の利用契約は `specs/`、コードの落とし穴はそのコードのコメント、作業の記録は ticket に置く。ソースから繰り返し集める情報が必要なら script・`--help`・生成物にし、文書には取得するコマンドを 1 行残す。たまにしか使わない写しは消す。
 
 - ファイル名は英語の kebab-case で主題の名詞句にする。日付・ticket 名・版を入れない。ディレクトリは複数ファイルの組にだけ作る。分ける単位は読む人と読む場面にする
-- 文書の先頭に下の YAML frontmatter を置く。`docs/**/*.md` と `specs/*.md` が対象で、`results/` 配下の過去の実測記録は対象にしない。通常の文書へ生成物というコメントを書いて検査から外さない
+- 文書の frontmatter 検査を採用した project は、文書の先頭に下の YAML frontmatter を置く。`docs/**/*.md` と `specs/*.md` が対象で、`results/` 配下の過去の実測記録は対象にしない。通常の文書へ生成物というコメントを書いて検査から外さない
 - `stale-when` は誤りの判定ではなく、再確認のきっかけである。path は変わったら読み直す狭い範囲を選ぶ。まだ無い機能や人の判断は event で書く。旧 describes の値を機械的に写さない
 - `read-at` は読む PDH-stage の一覧である。空の文書は到達できる文書・skill・agent 定義・Product Brief・project の規則からリンクする。自己リンク・ticket の履歴・fixture は読む入口に数えない
 
@@ -144,6 +144,8 @@ stale-when:     # 1 件以上。以下から必要なものを選ぶ
 # replaced-by: docs/replacement.md#scope  # superseded のときだけ必須
 ---
 ```
+
+採用は INSTALL.md「文書の frontmatter 検査を採用する場合」に従い、`docs-metadata.check` / `docs-references.check` を有効にする。以下の目次・文書照合の手順は採用した project で使う。
 
 `bash scripts/docs-toc.sh --stage <PDH-stage>` が読む候補と見出しを出す。`docs-metadata.check` は型・path と後継の実在・後継の循環を、`docs-references.check` は読む入口からの到達を数える。外部照会は lint と close からは実行しない。外部事実を使う担当が利用前に `python3 scripts/docs-policy.py check-external <doc>` を実行する。文書の check を argv のまま、1 件につき既定 30 秒の上限で照会し、一致（exit 0）・不一致（exit 1）・取得不能（exit 2）を返す。目次も check がある文書にこの入口を表示する。
 

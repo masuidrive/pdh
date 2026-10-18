@@ -60,6 +60,20 @@ with tempfile.TemporaryDirectory(prefix='pdh-install-') as temporary:
             (target/directory/name).write_text('project-owned agent\n')
         skill_dir=target/('.claude/skills' if engine=='claude' else '.agents/skills')
         run(target,'git','init','-q','-b','main')
+        if engine == 'claude':
+            (target/'.agents/skills').mkdir(parents=True)
+            for source in (target/'.claude/skills').iterdir():
+                (target/'.agents/skills'/source.name).symlink_to('../../.claude/skills/'+source.name)
+        (target/'docs/plain.md').write_text('# Existing project document\nNo frontmatter.\n')
+        run(target,'bash','scripts/fast-checks.sh')
+        # Activating the registry examples must reject missing frontmatter.
+        for name in ('docs-metadata', 'docs-references'):
+            shutil.copy2(target/f'scripts/checks/{name}.check.example', target/f'scripts/checks/{name}.check')
+        output=run(target,'bash','scripts/fast-checks.sh',code=1)
+        assert 'docs/plain.md' in output and 'frontmatter' in output, output
+        for name in ('docs-metadata', 'docs-references'):
+            (target/f'scripts/checks/{name}.check').unlink()
+
         # Verify session resumption can read actual output lines in both layouts.
         for stage in ('ticket-write','open','ticket-review','ticket-human-review','implement','review','verify','human-review','close'):
             out=run(target,'bash','scripts/pdh-stage-checklist.sh','PDH-'+stage)

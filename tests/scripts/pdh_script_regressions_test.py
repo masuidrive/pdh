@@ -26,6 +26,7 @@ class ScriptTests(unittest.TestCase):
                         GIT_COMMITTER_NAME='Test', GIT_COMMITTER_EMAIL='test@example.invalid')
         for name in ('check-pdh-ticket', 'pdh-stage-checklist', 'pdh-review-range', 'pdh-lock'):
             self.write(f'scripts/{name}.sh', (ROOT / f'scripts/{name}.sh').read_text())
+        self.write('scripts/checks/docs-metadata.check', '# opted in\n')
         self.write('scripts/docs-policy.py', (ROOT / 'scripts/docs-policy.py').read_text())
         self.write('.ticket-config.yaml', 'default_branch: main\nbranch_prefix: features/\n')
         self.run_cmd('git', 'init', '-q', '-b', 'main')
@@ -128,6 +129,13 @@ class ScriptTests(unittest.TestCase):
         self.write(f'{self.ticket}/progress.md', self.review_progress(severity='Minor') + f'close-gate-sha: {self.sha()}\n')
         self.note('human-review')
         self.assertIn('docs/guide.md: related-docs.md', self.check(code=1))
+        # Merely distributing docs-policy.py does not adopt metadata at close.
+        (self.root/'scripts/checks/docs-metadata.check').unlink()
+        content=(self.root/'docs/guide.md').read_text()
+        self.write('docs/guide.md', '# Existing plain document\n')
+        self.check()
+        self.write('docs/guide.md', content)
+        self.write('scripts/checks/docs-metadata.check', '# opted in\n')
         for row, expected in (
             ('- [ ] docs/guide.md: 未了', 1),
             ('- [-] docs/guide.md - skip:', 1),

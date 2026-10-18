@@ -60,8 +60,8 @@ bash ticket.sh init
 | `tmp/pdh/claude/templates/check-ticket-template-drift.sh` | `scripts/check-ticket-template-drift.sh` | 共有 script | 上書き |
 | `tmp/pdh/claude/templates/checks/README.md` | `scripts/checks/README.md` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
 | `tmp/pdh/claude/templates/checks/bin/pdh-stage-skill-sections.sh` | `scripts/checks/bin/pdh-stage-skill-sections.sh` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
-| `tmp/pdh/claude/templates/checks/docs-metadata.check` | `scripts/checks/docs-metadata.check` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
-| `tmp/pdh/claude/templates/checks/docs-references.check` | `scripts/checks/docs-references.check` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
+| `tmp/pdh/claude/templates/checks/docs-metadata.check` | `scripts/checks/docs-metadata.check.example` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
+| `tmp/pdh/claude/templates/checks/docs-references.check` | `scripts/checks/docs-references.check.example` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
 | `tmp/pdh/claude/templates/checks/example-max-source-lines.check` | `scripts/checks/example-max-source-lines.check` | fast-check の定義・見本（project の独自 check は保持） | 差分マージ |
 | `tmp/pdh/claude/templates/checks/example-max-test-lines.check` | `scripts/checks/example-max-test-lines.check` | fast-check の定義・見本（project の独自 check は保持） | 差分マージ |
 | `tmp/pdh/claude/templates/checks/example-no-merge-conflict-markers.check` | `scripts/checks/example-no-merge-conflict-markers.check` | fast-check の定義・見本（project の独自 check は保持） | 差分マージ |
@@ -152,6 +152,19 @@ bash scripts/test-all.sh
 9. 移行確認コマンドを再実行し、要適用が残れば直す。同じ手順の 2 回目に差分が出ないことを確認する。backup の場所・反映した項目・相違・各検査の終了コードと実出力を報告する
 
 ### 既知の移行手順
+
+#### 文書の frontmatter 検査を採用する場合
+
+既定では `docs-metadata.check.example` / `docs-references.check.example` を配る。registry は `*.check` だけを実行する。採用する場合は `pdh-change`「文書を書くとき」に従って既存の `docs/**/*.md` と `specs/*.md` に frontmatter・読む入口を整えてから、次を実行する。有効な check は project 管理とし、更新時に上書きしない。
+
+```bash
+for name in docs-metadata docs-references; do
+  test -f "scripts/checks/$name.check" || cp "scripts/checks/$name.check.example" "scripts/checks/$name.check"
+done
+bash scripts/fast-checks.sh
+```
+
+採用済みの確認（冪等）: `test -f scripts/checks/docs-metadata.check && test -f scripts/checks/docs-references.check`。close 前の文書レビューは、どちらかの有効な check がある場合に行う。旧版が `.check` として配置したものは、採用しない場合に限り backup してその 2 ファイルを削除する。
 
 #### PDH の stage skill・worker 定義・lock への組み直し
 

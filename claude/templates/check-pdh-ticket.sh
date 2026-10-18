@@ -26,7 +26,7 @@
 # <tickets_dir>/done/ は、この branch 自身が直下へ追加した ticket の記録だけを見る。
 #
 # 追記のみの検査は ticket.sh の append_only_files（check / close）が担う。
-# docs-policy.py を導入した repo は文書をすべて消した場合も base 側を照合する（Python + PyYAML）。
+# 文書 check を有効にした repo は文書をすべて消した場合も base 側を照合する（Python + PyYAML）。
 set -uo pipefail
 ac_hash_target=''
 if [ "${1:-}" = --ac-hash ]; then
@@ -530,7 +530,7 @@ for t in "$tickets_dir"/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
   case "$st" in
     PDH-human-review|PDH-close)
       [ "$git_ready" -eq 1 ] || continue
-      if [ -n "$pdh_review_base" ] && { [ -f scripts/docs-policy.py ] || [ -d docs ] || [ -d specs ]; }; then
+      if [ -n "$pdh_review_base" ] && { [ -f scripts/checks/docs-metadata.check ] || [ -f scripts/checks/docs-references.check ]; }; then
         python3 scripts/docs-policy.py review --note "$n" --base "$pdh_review_base" --tip "$pdh_review_tip" || failed=1
       fi
       if [ "$lock_checked" -eq 0 ] && [ -f scripts/pdh-lock.sh ]; then

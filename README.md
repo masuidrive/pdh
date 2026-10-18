@@ -52,7 +52,8 @@ pdh/
     templates/
       CLAUDE.md  AGENTS.md  product-brief.md  .ticket-config.yaml
       agents/claude/  agents/codex/  # pdh-* の役割ファイルだけを配置・lock する
-      checks/  settings.json  hooks.json
+      checks/  # 文書検査は .check.example で配り、採用時に有効化
+      settings.json  hooks.json
       test-all.sh  dev-server.sh  seed-pdh-verify.sh
       check-pdh-ticket.sh  check-ticket-template-drift.sh  fast-checks.sh
       pdh-stage-checklist.sh  pdh-session-hook.sh  pdh-lock.sh

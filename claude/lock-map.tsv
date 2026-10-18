@@ -31,8 +31,8 @@ claude/templates/check-pdh-ticket.sh	scripts/check-pdh-ticket.sh
 claude/templates/check-ticket-template-drift.sh	scripts/check-ticket-template-drift.sh
 claude/templates/checks/README.md	scripts/checks/README.md
 claude/templates/checks/bin/pdh-stage-skill-sections.sh	scripts/checks/bin/pdh-stage-skill-sections.sh
-claude/templates/checks/docs-metadata.check	scripts/checks/docs-metadata.check
-claude/templates/checks/docs-references.check	scripts/checks/docs-references.check
+claude/templates/checks/docs-metadata.check	scripts/checks/docs-metadata.check.example
+claude/templates/checks/docs-references.check	scripts/checks/docs-references.check.example
 claude/templates/checks/pdh-stage-skill-sections.check	scripts/checks/pdh-stage-skill-sections.check
 claude/templates/docs-policy.py	scripts/docs-policy.py
 claude/templates/docs-toc.sh	scripts/docs-toc.sh

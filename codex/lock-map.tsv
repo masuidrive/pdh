@@ -24,8 +24,8 @@ codex/templates/check-pdh-ticket.sh	scripts/check-pdh-ticket.sh
 codex/templates/check-ticket-template-drift.sh	scripts/check-ticket-template-drift.sh
 codex/templates/checks/README.md	scripts/checks/README.md
 codex/templates/checks/bin/pdh-stage-skill-sections.sh	scripts/checks/bin/pdh-stage-skill-sections.sh
-codex/templates/checks/docs-metadata.check	scripts/checks/docs-metadata.check
-codex/templates/checks/docs-references.check	scripts/checks/docs-references.check
+codex/templates/checks/docs-metadata.check	scripts/checks/docs-metadata.check.example
+codex/templates/checks/docs-references.check	scripts/checks/docs-references.check.example
 codex/templates/checks/pdh-stage-skill-sections.check	scripts/checks/pdh-stage-skill-sections.check
 codex/templates/docs-policy.py	scripts/docs-policy.py
 codex/templates/docs-toc.sh	scripts/docs-toc.sh
