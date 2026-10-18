@@ -109,10 +109,14 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         assert 'scripts/pdh-lock.sh' in run(target,'bash','scripts/fast-checks.sh',code=1)
         guard.write_bytes(body)
         # Activating examples must reject the same docs that passed by default.
-        for name in ('docs-metadata','docs-references'):
-            shutil.copy2(target/f'scripts/checks/{name}.check.example',target/f'scripts/checks/{name}.check')
-        output=run(target,'bash','scripts/fast-checks.sh',code=1)
+        output=documented(target,engine,'docs-opt-in',code=1)
         assert 'docs/plain.md' in output and 'frontmatter' in output,output
+        plain=target/'docs/plain.md';plain_body=plain.read_text()
+        plain.write_text('---\nkind: reference\nstatus: active\nread-when: project development\n'
+                         'read-at: [PDH-implement]\nstale-when: [{event: before-use}]\n---\n'+plain_body)
+        run(target,'bash','scripts/fast-checks.sh')
+        documented(target,engine,'docs-opt-in')
+        plain.write_text(plain_body)
         for name in ('docs-metadata','docs-references'):
             (target/f'scripts/checks/{name}.check').unlink()
         # Lock checks ignore changes and additions to project-owned agents too.

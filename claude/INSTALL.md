@@ -252,6 +252,7 @@ done
 
 既定では `docs-metadata.check.example` / `docs-references.check.example` を配る。registry は `*.check` だけを実行する。採用する場合は `pdh-change`「文書を書くとき」に従って既存の `docs/**/*.md` と `specs/*.md` に frontmatter・読む入口を整えてから、次を実行する。有効な check は project 管理とし、更新時に上書きしない。
 
+<!-- pdh-shell: docs-opt-in -->
 ```bash
 for name in docs-metadata docs-references; do
   test -f "scripts/checks/$name.check" || cp "scripts/checks/$name.check.example" "scripts/checks/$name.check"
