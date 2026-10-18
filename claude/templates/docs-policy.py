@@ -471,7 +471,11 @@ def main():
     if args.mode in ('toc', 'record') and not any(
             Path(f'scripts/checks/{name}.check').is_file()
             for name in ('docs-metadata', 'docs-references')):
-        print('docs-policy: 文書の frontmatter 検査は採用していないため省略')
+        if args.mode == 'toc':
+            print('docs-policy: 文書の frontmatter 検査は採用していないので目次は出さない。'
+                  'docs/ と specs/ から、この stage に関係する文書を自分で探して読む')
+        else:
+            print('docs-policy: 文書の frontmatter 検査は採用していないため省略')
         return 0
     try:
         if args.mode == 'check-external':

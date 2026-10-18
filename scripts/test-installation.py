@@ -57,6 +57,8 @@ def stage_docs(target, code):
             assert 'docs/plain.md' in output and 'frontmatter' in output,output
         else:
             assert len(output.splitlines())==1 and '採用していない' in output,output
+            assert '目次は出さない' in output and 'docs/ と specs/' in output,output
+            assert 'この stage に関係する文書を自分で探して読む' in output,output
     record=target/'tmp/skip-record.md'
     output=run(target,'python3','scripts/docs-policy.py','record','docs/plain.md',
                '--base','HEAD','--resolution','unchanged','--reason','project document',
