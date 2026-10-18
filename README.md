@@ -51,7 +51,7 @@ pdh/
       pdh-change/  pdh-check-writing/  pdh-update/  pdh-decision-board/
     templates/
       CLAUDE.md  AGENTS.md  product-brief.md  .ticket-config.yaml
-      agents/claude/  agents/codex/
+      agents/claude/  agents/codex/  # pdh-* の役割ファイルだけを配置・lock する
       checks/  settings.json  hooks.json
       test-all.sh  dev-server.sh  seed-pdh-verify.sh
       check-pdh-ticket.sh  check-ticket-template-drift.sh  fast-checks.sh

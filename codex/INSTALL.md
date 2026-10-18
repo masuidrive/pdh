@@ -58,7 +58,13 @@ bash ticket.sh init
 | `tmp/pdh/codex/templates/.ticket-config.yaml` | `.ticket-config.yaml` | project の設定・入口テンプレート | 差分マージ |
 | `tmp/pdh/codex/templates/AGENTS.local.md.example` | `AGENTS.local.md.example` | project の設定・入口テンプレート | 初回だけ |
 | `tmp/pdh/codex/templates/AGENTS.md` | `AGENTS.md` | project の設定・入口テンプレート | 差分マージ |
-| `tmp/pdh/codex/templates/agents/codex/` | `.codex/agents/` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/codex/templates/agents/codex/pdh-ac-reader.toml` | `.codex/agents/pdh-ac-reader.toml` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/codex/templates/agents/codex/pdh-ac-verifier.toml` | `.codex/agents/pdh-ac-verifier.toml` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/codex/templates/agents/codex/pdh-coding-engineer.toml` | `.codex/agents/pdh-coding-engineer.toml` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/codex/templates/agents/codex/pdh-qa.toml` | `.codex/agents/pdh-qa.toml` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/codex/templates/agents/codex/pdh-reviewer-lens1.toml` | `.codex/agents/pdh-reviewer-lens1.toml` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/codex/templates/agents/codex/pdh-reviewer.toml` | `.codex/agents/pdh-reviewer.toml` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/codex/templates/agents/codex/pdh-surface-observer.toml` | `.codex/agents/pdh-surface-observer.toml` | PDH worker の役割定義 | 上書き |
 | `tmp/pdh/codex/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | 共有 script | 上書き |
 | `tmp/pdh/codex/templates/check-ticket-template-drift.sh` | `scripts/check-ticket-template-drift.sh` | 共有 script | 上書き |
 | `tmp/pdh/codex/templates/checks/README.md` | `scripts/checks/README.md` | fast-check の定義・見本（project の独自 check は保持） | 上書き |

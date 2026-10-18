@@ -13,7 +13,13 @@ codex/skills/pdh-ticket-review/	.agents/skills/pdh-ticket-review/
 codex/skills/pdh-ticket-write/	.agents/skills/pdh-ticket-write/
 codex/skills/pdh-update/	.agents/skills/pdh-update/
 codex/skills/pdh-verify/	.agents/skills/pdh-verify/
-codex/templates/agents/codex/	.codex/agents/
+codex/templates/agents/codex/pdh-ac-reader.toml	.codex/agents/pdh-ac-reader.toml
+codex/templates/agents/codex/pdh-ac-verifier.toml	.codex/agents/pdh-ac-verifier.toml
+codex/templates/agents/codex/pdh-coding-engineer.toml	.codex/agents/pdh-coding-engineer.toml
+codex/templates/agents/codex/pdh-qa.toml	.codex/agents/pdh-qa.toml
+codex/templates/agents/codex/pdh-reviewer-lens1.toml	.codex/agents/pdh-reviewer-lens1.toml
+codex/templates/agents/codex/pdh-reviewer.toml	.codex/agents/pdh-reviewer.toml
+codex/templates/agents/codex/pdh-surface-observer.toml	.codex/agents/pdh-surface-observer.toml
 codex/templates/check-pdh-ticket.sh	scripts/check-pdh-ticket.sh
 codex/templates/check-ticket-template-drift.sh	scripts/check-ticket-template-drift.sh
 codex/templates/checks/README.md	scripts/checks/README.md

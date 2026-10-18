@@ -54,6 +54,10 @@ with tempfile.TemporaryDirectory(prefix='pdh-install-') as temporary:
             destination.parent.mkdir(parents=True,exist_ok=True)
             if source.is_dir():shutil.copytree(source,destination,dirs_exist_ok=True)
             else:shutil.copy2(source,destination)
+        # Project-owned agents must remain outside the distributed file lock.
+        for directory, name in (('.codex/agents', 'my-custom-agent.toml'),
+                                *((('.claude/agents', 'my-custom-agent.md'),) if engine == 'claude' else ())):
+            (target/directory/name).write_text('project-owned agent\n')
         skill_dir=target/('.claude/skills' if engine=='claude' else '.agents/skills')
         run(target,'git','init','-q','-b','main')
         # Verify session resumption can read actual output lines in both layouts.

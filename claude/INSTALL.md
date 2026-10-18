@@ -42,8 +42,20 @@ bash ticket.sh init
 | `tmp/pdh/claude/templates/AGENTS.md` | `AGENTS.md` | project の設定・入口テンプレート | 差分マージ |
 | `tmp/pdh/claude/templates/CLAUDE.local.md.example` | `CLAUDE.local.md.example` | project の設定・入口テンプレート | 初回だけ |
 | `tmp/pdh/claude/templates/CLAUDE.md` | `CLAUDE.md` | project の設定・入口テンプレート | 差分マージ |
-| `tmp/pdh/claude/templates/agents/claude/` | `.claude/agents/` | PDH worker の役割定義 | 上書き |
-| `tmp/pdh/claude/templates/agents/codex/` | `.codex/agents/` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/claude/pdh-ac-reader.md` | `.claude/agents/pdh-ac-reader.md` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/claude/pdh-ac-verifier.md` | `.claude/agents/pdh-ac-verifier.md` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/claude/pdh-coding-engineer.md` | `.claude/agents/pdh-coding-engineer.md` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/claude/pdh-qa.md` | `.claude/agents/pdh-qa.md` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/claude/pdh-reviewer-lens1.md` | `.claude/agents/pdh-reviewer-lens1.md` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/claude/pdh-reviewer.md` | `.claude/agents/pdh-reviewer.md` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/claude/pdh-surface-observer.md` | `.claude/agents/pdh-surface-observer.md` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/codex/pdh-ac-reader.toml` | `.codex/agents/pdh-ac-reader.toml` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/codex/pdh-ac-verifier.toml` | `.codex/agents/pdh-ac-verifier.toml` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/codex/pdh-coding-engineer.toml` | `.codex/agents/pdh-coding-engineer.toml` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/codex/pdh-qa.toml` | `.codex/agents/pdh-qa.toml` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/codex/pdh-reviewer-lens1.toml` | `.codex/agents/pdh-reviewer-lens1.toml` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/codex/pdh-reviewer.toml` | `.codex/agents/pdh-reviewer.toml` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/codex/pdh-surface-observer.toml` | `.codex/agents/pdh-surface-observer.toml` | PDH worker の役割定義 | 上書き |
 | `tmp/pdh/claude/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | 共有 script | 上書き |
 | `tmp/pdh/claude/templates/check-ticket-template-drift.sh` | `scripts/check-ticket-template-drift.sh` | 共有 script | 上書き |
 | `tmp/pdh/claude/templates/checks/README.md` | `scripts/checks/README.md` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
