@@ -9,8 +9,9 @@
 
 ```
 product-brief.md            # プロダクト概要・方針【変更にはユーザーの明示的な承認が必要】
+PDH-AGENTS.md               # PDH 共有契約
 docs/
-  product-delivery-hierarchy.md  # Ticket 運用ルール
+  pdh-glossary.md           # PDH の用語
 tickets/                    # Ticket（実行作業。ticket.sh が管理）
   done/                     # 完了した Ticket
 ```

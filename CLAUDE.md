@@ -17,7 +17,7 @@ CLAUDE.md                            # このファイル（PDH repo 固有ル�
 README.md                            # PDH の説明（何を解決するか・ワークフロー）
 INSTALL.md                           # engine ごとの INSTALL.md への入口
 docs/                                # 契約。両配布セットが同じものを配る
-  product-delivery-hierarchy.md      # PDH 運用ルール（配布物）
+  pdh-glossary.md                    # PDH の用語（配布物）
   PDH-AGENTS.md                      # PDH 汎用 agent ルール（配布物。この repo でもこれを読む）
 claude/                              # Claude Code 用の配布セット
   INSTALL.md                         # 導入・更新手順。配布物の配置表はここにある

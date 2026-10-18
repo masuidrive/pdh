@@ -57,7 +57,13 @@ for file in (ROOT/'claude/skills').rglob('*'):
     if file.is_file():
         rel = file.relative_to(ROOT/'claude')
         if file.suffix in ('.md', '.sh', '.py'):
-            outputs[ROOT/'codex'/rel] = native(file.read_text()).encode()
+            text = native(file.read_text())
+            if rel.as_posix() == 'skills/pdh-update/SKILL.md':
+                text += ('\nCodex 単独版へ切り替える場合は、INSTALL.md「Claude 併用版からの移行」に従う。'
+                         '旧 `CLAUDE.md` と `.claude/` の固有変更を backup・マージし、'
+                         '検査後に旧 PDH 配布物だけを名前で指定して退役させる。'
+                         '`.claude/` 全体や user の設定・agent・skill を削除しない。\n')
+            outputs[ROOT/'codex'/rel] = text.encode()
         else:
             outputs[ROOT/'codex'/rel] = file.read_bytes()
 # Shared portable scripts are regenerated too; native entrypoints stay hand owned.

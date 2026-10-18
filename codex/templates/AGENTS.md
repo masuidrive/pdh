@@ -8,8 +8,9 @@ Read `product-brief.md` and `PDH-AGENTS.md`. If `AGENTS.local.md` exists, also r
 
 ```text
 product-brief.md                 # Product purpose and direction
+PDH-AGENTS.md                    # Shared PDH contract
 docs/
-  product-delivery-hierarchy.md  # Ticket workflow
+  pdh-glossary.md                # PDH terminology
 tickets/                         # Managed by ticket.sh
   done/
 ```

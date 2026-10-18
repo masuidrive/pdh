@@ -7,11 +7,23 @@ from pathlib import Path
 import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCES = (
+LEGACY_SOURCES = (
     'docs/PDH-AGENTS.md', 'skills/pdh-dev/_flow.md', 'skills/pdh-dev/_review.md',
     'skills/pdh-coding/SKILL.md', 'skills/pdh-verifying/SKILL.md',
     'skills/pdh-decision-board/base.md', 'skills/pdh-decision-board/ticket-gate.md',
     'skills/pdh-decision-board/close-gate.md', 'skills/pdh-decision-board/final-check.md',
+)
+# Legacy paths above are frozen inputs for pre-split historical revisions only.
+SOURCES = (
+    'docs/PDH-AGENTS.md',
+    'codex/skills/pdh-pm/SKILL.md', 'codex/skills/pdh-pm/_execution-team.md',
+    'codex/skills/pdh-implement/SKILL.md', 'codex/skills/pdh-review/SKILL.md',
+    'codex/skills/pdh-verify/SKILL.md',
+    'codex/templates/agents/codex/pdh-coding-engineer.toml',
+    'codex/templates/agents/codex/pdh-reviewer.toml',
+    'codex/templates/agents/codex/pdh-ac-verifier.toml',
+    'codex/skills/pdh-decision-board/base.md', 'codex/skills/pdh-decision-board/ticket-gate.md',
+    'codex/skills/pdh-decision-board/close-gate.md', 'codex/skills/pdh-decision-board/final-check.md',
 )
 HEADER = ('あなたは PDH の進行担当です。以下の PDH 指示を適用し、その後の各状況について次の行動を判断してください。'
           'これは文章だけで判断する課題です。ツールは使わず、実装や試験を実施したとは書かないでください。'
@@ -28,9 +40,9 @@ def main():
     if args.output.exists():
         parser.error('output already exists; use a new snapshot directory')
     parts, manifest = [], []
-    for source in SOURCES:
-        if args.source_set == 'codex' and source.startswith('skills/'):
-            source = 'codex/' + source
+    if args.source_set == 'legacy' and args.revision == 'working-tree':
+        parser.error('legacy requires a historical --revision')
+    for source in (LEGACY_SOURCES if args.source_set == 'legacy' else SOURCES):
         data = ((ROOT/source).read_bytes() if args.revision == 'working-tree' else
                 subprocess.check_output(['git', 'show', args.revision+':'+source], cwd=ROOT))
         parts.append('### Source: '+source+'\n'+data.decode('utf-8'))

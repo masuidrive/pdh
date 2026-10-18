@@ -16,7 +16,7 @@
 # PDH integration:
 # - PDH-implement: Engineers run individual test commands for fast feedback
 # - PDH-verify: Run this script to confirm all suites pass
-# - Referenced in AGENTS.md and pdh-dev SKILL.md
+# - Referenced in AGENTS.md and pdh-verify SKILL.md
 #
 # Customize the `run` calls below for your project's test suites.
 # Each `run "label" command args...` entry defines one suite.
@@ -103,7 +103,7 @@ run "pdh-ticket" bash scripts/check-pdh-ticket.sh
 
 # Example: Backend (Python pytest)
 # run "backend (SQLite)" uv run pytest -x -q
-# run "backend (PostgreSQL)" env LLMHUB_DATABASE_URL=postgresql+asyncpg://user:pass@db/test uv run pytest -x -q
+# run "backend (PostgreSQL)" env DATABASE_URL=postgresql+asyncpg://user:pass@db/test uv run pytest -x -q
 
 # Example: Frontend (vitest / jest)
 # run "frontend" bash -c "cd frontend && npm test -- --run"

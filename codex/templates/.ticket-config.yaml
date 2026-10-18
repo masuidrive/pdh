@@ -107,7 +107,7 @@ note_content: |
        .codex/agents/pdh-coding-engineer.toml「Open-Questions」に従う）。決まったら `[x]` にし、決まった内容を同じ行に書く。
        close は未了の checkbox を数えるので、決まっていない行が残ると close できない。 -->
 
-# Ticket template — pdh-dev SKILL の ticket 標準構造に準拠
+# Ticket template — pdh-ticket-write SKILL の ticket 標準構造に準拠
 # このテンプレートには frontmatter が含まれていない。
 # YAML frontmatter (created_at, started_at, closed_at) は ticket.sh が自動挿入する。
 #

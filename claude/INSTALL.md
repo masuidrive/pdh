@@ -232,6 +232,20 @@ done < tmp/pdh/claude/lock-map.tsv
 
 ### 既知の移行手順
 
+#### 入口とテスト template の旧参照を直す
+
+`CLAUDE.md` の構造図は共有契約を `PDH-AGENTS.md`、用語を `docs/pdh-glossary.md` とする。`scripts/test-all.sh` の skill 参照を `pdh-verify` に直し、DB 接続変数の例は project が使う名前へ合わせる（template は `DATABASE_URL`）。`.ticket-config.yaml` の標準構造の参照は `pdh-ticket-write` に直す。project の本文と実際のテストコマンドは保持する。
+
+確認（冪等）:
+
+```bash
+for path in CLAUDE.md scripts/test-all.sh .ticket-config.yaml; do
+  status=0
+  grep -nE 'product-delivery-hierarchy\.md|pdh-dev|LLMHUB_DATABASE_URL' "$path" || status=$?
+  [ "$status" -eq 1 ] || exit 1
+done
+```
+
 #### 文書の frontmatter 検査を採用する場合
 
 既定では `docs-metadata.check.example` / `docs-references.check.example` を配る。registry は `*.check` だけを実行する。採用する場合は `pdh-change`「文書を書くとき」に従って既存の `docs/**/*.md` と `specs/*.md` に frontmatter・読む入口を整えてから、次を実行する。有効な check は project 管理とし、更新時に上書きしない。

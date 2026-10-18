@@ -7,7 +7,7 @@ PDH の配布セットは coding agent の engine ごとに分かれている。
 | Claude Code（Codex を worker に使う構成を含む） | [`claude/INSTALL.md`](claude/INSTALL.md) |
 | Codex CLI | [`codex/INSTALL.md`](codex/INSTALL.md) |
 
-どちらの配布セットも、`docs/product-delivery-hierarchy.md`（運用ルール）と `docs/PDH-AGENTS.md`（PDH 汎用 agent ルール）を同じものとして配布する。engine で違うのは skill の文面、agent 定義、起動手順だけである。
+どちらの配布セットも、`docs/PDH-AGENTS.md`（共有契約）と `docs/pdh-glossary.md`（用語）を同じものとして配布する。engine で違うのは skill の文面、agent 定義、起動手順だけである。
 
 coding agent に任せる場合は、対象プロジェクトのルートで次のように指示する。
 

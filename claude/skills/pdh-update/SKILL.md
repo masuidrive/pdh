@@ -12,7 +12,7 @@ description: "PDH アップデート: PDH-repoの最新版を取り込み、プ�
 3. **INSTALL.md の「既知の移行手順」を必ず読み、該当する項目をすべて適用する。**
 3.5. **coding-bot（`.github/coding-bot/` の手順書と script）を導入済みなら**（`.github/` 内に `_pdh.md` がある。改名前の配置も含む）、先に PDH-repo の [github-bot/INSTALL.md の改名手順](https://github.com/masuidrive/pdh/blob/main/github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)と同文書の「導入先固有の secret」を確認し、該当する移行と確認コマンドの再実行を行う。その後、同文書「更新」に従い `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/` を PDH-repo の版でまるごと置き換える。残りのファイル（`.github/coding-bot/`・`.github/workflows/coding-bot*.yml`・`.devcontainer/`）は同じ「更新」のとおり diff を確かめて反映し、丸ごと上書きしない。
 4. 更新手順には `bash ./ticket.sh selfupdate`（ticket.sh 本体を配布元の repo の最新版へ更新）が含まれる。
-5. **「既知の移行手順」の確認コマンドを、適用後にもう一度ぜんぶ実行する**（INSTALL.md 手順 7.5）。「要追加」「要改名」が残っていたら直してから次へ進む。
+5. **「既知の移行手順」の確認コマンドを、適用後にもう一度ぜんぶ実行する**。「要追加」「要改名」が残っていたら直してから次へ進む。
 5.5. `bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/claude/templates/.ticket-config.yaml` で `.ticket-config.yaml` のテンプレ本文（`default_content` / `note_content`）と PDH-repo の版の差を数え、**出力を完了報告に貼る。**差があれば、その行が導入先の独自の節か、取り込み漏れかを分けて報告する
 6. 完了報告には、どの項目を適用したか（または該当なしと判断したか）に加えて、**手順 5 の再実行の出力をそのまま貼る。**
 
