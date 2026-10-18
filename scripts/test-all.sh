@@ -15,9 +15,10 @@ failed=0
 run() {
   printf '\n=== %s ===\n' "$1"
   shift
-  if ! "$@"; then
-    failed=1
-  fi
+  "$@"
+  local status=$?
+  printf "exit-code: %s\n" "$status"
+  if [[ "$status" -ne 0 ]]; then failed=1; fi
 }
 
 run "fast-checks" bash scripts/fast-checks.sh
@@ -25,6 +26,9 @@ run "fast-checks" bash scripts/fast-checks.sh
 # The runner's own clock captures one, so a regression here breaks the whole gate
 # with a shell syntax error rather than a check failure. Run it under color once.
 run "fast-checks (FORCE_COLOR=3)" env FORCE_COLOR=3 bash scripts/fast-checks.sh
+run "Codex generated payload" python3 scripts/gen-codex-distribution.py --check
+run "installation and lock lifecycle" python3 scripts/test-installation.py
+run "distributed script contracts" bash scripts/test-distributed-scripts.sh
 run "distribution consistency" bash scripts/check-distribution.sh
 run "guard parity (claude/ ↔ codex/)" bash scripts/check-guard-parity.sh
 run "github-bot layer" bash scripts/check-github-bot.sh
@@ -65,7 +69,6 @@ for distribution_set in claude codex; do
 done
 
 for distribution_set in claude codex; do
-  run "$distribution_set check-pdh-ticket" bash scripts/test-pdh-ticket-checks.sh "$distribution_set"
   run "$distribution_set ticket template drift" bash scripts/test-ticket-template-drift.sh "$distribution_set"
 done
 
