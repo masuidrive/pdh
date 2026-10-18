@@ -98,6 +98,7 @@ bash ticket.sh init
 <!-- pdh-shell: install -->
 ```bash
 while IFS="$(printf '\t')" read -r source destination; do
+  destination=${destination%/}
   mkdir -p "$(dirname "$destination")"
   if [ -d "tmp/pdh/$source" ]; then
     rm -rf "$destination"
@@ -219,6 +220,7 @@ printf 'backup: %s\n' "$PDH_BACKUP"
 <!-- pdh-shell: update -->
 ```bash
 while IFS="$(printf '\t')" read -r source destination; do
+  destination=${destination%/}
   mkdir -p "$(dirname "$destination")"
   if [ -d "tmp/pdh/$source" ]; then
     rm -rf "$destination"

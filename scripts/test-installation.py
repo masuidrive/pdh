@@ -181,6 +181,19 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         print(engine+': documented install/update twice, custom agents, plain docs, opt-in rejection, disappearance guard, backup and preservation passed')
         if engine=='codex':
             assert not (target/'.claude').exists(),'native installation depends on legacy Claude files'
+            # Legacy skill symlinks must become native dirs without following them.
+            legacy=target/'.claude/skills/pdh-resume'
+            legacy.parent.mkdir(parents=True)
+            shutil.copytree(skill_dir/'pdh-resume',legacy)
+            (legacy/'project-notes.md').write_text('legacy project customization\n')
+            shutil.rmtree(skill_dir/'pdh-resume')
+            (skill_dir/'pdh-resume').symlink_to('../../.claude/skills/pdh-resume',target_is_directory=True)
+            legacy_files=payload(target/'.claude')
+            documented(target,engine,'update')
+            documented(target,engine,'verify')
+            assert not (skill_dir/'pdh-resume').is_symlink(),'legacy skill symlink was not replaced'
+            assert payload(target/'.claude')==legacy_files,'native update changed legacy source'
+            print('codex: legacy symlink replaced; .claude source customization preserved')
             role='pdh-reviewer'
             body=tomllib.loads((target/'.codex/agents'/f'{role}.toml').read_text())['developer_instructions']
             assert '.claude/agents/' not in body

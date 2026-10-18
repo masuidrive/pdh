@@ -103,6 +103,7 @@ bash ticket.sh init
 <!-- pdh-shell: install -->
 ```bash
 while IFS="$(printf '\t')" read -r source destination; do
+  destination=${destination%/}
   mkdir -p "$(dirname "$destination")"
   if [ -d "tmp/pdh/$source" ]; then
     rm -rf "$destination"
@@ -223,6 +224,7 @@ backup は `tmp/` 配下にあり、更新が正しいと確認するまで消�
 <!-- pdh-shell: update -->
 ```bash
 while IFS="$(printf '\t')" read -r source destination; do
+  destination=${destination%/}
   mkdir -p "$(dirname "$destination")"
   if [ -d "tmp/pdh/$source" ]; then
     rm -rf "$destination"
