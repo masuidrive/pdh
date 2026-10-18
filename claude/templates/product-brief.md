@@ -2,8 +2,9 @@
 
 Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/claude/templates/product-brief.md
 
-本文中で「まだ決められない・確認が必要」な箇所には `[NEEDS CLARIFICATION: 具体的な問い]` を埋め込む。
-coding agent はこのマーカーに触れる判断を推測で埋めず、実装を止めて確認する。解消したらマーカーを決定内容に置き換える。
+
+Done には、達成した状態を散文で書く。数値目標は、実際に計測する手段があるものだけにする。
+閉じる条件: この問題が解けたと言える状態になった。
 
 ## Background
 
@@ -27,6 +28,10 @@ Who ごとに問題が違うなら分けて書く。
 機能一覧ではなく、どういう方向で解くか。やらない判断もここ。
 既存プロダクトのリニューアルなら前バージョンとの違い。
 主要なユーザフローがあれば 1-2 個書く（Ticket の Acceptance Criteria を導く素材になる）。
+
+## Key User Journeys
+
+利用者が目的を達成する操作の流れを `J1`・`J2` のような番号で書く。ticket の Why はこの番号を指す。
 
 ## Appetite
 
