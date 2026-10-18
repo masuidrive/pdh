@@ -124,6 +124,7 @@ python3 - <<'MERGE_HOOKS'
 import json
 from pathlib import Path
 
+pending = []
 for source, destination in [('tmp/pdh/claude/templates/hooks.json', '.codex/hooks.json'), ('tmp/pdh/claude/templates/settings.json', '.claude/settings.json')]:
     path = Path(destination)
     existing = json.loads(path.read_text()) if path.exists() else {}
@@ -140,8 +141,10 @@ for source, destination in [('tmp/pdh/claude/templates/hooks.json', '.codex/hook
             for hook in group['hooks']:
                 if not any(item.get('type') == hook['type'] and item.get('command') == hook['command'] for item in hooks):
                     hooks.append(hook)
+    pending.append((path, json.dumps(existing, ensure_ascii=False, indent=2) + '\n'))
+for path, content in pending:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(existing, ensure_ascii=False, indent=2) + '\n')
+    path.write_text(content)
 MERGE_HOOKS
 [ -e docs/pdh-review-eval ] || cp -R tmp/pdh/claude/templates/pdh-review-eval docs/pdh-review-eval
 chmod +x scripts/*.sh

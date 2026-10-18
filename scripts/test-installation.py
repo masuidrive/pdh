@@ -127,6 +127,27 @@ cp "$PDH_TICKET_FIXTURE" "$4"
             path=existing/name;path.parent.mkdir(parents=True,exist_ok=True)
             path.write_text(json.dumps(user_settings))
         documented(existing,engine,'prepare')
+        # Parse every input before writing any hook settings, including templates.
+        merge_paths=json_paths if engine=='claude' else json_paths[:1]
+        for invalid_source in (False,True):
+            for name in merge_paths:
+                broken=(existing/'tmp/pdh'/engine/'templates'/Path(name).name
+                        if invalid_source else existing/name)
+                original=broken.read_bytes()
+                broken.write_text('{ invalid JSON\n')
+                before={name:(existing/name).read_bytes() for name in json_paths}
+                assert 'JSONDecodeError' in documented(existing,engine,'install',code=1)
+                assert before=={name:(existing/name).read_bytes() for name in json_paths},(engine,name,'partial JSON write')
+                broken.write_bytes(original)
+        if engine=='claude':
+            # A missing first destination must not be created if the second is invalid.
+            first=existing/json_paths[0];original=first.read_bytes();first.unlink()
+            second=existing/json_paths[1];body=second.read_bytes();second.write_text('{ invalid JSON\n')
+            documented(existing,engine,'install',code=1)
+            assert not first.exists(),'created hooks.json before validating settings.json'
+            assert second.read_text()=='{ invalid JSON\n'
+            first.write_bytes(original);second.write_bytes(body)
+        print(engine+': invalid destination/template JSON leaves all hook settings untouched')
         for iteration in range(2):
             documented(existing,engine,'install')
             for name,body in originals.items():
