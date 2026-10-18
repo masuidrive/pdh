@@ -10,8 +10,15 @@ usage() {
 --measured: measure が true の全件を順に測り、最後に集計する。
 --out: 結果の保存先（既定 docs/pdh-review-eval/results）。
 --work: 一時作業の親ディレクトリ。省略時は mktemp -d で作る。
+PDH_REVIEW_MODEL: project が選んだ Claude model。未指定なら --model を渡さず CLI の既定に従う。
 本物の reviewer と判定用 Claude をサブスクリプション枠で起動する。CI では実行しない。
 USAGE
+}
+claude_eval() {
+  if [ -n "${PDH_REVIEW_MODEL:-}" ]; then
+    set -- --model "$PDH_REVIEW_MODEL" "$@"
+  fi
+  exec claude "$@"
 }
 fail() { printf 'pdh-review-eval: %s\n' "$2" >&2; exit "$1"; }
 cases='' case_id='' measured=false out='docs/pdh-review-eval/results' work=''
@@ -136,7 +143,7 @@ while IFS= read -r entry; do
     printf '# PDH review evaluation: %s\n\n' "$id"
     printf 'case id: %s\nkind: %s\nsha: %s\nbase: %s\n\n' "$id" "$kind" "$sha" "$base"
     printf 'reviewer definition HEAD: %s\nreviewer definition commit: %s\n\n' "$definition_head" "$definition_commit"
-    printf 'DA/CR・判定: claude-opus-5-5。codex: codex exec review（high）。判定も LLM による推定。\n'
+    printf 'DA/CR・判定: %s。codex: codex exec review（high）。判定も LLM による推定。\n' "${PDH_REVIEW_MODEL:-CLI の既定}"
     printf 'ticket: %s\n' "$ticket_path"
   } > "$report"
   pids=()
@@ -154,7 +161,7 @@ while IFS= read -r entry; do
         printf '%s\n' '上の本文の <RESULT_FILE> への書き込み指示は、この実行では標準出力への報告に置き換える。ファイルへ書かず、読み取りだけで review し、結果は標準出力へ返す。'
         printf '%s\n' '作業ディレクトリは review 対象の worktree である。git は `-C` を付けずに呼ぶ（`git -C` は許可していないので拒否される）。'
       } > "$case_dir/$reviewer.prompt"
-      (cd "$wt"; exec claude -p --model claude-opus-5-5 --setting-sources '' --strict-mcp-config \
+      (cd "$wt"; claude_eval -p --setting-sources '' --strict-mcp-config \
         --permission-mode dontAsk --tools 'Read,Grep,Glob,Bash' --add-dir "$case_dir" \
         --allowedTools 'Read' 'Grep' 'Glob' 'Bash(git diff:*)' 'Bash(git log:*)' 'Bash(git show:*)' \
         < "$case_dir/$reviewer.prompt") > "$raw.txt" 2> "$raw.stderr.txt" &
@@ -188,7 +195,7 @@ while IFS= read -r entry; do
       jq -c '{kind, defect: (if .kind == "defect" then (.defect | {summary, location}) else null end)}' <<< "$entry"
       printf '\n<reviewer_output>\n'; cat "$raw.txt"; printf '\n</reviewer_output>\n'
     } > "$case_dir/judge.prompt"
-    if ! (cd "$run_dir"; claude -p --model claude-opus-5-5 --tools '' --setting-sources '' --strict-mcp-config \
+    if ! (cd "$run_dir"; claude_eval -p --tools '' --setting-sources '' --strict-mcp-config \
       < "$case_dir/judge.prompt") > "$raw.judge.json" 2> "$raw.judge.stderr.txt" ||
       ! jq -se --arg kind "$kind" '
         length == 1 and (.[0] |

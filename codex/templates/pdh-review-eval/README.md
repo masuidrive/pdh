@@ -18,6 +18,8 @@ stale-when:
 
 `bash scripts/pdh-review-eval.sh --help` で実行方法を読む。評価は実際の engine を使うため、CI へは入れない。対象の差分・reviewer の定義・dataset を固定して比較する。
 
+`PDH_REVIEW_MODEL` に project の役割プロファイルが選んだ Claude model を指定できる。省略時は model を CLI の既定に任せる。DA/CR と判定に同じ指定を使い、結果に指定値か「CLI の既定」を残す。
+
 `results/` は過去の実測であり、現在の規則として使わない。各結果に残る測定日時・対象 SHA・model・条件と raw 出力を根拠に読む。新しい条件での結果は既存の結果を書き換えずに追加する。
 
 ## 限界

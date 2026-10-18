@@ -6,6 +6,7 @@ TMP_DIR=$(mktemp -d) || exit 1
 trap 'rm -rf "$TMP_DIR"' EXIT
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 must() { "$@" || fail "準備コマンドが失敗しました: $*"; }
+unset PDH_REVIEW_MODEL
 checks=0
 expect() {
   local expected=$1 label=$2 actual
@@ -61,6 +62,7 @@ set -euo pipefail
 prompt=$(cat)
 if [[ " $* " != *' --allowedTools '* ]]; then
   [[ " $* " == *' --tools '* ]] || exit 80
+  printf '%s\n' "$@" > "$EVAL_AUDIT/judge.args"
   # --tools の値が空であることも、引数のまま検査する。
   while [ "$#" -gt 0 ]; do
     if [ "$1" = --tools ]; then [ "$2" = '' ] || exit 81; break; fi
@@ -159,8 +161,12 @@ file_contains "$EVAL_AUDIT/defect-codex.args" 'model_reasoning_effort="high"'
 [ "$(find "$TMP_DIR/results with spaces/raw" -name '*.txt' ! -name '*stderr.txt' | wc -l)" -eq 6 ] || fail '生出力の件数が不正'
 [ "$(find "$TMP_DIR/results with spaces" -name '*-summary.md' | wc -l)" -eq 1 ] || fail 'summary がありません'
 [ ! -e "$EVAL_AUDIT/parent-da.prompt" ] || fail 'measure=false を実行しました'
+# The default CLI invocation must never pin a model for reviewers or the judge.
+! grep -qx -- '--model' "$EVAL_AUDIT/defect-da.args" || fail 'default reviewer model is pinned'
+! grep -qx -- '--model' "$EVAL_AUDIT/judge.args" || fail 'default judge model is pinned'
 clean_worktrees
 export EVAL_REQUIRE_PARALLEL=0
+export PDH_REVIEW_MODEL=project-review-model
 for id in parent parent-done missing null; do
   expect 0 "ticket の探索: $id" bash scripts/pdh-review-eval.sh --cases cases.json --case "$id" --reviewers cr --out "$TMP_DIR/$id" --work "$TMP_DIR/work space"
   reports=("$TMP_DIR/$id/"*-$id.md)
@@ -168,6 +174,12 @@ for id in parent parent-done missing null; do
   file_contains "${reports[0]}" '起動失敗: なし'
   clean_worktrees
 done
+file_contains "$EVAL_AUDIT/null-cr.args" 'project-review-model'
+file_contains "$EVAL_AUDIT/judge.args" 'project-review-model'
+reports=("$TMP_DIR/null/"*-null.md)
+file_contains "${reports[0]}" 'DA/CR・判定: project-review-model'
+unset PDH_REVIEW_MODEL
+
 expect 0 '既定 out と mktemp' bash scripts/pdh-review-eval.sh --cases cases.json --case null --reviewers da
 reports=(docs/pdh-review-eval/results/*-null.md)
 file_contains "${reports[0]}" 'caught: null'
