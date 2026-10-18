@@ -199,6 +199,10 @@ grep -qxF 'AGENTS.local.md' .gitignore || printf '\nAGENTS.local.md\n' >> .gitig
 
 <!-- pdh-shell: verify -->
 ```bash
+if ! grep -Eq '^[[:space:]]*Read[[:space:]]+(.*[[:space:]`])?PDH-AGENTS[.]md([[:space:]`.,]|$)' AGENTS.md; then
+  printf '%s\n' 'AGENTS.md に次の行を追加する: Read `PDH-AGENTS.md`.' >&2
+  exit 1
+fi
 bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/codex/lock-map.tsv
 bash scripts/pdh-lock.sh check
 bash scripts/fast-checks.sh

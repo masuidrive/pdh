@@ -222,7 +222,23 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         # Placement is a separate assertion; the installer is never synthesized from it.
         for src,dst,mode in re.findall(r'^\| `tmp/pdh/([^`]+)` \| `([^`]+)` \| [^|]+ \| (上書き|差分マージ|初回だけ) \|$', (ROOT/engine/'INSTALL.md').read_text(), re.M):
             assert (target/dst).exists(), (engine,dst,'documented install omitted placement')
+        # Preserved project entrypoints must explicitly load the PDH contract.
+        entry_name='CLAUDE.md' if engine=='claude' else 'AGENTS.md'
+        instruction='@PDH-AGENTS.md' if engine=='claude' else 'Read `PDH-AGENTS.md`.'
+        entry=target/entry_name;entry_body=entry.read_bytes()
+        for body in (originals[entry_name], originals[entry_name]+'PDH-AGENTS.md # Shared contract\n'):
+            entry.write_text(body)
+            output=documented(target,engine,'verify',code=1)
+            assert entry_name in output and instruction in output,output
+            assert entry.read_text()==body,'verification rewrote project rules'
+        entry.unlink()
+        output=documented(target,engine,'verify',code=1)
+        assert entry_name in output and instruction in output,output
+        entry.write_text(originals[entry_name]+'\n'+instruction+'\n')
         verify_install(target,engine)
+        entry.write_bytes(entry_body)
+        verify_install(target,engine)
+        print(engine+': verify rejects missing contract import, bare filename and missing entry; suggests a working line')
         documented(target,engine,'references-check')
         if engine=='codex':
             role=target/'.codex/agents/pdh-qa.toml';body=role.read_bytes();role.unlink()

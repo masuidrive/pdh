@@ -195,6 +195,10 @@ fi
 
 <!-- pdh-shell: verify -->
 ```bash
+if ! grep -Eq '^[[:space:]]*@PDH-AGENTS[.]md([[:space:]]|$)' CLAUDE.md; then
+  printf '%s\n' 'CLAUDE.md に次の行を追加する: @PDH-AGENTS.md' >&2
+  exit 1
+fi
 bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/claude/lock-map.tsv
 bash scripts/pdh-lock.sh check
 bash scripts/fast-checks.sh
