@@ -164,6 +164,19 @@ cp "$PDH_TICKET_FIXTURE" "$4"
             if iteration==0:initial=payload(existing)
             else:assert initial==payload(existing),'second install changed existing project'
         print(engine+': existing rules, config, permissions and hooks preserved; PDH hooks added once')
+        # Existing PDH hooks can use a different matcher or shell quoting.
+        for matcher in ('startup','startup|resume|compact'):
+            settings=json.loads(json.dumps(user_settings))
+            settings['hooks']['SessionStart'].append({
+                'matcher':matcher,
+                'hooks':[{'type':'command','command':"bash './scripts/pdh-session-hook.sh'",'timeout':9}]})
+            for name in merge_paths:(existing/name).write_text(json.dumps(settings))
+            for iteration in range(2):
+                documented(existing,engine,'install')
+                for name in merge_paths:
+                    actual=json.loads((existing/name).read_text())
+                    assert actual==settings,(engine,name,matcher,'duplicate PDH hook or changed existing settings')
+        print(engine+': alternate matcher/quoting keeps the existing PDH hook and unrelated settings unchanged')
         target=temp/engine
         target.mkdir()
         run(target,'git','init','-q','-b','main')

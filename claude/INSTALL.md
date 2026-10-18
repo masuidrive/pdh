@@ -132,6 +132,9 @@ for source, destination in [('tmp/pdh/claude/templates/hooks.json', '.codex/hook
     events = existing.setdefault('hooks', {})
     for event, groups in required['hooks'].items():
         entries = events.setdefault(event, [])
+        if any('pdh-session-hook.sh' in hook.get('command', '')
+               for entry in entries for hook in entry.get('hooks', [])):
+            continue
         for group in groups:
             match = next((item for item in entries if item.get('matcher') == group.get('matcher')), None)
             if match is None:
