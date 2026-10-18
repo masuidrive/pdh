@@ -10,6 +10,7 @@ project の root で「https://github.com/masuidrive/pdh の claude/INSTALL.md �
 
 ### 方法 2: 手動でセットアップ
 
+<!-- pdh-shell: prepare -->
 ```bash
 git clone https://github.com/masuidrive/pdh.git tmp/pdh
 curl -sL https://raw.githubusercontent.com/masuidrive/ticket.sh/main/ticket.sh -o ticket.sh
@@ -92,12 +93,45 @@ bash ticket.sh init
 | `tmp/pdh/claude/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | 共有 script | 上書き |
 | `tmp/pdh/claude/templates/checks/required-pdh-source-files.check` | `scripts/checks/required-pdh-source-files.check` | PDH の共有 script と PM の分冊の存在 | 差分マージ |
 
+新規導入では次を実行する。更新時は下の更新手順を使う。
+
+<!-- pdh-shell: install -->
+```bash
+while IFS="$(printf '\t')" read -r source destination; do
+  mkdir -p "$(dirname "$destination")"
+  if [ -d "tmp/pdh/$source" ]; then
+    rm -rf "$destination"
+    mkdir -p "$destination"
+    cp -RL "tmp/pdh/$source/." "$destination/"
+  else
+    cp -p "tmp/pdh/$source" "$destination"
+  fi
+done < tmp/pdh/claude/lock-map.tsv
+for name in .ticket-config.yaml AGENTS.md product-brief.md CLAUDE.md CLAUDE.local.md.example; do
+  cp "tmp/pdh/claude/templates/$name" "$name"
+done
+for name in dev-server.sh seed-pdh-verify.sh test-all.sh; do
+  cp "tmp/pdh/claude/templates/$name" "scripts/$name"
+done
+for name in example-max-source-lines example-max-test-lines example-no-merge-conflict-markers example-no-node-p-capture required-pdh-files required-pdh-source-files; do
+  cp "tmp/pdh/claude/templates/checks/$name.check" "scripts/checks/$name.check"
+done
+mkdir -p .codex
+cp tmp/pdh/claude/templates/hooks.json .codex/hooks.json
+mkdir -p .claude
+cp tmp/pdh/claude/templates/settings.json .claude/settings.json
+mkdir -p docs/pdh-review-eval
+cp -R tmp/pdh/claude/templates/pdh-review-eval/. docs/pdh-review-eval/
+chmod +x scripts/*.sh
+```
+
 設定の JSON は既存設定へマージする。`settings.json` は PM の session 開始・再開・compact で stage と未了行を context へ戻す。worker には `PDH_ROLE=<役割>` を渡す。Codex の hook を使う場合は `.codex/hooks.json` の信頼設定も確認し、実際の session で表示を確かめる。
 
 #### Codex CLI を使う場合: skill を symlink する
 
 Claude 併用では `.claude/skills/` に実体を 1 つ置く。
 
+<!-- pdh-shell: symlinks -->
 ```bash
 mkdir -p .agents/skills
 for source in tmp/pdh/claude/skills/pdh-*; do
@@ -108,6 +142,7 @@ done
 
 Claude 併用で `AGENTS.md` を生成する共有 script は `.codex/config.toml` の上限を読む。初回は次で設定を作り、既存の設定がある場合はその値を保持する。
 
+<!-- pdh-shell: config -->
 ```bash
 mkdir -p .codex
 if [ ! -f .codex/config.toml ]; then
@@ -127,9 +162,11 @@ fi
 
 差分マージのファイルにある `Based on` の `XXXXXXX` だけを取り込んだ commit に置換する。上書きするファイルの版は `.pdh-lock` に記録する。
 
+<!-- pdh-shell: verify -->
 ```bash
 bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/claude/lock-map.tsv
 bash scripts/pdh-lock.sh check
+bash scripts/fast-checks.sh
 bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/claude/templates/.ticket-config.yaml
 bash scripts/test-all.sh
 ./ticket.sh list
@@ -150,6 +187,48 @@ bash scripts/test-all.sh
 7. `bash ./ticket.sh selfupdate` し、`./ticket.sh list` で確かめる。coding-bot 導入済みなら [github-bot/INSTALL.md](../github-bot/INSTALL.md) の更新・改名・secret の手順も適用する。共有プロトコルは上書きし、workflow・devcontainer の project の設定は差分を読んで保持する
 8. 「版を記録して検査する」のコマンドを回す。`pdh-lock.sh write` は全件一致しなければ既存 lock を保って止まる。差分マージしていない変更があればそのファイルの `Based on` を進めない
 9. 移行確認コマンドを再実行し、要適用が残れば直す。同じ手順の 2 回目に差分が出ないことを確認する。backup の場所・反映した項目・相違・各検査の終了コードと実出力を報告する
+
+### backup と上書き対象の更新コマンド
+
+手順 1 の配布元更新・backup は次で行う。手順 3 の上書きは lock-map に列挙した対象だけを置き換える。差分マージ・初回だけのファイルは表の方針に従う。
+
+<!-- pdh-shell: refresh -->
+```bash
+if [ -d tmp/pdh/.git ]; then
+  git -C tmp/pdh fetch origin main
+  git -C tmp/pdh checkout main
+  git -C tmp/pdh merge --ff-only origin/main
+else
+  git clone https://github.com/masuidrive/pdh.git tmp/pdh
+fi
+```
+
+<!-- pdh-shell: backup -->
+```bash
+PDH_BACKUP=$(mktemp -d tmp/pdh-backup.XXXXXX)
+for path in AGENTS.md AGENTS.local.md product-brief.md .ticket-config.yaml .pdh-lock PDH-AGENTS.md scripts docs CLAUDE.md CLAUDE.local.md; do
+  [ ! -e "$path" ] || cp -Rp "$path" "$PDH_BACKUP/"
+done
+[ ! -d .agents/skills ] || cp -Rp .agents/skills "$PDH_BACKUP/agents-skills"
+[ ! -d .codex/agents ] || cp -Rp .codex/agents "$PDH_BACKUP/codex-agents"
+[ ! -d .claude/skills ] || cp -Rp .claude/skills "$PDH_BACKUP/claude-skills"
+[ ! -d .claude/agents ] || cp -Rp .claude/agents "$PDH_BACKUP/claude-agents"
+printf 'backup: %s\n' "$PDH_BACKUP"
+```
+
+<!-- pdh-shell: update -->
+```bash
+while IFS="$(printf '\t')" read -r source destination; do
+  mkdir -p "$(dirname "$destination")"
+  if [ -d "tmp/pdh/$source" ]; then
+    rm -rf "$destination"
+    mkdir -p "$destination"
+    cp -RL "tmp/pdh/$source/." "$destination/"
+  else
+    cp -p "tmp/pdh/$source" "$destination"
+  fi
+done < tmp/pdh/claude/lock-map.tsv
+```
 
 ### 既知の移行手順
 
@@ -191,6 +270,7 @@ rm -f scripts/hookbus.js
 
 初回の `.pdh-lock` は、上書きの全件を配布元と一致させてから書く。上書き対象の `Based on` 行は消し、差分マージの footer は残す。
 
+<!-- pdh-shell: migration-check -->
 ```bash
 bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/claude/lock-map.tsv
 bash scripts/pdh-lock.sh check
@@ -206,7 +286,12 @@ grep -q 'AC-approved:' .ticket-config.yaml
 for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-rule-write; do
   test ! -e ".claude/skills/$skill" || exit 1
 done
-! rg 'hookbus' .claude/settings.json scripts/test-all.sh package.json vitest.config.* 2>/dev/null
+for path in .claude/settings.json scripts/test-all.sh package.json vitest.config.*; do
+  [ -f "$path" ] || continue
+  status=0
+  grep -n 'hookbus' "$path" || status=$?
+  [ "$status" -eq 1 ] || exit 1
+done
 bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/claude/templates/.ticket-config.yaml
 ```
 

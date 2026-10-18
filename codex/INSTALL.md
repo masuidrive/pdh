@@ -20,6 +20,7 @@ Codex は既存ファイルを上書きせず、下の手動手順と同じ配�
 
 #### 1. 配布元と ticket.sh を用意する
 
+<!-- pdh-shell: prepare -->
 ```bash
 git init  # 既存リポジトリなら不要
 if [ -d tmp/pdh/.git ]; then
@@ -99,108 +100,31 @@ bash ticket.sh init
 | `tmp/pdh/codex/templates/checks/required-pdh-source-files.check` | `scripts/checks/required-pdh-source-files.check` | PDH の共有 script と PM の分冊の存在 | 差分マージ |
 
 
+<!-- pdh-shell: install -->
 ```bash
-mkdir -p docs scripts .agents/skills .codex/agents
-mkdir -p "$(dirname "PDH-AGENTS.md" )"
-cp -RL tmp/pdh/docs/PDH-AGENTS.md PDH-AGENTS.md
-mkdir -p "$(dirname "docs/pdh-glossary.md" )"
-cp -RL tmp/pdh/docs/pdh-glossary.md docs/pdh-glossary.md
-mkdir -p "$(dirname ".agents/skills/pdh-change" )"
-cp -RL tmp/pdh/codex/skills/pdh-change .agents/skills/pdh-change
-mkdir -p "$(dirname ".agents/skills/pdh-check-writing" )"
-cp -RL tmp/pdh/codex/skills/pdh-check-writing .agents/skills/pdh-check-writing
-mkdir -p "$(dirname ".agents/skills/pdh-close" )"
-cp -RL tmp/pdh/codex/skills/pdh-close .agents/skills/pdh-close
-mkdir -p "$(dirname ".agents/skills/pdh-decision-board" )"
-cp -RL tmp/pdh/codex/skills/pdh-decision-board .agents/skills/pdh-decision-board
-mkdir -p "$(dirname ".agents/skills/pdh-implement" )"
-cp -RL tmp/pdh/codex/skills/pdh-implement .agents/skills/pdh-implement
-mkdir -p "$(dirname ".agents/skills/pdh-open" )"
-cp -RL tmp/pdh/codex/skills/pdh-open .agents/skills/pdh-open
-mkdir -p "$(dirname ".agents/skills/pdh-pm" )"
-cp -RL tmp/pdh/codex/skills/pdh-pm .agents/skills/pdh-pm
-mkdir -p "$(dirname ".agents/skills/pdh-resume" )"
-cp -RL tmp/pdh/codex/skills/pdh-resume .agents/skills/pdh-resume
-mkdir -p "$(dirname ".agents/skills/pdh-review" )"
-cp -RL tmp/pdh/codex/skills/pdh-review .agents/skills/pdh-review
-mkdir -p "$(dirname ".agents/skills/pdh-ticket-review" )"
-cp -RL tmp/pdh/codex/skills/pdh-ticket-review .agents/skills/pdh-ticket-review
-mkdir -p "$(dirname ".agents/skills/pdh-ticket-write" )"
-cp -RL tmp/pdh/codex/skills/pdh-ticket-write .agents/skills/pdh-ticket-write
-mkdir -p "$(dirname ".agents/skills/pdh-update" )"
-cp -RL tmp/pdh/codex/skills/pdh-update .agents/skills/pdh-update
-mkdir -p "$(dirname ".agents/skills/pdh-verify" )"
-cp -RL tmp/pdh/codex/skills/pdh-verify .agents/skills/pdh-verify
-mkdir -p "$(dirname ".ticket-config.yaml" )"
-cp -RL tmp/pdh/codex/templates/.ticket-config.yaml .ticket-config.yaml
-mkdir -p "$(dirname "AGENTS.local.md.example" )"
-cp -RL tmp/pdh/codex/templates/AGENTS.local.md.example AGENTS.local.md.example
-mkdir -p "$(dirname "AGENTS.md" )"
-cp -RL tmp/pdh/codex/templates/AGENTS.md AGENTS.md
-mkdir -p "$(dirname ".codex/agents" )"
-cp -RL tmp/pdh/codex/templates/agents/codex .codex/agents
-mkdir -p "$(dirname "scripts/check-pdh-ticket.sh" )"
-cp -RL tmp/pdh/codex/templates/check-pdh-ticket.sh scripts/check-pdh-ticket.sh
-mkdir -p "$(dirname "scripts/check-ticket-template-drift.sh" )"
-cp -RL tmp/pdh/codex/templates/check-ticket-template-drift.sh scripts/check-ticket-template-drift.sh
-mkdir -p "$(dirname "scripts/checks/README.md" )"
-cp -RL tmp/pdh/codex/templates/checks/README.md scripts/checks/README.md
-mkdir -p "$(dirname "scripts/checks/bin/pdh-stage-skill-sections.sh" )"
-cp -RL tmp/pdh/codex/templates/checks/bin/pdh-stage-skill-sections.sh scripts/checks/bin/pdh-stage-skill-sections.sh
-mkdir -p "$(dirname "scripts/checks/docs-metadata.check.example" )"
-cp -RL tmp/pdh/codex/templates/checks/docs-metadata.check scripts/checks/docs-metadata.check.example
-mkdir -p "$(dirname "scripts/checks/docs-references.check.example" )"
-cp -RL tmp/pdh/codex/templates/checks/docs-references.check scripts/checks/docs-references.check.example
-mkdir -p "$(dirname "scripts/checks/example-max-source-lines.check" )"
-cp -RL tmp/pdh/codex/templates/checks/example-max-source-lines.check scripts/checks/example-max-source-lines.check
-mkdir -p "$(dirname "scripts/checks/example-max-test-lines.check" )"
-cp -RL tmp/pdh/codex/templates/checks/example-max-test-lines.check scripts/checks/example-max-test-lines.check
-mkdir -p "$(dirname "scripts/checks/example-no-merge-conflict-markers.check" )"
-cp -RL tmp/pdh/codex/templates/checks/example-no-merge-conflict-markers.check scripts/checks/example-no-merge-conflict-markers.check
-mkdir -p "$(dirname "scripts/checks/example-no-node-p-capture.check" )"
-cp -RL tmp/pdh/codex/templates/checks/example-no-node-p-capture.check scripts/checks/example-no-node-p-capture.check
-mkdir -p "$(dirname "scripts/checks/pdh-stage-skill-sections.check" )"
-cp -RL tmp/pdh/codex/templates/checks/pdh-stage-skill-sections.check scripts/checks/pdh-stage-skill-sections.check
-mkdir -p "$(dirname "scripts/checks/required-pdh-files.check" )"
-cp -RL tmp/pdh/codex/templates/checks/required-pdh-files.check scripts/checks/required-pdh-files.check
-mkdir -p "$(dirname "scripts/dev-server.sh" )"
-cp -RL tmp/pdh/codex/templates/dev-server.sh scripts/dev-server.sh
-mkdir -p "$(dirname "scripts/docs-policy.py" )"
-cp -RL tmp/pdh/codex/templates/docs-policy.py scripts/docs-policy.py
-mkdir -p "$(dirname "scripts/docs-toc.sh" )"
-cp -RL tmp/pdh/codex/templates/docs-toc.sh scripts/docs-toc.sh
-mkdir -p "$(dirname "scripts/fast-checks.sh" )"
-cp -RL tmp/pdh/codex/templates/fast-checks.sh scripts/fast-checks.sh
-mkdir -p "$(dirname ".codex/hooks.json" )"
-cp -RL tmp/pdh/codex/templates/hooks.json .codex/hooks.json
-mkdir -p "$(dirname "scripts/pdh-lock.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-lock.sh scripts/pdh-lock.sh
-mkdir -p "$(dirname "scripts/pdh-related-docs.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-related-docs.sh scripts/pdh-related-docs.sh
-mkdir -p "$(dirname "docs/pdh-review-eval" )"
-cp -RL tmp/pdh/codex/templates/pdh-review-eval docs/pdh-review-eval
-mkdir -p "$(dirname "scripts/pdh-review-eval.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-review-eval.sh scripts/pdh-review-eval.sh
-mkdir -p "$(dirname "scripts/pdh-review-range.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-review-range.sh scripts/pdh-review-range.sh
-mkdir -p "$(dirname "scripts/pdh-review-tally.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-review-tally.sh scripts/pdh-review-tally.sh
-mkdir -p "$(dirname "scripts/pdh-session-hook.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-session-hook.sh scripts/pdh-session-hook.sh
-mkdir -p "$(dirname "scripts/pdh-stage-checklist.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-stage-checklist.sh scripts/pdh-stage-checklist.sh
-mkdir -p "$(dirname "scripts/pdh-verify-lib.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-verify-lib.sh scripts/pdh-verify-lib.sh
-mkdir -p "$(dirname "product-brief.md" )"
-cp -RL tmp/pdh/codex/templates/product-brief.md product-brief.md
-mkdir -p "$(dirname "scripts/seed-pdh-verify.sh" )"
-cp -RL tmp/pdh/codex/templates/seed-pdh-verify.sh scripts/seed-pdh-verify.sh
-mkdir -p "$(dirname "scripts/spawn-worker.sh" )"
-cp -RL tmp/pdh/codex/templates/spawn-worker.sh scripts/spawn-worker.sh
-mkdir -p "$(dirname "scripts/test-all.sh" )"
-cp -RL tmp/pdh/codex/templates/test-all.sh scripts/test-all.sh
-mkdir -p "$(dirname "scripts/test-ticket-local.sh" )"
-cp -RL tmp/pdh/codex/templates/test-ticket-local.sh scripts/test-ticket-local.sh
+while IFS="$(printf '\t')" read -r source destination; do
+  mkdir -p "$(dirname "$destination")"
+  if [ -d "tmp/pdh/$source" ]; then
+    rm -rf "$destination"
+    mkdir -p "$destination"
+    cp -RL "tmp/pdh/$source/." "$destination/"
+  else
+    cp -p "tmp/pdh/$source" "$destination"
+  fi
+done < tmp/pdh/codex/lock-map.tsv
+for name in .ticket-config.yaml AGENTS.md product-brief.md AGENTS.local.md.example; do
+  cp "tmp/pdh/codex/templates/$name" "$name"
+done
+for name in dev-server.sh seed-pdh-verify.sh test-all.sh; do
+  cp "tmp/pdh/codex/templates/$name" "scripts/$name"
+done
+for name in example-max-source-lines example-max-test-lines example-no-merge-conflict-markers example-no-node-p-capture required-pdh-files required-pdh-source-files; do
+  cp "tmp/pdh/codex/templates/checks/$name.check" "scripts/checks/$name.check"
+done
+mkdir -p .codex
+cp tmp/pdh/codex/templates/hooks.json .codex/hooks.json
+mkdir -p docs/pdh-review-eval
+cp -R tmp/pdh/codex/templates/pdh-review-eval/. docs/pdh-review-eval/
 chmod +x scripts/*.sh
 ```
 
@@ -210,6 +134,7 @@ chmod +x scripts/*.sh
 
 差分マージするファイルだけに `Based on` を残す。上書きで配る版は `.pdh-lock` が持つ。Product Brief は初回の由来だけを記録し、更新時に本文を上書きしない。
 
+<!-- pdh-shell: ancestry -->
 ```bash
 COMMIT_ID=$(git -C tmp/pdh rev-parse --short=7 HEAD)
 python3 - "$COMMIT_ID" <<'SUBSTITUTE'
@@ -238,9 +163,11 @@ grep -qxF 'AGENTS.local.md' .gitignore || printf '\nAGENTS.local.md\n' >> .gitig
 
 #### 5. 導入結果を検査する
 
+<!-- pdh-shell: verify -->
 ```bash
 bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/codex/lock-map.tsv
 bash scripts/pdh-lock.sh check
+bash scripts/fast-checks.sh
 ```
 
 
@@ -261,12 +188,13 @@ bash -n ticket.sh scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.
 
 ## 既存プロジェクトのアップデート
 
-project 固有のファイルを保持し、上流管理の PDH skill と worker 定義だけを上書きする。
+project 固有のファイルを保持し、配置表で「上書き」とした PDH 配布物を更新する。
 
 ### 1. 更新前の状態を保存する
 
 作業 tree に未保存変更があれば先に commit する。次に配布元を取得し、更新対象の backup を作る。
 
+<!-- pdh-shell: refresh -->
 ```bash
 if [ -d tmp/pdh/.git ]; then
   git -C tmp/pdh fetch origin main
@@ -275,12 +203,16 @@ if [ -d tmp/pdh/.git ]; then
 else
   git clone https://github.com/masuidrive/pdh.git tmp/pdh
 fi
+```
+
+<!-- pdh-shell: backup -->
+```bash
 PDH_BACKUP=$(mktemp -d tmp/pdh-backup.XXXXXX)
+for path in AGENTS.md AGENTS.local.md product-brief.md .ticket-config.yaml .pdh-lock PDH-AGENTS.md scripts docs; do
   [ ! -e "$path" ] || cp -Rp "$path" "$PDH_BACKUP/"
 done
 [ ! -d .agents/skills ] || cp -Rp .agents/skills "$PDH_BACKUP/agents-skills"
 [ ! -d .codex/agents ] || cp -Rp .codex/agents "$PDH_BACKUP/codex-agents"
-[ ! -d scripts/checks ] || cp -Rp scripts/checks "$PDH_BACKUP/scripts-checks"
 printf 'backup: %s\n' "$PDH_BACKUP"
 ```
 
@@ -288,22 +220,21 @@ backup は `tmp/` 配下にあり、更新が正しいと確認するまで消�
 
 ### 2. 上流管理ファイルを更新する
 
+<!-- pdh-shell: update -->
 ```bash
-mkdir -p docs .agents/skills .codex/agents scripts
-for skill in pdh-change pdh-check-writing pdh-close pdh-decision-board pdh-implement pdh-open pdh-pm pdh-resume pdh-review pdh-ticket-review pdh-ticket-write pdh-update pdh-verify; do
-  rm -rf ".agents/skills/$skill"
-  # ⚠ -L で symlink を辿る。配布の codex/skills/pdh-decision-board/ は kit / tools /
-  # 共通の .md を claude/ 側の実体への symlink で持っている（同じ物を 2 つ持たないため）。
-  # -L が無いと、導入先には壊れたリンクだけが置かれる。
-  cp -RL "tmp/pdh/codex/skills/$skill" ".agents/skills/$skill"
-done
-for agent in pdh-ac-reader pdh-ac-verifier pdh-coding-engineer pdh-qa pdh-reviewer-lens1 pdh-reviewer pdh-surface-observer; do
-  cp "tmp/pdh/codex/templates/agents/codex/$agent.toml" ".codex/agents/$agent.toml"
-done
-cp tmp/pdh/docs/PDH-AGENTS.md PDH-AGENTS.md
+while IFS="$(printf '\t')" read -r source destination; do
+  mkdir -p "$(dirname "$destination")"
+  if [ -d "tmp/pdh/$source" ]; then
+    rm -rf "$destination"
+    mkdir -p "$destination"
+    cp -RL "tmp/pdh/$source/." "$destination/"
+  else
+    cp -p "tmp/pdh/$source" "$destination"
+  fi
+done < tmp/pdh/codex/lock-map.tsv
 ```
 
-上の `rm -rf` は名前を列挙した PDH skill だけを置き換える。`.agents/skills/` 全体や、`pdh-` で始まらない user skill / agent 定義は削除しない。
+上の `rm -rf` は lock-map に列挙した PDH skill だけを置き換える。`.agents/skills/` 全体や、`pdh-` で始まらない user skill / agent 定義は削除しない。
 
 github-bot レイヤーを導入済み（`.github/` 内に `_pdh.md` がある。改名前の配置も含む）なら、先に [改名手順](../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)と同文書の「導入先固有の secret」を確認し、該当する移行と確認コマンドの再実行を行う。その後、PDH 保守分（下の 4 つ）も同じく上流の版で置き換える。
 
@@ -318,70 +249,22 @@ if [ -f .github/coding-bot/_pdh.md ]; then
 fi
 ```
 
-上の skill・agent に加え、配置表の「上書き」の script・文書・check も毎回コピーする。「差分マージ」は project の値を保ち、「初回だけ」は既存の本文を保持する。新規の設定ファイルは既存設定へマージする。
+上のコマンドは配置表の「上書き」の script・文書・check も毎回コピーする。「差分マージ」は project の値を保ち、「初回だけ」は既存の本文を保持する。新規の設定ファイルは既存設定へマージする。
 
-```bash
-mkdir -p "$(dirname "PDH-AGENTS.md" )"
-cp -RL tmp/pdh/docs/PDH-AGENTS.md PDH-AGENTS.md
-mkdir -p "$(dirname "docs/pdh-glossary.md" )"
-cp -RL tmp/pdh/docs/pdh-glossary.md docs/pdh-glossary.md
-mkdir -p "$(dirname "scripts/check-pdh-ticket.sh" )"
-cp -RL tmp/pdh/codex/templates/check-pdh-ticket.sh scripts/check-pdh-ticket.sh
-mkdir -p "$(dirname "scripts/check-ticket-template-drift.sh" )"
-cp -RL tmp/pdh/codex/templates/check-ticket-template-drift.sh scripts/check-ticket-template-drift.sh
-mkdir -p "$(dirname "scripts/checks/README.md" )"
-cp -RL tmp/pdh/codex/templates/checks/README.md scripts/checks/README.md
-mkdir -p "$(dirname "scripts/checks/bin/pdh-stage-skill-sections.sh" )"
-cp -RL tmp/pdh/codex/templates/checks/bin/pdh-stage-skill-sections.sh scripts/checks/bin/pdh-stage-skill-sections.sh
-mkdir -p "$(dirname "scripts/checks/docs-metadata.check.example" )"
-cp -RL tmp/pdh/codex/templates/checks/docs-metadata.check scripts/checks/docs-metadata.check.example
-mkdir -p "$(dirname "scripts/checks/docs-references.check.example" )"
-cp -RL tmp/pdh/codex/templates/checks/docs-references.check scripts/checks/docs-references.check.example
-mkdir -p "$(dirname "scripts/checks/pdh-stage-skill-sections.check" )"
-cp -RL tmp/pdh/codex/templates/checks/pdh-stage-skill-sections.check scripts/checks/pdh-stage-skill-sections.check
-mkdir -p "$(dirname "scripts/docs-policy.py" )"
-cp -RL tmp/pdh/codex/templates/docs-policy.py scripts/docs-policy.py
-mkdir -p "$(dirname "scripts/docs-toc.sh" )"
-cp -RL tmp/pdh/codex/templates/docs-toc.sh scripts/docs-toc.sh
-mkdir -p "$(dirname "scripts/fast-checks.sh" )"
-cp -RL tmp/pdh/codex/templates/fast-checks.sh scripts/fast-checks.sh
-mkdir -p "$(dirname "scripts/pdh-lock.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-lock.sh scripts/pdh-lock.sh
-mkdir -p "$(dirname "scripts/pdh-related-docs.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-related-docs.sh scripts/pdh-related-docs.sh
-mkdir -p "$(dirname "scripts/pdh-review-eval.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-review-eval.sh scripts/pdh-review-eval.sh
-mkdir -p "$(dirname "scripts/pdh-review-range.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-review-range.sh scripts/pdh-review-range.sh
-mkdir -p "$(dirname "scripts/pdh-review-tally.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-review-tally.sh scripts/pdh-review-tally.sh
-mkdir -p "$(dirname "scripts/pdh-session-hook.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-session-hook.sh scripts/pdh-session-hook.sh
-mkdir -p "$(dirname "scripts/pdh-stage-checklist.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-stage-checklist.sh scripts/pdh-stage-checklist.sh
-mkdir -p "$(dirname "scripts/pdh-verify-lib.sh" )"
-cp -RL tmp/pdh/codex/templates/pdh-verify-lib.sh scripts/pdh-verify-lib.sh
-mkdir -p "$(dirname "scripts/spawn-worker.sh" )"
-cp -RL tmp/pdh/codex/templates/spawn-worker.sh scripts/spawn-worker.sh
-mkdir -p "$(dirname "scripts/test-ticket-local.sh" )"
-cp -RL tmp/pdh/codex/templates/test-ticket-local.sh scripts/test-ticket-local.sh
-```
+
 
 ### 3. project 固有ファイルを差分マージする
 
 次のファイルは上書きしない。`git diff --no-index` で template と比較し、必要な上流変更だけを既存ファイルへ反映する。
 
 - `AGENTS.md`
-- `product-brief.md`
 - `.ticket-config.yaml`
 - `scripts/test-all.sh`
-- `scripts/fast-checks.sh`
-- `scripts/checks/`
+- `scripts/checks/` の「差分マージ」の check（有効化した文書 check は project 管理）
 - `scripts/dev-server.sh`
 - `scripts/seed-pdh-verify.sh`
-- `scripts/spawn-worker.sh`（[既知の移行手順](#既知の移行手順)で確認・更新する）
-- `scripts/test-ticket-local.sh`
-- `scripts/check-pdh-ticket.sh` と `scripts/pdh-review-range.sh` と `scripts/check-ticket-template-drift.sh`（上流の版で置き換えてよい。project 固有の変更を持たない）
+
+`product-brief.md` は「初回だけ」とし、既存の本文を保持する。
 
 例:
 
@@ -432,6 +315,7 @@ rm -f scripts/hookbus.js
 
 初回の `.pdh-lock` は、上書きの全件を配布元と一致させてから書く。上書き対象の `Based on` 行は消し、差分マージの footer は残す。
 
+<!-- pdh-shell: migration-check -->
 ```bash
 bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/codex/lock-map.tsv
 bash scripts/pdh-lock.sh check
@@ -447,7 +331,12 @@ grep -q 'AC-approved:' .ticket-config.yaml
 for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-rule-write; do
   test ! -e ".agents/skills/$skill" || exit 1
 done
-! rg 'hookbus' .claude/settings.json scripts/test-all.sh package.json vitest.config.* 2>/dev/null
+for path in .claude/settings.json scripts/test-all.sh package.json vitest.config.*; do
+  [ -f "$path" ] || continue
+  status=0
+  grep -n 'hookbus' "$path" || status=$?
+  [ "$status" -eq 1 ] || exit 1
+done
 bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/codex/templates/.ticket-config.yaml
 ```
 
@@ -461,7 +350,7 @@ bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/codex/templa
 grep -q PDH_CODEX_RESUME_MAX scripts/spawn-worker.sh 2>/dev/null && echo "worker 自動再開: 適用済み" || echo "worker 自動再開: 要適用"
 ```
 
-「要適用」なら、既存ファイルを backup してから次を実行する。既に自動再開がある場合も、上流との差分を確認して今回の修正を反映する。project 固有の変更があれば、その変更を保持してマージする。
+「要適用」なら、既存ファイルを backup してから次を実行する。既に自動再開がある場合も、上流との差分を確認して今回の修正を反映する。旧版の project 固有変更は project 側の別 script へ移してから共有版へ揃える。
 
 ```bash
 mkdir -p scripts

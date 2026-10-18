@@ -3,8 +3,8 @@
 #
 # This repo ships text, not a running product, so "tests" here mean: the
 # distribution set is internally consistent, and the shipped shell scripts parse.
-# Real verification (does a consuming project still work after this change?) is
-# not automatable here — see CLAUDE.md「テスト・検証」.
+# Documented installation/update commands also run in isolated consuming repos.
+# Interactive engine behavior is covered separately — see CLAUDE.md「テスト・検証」.
 #
 # This is NOT the distributed template; that is templates/test-all.sh.
 set -uo pipefail
@@ -27,7 +27,7 @@ run "fast-checks" bash scripts/fast-checks.sh
 # with a shell syntax error rather than a check failure. Run it under color once.
 run "fast-checks (FORCE_COLOR=3)" env FORCE_COLOR=3 bash scripts/fast-checks.sh
 run "Codex generated payload" python3 scripts/gen-codex-distribution.py --check
-run "installation and lock lifecycle" python3 scripts/test-installation.py
+run "documented installation/update and lock lifecycle" python3 scripts/test-installation.py
 run "distributed script contracts" bash scripts/test-distributed-scripts.sh
 run "distribution consistency" bash scripts/check-distribution.sh
 run "guard parity (claude/ ↔ codex/)" bash scripts/check-guard-parity.sh
