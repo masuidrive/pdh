@@ -4,6 +4,10 @@ PDH を Codex プロジェクトへ導入する手順と、導入済みプロジ
 
 worker 定義は共有の上書き対象である。役ごとの engine・model・reasoning effort は `AGENTS.md` とそこから指す project の PM 規則で指定する。未指定の model は親から引き継ぐ。
 
+## 前提
+
+Python 3.11 以降と PyYAML（文書・生成の検査と Codex の worker 起動が使う）を用意する。
+
 ## 新規導入
 
 ### Codex に任せる
@@ -279,6 +283,15 @@ git diff --no-index -- scripts/test-all.sh tmp/pdh/codex/templates/test-all.sh |
 `.ticket-config.yaml` の `default_content` / `note_content` は新しい template と照合し、設定キーは project の値を保持する。`scripts/checks/required-pdh-files.check` の一覧は実際に配置したファイルへ合わせる。
 
 ### 既知の移行手順
+
+#### Python 3.11 以降と PyYAML を用意する
+
+既存の導入先は Python 3.11 以降と PyYAML を用意する。確かめ方:
+
+<!-- pdh-shell: runtime-check -->
+```bash
+python3 -c 'import sys,yaml,tomllib; assert sys.version_info>=(3,11)'
+```
 
 #### 入口とテスト template の旧参照を直す
 

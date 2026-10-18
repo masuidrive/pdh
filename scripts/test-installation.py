@@ -92,6 +92,7 @@ cp "$PDH_TICKET_FIXTURE" "$4"
             path=target/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(body)
         run(target,'git','add','.')
         run(target,'git','-c','commit.gpgsign=false','commit','-qm','existing project')
+        documented(target,engine,'runtime-check')
         documented(target,engine,'prepare')
         documented(target,engine,'install')
         if engine=='claude':
@@ -160,6 +161,7 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         run(target,'git','add','.')
         run(target,'git','-c','commit.gpgsign=false','commit','-qm','before update')
         for iteration in range(2):
+            documented(target,engine,'runtime-check')
             documented(target,engine,'refresh')
             output=documented(target,engine,'backup')
             backup=target/next(line.removeprefix('backup: ') for line in output.splitlines() if line.startswith('backup: '))

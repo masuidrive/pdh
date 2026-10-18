@@ -2,6 +2,10 @@
 
 Claude Code 用配布セット。Codex 単独導入は [codex/INSTALL.md](../codex/INSTALL.md)、概要は [README](../README.md) を読む。
 
+## 前提
+
+Python 3.11 以降と PyYAML（文書・生成の検査と Codex の worker 起動が使う）を用意する。
+
 ## 新規導入
 
 ### 方法 1: coding agent に任せる
@@ -233,6 +237,15 @@ done < tmp/pdh/claude/lock-map.tsv
 ```
 
 ### 既知の移行手順
+
+#### Python 3.11 以降と PyYAML を用意する
+
+既存の導入先は Python 3.11 以降と PyYAML を用意する。確かめ方:
+
+<!-- pdh-shell: runtime-check -->
+```bash
+python3 -c 'import sys,yaml,tomllib; assert sys.version_info>=(3,11)'
+```
 
 #### 入口とテスト template の旧参照を直す
 
