@@ -10,6 +10,7 @@ import tempfile
 import tomllib
 
 ROOT=Path(__file__).resolve().parents[1]
+executed=set()
 env=dict(os.environ, GIT_CONFIG_NOSYSTEM='1',GIT_CONFIG_GLOBAL='/dev/null',GIT_TEMPLATE_DIR='',
          GIT_AUTHOR_NAME='PDH Test',GIT_AUTHOR_EMAIL='test@example.invalid',
          GIT_COMMITTER_NAME='PDH Test',GIT_COMMITTER_EMAIL='test@example.invalid')
@@ -33,7 +34,14 @@ def shell_block(engine, name):
 def documented(target, engine, name, code=0):
     script=shell_block(engine,name)
     run(target,'bash','-n','-c',script)
-    return run(target,'bash','-euo','pipefail','-c',script,code=code)
+    output=run(target,'bash','-euo','pipefail','-c',script,code=code)
+    executed.add((engine,name))
+    return output
+
+
+def verify_install(target, engine):
+    documented(target,engine,'verify')
+    if engine=='codex':documented(target,engine,'verify-layout')
 
 
 def payload(target):
@@ -65,7 +73,7 @@ with tempfile.TemporaryDirectory(prefix='pdh-install-') as temporary:
     upstream=temp/'upstream'
     upstream.mkdir()
     # Snapshot only distributed payload; write requires a committed upstream.
-    for engine in ('claude','codex','docs'):
+    for engine in ('claude','codex','docs','github-bot'):
         shutil.copytree(ROOT/engine,upstream/engine)
     run(upstream,'git','init','-q','-b','main')
     run(upstream,'git','add','.')
@@ -153,12 +161,39 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         if engine=='claude':
             documented(target,engine,'symlinks')
             documented(target,engine,'config')
-        else:documented(target,engine,'ancestry')
+        else:
+            documented(target,engine,'ancestry')
+            documented(target,engine,'local-ignore')
+            documented(target,engine,'local-ignore')
+            assert (target/'.gitignore').read_text().splitlines().count('AGENTS.local.md')==1
+            documented(target,engine,'worker-resume-check')
+            documented(target,engine,'worker-resume-install')
+            documented(target,engine,'worker-resume-check')
+            documented(target,engine,'merge-diff')
+            # Optional bot update: absent installation, then four PDH files only.
+            documented(target,engine,'bot-update')
+            bot=target/'.github/coding-bot';bot.mkdir(parents=True)
+            (bot/'_pdh.md').write_text('old shared protocol\n')
+            (bot/'system.md').write_text('project-owned bot setup\n')
+            (target/'.codex/skills/my-custom-skill').mkdir(parents=True)
+            documented(target,engine,'bot-update')
+            for name in ('_pdh.md','_github-issue.md','pdh-hooks.sh'):
+                assert (bot/name).read_bytes()==(upstream/'github-bot'/name).read_bytes()
+            assert (target/'.codex/skills/pdh-gh-pull/SKILL.md').is_file()
+            assert (bot/'system.md').read_text()=='project-owned bot setup\n'
+            assert (target/'.codex/skills/my-custom-skill').is_dir()
+            before=payload(target);documented(target,engine,'bot-update')
+            assert payload(target)==before
         skill_dir=target/('.claude/skills' if engine=='claude' else '.agents/skills')
         # Placement is a separate assertion; the installer is never synthesized from it.
         for src,dst,mode in re.findall(r'^\| `tmp/pdh/([^`]+)` \| `([^`]+)` \| [^|]+ \| (上書き|差分マージ|初回だけ) \|$', (ROOT/engine/'INSTALL.md').read_text(), re.M):
             assert (target/dst).exists(), (engine,dst,'documented install omitted placement')
-        documented(target,engine,'verify')
+        verify_install(target,engine)
+        documented(target,engine,'references-check')
+        if engine=='codex':
+            role=target/'.codex/agents/pdh-qa.toml';body=role.read_bytes();role.unlink()
+            documented(target,engine,'verify-layout',code=1)
+            role.write_bytes(body)
         stage_docs(target,code=0)
         # Either active check means adoption, just as in check-pdh-ticket.sh.
         for name in ('docs-metadata','docs-references'):
@@ -236,7 +271,7 @@ cp "$PDH_TICKET_FIXTURE" "$4"
             documented(target,engine,'update')
             if engine=='claude':documented(target,engine,'symlinks')
             documented(target,engine,'migration-check')
-            documented(target,engine,'verify')
+            verify_install(target,engine)
             run(target,'bash','scripts/fast-checks.sh')
             for name,content in preserved.items():assert (target/name).read_bytes()==content,(engine,name)
             if iteration==0:first=payload(target)
@@ -264,6 +299,30 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         output=documented(target,engine,'migration-check')
         assert '要適用:' not in output and '済:' in output,output
         print(engine+': migration-check reports all missing items and returns aggregate status')
+        old_names=('pdh-dev','pdh-coding','pdh-reviewing','pdh-verifying','pdh-rule-write')
+        for name in old_names:
+            (skill_dir/name).mkdir()
+            if engine=='claude':
+                (target/'.agents/skills'/name).symlink_to('../../.claude/skills/'+name,target_is_directory=True)
+        for directory in ('.claude/skills/tmux-director','.agents/skills/tmux-director'):
+            (target/directory).mkdir(parents=True)
+        (target/'scripts/hookbus.js').write_text('old hookbus\n')
+        user_skill=skill_dir/'my-custom-skill';user_skill.mkdir()
+        (user_skill/'SKILL.md').write_text('project skill\n')
+        for iteration in range(2):
+            documented(target,engine,'remove-old-skills')
+            for name in old_names:
+                assert not (skill_dir/name).exists()
+                assert not (target/'.agents/skills'/name).is_symlink()
+            assert not (target/'scripts/hookbus.js').exists()
+            assert not (target/'.claude/skills/tmux-director').exists()
+            assert not (target/'.agents/skills/tmux-director').exists()
+            assert (user_skill/'SKILL.md').read_text()=='project skill\n'
+            if iteration==0:cleaned=payload(target)
+            else:assert payload(target)==cleaned
+        if engine=='codex':
+            # The cleanup above may create only an empty legacy directory.
+            (target/'.claude/skills').rmdir();(target/'.claude').rmdir()
         print(engine+': documented install/update twice, custom agents, plain docs, opt-in rejection, disappearance guard, backup and preservation passed')
         if engine=='codex':
             assert not (target/'.claude').exists(),'native installation depends on legacy Claude files'
@@ -274,12 +333,56 @@ cp "$PDH_TICKET_FIXTURE" "$4"
             (legacy/'project-notes.md').write_text('legacy project customization\n')
             shutil.rmtree(skill_dir/'pdh-resume')
             (skill_dir/'pdh-resume').symlink_to('../../.claude/skills/pdh-resume',target_is_directory=True)
+            legacy_custom={
+                'CLAUDE.md':'project legacy rules\n',
+                'CLAUDE.local.md':'project local context\n',
+                '.claude/settings.json':'{"permissions":{"allow":["Bash(project)"]}}\n',
+                '.claude/skills/my-custom-skill/SKILL.md':'project legacy skill\n',
+                '.claude/agents/my-custom-agent.md':'project legacy agent\n',
+                '.claude/agents/pdh-qa.md':'old PDH role\n',
+            }
+            for name,body in legacy_custom.items():
+                path=target/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(body)
+            output=documented(target,engine,'legacy-backup')
+            backup=target/next(line.removeprefix('legacy backup: ') for line in output.splitlines() if line.startswith('legacy backup: '))
+            assert (backup/'CLAUDE.md').read_text()==legacy_custom['CLAUDE.md']
+            assert (backup/'CLAUDE.local.md').read_text()==legacy_custom['CLAUDE.local.md']
+            assert (backup/'skills/pdh-resume/project-notes.md').read_text()=='legacy project customization\n'
+            assert (backup/'agents/my-custom-agent.md').read_text()==legacy_custom['.claude/agents/my-custom-agent.md']
+            agents=target/'AGENTS.md';agents_body=agents.read_bytes()
+            documented(target,engine,'legacy-rules')
+            assert agents.read_bytes()==agents_body,'legacy rules overwrote existing AGENTS'
+            agents.unlink();documented(target,engine,'legacy-rules')
+            assert agents.read_text()==legacy_custom['CLAUDE.md']
+            agents.unlink();(target/'CLAUDE.md').unlink()
+            documented(target,engine,'legacy-rules')
+            assert agents.read_bytes()==(upstream/'codex/templates/AGENTS.md').read_bytes()
+            agents.write_bytes(agents_body);(target/'CLAUDE.md').write_text(legacy_custom['CLAUDE.md'])
+            documented(target,engine,'legacy-local')
+            assert (target/'AGENTS.local.md').read_text()==legacy_custom['CLAUDE.local.md']
+            (target/'AGENTS.local.md').write_text('existing native local context\n')
+            documented(target,engine,'legacy-local')
+            assert (target/'AGENTS.local.md').read_text()=='existing native local context\n'
             legacy_files=payload(target/'.claude')
+            # Migration step 3 uses the marked native update and verification.
             documented(target,engine,'update')
-            documented(target,engine,'verify')
+            documented(target,engine,'migration-check')
+            verify_install(target,engine)
             assert not (skill_dir/'pdh-resume').is_symlink(),'legacy skill symlink was not replaced'
             assert payload(target/'.claude')==legacy_files,'native update changed legacy source'
             print('codex: legacy symlink replaced; .claude source customization preserved')
+            for iteration in range(2):
+                documented(target,engine,'legacy-retire')
+                documented(target,engine,'legacy-verify')
+                assert not legacy.exists()
+                assert not (target/'.claude/agents/pdh-qa.md').exists()
+                for name,body in legacy_custom.items():
+                    if name=='.claude/agents/pdh-qa.md':continue
+                    assert (target/name).read_text()==body,(name,'legacy retirement changed custom file')
+                assert (backup/'skills/pdh-resume/project-notes.md').is_file()
+                if iteration==0:retired=payload(target)
+                else:assert payload(target)==retired
+            print('codex: legacy migration 1-4 executed; backup, merge branches, local context and selective retirement passed twice')
             role='pdh-reviewer'
             body=tomllib.loads((target/'.codex/agents'/f'{role}.toml').read_text())['developer_instructions']
             assert '.claude/agents/' not in body
@@ -300,3 +403,12 @@ cp "$PDH_TICKET_FIXTURE" "$4"
             run(target,'bash','-c','definition_head=HEAD; run_dir=.; '+text[start:end])
             assert (target/'reviewer.md').read_text().strip()==body.strip()
         print(engine+': placement, every stage, lock write/check/drift/atomicity/idempotence, template bodies and native role extraction passed')
+
+    # Every executable block must be marked and reached by a scenario above.
+    for engine in ('claude','codex'):
+        guide=(ROOT/engine/'INSTALL.md').read_text()
+        names=re.findall(r'<!-- pdh-shell: ([\w-]+) -->\n```bash\n',guide)
+        assert len(names)==guide.count('```bash\n'),(engine,'unmarked executable block')
+        assert len(names)==len(set(names)),(engine,'duplicate marker')
+        assert set(names)=={name for seen_engine,name in executed if seen_engine==engine},(engine,'unexecuted blocks',set(names)-{name for e,name in executed if e==engine})
+        print(engine+f': all {len(names)} marked INSTALL shell blocks executed')

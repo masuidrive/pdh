@@ -273,6 +273,7 @@ python3 -c 'import sys,yaml,tomllib; assert sys.version_info>=(3,11)'
 
 確認（冪等）:
 
+<!-- pdh-shell: references-check -->
 ```bash
 for path in CLAUDE.md scripts/test-all.sh .ticket-config.yaml; do
   status=0
@@ -299,6 +300,7 @@ bash scripts/fast-checks.sh
 
 旧 `pdh-dev` は `pdh-pm` と stage ごとの skill に、`pdh-rule-write` は `pdh-change` に、`pdh-coding` / `pdh-reviewing` / `pdh-verifying` は worker 定義に移った。`pdh-resume` と `pdh-pm/_open-ticket.md` も配る。配置表の全件を更新し、旧名だけを削除する。
 
+<!-- pdh-shell: remove-old-skills -->
 ```bash
 for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-rule-write; do
   rm -rf ".claude/skills/$skill"

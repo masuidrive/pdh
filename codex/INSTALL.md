@@ -184,6 +184,7 @@ SUBSTITUTE
 
 環境固有で commit できない指示には、gitignore した `AGENTS.local.md` を使える。secret の値は書かず、取得方法や保管場所だけを書く。必要なら `AGENTS.local.md.example` をコピーして作る。
 
+<!-- pdh-shell: local-ignore -->
 ```bash
 grep -qxF 'AGENTS.local.md' .gitignore || printf '\nAGENTS.local.md\n' >> .gitignore
 ```
@@ -198,6 +199,7 @@ bash scripts/fast-checks.sh
 ```
 
 
+<!-- pdh-shell: verify-layout -->
 ```bash
 test -f AGENTS.md
 test -f PDH-AGENTS.md
@@ -268,6 +270,7 @@ github-bot レイヤーを導入済み（`.github/` 内に `_pdh.md` がある�
 
 ⚠ **残りの machinery は «diff してから» 反映する** — `.github/coding-bot/system.md` `_issue.md` `_pr.md` `run-action.sh` `engines/`、`.github/workflows/coding-bot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**導入先はここを意図して変えていることがある（repo 固有の規則を書いた節・action の SHA 固定・timeout・既存 devcontainer とのマージ結果）。⚠ **2026-09-17 に所有者が変わってから、この節は «触らない» ではなくなった** — それまでは外部 repo からの vendoring で「この手順では触らない」ものだったので、導入先の書き足しも自動的に守られていた。**いまは守られない。**
 
+<!-- pdh-shell: bot-update -->
 ```bash
 if [ -f .github/coding-bot/_pdh.md ]; then
   cp tmp/pdh/github-bot/_pdh.md .github/coding-bot/_pdh.md
@@ -296,6 +299,7 @@ fi
 
 例:
 
+<!-- pdh-shell: merge-diff -->
 ```bash
 git diff --no-index -- AGENTS.md tmp/pdh/codex/templates/AGENTS.md || true
 git diff --no-index -- .ticket-config.yaml tmp/pdh/codex/templates/.ticket-config.yaml || true
@@ -321,6 +325,7 @@ python3 -c 'import sys,yaml,tomllib; assert sys.version_info>=(3,11)'
 
 確認（冪等）:
 
+<!-- pdh-shell: references-check -->
 ```bash
 for path in AGENTS.md scripts/test-all.sh .ticket-config.yaml; do
   status=0
@@ -347,6 +352,7 @@ bash scripts/fast-checks.sh
 
 旧 `pdh-dev` は `pdh-pm` と stage ごとの skill に、`pdh-rule-write` は `pdh-change` に、`pdh-coding` / `pdh-reviewing` / `pdh-verifying` は worker 定義に移った。`pdh-resume` と `pdh-pm/_open-ticket.md` も配る。配置表の全件を更新し、旧名だけを削除する。
 
+<!-- pdh-shell: remove-old-skills -->
 ```bash
 for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-rule-write; do
   rm -rf ".agents/skills/$skill"
@@ -416,12 +422,14 @@ exit "$pdh_migration_status"
 
 `scripts/spawn-worker.sh` は現在は配置表の上書き対象である。旧導入先も共有版へ揃える。適用済みかの確認（冪等）:
 
+<!-- pdh-shell: worker-resume-check -->
 ```bash
 grep -q PDH_CODEX_RESUME_MAX scripts/spawn-worker.sh 2>/dev/null && echo "worker 自動再開: 適用済み" || echo "worker 自動再開: 要適用"
 ```
 
 「要適用」なら、既存ファイルを backup してから次を実行する。既に自動再開がある場合も、上流との差分を確認して今回の修正を反映する。旧版の project 固有変更は project 側の別 script へ移してから共有版へ揃える。
 
+<!-- pdh-shell: worker-resume-install -->
 ```bash
 mkdir -p scripts
 cp tmp/pdh/codex/templates/spawn-worker.sh scripts/spawn-worker.sh
@@ -446,6 +454,7 @@ close 済みでない（todo / doing）ticket は、見出しの改名など AC 
 
 ### 1. legacy ファイルを退避する
 
+<!-- pdh-shell: legacy-backup -->
 ```bash
 PDH_LEGACY_BACKUP=$(mktemp -d tmp/pdh-claude-backup.XXXXXX)
 [ ! -f CLAUDE.md ] || cp -p CLAUDE.md "$PDH_LEGACY_BACKUP/"
@@ -459,6 +468,7 @@ printf 'legacy backup: %s\n' "$PDH_LEGACY_BACKUP"
 
 `AGENTS.md` がなければ `CLAUDE.md` を出発点としてコピーする。すでにある場合は上書きせず、旧 `CLAUDE.md` にある project 固有ルール、テストコマンド、モデル override を `AGENTS.md` へマージする。既存の thin pointer だけを残して旧ルールを失わないこと。
 
+<!-- pdh-shell: legacy-rules -->
 ```bash
 if [ ! -f AGENTS.md ]; then
   if [ -f CLAUDE.md ]; then cp -p CLAUDE.md AGENTS.md; else cp tmp/pdh/codex/templates/AGENTS.md AGENTS.md; fi
@@ -471,6 +481,7 @@ git diff --no-index -- AGENTS.md tmp/pdh/codex/templates/AGENTS.md || true
 
 環境固有 context も同様に移す。`AGENTS.local.md` がなければ旧ファイルをコピーし、両方ある場合は既存 `AGENTS.local.md` を上書きせず差分をマージする。
 
+<!-- pdh-shell: legacy-local -->
 ```bash
 if [ -f CLAUDE.local.md ] && [ ! -f AGENTS.local.md ]; then
   cp -p CLAUDE.local.md AGENTS.local.md
@@ -489,6 +500,7 @@ grep -qxF 'AGENTS.local.md' .gitignore || printf '\nAGENTS.local.md\n' >> .gitig
 
 新配置でテストが通り、backup が存在することを確認してから、旧 PDH skill と agent 定義を名前を指定して削除する。
 
+<!-- pdh-shell: legacy-retire -->
 ```bash
 for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-rule-write pdh-change pdh-check-writing pdh-close pdh-decision-board pdh-implement pdh-open pdh-pm pdh-resume pdh-review pdh-ticket-review pdh-ticket-write pdh-update pdh-verify; do
   rm -rf ".claude/skills/$skill"
@@ -503,6 +515,7 @@ done
 
 移行確認:
 
+<!-- pdh-shell: legacy-verify -->
 ```bash
 test -f AGENTS.md
 test ! -L .agents/skills/pdh-pm
