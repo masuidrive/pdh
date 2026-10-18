@@ -1,0 +1,4 @@
+# PDH-stage の skill の節の形（入力・処理・出力・例外）。中身は scripts/checks/bin/pdh-stage-skill-sections.sh。
+reason=PDH-stage の skill に «入力・処理・出力・例外» の節が欠けている（pdh-change「PDH-stage の skill の形」）
+linter_command=scripts/checks/bin/pdh-stage-skill-sections.sh {{filenames}}
+glob=.claude/skills/**/*.md

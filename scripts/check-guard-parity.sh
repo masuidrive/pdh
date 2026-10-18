@@ -17,14 +17,14 @@ cd "$(cd "$(dirname "$0")/.." && pwd)" || exit 1
 guards=(
   "実 API で 1 経路以上 200 確認"      # 外部 path は実 API で検証（stub で完了としない）
   "product / UX / security"            # 実装が独断で決めず明示回答まで止める判断の列挙
-  "確定値を聞き返す"                    # 「よしなに」等の曖昧委譲を拒否して確定値を得る
+  "明示の回答"                    # 「よしなに」等の曖昧委譲を拒否して確定値を得る
   'Human-Agent-Interface'               # 発行先は起動側の囲い → project ルール → 既定の順（経路の上書き口）
-  'Checklist` へ 1 行書く'              # 板を発行したら note の Checklist に待ちの行を書く（close が数える）
+  '待ち行'              # 板を発行したら note の Checklist に待ちの行を書く（close が数える）
   'progress.md'                         # 経緯は progress.md（追記のみ）。note は現在値だけ
   "完了判定には使わない"                # 手で組んだ入力（stub）を完了判定に使わない
   "最下層の 1 テストで固定する"          # 1 つの契約は違反を観測できる最下層の 1 テストで固定する
   "contrast case"                       # 人が判断する材料では «出ない» 側の証拠も省かない
-  "close 前の板は省かない"              # 実装前の板を省いても close 前の板は出す
+  "ほかの理由（判断が少ない・急ぐ）では省かない"              # 実装前の板を省いても close 前の板は出す
   "rc だけで成否を決めない"              # codex exec review の «指摘ゼロ» を review 未実行と取り違えない
 )
 
@@ -36,8 +36,8 @@ count_files_with() {
   find -L "$2" -type f -exec grep -l -- "$1" {} + 2>/dev/null | wc -l | tr -d ' '
 }
 for g in "${guards[@]}"; do
-  c=$(count_files_with "$g" claude/skills/)
-  x=$(count_files_with "$g" codex/skills/)
+  c=$(count_files_with "$g" claude/)
+  x=$(count_files_with "$g" codex/)
   if [ "$c" -eq 0 ] || [ "$x" -eq 0 ]; then
     printf 'guard-parity: MISSING — "%s" (claude=%s codex=%s)\n' "$g" "$c" "$x" >&2
     failed=1

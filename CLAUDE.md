@@ -23,7 +23,6 @@ claude/                              # Claude Code 用の配布セット
   INSTALL.md                         # 導入・更新手順。配布物の配置表はここにある
   skills/                            # skill の実体（配布先 .claude/skills/）
   templates/                         # 配布テンプレート（CLAUDE.md、AGENTS.md、agents/、checks/、*.sh）
-  scripts/hookbus.js                 # tmux worker hook event bus（配布物）
 codex/                               # Codex CLI 用の配布セット（同じ構成。入口は AGENTS.md）
 github-bot/                          # GitHub Issues + Actions bot レイヤー（任意・engine 中立）
   _pdh.md _github-issue.md           # PDH 側で保守する層（PDH mode 定義・gate→issue プロトコル）
@@ -57,26 +56,26 @@ scripts/                             # この repo 自身の検査。配布物�
 ## 配布物の一貫性
 
 - **配布ファイルを追加・改名・削除したら、そのセットの `INSTALL.md` の配置表（「ファイルを配置する」のコピー元/コピー先テーブル）と README のディレクトリ構造図を同じ commit で更新する。** 配布物の一覧は `INSTALL.md` にある
-- **配布ファイル末尾の `Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/<path>` 行を壊さない。** `XXXXXXX` はプレースホルダのまま commit する（導入時に HEAD commit へ置換される）。path 部分は **この repo 内でのソースパス**と一致させる（URL が pdh repo への permalink なので、配布先の `.claude/...` ではない）。`scripts/check-distribution.sh` の `BASED_ON_FILES` へ登録して初めて検査される。⚠ **skill の分冊と `templates/agents/` の agent 定義には `Based on` を足さない** — どちらも配布先で毎回まるごと上書きされるので、由来を追う相手がいない
+- **上書き対象には `Based on` を付けない。版は `.pdh-lock` に置く。差分マージする template と初回の Product Brief には `XXXXXXX` の由来を残す。**配置表の更新区分と `lock-map.tsv` の対応は `scripts/check-placement.py` が検査する。
 - **`pdh-update` skill の更新手順が、追加した配布物をカバーしているか確認する**
 - **skill か `pdh-*` の agent 定義を増減したら、`<set>/templates/checks/required-pdh-files.check` の `required_paths` を同じ commit で直す。** pdh-update はこれらを毎回まるごと上書きするので、**消失は差分マージでは検出できない**（この check だけが検出する）。⚠ **この check は列挙した path しか守らないので、足し忘れたものは消えても落ちない。**対象は `.claude/skills/` の実体・`.agents/skills/` の symlink・`.claude/agents/` と `.codex/agents/` の定義の 4 か所すべて
 - **上書きされないテンプレート（`.ticket-config.yaml` / `CLAUDE.md` / `test-all.sh` 等、project カスタマイズを保持するファイル）に項目を追加・変更したら、`INSTALL.md`「既知の移行手順」に冪等な確認コマンド付きで追記する。** これらは pdh-update の diff マージ任せで、既存プロジェクトに確実には届かない。skill（常に上書き）だけが diff 伝播を信用してよい
 
 ## どこに書くかの判断（CLAUDE.md / PDH-AGENTS.md / skill）
 
-判断の 3 問は `docs/PDH-AGENTS.md`「Where A Rule Belongs」に従う。この repo 固有の適用例だけをここに置く。
+規則の置き場所は `claude/skills/pdh-change/SKILL.md` に従う。この repo 固有の適用例だけをここに置く。
 
-例: 「変更前に `git log` / `git blame` で意図を把握する」は、共通・コード変更時のみ・実装担当なので `pdh-coding` に従う。配布テンプレートの `CLAUDE.md` に同じことを書くと、コピー先で二重管理になる。
+例: 「変更前に `git log` / `git blame` で意図を把握する」は、共通・コード変更時のみ・実装担当なので `pdh-coding-engineer` に従う。配布テンプレートの `CLAUDE.md` に同じことを書くと、コピー先で二重管理になる。
 
 **bot に毎 run 必ず守らせたい手順は、散文ではなく世界を見る検査か runner に置く。**散文は engine によって落ちる（実測: claude は 3 か所に書いた progress.md の作成を無視し、Checklist の 1 行には従った）。自己申告の checkbox は «付けた» を数えるだけなので、ファイルの存在・diff の削除行・ラベル・コメント本文のように外から確かめられるものは `check-pdh-ticket.sh` や `pdh-hooks.sh` の側で確かめ、checkbox は外から確かめられないものにだけ残す。
 
 **同じルールが「テンプレートでは重複、実プロジェクトでは固有情報」になることがある。** 配布先ごとに参照先が変わる場合（辿るディレクトリ構成が違う等）は、`CLAUDE.md` にその差分だけを書いてよい。
 
-**skill を新設するのは、人間の発話が入口になるものだけ**（守るのは配布先の常駐 context — skill の description は全セッションに載り、trigger を使わないファイルには対価だけが残る）。worker がパスで読むだけの規則は skill にせず `pdh-dev` の分冊に置く。既存の `pdh-reviewing` / `pdh-verifying` は配布済みのため据え置き（移行を 2 回強いない）。
+**skill は stage の手順か複数 stage で使う道具として役割を定める。** worker の手順は `templates/agents/` の役割本文に置く。Codex 本文の再生成は `python3 scripts/gen-codex-distribution.py` で行う。
 
 ## 規則に、実行時に要らない背景と仕組みを書かない
 
-何を書かないかは `docs/PDH-AGENTS.md`「Where A Rule Belongs」の «規則の文には、読み手のすることを変える文だけを書く» で決める。この repo では、書かないものの置き場所を次のように決める。
+何を書かないかは `claude/skills/pdh-change/SKILL.md`「規則の文の書き方」の «規則の文には、読み手のすることを変える文だけを書く» で決める。この repo では、書かないものの置き場所を次のように決める。
 
 | 書かないもの | 置き場所 |
 |---|---|
@@ -101,7 +100,7 @@ scripts/                             # この repo 自身の検査。配布物�
 
 ## 重複の禁止
 
-- **同じルールを 2 箇所に書かない**（`product-brief.md` の `AI-1`）。PDH 汎用は `docs/PDH-AGENTS.md`、project 固有の書き方例は `claude/templates/CLAUDE.md`、導入・更新手順は `INSTALL.md`、運用ルールは `docs/product-delivery-hierarchy.md`
+- **同じルールを 2 箇所に書かない**（`product-brief.md` の `AI-1`）。PDH 汎用は `docs/PDH-AGENTS.md`、project 固有の書き方例は `claude/templates/CLAUDE.md`、導入・更新手順は `INSTALL.md`、運用ルールは `docs/PDH-AGENTS.md`
 - **配布テンプレートに「このテンプレートの使い方」を書かない**（`AI-3`）。コピー先で読み手のいない説明文になる
 - 文言を移動したら、移動元に残骸がないか `rg '<特徴的な一文>'` で sweep する
 
@@ -171,7 +170,7 @@ rg '検査に入れない|測らない|数えない|数や有無|入力であっ
 # PDH (Ticket) 運用
 
 - **`product-brief.md` が全判断の基準**
-- PDH 汎用ルールは `docs/PDH-AGENTS.md`、フローの詳細は各セットの `skills/pdh-dev/SKILL.md` にある。ここには PDH repo 固有の差分だけを書く
+- PDH 汎用ルールは `docs/PDH-AGENTS.md`、フローの詳細は各セットの `skills/pdh-pm/SKILL.md` にある。ここには PDH repo 固有の差分だけを書く
 - **Acceptance Criteria の変更（追加・削除・修正）は必ずユーザの承認を得ること**
 
 ## 影響範囲の明示（必須）

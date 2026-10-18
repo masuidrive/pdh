@@ -44,12 +44,13 @@
     }
   }
 
-  // 「主線 ✦」→「主線 n / N」。N は列の 1 段目の総数 = 列数。
+  // 書き手が置く印「主線 ✦」→ 表示「本文 n / N」（本文 = 承認者が必ず読む部分）。N は列の 1 段目の総数 = 列数。
+  // 照合する印「主線 ✦」は書き手との取り決めなので変えない。
   var topCount = cols.length;
   var mainlineSeq = 0;
   rewriteText(deck, /主線 ✦/g, function () {
     mainlineSeq += 1;
-    return "主線 " + mainlineSeq + " / " + topCount;
+    return "本文 " + mainlineSeq + " / " + topCount;
   });
 
   // 「↓ 下に N 段」の N は、その面の «下に実際にある面の数» から書く。
@@ -147,7 +148,7 @@
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
     // ⚠ Space は «フォーカスしている部品を押す» キーである。面送りにも使うと、
     //    選択肢を選んだ瞬間に隣の面へ動き、選べたかどうかを確かめられない
-    //    （独立 reviewer が検出）。押す場所の除外一覧を使い回す —
+    //    （reviewer が検出）。押す場所の除外一覧を使い回す —
     //    一覧を 2 つ持つと、片方だけ育って同じ事故が戻る。
     //    矢印は部品の上でも面送りでよい（部品が矢印を使わないため）。
     if (e.key === " " && isUI(t)) return;
@@ -240,7 +241,7 @@
 /* 面ごとの自動縮小 — 中身が 1 画面に入りきらない面だけ縮める。
    offsetHeight は transform の影響を受けないので、1 回測れば必要な倍率が確定する。 */
 (function () {
-  var MIN = 0.55;   // これ以下は最後の逃げ道。ふだんは面を割って避ける
+  var MIN = 0.55;   // これ以下は最後の手段。ふだんは面（スライド 1 枚）を分けて避ける
   var panes = Array.prototype.slice.call(document.querySelectorAll(".deck .p"));
   // 組んだときの高さ。⚠ offsetHeight は flex に押し込まれて «面の高さ» に丸められる
   // ことがある。溢れている中身の高さは scrollHeight でしか取れない（下余白は自分で足す）。

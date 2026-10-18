@@ -58,7 +58,7 @@ Required-files check:
 ```
 reason=a required file is gone; an upstream overwrite may have removed it
 # required_paths: exact repo-relative file paths, comma-separated. No glob here.
-required_paths=config/settings.yaml,.claude/skills/pdh-dev/_flow.md
+required_paths=config/settings.yaml,.claude/skills/pdh-verify/SKILL.md
 ```
 
 Linter-command check:
@@ -178,6 +178,12 @@ Narrowing a too-broad pattern is preferred over deleting when the bug it pins
 can still recur.
 
 ## Examples
+
+`codex-agents-generated.check` runs `scripts/gen-codex-agents.sh --check` once
+through a linter wrapper to compare all `.codex/agents/pdh-*.toml` files with
+their canonical `.claude/agents/pdh-*.md` sources. Regenerate them with
+`bash scripts/gen-codex-agents.sh`. `required-pdh-files.check` also guards the
+source and generated files against deletion.
 
 The registry ships three examples. Adjust their globs and excludes for the
 project, or delete examples that do not fit:

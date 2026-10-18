@@ -1,4 +1,4 @@
-// 判断ボード kit v2 — mermaid-render.js
+// decision-board kit v2 — mermaid-render.js
 // beautiful-mermaid.iife.js（global: BeautifulMermaid）の後に読み込む。
 // pre.mermaid を kit token 色で描画し、テーマ変更で再描画。失敗時はソースを見せ、
 // console.error も残す（fallback がエラーの種類を隠さないため）。

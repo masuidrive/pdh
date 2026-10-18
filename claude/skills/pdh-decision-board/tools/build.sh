@@ -206,7 +206,7 @@ if [ "$title_set" = false ]; then
       printf "%s", text
     }
   ' "$body")
-  [ -n "$title" ] || title='判断ボード'
+  [ -n "$title" ] || title='decision-board'
 fi
 
 escaped_lang=$(printf '%s' "$lang" | awk '{ gsub(/&/, "\\&amp;"); gsub(/"/, "\\&quot;"); printf "%s", $0 }')

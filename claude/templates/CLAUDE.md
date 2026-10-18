@@ -25,7 +25,7 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 # 実装品質ルール
 
 <!-- このプロジェクトで実際に踏んだ実装上の失敗を、再発防止ルールとしてここに書く。 -->
-<!-- 言語・フレームワークに依存しない汎用コーディング標準は pdh-coding skill に従うので、ここには書かない。 -->
+<!-- 言語・フレームワークに依存しない汎用コーディング標準は pdh-coding-engineer agent に従うので、ここには書かない。 -->
 <!-- grep 1 パターンで決定論的に検出できるものは、ルールではなく scripts/checks/*.check にする。 -->
 
 # 開発環境
@@ -39,7 +39,7 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 ## テスト
 
 - **完了報告前のテスト実行ルールは `PDH-AGENTS.md`「Reporting」に従う**（未実行での完了報告禁止。コマンド未インストール・依存不足・環境エラーも「テスト失敗」とみなす）。ここには project 固有のテストコマンドと確認観点だけを書く
-- **完了判定に使う「動作確認」の基準は pdh-coding skill「動作確認 gate」に従う。** 実データ + 終端操作で確認し、stub での pass を完了としない
+- **完了判定に使う「動作確認」の基準は pdh-coding-engineer agent「動作確認 gate」に従う。** 実データ + 終端操作で確認し、stub での pass を完了としない
 
 <!-- プロジェクトに合わせてテストコマンドを記述すること -->
 
@@ -53,11 +53,11 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 ### テスト設計ルール
 
 - **テストは「アプリがこう動くべき」（desired state）を記述する**。現在の仕様における正しい振る舞いを定義するもの
-- チケット固有の一時確認は pdh-coding skill「テスト設計ルール」の `ticket-local-test` ルールに従う
+- チケット固有の一時確認は pdh-coding-engineer agent「テスト設計ルール」の `ticket-local-test` ルールに従う
 
 # PDH (Ticket) 運用
 
-PDH 汎用ルールは `PDH-AGENTS.md`、フローの詳細・ステップ定義・レビュー構造は `/pdh-dev` SKILL.md にある。**`CLAUDE.md` には project 固有の差分だけを書く。**
+PDH 汎用ルールは `PDH-AGENTS.md`、フローの詳細・ステップ定義・レビュー構造は `/pdh-pm` SKILL.md にある。**`CLAUDE.md` には project 固有の差分だけを書く。**
 
 ## 影響範囲の明示（必須）
 
@@ -87,18 +87,18 @@ PDH 汎用ルールは `PDH-AGENTS.md`、フローの詳細・ステップ定義
 
 ## チーム構成・モデル設定
 
-pdh-dev が spawn するチームメンバーの engine / モデル設定。
+pdh-pm が spawn するチームメンバーの engine / モデル設定。
 
-engine 割り当ての規則（worker 既定 = main と同一、main engine の選び方、spawn 機構）は pdh-dev `_execution-team.md`「エンジン割り当て」「spawn 機構」に従う。ここには **この project 固有の上書きだけ**を書く。
+engine 割り当ての規則（実装と review の分離、main engine の選び方、spawn 機構）は pdh-pm `_execution-team.md`「エンジン割り当て」「spawn 機構」に従う。ここには **この project 固有の上書きだけ**を書く。
 
 - main = claude → 実装 worker = `codex exec -c model_reasoning_effort="medium"`（機械的な実装は `medium`、統合・判断を含む難しい実装は `high`）
 - main = codex → 実装 worker = `claude -p --model opus`
 
-**下表は「役割ごとに engine / model を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。PDH stage の定義と gate 条件は `PDH-AGENTS.md` と `/pdh-dev` に従い、この表は project 固有の role / model override だけを書く。
+**下表は「役割ごとに engine / model を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。PDH stage の定義と gate 条件は `PDH-AGENTS.md` と `/pdh-pm` に従い、この表は project 固有の role / model override だけを書く。
 
 **この表は消さないこと。** どの step にどの engine / model を割り当てるかは project 依存で、skill 側の既定値では決められない。判断材料の例:
 
-- **タスクの難易度**: 設計判断や統合を含む step に強いモデルを当てる、といった step ごとの使い分け。機械的な変更でも最小能力の軽量モデルへは落とさない（pdh-dev `_execution-team.md`「エンジン割り当て」）
+- **タスクの難易度**: 設計判断や統合を含む step に強いモデルを当てる、といった step ごとの使い分け。機械的な変更でも最小能力の軽量モデルへは落とさない（pdh-pm `_execution-team.md`「エンジン割り当て」）
 - **コスト / スループット**: 比べるのは «1 回の単価» ではなく «完了 1 件までの合計»（やり直し・review の巡数・人が押す回数を含む）
 - **独立性**: cross-model review が要る step には、生成側と別のモデルを明示指定する
 
@@ -120,7 +120,7 @@ engine 割り当ての規則（worker 既定 = main と同一、main engine の�
 
 ### worker の起動方法
 
-engine 別の起動コマンド、並行起動、main = Claude Code のときの codex worker spawn 手順（`run_in_background` / timeout / 出力先 / worktree 時の cwd 注意）は pdh-dev `_execution-team.md`「spawn 機構」に従う。
+engine 別の起動コマンド、並行起動、main = Claude Code のときの codex worker spawn 手順（`run_in_background` / timeout / 出力先 / worktree 時の cwd 注意）は pdh-pm `_execution-team.md`「spawn 機構」に従う。
 
 <!-- この project 固有の起動制約（sandbox、認証、権限ポリシー、使ってはいけない起動経路など）があればここに書く -->
 

@@ -1,4 +1,4 @@
-/* 判断ボード kit v2 — tokens.css
+/* decision-board kit v2 — tokens.css
    全 board が読み込む変数。基準はここにしか無い。dark は差し替えだけ。
    値の根拠: APCA 実測（本文 |Lc|>=90 / 補足 >=60 / 罫線 >=25 — 検査は check-contrast.sh）。
    --line は装飾ではなく形状の輪郭 — 地の段差(bg/paper)を控えめにする分、輪郭が形を担う。 */

@@ -8,7 +8,6 @@ Read `product-brief.md` and `PDH-AGENTS.md`. If `AGENTS.local.md` exists, also r
 
 ```text
 product-brief.md                 # Product purpose and direction
-technical-reference.md           # Current implementation: how it works
 docs/
   product-delivery-hierarchy.md  # Ticket workflow
 tickets/                         # Managed by ticket.sh
@@ -23,7 +22,7 @@ tickets/                         # Managed by ticket.sh
 
 ## Implementation Quality
 
-<!-- Record recurring project-specific failures here. General implementation rules belong in pdh-coding. -->
+<!-- Record recurring project-specific failures here. General implementation rules belong in pdh-coding-engineer. -->
 
 ## Development Environment
 
@@ -37,11 +36,11 @@ tickets/                         # Managed by ticket.sh
 
 Run the full suite through `scripts/test-all.sh`. Use `--parallel` for parallel execution.
 
-Follow `PDH-AGENTS.md` for completion-report and surface evidence requirements. Test design and ticket-local-test rules are in `.agents/skills/pdh-coding/SKILL.md`.
+Follow `PDH-AGENTS.md` for completion-report and surface evidence requirements. Test design and ticket-local-test rules are in `.codex/agents/pdh-coding-engineer.toml`.
 
 ## PDH Ticket Workflow
 
-Shared PDH rules are in `PDH-AGENTS.md`; stage execution and review structure are in `.agents/skills/pdh-dev/SKILL.md`. Keep only project-specific differences here.
+Shared PDH rules are in `PDH-AGENTS.md`; stage execution and review structure are in `.agents/skills/pdh-pm/SKILL.md`. Keep only project-specific differences here.
 
 ### Affected Layers
 
@@ -60,7 +59,7 @@ List the affected project layers when creating a ticket or planning implementati
 
 ## Codex Workers
 
-Configure the reasoning effort in `.codex/agents/pdh-*.toml` for the project's roles. Leave `model` unset (workers inherit the parent's model) unless a role needs a different one. Keep project-specific constraints here.
+Record engine, model and reasoning-effort overrides for each role here or in the PM rules referenced here. Shared `.codex/agents/pdh-*.toml` files are overwritten on update. Workers inherit the parent model unless the project explicitly selects another one.
 
 | Role | Project-specific constraints and focus |
 |---|---|

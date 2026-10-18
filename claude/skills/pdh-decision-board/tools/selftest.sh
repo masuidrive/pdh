@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # build.sh と check-static.sh を、反証 fixture で確かめる。
-# 標準の shell 道具だけで走る（bash / awk / grep / sed）。
+# shell 道具（bash / awk / grep / sed）と python3 の標準ライブラリで走る。
 set -euo pipefail
 
 TOOLS_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -108,7 +108,7 @@ expected_for() {
     broken-toc-anchor)       echo 'ページ内参照' ;;
     broken-static-image)     echo '画像' ;;
     broken-j)                echo '回答フォームの属性' ;;
-    broken-static-table)     echo '裸の表' ;;
+    broken-static-table)     echo '.table-wrap の無い表' ;;
   esac
 }
 
@@ -133,8 +133,8 @@ for fixture in broken-static-tag broken-static-class broken-static-reference \
   echo "PASS $fixture: static $expected を反証"
 done
 
-# to-markdown.sh — HTML の board から経路へ貼る Markdown を作る。
-# 守るのは「本文が 1 つであること」。Markdown を書かせず HTML から機械で作るので、
+# to-markdown.sh — HTML の decision-board から受け渡し経路へ貼る Markdown を作る。
+# この検査の目的: 本文が HTML の 1 つのまま保たれること。Markdown を書かせず HTML から機械で作るので、
 # 落ちると «Markdown を手で書く» へ戻り、2 つの本文がずれ始める。
 if sh "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/good.html" > "$SELFTEST_TMP/good.md" 2>"$SELFTEST_TMP/good.md.err"; then
   md_bad=0
@@ -172,7 +172,7 @@ if sh "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/good.html" > "$SELFTEST_TMP/goo
   grep -q '^説明の文$'                 "$SELFTEST_TMP/inline.md" || { echo 'FAIL to-markdown: dd が説明の行になりません' >&2; md_bad=1; }
   if grep -q 'answer-summary' "$SELFTEST_TMP/inline.md"; then echo 'FAIL to-markdown: 回答欄へのリンクが残っています' >&2; md_bad=1; fi
   [ "$md_bad" -eq 0 ] || { cat "$SELFTEST_TMP/callout.md" "$SELFTEST_TMP/inline.md" >&2; exit 1; }
-  echo 'PASS to-markdown.sh: Markdown へ落とす（表・畳み・alert・mermaid・強調・dl）'
+  echo 'PASS to-markdown.sh: Markdown へ落とす（表・details・alert・mermaid・強調・dl）'
 else
   echo 'FAIL to-markdown.sh: 変換に失敗しました' >&2
   cat "$SELFTEST_TMP/good.md.err" >&2
@@ -193,4 +193,24 @@ if bash "$TOOLS_DIR/../kit/check-contrast.sh" "$SELFTEST_TMP/broken-tokens.css" 
 fi
 echo 'PASS check-contrast.sh: 壊した palette を反証'
 
+for body in \
+  '<li><span class="lbl">目的</span><span>編集者が操作する</span></li>' \
+  '<li><span class="lbl">目的</span><p>編集者が操作する</p></li>' \
+  '<li>
+    <span class="lbl">目的</span>
+    <span>編集者が操作する</span>
+  </li>' \
+  '<li>
+    <span class="lbl">目的</span>
+    <p>編集者が操作する</p>
+  </li>'; do
+  printf '%s\n' "<main class=\"board\"><ul class=\"summary-list\">$body</ul><ul class=\"axis\"><li><span class=\"lbl\">費用</span><span>増えない</span></li></ul></main>" > "$SELFTEST_TMP/labels.html"
+  "$TOOLS_DIR/to-markdown.sh" "$SELFTEST_TMP/labels.html" > "$SELFTEST_TMP/labels.md"
+  grep -qxF -- '- **目的**: 編集者が操作する' "$SELFTEST_TMP/labels.md"
+  grep -qxF -- '- **費用**: 増えない' "$SELFTEST_TMP/labels.md"
+done
+echo 'PASS to-markdown.sh: li 内のラベルと本文を一つの箇条に保つ'
+
+python3 "$TOOLS_DIR/review-copy-test.py"
+echo 'PASS review-copy.py: 本文・画像の保持と不正な data URI の拒否'
 echo 'PASS selftest'

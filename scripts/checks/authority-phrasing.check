@@ -6,8 +6,8 @@
 # `を正とする` `の正）` `の正文` を逃し、11 箇所の直し漏れが出た。先行助詞
 # 4 つ（が・の・は・を）で受け、後続 1 字の除外で `正しい` `正確` `正常` を
 # 弾く。`正典` `正本` は後続に関係なく拾う。「は」を外すと `X は正。` を逃す。
+linter_command=python3 scripts/check-authority-phrasing.py {{filenames}}
 reason=優先関係を `正` で示さない。「に従う」「にある」「で決まる」のような普通の動詞にする
-pattern=正典|正本|[がのはを]正($|[^し確常規当直義解方式面味誤答体攻す門社の])
 glob=docs/**,claude/**,codex/**,**/*.md
 # check 自身の reason とコメントが pattern に当たるので、レジストリは対象外にする。
 # github-bot/vendor/** は github-bots から vendoring した upstream text。PDH の書き方
@@ -25,3 +25,5 @@ exclude=claude/templates/checks/**,codex/templates/checks/**,scripts/checks/**,g
 #
 # ⚠ この repo の中でこの語を引用せざるを得ない行は、行末に `checks-allow:
 # authority-phrasing` を書いて外す。
+
+

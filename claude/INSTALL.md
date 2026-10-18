@@ -1,862 +1,188 @@
 # PDH セットアップガイド
 
-PDH の **Claude Code 用配布セット**（`claude/`）を自分のプロジェクトへ導入する手順と、導入済みプロジェクトを最新版へ更新する手順。Codex CLI を main にする場合は `codex/INSTALL.md` を読む。
-
-PDH そのものの説明（何を解決するか・ワークフロー・ファイル構成）は [README.md](../README.md) を参照。前提条件（必要なツール）も README 側にある。
-
-- **新規に導入する**: [新規導入](#新規導入) — [方法 1](#方法-1-coding-agent-に任せる)（coding agent に任せる）または [方法 2](#方法-2-手動でセットアップ)（手順 1〜13 を順に実行）
-- **導入済みを更新する**: [既存プロジェクトのアップデート](#既存プロジェクトのアップデート) — [手順](#手順) と [既知の移行手順](#既知の移行手順)
-- **tmux Director の hookbus を使う**: 上記のあと README の「tmux Director」へ
-
-節番号は改訂で変わりうるので、他ファイルから参照するときは番号ではなく**見出し名**を使うこと。
-
-coding agent にこのリポジトリを読ませれば、導入は自動でも行える（方法 1）。
+Claude Code 用配布セット。Codex 単独導入は [codex/INSTALL.md](../codex/INSTALL.md)、概要は [README](../README.md) を読む。
 
 ## 新規導入
 
 ### 方法 1: coding agent に任せる
 
-プロジェクトのルートで Claude Code を起動し、以下のように指示する:
-
-```
-https://github.com/masuidrive/pdh の claude/INSTALL.md を読んで、このプロジェクトに PDH を導入して。
-```
-
-Claude Code が以下を自動で行う:
-1. ticket.sh のダウンロードと初期化
-2. PDH ドキュメントの配置
-3. スキル・CLAUDE.md・ticket-config の設定
-4. Product Brief の雛形作成
+project の root で「https://github.com/masuidrive/pdh の claude/INSTALL.md を読んで、この project に PDH を導入して」と依頼する。
 
 ### 方法 2: 手動でセットアップ
 
-#### 1. PDH リポジトリを clone する
-
 ```bash
 git clone https://github.com/masuidrive/pdh.git tmp/pdh
-```
-
-以降のステップでは `tmp/pdh/` のファイルをコピー元として使う。
-
-#### 2. ticket.sh を導入する
-
-```bash
-# プロジェクトのルートで
-git init  # 既存リポジトリなら不要
-
-# ticket.sh をダウンロード・初期化
 curl -sL https://raw.githubusercontent.com/masuidrive/ticket.sh/main/ticket.sh -o ticket.sh
 chmod +x ticket.sh
 bash ticket.sh init
 ```
 
-#### 3. ファイルを配置する
+### ファイルを配置する
 
-以下のファイルを `tmp/pdh/` からプロジェクトにコピーする。
-**すでにファイルが存在する場合はコピーせず、「既存プロジェクトのアップデート」に従う。**
+配置先が既にある project は、下の更新手順に従う。直前の `ticket.sh init` が新規作成した設定だけは template で置き換えてよい。表のディレクトリは中の全ファイルをコピーする。自前の skill・agent・check は消さない。
 
-| コピー元 | コピー先 | 用途 |
-|---|---|---|
-| `tmp/pdh/docs/product-delivery-hierarchy.md` | `docs/product-delivery-hierarchy.md` | PDH 運用ルール（テンプレートは `.ticket-config.yaml` / `product-brief.md` 側にある） |
-| `tmp/pdh/claude/skills/pdh-dev/` | `.claude/skills/pdh-dev/` | PDH stage flow ワークフロースキル（`SKILL.md` と、そこから参照される `_*.md` を**ディレクトリごと**コピーする） |
-| `tmp/pdh/claude/skills/pdh-coding/SKILL.md` | `.claude/skills/pdh-coding/SKILL.md` | コーディング標準スキル |
-| `tmp/pdh/claude/skills/pdh-reviewing/SKILL.md` | `.claude/skills/pdh-reviewing/SKILL.md` | レビュー標準スキル（reviewer worker が review 開始前に読む） |
-| `tmp/pdh/claude/skills/pdh-verifying/SKILL.md` | `.claude/skills/pdh-verifying/SKILL.md` | 検証標準スキル（QA / AC 裏取り / Surface Observer / AC 読み手 worker が読む） |
-| `tmp/pdh/claude/skills/pdh-check-writing/SKILL.md` | `.claude/skills/pdh-check-writing/SKILL.md` | 宣言型 `.check` 執筆スキル |
-| `tmp/pdh/claude/skills/tmux-director/SKILL.md` | `.claude/skills/tmux-director/SKILL.md` | tmux Director スキル |
-| `tmp/pdh/claude/skills/pdh-update/SKILL.md` | `.claude/skills/pdh-update/SKILL.md` | PDH アップデートスキル |
-| `tmp/pdh/claude/skills/pdh-decision-board/` | `.claude/skills/pdh-decision-board/` | 判断ボードスキル — 実装前 gate と close 前 gate の両方。`SKILL.md` が入口で、共通規則 `base.md` / gate 差分 `ticket-gate.md` `close-gate.md` / renderer 分冊 / `kit/`（CSS・JS・見本）/ `tools/`（組み立てと静的検査。bash と awk だけで動く）を**ディレクトリごと**コピーする |
-| `tmp/pdh/claude/templates/CLAUDE.md` | `CLAUDE.md` | Agent 向けルール |
-| `tmp/pdh/docs/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH 汎用 agent ルール |
-| `tmp/pdh/claude/templates/CLAUDE.local.md.example` | `CLAUDE.local.md.example` | 環境固有 agent メモのサンプル（実体は commit しない） |
-| `tmp/pdh/claude/templates/AGENTS.md` | `AGENTS.md` | Codex CLI 向け設定（CLAUDE.md / PDH-AGENTS.md への thin pointer） |
-| `tmp/pdh/claude/templates/.ticket-config.yaml` | `.ticket-config.yaml` | ticket.sh 設定 |
-| `tmp/pdh/claude/templates/test-all.sh` | `scripts/test-all.sh` | テスト一括実行スクリプト |
-| `tmp/pdh/claude/templates/fast-checks.sh` | `scripts/fast-checks.sh` | 決定論的 fast-check ランナー（宣言形式の grep 不変条件。test-all の最初の軽量ステージ） |
-| `tmp/pdh/claude/templates/checks/` | `scripts/checks/` | fast-check レジストリ（README、汎用pattern例、source 1500行/test 2500行の例。プロジェクトに合わせて調整/削除）。⚠ **`required-pdh-files.check` は `example-` を持たない** — 見本ではなく、**残して使うもの**である（PDH 配布物の消失を検出する唯一の手段）。既定で全部入っているので、使わないもの（Codex CLI を使わないなら `.agents/skills/` と `.codex/agents/`、tmux Director を使わないなら `tmux-director`）の行を外して使う |
-| `tmp/pdh/claude/templates/dev-server.sh` | `scripts/dev-server.sh` | PDH verify / human-review 用の開発サーバ入口 |
-| `tmp/pdh/claude/templates/seed-pdh-verify.sh` | `scripts/seed-pdh-verify.sh` | PDH verify / human-review 用のローカル seed hook |
-| `tmp/pdh/claude/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | `ticket-local-test` 実行スクリプト（CI には含めない） |
-| `tmp/pdh/claude/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | ticket dir の `progress.md`（存在・追記のみ）、human gate の待ち行、close 前 review の区間、`起票:` 行の実在、Why の根拠 2 行を確かめる検査。`scripts/test-all.sh` の `run "pdh-ticket"` 行が呼ぶ |
-| `tmp/pdh/claude/templates/pdh-review-range.sh` | `scripts/pdh-review-range.sh` | 最後に review した SHA 以降の ticket 自身の commit を列挙し、close 前 review の指示文を作る。`check-pdh-ticket.sh` も読み込む（実行権限 `chmod +x` 要） |
-| `tmp/pdh/claude/templates/check-ticket-template-drift.sh` | `scripts/check-ticket-template-drift.sh` | `.ticket-config.yaml` のテンプレ本文（`default_content` / `note_content`）と上流の差を数える。pdh-update の後に回す（実行権限 `chmod +x` 要） |
-| `tmp/pdh/claude/templates/agents/claude/` | `.claude/agents/` | PDH worker の agent 定義（Claude Code 用。read-only 役の書き込み境界を `tools` で機構化する。**ディレクトリごと**コピーする） |
-| `tmp/pdh/claude/templates/agents/codex/` | `.codex/agents/` | PDH worker の agent 定義（Codex CLI 用。read-only 役を `sandbox_mode` で機構化する。Codex CLI を使わないなら省略してよい） |
-| `tmp/pdh/claude/templates/product-brief.md` | `product-brief.md` | Product Brief テンプレート |
-| `tmp/pdh/claude/templates/technical-reference.md` | `technical-reference.md` | Technical Reference テンプレート（現在の実装の How。運用は `docs/product-delivery-hierarchy.md` 参照） |
-| `tmp/pdh/claude/templates/spawn-worker.sh` | `scripts/spawn-worker.sh` | worker を «起動した shell 呼び出しの寿命» から切り離して走らせ、終わり方（rc・受けた signal）を必ず残す。`_execution-team.md`「並行起動」の実装（実行権限 `chmod +x` 要） |
-| `tmp/pdh/claude/scripts/hookbus.js` | `scripts/hookbus.js` | tmux worker hook event bus (実行権限 `chmod +x` 要) — README「tmux Director」参照 |
+| コピー元 | コピー先 | 用途 | 更新の仕方 |
+|---|---|---|---|
+| `tmp/pdh/docs/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH の共通契約・用語 | 上書き |
+| `tmp/pdh/docs/pdh-glossary.md` | `docs/pdh-glossary.md` | PDH の共通契約・用語 | 上書き |
+| `tmp/pdh/claude/skills/pdh-change/` | `.claude/skills/pdh-change/` | pdh-change skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/skills/pdh-check-writing/` | `.claude/skills/pdh-check-writing/` | pdh-check-writing skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/skills/pdh-close/` | `.claude/skills/pdh-close/` | pdh-close skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/skills/pdh-decision-board/` | `.claude/skills/pdh-decision-board/` | pdh-decision-board skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/skills/pdh-implement/` | `.claude/skills/pdh-implement/` | pdh-implement skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/skills/pdh-open/` | `.claude/skills/pdh-open/` | pdh-open skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/skills/pdh-pm/` | `.claude/skills/pdh-pm/` | pdh-pm skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/skills/pdh-resume/` | `.claude/skills/pdh-resume/` | pdh-resume skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/skills/pdh-review/` | `.claude/skills/pdh-review/` | pdh-review skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/skills/pdh-ticket-review/` | `.claude/skills/pdh-ticket-review/` | pdh-ticket-review skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/skills/pdh-ticket-write/` | `.claude/skills/pdh-ticket-write/` | pdh-ticket-write skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/skills/pdh-update/` | `.claude/skills/pdh-update/` | pdh-update skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/skills/pdh-verify/` | `.claude/skills/pdh-verify/` | pdh-verify skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/templates/.ticket-config.yaml` | `.ticket-config.yaml` | project の設定・入口テンプレート | 差分マージ |
+| `tmp/pdh/claude/templates/AGENTS.md` | `AGENTS.md` | project の設定・入口テンプレート | 差分マージ |
+| `tmp/pdh/claude/templates/CLAUDE.local.md.example` | `CLAUDE.local.md.example` | project の設定・入口テンプレート | 初回だけ |
+| `tmp/pdh/claude/templates/CLAUDE.md` | `CLAUDE.md` | project の設定・入口テンプレート | 差分マージ |
+| `tmp/pdh/claude/templates/agents/claude/` | `.claude/agents/` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/agents/codex/` | `.codex/agents/` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/claude/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/check-ticket-template-drift.sh` | `scripts/check-ticket-template-drift.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/checks/README.md` | `scripts/checks/README.md` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
+| `tmp/pdh/claude/templates/checks/bin/pdh-stage-skill-sections.sh` | `scripts/checks/bin/pdh-stage-skill-sections.sh` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
+| `tmp/pdh/claude/templates/checks/docs-metadata.check` | `scripts/checks/docs-metadata.check` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
+| `tmp/pdh/claude/templates/checks/docs-references.check` | `scripts/checks/docs-references.check` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
+| `tmp/pdh/claude/templates/checks/example-max-source-lines.check` | `scripts/checks/example-max-source-lines.check` | fast-check の定義・見本（project の独自 check は保持） | 差分マージ |
+| `tmp/pdh/claude/templates/checks/example-max-test-lines.check` | `scripts/checks/example-max-test-lines.check` | fast-check の定義・見本（project の独自 check は保持） | 差分マージ |
+| `tmp/pdh/claude/templates/checks/example-no-merge-conflict-markers.check` | `scripts/checks/example-no-merge-conflict-markers.check` | fast-check の定義・見本（project の独自 check は保持） | 差分マージ |
+| `tmp/pdh/claude/templates/checks/example-no-node-p-capture.check` | `scripts/checks/example-no-node-p-capture.check` | fast-check の定義・見本（project の独自 check は保持） | 差分マージ |
+| `tmp/pdh/claude/templates/checks/pdh-stage-skill-sections.check` | `scripts/checks/pdh-stage-skill-sections.check` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
+| `tmp/pdh/claude/templates/checks/required-pdh-files.check` | `scripts/checks/required-pdh-files.check` | fast-check の定義・見本（project の独自 check は保持） | 差分マージ |
+| `tmp/pdh/claude/templates/dev-server.sh` | `scripts/dev-server.sh` | project の設定・入口テンプレート | 差分マージ |
+| `tmp/pdh/claude/templates/docs-policy.py` | `scripts/docs-policy.py` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/docs-toc.sh` | `scripts/docs-toc.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/fast-checks.sh` | `scripts/fast-checks.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/gen-agents-md.sh` | `scripts/gen-agents-md.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/gen-codex-agents.sh` | `scripts/gen-codex-agents.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/hooks.json` | `.codex/hooks.json` | SessionStart の hook を既存設定へ統合 | 差分マージ |
+| `tmp/pdh/claude/templates/pdh-lock.sh` | `scripts/pdh-lock.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/pdh-related-docs.sh` | `scripts/pdh-related-docs.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/pdh-review-eval/` | `docs/pdh-review-eval/` | project の評価データと実測結果の書き方。空の case 一覧 | 初回だけ |
+| `tmp/pdh/claude/templates/pdh-review-eval.sh` | `scripts/pdh-review-eval.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/pdh-review-range.sh` | `scripts/pdh-review-range.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/pdh-review-tally.sh` | `scripts/pdh-review-tally.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/pdh-session-hook.sh` | `scripts/pdh-session-hook.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/pdh-stage-checklist.sh` | `scripts/pdh-stage-checklist.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/pdh-verify-lib.sh` | `scripts/pdh-verify-lib.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/product-brief.md` | `product-brief.md` | project の設定・入口テンプレート | 初回だけ |
+| `tmp/pdh/claude/templates/seed-pdh-verify.sh` | `scripts/seed-pdh-verify.sh` | project の設定・入口テンプレート | 差分マージ |
+| `tmp/pdh/claude/templates/settings.json` | `.claude/settings.json` | SessionStart の hook を既存設定へ統合 | 差分マージ |
+| `tmp/pdh/claude/templates/spawn-worker.sh` | `scripts/spawn-worker.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/test-all.sh` | `scripts/test-all.sh` | project の設定・入口テンプレート | 差分マージ |
+| `tmp/pdh/claude/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | 共有 script | 上書き |
+| `tmp/pdh/claude/templates/checks/required-pdh-source-files.check` | `scripts/checks/required-pdh-source-files.check` | PDH の共有 script と PM の分冊の存在 | 差分マージ |
 
-コピー時に、各ファイル末尾の `Based on` 行の `XXXXXXX` を `tmp/pdh` の HEAD commit ID（7 桁）に置換する。
+設定の JSON は既存設定へマージする。`settings.json` は PM の session 開始・再開・compact で stage と未了行を context へ戻す。worker には `PDH_ROLE=<役割>` を渡す。Codex の hook を使う場合は `.codex/hooks.json` の信頼設定も確認し、実際の session で表示を確かめる。
 
-##### Codex CLI を使う場合: skill を symlink する
+#### Codex CLI を使う場合: skill を symlink する
 
-Codex CLI はプロジェクト直下の `.agents/skills/` を skill として自動で読み込む（`.codex/skills/` も同様）。**skill の実体は `.claude/skills/` に置き、`.agents/skills/` からは symlink を張る**。コピーではなく symlink にすることで、実体が 1 つだけになり両者が食い違わない。
+Claude 併用では `.claude/skills/` に実体を 1 つ置く。
 
 ```bash
 mkdir -p .agents/skills
-for s in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-check-writing pdh-update tmux-director pdh-decision-board; do
-  ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
+for source in tmp/pdh/claude/skills/pdh-*; do
+  skill=${source##*/}
+  ln -snf "../../.claude/skills/$skill" ".agents/skills/$skill"
 done
 ```
 
-symlink を張れないファイルシステム（Windows の一部構成など）では、`.claude/skills/` をディレクトリごとコピーしてもよい。その場合は PDH 更新のたびにコピーし直すこと。
-
-`PDH-AGENTS.md` は PDH 汎用 agent ルール、`CLAUDE.md` は project 固有ルールとして commit する。`.claude/skills/` は skill の実体、`.agents/skills/` はそこへの symlink とし、実体を 1 つに保つ。端末・sandbox・個人アカウント・一時 URL・ローカル認証状態などの環境固有メモは `CLAUDE.local.md` に書き、`.gitignore` に入れて commit しない。必要なら `CLAUDE.local.md.example` をコピーして作る。secret の値そのものは `CLAUDE.local.md` にも書かず、取得方法や保管場所だけを書く。
+Claude 併用で `AGENTS.md` を生成する共有 script は `.codex/config.toml` の上限を読む。初回は次で設定を作り、既存の設定がある場合はその値を保持する。
 
 ```bash
-grep -qxF 'CLAUDE.local.md' .gitignore || printf '\nCLAUDE.local.md\n' >> .gitignore
+mkdir -p .codex
+if [ ! -f .codex/config.toml ]; then
+  printf 'project_doc_max_bytes = 131072\n' > .codex/config.toml
+fi
 ```
 
-> **⚠ Grok Build を使う場合、`CLAUDE.local.md` は読まれない。** Grok は instruction file の探索で `.gitignore` を尊重するため、gitignore した時点で discovery から外れる（skill の探索は `.gitignore` を無視するので影響しない）。grok 0.2.93 の `grok inspect` で確認済み。Grok で環境固有メモを効かせたい場合は `.grok/rules/*.md` に置くなど、別の手段を検討すること。Claude Code / Codex CLI はこの制約を受けない。
+#### project 固有の設定
 
-対象ファイル (16 個):
-- `CLAUDE.md`
-- `PDH-AGENTS.md`
-- `product-brief.md`
-- `technical-reference.md`
-- `.ticket-config.yaml`
-- `docs/product-delivery-hierarchy.md`
-- `.claude/skills/pdh-reviewing/SKILL.md`
-- `.claude/skills/pdh-verifying/SKILL.md`
-- `.claude/skills/pdh-check-writing/SKILL.md`
-- `.claude/skills/pdh-coding/SKILL.md`
-- `.claude/skills/pdh-dev/SKILL.md`
-- `.claude/skills/pdh-update/SKILL.md`
-- `.claude/skills/pdh-decision-board/SKILL.md`
-- `.claude/skills/tmux-director/SKILL.md`
-- `scripts/checks/example-max-source-lines.check`
-- `scripts/checks/example-max-test-lines.check`
+- `CLAUDE.md` に project の規則・テスト環境・PM の規則を置くファイル・worker の割り当て・受け渡し経路を書く。`PDH-AGENTS.md` と共有 skill は書き換えない
+- `.ticket-config.yaml` の branch、push、worktree の設定を project に合わせる。`worktree_mode: true` が既定。`post_start_command` は project に必要なら設定する
+- `scripts/test-all.sh` に製品の全スイートを登録する。`check-pdh-ticket.sh` も 1 段に残す。`dev-server.sh` と `seed-pdh-verify.sh` は実環境へ合わせる
+- `product-brief.md` の全節を人と埋める。まだ決めていないものは未決と書く。既存の Product Brief の本文は更新で上書きしない
+- 個人の環境は gitignore した `CLAUDE.local.md` へ置き、secret の値は書かない。Grok Build は gitignore した context を読まないため、必要ならその engine の規則の入口へ置く
 
-macOS / Linux 両対応のワンライナー:
+#### 版を記録して検査する
+
+差分マージのファイルにある `Based on` の `XXXXXXX` だけを取り込んだ commit に置換する。上書きするファイルの版は `.pdh-lock` に記録する。
 
 ```bash
-COMMIT_ID=$(cd tmp/pdh && git rev-parse --short=7 HEAD)
-
-# macOS (BSD sed) と Linux (GNU sed) の両対応: バックアップ拡張子として空ファイルを作らない書き方
-sed_inplace() {
-  if sed --version >/dev/null 2>&1; then
-    # GNU sed (Linux)
-    sed -i "s/XXXXXXX/$COMMIT_ID/g" "$@"
-  else
-    # BSD sed (macOS)
-    sed -i '' "s/XXXXXXX/$COMMIT_ID/g" "$@"
-  fi
-}
-
-sed_inplace \
-  CLAUDE.md \
-  PDH-AGENTS.md \
-  product-brief.md \
-  technical-reference.md \
-  .ticket-config.yaml \
-  docs/product-delivery-hierarchy.md \
-  .claude/skills/pdh-reviewing/SKILL.md \
-  .claude/skills/pdh-verifying/SKILL.md \
-  .claude/skills/pdh-check-writing/SKILL.md \
-  .claude/skills/pdh-coding/SKILL.md \
-  .claude/skills/pdh-dev/SKILL.md \
-  .claude/skills/pdh-update/SKILL.md \
-  .claude/skills/pdh-decision-board/SKILL.md \
-  .claude/skills/tmux-director/SKILL.md \
-  scripts/checks/example-max-source-lines.check \
-  scripts/checks/example-max-test-lines.check
-```
-
-`scripts/hookbus.js`・`AGENTS.md`・各 script テンプレート（`test-all.sh` 等）には `Based on` footer がないので sed 対象外。
-
-#### 4. .claude/settings.json を設定する
-
-##### 4.a. PDH core のみ (tmux Director を使わない / 単一 Claude Code セッション)
-
-Agent Teams を使うために、`.claude/settings.json` に以下を配置する。`scripts/hookbus.js` も不要:
-
-```json
-{
-  "teammateMode": "in-process",
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-  }
-}
-```
-
-- **`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` は必須。** Agent Teams は experimental で既定は無効。この変数が無いと session 開始時に team が作られず、teammate の spawn も提案も行われない（[公式ドキュメント](https://code.claude.com/docs/en/agent-teams)）
-- **`teammateMode` は Claude Code 自身の teammate 表示方法**（`in-process` / `auto` / `tmux` / `iterm2`）であり、PDH の tmux Director とは別物。**Claude Code v2.1.179 以降は `in-process` が既定**なので上記の指定は冗長だが、既定値の変更に左右されないよう明示している。split pane で teammate を見たい場合は `auto` にしてよい
-
-##### 4.b. tmux Director の hookbus event stream も使う
-
-上記に加えて `hooks` ブロックを追加:
-
-（PDH の tmux Director は「別 window で動く独立した Claude Code セッションを監督する」スキルで、Claude Code の `teammateMode: "tmux"`（1 セッションの teammate を split pane に置く機能）とは別物。ここで `in-process` のままなのはそのため。）
-
-```json
-{
-  "teammateMode": "in-process",
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-  },
-  "hooks": {
-    "SessionStart":      [{"hooks":[{"type":"command","command":"\"$CLAUDE_PROJECT_DIR/scripts/hookbus.js\" event","timeout":5}]}],
-    "Stop":              [{"hooks":[{"type":"command","command":"\"$CLAUDE_PROJECT_DIR/scripts/hookbus.js\" event","timeout":5}]}],
-    "SubagentStop":      [{"hooks":[{"type":"command","command":"\"$CLAUDE_PROJECT_DIR/scripts/hookbus.js\" event","timeout":5}]}],
-    "Notification":      [{"matcher":"idle_prompt|permission_prompt",
-                            "hooks":[{"type":"command","command":"\"$CLAUDE_PROJECT_DIR/scripts/hookbus.js\" event","timeout":5}]}],
-    "UserPromptSubmit":  [{"hooks":[{"type":"command","command":"\"$CLAUDE_PROJECT_DIR/scripts/hookbus.js\" event","timeout":5}]}]
-  }
-}
-```
-
-意味:
-- 5 つの hook は `scripts/hookbus.js` を呼んで `/tmp/claude-events-<socket_hash>/log.ndjson` にイベントを NDJSON で記録する
-- `UserPromptSubmit` は Director が `tmux send-keys` で送った Enter が worker に届いたかを確認するために使う
-- `$CLAUDE_PROJECT_DIR` は Claude Code が hook 実行時に project root を渡す公式 env var。**相対パス `scripts/hookbus.js` にすると worker が別ディレクトリに cd した直後に Stop hook が発火した場合に `not found` エラーになる** ため絶対化必須。パスにスペースが含まれる将来ケースに備えてダブルクォートで囲む
-
-設定後、Claude Code を再起動すると有効になる。
-
-#### 5. CLAUDE.md をカスタマイズする
-
-`PDH-AGENTS.md` は PDH 汎用ルールなので project 固有の内容を入れない。project 固有の内容は `CLAUDE.md` にだけ書く。
-
-- `## ディレクトリ構造` をプロジェクトの実際の構造に書き換える
-- テストコマンド（`uv run pytest`, `npm test` 等）をプロジェクトに合わせる
-- `scripts/dev-server.sh` / `scripts/seed-pdh-verify.sh` をプロジェクトの開発サーバー・ローカル fixture に合わせて編集する
-
-#### 6. .ticket-config.yaml をカスタマイズする
-
-設定項目:
-- `default_branch`: メインブランチ名（default: `main`）
-- `branch_prefix`: feature ブランチのプレフィックス（default: `features/`）
-- `auto_push`: close 時に自動 push するか
-- `worktree_copy_files`: `ticket.sh start --worktree` 時に main repo からコピーする gitignored ファイルのリスト（template default: `.env`）。worktree で動くために必要なファイルに合わせて編集する
-- `default_content`: Ticket テンプレート（Why / What+AC / Architectural Invariants check / Design Decisions / Out-of-scope + 任意: Implementation Notes / Dependencies）
-- `note_content`: 作業メモテンプレート（PDH-ticket-review / PDH-implement / PDH-review + Findings 表 / PDH-verify / Technical reference 更新 / PDH-human-review / Discoveries / Open Questions / Resume Point）
-
-#### 7. scripts/test-all.sh を作成する
-
-`tmp/pdh/claude/templates/test-all.sh` をコピーし、プロジェクトのテストスイートに合わせてカスタマイズする。
-テンプレート内のコメントアウトされた `run` 行を参考に、プロジェクトの各テストスイートを追加する。
-
-```bash
-cp tmp/pdh/claude/templates/test-all.sh scripts/test-all.sh
-chmod +x scripts/test-all.sh
-# scripts/test-all.sh を編集し、プロジェクトのテストコマンドを追加
-```
-
-このスクリプトは `PDH-implement`（実装完了時）と `PDH-verify`（完了検証）で実行される。
-`--parallel` フラグで並列実行が可能。
-
-#### 8. scripts/dev-server.sh / scripts/seed-pdh-verify.sh を作成する
-
-`tmp/pdh/claude/templates/dev-server.sh` と `tmp/pdh/claude/templates/seed-pdh-verify.sh` をコピーし、プロジェクトの実装に合わせて編集する。
-
-```bash
-cp tmp/pdh/claude/templates/dev-server.sh scripts/dev-server.sh
-cp tmp/pdh/claude/templates/seed-pdh-verify.sh scripts/seed-pdh-verify.sh
-chmod +x scripts/dev-server.sh scripts/seed-pdh-verify.sh
-```
-
-`PDH-verify` / `PDH-human-review` で UI / API surface を確認する場合、agent は `./scripts/dev-server.sh --seed` を使う。`--seed` は local 環境をリセットして `scripts/seed-pdh-verify.sh` を実行し、`--port <port>` は固定 port、未指定なら空き port をランダム選択する。localhost 以外から確認する必要がある場合は共通オプション `--no-localhost` を使う。
-
-このテンプレートは安全のため実サーバを起動せず失敗する。各プロジェクトで npm / pnpm / wrangler / docker compose 等の実際の起動方法、dummy login、確認 URL、必要な認証情報の出力を実装する。seed 不要のプロジェクトでも `seed-pdh-verify.sh` は no-op として成功させる。
-
-#### 9. scripts/test-ticket-local.sh を作成する
-
-`tmp/pdh/claude/templates/test-ticket-local.sh` をコピーする。これは特定 ticket の一時的な確認を
-`tickets/<ticket-id>/tests/test-ticket-local.sh`（旧 flat 形式 `tests/tickets/<ticket-id>/` も後方互換）から実行する wrapper で、`scripts/test-all.sh` / CI には含めない。
-
-```bash
-cp tmp/pdh/claude/templates/test-ticket-local.sh scripts/test-ticket-local.sh
-chmod +x scripts/test-ticket-local.sh
-```
-
-使い方:
-
-```bash
-./scripts/test-ticket-local.sh                    # current-ticket.md から ticket id を推定
-./scripts/test-ticket-local.sh <ticket-id>        # 明示指定
-```
-
-`ticket-local-test` は `PDH-verify` の証跡として `current-note.md` に実行コマンドと結果を残す。
-`application-test` へ昇格するか迷う場合は「ticket 名や一時 fixture なしで今後も product contract として説明できるか」を基準にする。
-
-#### 10. (hookbus 使用時のみ) vitest in-source testing を有効化
-
-`scripts/hookbus.js` は **vitest in-source testing** (`import.meta.vitest`) でライブラリコード + CLI + テストを 1 ファイルに同居させている。テストを走らせたい場合:
-
-1. `vitest` を devDependency に追加 (`npm i -D vitest` または既存プロジェクトなら既に入っている)
-2. `vitest.config.ts` (or `.js`) の `test.projects[]` に hookbus 用 project を追加:
-   ```ts
-   import { defineConfig, defineProject } from 'vitest/config';
-   export default defineConfig({
-     test: {
-       projects: [
-         // ... 既存 projects ...
-         defineProject({
-           test: {
-             name: 'scripts',
-             root: './scripts',
-             include: [],
-             includeSource: ['hookbus.js'],  // ← in-source tests を拾う
-             pool: 'forks',
-             poolOptions: { forks: { singleFork: true } },
-           },
-         }),
-       ],
-     },
-   });
-   ```
-3. `package.json` の `scripts` に追加:
-   ```json
-   "test:scripts": "vitest run --project scripts"
-   ```
-4. 実行: `npm run test:scripts` (14 テスト走る想定)
-
-`scripts/test-all.sh` を使っているなら `run "test:scripts" npm run test:scripts` を `sequential` / `parallel` 両ブロックに追加。
-
-hookbus を使わない、または CLI 動作だけで十分なプロジェクトではこの節はスキップしてよい。
-
-#### 11. Product Brief を書く
-
-- **ファイルがない場合**: `tmp/pdh/claude/templates/product-brief.md` をコピーし、`based on` 行の commit ID を置換する。内容を埋めるようユーザに促す
-- **ファイルがある場合**: テンプレートと見比べて、新しいセクションが増えていたら追記するようユーザに促す
-
-PDH の全判断は Product Brief を基準にするため、Background / Who / Problem / Solution / Constraints / Architectural Invariants / Done のセクションが十分に記述されている必要がある。
-
-#### 12. 動作確認
-
-配置が正しいかざっと確認:
-
-```bash
-# ファイル存在チェック
-test -f product-brief.md && echo "OK product-brief"
-test -f technical-reference.md && echo "OK technical-reference"
-test -f CLAUDE.md && echo "OK CLAUDE.md"
-test -f .ticket-config.yaml && echo "OK ticket-config"
-test -f ticket.sh && echo "OK ticket.sh"
-test -f .claude/settings.json && echo "OK settings.json"
-ls .claude/skills/{pdh-dev,pdh-coding,pdh-reviewing,pdh-check-writing,tmux-director,pdh-update}/SKILL.md
-
-# Based on の commit ID が XXXXXXX から置換されたか
-grep -l XXXXXXX CLAUDE.md product-brief.md technical-reference.md .ticket-config.yaml .claude/skills/*/SKILL.md scripts/checks/*.check 2>&1
-# → 何も出なければ OK (全ファイルで置換済み)
-
-# ticket.sh が動くか
+bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/claude/lock-map.tsv
+bash scripts/pdh-lock.sh check
+bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/claude/templates/.ticket-config.yaml
+bash scripts/test-all.sh
 ./ticket.sh list
 ```
 
-hookbus を使う場合の追加確認:
-
-```bash
-test -x scripts/hookbus.js && echo "OK hookbus.js executable"
-node scripts/hookbus.js whoami   # <socket_hash>:<pane_id> or local-<pid> が 1 行出る
-jq '.hooks.Stop' .claude/settings.json   # hook 配線された JSON が出る
-```
-
-Claude Code を起動して、以下が認識されれば skill 側も OK:
-
-```
-/pdh-dev
-```
-
-で skill が読み込まれれば成功。
-
-#### 13. 後片付け
-
-```bash
-rm -rf tmp/pdh
-```
+`pdh-pm` と `pdh-resume` が認識されることを session で確かめる。配置と移行の検査が終わるまで `tmp/pdh` は残す。完了後に消してよい。
 
 ## 既存プロジェクトのアップデート
 
-導入済みプロジェクトを最新の PDH へ更新する手順。`pdh-update` skill もこの節を辿る。
-
 ### 手順
 
-1. PDH リポジトリを clone する（なければ）:
-   ```bash
-   git clone https://github.com/masuidrive/pdh.git tmp/pdh
-   ```
-2. `based on` の URL から旧 commit ID を特定する
-3. **新規ファイルの検出**: `tmp/pdh` で旧 commit ID 以降に追加されたファイルを確認する:
-   ```bash
-   cd tmp/pdh && git diff --name-status <旧commit-id> HEAD -- skills/ templates/ scripts/
-   ```
-   `A`（追加）のファイルがあれば、「ファイルを配置する」の配置表に従って配置する。**`.ticket-config.yaml` / `product-brief.md` / `technical-reference.md` / `CLAUDE.md` / 各 SKILL.md に `Based on` footer が入るものは、同節の sed 対象にも追加する**
-4. **新規ファイルの付随設定 (重要)**: 新規ファイルには単独配置だけでは機能しないものがある。下表に該当する追加があれば、対応する章を見て `.claude/settings.json` / `vitest.config.ts` / `scripts/test-all.sh` 等を更新する:
-
-   | 新規追加された file | 参照すべき章 | 追加が必要な設定 |
-   |---|---|---|
-   | `scripts/hookbus.js` | 「.claude/settings.json を設定する」の hookbus 版 + 「vitest in-source testing を有効化」+ README「tmux Director」 | `.claude/settings.json` に 5 hook ブロック、`vitest.config.ts` に scripts project (includeSource)、`package.json` に `test:scripts`、`scripts/test-all.sh` に `run "test:scripts"` 行 |
-   | `skills/pdh-check-writing/SKILL.md` | 「ファイルを配置する」+「Codex CLI を使う場合: skill を symlink する」 | `.claude/skills/`へ配置し、`.agents/skills/`へsymlinkを追加。追加された`templates/checks/*.check`もdirectory copyへ反映 |
-   | 新規 `skills/<名前>/SKILL.md` (将来追加されたもの) | 追加された skill の README / ヘッダコメント | skill 固有の settings.json / env / script があれば個別対応 |
-   | 新規 `templates/` | 「ファイルを配置する」ほか | テンプレートによる。本ガイドを再読し該当章を確認 |
-
-   不明な新規 file があれば、**そのファイル自体の冒頭コメント** と **本ガイドの該当 section** を両方読んで必要な設定を判断する。
-
-5. **既存ファイルの差分マージ**: `Based on` 行があるファイルごとに差分を取得・反映する:
-   ```bash
-   cd tmp/pdh && git diff <旧commit-id> HEAD -- <テンプレートファイルパス>
-   ```
-   - **PDH が配っている skill と、PDH worker の agent 定義（`.claude/agents/pdh-*.md` / `.codex/agents/pdh-*.toml`）**: 常にテンプレートで上書きする。**どちらもプロジェクト固有のカスタマイズを持たない**（skill は共通ルール、agent 定義は skill を指す thin pointer）ので、`Based on` 行を持たず差分マージもしない。⚠ **上書きするのは «この INSTALL の配置表に名前がある» ものだけである。**導入先は自前の skill を同じ `.claude/skills/` に置いている — 「配下すべて」と読むと**それが消える**。⚠ **`pdh-` で始まらない自前の agent 定義も上書きしない。**
-   - **github-bot レイヤー（`.github/` 内に `_pdh.md` がある場合。改名前の配置も含む）**: 先に [改名手順](../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)を適用する。更新は 2 つに分かれる。
-     - **まるごと上書きする 4 つ** — `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `.claude/skills/pdh-gh-pull/`（`github-bot/INSTALL.md`「更新」）。⚠ **ただし導入先が `_pdh.md` を自分の設定（`github_bot.close` のモード・base branch 名）に固定して書き直している場合は、そこは差分マージにする。**
-     - ⚠ **残りの machinery は «diff してから» 反映する** — `.github/coding-bot/system.md` `_issue.md` `_pr.md` `run-action.sh` `engines/`、`.github/workflows/coding-bot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**導入先はここを意図して変えていることがある（repo 固有の規則を書いた節・action の SHA 固定・timeout・既存 devcontainer とのマージ結果）。**上流だけにある行を見て、取るべきものだけ取る。**
-       ⚠ **2026-09-17 に所有者が変わってから、この節は «触らない» ではなくなった。**それまで machinery は外部 repo からの vendoring で「この手順では触らない」ものだったので、導入先が書き足した節も自動的に守られていた。**いまは守られない。**
-   - **CLAUDE.md**: `Based on` 行の commit ID 間の差分を取り、プロジェクト固有の設定（テストコマンド、ディレクトリ構造、チーム構成テーブル等）を保持しつつテンプレートの変更を反映する
-   - **`Based on` 行を持たない配布物のうち、上書きでないもの (`scripts/fast-checks.sh` / `scripts/checks/README.md` / `scripts/hookbus.js` / `scripts/spawn-worker.sh`)**: この手順では拾えない。該当する変更は[既知の移行手順](#既知の移行手順)で個別に扱う
-   - **`.ticket-config.yaml`**: ⚠ **`note_content` を独自化していないなら、差分マージより «テンプレートで全置換してから固有設定を戻す» ほうが確実。**戻すのは `tickets_dir` / `default_branch` / `branch_prefix` / `repository` / `auto_push` / `delete_remote_on_close` / `worktree_copy_files` / 各 `*_success_message`。⚠ **`note_content` に独自の節を足しているなら全置換してはならない** — その節がまるごと消える。その場合は差分マージにし、下の[既知の移行手順](#既知の移行手順)の確認コマンドで**トップレベルのキーを 1 つずつ見る。**大きなブロック（`note_content`）と数行のキーが同居するファイルを行単位で diff マージすると、**ブロックだけが入ってキーが落ちる**（実際に落ちた配布先がある）
-   - **本ガイドが指定する設定 (settings.json / vitest.config.ts / scripts/test-all.sh)**: プロジェクト固有のカスタマイズが入っているので上書きしない。代わりに本ガイドの「.claude/settings.json を設定する」「scripts/test-all.sh を作成する」「vitest in-source testing を有効化」と README「tmux Director」で推奨される項目が含まれているかをレビューし、抜けていたら追加する
-6. **削除されたファイルの撤去**: 旧 commit から HEAD で `D` (削除) になったファイルがあれば、プロジェクト側から除去する。該当する設定 (settings.json / vitest.config.ts / scripts/test-all.sh) も必要なら撤去。上の表の逆手順。**過去の major refactor で `epics/` ディレクトリ / `epic-creator` skill / Light Full flow / PD-A / PD-B / PD-D / PD-C-2/3/4/5/8 phase は廃止された**。旧バージョンから upgrade する場合は project 側からこれらの参照を撤去する
-
-   ⚠ **`tickets/` で触ってよいのは close 済みでないもの（todo / doing）だけ。**まだ閉じていない ticket はこれから gate を通るので、新しい形へ揃える意味がある。**`tickets/done/`（close 済み）はその時点の運用を残した歴史記録**なので、廃止された phase 名も旧見出しもそのままにする。**close 済み ticket は gate の対象外なので、直しても守るものが無い。**「参照を撤去する」を歴史記録にも適用しない。
-
-   **⚠ 削除が「置き換え」である場合がある。** 下の[既知の移行手順](#既知の移行手順)に該当する項目があれば、単に消すのではなくそちらに従う。
-
-6.5. **[既知の移行手順](#既知の移行手順)**: 下の節を読み、自分のプロジェクトが該当する項目をすべて適用する
-7. **ticket.sh のアップデート**: `bash ./ticket.sh selfupdate` を実行して ticket.sh 本体を最新化する（PDH スキル・テンプレートは ticket.sh の挙動を前提にするため、PDH 更新と同時に行う）。実行後 `./ticket.sh list` で動作確認する
-7.5. **移行手順の確認コマンドを、適用後にもう一度ぜんぶ実行する。** 出力に「要追加」「要改名」が 1 つも残っていないことを目で見る。⚠ **適用したつもりと、適用できたことは別である** — 実際に、note テンプレートの節と項目だけが入り、それを強制する `require_checklist` / `require_checklist_groups` が落ちた配布先があった（**checkbox は全部あるのに、埋めなくても close が通る**状態になる）。**残っていたら、そこで直してからもう一度実行する。**
-8. `Based on` 行の commit ID を最新に更新する
-9. 変更点をまとめてユーザに報告する (新規追加 file、削除 file、付随設定追加、削除 file と付随設定撤去、ticket.sh の更新有無 を明示)。**手順 7.5 の再実行の出力をそのまま貼る**（「適用した」という主張ではなく、確認コマンドの出力が証拠である）
-10. **close 済みでない（todo / doing）ticket は、形だけを揃え、AC は書き直さない。**守るのは «承認済みの AC が、承認なしに書き換わらないこと» である。AC の追加・削除・言い換えには明示の承認が要る（`PDH-AGENTS.md`「Stage Flow」）ので、一括の書き直しは承認済みの契約を承認なしに変えることになる。
-    - **一括でしてよいのは、見出しの改名など AC の中身に触れない変更だけ。**AskUserQuestion で対象の ticket と変更点を示し、OK なら commit する
-    - **AC の書き方が変わったときは、その ticket に着手するときの `PDH-ticket-review` で、その 1 件だけ新しい書き方へ直す。**着手した ticket は `PDH-ticket-human-review` を必ず通るので、書き直した AC はその場で承認を受ける
-    - ⚠ **`tickets/done/` は対象外**（手順 6 の歴史記録の扱い）
-11. 後片付け: `rm -rf tmp/pdh`
+1. 作業ツリーを commit し、現在の skill・agent・設定・script・`.pdh-lock` を backup する。`tmp/pdh` を fetch / fast-forward して最新の main にする（なければ clone）
+2. `.pdh-lock` の upstream SHA と差分マージ対象の `Based on` から旧版を特定する。上流の旧版・最新版・導入先の 3 点を比較し、導入先だけの変更を失わない形で反映する
+3. 配置表の「上書き」は名前を列挙した PDH ファイルだけを毎回置き換える。ディレクトリを置き換える前に backup を残す。「差分マージ」は project の値と独自の節を保持する。「初回だけ」は欠けたときだけ作る
+4. `.ticket-config.yaml` は `default_content` と `note_content` を現行 template と一致させる。独自の節がある場合は差分マージして相違を報告する。固有設定（tickets_dir、default_branch、branch_prefix、repository、auto_push、delete_remote_on_close、worktree_copy_files、post_start_command、各 success_message）は戻す。トップレベルの `require_checklist`・`require_checklist_groups`・`pre_close_command`・`ticket_files`・`append_only_files` も個別に確認する
+5. `required-pdh-files.check` を配置した skill・agent の一覧に合わせ、symlink も更新する。project が使わないと明示して外した項目は復活させない。新設された script と hook の配線を忘れない
+6. [既知の移行手順](#既知の移行手順)の全項目を確認する。未完の ticket だけを移行し、`tickets/done/` は歴史記録として保持する。AC と Out-of-scope の内容は一括変更しない。着手時の ticket review と人の承認で直す
+7. `bash ./ticket.sh selfupdate` し、`./ticket.sh list` で確かめる。coding-bot 導入済みなら [github-bot/INSTALL.md](../github-bot/INSTALL.md) の更新・改名・secret の手順も適用する。共有プロトコルは上書きし、workflow・devcontainer の project の設定は差分を読んで保持する
+8. 「版を記録して検査する」のコマンドを回す。`pdh-lock.sh write` は全件一致しなければ既存 lock を保って止まる。差分マージしていない変更があればそのファイルの `Based on` を進めない
+9. 移行確認コマンドを再実行し、要適用が残れば直す。同じ手順の 2 回目に差分が出ないことを確認する。backup の場所・反映した項目・相違・各検査の終了コードと実出力を報告する
 
 ### 既知の移行手順
 
-#### worker の混雑時の自動再開を導入する
+#### PDH の stage skill・worker 定義・lock への組み直し
 
-`scripts/spawn-worker.sh` は `Based on` 行を持たないため、通常の差分マージだけでは更新されない。適用済みかの確認（冪等）:
-
-```bash
-grep -q PDH_CODEX_RESUME_MAX scripts/spawn-worker.sh 2>/dev/null && echo "worker 自動再開: 適用済み" || echo "worker 自動再開: 要適用"
-```
-
-「要適用」なら、既存ファイルを backup してから次を実行する。既に自動再開がある場合も、上流との差分を確認して今回の修正を反映する。project 固有の変更があれば、その変更を保持してマージする。
+旧 `pdh-dev` は `pdh-pm` と stage ごとの skill に、`pdh-rule-write` は `pdh-change` に、`pdh-coding` / `pdh-reviewing` / `pdh-verifying` は worker 定義に移った。`pdh-resume` と `pdh-pm/_open-ticket.md` も配る。配置表の全件を更新し、旧名だけを削除する。
 
 ```bash
-mkdir -p scripts
-cp tmp/pdh/claude/templates/spawn-worker.sh scripts/spawn-worker.sh
-chmod +x scripts/spawn-worker.sh
-```
-
-適用後に確認コマンドを再実行する。同じ版を再度コピーしても差分は出ない。
-
-#### `.ticket-config.yaml` のテンプレ本文と上流の差を数える script が入った（2026-09-29 以降）
-
-`scripts/check-ticket-template-drift.sh` が、導入先の `.ticket-config.yaml` の `default_content` / `note_content` と上流のテンプレの差分行数を出す（差があれば exit 1）。pdh-update の手順が、更新の後にこれを回して出力を報告させる。
-
-```bash
-test -x scripts/check-ticket-template-drift.sh && echo "差の検査: 適用済み" || echo "差の検査: 要適用"
-```
-
-「要適用」なら `tmp/pdh/claude/templates/check-ticket-template-drift.sh` を `scripts/` へコピーして `chmod +x` する（project 固有の変更を持たないので上書きしてよい）。
-
-#### テンプレートの基本方針の見本 3 つが `PDH-AGENTS.md` へ移った（2026-09-29 以降）
-
-«文末が「？？」の質問には答えるだけ»・«指定されたコマンドが起動しないときは止めて確認する»・«base branch のソースコードを書き換える前に ticket にするかを確認する» の 3 つは、`CLAUDE.md` テンプレートの基本方針の見本から `PDH-AGENTS.md`「Execution Model」へ移った。`PDH-AGENTS.md` は常に読まれるので、project の `CLAUDE.md` に同じ 3 つが残っていると同じ規則が 2 か所にある。⚠ **`PDH-AGENTS.md` は書き換えない配布物なので、この 3 つは project 側で外せなくなった。**
-
-適用済みかの確認（冪等）:
-
-```bash
-grep -nE '？？|（?2回）|インストール不足・設定ミスで起動しない|まずチケット化するか確認' CLAUDE.md || echo "CLAUDE.md: 適用済み"
-```
-
-行が出たら、その行を `CLAUDE.md` から消す。project が意図して書き足した条件（対象のコマンド名など）があるなら、その条件だけを残す。
-
-#### ticket の Design Decisions に影響 6 項目が入った（2026-09-29 以降）
-
-`.ticket-config.yaml` の `default_content` の «### Design Decisions» に、影響 6 項目（DB schema / Public API / CLI・SDK・file format・event schema / Backward compatibility / Migration・rollout・rollback / Docs・generated artifacts）の欄が入った。無ければ «なし» と書く。`note_content` の Checklist の PDH-ticket-review 行も、6 項目を埋めたかを数える形になった。`.ticket-config.yaml` は上書きされないテンプレートなので、既存プロジェクトでは手で更新する。
-
-適用済みかの確認（冪等）:
-
-```bash
-grep -q 'Backward compatibility:' .ticket-config.yaml && echo "適用済み" || echo "要追加"
-```
-
-「要追加」なら `tmp/pdh/claude/templates/.ticket-config.yaml` の «### Design Decisions» の 7 行と、Checklist の PDH-ticket-review 行を写す。既存の ticket は書き換えない。
-
-#### `CLAUDE.md` テンプレートの委譲先モデルが名前で pin されなくなった（2026-09-29 以降）
-
-«チーム構成・モデル設定» の実装 worker の例が `codex exec -m <モデル名>` と名前を書いていた。provider の API は世代番号の無い名前を受け付けないので、名前を書くと書いた側だけが古くなる。例から `-m` を外し、`_execution-team.md`「エンジン割り当て」に «委譲先の model は名前で pin しない» を足した。`CLAUDE.md` は上書きされないので、既存プロジェクトでは手で直す。
-
-適用済みかの確認（冪等）:
-
-```bash
-grep -nE 'codex exec[^`]* -m ' CLAUDE.md || echo "CLAUDE.md: 適用済み"
-```
-
-行が出たら `-m <モデル名>` を外す。project が意図して特定のモデルに固定しているなら、その理由を同じ行に書いて残す。
-
-#### `CLAUDE.md` テンプレートの «判断材料の例» が軽量モデルを勧めなくなった（2026-09-29 以降）
-
-«チーム構成・モデル設定» の判断材料の例が、«機械的な変更は軽量・高速なモデル» «頻繁に回る step を安いモデルに寄せる» と書いていた。`_execution-team.md` の «worker の model を最小能力の軽量 model へ落とさない» と逆向きなので、«完了 1 件までの合計で比べる» に直した。`CLAUDE.md` は上書きされないので、既存プロジェクトでは手で直す。
-
-適用済みかの確認（冪等）:
-
-```bash
-grep -nE '軽量・高速なモデル|安いモデルに寄せる' CLAUDE.md || echo "CLAUDE.md: 適用済み"
-```
-
-行が出たら、`tmp/pdh/claude/templates/CLAUDE.md` の同じ 2 行に置き換える。
-
-#### fast-check の README に «grep で書けない不変則は決定論テストで固定する» が入った（2026-09-29 以降）
-
-`scripts/checks/README.md` の «Adding a check» に、grep で表せない不変則（要素間の関係・算術・状態遷移）は `.check` にせず決定論テストで固定し、その選択を ticket の note に 1 行書く、が入った。`scripts/checks/README.md` は `Based on` 行を持たないので、差分マージでは届かない。project 固有のカスタマイズを持たないので上書きしてよい。
-
-適用済みかの確認（冪等）:
-
-```bash
-grep -q 'deterministic test instead' scripts/checks/README.md && echo "適用済み" || echo "要更新"
-```
-
-「要更新」なら上書きする:
-
-```bash
-cp tmp/pdh/claude/templates/checks/README.md scripts/checks/README.md
-```
-
-#### github-bot: 名前と導入先固有の secret（2026-09-27 以降）
-
-github-bot を導入済みなら、[github-bot/INSTALL.md の改名手順](../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)を先に適用する。同文書の「導入先固有の secret を `CODING_BOT_ENV_JSON` へ移す」も確認対象である。各節の確認コマンドを更新前後に実行し、ファイルだけでなく GitHub の secret / variable 名も確認する。
-
-#### close 前 review の区間が sub-branch の merge を拾うようになり、`test-all.sh` の迷子の行が消えた（2026-09-27 以降）
-
-`scripts/pdh-review-range.sh` は区間を «base から届く commit を除いたもの» で作るようになった。以前は first-parent だけを見ていたので、gate の後に sub-branch を `--no-ff` で merge した commit が区間から漏れ、review されないまま close を通った。base に merge 済みの branch へ base を取り込み直したときに、base 側の commit を ticket の変更と数えることも無くなった。`scripts/check-pdh-ticket.sh` も同じ取り方で `tickets/done/` への移動を探し、`scripts/pdh-review-range.sh` が無ければ名指しして落ちる。さらに ticket の状態（progress・待ち行・close 前 review）を、その ticket の branch（branch 名が一致するか、branch の commit が ticket dir に触っている）でだけ検査するようになった。base に載った別の ticket の記録で、ほかの branch の CI が落ちることは無くなった。あわせて、`test-all.sh` テンプレートの先頭のコメント欄に `run "pdh-ticket"` が 1 行紛れ込んでいて、実行のたびに `run: command not found` が出ていた（本来の行は下の `run "fast-checks"` の次にある）。
-
-適用済みかの確認（冪等）:
-
-```bash
-grep -q 'pdh_review_exclude' scripts/pdh-review-range.sh && echo "区間 script: 適用済み" || echo "区間 script: 要適用"
-grep -q 'ticket_is_on_this_branch' scripts/check-pdh-ticket.sh && echo "検査: 適用済み" || echo "検査: 要適用"
-awk '/^run_seq\(\)/{exit} /^run "pdh-ticket"/{f=1} END{exit !f}' scripts/test-all.sh && echo "test-all: 迷子の行あり" || echo "test-all: 適用済み"
-```
-
-「要適用」なら `tmp/pdh/claude/templates/pdh-review-range.sh` と `tmp/pdh/claude/templates/check-pdh-ticket.sh` を `scripts/` へコピーする（どちらも project 固有の変更を持たないので上書きしてよい）。「迷子の行あり」なら、`run_seq()` の定義より前にある `run "pdh-ticket" bash scripts/check-pdh-ticket.sh` の行（と直前の `# PDH:` のコメント行）を消す。下の `run "fast-checks"` の次にある同じ行は残す。
-
-#### close 前 review の区間と、起票の検査が `check-pdh-ticket.sh` に入った（2026-09-26 以降）
-
-`scripts/check-pdh-ticket.sh` が 3 つを新しく落とす。① progress の最後の `close-gate-sha:` の後に ticket 自身の commit が残っている、または Status が `PDH-close`（branch 自身の commit が `tickets/done/` へ移した ticket を含む）なのに `close-gate-sha:` が 1 行も無い。② note の Checklist の `起票: <anchor> → <ticket 名>` 行の ticket が `tickets/` にも `tickets/done/` にも無い。③ `.ticket-config.yaml` の ticket テンプレが Why 節に `再現か実測:` を持つようになった commit より後に作られた ticket で、Why の `再現か実測:` か `いま直さない理由:` が空。区間は新しい `scripts/pdh-review-range.sh` が作り、base の branch 名は `.ticket-config.yaml` の `default_branch` から読む。記録の書式と回し方は `pdh-dev` の `_reference.md` と `_flow.md`（PDH-verify の 7）にある。
-
-適用済みかの確認（冪等）:
-
-```bash
-test -f scripts/pdh-review-range.sh && echo "区間 script: 適用済み" || echo "区間 script: 要適用"
-grep -q 'close-gate-sha' scripts/check-pdh-ticket.sh && echo "検査: 適用済み" || echo "検査: 要適用"
-grep -q '再現か実測:' .ticket-config.yaml && echo "テンプレ: 適用済み" || echo "テンプレ: 要追加"
-```
-
-「要適用」なら `tmp/pdh/claude/templates/pdh-review-range.sh` と `tmp/pdh/claude/templates/check-pdh-ticket.sh` を `scripts/` へコピーして `chmod +x` する（`check-pdh-ticket.sh` は project 固有の変更を持たないので上書きしてよい）。「要追加」なら同 template の `default_content` の `### Why` にある 2 行を足す。③ はこの 2 行を足した commit より後に作られた ticket にだけ効くので、既存の ticket は書き換えない。⚠ close 済みでない ticket のうち、Status が `PDH-close` のものと、branch の上で `tickets/done/` へ移したがまだ base に入っていないものは、`close-gate-sha:` が無いと ① で落ちる。close の前に close 前 review を回して行を書く。
-
-#### note の時系列の節が `progress.md` へ移った（2026-09-14 以降）
-
-ticket dir に `progress.md`（経緯。追記のみ）が加わり、note は現在値（Status / Checklist / Required Probes / process check / Technical reference 更新 / Open Questions / Resume Point）だけになった。`.ticket-config.yaml` の `note_content` から「PDH-implement. 実装ログ」「PDH-review. 品質検証結果」「PDH-human-review. 人間レビュー」「Discoveries」の 4 節が消えている。`.ticket-config.yaml` は上書きされないテンプレートなので、既存プロジェクトでは手で外す。`progress.md` は `ticket.sh new` が `ticket_files` から作り、行の削除は `ticket.sh close` が `append_only_files` で拒否する（**ticket.sh 20260914 以降が必要**。手順 7 の `selfupdate` を先に）。human gate の待ち行の欠落は `scripts/check-pdh-ticket.sh`（`scripts/test-all.sh` の 1 段）が確かめる。
-
-適用済みかの確認（冪等）:
-
-```bash
-grep -q '## PDH-implement. 実装ログ' .ticket-config.yaml && echo "節: 要適用" || echo "節: 適用済み"
-grep -q '^ticket_files:' .ticket-config.yaml && echo "ticket_files: 適用済み" || echo "ticket_files: 要適用"
-grep -q '^append_only_files:' .ticket-config.yaml && echo "append_only_files: 適用済み" || echo "append_only_files: 要適用"
-[ "$(bash ./ticket.sh version | sed -n 's/^Version: \([0-9]*\).*/\1/p')" -ge 20260914 ] 2>/dev/null && echo "ticket.sh: 適用済み" || echo "ticket.sh: 要 selfupdate（20260914 以降）"
-test -f scripts/check-pdh-ticket.sh && echo "検査: 適用済み" || echo "検査: 要適用"
-grep -q 'check-pdh-ticket.sh' scripts/test-all.sh && echo "test-all: 適用済み" || echo "test-all: 要適用"
-```
-
-「要適用」なら `tmp/pdh/claude/templates/.ticket-config.yaml` の `note_content` に合わせて 4 節を外し、同 template の `ticket_files` と `append_only_files` を足し、`tmp/pdh/claude/templates/check-pdh-ticket.sh` を `scripts/` にコピーして `scripts/test-all.sh` の `run "fast-checks"` の次に `run "pdh-ticket" bash scripts/check-pdh-ticket.sh` を足す。close 済みでない（todo / doing）ticket は、次の stage に入るときに agent が `progress.md` を作り、以後の記録をそちらへ書く。既存 note の記録は移さない。`tickets/done/` は歴史記録なので触らない。
-
-#### 検証 worker 向け skill `pdh-verifying` が新設された（2026-08-30 以降）
-
-QA Engineer / AC 裏取り / Surface Observer / AC 読み手の役割規則が、`pdh-dev` の `_subagent-context.md` から新設の `pdh-verifying` skill へ移った。`_subagent-context.md` には全 worker 共通の契約と役割の参照だけが残り、配布 agent 定義（`.claude/agents/pdh-qa.md` 等と `.codex/agents/*.toml`）は `pdh-verifying` を指す形になっている。**`pdh-dev` と agent 定義だけ更新して `pdh-verifying` を配置しないと、spawn prompt と agent 定義が存在しない skill を指す。**
-
-適用済みかの確認（冪等）:
-
-```bash
-test -f .claude/skills/pdh-verifying/SKILL.md && echo "skill: 適用済み" || echo "skill: 要適用"
-test -L .agents/skills/pdh-verifying && echo "symlink: 適用済み" || echo "symlink: 要適用（Codex CLI を使わないなら不要）"
-```
-
-「要適用」なら「ファイルを配置する」の配置表と symlink 手順に従って配置し、`.claude/agents/` / `.codex/agents/` の agent 定義も上書きコピーし直す（agent 定義は skill と同じく毎回まるごと上書き）。
-
-#### `application-test` / `ticket-local-test` の規則が pdh-coding skill へ移動した（2026-08-30 以降）
-
-`PDH-AGENTS.md`「Verification」にあった `application-test`（旧称: 恒久テスト）と `ticket-local-test` の区別・置き場所・昇格判定は、`pdh-coding` skill「テスト設計ルール」へ統合された。skill と `PDH-AGENTS.md` は上書きで届くが、`CLAUDE.md` は上書きされないため、旧参照が残っていれば付け替える。
-
-適用済みかの確認（冪等）:
-
-```bash
-grep -q 'pdh-coding skill「テスト設計ルール」' CLAUDE.md && echo "適用済み" || echo "要適用（CLAUDE.md の ticket-local-test 参照先を pdh-coding skill「テスト設計ルール」へ変える）"
-```
-
-#### Ticket テンプレートの見出し改名と AC ガイド更新（2026-08-30 以降）
-
-2 つの変更が `.ticket-config.yaml` の `default_content` に入った。`.ticket-config.yaml` は上書きされないテンプレートなので、既存プロジェクトでは手で更新する。
-
-1. **見出し「確定判断 (Design Decisions)」→「Design Decisions」**。節ラベルのうち「確定判断」だけが日本語だったため、他ラベル（Why / What / Out-of-scope 等）と同じ英語へ揃えた。`start_success_message` の列挙と Implementation Notes コメント内の表記も同様。散文中の用語「確定判断」はそのままでよい（skill 側も日本語の用語としては使い続ける）
-2. **AC コメントを承認者向けガイドへ更新**。「読み手は承認する人」「冒頭に『この ticket が終わると、〈誰〉が、〈何〉をできるようになる』の 1 文を書き、各 AC はその分割」を追記し、実装の言葉の例（`/api/users に GET…`）を承認者の言葉の例に差し替えた（doc のテンプレート節は廃止され、テンプレートは `default_content` だけになった）
-
-適用済みかの確認（冪等）:
-
-```bash
-grep -q '### Design Decisions' .ticket-config.yaml && echo "1: 適用済み" || echo "1: 要適用"
-grep -q 'この ticket が終わると' .ticket-config.yaml && echo "2: 適用済み" || echo "2: 要適用"
-```
-
-「要適用」なら `tmp/pdh/claude/templates/.ticket-config.yaml` の `default_content` の該当コメントを取り込む。close 済みでない（todo / doing）ticket の見出しを揃えるかは更新手順 10 で確認する。`tickets/done/` は歴史記録なので触らない。
-
-#### PDH worker の agent 定義が新設された（2026-08-30 以降）
-
-worker（Coding Engineer / reviewer / QA / AC 裏取り / Surface Observer / AC 読み手）の agent 定義が `agents/claude/`（`.md`）と `agents/codex/`（`.toml`）として配布に加わった。**skill と同じく毎回まるごと上書きする**（更新手順 5）。engine の agent 定義機構に配置すると PM は定義名で worker を spawn でき、read-only 役の書き込み境界が Claude Code では `tools`、Codex では `sandbox_mode` で機構的に強制される。定義が無くても従来の subprocess spawn はそのまま動く。
-
-適用済みかの確認（冪等）:
-
-```bash
-test -f .claude/agents/pdh-reviewer.md && echo "claude: 適用済み" || echo "claude: 要適用"
-test -f .codex/agents/pdh-reviewer.toml && echo "codex: 適用済み" || echo "codex: 要適用（Codex CLI を使わないなら不要）"
-```
-
-「要適用」なら「ファイルを配置する」の配置表に従いコピーする:
-
-```bash
-mkdir -p .claude/agents
-cp tmp/pdh/claude/templates/agents/claude/*.md .claude/agents/
-# Codex CLI を使う場合のみ
-mkdir -p .codex/agents
-cp tmp/pdh/claude/templates/agents/codex/*.toml .codex/agents/
-```
-
-#### reviewer 向け skill `pdh-reviewing` が新設された（2026-08-30 以降）
-
-reviewer worker が review 時に従う規則（網羅探索チェックリスト、レンズごとの確認内容、修正確認、報告形式）が、`pdh-dev` の `_review.md` / `_subagent-context.md` から新設の `pdh-reviewing` skill へ移った。`pdh-dev` 側には Director（PM）側の運用だけが残り、reviewer の spawn prompt は `pdh-reviewing` を読ませる形になっている。**`pdh-dev` だけ更新して `pdh-reviewing` を配置しないと、spawn prompt が存在しない skill を指す。**
-
-適用済みかの確認（冪等）:
-
-```bash
-test -f .claude/skills/pdh-reviewing/SKILL.md && echo "適用済み" || echo "要適用"
-```
-
-「要適用」なら:
-
-```bash
-mkdir -p .claude/skills/pdh-reviewing .agents/skills
-cp tmp/pdh/claude/skills/pdh-reviewing/SKILL.md .claude/skills/pdh-reviewing/SKILL.md
-cp -R tmp/pdh/claude/skills/pdh-dev/. .claude/skills/pdh-dev/
-ln -snf ../../.claude/skills/pdh-reviewing .agents/skills/pdh-reviewing
-```
-
-配置後、「ファイルを配置する」の sed 置換（`Based on` 行）を `.claude/skills/pdh-reviewing/SKILL.md` にも適用する。
-
-#### 判断ボード 3 skill が `pdh-decision-board` 1 つに統合された（2026-08-30 以降）
-
-`pdh-decision-board-base` / `pdh-ticket-decision-board` / `pdh-close-decision-board` は `pdh-decision-board` 1 つになった。入口は `SKILL.md`（gate の選び方と、手順ごとに読む分冊を持つ router）で、旧 base の `SKILL.md` は `base.md`、実装前 gate の差分は `ticket-gate.md`、close 前 gate の差分は `close-gate.md` になり、`ship-risk.md`・renderer 分冊・`kit/`・`tools/` もすべて `pdh-decision-board/` 直下にある。
-
-**⚠ 旧 3 ディレクトリは必ず削除する。**残すと skill の実体が 2 系統になり（`AI-2`: skill の実体は 1 つだけ置く、に違反）、どちらに従うか agent には判定できない。`.agents/skills/` の古い symlink 3 本も削除する。
-
-適用済みかの確認（冪等）:
-
-```bash
-test -d .claude/skills/pdh-decision-board && ! test -e .claude/skills/pdh-decision-board-base && echo "適用済み" || echo "要適用"
-```
-
-「要適用」なら:
-
-```bash
-rm -rf .claude/skills/pdh-decision-board-base .claude/skills/pdh-ticket-decision-board .claude/skills/pdh-close-decision-board .claude/skills/pdh-decision-board
-rm -f .agents/skills/pdh-decision-board-base .agents/skills/pdh-ticket-decision-board .agents/skills/pdh-close-decision-board
-cp -r tmp/pdh/claude/skills/pdh-decision-board/ .claude/skills/pdh-decision-board/
-mkdir -p .agents/skills
-ln -snf ../../.claude/skills/pdh-decision-board .agents/skills/pdh-decision-board
-```
-
-これより下の節にある判断ボード関連の移行手順（3 分冊化・2 ファイル化・evals の分離）は、この統合で置き換えられている。未適用でもこの節だけを適用すればよい（旧 commit の `tmp/pdh` にしか無いパスをコピーする手順は、現在の `tmp/pdh` では実行できない）。
-
-#### 文章 skill 3 本が削除された（2026-08-26 以降）
-
-`common-writing` / `japanese-tech-writing` / `cognitive-rhythm-writing` を削除した。**判断ボードと ticket に効いていたのは «承認者に復元作業をさせない» 3 項だけで、それは `pdh-decision-board-base/final-check.md` の「文」の層にある。**残りは書籍・記事の原稿向けの規範で、板の読み手にプラスにならないまま 39.6 KB が配布されていた。
-
-```bash
-rm -rf .claude/skills/common-writing .claude/skills/japanese-tech-writing .claude/skills/cognitive-rhythm-writing
-rm -f .agents/skills/common-writing .agents/skills/japanese-tech-writing .agents/skills/cognitive-rhythm-writing
-```
-
-#### 判断ボードの evals / 検査 script が配布物から外れた（2026-08-26 以降）
-
-`pdh-decision-board-base/` から次が消えた。**どれも配布先では使わないもので、残しても害だけがある。**
-
-- `evals/` — 判断ボード skill 自身の評価シナリオ。skill の規則を変えるとき（＝ PDH repo 側）にしか回さない
-- `examples.md` — 規則の由来になった日付つきの事故と実測値。**特定時点の制約を実行者に持たせるとゴールから遠ざかる**ので、skill を直すときの資料として PDH repo 側に置く。規則ファイルからも日付つきの出典を落とし、規則を現在形だけで書くようにした
-- `tools/check.js` と `tools/fixtures/broken-{a,d,h,i}.html`、`kit/check-contrast.py` — Node / Playwright / Python を要求していた。描画の検査は PDH repo 側へ移っており（配布先は kit を変えないので要らない）、palette の検査は `kit/check-contrast.sh`（awk）が引き継いだ
-
-古い配置が残っていると、Playwright の導入を促す README や、回されない eval がプロジェクトに居座る。ディレクトリごと消してからコピーし直す。
-
-```bash
-rm -rf .claude/skills/pdh-decision-board-base
-cp -r tmp/pdh/claude/skills/pdh-decision-board-base/ .claude/skills/pdh-decision-board-base/
-```
-
-#### pdh-close-decision-board が 2 ファイルになった（2026-08-26 以降）
-
-close 前 gate の skill は `SKILL.md` に加えて `ship-risk.md`（保存されている形・外部契約を変える ticket だけが読む分冊）を持つ。`SKILL.md` だけをコピーしていたプロジェクトは、ディレクトリごとコピーし直す。同時に、判断ボードの reviewer への問いが 7 問（問 2 が「推奨はゴールに届くか」）になり、判断カードに「ゴールへの効き」の欄が増えた。
-
-```bash
-cp -r tmp/pdh/claude/skills/pdh-decision-board-base/ .claude/skills/pdh-decision-board-base/
-cp -r tmp/pdh/claude/skills/pdh-ticket-decision-board/ .claude/skills/pdh-ticket-decision-board/
-cp -r tmp/pdh/claude/skills/pdh-close-decision-board/ .claude/skills/pdh-close-decision-board/
-```
-
-#### pdh-ticket-decision-board の 3 分冊化 + close 前 gate の追加（2026-08-20 以降）
-
-**判断ボード skill は 3 つの構成になった。**gate と媒体に依存しない共通規則・renderer 分冊・kit（CSS/JS/検査 script）は新設の `pdh-decision-board-base` が持ち、`pdh-ticket-decision-board`（実装前 gate）と新設の `pdh-close-decision-board`（close 前 gate）は base への差分だけを持つ。
-
-**⚠ 単なるファイル追加ではない。**旧 `pdh-ticket-decision-board/` に入っていた `render-html-common.md` / `create-doc.md` / `create-slides.md` / `examples.md` は base 側へ移動して内容も更新されているため、**旧配置のまま残すと 2 系統の規則が食い違う。**
-
-移行手順:
-
-```bash
-rm -rf .claude/skills/pdh-ticket-decision-board
-cp -r tmp/pdh/claude/skills/pdh-decision-board-base/ .claude/skills/pdh-decision-board-base/
-cp -r tmp/pdh/claude/skills/pdh-ticket-decision-board/ .claude/skills/pdh-ticket-decision-board/
-cp -r tmp/pdh/claude/skills/pdh-close-decision-board/ .claude/skills/pdh-close-decision-board/
-for s in pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board; do
-  ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
+for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-rule-write; do
+  rm -rf ".claude/skills/$skill"
+  rm -f ".agents/skills/$skill"
 done
+rm -rf .claude/skills/tmux-director .agents/skills/tmux-director
+rm -f scripts/hookbus.js
 ```
 
-kit の CSS（tokens.css の palette）を変えたときは `bash .claude/skills/pdh-decision-board-base/kit/check-contrast.sh` が exit 0 になることを確認する。
+`.claude/settings.json` の hookbus の呼び出しだけを外し、他の hook は保つ。`vitest.config.*` の hookbus project と `package.json` / `test-all.sh` の専用段も外す。SessionStart は配布した `pdh-session-hook.sh` の設定へ統合し、session を再起動する。
 
+旧 `docs/product-delivery-hierarchy.md` の規則は `PDH-AGENTS.md` と stage skill へ集約した。project の追記を移してから旧配布文書を削除する。
 
-#### decision-board → pdh-ticket-decision-board へ置き換え（2026-08-15 以降）
+`technical-reference.md` は配布しない。現行の事実をコードのコメント・テスト・仕様書へ、ソースから作れない外の事実・人の意図と方針を project の文書へ移してから廃止する。本文が残る間は退避し、内容を読まずに消さない。
 
-**`decision-board` skill は撤去され、`pdh-ticket-decision-board` に置き換わった。**
-単なる rename ではなく、扱う範囲と作り方の両方が変わっている。
+`.ticket-config.yaml` のテンプレ本文を新しいものへ揃え、`worktree_mode: true`・`pre_close_command`・`require_checklist_groups: [Required-Probes, Checklist]` を確認する。Why の 3 ラベル、contract check の Feasibility / DB-changes / API-changes / Complexity / Benefit、AC と Out-of-scope の `AC-approved:`、Open-Questions の checkbox を取り込む。旧 Why ラベル・旧 Status 書式は受け付けない。
 
-| | 旧 `decision-board` | 新 `pdh-ticket-decision-board` |
-|---|---|---|
-| 扱う gate | 実装前・close 前の両方 | **実装前（`PDH-ticket-human-review`）だけ** |
-| 媒体 | HTML 1 枚に固定 | Markdown / 端末に出す文章 / PR コメント / HTML 文書 / HTML 2 軸デッキ から選ぶ |
-| 作り方 | `db-*` タグを `build-board.sh` に渡す | 規則に従って組む（生成スクリプトは持たない） |
-| 検査 | 発行前の 2 段 | Completed Staff Work の 1 問 + 形・文・判断の 3 層 + 別 engine の reviewer に 7 問 |
+未完の note の旧 `## Status` の段に checkbox がある場合、各行を印・本文・skip 理由ごと `## Checklist` へ移し、Status を `## Status: PDH-<stage>` の 1 行へ直す。旧 Resume Point の必要な現在値は Checklist / Open-Questions へ、経緯は progress へ移してから節を消す。`pdh-resume` と `pdh-stage-checklist.sh --show` で現在の段を確認し、`bash scripts/pdh-stage-checklist.sh <stage> --enter <note>` でその段の行を写す。AC の内容を変える場合は人の再承認を得てから hash を書く。done の記録は移さない。
 
-移行手順:
+初回の `.pdh-lock` は、上書きの全件を配布元と一致させてから書く。上書き対象の `Based on` 行は消し、差分マージの footer は残す。
 
 ```bash
-rm -rf .claude/skills/decision-board .agents/skills/decision-board
-cp -r tmp/pdh/claude/skills/pdh-ticket-decision-board/ .claude/skills/pdh-ticket-decision-board/
-ln -snf ../../.claude/skills/pdh-ticket-decision-board .agents/skills/pdh-ticket-decision-board
-```
-
-⚠ **`build-board.sh` / `board-kit.tpl` / `board-runtime.js` / `mermaid-render.min.js` は
-配布されなくなった。**これらで作った過去の `board.html` はそのまま読めるが、**再 build する
-手段は無い。**必要なら旧ファイルを自プロジェクトへ退避してから更新すること。
-
-⚠ close 前 gate（`PDH-human-review`）の board を作る手順は、この時点ではどの skill も持たなかった。
-**現在は `pdh-decision-board` の `close-gate.md` が持つ** — 前述「判断ボード 3 skill が
-`pdh-decision-board` 1 つに統合された」まで更新すれば解消する。
-
-#### 導入・更新手順が README.md → INSTALL.md へ移動（2026-07 以降）
-
-以前は導入・更新手順が README.md にあり、`pdh-update` skill もそこを読んでいた。現在は本ファイル（INSTALL.md）にあり、README.md は概要とリンクだけを持つ。
-
-**プロジェクトに配布済みの `pdh-update` skill は古い URL を読み続ける。** skill を更新しないと、次回以降も README.md を取得して手順を見失う。
-
-```bash
-# pdh-update skill を最新版に差し替える（他の skill と同じ手順）
-cp tmp/pdh/claude/skills/pdh-update/SKILL.md .claude/skills/pdh-update/SKILL.md
-grep -n 'INSTALL.md' .claude/skills/pdh-update/SKILL.md   # ヒットすれば更新済み
-```
-
-README.md 側にも INSTALL.md へのリンクを残してあるので、古い skill でも「README を読む → INSTALL.md へ辿る」で到達はできる。ただし遠回りになるため、この移行は早めに適用すること。
-
-`git diff` の追加/削除だけでは正しく移行できない変更を、ここに追記していく。アップデート時は上から順に、自分のプロジェクトが該当するか確認する。該当しなければ読み飛ばしてよい（すでに適用済みなら何度実行しても無害な形で書く）。
-
-#### Codex 用 skill wrapper → symlink（2026-07 以降）
-
-以前は `.agents/skills/<name>/SKILL.md` に「`.claude/skills/` を読め」と書いた wrapper ファイルを置いていた。現在は **`.agents/skills/<name>` を `.claude/skills/<name>` への symlink** にする。
-
-**wrapper を消すだけだと Codex から skill が一切見えなくなる。** 必ず symlink を張り直すこと:
-
-```bash
-# 旧 wrapper があれば撤去し、symlink に置き換える（冪等）
-for s in pdh-dev pdh-coding pdh-check-writing pdh-update tmux-director pdh-decision-board-base pdh-ticket-decision-board pdh-close-decision-board; do
-  [ -e ".agents/skills/$s" ] && [ ! -L ".agents/skills/$s" ] && rm -rf ".agents/skills/$s"
-  [ -d ".claude/skills/$s" ] && ln -snf "../../.claude/skills/$s" ".agents/skills/$s"
+bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/claude/lock-map.tsv
+bash scripts/pdh-lock.sh check
+test -f .claude/skills/pdh-resume/SKILL.md
+test -f .claude/skills/pdh-pm/_open-ticket.md
+grep -q '^worktree_mode: true' .ticket-config.yaml
+grep -q '^pre_close_command:' .ticket-config.yaml
+grep -q 'Key-User-Journeys:' .ticket-config.yaml
+grep -q 'Reproduction-or-measurement:' .ticket-config.yaml
+grep -q 'Why-not-fix-now:' .ticket-config.yaml
+grep -q 'AC-approved:' .ticket-config.yaml
+! grep -q 'Resume Point' .ticket-config.yaml
+for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-rule-write; do
+  test ! -e ".claude/skills/$skill" || exit 1
 done
-ls -l .agents/skills/   # すべて -> ../../.claude/skills/... になっていることを確認
+! rg 'hookbus' .claude/settings.json scripts/test-all.sh package.json vitest.config.* 2>/dev/null
+bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/claude/templates/.ticket-config.yaml
 ```
 
-#### `pdh-dev` の分冊ファイル欠落（2026-07 以前に導入した場合）
-
-`pdh-dev` は `SKILL.md` と、そこから参照される `_*.md`（`_flow.md` / `_review.md` / `_execution-team.md` 等）で構成される。**2026-07 以前の手順は `SKILL.md` だけをコピーするよう書いていた**ため、手動導入したプロジェクトでは分冊が欠落している可能性がある。これは新規ファイルの追加ではないので `git diff` では検出できない。
-
-```bash
-# 欠落を確認し、ディレクトリごと同期する
-ls .claude/skills/pdh-dev/
-cp -R tmp/pdh/claude/skills/pdh-dev/. .claude/skills/pdh-dev/
-```
-
-#### `scripts/test-all.sh` の bash 3.2 クラッシュ修正（2026-07 以降）
-
-`scripts/test-all.sh` はプロジェクト固有のカスタマイズが入るため通常は上書きしないが、**空配列展開が macOS の bash 3.2 で `unbound variable` になるバグ**があった。該当する場合は Summary 部分だけを差し替える:
-
-```bash
-grep -q 'PASSED\[@\]} > 0' scripts/test-all.sh && echo "修正済み" || echo "要修正"
-```
-
-「要修正」なら、`tmp/pdh/claude/templates/test-all.sh` の Summary ブロック（`(( ${#PASSED[@]} > 0 ))` / `(( ${#FAILED[@]} > 0 ))` の要素数ガード）を該当箇所に反映する。suite 定義（`run "..."` 行）は自分のものを残すこと。
-
-修正後、**suite が 1 つも定義されていない状態と、失敗する suite がある状態の両方で実行して確認する**（このバグは空配列でだけ出る）。
-
-#### `.ticket-config.yaml` に checkbox gate と `Required Probes` を追加（2026-08-30 以降）
-
-未了の checkbox が残っている間 `close` を拒否する gate を有効にし、note に `## Required Probes` の節と、その節の存在を close の必須条件にする宣言を足した。**どちらも `--force` では抜けられない。**当てはまらない項目は `- [-] ... - skip: <理由>` と書いて理由をファイルに残す（理由なしの `- [-]` は未了扱い）。未了の一覧は `./ticket.sh check`、特定の節だけの要求は `./ticket.sh check --require "<見出し名>"`。
-
-⚠ **`Required Probes` の節が無いと、AC を確かめる工程が «節ごと存在しない» まま実装へ進める**（実際にそれで未確認の仮定に基づく修正が本番へ出た）。`require_checklist` は未了の checkbox を数えるので、**節ごと無い ticket は 0 件 = 全部片付いた、と読んで通してしまう。**塞ぐのは `require_checklist_groups` の側なので、**両方入っていることを確認する。**
-
-`.ticket-config.yaml` は project カスタマイズが濃く diff マージで取りこぼされやすいので、直接確認する。⚠ **`note_content` の節や項目が入っていることを、キーが入っている証拠にしない。**節と項目は `note_content` という 1 つの大きなブロックの中にあるので diff マージでまとめて入るが、**トップレベルのキーは独立した数行なので、そこだけ落ちる。**実際にそれで落ちた配布先がある。
-
-```bash
-grep -q '^require_checklist:' .ticket-config.yaml && echo "gate: 適用済み" || echo "gate: 要追加"
-grep -q '^require_checklist_groups:' .ticket-config.yaml && echo "必須グループ: 適用済み" || echo "必須グループ: 要追加"
-grep -q '## Required Probes' .ticket-config.yaml && echo "節: 適用済み" || echo "節: 要追加"
-grep -q '## Checklist' .ticket-config.yaml && echo "Checklist 節: 適用済み" || echo "Checklist 節: 要改名"
-grep -q '確かめていない仮定' .ticket-config.yaml && echo "項目: 適用済み" || echo "項目: 要追加"
-```
-
-「要追加」のものを `tmp/pdh/claude/templates/.ticket-config.yaml` からコピーする。
-
-- `gate` — `# Automatically delete remote feature branch` ブロックの直後にある `require_checklist: true`（コメント含む）
-- `必須グループ` — その直後の `require_checklist_groups:`（コメント含む）。**ticket.sh 20260830 以降が必要**なので、手順 7 の `selfupdate` を先に済ませる（古い ticket.sh ではキーが黙って無視され、守られていないのに守られたつもりになる）
-- `節` — `note_content` の `## Required Probes` 節（`## PDH-ticket-review. Ticket contract check` の直後）
-- `Checklist 節` — `## PDH-verify. プロセスチェックリスト` を **`## Checklist` へ改名し、`## Status:` の直後へ移す**。⚠ **見出しが「verify のときに見るもの」に読めると、他 stage の項目が終盤まで放置される。**stage ごとに節を割らないこと（割ると「その stage の分だけ」を見て、他が残っているのに気づかない）
-- `項目` — `## Checklist` の `PDH-implement:` 行 2 つと `PDH-review:` 行 2 つ
-
-**既存の進行中 ticket がある状態でこれらを入れると、その ticket の close が止まる。**止まったら未了を埋めるか、当てはまらない項目に `- [-] ... - skip: <理由>` を書く。**節そのものが無い ticket では、`## Required Probes` を手で足してから測る**（テンプレートを変えても、既にある note には反映されない）。⚠ **`Checklist` を必須グループに宣言すると、`## PDH-verify. プロセスチェックリスト` のままの進行中 note は close が止まる。**その note の見出しも `## Checklist` へ改名する。**改名するのは close 済みでない note（todo / doing）だけで、`tickets/done/` は触らない**（手順 6 の歴史記録の扱い）。
-
-#### `.ticket-config.yaml` に `worktree_copy_files` を追加（2026-07 以降）
-
-worktree には gitignored ファイル（`.env` 等）が入らない。`worktree_copy_files` に列挙すると `ticket.sh start --worktree` が作成・再開時に main repo からコピーする（ticket.sh 本体の対応は手順 7 の selfupdate で入る。古い ticket.sh でもキーが無視されるだけで無害）。`.ticket-config.yaml` は project カスタマイズが濃く diff マージで取りこぼされやすいので、キーの有無を直接確認する:
-
-```bash
-grep -q '^worktree_copy_files:' .ticket-config.yaml && echo "適用済み" || echo "要追加"
-```
-
-「要追加」なら `tmp/pdh/claude/templates/.ticket-config.yaml` の `# Worktree settings` ブロック（コメント含む）を `.ticket-config.yaml` にコピーし、worktree での実行に必要な gitignored ファイルに合わせてリストを編集する。
-
-#### fast-check に `required_paths` 型を追加（2026-08 以降）
-
-`scripts/fast-checks.sh` と `scripts/checks/README.md` には `Based on` footer がないため、「既存ファイルの差分マージ」の対象から漏れる。ランナー本体とレジストリ契約はプロジェクト固有のカスタマイズを持たない（カスタマイズは `scripts/checks/*.check` 側にある）ので、常に最新版で上書きしてよい。
-
-`required_paths` は「この exact path のファイルが存在すること」を宣言する 4 番目の型。`pattern` / `max_lines` / `linter_command` は「禁止されたものが存在しない」ことしか主張しないので、glob が 0 件になる — つまり守っていたファイルごと消える — と静かに通る。上流の directory 上書きや merge 事故で消える経路のあるファイルには、中身を守る check と併せてこれを置く。
-
-```bash
-grep -q 'required_paths' scripts/fast-checks.sh && echo "適用済み" || echo "要更新"
-```
-
-「要更新」なら上書きし、既存の check が通ることを確認する:
-
-```bash
-cp tmp/pdh/claude/templates/fast-checks.sh scripts/fast-checks.sh
-cp tmp/pdh/claude/templates/checks/README.md scripts/checks/README.md
-bash scripts/fast-checks.sh
-```
+上の確認を更新後に再実行する。同じ移行を 2 回行っても差分は出ない。review 集計は `pdh-review-tally.sh`、評価は `pdh-review-eval.sh --help` と `docs/pdh-review-eval/README.md` を読む。評価データは project が集め、実 engine での計測は CI に入れない。

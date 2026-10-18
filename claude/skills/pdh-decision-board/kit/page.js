@@ -1,4 +1,4 @@
-// 判断ボード kit v2 — page.js（文書版のページ機構）
+// decision-board kit v2 — page.js（文書版のページ機構）
 // 1) 目次ボタンの開閉  2) 現在地 spy — スクロール位置から決定論で計算する
 //    （IntersectionObserver は上向きスクロールで発火順が前後し、1 つ先の項目が残る）
 // 3) h2 の stuck 検出 — 貼り付き中だけ 1 行に切り詰める

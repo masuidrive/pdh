@@ -9,10 +9,9 @@
 #   scripts/test-ticket-local.sh <ticket-id>             # explicit ticket
 #   scripts/test-ticket-local.sh <ticket-id> -- <args>   # pass args through
 #
-# Script path resolution (new per-ticket layout first, legacy flat layout as fallback):
+# Script path resolution (active ticket first, then done):
 #   tickets/<ticket-id>/tests/test-ticket-local.sh
 #   tickets/done/<ticket-id>/tests/test-ticket-local.sh
-#   tests/tickets/<ticket-id>/test-ticket-local.sh   (legacy)
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,9 +28,9 @@ Default ticket-id is inferred from the active ticket.sh symlinks
 current-ticket.md compat symlink for the legacy flat layout), matching
 what `ticket.sh start`/`restore` output shows.
 
-Script path resolution (new layout first, legacy flat layout as fallback):
+Script path resolution (active ticket first, then done):
   tickets/<ticket-id>/tests/test-ticket-local.sh
-  tests/tickets/<ticket-id>/test-ticket-local.sh   (legacy)
+  tickets/done/<ticket-id>/tests/test-ticket-local.sh
 EOF
 }
 
@@ -82,7 +81,6 @@ fi
 
 new_script="tickets/$ticket_id/tests/test-ticket-local.sh"
 done_script="tickets/done/$ticket_id/tests/test-ticket-local.sh"
-legacy_script="tests/tickets/$ticket_id/test-ticket-local.sh"
 
 if [[ -f "$new_script" ]]; then
   script="$new_script"
@@ -90,14 +88,10 @@ if [[ -f "$new_script" ]]; then
 elif [[ -f "$done_script" ]]; then
   script="$done_script"
   tests_dir="tickets/done/$ticket_id/tests"
-elif [[ -f "$legacy_script" ]]; then
-  script="$legacy_script"
-  tests_dir="tests/tickets/$ticket_id"
 else
   echo "Ticket-local test not found. Checked:" >&2
   echo "  $new_script" >&2
   echo "  $done_script" >&2
-  echo "  $legacy_script" >&2
   exit 1
 fi
 

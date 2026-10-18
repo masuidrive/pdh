@@ -243,7 +243,7 @@ if ! awk -v images="$images" '
       print "FAIL ページ内参照 :: main.board range is missing"
       print "__IMAGE__"
       print "FAIL 回答フォームの属性 :: main.board range is missing"
-      print "FAIL 裸の表 :: main.board range is missing"
+      print "FAIL .table-wrap の無い表 :: main.board range is missing"
       exit
     }
     scan_body(body)
@@ -283,7 +283,7 @@ if ! awk -v images="$images" '
     if (issues["image"] == "") print "__IMAGE__"
     else print "__IMAGE__ :: " issues["image"]
     emit("回答フォームの属性", issues["answer"])
-    emit("裸の表", issues["table"])
+    emit(".table-wrap の無い表", issues["table"])
   }
 ' "$board" > "$analysis"; then
   echo 'check-static.sh: ERROR: HTML analysis failed' >&2

@@ -24,8 +24,8 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 
 - **2 層構造**: Product Brief (why) → Ticket (what + how)
 - **PDH stage flow**: `PDH-open` → `PDH-ticket-review` → `PDH-ticket-human-review` → `PDH-implement` → `PDH-review` → `PDH-verify` → `PDH-human-review` → `PDH-close`。実装前と close 前に人間の gate を置く
-- **契約（engine 共通）**: `docs/product-delivery-hierarchy.md`（運用ルール）と `docs/PDH-AGENTS.md`（PDH 汎用 agent ルール）。stage flow・gate・AC の扱い・検証の証拠要件はここにあり、engine で変えない
-- **配布セット（engine ごと）**: `claude/`（Claude Code 用）と `codex/`（Codex CLI 用）。それぞれ `skills/`・`templates/`（入口ファイルの雛形、agent 定義、script）・`INSTALL.md` を持つ。同じ規則文でも engine で振る舞いが逆になることが実測で出たため、skill の文面・agent 定義・起動手順は engine ごとに最適化する
+- **契約（engine 共通）**: `docs/PDH-AGENTS.md`（PDH の構造と agent の規則）。stage flow・gate・AC の扱い・検証の証拠要件はここにあり、engine で変えない
+- **配布セット（engine ごと）**: `claude/`（Claude Code 用）と `codex/`（Codex CLI 用）。それぞれ `skills/`・`templates/`（入口ファイルの雛形、agent 定義、script）・`INSTALL.md` を持つ。skill と worker 本文は Claude 版から Codex 版を生成し、Codex 単独の導入・更新・退避・移行の経路は保つ
 - **評価データ（engine 共通）**: 実案件の切り出し再生と harness は private repo `masuidrive/pdh-eval`（この repo では `evals/private/` として checkout）。どちらの配布セットの規則変更も、同じ切り出しで両 engine を測ってから入れる
 - **導入・更新経路**: 使う engine の `INSTALL.md`（`claude/INSTALL.md` / `codex/INSTALL.md`）を coding agent に読ませて導入。更新は `pdh-update` skill（内部で同じ `INSTALL.md` を辿る）
 
@@ -39,11 +39,11 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 
 ## Constraints
 
-- 配布物が動くのに要るのは、**標準的な Unix 環境（macOS / Ubuntu）に既定で入っているもの**だけ。具体的には `bash` / `git` / `awk` / `grep` / `sed` と、その周辺の標準コマンド。BSD 系と GNU 系の両方で動くこと（例外: tmux Director の `claude/scripts/hookbus.js` が Node 18+ を要求する。これ以上増やさない）
+- 配布物が動くのに要るのは、`bash` / `git` / `awk` / `grep` / `sed` と、その周辺の標準コマンド、文書・生成の検査用の Python 3.11 以降と PyYAML。BSD 系と GNU 系の両方で動くこと
 - **閲覧者のブラウザが実行する JavaScript は、この制限の対象外。**判断ボードに埋め込む JS は、閲覧者にも配布先にも install を強いないため
-- **opt-in の配布レイヤーも、この実行依存の制限の外に置く。**既定では配置されず、有効化した利用者だけが追加依存を要求する（`github-bot/` なら GitHub Actions と devcontainer）。core の配布物（既定で入るもの）は依然 `bash` / `git` / `awk` / `grep` / `sed` + ticket.sh だけで動くこと
+- **opt-in の配布レイヤーも、この実行依存の制限の外に置く。**既定では配置されず、有効化した利用者だけが追加依存を要求する（`github-bot/` なら GitHub Actions と devcontainer）。core の配布物は上記の標準コマンドと Python / PyYAML、ticket.sh で動くこと
 - **契約は engine 中立、配布は engine ごと**: `docs/` の契約は Claude Code / Codex CLI のどちらでも同じに読めること。engine 固有の起動手順・model 指定は配布セットの中に置き、`docs/` に書かない
-- 配布ファイル末尾の `Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/...` 行は導入時に HEAD commit へ置換される。この行の形式を壊さない
+- 差分マージ対象の `Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/...` 行は導入時に取り込んだ commit へ置換される。上書き対象の版は `.pdh-lock` に置く
 - ticket のライフサイクルは [ticket.sh](https://github.com/masuidrive/ticket.sh) に委ねる。PDH 側で再実装しない
 - モデル名は時間で古びる。ドキュメントでは役割プロファイル（`strong-judge` 等）に従い、具体的なモデル名は上書き例として扱う
 - 本文は日本語、`AGENTS.md` など他 agent platform が読む入口は英語
@@ -52,9 +52,9 @@ PDH は、その 2 つを Git 管理された Markdown として構造化する�
 
 - `AI-1` PDH 汎用ルールは `docs/PDH-AGENTS.md`、project 固有ルールは配布セットの入口テンプレート（`claude/templates/CLAUDE.md` / `codex/templates/AGENTS.md`）。両者の内容を重複させない
 - `AI-2` skill の実体は配布セットごとに 1 つ置く（`claude/skills/` / `codex/skills/`）。1 つの配布セットの中で別 engine 向けの入口を作るなら symlink とし、内容を複製した wrapper を作らない
-- `AI-3` 配布テンプレートには、テンプレート自身の使い方説明を書かない。導入・更新手順は `INSTALL.md`、運用ルールは `docs/product-delivery-hierarchy.md` にある
-- `AI-4` 配布物の実行依存は、標準的な Unix 環境（macOS / Ubuntu）に既定で入っているものと ticket.sh に限る。BSD / GNU 両対応で書く（`claude/scripts/hookbus.js` の Node 18+ のみ既存例外）。閲覧者のブラウザが実行する JavaScript は対象外。**opt-in の配布レイヤー**（既定では配置されず、有効化した利用者だけが要求するもの。`github-bot/` が該当し GitHub Actions を要求する）も対象外 — core の配布物（既定で入るもの）は依然この制限を満たす
-- `AI-5` `docs/` の契約（`product-delivery-hierarchy.md` / `PDH-AGENTS.md`）は engine 中立に記述し、入口ファイルや subagent 機構を engine の名前で指定しない。engine 固有の起動手順・model 指定は配布セットの skill と agent 定義に置く
+- `AI-3` 配布テンプレートには、テンプレート自身の使い方説明を書かない。導入・更新手順は `INSTALL.md`、運用ルールは `docs/PDH-AGENTS.md` と stage skill にある
+- `AI-4` 配布物の実行依存は、標準的な Unix コマンドと ticket.sh、文書・生成の検査用の Python 3.11 以降と PyYAML に限る。BSD / GNU 両対応で書く。閲覧者のブラウザが実行する JavaScript と、明示的に有効化する github-bot・review 評価の追加依存はこの制限の対象外。
+- `AI-5` `docs/PDH-AGENTS.md` の契約は engine 中立に記述し、入口ファイルや subagent 機構を engine の名前で指定しない。engine 固有の起動手順・model 指定は配布セットの skill と agent 定義に置く
 
 ## Done
 

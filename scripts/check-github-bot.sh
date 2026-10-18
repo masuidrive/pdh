@@ -59,8 +59,8 @@ for tag in '<Human-Agent-Interface>' '</Human-Agent-Interface>'; do
     failed=1
   fi
 done
-if ! grep -qF -- 'Human-Agent-Interface' docs/PDH-AGENTS.md; then
-  printf 'github-bot: docs/PDH-AGENTS.md に <Human-Agent-Interface> の優先規則が無い（囲いが契約で裏付けられていない）\n' >&2
+if ! grep -qF -- 'Human-Agent-Interface' claude/skills/pdh-pm/SKILL.md; then
+  printf 'github-bot: pdh-pm/SKILL.md に <Human-Agent-Interface> の優先規則が無い（囲いが契約で裏付けられていない）\n' >&2
   failed=1
 fi
 if [ -f github-bot/_github-issue.md ] && ! grep -qF -- '## Checklist' github-bot/_github-issue.md; then

@@ -53,7 +53,7 @@
   // 集めた回答から貼り戻し文を組む。見出しは board 側が data-answer-title で持つ。
   // ここに board 固有の文字列を書くと、board ごとに board.js を分岐させることになる。
   const answerText = (items, done) => {
-    const lines = [`# 判断ボードの回答 — ${root.dataset.answerTitle || boardId}`, ''];
+    const lines = [`# decision-board の回答 — ${root.dataset.answerTitle || boardId}`, ''];
     items.forEach(item => {
       lines.push(`## ${item.title}`);
       lines.push(`選択: ${item.label || '（未選択）'}`);

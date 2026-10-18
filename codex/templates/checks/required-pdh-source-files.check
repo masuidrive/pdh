@@ -1,0 +1,3 @@
+# PDH の共有 script と PM の分冊が消えたら落とす。project の文書は project の check に置く。
+reason=PDH の共有ファイルが消えている
+required_paths=product-brief.md,AGENTS.md,PDH-AGENTS.md,scripts/checks/README.md,scripts/pdh-lock.sh,scripts/check-pdh-ticket.sh,scripts/docs-policy.py,scripts/docs-toc.sh,scripts/pdh-review-range.sh,.agents/skills/pdh-pm/_records.md,.agents/skills/pdh-pm/_execution-team.md

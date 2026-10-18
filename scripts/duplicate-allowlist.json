@@ -1,0 +1,431 @@
+[
+  {
+    "line": "- **ticket の Acceptance Criteria、Architectural-Invariants-check、Out-of-scope を独断で変更しない。**必要なら結果で PM へ escalate し、合意を得てから進める",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- CLAUDE.md や skill の規則を根拠にする finding は、規則の path:行 と、違反している行を引用する",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- Critical と Major を 1 件ずつ、«観点 label / file:location / 問題 / 発生条件 / 根拠 / 確定か未確定 / 推奨対応» で。無ければ `No Critical/Major`",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- Critical：AC 未達・security 違反・データ喪失の可能性のために、直さないままでは ticket を出荷できないもの",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- Major：この ticket が変える、利用者の操作の流れ（user journey）を劣化させるもの",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- Minor：それ以外。報告には書かない。Minor は自動的に新しい ticket になるのではなく、PM が処置を決める",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- `--no-localhost` は、project の安全な方法で localhost 以外の URL を公開する。URL を知れば到達できる公開方式（Quick Tunnel 等）では露出内容を確認する。厳密な認可が要るなら、別方式（named tunnel + Access 等）にするかをユーザが判断する",
+    "files": [
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- `--port` なしのときは、script が空きポートを選ぶ。`--no-localhost` では外部 URL に port が出ないことが多いので、固定 port が要る検証以外では `--port` を省略してよい",
+    "files": [
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- `--seed` はローカル状態をリセットし、`scripts/seed-pdh-verify.sh` を実行する",
+    "files": [
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- `<RESULT_FILE>` へ要約、結論、根拠、次 action に絞った最終結果を書く",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- `<SCOPE>` 内だけを変更する。範囲外の問題は直さず結果で PM へ報告する",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- branch：`<BRANCH>`。すでにこの branch にいるため切り替えない",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- diff のうち読まなかったファイル（生成物など）とその理由、確かめられずに残ったリスクを 1〜3 行",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- progress：`<PROGRESS_FILE>`（追記だけ。`[SKILLS_PATH]/pdh-pm/_records.md`「ticket / note / progress の役割分担」）",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- push・`./ticket.sh close`・`gh pr merge`・`gh` での issue / PR / comment の書き込みをしない",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-reader.md",
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- review 元の branch：`<BRANCH>`。PM が用意した指定 SHA の detached worktree で作業する。branch を切り替えない",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- test 結果・AC の判定・consumer surface の観察は、どれも正確な commit SHA に結び付けて記録する",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- ticket-local-test の置き場：`<TESTS_DIR>`（存在しなければ `mkdir -p` する）",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- その SHA より後の変更は、それが影響しうる証拠を無効にする。後から commit が入ったら、影響する証拠を取り直す",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- 一時ファイルの置き場：`<TMP_DIR>`。repo 直下や `/tmp` へ散らかさない",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- 判断事項は判断ポイントと選択肢を示し、おすすめを先頭に置き、各 tradeoff を 1 行で添える",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- 失敗や中断時も、何がなぜ失敗したかを `<RESULT_FILE>` へ書き、無言終了しない",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- 根拠：コードの引用（path:行 と、その行の文）か、実行したコマンドとその出力。どちらも無い finding は «確信度: 低» と書く。LLM の reviewer は、正しいコードにも問題を見つける方へ偏る。複数の reviewer が同じことを言っても、正しさの証拠にはならない",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- 発生条件：欠陥が起きる入力・状態・経路。そのまま修正前に落ちるテストの入力になる",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- 確定：発生条件と誤った出力を言える。未確定：仕組みは実在するが発生条件が不確かなもの。何で確定するかを書く",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- 終わったら、この本文の「報告の返し方」と「報告」の形で報告を返す",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "- 終わったら、この本文の「報告の返し方」の形で報告を返す",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "2 巡目以降の reviewer は、渡された finding・修正の diff・修正前後の出力だけを読み、修正が直前の性質を壊していないかを最初に見る。広い探索をやり直さない。実装者が記録した、修正前後の同じ入力の出力が無ければ、無いことを finding とする。",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "2. `./PDH-AGENTS.md`（PDH 汎用ルール。severity 等の判定はここに従う）",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "3. `./CLAUDE.md`（project 固有の規則、テスト、approval、tool/model 上書き）",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "4. `./CLAUDE.local.md`（存在すれば。git 管理外なので worktree には無いことがある。そのときは main の checkout の root を見る）",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "5. `<TICKET_FILE>`（Why、Acceptance Criteria、Architectural-Invariants-check、Design-Decisions、Out-of-scope の節）",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "HEAD・branch・index を動かす `checkout`・`switch`・`reset`・`rebase`・`merge`・`cherry-pick`・`commit` などを実行しない。指定 SHA は PM が用意した detached worktree で読む。別の SHA の worktree が必要なら PM に返す。PM は起動前後の HEAD と作業ツリーを照合し、結果を回収した後に `git worktree remove <専用 worktree のパス>` で片付ける。再現テストとログは worktree の外の `<TMP_DIR>` に残す。",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "PM から委譲された 1 つの subtask だけを実行する。会話履歴を前提にせず、prompt と指定ファイルを自分で読む。この本文の `<…>`（`<RESULT_FILE>` など）は、PM が prompt に書いた実際の値を指す。",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "UI / API の検証と承認の PDH-stage には `./scripts/dev-server.sh` を使う。QA Engineer と Surface Observer はここで起動したサーバで確かめる。",
+    "files": [
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "UI / API の検証に再現可能なローカルデータが要るなら、`scripts/seed-pdh-verify.sh` を実装する。seed が不要なら、この script は何もせず成功で終わる形にする。**この script から本番データやリモートデータを使わない**（現在の検証についてユーザが明示的に承認した場合を除く）。",
+    "files": [
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "`[SKILLS_PATH]/pdh-pm/_open-ticket.md`「開けたかを確かめるコマンド」の終了コードが 0 である。",
+    "files": [
+      "claude/skills/pdh-open/SKILL.md",
+      "claude/skills/pdh-resume/SKILL.md"
+    ],
+    "reason": "open と resume は同じ helper の終了条件を確認する。"
+  },
+  {
+    "line": "`ticket.sh` を実行しない。`<TESTS_DIR>` と `<TMP_DIR>` が与えられていないのに必要になったら、推測せず結果で PM へ報告する。",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "file へ書けない sandbox で動くときは、`<RESULT_FILE>` に書く内容を最終 message で返す。",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "ticket に必要な dev server / seed の挙動が script と食い違うなら、変更を単発のコマンドへ隠さず script を更新する。",
+    "files": [
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "この規則の目的: reviewer が、PM と他の worker の branch と index を保ったまま、指定 SHA を読めること。",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "上記以外は、prompt とこの本文で指定されたファイルだけ読む。",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "散文は `product-brief.md` の作業言語に合わせる。code、identifier、command、log、conventional-commit prefix は原文を保つ。",
+    "files": [
+      "claude/templates/agents/claude/pdh-ac-verifier.md",
+      "claude/templates/agents/claude/pdh-coding-engineer.md",
+      "claude/templates/agents/claude/pdh-qa.md",
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md",
+      "claude/templates/agents/claude/pdh-surface-observer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "発生条件を言える候補は、確信が無くても未確定として書く。自分で捨てない — 処置は PM が決めるので、reviewer の段で捨てた候補は誰にも確かめられないまま消える。特に、PM が転記した «fail-open を先に探す diff の一覧» に当たる箇所は、何が不確かかを書いて残す。«〜を確認すべき» で終わる finding は書かない。確かめられるなら自分で確かめ、結果（欠陥がある / 無い）を書く（`PDH-AGENTS.md`「確認が要るのは判断であって、調査ではない」）。",
+    "files": [
+      "claude/templates/agents/claude/pdh-reviewer-lens1.md",
+      "claude/templates/agents/claude/pdh-reviewer.md"
+    ],
+    "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
+  },
+  {
+    "line": "`[SKILLS_PATH]/pdh-pm/_open-ticket.md`「開けたかを確かめるコマンド」の終了コードが 0 である。",
+    "files": [
+      "codex/skills/pdh-open/SKILL.md",
+      "codex/skills/pdh-resume/SKILL.md"
+    ],
+    "reason": "open と resume は同じ helper の終了条件を確認する。"
+  }
+]

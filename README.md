@@ -2,268 +2,72 @@
 
 # PDH — Product Delivery Hierarchy
 
-Product Brief / Ticket の 2 層で、**なぜ作るか**・**いま何をやるか** を構造化する仕組み。
-
-人間と coding agent（Claude Code 等）の両方が読み、同じ文脈の中でプロダクトの方向性から日々の実装作業までを追跡する。
-
-## 特徴
-
-- **2 層構造**: Product Brief (why) → Ticket (what + how、1 ticket = 1 work unit)
-- **Ticket-human-review + post-implementation review**: 実装前に ticket contract / AC を人間とすり合わせ、実装後に review / verify / human-review を通す
-- **Coding agent 対応**: Agent が読んで判断・実装できるように設計
-- **Git ベース**: すべて Markdown ファイル。特別なツールは不要
-- **ticket.sh 連携**: [ticket.sh](https://github.com/masuidrive/ticket.sh) でチケットのライフサイクルを管理
-
-> **note**: 旧設計は Product Brief / Epic / Ticket の 3 層 + Light/Full の 2 段階 flow だったが、1 user + AI 体制で Epic の同期 / coordination 価値より overhead cost の方が高いと実証され、Product Brief / Ticket の 2 層 + PDH stage flow (1 ticket per work) に統一された。Epic / PD-A / PD-B / PD-D / PD-C-2〜5 / PD-C-8 は廃止。詳細は `docs/product-delivery-hierarchy.md` 参照。
+Product Brief（なぜ作るか）と ticket（いま何をやるか）の 2 層を、Git の Markdown に残す仕組み。coding agent が session・compact・bot run をまたいで作業を続け、人が実装前の AC と close を承認する。
 
 ## 前提条件
 
-| 必須/任意 | ツール | バージョン目安 | 用途 |
-|---|---|---|---|
-| 必須 | `git` | 2.x+ | バージョン管理、リポジトリ clone |
-| 必須 | `curl` | any | ticket.sh ダウンロード |
-| 必須 | `bash` | 4.x+ | スクリプト実行 |
-| 必須（いずれか） | [`claude`](https://claude.ai/claude-code) (Claude Code CLI) | 2.x+ | coding agent 本体。skill は `.claude/skills/` から読む |
-| 必須（いずれか） | [`codex`](https://github.com/openai/codex) (Codex CLI) | any | coding agent 本体。skill は `.agents/skills/`、指示は `AGENTS.md` から読む |
-| 任意 | `node` | **18+** (推奨 20+ / 24+) | `scripts/hookbus.js` の実行 (tmux Director 使用時のみ)。ESM / top-level await / `import.meta` / `node:` prefix を使うため 18 未満は不可 |
-| 任意 | `tmux` | 3.x+ | Director で複数 worker 監視する場合 |
-
-**coding agent は claude / codex のどちらか一方があれば動く。** PDH のフローは engine 中立で、どちらを main（PM）にしても同じ stage flow を回せる。両方ある場合は実装 worker だけを逆 engine に委譲する構成も選べる（§main engine の選択 参照）。
+`git`・`curl`・`bash`・標準 Unix コマンド、Python 3.11 以降と PyYAML、Claude Code または Codex CLI を使う。review 評価コマンドを使う場合は `jq` と評価対象の CLI も必要。外部 API・CI・開発サーバの環境は各 project の規則で決める。
 
 ## セットアップ・アップデート
 
-導入手順と更新手順は engine ごとの INSTALL.md にある。**使う coding agent の方を読ませる。**
+使う engine の導入手順を coding agent に読ませる。
 
-- **Claude Code**: [claude/INSTALL.md](claude/INSTALL.md)（[新規導入](claude/INSTALL.md#新規導入) / [既存プロジェクトのアップデート](claude/INSTALL.md#既存プロジェクトのアップデート) / [既知の移行手順](claude/INSTALL.md#既知の移行手順)）
-- **Codex CLI**: [codex/INSTALL.md](codex/INSTALL.md)（[新規導入](codex/INSTALL.md#新規導入) / [既存プロジェクトのアップデート](codex/INSTALL.md#既存プロジェクトのアップデート)）
-- 導入済みの更新は `pdh-update` skill を使う場合も内部でこの手順を辿る。差分だけでは移行できない変更は各 INSTALL.md の移行手順に集約している
+- Claude Code: [claude/INSTALL.md](claude/INSTALL.md)
+- Codex CLI: [codex/INSTALL.md](codex/INSTALL.md)
+- GitHub bot（任意）: [github-bot/INSTALL.md](github-bot/INSTALL.md)
 
-最短の導入は、プロジェクトのルートで coding agent にこう指示する（使う engine の INSTALL.md を指す）:
-
-```
-# Claude Code
-https://github.com/masuidrive/pdh の claude/INSTALL.md を読んで、このプロジェクトに PDH を導入して。
-
-# Codex CLI
-https://github.com/masuidrive/pdh の codex/INSTALL.md を読んで、このプロジェクトに PDH を導入して。
-```
+導入済みの更新は `pdh-update`。配置表は各 INSTALL にあり、「上書き / 差分マージ / 初回だけ」を区別する。共有 skill・worker・script の版は `.pdh-lock`、project の差分マージ対象の由来は `Based on` が持つ。
 
 ## ワークフロー (PDH stage flow)
 
-```
-Product Brief を書く
-    ↓
-Ticket を作成 (Why / AC / Architectural Invariants check / Design Decisions / Out-of-scope を埋める)
-    ↓
-PDH-open: 対象 ticket / note / brief を読む
-    ↓
-PDH-ticket-review: agent が ticket contract を整える
-    ↓
-PDH-ticket-human-review: 実装前に全体概要・修正点・AC をユーザに提示し、AC 承認を得る (人間 gate)
-    ↓
-PDH-implement: 実装
-    ↓
-PDH-review: 実装後 review と修正ループ
-    ↓
-PDH-verify: AC 裏取り + Surface Observer + テスト全件 + `ticket-local-test`
-    ↓
-PDH-human-review: やったこと・達成したことをユーザが確認する (人間 gate)
-    ↓
-PDH-close: human-review 承認後に close
-```
+`PDH-ticket-write` → `PDH-open` → `PDH-ticket-review` → `PDH-ticket-human-review` → `PDH-implement` → `PDH-review` → `PDH-verify` → `PDH-human-review` → `PDH-close`。
 
-詳細は `docs/product-delivery-hierarchy.md` と `claude/skills/pdh-dev/SKILL.md` を参照。
+中断後は `pdh-resume` が note の Status と Checklist を読み、現在の stage から続ける。PM は `pdh-pm`、worker は役割定義を読む。詳細は [共有契約](docs/PDH-AGENTS.md)。
 
 ## main engine の選択
 
-PDH のフローは engine 中立で、特定の engine を前提にしない。
-
-**main engine** = PM（Director）を動かす coding agent。`claude` でも `codex` でもよい。**worker は既定で main と同じ engine**になる。
-
-- **claude だけの環境**: `claude` で起動する。skill は `.claude/skills/` から読まれる
-- **codex だけの環境**: `codex` で起動する。`AGENTS.md` が自動でコンテキストに載り、skill は `.agents/skills/`（`.claude/skills/` への symlink）から読まれる
-- **両方ある環境**: どちらを main にしてもよい。役割ごとに engine を分けたいとき（例: 実装だけ main と逆の engine にする）は、下の `CLAUDE.md` のチーム構成で指定する
-
-役割ごとの engine / model を既定から変えたい場合は `CLAUDE.md` のチーム構成テーブルで上書きする。特定 engine をフローにハードコードしないこと（`product-brief.md` の `AI-5`）。ただし **cross-model review が必須の変更**（認証・認可・DB スキーマ・secret・データ削除・課金）では、生成したモデルとは別のモデルによる独立レビューを最低 1 つ入れる。これは engine の指定ではなく「生成者と検証者を分ける」という要件で、同一 engine 内の別モデルでも満たせる。
-
-詳細は `claude/skills/pdh-dev/_execution-team.md`「エンジン割り当て」「spawn 機構」を参照。
+Claude Code は `.claude/skills/`、Codex 単独導入は `.agents/skills/` に skill を置く。Claude 併用では `.agents/skills/` を `.claude/skills/` への symlink にする。実装と review は既定で別 engine を使い、project の役割の設定で選ぶ。
 
 ### 対応している coding agent
 
-PDH が engine に要求するのは 2 つだけ。
-
-1. session 開始時に `AGENTS.md` または `CLAUDE.md` を自動でコンテキストに載せること
-2. `.claude/skills/` または `.agents/skills/` から skill を読むこと
-
-| engine | 状況 |
-|---|---|
-| **Claude Code** | first-class。PDH の開発自体がここで回っている |
-| **Codex CLI** | first-class。`AGENTS.md` の自動ロードと `.agents/skills/`（`.claude/skills/` への symlink）からの skill 探索を実測確認済み |
-| Grok Build | 動く。`AGENTS.md` / `CLAUDE.md` を両方読み、`.claude/skills/` と `.agents/skills/` の両方を走査する。ただし **gitignore した `CLAUDE.local.md` は読まれない**（[INSTALL.md](claude/INSTALL.md#新規導入) の注記を参照） |
-| opencode ほか | 未検証だが、上の 2 条件を満たすなら動くはず |
-
-2 の skill 機構が無い agent でも、`AGENTS.md` から `.claude/skills/pdh-dev/SKILL.md` を明示的に読ませれば動作する。skill 機構は遅延ロードの最適化であって、PDH の前提ではない。
-
-## tmux Director
-
-tmux 上で複数の Claude Code セッションを走らせている場合に、別 window の Claude Code を監督・指示するためのスキル。**Claude Code 専用**（hook 機構・slash command・worktree に依存するため。codex を使う場合は pdh-dev の subprocess worker 方式を使う）。
-
-- **Director (監督)** として振る舞い、自分ではコードを書かず、別 window の Claude Code に指示を出して作業を監視する
-- PDH ワークフロー (`PDH-open` → `PDH-ticket-review` → `PDH-ticket-human-review` → `PDH-implement` → `PDH-review` → `PDH-verify` → `PDH-human-review` → `PDH-close`) の遵守を監視し、逸脱 (テスト未実行、E2E 省略、AC 未達、human gate スキップ等) を検知して是正指示を出す
-
-Claude Code で `tmux-director` と入力すると起動する。
-
-### 監視パス (2 系統)
-
-1. **hookbus event stream (推奨、ms 単位で反応)** — `scripts/hookbus.js` と `.claude/settings.json` の hooks を配線しておくと、worker がアイドル / permission 待ちになった瞬間に `/tmp/claude-events-<socket_hash>/log.ndjson` に NDJSON が 1 行 append される。Director は Claude Code の **`Monitor` ツール** (deferred tool、stdout 1 行 = 1 通知として会話に push する組み込み streaming 機能) で `scripts/hookbus.js pull --include <w1-key> --include <w2-key> ... --follow` を bg 消費し、対象 worker の event だけを通知として受け取る。無関係な pane は allow-list にないので自然に弾かれる。ポーリング不要
-2. **tmux capture-pane Monitor Agent (fallback、15 秒間隔)** — hookbus 未配線のプロジェクト用。Sonnet Agent を bg spawn して 15 秒ごとに画面 capture + 状態判定
-
-### hookbus 起動手順
-
-**前提**: INSTALL.md「ファイルを配置する」で `scripts/hookbus.js` 配置済、「.claude/settings.json を設定する」の hookbus 版で hooks 配置済。
-
-**重要な仕様**: `.claude/settings.json` は **各 Claude Code セッション起動時に読まれて固まる**。mid-session で settings.json を編集しても、走っているセッションには反映されない。hooks を追加・変更した場合は **全 Claude セッション一旦終了 → 再起動** が必要。
-
-手順:
-
-1. 全 tmux window で走っている Claude Code セッションを終了 (`/exit` or Ctrl-C)
-2. Director window / Worker window とも通常どおり `claude` で起動
-3. Director セッション内で監視対象 worker の key を allow-list で指定し、**固有 `--cursor` id** で Monitor 起動:
-   ```bash
-   SOCK_HASH=$(scripts/hookbus.js whoami | cut -d: -f1)
-   CURID="$SOCK_HASH:mon-$(tmux display-message -p '#{window_index}')"    # Director 自身の key と必ず別
-   ROOT=/tmp/claude-events-$SOCK_HASH
-   mkdir -p "$ROOT/consumers"
-   wc -c < "$ROOT/log.ndjson" | tr -d ' ' > "$ROOT/consumers/${CURID/:/%3A}.cursor"  # cursor を log 末尾へ直書き seed (__seed_no_match__ pull では seed されないため。backlog 再生回避)
-   ```
-   ```
-   Monitor({
-     command: "scripts/hookbus.js pull --cursor $CURID --include <w1-key> --include <w2-key> --include <w3-key> --follow",
-     description: "tmux worker events",
-     persistent: true
-   })
-   ```
-   worker の key は `<socket_hash>:<pane_id>` (例: `a3f2e1:%10`)。pane_id は `tmux list-panes -a -F '#{pane_id}'` で取れる。socket_hash は Director の `scripts/hookbus.js whoami` の `:` 前部分と同じ。`--include` 省略時は全 event が流れる (無関係な pane 含む) ので、監視対象は明示推奨。worker が Stop / Notification した瞬間、NDJSON 1 行が会話に通知として push される。
-
-   **⚠ `--cursor` を必ず明示する**: 省略時 cursor identity は `whoami`（= Director 自身の pane の key。`<hash>:<pane_id>` 形式で、pane_id は環境ごとに異なる）にフォールバックする。cursor は「読んだ byte offset」を identity ごとに 1 ファイルで持ち emit ごとに advance するため、**同一 identity の `pull` が複数あると (Monitor 2 つ / Director の手動 `pull`) 片方が cursor を進めて他方がイベントを取り逃す**。各 Monitor に固有 `--cursor`、新規 cursor は上記のように log 末尾へ seed (offset 0 からだと全 backlog を replay し通知洪水)、複数 worker は「1 Monitor + `--include` 複数」で監視する。
-
-**動作確認** (Director 側で):
-```bash
-# 別 worker window で何かターンを終わらせてから:
-cat /tmp/claude-events-*/log.ndjson | tail -3    # 3 行以上あれば動いてる
-scripts/hookbus.js whoami                         # 自分の key が出る
-```
-
-### 元に戻す
-
-- `.claude/settings.json` から `hooks` ブロックを外す → 全セッション再起動 → log 書込停止
-- `/tmp/claude-events-*` の cleanup は `scripts/hookbus.js cleanup --older-than 7` (default) または `rm -rf /tmp/claude-events-*`
-
-詳細は `scripts/hookbus.js` ヘッダコメント (サブコマンド / ログ配置) と `.claude/skills/tmux-director/SKILL.md` の TD-0 節を参照。
+Claude Code と Codex CLI の導入・更新手順を提供する。他の engine では project の規則・共有契約・skill を読めることと worker の起動・回収経路を確かめる。
 
 ## ファイル構成
 
-導入後のプロジェクト構造:
-
-```
-project-root/
-  product-brief.md          ← プロダクトの why + Architectural Invariants (1 つだけ)
-  technical-reference.md    ← 現在の実装の How (1 つだけ。ticket close 時に agent が維持)
-  CLAUDE.md                 ← project 固有 Agent ルール
-  PDH-AGENTS.md             ← PDH 汎用 Agent ルール
-  CLAUDE.local.md           ← gitignore 済みの環境固有 agent メモ（存在する場合のみ）
-  CLAUDE.local.md.example   ← 環境固有 agent メモのサンプル
-  ticket.sh                 ← チケット管理ツール
-  .ticket-config.yaml       ← ticket.sh 設定
-  docs/
-    product-delivery-hierarchy.md  ← PDH 運用ルール・テンプレート
-  tickets/
-    YYMMDD-hhmmss-slug/     ← Ticket ディレクトリ (ticket.sh が管理: ticket.md / note.md / tests/ / tmp/)
-    done/                   ← 完了した Ticket
-  current-ticket/           ← 作業中 ticket への symlink (ticket.sh start/restore が作る。git 管理しない)
-  AGENTS.md                 ← Codex CLI 向け設定 (CLAUDE.md / PDH-AGENTS.md への thin pointer)
-  .agents/
-    skills/                 ← Codex 用 symlink（実体は .claude/skills）
-  scripts/
-    test-all.sh             ← テスト一括実行
-    fast-checks.sh          ← 決定論的 fast-check ランナー（宣言形式の grep 不変条件）
-    checks/                 ← fast-check レジストリ（*.check + README）
-    dev-server.sh           ← PDH verify / human-review 用の開発サーバ入口
-    seed-pdh-verify.sh      ← PDH verify / human-review 用のローカル seed hook
-    test-ticket-local.sh    ← `ticket-local-test` 実行
-    check-pdh-ticket.sh     ← ticket dir の progress.md・human gate の待ち行・close 前 review の区間・起票の検査（test-all の 1 段）
-    pdh-review-range.sh     ← 最後に review した SHA 以降の ticket 自身の commit（close 前 review の区間）
-    check-ticket-template-drift.sh ← .ticket-config.yaml のテンプレ本文と上流の差（pdh-update の後に回す）
-    hookbus.js              ← (任意) tmux Director hookbus event bus
-  tests/
-    tickets/
-      YYMMDD-hhmmss-slug/
-        test-ticket-local.sh ← 旧 flat 形式の ticket-local-test（後方互換。新レイアウトでは tickets/<name>/tests/ に置く）
-  .claude/
-    settings.json           ← Agent Teams 設定 + (任意) hookbus 用 hooks
-    skills/
-      pdh-dev/              ← PDH stage flow ワークフロースキル (SKILL.md + _*.md)
-      pdh-coding/SKILL.md   ← コーディング標準スキル
-      pdh-reviewing/SKILL.md ← レビュー標準スキル
-      pdh-verifying/SKILL.md ← 検証標準スキル（QA / AC 裏取り / Surface Observer / AC 読み手）
-      pdh-check-writing/SKILL.md ← 宣言型 `.check` 執筆スキル
-      tmux-director/SKILL.md ← tmux Director スキル
-      pdh-update/SKILL.md    ← PDH アップデートスキル
-      pdh-decision-board/      ← 判断ボードスキル (SKILL.md + 分冊 + kit/ + tools/)
-```
+導入先では `product-brief.md`、`PDH-AGENTS.md`、project の規則（`CLAUDE.md` または `AGENTS.md`）、`.ticket-config.yaml`、`tickets/<ticket>/ticket.md`・`note.md`・`progress.md` を持つ。skill・worker・共有 script は配置表どおりに置く。`scripts/test-all.sh`・開発サーバ・seed は project が実装する。
 
 ## このリポジトリの構成
 
-配布セットは engine ごとに分かれ（`claude/` / `codex/`）、契約（`docs/`）と評価データ（`evals/`）を共有する。同じ規則文でも engine で振る舞いが逆になることが実測で出たため、skill の文面・agent 定義・起動手順は engine ごとに最適化し、stage flow・gate・AC の扱いは 1 つに保つ（`product-brief.md` の決定事項 2026-09-06）。
-
-```
+```text
 pdh/
-  README.md                          ← このファイル（PDH の説明）
-  INSTALL.md                         ← engine ごとの INSTALL.md への入口
-  product-brief.md                   ← PDH 自身の Product Brief
-  CLAUDE.md                          ← PDH repo 固有の agent ルール（AGENTS.md はここへの pointer）
-  docs/                              ← 契約【配布物。両セット共通】
-    product-delivery-hierarchy.md    ← PDH 運用ルール
-    PDH-AGENTS.md                    ← PDH 汎用 agent ルール（配布先 root の PDH-AGENTS.md）
-  claude/                            ← Claude Code 用の配布セット
-    INSTALL.md                       ← 導入・更新手順（配布物の配置表はここにある）
+  docs/PDH-AGENTS.md          # 共有契約
+  docs/pdh-glossary.md        # 用語
+  claude/
+    INSTALL.md  lock-map.tsv
     skills/
-      pdh-dev/                       ← PDH stage flow ワークフロースキル（SKILL.md + 分冊 _*.md）
-      pdh-coding/SKILL.md            ← コーディング標準スキル
-      pdh-reviewing/SKILL.md         ← レビュー標準スキル
-      pdh-verifying/SKILL.md         ← 検証標準スキル（verify worker 群の規則）
-      pdh-check-writing/SKILL.md     ← 宣言型 `.check` 執筆スキル
-      tmux-director/SKILL.md         ← tmux Director スキル
-      pdh-update/SKILL.md            ← PDH アップデートスキル
-      pdh-decision-board/            ← 判断ボードスキル（SKILL.md + 分冊 + kit/ + tools/）
+      pdh-pm/                # SKILL.md / _execution-team.md / _open-ticket.md / _records.md
+      pdh-ticket-write/  pdh-open/  pdh-resume/  pdh-ticket-review/
+      pdh-implement/  pdh-review/  pdh-verify/  pdh-close/
+      pdh-change/  pdh-check-writing/  pdh-update/  pdh-decision-board/
     templates/
-      CLAUDE.md                      ← project 固有ルールの雛形（入口ファイル）
-      CLAUDE.local.md.example        ← 環境固有 agent メモのサンプル
-      AGENTS.md                      ← Codex を worker に使うときの thin pointer
-      agents/claude/  agents/codex/  ← PDH worker の agent 定義（配布先 .claude/agents/ と .codex/agents/）
-      product-brief.md  technical-reference.md  .ticket-config.yaml
-      test-all.sh  fast-checks.sh  checks/  dev-server.sh  seed-pdh-verify.sh  test-ticket-local.sh  check-pdh-ticket.sh  pdh-review-range.sh  check-ticket-template-drift.sh
-    scripts/hookbus.js               ← tmux Director hookbus（CLI + library + in-source vitest）
-  codex/                             ← Codex CLI 用の配布セット（同じ構成。入口は AGENTS.md、agent 定義は .codex/agents/*.toml）
-  github-bot/                        ← GitHub Issues + Actions bot レイヤー【任意・engine 中立。有効化した人だけが配置】
-    INSTALL.md  _pdh.md  _github-issue.md  pdh-hooks.sh  pdh-gh-pull/  .ticket-config.snippet.yaml
-    .github/  .devcontainer/  ROBOT.md ← coding-bot の実体（workflow / runner / devcontainer）。直すのはここ
-      coding-bot/run-in-container.sh ← compose 内の実行入口・共通 smoke
-      coding-bot/engines/_stub.sh    ← ローカル試験専用 engine
-  evals/                             ← 評価【配布物ではない。両セット共通】
-    eval-*.md  fixtures/  examples.md
-    private/                         ← 実案件の切り出し再生（private repo pdh-eval の checkout。git 管理外）
-  scripts/                           ← この repo 自身の検査【配布物ではない】
-    test-all.sh  fast-checks.sh  check-distribution.sh  check-guard-parity.sh  check-github-bot.sh  check-links.py  checks/
-    smoke-github-bot.sh              ← github-bot 層を実 repo で両 engine 実走する（Actions を使うので手で回す）
-    check-board-render.sh  board-check/  bsd-shim/
+      CLAUDE.md  AGENTS.md  product-brief.md  .ticket-config.yaml
+      agents/claude/  agents/codex/
+      checks/  settings.json  hooks.json
+      test-all.sh  dev-server.sh  seed-pdh-verify.sh
+      check-pdh-ticket.sh  check-ticket-template-drift.sh  fast-checks.sh
+      pdh-stage-checklist.sh  pdh-session-hook.sh  pdh-lock.sh
+      pdh-review-range.sh  pdh-review-tally.sh  pdh-review-eval.sh
+      pdh-related-docs.sh  pdh-verify-lib.sh  docs-policy.py  docs-toc.sh
+      spawn-worker.sh  test-ticket-local.sh  gen-agents-md.sh  gen-codex-agents.sh
+      pdh-review-eval/        # README と空の cases.json。実案件データは配らない
+  codex/                     # ネイティブ配置・backup・移行の入口と、生成した skill・worker
+    INSTALL.md  lock-map.tsv  skills/  templates/
+  github-bot/                # 任意の coding-bot。pdh-gh-pull/ もここから配る
+    INSTALL.md  _pdh.md  _github-issue.md  pdh-hooks.sh
+    .github/  .devcontainer/  ROBOT.md
+  scripts/                   # 配布元自身の検査と Codex 生成
+  tests/                     # 一時導入先で共有 script の契約を検査
+  evals/                     # 配布元の評価。配布しない
 ```
 
-## 関連ツール
-
-- [ticket.sh](https://github.com/masuidrive/ticket.sh) — Git ベースのチケット管理
-- [Claude Code](https://claude.ai/claude-code) — Anthropic の CLI ツール
-
-## License
-
-Apache License 2.0
+Codex 本文は `python3 scripts/gen-codex-distribution.py` で Claude 本文から生成する。ネイティブの INSTALL・AGENTS と退避・移行の経路は別に保守する。生成のずれと配置表・lock-map の対応は `bash scripts/test-all.sh` で検査する。

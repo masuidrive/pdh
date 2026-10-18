@@ -57,21 +57,27 @@ set -u
 if [ "${1:-}" = "--wait" ]; then
   out="${2:-}"
   [ -n "$out" ] || { echo "usage: spawn-worker.sh --wait <out-dir> [seconds]" >&2; exit 64; }
+  [ -d "$out" ] || { echo "spawn-worker.sh: 待つ worker の dir が無い: $out" >&2; exit 66; }
   secs="${3:-150}"
+  case "$secs" in ''|*[!0-9]*) echo "spawn-worker.sh: seconds は非負整数が必要" >&2; exit 64 ;; esac
   resume_status() {
     if [ -f "$out/resume.log" ]; then
       awk '$2 == "phase=started" && $3 ~ /^started_at=/ {n++} END {printf " resumes=%d", n}' "$out/resume.log"
     fi
   }
   waited=0
-  while [ "$waited" -lt "$secs" ]; do
-    if [ -f "$out/rc.txt" ]; then
-      echo "DONE rc=$(cat "$out/rc.txt")$(resume_status)"
+  # rc.txt は待つ前にも確かめる。0 秒の --wait（戻ったときに 1 回だけ見る）でも、終わった worker を DONE と返すため。
+  while :; do
+    rc_file="$out/rc.txt"
+    [ -f "$rc_file" ] || rc_file="$out/rc"
+    if [ -f "$rc_file" ]; then
+      echo "DONE rc=$(cat "$rc_file")$(resume_status)"
       if [ -f "$out/resume.log" ]; then
         awk '/^再開の [0-9]+ 回目が混雑以外で終わった/ {print}' "$out/resume.log"
       fi
       exit 0
     fi
+    [ "$waited" -lt "$secs" ] || break
     sleep 2
     waited=$((waited + 2))
   done
@@ -106,7 +112,7 @@ out="$(cd "$out" && pwd)"   # 切り離した先では相対パスが効かな�
 #   書いた pid.txt を «後から» 消してしまう（2026-09-15 に実測。pid.txt だけが
 #   消え、--wait が supervisor の生死を確かめられなくなっていた）。
 if [ "${_SPAWN_WORKER_SUPERVISOR:-}" != "1" ]; then
-  rm -f "$out/rc.txt" "$out/diag.txt" "$out/pid.txt" "$out/child-pid.txt"
+  rm -f "$out/rc" "$out/rc.txt" "$out/diag.txt" "$out/pid.txt" "$out/child-pid.txt"
   rm -f "$out/resume.log" "$out"/stdout.[0-9]*.txt "$out"/stderr.[0-9]*.txt "$out"/resume-[0-9]*.prompt.txt
 fi
 
@@ -115,7 +121,7 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
   {
     printf 'started_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf 'self_pid=%s parent_pid=%s\n' "$$" "$PPID"
-    printf 'session_leader=%s\n' "$(ps -o sid= -p "$$" 2>/dev/null | tr -d ' ')"
+    printf 'session_leader=%s\n' "$( { ps -o sid= -p "$$" 2>/dev/null || ps -o sess= -p "$$" 2>/dev/null; } | tr -d ' ')"
     printf 'command=%s\n' "$*"
   } > "$out/spawn.txt" 2>/dev/null || true
 

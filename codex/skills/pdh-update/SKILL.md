@@ -1,28 +1,21 @@
 ---
 name: pdh-update
-description: "PDH アップデート: 上流 PDH リポジトリの最新版を取り込み、プロジェクト固有設定を保持して配布物を更新する。「pdh-update」と明示された時だけ起動する。"
+description: "PDH アップデート: PDH-repoの最新版を取り込み、プロジェクトのスキル・テンプレートを更新する。「pdh-update」とだけ言われた時のみ起動する。他のキーワードでは起動しない。"
 ---
 
-# PDH Update
+# PDH Update — PDH-repo の取り込み
 
-次を最後まで実行する。
+利用可能な worker / delegation 機構で更新作業用 worker を起動し、その worker 内で以下を実行する（worker を起動した側の会話では実行しない）。worker を起動できない場合は単独続行せず、制限を報告してユーザに確認する。
 
-1. 上流の `codex/INSTALL.md` を取得して「既存プロジェクトのアップデート」と「Claude 併用版からの移行」を読む。
-2. 更新前に `codex/INSTALL.md` の手順で timestamp 付き backup を作る。backup path を記録する。
-3. `.agents/skills/pdh-*` と `.codex/agents/pdh-*` は上流定義で置き換える。列挙された PDH path だけを対象にし、user が追加した skill / agent は触らない。
-4. `PDH-AGENTS.md` と `docs/product-delivery-hierarchy.md` を更新する。
-5. `AGENTS.md`、`product-brief.md`、`technical-reference.md`、`.ticket-config.yaml`、`scripts/` の project 固有ファイルは上書きしない。template との差分を読み、必要な上流変更だけをマージする。
-5.5. `bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/codex/templates/.ticket-config.yaml` で `.ticket-config.yaml` のテンプレ本文（`default_content` / `note_content`）と上流の差を数え、**出力を完了報告に貼る。**差があれば、その行が導入先の独自の節か、取り込み漏れかを分けて報告する
-6. `codex/INSTALL.md` の配置表に追加された `.check` を取り込み、project 固有の `.check` を残す。`required-pdh-files.check` は現行の skill / agent 定義一式に合わせる。
-6.4. `codex/INSTALL.md` の「既知の移行手順」を読み、該当する移行を適用し、確認コマンドを適用後に再実行する。`scripts/spawn-worker.sh` の自動再開もこの手順で更新する。
-6.5. github-bot レイヤーを導入済みなら（`.github/` 内に `_pdh.md` がある。改名前の配置も含む）、先に上流 [github-bot/INSTALL.md の改名手順](../../../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)と同文書の「導入先固有の secret」を確認し、該当する移行と確認コマンドの再実行を行う。その後、同文書「更新」に従い `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/` を上流の版で置き換える。machinery（`.github/coding-bot/`・`.github/workflows/coding-bot*.yml`・`.devcontainer/`）は同じ「更新」のとおり diff を確かめて反映し、丸ごと上書きしない。
-7. `bash ./ticket.sh selfupdate` で ticket.sh を更新する。
-7.5. close 済みでない ticket は、AC の中身に触れない形だけを揃える。AC の書き直しは着手時の `PDH-ticket-review` で行う（`codex/INSTALL.md`「3.5」）。
-8. `Based on` の commit ID を上流 HEAD に更新し、`codex/INSTALL.md` の導入結果検査と project の `scripts/test-all.sh` を実行する。
-9. 同じ更新をもう一度実行し、PDH 配布物に 2 回目の差分が出ないことを確認する。
+1. https://raw.githubusercontent.com/masuidrive/pdh/refs/heads/main/codex/INSTALL.md を読む（README.md しか無い古い記述を見た場合も INSTALL.md を読む）
+2. INSTALL.md の「既存プロジェクトのアップデート」の手順に従い、このプロジェクトの PDH を最新版にアップデートする。配置表へ追加されたskillと、directory copy配下に追加された`scripts/checks/*.check`も取り込み、Codex用symlink一覧を現行skill一式へ揃える。**skillと`pdh-*`のagent定義は毎回まるごと上書きする**（差分マージしない）。あわせて`scripts/checks/required-pdh-files.check`の`required_paths`を、いま配置した skill / agent 定義の一式へ揃える（導入先が使わないと決めて外した行は復活させない）
+3. **INSTALL.md の「既知の移行手順」を必ず読み、該当する項目をすべて適用する。**
+3.5. **coding-bot（`.github/coding-bot/` の手順書と script）を導入済みなら**（`.github/` 内に `_pdh.md` がある。改名前の配置も含む）、先に PDH-repo の [github-bot/INSTALL.md の改名手順](https://github.com/masuidrive/pdh/blob/main/github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)と同文書の「導入先固有の secret」を確認し、該当する移行と確認コマンドの再実行を行う。その後、同文書「更新」に従い `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/` を PDH-repo の版でまるごと置き換える。残りのファイル（`.github/coding-bot/`・`.github/workflows/coding-bot*.yml`・`.devcontainer/`）は同じ「更新」のとおり diff を確かめて反映し、丸ごと上書きしない。
+4. 更新手順には `bash ./ticket.sh selfupdate`（ticket.sh 本体を配布元の repo の最新版へ更新）が含まれる。
+5. **「既知の移行手順」の確認コマンドを、適用後にもう一度ぜんぶ実行する**（INSTALL.md 手順 7.5）。「要追加」「要改名」が残っていたら直してから次へ進む。
+5.5. `bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/codex/templates/.ticket-config.yaml` で `.ticket-config.yaml` のテンプレ本文（`default_content` / `note_content`）と PDH-repo の版の差を数え、**出力を完了報告に貼る。**差があれば、その行が導入先の独自の節か、取り込み漏れかを分けて報告する
+6. 完了報告には、どの項目を適用したか（または該当なしと判断したか）に加えて、**手順 5 の再実行の出力をそのまま貼る。**
 
-旧 `.claude/skills/`、`.claude/agents/`、`CLAUDE.md` がある場合は、`codex/INSTALL.md` の migration に従う。先に内容を backup し、project 固有ルールを `AGENTS.md` へ統合する。`.claude/` 全体や user のファイルをまとめて削除しない。
+6.5. 上書きしたファイルの版を記録する: `bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/codex/lock-map.tsv`。上書きしたファイルが PDH-repo の版と 1 つでも違えば、lock を書かずに止まる。その一覧を完了報告に貼る
 
-完了報告には、上流 commit、backup path、更新した配布物、マージした project 固有ファイル、適用した migration、テスト結果、2 回目の冪等性確認を含める。
-
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/codex/skills/pdh-update/SKILL.md
+`Based on` 行を持つのは、差分をマージするファイル（`AGENTS.md`・`product-brief.md`・`.ticket-config.yaml` など）だけである。上書きするファイルの版は `.pdh-lock` が持つ。取り込んでいない PDH-repo の変更が残っているファイルは、`Based on` 行の commit ID を進めない。進めると «その版を取り込んだ» という誤った表示になる。版はファイルごとに違ってよい。

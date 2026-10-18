@@ -291,8 +291,11 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 1
 fi
 
+universe_paths=()
 universe_files=()
 while IFS= read -r -d '' file; do
+  universe_paths+=("$file")
+  [[ -f "$file" ]] || continue
   universe_files+=("$file")
 done < <(git ls-files -z --cached --others --exclude-standard)
 
@@ -415,17 +418,17 @@ for check_file in "${check_files[@]}"; do
     continue
   fi
 
-  # required_paths asserts presence, so it consults the file universe directly
+  # required_paths asserts presence, so it consults the unfiltered path universe
   # rather than a glob-selected subset. Present means both: named in the scanned
-  # universe (a gitignored file on disk is not, matching every other check type)
+  # universe (including directory symlinks; gitignored files are excluded)
   # AND actually on disk (a plain `rm` leaves the path in the index, and that
   # uncommitted deletion is exactly the state this check has to catch).
   if [[ -n "$required_paths" ]]; then
     IFS=',' read -r -a required_path_list <<< "$required_paths"
     for required_path in "${required_path_list[@]}"; do
       path_present=0
-      if (( ${#universe_files[@]} > 0 )) && [[ -e "$required_path" ]]; then
-        for file in "${universe_files[@]}"; do
+      if (( ${#universe_paths[@]} > 0 )) && [[ -e "$required_path" ]]; then
+        for file in "${universe_paths[@]}"; do
           if [[ "$file" == "$required_path" ]]; then
             path_present=1
             break

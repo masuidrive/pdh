@@ -12,7 +12,7 @@ body { line-height: var(--lh-body); }
 .deck { --deck-measure: 62em; }
 
 /* ---------- 2 軸の scroll 構造 ---------- */
-/* 横 = 決めるための主線、縦 = 確かめるための裏付け（html.md「2 軸の意味」）。 */
+/* 横 = 決めるために承認者が必ず読む本文、縦 = 確かめるための根拠（html.md「2 軸デッキを作るとき」）。 */
 .deck {
   display: flex;
   height: 100dvh;
@@ -246,7 +246,7 @@ figure.shot { margin: 0 0 calc(var(--u) * 4); }
    «図が中央に置かれ、文が下» になり、左右が空いていた（実測）。
    ⚠ 560px まで下げると文が 13 全角まで細るので、640px を境にする。 */
 @media (min-width: 640px) {
-  /* ⚠ class 名を `aside` にしているのは、汎用の `.side`（退けた案の枠）と
+  /* ⚠ class 名を `aside` にしているのは、汎用の `.side`（選ばなかった案の枠）と
      衝突したため。`figure.shot.side` と書いたら `.side { border: 1px;
      padding: 16px 20px }` も当たり、図の «外側» に枠と余白が付いて、その内側で
      図がさらに縮んでいた。html.md「同じ一般名の class を

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 判断ボード kit v2 — token の知覚コントラスト検査（APCA-W3 0.0.98G-4g）。
+# decision-board kit v2 — token の知覚コントラスト検査（APCA-W3 0.0.98G-4g）。
 #
 # tokens.css を書き換えたら実行する。目標:
 #   本文 ink/(paper|bg|fill) |Lc| >= 90 / 補足 muted >= 60 / accent・ok・warn 字 >= 60

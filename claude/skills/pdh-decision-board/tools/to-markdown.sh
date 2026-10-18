@@ -1,8 +1,8 @@
 #!/bin/sh
-# 判断ボードの HTML から、経路へ貼る Markdown を作る。
+# decision-board の HTML から、受け渡し経路へ貼る Markdown を作る。
 #
-# 守るのは «本文が 1 つであること» である。base.md は「主成果物は 1 つにする。同格の本文を
-# 2 つ作らない」と定める。Markdown が要る経路（GitHub の issue コメントなど）でも、
+# この script の目的: HTML を読む人と Markdown を読む人が、同じ 1 つの本文を受け取れること。base.md は「decision-board は 1 つにする。同じ中身を
+# 手で 2 つ書かない」と定める。Markdown が要る経路（GitHub の issue コメントなど）でも、
 # Markdown を «書かせない» — HTML を唯一の本文にして、そこから機械で作る。書かせると、
 # 片方だけ直したときに黙ってずれる。
 #
@@ -11,7 +11,7 @@
 # 落とすもの: 目次・style・script・回答 UI（ボタン / 貼り戻し欄 / 進捗）・svg の中身
 # （代わりに «図は HTML の board にあります» と出す。--url は出力の先頭に置く）。
 # 残すもの（GitHub Flavored Markdown が描くもの）: 見出し・段落・箇条書き・表・引用・
-# 畳み（<details>）・mermaid（```mermaid）・注意の枠（> [!WARNING] などの alert）・
+# 閉じた <details>・mermaid（```mermaid）・注意の枠（> [!WARNING] などの alert）・
 # 判定の tag・選択肢（- [ ]）・用語と説明（dl → 太字の行 + 説明の行）。
 set -eu
 
@@ -68,6 +68,7 @@ function wrapclose(b, at, m,   inner, head, tail){
 }
 function flushpara(   t){
   t = trim(buf); buf=""
+  if (mode == "li") gsub(/[ \t\r\n]+/, " ", t)
   if (t == "") return
   if (mode == "li" && calldepth > 0) { emit("> " indent listmark " " t "\n"); return }
   if (mode == "li")      { emit(indent listmark " " t "\n"); return }
@@ -111,8 +112,8 @@ BEGIN{ RS="<"; mode="para"; listmark="-"; indent=""; skip=0; drop=0 }
   else if (lt ~ /^\/h[1-4]$/) { t=trim(buf); buf=""; if (t!="") emit(hp t "\n\n") }
 
   # ---- 段落・箇条書き ----
-  else if (lt ~ /^p[ >]?$|^p$/)      { flushpara() }
-  else if (lt == "/p")               { flushpara() }
+  else if (lt ~ /^p[ >]?$|^p$/)      { if (mode == "li") buf = buf " "; else flushpara() }
+  else if (lt == "/p")               { if (mode == "li") buf = buf " "; else flushpara() }
   else if (lt ~ /^ul/ && lt !~ /^\//){ flushpara(); if(listdepth>0) indent=indent "  "; listdepth++; listmark="-"; mode="para" }
   else if (lt ~ /^ol/ && lt !~ /^\//){ flushpara(); if(listdepth>0) indent=indent "  "; listdepth++; listmark="1."; mode="para" }
   else if (lt == "/ul" || lt == "/ol"){ flushpara(); listdepth--; if(listdepth>0) indent=substr(indent,3); else {indent=""; emit("\n")} }
@@ -161,7 +162,7 @@ BEGIN{ RS="<"; mode="para"; listmark="-"; indent=""; skip=0; drop=0 }
   else if (lt ~ /^thead/ && lt !~ /^\//) { inhead=1 }
   else if (lt == "/thead")               { inhead=0 }
 
-  # ---- 畳み（GitHub は details を描く）----
+  # ---- 閉じた details（GitHub は details を描く）----
   else if (lt ~ /^details/ && lt !~ /^\//) { flushpara(); emit("<details>\n") }
   else if (lt == "/details")               { flushpara(); emit("</details>\n\n") }
   else if (lt ~ /^summary/ && lt !~ /^\//) { flushpara(); mode="summary" }
@@ -180,19 +181,25 @@ BEGIN{ RS="<"; mode="para"; listmark="-"; indent=""; skip=0; drop=0 }
   else if (lt ~ /^input[^>]*type="radio"/) { emit("- [ ] ") ; mode="optline" }
   else if (lt ~ /^\/label/ && mode=="optline") { emit(trim(buf) "\n"); buf=""; mode="para" }
 
+  else if (lt ~ /^div/ && clsof(lt) ~ /(^| )acrow( |$)/) { flushpara() }
+
   # ---- span の役割ごとに落とす / 飾る ----
   # .tag は判定なので語のまま `` で囲む。.lab は小見出しなので太字。.badge は括弧。
   # それ以外の span は素通し。⚠ 閉じ方を flag で持つ — buf の中身で判定すると、
   # 他の span の閉じにも当たって余分な記号が残る。
   else if (lt ~ /^span/ && lt !~ /^\//) {
     cls=" " clsof(lt) " "
-    if      (cls ~ / tag /)   { buf = buf "`";   spankind="tag" }
+    if      (cls ~ / lbl /)   { if (mode != "li") flushpara(); buf = buf "**"; spankind="lbl" }
+    else if (cls ~ / id /)    { buf = buf "**"; spankind="id" }
+    else if (cls ~ / tag /)   { buf = buf "`";   spankind="tag" }
     else if (cls ~ / lab /)   { buf = buf "**";  spankind="lab" }
     else if (cls ~ / badge /) { buf = buf " （"; spankind="badge" }
     else spankind=""
   }
   else if (lt == "/span") {
-    if (spankind == "tag")   buf = buf "`"
+    if (spankind == "lbl")      { buf = trim(buf) "**"; if (mode == "li") buf = buf ": "; else flushpara() }
+    else if (spankind == "id")  buf = buf "**: "
+    else if (spankind == "tag")   buf = buf "`"
     else if (spankind=="lab")   buf = buf "**"
     else if (spankind=="badge") buf = buf "）"
     spankind=""

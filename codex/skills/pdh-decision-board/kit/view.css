@@ -1,0 +1,28 @@
+/* pdh-decision-board kit — view.css（combined layout のトグル）
+   文書とスライドを 1 枚に持ち、上のトグルで切り替える。既定表示は文書。
+   規則は ../reader-profile.md「画面（HTML のとき）」【媒体】。 */
+
+/* トグルのバー（上に貼り付く） */
+.viewswitch {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; gap: calc(var(--u) * 2); align-items: center;
+  padding: calc(var(--u) * 2) calc(var(--u) * 4);
+  background: var(--bg); border-bottom: 1px solid var(--line);
+}
+.viewswitch button {
+  font: inherit; cursor: pointer; color: var(--muted);
+  background: transparent; border: 1px solid var(--line); border-radius: 999px;
+  padding: calc(var(--u) * 1) calc(var(--u) * 4);
+}
+.viewswitch button.on { color: var(--ink); border-color: var(--ink); font-weight: 600; }
+.viewswitch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ビューの出し分け。既定（data-view が document / 未設定）は文書、deck でスライド。 */
+.board[data-view="deck"] .view-doc { display: none; }
+.board:not([data-view="deck"]) .view-deck-wrap { display: none; }
+
+/* スライドは全画面ではなく «トグルのバーを引いた高さ» にして、文書と同じ 1 枚に収める。
+   deck.css の 100dvh をこの scope で上書きする（deck.js の fitAll は clientHeight に合わせて測り直す）。 */
+.board[data-view="deck"] .deck,
+.board[data-view="deck"] .deck-col,
+.board[data-view="deck"] .p { height: calc(100dvh - var(--viewbar, 3.2rem)); }

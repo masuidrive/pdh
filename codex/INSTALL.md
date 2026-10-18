@@ -2,7 +2,7 @@
 
 PDH を Codex プロジェクトへ導入する手順と、導入済みプロジェクトを更新する手順。[PDH の概要](../README.md)。
 
-`.codex/agents/*.toml` の reasoning effort は見本であり、project の役割に合わせて設定する。model は書かない（worker は親の model を引き継ぐ）。役ごとに別の model が要るときだけ project が書く。
+worker 定義は共有の上書き対象である。役ごとの engine・model・reasoning effort は `AGENTS.md` とそこから指す project の PM 規則で指定する。未指定の model は親から引き継ぐ。
 
 ## 新規導入
 
@@ -38,107 +38,181 @@ bash ticket.sh init
 
 この節は PDH 未導入の project が対象である。開始前からコピー先が存在した場合は上書きせず、[既存プロジェクトのアップデート](#既存プロジェクトのアップデート)に従う。直前の `ticket.sh init` が新しく作った `.ticket-config.yaml` だけは、PDH template に置き換えてから project に合わせて編集する。
 
-| コピー元 | コピー先 | 用途 |
-|---|---|---|
-| `tmp/pdh/docs/product-delivery-hierarchy.md` | `docs/product-delivery-hierarchy.md` | PDH 運用ルール |
-| `tmp/pdh/docs/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH 共通 agent ルール |
-| `tmp/pdh/codex/skills/pdh-dev/` | `.agents/skills/pdh-dev/` | stage flow と worker 共通 context |
-| `tmp/pdh/codex/skills/pdh-coding/` | `.agents/skills/pdh-coding/` | 実装規則 |
-| `tmp/pdh/codex/skills/pdh-reviewing/` | `.agents/skills/pdh-reviewing/` | review 規則 |
-| `tmp/pdh/codex/skills/pdh-verifying/` | `.agents/skills/pdh-verifying/` | QA・AC 裏取り・surface 確認規則 |
-| `tmp/pdh/codex/skills/pdh-check-writing/` | `.agents/skills/pdh-check-writing/` | 宣言型 `.check` 執筆規則 |
-| `tmp/pdh/codex/skills/pdh-update/` | `.agents/skills/pdh-update/` | PDH 更新 skill |
-| `tmp/pdh/codex/skills/pdh-decision-board/` | `.agents/skills/pdh-decision-board/` | 実装前・close 前の判断ボード |
-| `tmp/pdh/codex/templates/AGENTS.md` | `AGENTS.md` | project 固有 Codex ルールの雛形 |
-| `tmp/pdh/codex/templates/AGENTS.local.md.example` | `AGENTS.local.md.example` | 環境固有 context のサンプル |
-| `tmp/pdh/codex/templates/agents/codex/` | `.codex/agents/` | PDH worker の custom agent 定義 |
-| `tmp/pdh/codex/templates/.ticket-config.yaml` | `.ticket-config.yaml` | ticket.sh 設定 |
-| `tmp/pdh/codex/templates/product-brief.md` | `product-brief.md` | Product Brief の雛形 |
-| `tmp/pdh/codex/templates/technical-reference.md` | `technical-reference.md` | 現在の実装の How の雛形 |
-| `tmp/pdh/codex/templates/test-all.sh` | `scripts/test-all.sh` | テスト一括実行 |
-| `tmp/pdh/codex/templates/fast-checks.sh` | `scripts/fast-checks.sh` | fast-check runner |
-| `tmp/pdh/codex/templates/checks/` | `scripts/checks/` | fast-check registry と見本 |
-| `tmp/pdh/codex/templates/dev-server.sh` | `scripts/dev-server.sh` | verify 用開発サーバー入口 |
-| `tmp/pdh/codex/templates/seed-pdh-verify.sh` | `scripts/seed-pdh-verify.sh` | verify 用 fixture seed hook |
-| `tmp/pdh/codex/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | ticket-local-test wrapper |
-| `tmp/pdh/codex/templates/spawn-worker.sh` | `scripts/spawn-worker.sh` | worker を «起動した shell 呼び出しの寿命» から切り離して走らせ、終わり方（rc・受けた signal）を必ず残す。`_execution-team.md`「並行起動」の実装（実行権限 `chmod +x` 要） |
-| `tmp/pdh/codex/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | ticket dir の progress.md、human gate の待ち行、close 前 review の区間、`起票:` 行の実在、Why の根拠 2 行の検査（test-all の 1 段） |
-| `tmp/pdh/codex/templates/pdh-review-range.sh` | `scripts/pdh-review-range.sh` | 最後に review した SHA 以降の ticket 自身の commit を列挙し、close 前 review の指示文を作る（`check-pdh-ticket.sh` も読み込む） |
-| `tmp/pdh/codex/templates/check-ticket-template-drift.sh` | `scripts/check-ticket-template-drift.sh` | `.ticket-config.yaml` のテンプレ本文（`default_content` / `note_content`）と上流の差を数える。pdh-update の後に回す（実行権限 `chmod +x` 要） |
+| コピー元 | コピー先 | 用途 | 更新の仕方 |
+|---|---|---|---|
+| `tmp/pdh/docs/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH の共通契約・用語 | 上書き |
+| `tmp/pdh/docs/pdh-glossary.md` | `docs/pdh-glossary.md` | PDH の共通契約・用語 | 上書き |
+| `tmp/pdh/codex/skills/pdh-change/` | `.agents/skills/pdh-change/` | pdh-change skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/skills/pdh-check-writing/` | `.agents/skills/pdh-check-writing/` | pdh-check-writing skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/skills/pdh-close/` | `.agents/skills/pdh-close/` | pdh-close skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/skills/pdh-decision-board/` | `.agents/skills/pdh-decision-board/` | pdh-decision-board skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/skills/pdh-implement/` | `.agents/skills/pdh-implement/` | pdh-implement skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/skills/pdh-open/` | `.agents/skills/pdh-open/` | pdh-open skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/skills/pdh-pm/` | `.agents/skills/pdh-pm/` | pdh-pm skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/skills/pdh-resume/` | `.agents/skills/pdh-resume/` | pdh-resume skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/skills/pdh-review/` | `.agents/skills/pdh-review/` | pdh-review skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/skills/pdh-ticket-review/` | `.agents/skills/pdh-ticket-review/` | pdh-ticket-review skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/skills/pdh-ticket-write/` | `.agents/skills/pdh-ticket-write/` | pdh-ticket-write skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/skills/pdh-update/` | `.agents/skills/pdh-update/` | pdh-update skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/skills/pdh-verify/` | `.agents/skills/pdh-verify/` | pdh-verify skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/templates/.ticket-config.yaml` | `.ticket-config.yaml` | project の設定・入口テンプレート | 差分マージ |
+| `tmp/pdh/codex/templates/AGENTS.local.md.example` | `AGENTS.local.md.example` | project の設定・入口テンプレート | 初回だけ |
+| `tmp/pdh/codex/templates/AGENTS.md` | `AGENTS.md` | project の設定・入口テンプレート | 差分マージ |
+| `tmp/pdh/codex/templates/agents/codex/` | `.codex/agents/` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/codex/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/check-ticket-template-drift.sh` | `scripts/check-ticket-template-drift.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/checks/README.md` | `scripts/checks/README.md` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
+| `tmp/pdh/codex/templates/checks/bin/pdh-stage-skill-sections.sh` | `scripts/checks/bin/pdh-stage-skill-sections.sh` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
+| `tmp/pdh/codex/templates/checks/docs-metadata.check` | `scripts/checks/docs-metadata.check` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
+| `tmp/pdh/codex/templates/checks/docs-references.check` | `scripts/checks/docs-references.check` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
+| `tmp/pdh/codex/templates/checks/example-max-source-lines.check` | `scripts/checks/example-max-source-lines.check` | fast-check の定義・見本（project の独自 check は保持） | 差分マージ |
+| `tmp/pdh/codex/templates/checks/example-max-test-lines.check` | `scripts/checks/example-max-test-lines.check` | fast-check の定義・見本（project の独自 check は保持） | 差分マージ |
+| `tmp/pdh/codex/templates/checks/example-no-merge-conflict-markers.check` | `scripts/checks/example-no-merge-conflict-markers.check` | fast-check の定義・見本（project の独自 check は保持） | 差分マージ |
+| `tmp/pdh/codex/templates/checks/example-no-node-p-capture.check` | `scripts/checks/example-no-node-p-capture.check` | fast-check の定義・見本（project の独自 check は保持） | 差分マージ |
+| `tmp/pdh/codex/templates/checks/pdh-stage-skill-sections.check` | `scripts/checks/pdh-stage-skill-sections.check` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
+| `tmp/pdh/codex/templates/checks/required-pdh-files.check` | `scripts/checks/required-pdh-files.check` | fast-check の定義・見本（project の独自 check は保持） | 差分マージ |
+| `tmp/pdh/codex/templates/dev-server.sh` | `scripts/dev-server.sh` | project の設定・入口テンプレート | 差分マージ |
+| `tmp/pdh/codex/templates/docs-policy.py` | `scripts/docs-policy.py` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/docs-toc.sh` | `scripts/docs-toc.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/fast-checks.sh` | `scripts/fast-checks.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/hooks.json` | `.codex/hooks.json` | SessionStart の hook を既存設定へ統合 | 差分マージ |
+| `tmp/pdh/codex/templates/pdh-lock.sh` | `scripts/pdh-lock.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/pdh-related-docs.sh` | `scripts/pdh-related-docs.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/pdh-review-eval/` | `docs/pdh-review-eval/` | project の評価データと実測結果の書き方。空の case 一覧 | 初回だけ |
+| `tmp/pdh/codex/templates/pdh-review-eval.sh` | `scripts/pdh-review-eval.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/pdh-review-range.sh` | `scripts/pdh-review-range.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/pdh-review-tally.sh` | `scripts/pdh-review-tally.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/pdh-session-hook.sh` | `scripts/pdh-session-hook.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/pdh-stage-checklist.sh` | `scripts/pdh-stage-checklist.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/pdh-verify-lib.sh` | `scripts/pdh-verify-lib.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/product-brief.md` | `product-brief.md` | project の設定・入口テンプレート | 初回だけ |
+| `tmp/pdh/codex/templates/seed-pdh-verify.sh` | `scripts/seed-pdh-verify.sh` | project の設定・入口テンプレート | 差分マージ |
+| `tmp/pdh/codex/templates/spawn-worker.sh` | `scripts/spawn-worker.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/test-all.sh` | `scripts/test-all.sh` | project の設定・入口テンプレート | 差分マージ |
+| `tmp/pdh/codex/templates/test-ticket-local.sh` | `scripts/test-ticket-local.sh` | 共有 script | 上書き |
+| `tmp/pdh/codex/templates/checks/required-pdh-source-files.check` | `scripts/checks/required-pdh-source-files.check` | PDH の共有 script と PM の分冊の存在 | 差分マージ |
 
-配置コマンド:
 
 ```bash
-mkdir -p docs .agents/skills .codex/agents scripts
-cp tmp/pdh/docs/product-delivery-hierarchy.md docs/product-delivery-hierarchy.md
-cp tmp/pdh/docs/PDH-AGENTS.md PDH-AGENTS.md
-for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-check-writing pdh-update pdh-decision-board; do
-  # ⚠ -L で symlink を辿る。配布の codex/skills/pdh-decision-board/ は kit / tools /
-  # 共通の .md を claude/ 側の実体への symlink で持っている（同じ物を 2 つ持たないため）。
-  # -L が無いと、導入先には壊れたリンクだけが置かれる。
-  cp -RL "tmp/pdh/codex/skills/$skill" ".agents/skills/$skill"
-done
-cp tmp/pdh/codex/templates/AGENTS.md AGENTS.md
-cp tmp/pdh/codex/templates/AGENTS.local.md.example AGENTS.local.md.example
-cp tmp/pdh/codex/templates/agents/codex/*.toml .codex/agents/
-cp tmp/pdh/codex/templates/.ticket-config.yaml .ticket-config.yaml
-cp tmp/pdh/codex/templates/product-brief.md product-brief.md
-cp tmp/pdh/codex/templates/technical-reference.md technical-reference.md
-cp tmp/pdh/codex/templates/test-all.sh scripts/test-all.sh
-cp tmp/pdh/codex/templates/fast-checks.sh scripts/fast-checks.sh
-cp -R tmp/pdh/codex/templates/checks scripts/checks
-cp tmp/pdh/codex/templates/dev-server.sh scripts/dev-server.sh
-cp tmp/pdh/codex/templates/seed-pdh-verify.sh scripts/seed-pdh-verify.sh
-cp tmp/pdh/codex/templates/test-ticket-local.sh scripts/test-ticket-local.sh
-cp tmp/pdh/codex/templates/check-pdh-ticket.sh scripts/check-pdh-ticket.sh
-cp tmp/pdh/codex/templates/pdh-review-range.sh scripts/pdh-review-range.sh
-cp tmp/pdh/codex/templates/check-ticket-template-drift.sh scripts/check-ticket-template-drift.sh
-chmod +x ticket.sh scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh scripts/pdh-review-range.sh scripts/check-ticket-template-drift.sh
+mkdir -p docs scripts .agents/skills .codex/agents
+mkdir -p "$(dirname "PDH-AGENTS.md" )"
+cp -RL tmp/pdh/docs/PDH-AGENTS.md PDH-AGENTS.md
+mkdir -p "$(dirname "docs/pdh-glossary.md" )"
+cp -RL tmp/pdh/docs/pdh-glossary.md docs/pdh-glossary.md
+mkdir -p "$(dirname ".agents/skills/pdh-change" )"
+cp -RL tmp/pdh/codex/skills/pdh-change .agents/skills/pdh-change
+mkdir -p "$(dirname ".agents/skills/pdh-check-writing" )"
+cp -RL tmp/pdh/codex/skills/pdh-check-writing .agents/skills/pdh-check-writing
+mkdir -p "$(dirname ".agents/skills/pdh-close" )"
+cp -RL tmp/pdh/codex/skills/pdh-close .agents/skills/pdh-close
+mkdir -p "$(dirname ".agents/skills/pdh-decision-board" )"
+cp -RL tmp/pdh/codex/skills/pdh-decision-board .agents/skills/pdh-decision-board
+mkdir -p "$(dirname ".agents/skills/pdh-implement" )"
+cp -RL tmp/pdh/codex/skills/pdh-implement .agents/skills/pdh-implement
+mkdir -p "$(dirname ".agents/skills/pdh-open" )"
+cp -RL tmp/pdh/codex/skills/pdh-open .agents/skills/pdh-open
+mkdir -p "$(dirname ".agents/skills/pdh-pm" )"
+cp -RL tmp/pdh/codex/skills/pdh-pm .agents/skills/pdh-pm
+mkdir -p "$(dirname ".agents/skills/pdh-resume" )"
+cp -RL tmp/pdh/codex/skills/pdh-resume .agents/skills/pdh-resume
+mkdir -p "$(dirname ".agents/skills/pdh-review" )"
+cp -RL tmp/pdh/codex/skills/pdh-review .agents/skills/pdh-review
+mkdir -p "$(dirname ".agents/skills/pdh-ticket-review" )"
+cp -RL tmp/pdh/codex/skills/pdh-ticket-review .agents/skills/pdh-ticket-review
+mkdir -p "$(dirname ".agents/skills/pdh-ticket-write" )"
+cp -RL tmp/pdh/codex/skills/pdh-ticket-write .agents/skills/pdh-ticket-write
+mkdir -p "$(dirname ".agents/skills/pdh-update" )"
+cp -RL tmp/pdh/codex/skills/pdh-update .agents/skills/pdh-update
+mkdir -p "$(dirname ".agents/skills/pdh-verify" )"
+cp -RL tmp/pdh/codex/skills/pdh-verify .agents/skills/pdh-verify
+mkdir -p "$(dirname ".ticket-config.yaml" )"
+cp -RL tmp/pdh/codex/templates/.ticket-config.yaml .ticket-config.yaml
+mkdir -p "$(dirname "AGENTS.local.md.example" )"
+cp -RL tmp/pdh/codex/templates/AGENTS.local.md.example AGENTS.local.md.example
+mkdir -p "$(dirname "AGENTS.md" )"
+cp -RL tmp/pdh/codex/templates/AGENTS.md AGENTS.md
+mkdir -p "$(dirname ".codex/agents" )"
+cp -RL tmp/pdh/codex/templates/agents/codex .codex/agents
+mkdir -p "$(dirname "scripts/check-pdh-ticket.sh" )"
+cp -RL tmp/pdh/codex/templates/check-pdh-ticket.sh scripts/check-pdh-ticket.sh
+mkdir -p "$(dirname "scripts/check-ticket-template-drift.sh" )"
+cp -RL tmp/pdh/codex/templates/check-ticket-template-drift.sh scripts/check-ticket-template-drift.sh
+mkdir -p "$(dirname "scripts/checks/README.md" )"
+cp -RL tmp/pdh/codex/templates/checks/README.md scripts/checks/README.md
+mkdir -p "$(dirname "scripts/checks/bin/pdh-stage-skill-sections.sh" )"
+cp -RL tmp/pdh/codex/templates/checks/bin/pdh-stage-skill-sections.sh scripts/checks/bin/pdh-stage-skill-sections.sh
+mkdir -p "$(dirname "scripts/checks/docs-metadata.check" )"
+cp -RL tmp/pdh/codex/templates/checks/docs-metadata.check scripts/checks/docs-metadata.check
+mkdir -p "$(dirname "scripts/checks/docs-references.check" )"
+cp -RL tmp/pdh/codex/templates/checks/docs-references.check scripts/checks/docs-references.check
+mkdir -p "$(dirname "scripts/checks/example-max-source-lines.check" )"
+cp -RL tmp/pdh/codex/templates/checks/example-max-source-lines.check scripts/checks/example-max-source-lines.check
+mkdir -p "$(dirname "scripts/checks/example-max-test-lines.check" )"
+cp -RL tmp/pdh/codex/templates/checks/example-max-test-lines.check scripts/checks/example-max-test-lines.check
+mkdir -p "$(dirname "scripts/checks/example-no-merge-conflict-markers.check" )"
+cp -RL tmp/pdh/codex/templates/checks/example-no-merge-conflict-markers.check scripts/checks/example-no-merge-conflict-markers.check
+mkdir -p "$(dirname "scripts/checks/example-no-node-p-capture.check" )"
+cp -RL tmp/pdh/codex/templates/checks/example-no-node-p-capture.check scripts/checks/example-no-node-p-capture.check
+mkdir -p "$(dirname "scripts/checks/pdh-stage-skill-sections.check" )"
+cp -RL tmp/pdh/codex/templates/checks/pdh-stage-skill-sections.check scripts/checks/pdh-stage-skill-sections.check
+mkdir -p "$(dirname "scripts/checks/required-pdh-files.check" )"
+cp -RL tmp/pdh/codex/templates/checks/required-pdh-files.check scripts/checks/required-pdh-files.check
+mkdir -p "$(dirname "scripts/dev-server.sh" )"
+cp -RL tmp/pdh/codex/templates/dev-server.sh scripts/dev-server.sh
+mkdir -p "$(dirname "scripts/docs-policy.py" )"
+cp -RL tmp/pdh/codex/templates/docs-policy.py scripts/docs-policy.py
+mkdir -p "$(dirname "scripts/docs-toc.sh" )"
+cp -RL tmp/pdh/codex/templates/docs-toc.sh scripts/docs-toc.sh
+mkdir -p "$(dirname "scripts/fast-checks.sh" )"
+cp -RL tmp/pdh/codex/templates/fast-checks.sh scripts/fast-checks.sh
+mkdir -p "$(dirname ".codex/hooks.json" )"
+cp -RL tmp/pdh/codex/templates/hooks.json .codex/hooks.json
+mkdir -p "$(dirname "scripts/pdh-lock.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-lock.sh scripts/pdh-lock.sh
+mkdir -p "$(dirname "scripts/pdh-related-docs.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-related-docs.sh scripts/pdh-related-docs.sh
+mkdir -p "$(dirname "docs/pdh-review-eval" )"
+cp -RL tmp/pdh/codex/templates/pdh-review-eval docs/pdh-review-eval
+mkdir -p "$(dirname "scripts/pdh-review-eval.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-review-eval.sh scripts/pdh-review-eval.sh
+mkdir -p "$(dirname "scripts/pdh-review-range.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-review-range.sh scripts/pdh-review-range.sh
+mkdir -p "$(dirname "scripts/pdh-review-tally.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-review-tally.sh scripts/pdh-review-tally.sh
+mkdir -p "$(dirname "scripts/pdh-session-hook.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-session-hook.sh scripts/pdh-session-hook.sh
+mkdir -p "$(dirname "scripts/pdh-stage-checklist.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-stage-checklist.sh scripts/pdh-stage-checklist.sh
+mkdir -p "$(dirname "scripts/pdh-verify-lib.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-verify-lib.sh scripts/pdh-verify-lib.sh
+mkdir -p "$(dirname "product-brief.md" )"
+cp -RL tmp/pdh/codex/templates/product-brief.md product-brief.md
+mkdir -p "$(dirname "scripts/seed-pdh-verify.sh" )"
+cp -RL tmp/pdh/codex/templates/seed-pdh-verify.sh scripts/seed-pdh-verify.sh
+mkdir -p "$(dirname "scripts/spawn-worker.sh" )"
+cp -RL tmp/pdh/codex/templates/spawn-worker.sh scripts/spawn-worker.sh
+mkdir -p "$(dirname "scripts/test-all.sh" )"
+cp -RL tmp/pdh/codex/templates/test-all.sh scripts/test-all.sh
+mkdir -p "$(dirname "scripts/test-ticket-local.sh" )"
+cp -RL tmp/pdh/codex/templates/test-ticket-local.sh scripts/test-ticket-local.sh
+chmod +x scripts/*.sh
 ```
 
 `.agents/skills/` は skill の実体である。`.claude/skills/` への symlink や wrapper は作らない。
 
 #### 3. Based on の commit ID を埋める
 
-対象ファイル（15 個）:
-
-- `AGENTS.md`
-- `PDH-AGENTS.md`
-- `product-brief.md`
-- `technical-reference.md`
-- `.ticket-config.yaml`
-- `docs/product-delivery-hierarchy.md`
-- `.agents/skills/pdh-reviewing/SKILL.md`
-- `.agents/skills/pdh-verifying/SKILL.md`
-- `.agents/skills/pdh-check-writing/SKILL.md`
-- `.agents/skills/pdh-coding/SKILL.md`
-- `.agents/skills/pdh-dev/SKILL.md`
-- `.agents/skills/pdh-update/SKILL.md`
-- `.agents/skills/pdh-decision-board/SKILL.md`
-- `scripts/checks/example-max-source-lines.check`
-- `scripts/checks/example-max-test-lines.check`
+差分マージするファイルだけに `Based on` を残す。上書きで配る版は `.pdh-lock` が持つ。Product Brief は初回の由来だけを記録し、更新時に本文を上書きしない。
 
 ```bash
-COMMIT_ID=$(cd tmp/pdh && git rev-parse --short=7 HEAD)
-sed_inplace() {
-  if sed --version >/dev/null 2>&1; then
-    sed -E -i "s#/blob/(XXXXXXX|[0-9a-f]{7})/#/blob/$COMMIT_ID/#g" "$@"
-  else
-    sed -E -i '' "s#/blob/(XXXXXXX|[0-9a-f]{7})/#/blob/$COMMIT_ID/#g" "$@"
-  fi
-}
-sed_inplace \
-  AGENTS.md PDH-AGENTS.md product-brief.md technical-reference.md .ticket-config.yaml \
-  docs/product-delivery-hierarchy.md \
-  .agents/skills/pdh-reviewing/SKILL.md \
-  .agents/skills/pdh-verifying/SKILL.md \
-  .agents/skills/pdh-check-writing/SKILL.md \
-  .agents/skills/pdh-coding/SKILL.md \
-  .agents/skills/pdh-dev/SKILL.md \
-  .agents/skills/pdh-update/SKILL.md \
-  .agents/skills/pdh-decision-board/SKILL.md \
-  scripts/checks/example-max-source-lines.check \
-  scripts/checks/example-max-test-lines.check
+COMMIT_ID=$(git -C tmp/pdh rev-parse --short=7 HEAD)
+python3 - "$COMMIT_ID" <<'SUBSTITUTE'
+from pathlib import Path
+import re,sys
+for name in ('AGENTS.md', 'product-brief.md', '.ticket-config.yaml', 'scripts/checks/example-max-source-lines.check', 'scripts/checks/example-max-test-lines.check'):
+    p=Path(name)
+    if p.is_file():p.write_text(re.sub(r'/blob/(XXXXXXX|[0-9a-f]{7})/', '/blob/'+sys.argv[1]+'/', p.read_text()))
+SUBSTITUTE
 ```
 
 #### 4. project 固有ファイルを編集する
@@ -149,7 +223,6 @@ sed_inplace \
 - `.ticket-config.yaml` の branch と worktree 設定を project に合わせる
 - `scripts/test-all.sh` に実際の全テストコマンドを登録する
 - `scripts/dev-server.sh` と `scripts/seed-pdh-verify.sh` に実際の verify 環境を実装する
-- `product-brief.md` と `technical-reference.md` を現在の product / implementation に合わせる
 
 環境固有で commit できない指示には、gitignore した `AGENTS.local.md` を使える。secret の値は書かず、取得方法や保管場所だけを書く。必要なら `AGENTS.local.md.example` をコピーして作る。
 
@@ -160,20 +233,25 @@ grep -qxF 'AGENTS.local.md' .gitignore || printf '\nAGENTS.local.md\n' >> .gitig
 #### 5. 導入結果を検査する
 
 ```bash
+bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/codex/lock-map.tsv
+bash scripts/pdh-lock.sh check
+```
+
+
+```bash
 test -f AGENTS.md
 test -f PDH-AGENTS.md
-for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-check-writing pdh-update pdh-decision-board; do
+for skill in pdh-change pdh-check-writing pdh-close pdh-decision-board pdh-implement pdh-open pdh-pm pdh-resume pdh-review pdh-ticket-review pdh-ticket-write pdh-update pdh-verify; do
   test -f ".agents/skills/$skill/SKILL.md" || exit 1
   test ! -L ".agents/skills/$skill" || exit 1
 done
 for agent in pdh-ac-reader pdh-ac-verifier pdh-coding-engineer pdh-qa pdh-reviewer-lens1 pdh-reviewer pdh-surface-observer; do
   test -f ".codex/agents/$agent.toml" || exit 1
 done
-! grep -Rqs 'XXXXXXX' AGENTS.md PDH-AGENTS.md product-brief.md technical-reference.md .ticket-config.yaml docs/product-delivery-hierarchy.md .agents/skills scripts/checks
 bash -n ticket.sh scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh scripts/pdh-review-range.sh scripts/check-ticket-template-drift.sh
 ```
 
-最後に `codex` を新しく起動し、`pdh-dev` と `pdh-update` が skill 一覧にあり、PDH worker が custom agent として選べることを確認する。
+最後に `codex` を新しく起動し、`pdh-pm` と `pdh-update` が skill 一覧にあり、PDH worker が custom agent として選べることを確認する。
 
 ## 既存プロジェクトのアップデート
 
@@ -192,7 +270,6 @@ else
   git clone https://github.com/masuidrive/pdh.git tmp/pdh
 fi
 PDH_BACKUP=$(mktemp -d tmp/pdh-backup.XXXXXX)
-for path in AGENTS.md PDH-AGENTS.md product-brief.md technical-reference.md .ticket-config.yaml docs/product-delivery-hierarchy.md scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh scripts/pdh-review-range.sh scripts/spawn-worker.sh; do
   [ ! -e "$path" ] || cp -Rp "$path" "$PDH_BACKUP/"
 done
 [ ! -d .agents/skills ] || cp -Rp .agents/skills "$PDH_BACKUP/agents-skills"
@@ -206,8 +283,8 @@ backup は `tmp/` 配下にあり、更新が正しいと確認するまで消�
 ### 2. 上流管理ファイルを更新する
 
 ```bash
-mkdir -p docs .agents/skills .codex/agents
-for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-check-writing pdh-update pdh-decision-board; do
+mkdir -p docs .agents/skills .codex/agents scripts
+for skill in pdh-change pdh-check-writing pdh-close pdh-decision-board pdh-implement pdh-open pdh-pm pdh-resume pdh-review pdh-ticket-review pdh-ticket-write pdh-update pdh-verify; do
   rm -rf ".agents/skills/$skill"
   # ⚠ -L で symlink を辿る。配布の codex/skills/pdh-decision-board/ は kit / tools /
   # 共通の .md を claude/ 側の実体への symlink で持っている（同じ物を 2 つ持たないため）。
@@ -218,7 +295,6 @@ for agent in pdh-ac-reader pdh-ac-verifier pdh-coding-engineer pdh-qa pdh-review
   cp "tmp/pdh/codex/templates/agents/codex/$agent.toml" ".codex/agents/$agent.toml"
 done
 cp tmp/pdh/docs/PDH-AGENTS.md PDH-AGENTS.md
-cp tmp/pdh/docs/product-delivery-hierarchy.md docs/product-delivery-hierarchy.md
 ```
 
 上の `rm -rf` は名前を列挙した PDH skill だけを置き換える。`.agents/skills/` 全体や、`pdh-` で始まらない user skill / agent 定義は削除しない。
@@ -236,13 +312,61 @@ if [ -f .github/coding-bot/_pdh.md ]; then
 fi
 ```
 
+上の skill・agent に加え、配置表の「上書き」の script・文書・check も毎回コピーする。「差分マージ」は project の値を保ち、「初回だけ」は既存の本文を保持する。新規の設定ファイルは既存設定へマージする。
+
+```bash
+mkdir -p "$(dirname "PDH-AGENTS.md" )"
+cp -RL tmp/pdh/docs/PDH-AGENTS.md PDH-AGENTS.md
+mkdir -p "$(dirname "docs/pdh-glossary.md" )"
+cp -RL tmp/pdh/docs/pdh-glossary.md docs/pdh-glossary.md
+mkdir -p "$(dirname "scripts/check-pdh-ticket.sh" )"
+cp -RL tmp/pdh/codex/templates/check-pdh-ticket.sh scripts/check-pdh-ticket.sh
+mkdir -p "$(dirname "scripts/check-ticket-template-drift.sh" )"
+cp -RL tmp/pdh/codex/templates/check-ticket-template-drift.sh scripts/check-ticket-template-drift.sh
+mkdir -p "$(dirname "scripts/checks/README.md" )"
+cp -RL tmp/pdh/codex/templates/checks/README.md scripts/checks/README.md
+mkdir -p "$(dirname "scripts/checks/bin/pdh-stage-skill-sections.sh" )"
+cp -RL tmp/pdh/codex/templates/checks/bin/pdh-stage-skill-sections.sh scripts/checks/bin/pdh-stage-skill-sections.sh
+mkdir -p "$(dirname "scripts/checks/docs-metadata.check" )"
+cp -RL tmp/pdh/codex/templates/checks/docs-metadata.check scripts/checks/docs-metadata.check
+mkdir -p "$(dirname "scripts/checks/docs-references.check" )"
+cp -RL tmp/pdh/codex/templates/checks/docs-references.check scripts/checks/docs-references.check
+mkdir -p "$(dirname "scripts/checks/pdh-stage-skill-sections.check" )"
+cp -RL tmp/pdh/codex/templates/checks/pdh-stage-skill-sections.check scripts/checks/pdh-stage-skill-sections.check
+mkdir -p "$(dirname "scripts/docs-policy.py" )"
+cp -RL tmp/pdh/codex/templates/docs-policy.py scripts/docs-policy.py
+mkdir -p "$(dirname "scripts/docs-toc.sh" )"
+cp -RL tmp/pdh/codex/templates/docs-toc.sh scripts/docs-toc.sh
+mkdir -p "$(dirname "scripts/fast-checks.sh" )"
+cp -RL tmp/pdh/codex/templates/fast-checks.sh scripts/fast-checks.sh
+mkdir -p "$(dirname "scripts/pdh-lock.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-lock.sh scripts/pdh-lock.sh
+mkdir -p "$(dirname "scripts/pdh-related-docs.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-related-docs.sh scripts/pdh-related-docs.sh
+mkdir -p "$(dirname "scripts/pdh-review-eval.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-review-eval.sh scripts/pdh-review-eval.sh
+mkdir -p "$(dirname "scripts/pdh-review-range.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-review-range.sh scripts/pdh-review-range.sh
+mkdir -p "$(dirname "scripts/pdh-review-tally.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-review-tally.sh scripts/pdh-review-tally.sh
+mkdir -p "$(dirname "scripts/pdh-session-hook.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-session-hook.sh scripts/pdh-session-hook.sh
+mkdir -p "$(dirname "scripts/pdh-stage-checklist.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-stage-checklist.sh scripts/pdh-stage-checklist.sh
+mkdir -p "$(dirname "scripts/pdh-verify-lib.sh" )"
+cp -RL tmp/pdh/codex/templates/pdh-verify-lib.sh scripts/pdh-verify-lib.sh
+mkdir -p "$(dirname "scripts/spawn-worker.sh" )"
+cp -RL tmp/pdh/codex/templates/spawn-worker.sh scripts/spawn-worker.sh
+mkdir -p "$(dirname "scripts/test-ticket-local.sh" )"
+cp -RL tmp/pdh/codex/templates/test-ticket-local.sh scripts/test-ticket-local.sh
+```
+
 ### 3. project 固有ファイルを差分マージする
 
 次のファイルは上書きしない。`git diff --no-index` で template と比較し、必要な上流変更だけを既存ファイルへ反映する。
 
 - `AGENTS.md`
 - `product-brief.md`
-- `technical-reference.md`
 - `.ticket-config.yaml`
 - `scripts/test-all.sh`
 - `scripts/fast-checks.sh`
@@ -261,57 +385,58 @@ git diff --no-index -- .ticket-config.yaml tmp/pdh/codex/templates/.ticket-confi
 git diff --no-index -- scripts/test-all.sh tmp/pdh/codex/templates/test-all.sh || true
 ```
 
-`.ticket-config.yaml` の `note_content` は 2026-09-14 以降、現在値の節だけを持つ（実装ログ / 品質検証結果 / 人間レビュー / Discoveries の 4 節は `progress.md` へ移った）。`grep -q '## PDH-implement. 実装ログ' .ticket-config.yaml && echo "要適用" || echo "適用済み"` で確認し、「要適用」なら template に合わせて 4 節を外し、`ticket_files` と `append_only_files` を足す（ticket.sh 20260914 以降。`selfupdate` を先に）。あわせて `scripts/check-pdh-ticket.sh` を配置し、`scripts/test-all.sh` の `run "fast-checks"` の次に `run "pdh-ticket" bash scripts/check-pdh-ticket.sh` を足す（`grep -q check-pdh-ticket.sh scripts/test-all.sh` で確認）。
-
-**`.ticket-config.yaml` のテンプレ本文と上流の差を数える script が入った（2026-09-29 以降）**
-
-`scripts/check-ticket-template-drift.sh` が、導入先の `.ticket-config.yaml` の `default_content` / `note_content` と上流のテンプレの差分行数を出す（差があれば exit 1）。pdh-update の手順が、更新の後にこれを回して出力を報告させる。
-
-```bash
-test -x scripts/check-ticket-template-drift.sh && echo "差の検査: 適用済み" || echo "差の検査: 要適用"
-```
-
-「要適用」なら `tmp/pdh/codex/templates/check-ticket-template-drift.sh` を `scripts/` へコピーして `chmod +x` する（project 固有の変更を持たないので上書きしてよい）。
-
-**close 前 review の区間が sub-branch の merge を拾うようになり、`test-all.sh` の迷子の行が消えた（2026-09-27 以降）**
-
-`scripts/pdh-review-range.sh` は区間を «base から届く commit を除いたもの» で作るようになった。以前は first-parent だけを見ていたので、gate の後に sub-branch を `--no-ff` で merge した commit が区間から漏れ、review されないまま close を通った。base に merge 済みの branch へ base を取り込み直したときに、base 側の commit を ticket の変更と数えることも無くなった。`scripts/check-pdh-ticket.sh` も同じ取り方で `tickets/done/` への移動を探し、`scripts/pdh-review-range.sh` が無ければ名指しして落ちる。さらに ticket の状態（progress・待ち行・close 前 review）を、その ticket の branch（branch 名が一致するか、branch の commit が ticket dir に触っている）でだけ検査するようになった。base に載った別の ticket の記録で、ほかの branch の CI が落ちることは無くなった。あわせて、`test-all.sh` テンプレートの先頭のコメント欄に `run "pdh-ticket"` が 1 行紛れ込んでいて、実行のたびに `run: command not found` が出ていた（本来の行は下の `run "fast-checks"` の次にある）。
-
-```bash
-grep -q 'pdh_review_exclude' scripts/pdh-review-range.sh && echo "区間 script: 適用済み" || echo "区間 script: 要適用"
-grep -q 'ticket_is_on_this_branch' scripts/check-pdh-ticket.sh && echo "検査: 適用済み" || echo "検査: 要適用"
-awk '/^run_seq\(\)/{exit} /^run "pdh-ticket"/{f=1} END{exit !f}' scripts/test-all.sh && echo "test-all: 迷子の行あり" || echo "test-all: 適用済み"
-```
-
-「要適用」なら `tmp/pdh/codex/templates/pdh-review-range.sh` と `tmp/pdh/codex/templates/check-pdh-ticket.sh` を `scripts/` へコピーする。「迷子の行あり」なら、`run_seq()` の定義より前にある `run "pdh-ticket" bash scripts/check-pdh-ticket.sh` の行（と直前の `# PDH:` のコメント行）を消す。下の `run "fast-checks"` の次にある同じ行は残す。
-
-**close 前 review の区間と、起票の検査が `check-pdh-ticket.sh` に入った（2026-09-26 以降）**
-
-`scripts/check-pdh-ticket.sh` が 3 つを新しく落とす。① progress の最後の `close-gate-sha:` の後に ticket 自身の commit が残っている、または Status が `PDH-close`（branch 自身の commit が `tickets/done/` へ移した ticket を含む）なのに `close-gate-sha:` が 1 行も無い。② note の Checklist の `起票: <anchor> → <ticket 名>` 行の ticket が `tickets/` にも `tickets/done/` にも無い。③ `.ticket-config.yaml` の ticket テンプレが Why 節に `再現か実測:` を持つようになった commit より後に作られた ticket で、Why の `再現か実測:` か `いま直さない理由:` が空。区間は新しい `scripts/pdh-review-range.sh` が作り、base の branch 名は `.ticket-config.yaml` の `default_branch` から読む。記録の書式と回し方は `pdh-dev` の `_reference.md` と `_flow.md`（PDH-verify の 7）にある。
-
-適用済みかの確認（冪等）:
-
-```bash
-test -f scripts/pdh-review-range.sh && echo "区間 script: 適用済み" || echo "区間 script: 要適用"
-grep -q 'close-gate-sha' scripts/check-pdh-ticket.sh && echo "検査: 適用済み" || echo "検査: 要適用"
-grep -q '再現か実測:' .ticket-config.yaml && echo "テンプレ: 適用済み" || echo "テンプレ: 要追加"
-```
-
-「要適用」なら `tmp/pdh/codex/templates/pdh-review-range.sh` と `tmp/pdh/codex/templates/check-pdh-ticket.sh` を `scripts/` へコピーして `chmod +x` する（`check-pdh-ticket.sh` は project 固有の変更を持たないので上書きしてよい）。「要追加」なら同 template の `default_content` の `### Why` にある 2 行を足す。③ はこの 2 行を足した commit より後に作られた ticket にだけ効くので、既存の ticket は書き換えない。⚠ close 済みでない ticket のうち、Status が `PDH-close` のものと、branch の上で `tickets/done/` へ移したがまだ base に入っていないものは、`close-gate-sha:` が無いと ① で落ちる。close の前に close 前 review を回して行を書く。
-
-新しい `codex/templates/checks/*.check` は追加し、既存の project 固有 `.check` は残す。`required-pdh-files.check` の `required_paths` は、実際に配置した PDH skill と Codex agent 定義の全件に合わせる。
-
-`AGENTS.md` テンプレートの Project Principles にあった «`??` / `？？` で終わる質問には答えるだけ» は、2026-09-29 以降 `PDH-AGENTS.md`「Execution Model」へ移った（«指定されたコマンドが起動しないときは止めて確認する» «base branch のソースコードを書き換える前に ticket にするかを確認する» と一緒に）。`grep -n 'two question marks' AGENTS.md` で行が出たら、その行を消す。`PDH-AGENTS.md` は書き換えない配布物なので、この 3 つは project 側で外せなくなった。
-
-`.ticket-config.yaml` の `default_content` の «### Design Decisions» に、影響 6 項目（DB schema / Public API / CLI・SDK・file format・event schema / Backward compatibility / Migration・rollout・rollback / Docs・generated artifacts）の欄が 2026-09-29 以降に入った。`grep -q 'Backward compatibility:' .ticket-config.yaml` で行が無ければ、template の 7 行と Checklist の PDH-ticket-review 行を写す。既存の ticket は書き換えない。
-
-`scripts/checks/README.md` の «Adding a check» に、grep で表せない不変則（要素間の関係・算術・状態遷移）は `.check` にせず決定論テストで固定し、その選択を ticket の note に 1 行書く、が 2026-09-29 以降に入った。`grep -q 'deterministic test instead' scripts/checks/README.md || cp tmp/pdh/codex/templates/checks/README.md scripts/checks/README.md` で揃える（project 固有のカスタマイズを持たないので上書きしてよい）。
+`.ticket-config.yaml` の `default_content` / `note_content` は新しい template と照合し、設定キーは project の値を保持する。`scripts/checks/required-pdh-files.check` の一覧は実際に配置したファイルへ合わせる。
 
 ### 既知の移行手順
 
+#### PDH の stage skill・worker 定義・lock への組み直し
+
+旧 `pdh-dev` は `pdh-pm` と stage ごとの skill に、`pdh-rule-write` は `pdh-change` に、`pdh-coding` / `pdh-reviewing` / `pdh-verifying` は worker 定義に移った。`pdh-resume` と `pdh-pm/_open-ticket.md` も配る。配置表の全件を更新し、旧名だけを削除する。
+
+```bash
+for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-rule-write; do
+  rm -rf ".agents/skills/$skill"
+done
+rm -rf .claude/skills/tmux-director .agents/skills/tmux-director
+rm -f scripts/hookbus.js
+```
+
+`.claude/settings.json` の hookbus の呼び出しだけを外し、他の hook は保つ。`vitest.config.*` の hookbus project と `package.json` / `test-all.sh` の専用段も外す。SessionStart は配布した `pdh-session-hook.sh` の設定へ統合し、session を再起動する。
+
+旧 `docs/product-delivery-hierarchy.md` の規則は `PDH-AGENTS.md` と stage skill へ集約した。project の追記を移してから旧配布文書を削除する。
+
+`technical-reference.md` は配布しない。現行の事実をコードのコメント・テスト・仕様書へ、ソースから作れない外の事実・人の意図と方針を project の文書へ移してから廃止する。本文が残る間は退避し、内容を読まずに消さない。
+
+`.ticket-config.yaml` のテンプレ本文を新しいものへ揃え、`worktree_mode: true`・`pre_close_command`・`require_checklist_groups: [Required-Probes, Checklist]` を確認する。Why の 3 ラベル、contract check の Feasibility / DB-changes / API-changes / Complexity / Benefit、AC と Out-of-scope の `AC-approved:`、Open-Questions の checkbox を取り込む。旧 Why ラベル・旧 Status 書式は受け付けない。
+
+未完の note の旧 `## Status` の段に checkbox がある場合、各行を印・本文・skip 理由ごと `## Checklist` へ移し、Status を `## Status: PDH-<stage>` の 1 行へ直す。旧 Resume Point の必要な現在値は Checklist / Open-Questions へ、経緯は progress へ移してから節を消す。`pdh-resume` と `pdh-stage-checklist.sh --show` で現在の段を確認し、`bash scripts/pdh-stage-checklist.sh <stage> --enter <note>` でその段の行を写す。AC の内容を変える場合は人の再承認を得てから hash を書く。done の記録は移さない。
+
+初回の `.pdh-lock` は、上書きの全件を配布元と一致させてから書く。上書き対象の `Based on` 行は消し、差分マージの footer は残す。
+
+```bash
+bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/codex/lock-map.tsv
+bash scripts/pdh-lock.sh check
+test -f .agents/skills/pdh-resume/SKILL.md
+test -f .agents/skills/pdh-pm/_open-ticket.md
+grep -q '^worktree_mode: true' .ticket-config.yaml
+grep -q '^pre_close_command:' .ticket-config.yaml
+grep -q 'Key-User-Journeys:' .ticket-config.yaml
+grep -q 'Reproduction-or-measurement:' .ticket-config.yaml
+grep -q 'Why-not-fix-now:' .ticket-config.yaml
+grep -q 'AC-approved:' .ticket-config.yaml
+! grep -q 'Resume Point' .ticket-config.yaml
+for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-rule-write; do
+  test ! -e ".agents/skills/$skill" || exit 1
+done
+! rg 'hookbus' .claude/settings.json scripts/test-all.sh package.json vitest.config.* 2>/dev/null
+bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/codex/templates/.ticket-config.yaml
+```
+
+上の確認を更新後に再実行する。同じ移行を 2 回行っても差分は出ない。review 集計は `pdh-review-tally.sh`、評価は `pdh-review-eval.sh --help` と `docs/pdh-review-eval/README.md` を読む。評価データは project が集め、実 engine での計測は CI に入れない。
+
 #### worker の混雑時の自動再開を導入する
 
-`scripts/spawn-worker.sh` は `Based on` 行を持たないため、通常の差分マージだけでは更新されない。適用済みかの確認（冪等）:
+`scripts/spawn-worker.sh` は現在は配置表の上書き対象である。旧導入先も共有版へ揃える。適用済みかの確認（冪等）:
 
 ```bash
 grep -q PDH_CODEX_RESUME_MAX scripts/spawn-worker.sh 2>/dev/null && echo "worker 自動再開: 適用済み" || echo "worker 自動再開: 要適用"
@@ -387,7 +512,7 @@ grep -qxF 'AGENTS.local.md' .gitignore || printf '\nAGENTS.local.md\n' >> .gitig
 新配置でテストが通り、backup が存在することを確認してから、旧 PDH skill と agent 定義を名前を指定して削除する。
 
 ```bash
-for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-check-writing pdh-update pdh-decision-board tmux-director; do
+for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-rule-write pdh-change pdh-check-writing pdh-close pdh-decision-board pdh-implement pdh-open pdh-pm pdh-resume pdh-review pdh-ticket-review pdh-ticket-write pdh-update pdh-verify; do
   rm -rf ".claude/skills/$skill"
 done
 rm -rf .agents/skills/tmux-director
@@ -402,8 +527,8 @@ done
 
 ```bash
 test -f AGENTS.md
-test ! -L .agents/skills/pdh-dev
-test -f .agents/skills/pdh-dev/SKILL.md
+test ! -L .agents/skills/pdh-pm
+test -f .agents/skills/pdh-pm/SKILL.md
 test -f .codex/agents/pdh-coding-engineer.toml
 find .claude/skills .claude/agents -maxdepth 1 -name 'pdh-*' -print 2>/dev/null
 ```

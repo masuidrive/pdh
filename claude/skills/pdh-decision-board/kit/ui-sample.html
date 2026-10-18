@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>判断ボード UI 部品見本</title>
+<title>decision-board UI 部品見本</title>
 <style>
 /* ============================================================
    層 1: tokens — 全 board が読み込む変数。基準はここにしか無い。
@@ -87,7 +87,7 @@ h3{font-size:1rem;margin:calc(var(--u)*8) 0 calc(var(--u)*2)}
 .summary .lab{display:block;font-size:.75rem;letter-spacing:.08em;color:var(--muted);margin-bottom:var(--u)}
 .summary>.lead .lab{color:var(--accent)}
 
-/* chips — 主線の面へ跳ぶ */
+/* chips — 承認者が必ず読む本文の各節へ跳ぶ */
 .chips{display:flex;flex-wrap:wrap;gap:calc(var(--u)*2);margin:0 0 calc(var(--u)*6);padding:0;list-style:none}
 .chips a{display:inline-block;border:1px solid var(--line);border-radius:999px;background:var(--paper);
   padding:calc(var(--u)*1) calc(var(--u)*4);text-decoration:none;color:var(--ink);font-size:.9rem}
@@ -134,7 +134,7 @@ h3{font-size:1rem;margin:calc(var(--u)*8) 0 calc(var(--u)*2)}
 .acrow details{margin-top:var(--u)}
 .acrow .orig{font-size:.85rem;color:var(--muted);border-left:2px solid var(--line);padding-left:calc(var(--u)*3);margin-top:var(--u)}
 
-/* mock-frame — 出来上がりの像。案名・試作バッジ・同一入力の表記を部品が持つ */
+/* mock-frame — 出来上がりの実例。案名・試作バッジ・同一入力の表記を部品が持つ */
 .mockrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(17rem,1fr));gap:calc(var(--u)*3);margin:0 0 calc(var(--u)*2)}
 .mock{border:1px solid var(--line);border-radius:var(--r);background:var(--paper);overflow:hidden}
 .mock .bar{display:flex;align-items:center;gap:calc(var(--u)*2);border-bottom:1px solid var(--line);
@@ -201,7 +201,7 @@ h3{font-size:1rem;margin:calc(var(--u)*8) 0 calc(var(--u)*2)}
 .fig svg text{font-family:var(--font-head);font-size:13px;fill:var(--ink)}
 .fig svg .dim{fill:var(--muted)}
 
-/* details — 裏付けを 1 手で開く */
+/* details — 根拠を 1 回の操作で開く */
 details.fold{border:1px solid var(--line);border-radius:var(--r);background:var(--paper);
   padding:calc(var(--u)*2) calc(var(--u)*4);margin:0 0 calc(var(--u)*3)}
 details.fold summary{cursor:pointer;font-weight:700}
@@ -281,8 +281,8 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
   <span class="theme-pick" id="fontPick" role="group" aria-label="本文フォント切替">
     <button type="button" data-set="">ゴシック</button><button type="button" data-set="mincho">明朝</button>
   </span></p>
-<h1>判断ボード UI 部品見本</h1>
-<p class="lede">board を組むのに必要な部品と色の全一覧。各部品には「skill のどの規則を実装するか」を添えた。幅と色の基準は tokens だけが持ち、部品は全部そこから導く — 右端が揃わない事故は構造的に起きない。</p>
+<h1>decision-board UI 部品見本</h1>
+<p class="lede">decision-board を組むのに必要な部品と色の全一覧。各部品には「skill のどの規則を実装するか」を添えた。幅と色の基準は tokens だけが持ち、部品は全部そこから導く — 右端が揃わない事故は構造的に起きない。</p>
 
 <div class="layout">
 <nav class="toc" id="toc" aria-label="目次">
@@ -351,13 +351,13 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
 <div class="spec" id="sp-toc">
 <p class="name">toc-rail（折りたたみ sidebar）</p>
 <p class="why">実装する規則: 読み手が現在地を失わない・判断のある節を目次から見つけられる（判断のある行の末尾に ✓ が付き、その節の判断が全部埋まると淡色の丸みが付く — この目次の 「判断カード」と「answer」の 2 行が実物。class は board.js が付ける）。広い画面では左に sticky、狭い画面では右上に浮いた「目次」ボタンだけを置き、押すと dropdown で開く — 帯を作らないので heading と高さを取り合わない。このページの左（狭ければ上）にあるのが実物 — 見出しを通過すると現在地が動く。節見出し（h2）も sticky で上に残り、いまどの節を読んでいるかが常に見える。</p>
-<p class="why"><b>目次は書き手が書かない。</b><code>page.js</code> が <code>section[id]</code> とその中の <code>h2</code> から組み、必要なら <code>.layout</code> / <code>.content</code> の包みまで作る。節が 5 つ以下の board では作らない。<b>手で書いた <code>nav#toc</code> がある board では何もしない</b> — このページがそれで、<code>.sub</code> で階層を持たせた並びを尊重している。<b>節を <code>&lt;section id="…"&gt;</code> で包み、その中に <code>h2</code> を置く</b>ことだけが書き手の仕事である。</p>
+<p class="why"><b>目次は書き手が書かない。</b><code>page.js</code> が <code>section[id]</code> とその中の <code>h2</code> から組み、必要なら <code>.layout</code> / <code>.content</code> の包みまで作る。節が 5 つ以下の decision-board では作らない。<b>手で書いた <code>nav#toc</code> がある decision-board では何もしない</b> — このページがそれで、<code>.sub</code> で階層を持たせた並びを尊重している。<b>節を <code>&lt;section id="…"&gt;</code> で包み、その中に <code>h2</code> を置く</b>ことだけが書き手の仕事である。</p>
 </div>
 
 <div class="spec" id="sp-chips">
-<p class="name">chips（主線ナビ）</p>
-<p class="why">実装する規則: 主線の固定 5 面 + 判断 + 返す。読み手が現在地を失わず、面へ 1 手で跳べる。</p>
-<ul class="chips"><li><a href="#">なぜ</a></li><li><a href="#">ゴール</a></li><li><a href="#">解き方</a></li><li><a href="#">決めること</a></li><li><a href="#">判断 1</a></li><li><a href="#">返す</a></li></ul>
+<p class="name">chips（本文の節へ跳ぶナビ）</p>
+<p class="why">実装する規則: 承認者が必ず読む本文の固定の 5 節 + 判断 + 返す。読み手が現在地を失わず、各節へ 1 回の操作で跳べる。</p>
+<ul class="chips"><li><a href="#">なぜ</a></li><li><a href="#">ゴール</a></li><li><a href="#">作り方の判断</a></li><li><a href="#">決めること</a></li><li><a href="#">判断 1</a></li><li><a href="#">返す</a></li></ul>
 </div>
 
 <div class="spec" id="sp-facts">
@@ -389,15 +389,15 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
 </div>
 
 <div class="spec" id="sp-mock">
-<p class="name">mock-frame（出来上がりの像）</p>
-<p class="why">実装する規則: 「出来上がりの像」欄 — 同じ入力 1 件・案名の明記・試作バッジ・変更前（現在）の基準を並べる。部品がラベルとバッジを持つので、忘れると枠ごと無いことが見える。</p>
+<p class="name">mock-frame（出来上がりの実例）</p>
+<p class="why">実装する規則: 「出来上がりの実例」欄 — 同じ入力 1 件・案名の明記・試作バッジ・変更前（現在）の基準を並べる。部品がラベルとバッジを持つので、忘れると枠ごと無いことが見える。</p>
 <p class="mockinput">全案で使う同じ入力: <code>{"output": {"display": {"overall": {"status": "ok", "score": 0.9}}}, "version": 2}</code></p>
 <div class="mockrow">
   <div class="mock base"><div class="bar"><b>現在（基準）</b><span class="badge">実画面</span></div>
     <div class="body"><span class="k">display</span><br><span class="k">overall</span><br><span class="k">status</span> <span class="s">ok</span><br><span class="k">score</span> <span class="n">0.9</span></div></div>
-  <div class="mock"><div class="bar"><b>A の完成像</b><span class="badge">試作</span></div>
+  <div class="mock"><div class="bar"><b>A を選んだ後の画面</b><span class="badge">試作</span></div>
     <div class="body">{<br>&nbsp;&nbsp;<span class="k">display</span>: {<br>&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">overall</span>: {<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">status</span>: <span class="s">ok</span>,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">score</span>: <span class="n">0.9</span><br>&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;}<br>}</div></div>
-  <div class="mock"><div class="bar"><b>C の完成像</b><span class="badge">試作</span></div>
+  <div class="mock"><div class="bar"><b>C を選んだ後の画面</b><span class="badge">試作</span></div>
     <div class="body">{<br>&nbsp;&nbsp;"output": {<br>&nbsp;&nbsp;&nbsp;&nbsp;"display": { … }<br>&nbsp;&nbsp;},<br>&nbsp;&nbsp;"version": 2<br>}</div></div>
 </div>
 </div>
@@ -406,7 +406,7 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
 <p class="name">tw（表）と acrow（AC 行）</p>
 <p class="why">実装する規則: 表を使うのは<b>セルが語・数値・1 句で終わる列挙</b>だけ。セルに文章を書き始めたらそれは表ではない — 語+説明は facts、案の比較は compare（セルは 1 文まで）、それ以外は本文の散文へ。表は読み手が検算できる形にし、自分の枠でだけ横に逃がす。AC は書き換えの隣で原文を確認できる。</p>
 <h3>判定の表 — <code>.tag</code> と、通らなかった行だけの塗り</h3>
-<p>受け入れ条件の一覧と、毎回の確認は、どちらも <b>1 行 1 判定</b>である。判定は語ではなく <code>.tag</code> で置き、<b>通っていない行だけ</b>地を薄く塗る。全行を塗ると差が消えるので、<code>--ok</code> の行は塗らない。</p>
+<p>AC の一覧と、毎回の確認は、どちらも <b>1 行 1 判定</b>である。判定は語ではなく <code>.tag</code> で置き、<b>通っていない行だけ</b>地を薄く塗る。全行を塗ると差が消えるので、<code>--ok</code> の行は塗らない。</p>
 <div class="tw"><table>
   <thead><tr><th>確認</th><th>判定</th><th>根拠</th></tr></thead>
   <tbody>
@@ -426,8 +426,8 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
 </div>
 
 <div class="spec" id="sp-fold">
-<p class="name">fold（裏付けの折りたたみ）</p>
-<p class="why">実装する規則: 実測の全表・退けた案の詳細・経緯は主線から 1 手で開ける裏付けへ。</p>
+<p class="name">fold（根拠を閉じた details に入れる）</p>
+<p class="why">実装する規則: 実測の全表・選ばなかった案の詳細・経緯は、本文から 1 回の操作で開ける根拠（閉じた details）へ入れる。</p>
 <details class="fold"><summary>数値の由来 — 最大 10 回・depth 5・64 文字</summary><p>最大 10 回と depth 5 は現行 Simple の上限を維持。64 文字は現行の base64 短縮条件で、この判断では変えない。</p></details>
 </div>
 
@@ -435,7 +435,7 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
 <p class="name">steps（順番のある列挙）</p>
 <p class="why">実装する規則: 順番が意味を持つときだけ使う — 段階承認の依存順・承認後の流れ・確認手順。順序の無い列挙は card-grid か facts（番号を装飾にしない）。分岐する流れは部品にせず mermaid に任せ、直線だけを steps で組む。</p>
 <ol class="steps">
-  <li class="done"><b>グループ 1 — 表示契約</b><span class="sub">承認済み（2026-08-18）。この board の判断はここに属する</span></li>
+  <li class="done"><b>グループ 1 — 表示契約</b><span class="sub">承認済み（2026-08-18）。この decision-board の判断はここに属する</span></li>
   <li class="on"><b>グループ 2 — 保存形式</b><span class="sub">いま承認を求めている段階。グループ 1 の選択に依存する</span></li>
   <li><b>グループ 3 — 移行手順</b><span class="sub">未着手。グループ 2 が決まると選択肢が 2 つに絞られる</span></li>
 </ol>
@@ -447,19 +447,18 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
 <ul class="tl">
   <li class="warn"><time>2026-08-12</time>利用開発者から「複数キー object の親子関係が読めない」と報告</li>
   <li><time>2026-08-14</time>Simple 表示の平坦化が原因と特定。表示契約の候補を 3 案作成</li>
-  <li class="mark"><time>2026-08-19</time>この board を発行。判断 1 で表示契約を選ぶ</li>
+  <li class="mark"><time>2026-08-19</time>この decision-board を発行。判断 1 で表示契約を選ぶ</li>
 </ul>
 </div>
 
 <div class="spec" id="sp-compare">
 <p class="name">compare（案の横並び比較）</p>
-<p class="why">実装する規則: 軸は「利用者から見て / コスト / 取り返し」に固定して横に比べる（案ごとに違う観点で書くと比較できない）。推奨列だけ accent-soft、3 案まで — 4 案以上は判断カードの縦積みへ。表は tw と同じく自分の枠内でだけ横に逃がす。</p>
+<p class="why">実装する規則: 軸は「利用者から見て / 変更のコスト」に固定して横に比べる（案ごとに違う観点で書くと比較できない）。推奨列だけ accent-soft、3 案まで — 4 案以上は判断カードの縦積みへ。表は tw と同じく自分の枠内でだけ横に逃がす。</p>
 <div class="tw compare"><table>
 <thead><tr><th></th><th class="rec">A. brace・comma・字下げを戻す<span class="tag">推奨</span></th><th>C. Simple を廃止して Raw だけ</th></tr></thead>
 <tbody>
 <tr><th>利用者から見て</th><td class="rec">親子関係が読める。全体は有効な JSON にならない</td><td>常に有効な JSON。抽出・省略・型別色を失う</td></tr>
-<tr><th>コスト</th><td class="rec">表示層のみ・実装小</td><td>実装は減るが利用者の読む手間が増える</td></tr>
-<tr><th>取り返し</th><td class="rec">表示契約だけなので後から選び直せる</td><td>同じく選び直せる</td></tr>
+<tr><th>変更のコスト</th><td class="rec">DB と API は変わらない。表示層に整形の処理が増える</td><td>同じく DB と API は変わらず、表示の仕組みが 1 つ減る</td></tr>
 </tbody></table></div>
 </div>
 
@@ -485,8 +484,8 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
 <h3>横長の図 — <code>.media.wide</code></h3>
 <p>横長の図は入れ物だけを全幅にする。<b>svg の寸法には触らない</b> — 引き伸ばすと、小さな図で字まで比例拡大されて読めなくなる。図の側が <code>viewBox</code> と <code>width="100%"</code> を持っていれば、広げた入れ物に合わせて自分で伸びる。図は mermaid ではなく SVG で書くと、縦横の比を書き手が決められる。</p>
 <figure class="fig">
-  <div class="bar"><b>コメントから gate までの流れ</b></div>
-  <div class="media wide"><svg viewBox="0 0 720 120" width="100%" height="auto" role="img" aria-label="コメント、依頼の実行、gate の判定、PR の 4 段が左から右へ並ぶ図">
+  <div class="bar"><b>コメントから PR までの流れ</b></div>
+  <div class="media wide"><svg viewBox="0 0 720 120" width="100%" height="auto" role="img" aria-label="コメント、依頼の実行、close の判定、PR の 4 段が左から右へ並ぶ図">
     <g fill="none" stroke="var(--line)" stroke-width="1.5">
       <rect x="8" y="40" width="140" height="40" rx="6"/><rect x="196" y="40" width="140" height="40" rx="6"/>
       <rect x="384" y="40" width="140" height="40" rx="6" stroke="var(--accent)"/><rect x="572" y="40" width="140" height="40" rx="6"/>
@@ -494,7 +493,7 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
     </g>
     <defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0l8 4-8 4z" fill="var(--muted)"/></marker></defs>
     <text x="78" y="65" text-anchor="middle">コメント</text><text x="266" y="65" text-anchor="middle">依頼を全部やる</text>
-    <text x="454" y="65" text-anchor="middle" fill="var(--accent)">gate の判定</text><text x="642" y="65" text-anchor="middle">PR</text>
+    <text x="454" y="65" text-anchor="middle" fill="var(--accent)">close の判定</text><text x="642" y="65" text-anchor="middle">PR</text>
   </svg></div>
   <figcaption>色は <code>var(--line)</code> <code>var(--muted)</code> <code>var(--accent)</code> だけで指定する。固定色を書くと暗い配色で読めなくなる。</figcaption>
 </figure>
@@ -535,7 +534,7 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
 
 <div class="spec" id="sp-judge">
 <p class="name">判断カード + option（回答は kit/board.js の契約）</p>
-<p class="why">実装する規則: 判断カードの型（背景 / 推奨 1 行 / 覆す条件 / 選択肢の 5 欄）と approve or direct。選択・集計・貼り戻しの動作は kit/board.js が持ち、このページは見た目だけ。</p>
+<p class="why">実装する規則: 判断カードの型（背景 / 推奨 1 行 / 覆す条件 / 選択肢の 5 欄）と «承認か、別の指示か» の返答。選択・集計・貼り戻しの動作は kit/board.js が持ち、このページは見た目だけ。</p>
 <div class="judge">
   <p class="q">判断 1 — Simple の表示形式をどれにするか？</p>
   <p><b style="color:var(--muted)">背景:</b> 複数キー object の平坦化で親子関係が読めない、という報告から。</p>
@@ -554,8 +553,8 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
 <p class="name">answer（返す）</p>
 <p class="why">実装する規則: 選択内容をそのまま返せる文章と返し先。集計・コピー・復元は kit/board.js。</p>
 <div class="answer">
-  <p class="progress">回答 1 / 2 · 貼り戻し先: この board を受け取った会話</p>
-  <textarea readonly># 判断ボードの回答 — Simple 表示の形式
+  <p class="progress">回答 1 / 2 · 貼り戻し先（回答をコピーして貼る先）: この decision-board を受け取った会話</p>
+  <textarea readonly># decision-board の回答 — Simple 表示の形式
 ## 判断 1: A. Simple に brace・comma・字下げを戻す
 ## 承認: （未回答）</textarea>
   <p><button class="btn" type="button">回答をコピー</button></p>
@@ -570,7 +569,7 @@ details.fold[open] summary{border-bottom:1px solid var(--line);padding-bottom:ca
 <dt>部品の条件</dt><dd>それぞれが skill の規則 1 つ以上を実装する。規則に対応しない装飾部品は持たない</dd>
 <dt>必要な色</dt><dd>無彩 6（bg / paper / fill / ink / muted / line）+ 有彩 3 役割 ×（濃・淡）</dd>
 <dt>有彩の意味</dt><dd>accent = 判断と選択、ok = 推奨と合格、warn = 注意と未測定と停止</dd>
-<dt>色の制約</dt><dd>濃色は字・線・バッジ、淡色は小さな面の地だけ。これ以外の色は board に存在しない</dd>
+<dt>色の制約</dt><dd>濃色は字・線・バッジ、淡色は小さな面の地だけ。これ以外の色は decision-board に存在しない</dd>
 </dl>
 <p class="lede">dark theme は tokens の差し替え 2 ブロックだけで実装されている — 部品の CSS は 1 行も変わっていない。色見本の chip は var() 参照なので、いま見ているテーマの実値がそのまま映る。</p>
 </section>

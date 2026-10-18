@@ -373,13 +373,13 @@ ul.tl time{display:block;font-family:var(--font-head);font-size:.78rem;letter-sp
 .fig svg text{font-family:var(--font-head);font-size:13px;fill:var(--ink)}
 .fig svg .dim{fill:var(--muted)}
 
-/* ---------- 汎用の畳みと目次（v2 部品の続き — 撤去した primitives 層から移動） ----------
-   details.fold = 根拠の詳細を 1 手で開く汎用の畳み（AC 原文専用の .acx とは別部品）。
+/* ---------- 汎用の閉じた details と目次（v2 部品の続き — 撤去した primitives 層から移動） ----------
+   details.fold = 根拠の詳細を 1 回の操作で開く汎用の閉じた details（AC 原文専用の .acx とは別部品）。
    toc = 文書版の目次。前提 DOM: <div class="layout"><nav class="toc" id="toc">
    <button class="toc-t" id="toct">目次</button><ol><li><a href="#節id">…</ol></nav>
    <div class="content">…節…</div></div>。現在地と stuck 検出は page.js が担う。
    ⚠ .toc a の色は .board a（accent + 下線）を後方定義で上書きしている — 並びを前へ動かさない。 */
-/* details — 裏付けを 1 手で開く */
+/* details — 根拠を 1 回の操作で開く */
 details.fold{border:1px solid var(--line);border-radius:var(--r);background:var(--paper);
   padding:calc(var(--u)*2) calc(var(--u)*4);margin:0 0 calc(var(--u)*3)}
 details.fold summary{cursor:pointer;font-weight:700}
@@ -417,7 +417,7 @@ h2.stuck{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* 貼り付
    左へ 50vw 伸ばすと、h2 と同じ高さ帯の目次項目が地の色で塗り潰される
    （実測 — DOM にも hit-test にも写らない box-shadow なので、
    目次の 2 番目が「存在するのに描画されない」という見え方になった）。
-   目次の無い 1 段組の board では従来どおり左右へ伸ばす（板の左 padding を覆うため）。 */
+   目次の無い 1 段組の decision-board では従来どおり左右へ伸ばす（decision-board の左 padding を覆うため）。 */
 .layout .content h2 { box-shadow: 50vw 0 0 0 var(--bg); }
 @media (min-width:1080px){.toc{position:sticky;top:calc(var(--u)*4);align-self:start;
   max-height:calc(100vh - 2rem);overflow:auto}}
@@ -465,9 +465,9 @@ h2.stuck{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* 貼り付
    閉じるのは overlay のどこを押してもよい（href が元の figure へ戻す）。Esc は board.js の上乗せ。
    ⚠ デッキでは .shot-zoom を .deck の «外» に置く。面の中身（.p > .in）には自動縮小の
    transform が掛かるため、その中の fixed は viewport ではなく面に張り付く。 */
-/* 像の上に «見るべき場所» を四角で重ねる。画像は加工しない — 加工すると原寸
-   overlay 側と食い違い、板の外へ持ち出された像だけが注記入りになる。
-   位置は % で書く。像の実寸が変わっても、同じ場所を指したままになる。 */
+/* 画面写真の上に «見るべき場所» を四角で重ねる。画像は加工しない — 加工すると原寸で
+   重ねて表示する部品の側と食い違い、decision-board の外へ持ち出された画像だけが注記入りになる。
+   位置は % で書く。画像の実寸が変わっても、同じ場所を指したままになる。 */
 .fig-mark-wrap { position: relative; display: block; }
 .fig-mark {
   position: absolute; box-sizing: border-box;
@@ -479,7 +479,7 @@ h2.stuck{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* 貼り付
 }
 /* 番号の札。枠の «外» の上に出す。⚠ 枠の中へ入れない — 小さい対象では札が
    対象そのものを覆う（実測: Delete Project ボタンが札で塗り潰された）。
-   札は折り返さない。折り返すと高さが増えて、やはり像へかぶる。 */
+   札は折り返さない。折り返すと高さが増えて、やはり画像へかぶる。 */
 .fig-mark > b {
   position: absolute; bottom: 100%; left: -2px; margin-bottom: 2px;
   background: var(--accent); color: var(--paper);
@@ -487,7 +487,7 @@ h2.stuck{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* 貼り付
   padding: 0 .4rem; border-radius: 3px;
   white-space: nowrap;
 }
-/* 枠が像の上端に近くて札が像の外へ出るときだけ、下へ回す。 */
+/* 枠が画像の上端に近くて札が画像の外へ出るときだけ、下へ回す。 */
 .fig-mark.fig-mark-below > b { bottom: auto; top: 100%; margin: 2px 0 0; }
 
 .shot-open { display: block; cursor: zoom-in; }
