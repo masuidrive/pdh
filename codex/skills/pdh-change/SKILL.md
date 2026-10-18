@@ -56,7 +56,7 @@ PDH を変える提案は、次の原則と照らし合わせる。原則を外�
 
 | 仕組み | いつ動くか | 何を数えるか | 足す場所 |
 |---|---|---|---|
-| fast-checks（`scripts/fast-checks.sh` と `scripts/checks/*.check`） | `scripts/test-all.sh` の最初の段 | ファイルの中身: 禁止の書き方・行数や文字数の上限・あるべきファイル・生成物と元のずれ | 新しい `.check`（skill `pdh-check-writing`、`scripts/checks/README.md`） |
+| fast-checks（`scripts/fast-checks.sh` と `scripts/checks/*.check`） | `scripts/test-all.sh` の最初の段 | ファイルの中身: 禁止の書き方・行数や文字数の上限・あるべきファイル・生成物と元のずれ | 新しい `.check`。型・恒久テスト・linter で書けないかを先に判定する（skill `pdh-check-writing`「足す前に判断すること」、`scripts/checks/README.md`） |
 | `scripts/check-pdh-ticket.sh` | `./ticket.sh close` の前（`.ticket-config.yaml` の `pre_close_command`）と、`scripts/test-all.sh` の 1 段。coding-bot は push の前にも回す | ticket の記録: progress.md・AC の hash・承認待ちの行・close 前 review の区間・`.pdh-lock` のずれ | script に検査を足し、`tests/scripts/pdh_ticket_evidence_checks_test.sh` に通る例と落ちる例を足す |
 | `require_checklist`（`ticket.sh`、`.ticket-config.yaml`） | `./ticket.sh close` | note の `## Checklist` の未了の checkbox と、必須の節 | PDH-stage の skill の «出力» の行か、note のテンプレート（`.ticket-config.yaml` の `note_content`） |
 | `scripts/pdh-stage-checklist.sh` | PDH-stage に入るとき（`--enter`）と、再開するとき（`--show`） | 数えない。PDH-stage の skill の «出力» の行を note へ写し、未了の行を見せる | PDH-stage の skill の «出力» に `- [ ] <PDH-stage>: …` の行を足す |
