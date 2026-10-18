@@ -19,12 +19,11 @@ project の root で「https://github.com/masuidrive/pdh の claude/INSTALL.md �
 git clone https://github.com/masuidrive/pdh.git tmp/pdh
 curl -sL https://raw.githubusercontent.com/masuidrive/ticket.sh/main/ticket.sh -o ticket.sh
 chmod +x ticket.sh
-bash ticket.sh init
 ```
 
 ### ファイルを配置する
 
-配置先が既にある project は、下の更新手順に従う。直前の `ticket.sh init` が新規作成した設定だけは template で置き換えてよい。表のディレクトリは中の全ファイルをコピーする。自前の skill・agent・check は消さない。
+配置先が既にある project は、下の更新手順に従う。表のディレクトリは中の全ファイルをコピーする。自前の skill・agent・check は消さない。
 
 | コピー元 | コピー先 | 用途 | 更新の仕方 |
 |---|---|---|---|
@@ -113,22 +112,43 @@ while IFS="$(printf '\t')" read -r source destination; do
   fi
 done < tmp/pdh/claude/lock-map.tsv
 for name in .ticket-config.yaml AGENTS.md product-brief.md CLAUDE.md CLAUDE.local.md.example; do
-  cp "tmp/pdh/claude/templates/$name" "$name"
+  [ -e "$name" ] || cp "tmp/pdh/claude/templates/$name" "$name"
 done
 for name in dev-server.sh seed-pdh-verify.sh test-all.sh; do
-  cp "tmp/pdh/claude/templates/$name" "scripts/$name"
+  [ -e "scripts/$name" ] || cp "tmp/pdh/claude/templates/$name" "scripts/$name"
 done
 for name in example-max-source-lines example-max-test-lines example-no-merge-conflict-markers example-no-node-p-capture required-pdh-files required-pdh-source-files; do
-  cp "tmp/pdh/claude/templates/checks/$name.check" "scripts/checks/$name.check"
+  [ -e "scripts/checks/$name.check" ] || cp "tmp/pdh/claude/templates/checks/$name.check" "scripts/checks/$name.check"
 done
-mkdir -p .codex
-cp tmp/pdh/claude/templates/hooks.json .codex/hooks.json
-mkdir -p .claude
-cp tmp/pdh/claude/templates/settings.json .claude/settings.json
-mkdir -p docs/pdh-review-eval
-cp -R tmp/pdh/claude/templates/pdh-review-eval/. docs/pdh-review-eval/
+python3 - <<'MERGE_HOOKS'
+import json
+from pathlib import Path
+
+for source, destination in [('tmp/pdh/claude/templates/hooks.json', '.codex/hooks.json'), ('tmp/pdh/claude/templates/settings.json', '.claude/settings.json')]:
+    path = Path(destination)
+    existing = json.loads(path.read_text()) if path.exists() else {}
+    required = json.loads(Path(source).read_text())
+    events = existing.setdefault('hooks', {})
+    for event, groups in required['hooks'].items():
+        entries = events.setdefault(event, [])
+        for group in groups:
+            match = next((item for item in entries if item.get('matcher') == group.get('matcher')), None)
+            if match is None:
+                entries.append(group)
+                continue
+            hooks = match.setdefault('hooks', [])
+            for hook in group['hooks']:
+                if not any(item.get('type') == hook['type'] and item.get('command') == hook['command'] for item in hooks):
+                    hooks.append(hook)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(existing, ensure_ascii=False, indent=2) + '\n')
+MERGE_HOOKS
+[ -e docs/pdh-review-eval ] || cp -R tmp/pdh/claude/templates/pdh-review-eval docs/pdh-review-eval
 chmod +x scripts/*.sh
+bash ticket.sh init
 ```
+
+既存の差分マージ・初回だけのファイルは保持する。template と比較して必要な項目を差分マージしてから検査する。上の JSON マージは既存の権限・hook と設定値を残し、PDH の SessionStart hook だけを重複なく追加する。
 
 設定の JSON は既存設定へマージする。`settings.json` は PM の session 開始・再開・compact で stage と未了行を context へ戻す。worker には `PDH_ROLE=<役割>` を渡す。Codex の hook を使う場合は `.codex/hooks.json` の信頼設定も確認し、実際の session で表示を確かめる。
 

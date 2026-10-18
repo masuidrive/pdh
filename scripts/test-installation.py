@@ -80,6 +80,43 @@ cp "$PDH_TICKET_FIXTURE" "$4"
                GIT_CONFIG_COUNT='1',GIT_CONFIG_KEY_0=f'url.{upstream}.insteadOf',
                GIT_CONFIG_VALUE_0='https://github.com/masuidrive/pdh.git')
     for engine in ('claude','codex'):
+        # Install into an existing project with unrelated rules and permissions.
+        # These deliberately are not PDH templates: preservation precedes merging.
+        existing=temp/(engine+'-existing')
+        existing.mkdir()
+        run(existing,'git','init','-q','-b','main')
+        originals={name: '# Project-owned '+name+'\n' for name in
+                   ('CLAUDE.md','AGENTS.md','product-brief.md','scripts/test-all.sh',
+                    'scripts/dev-server.sh','scripts/seed-pdh-verify.sh',
+                    'docs/pdh-review-eval/README.md','scripts/checks/required-pdh-files.check')}
+        originals['.ticket-config.yaml']='tickets_dir: tickets\nproject_value: retained\n'
+        user_hook={'type':'command','command':'echo project hook','timeout':42}
+        user_settings={'permissions':{'allow':['Bash(project-command)']},
+                       'hooks':{'SessionStart':[{'matcher':'startup|resume|compact','hooks':[user_hook]}]},
+                       'project_setting':True}
+        for name,body in originals.items():
+            path=existing/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(body)
+        json_paths=['.codex/hooks.json','.claude/settings.json']
+        for name in json_paths:
+            path=existing/name;path.parent.mkdir(parents=True,exist_ok=True)
+            path.write_text(json.dumps(user_settings))
+        documented(existing,engine,'prepare')
+        for iteration in range(2):
+            documented(existing,engine,'install')
+            for name,body in originals.items():
+                assert (existing/name).read_text()==body,(engine,name,'existing content overwritten')
+            for name in json_paths:
+                settings=json.loads((existing/name).read_text())
+                assert settings['permissions']==user_settings['permissions']
+                assert settings['project_setting'] is True
+                hooks=settings['hooks']['SessionStart'][0]['hooks']
+                assert hooks[0]==user_hook
+                expected=2 if name=='.codex/hooks.json' or engine=='claude' else 1
+                assert len(hooks)==expected,(engine,name,hooks)
+                if expected==2:assert 'pdh-session-hook.sh' in hooks[1]['command']
+            if iteration==0:initial=payload(existing)
+            else:assert initial==payload(existing),'second install changed existing project'
+        print(engine+': existing rules, config, permissions and hooks preserved; PDH hooks added once')
         target=temp/engine
         target.mkdir()
         run(target,'git','init','-q','-b','main')
