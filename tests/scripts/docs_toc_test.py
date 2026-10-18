@@ -6,9 +6,9 @@ import unittest
 from pathlib import Path
 
 try:
-    from .docs_policy_test import document
+    from .docs_policy_test import adopt_docs, document
 except ImportError:
-    from docs_policy_test import document
+    from docs_policy_test import adopt_docs, document
 
 ROOT = Path(os.environ['PDH_TEST_ROOT'])
 
@@ -17,6 +17,7 @@ class DocsTocTests(unittest.TestCase):
     def test_output_can_be_truncated_without_broken_pipe_errors(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            adopt_docs(root)
             (root / 'docs').mkdir()
             (root / 'docs/guide.md').write_text(document(
                 stale='[{event: before-use}]',
@@ -38,6 +39,7 @@ class DocsTocTests(unittest.TestCase):
     def test_stage_status_custom_directories_and_section_sizes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            adopt_docs(root)
             subprocess.run(['git', 'init', '-q'], cwd=root, check=True)
             (root / 'docs/results').mkdir(parents=True)
             (root / 'specs').mkdir()
@@ -67,6 +69,7 @@ class DocsTocTests(unittest.TestCase):
     def test_external_check_entry_is_printed_without_execution(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            adopt_docs(root)
             (root / 'docs').mkdir()
             (root / 'docs/query.md').write_text(document(stale='[{check: [touch, executed], expect: {exit-code: 0}}]'))
             result = subprocess.run(['bash', str(ROOT / 'scripts/docs-toc.sh')],
@@ -78,6 +81,7 @@ class DocsTocTests(unittest.TestCase):
     def test_invalid_stage_and_legacy_metadata_fail(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            adopt_docs(root)
             (root / 'docs').mkdir()
             (root / 'docs/guide.md').write_text('# Missing metadata\n')
             for args in ([], ['--stage', 'pdh-resume']):

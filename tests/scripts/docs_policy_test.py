@@ -19,11 +19,18 @@ def document(*, kind='reference', status='active', stages='[PDH-implement]',
             f'read-at: {stages}\nstale-when: {stale}\n{extra}---\n# Guide\n{body}')
 
 
+def adopt_docs(root):
+    checks = root / 'scripts/checks'
+    checks.mkdir(parents=True, exist_ok=True)
+    (checks / 'docs-metadata.check').write_text('# Adopt document metadata checks\n')
+
+
 class DocsPolicyTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
+        adopt_docs(self.root)
         self.git('init', '-q')
         self.git('config', 'user.email', 'test@example.com')
         self.git('config', 'user.name', 'Test')

@@ -17,7 +17,7 @@ PM がこのファイルを読む。QA Engineer・AC 裏取り・Surface Observe
 
 `bash scripts/docs-toc.sh --stage PDH-verify` を実行し、出力の読む場面と見出しから ticket に関係する文書・節だけを開く。
 
-文書と関連する入力の最終内容を照合し、`[TICKET_DIR]/related-docs.md` の記録を `python3 scripts/docs-policy.py record` で更新する。記録の形式は `pdh-ticket-review`「関係する文書を読む」に従う。
+文書の frontmatter 検査を採用している場合、文書と関連する入力の最終内容を照合し、`[TICKET_DIR]/related-docs.md` の記録を `python3 scripts/docs-policy.py record` で更新する。記録の形式は `pdh-ticket-review`「関係する文書を読む」に従う。
 
 PM は次の順に回す。test 結果・AC の判定・consumer surface の観察は、どれも正確な commit SHA に結び付いている。
 

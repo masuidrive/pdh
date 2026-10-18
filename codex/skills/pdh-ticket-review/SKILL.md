@@ -27,7 +27,7 @@ PDH-ticket-human-review から差し戻されたときは、progress にある�
 
 ### 関係する文書を読む
 
-`bash scripts/docs-toc.sh --stage PDH-ticket-review` を実行し、出力の読む場面と見出しから ticket に関係する文書・節だけを開く。 AC・作り方の判断に効く内容は ticket へ反映する。読んだ節と採否は `[TICKET_DIR]/related-docs.md` に残し、照合を終えた節は次のコマンドで記録する。`<base>` は close の文書検査と同じ基点にする。
+`bash scripts/docs-toc.sh --stage PDH-ticket-review` を実行し、出力の読む場面と見出しから ticket に関係する文書・節だけを開く。 AC・作り方の判断に効く内容は ticket へ反映する。文書の frontmatter 検査を採用している場合、読んだ節と採否は `[TICKET_DIR]/related-docs.md` に残し、照合を終えた節は次のコマンドで記録する。`<base>` は close の文書検査と同じ基点にする。
 
 ```sh
 python3 scripts/docs-policy.py record docs/example.md#scope --base <base> --note [TICKET_DIR]/note.md --resolution unchanged --reason '今回の変更でも契約が変わらない理由'
@@ -117,7 +117,7 @@ done) &&
 
 ### 判断で確かめるもの
 
-- [ ] PDH-ticket-review: 関係する文書の内容を ticket に反映し、節ごとの採否・照合記録を `related-docs.md` に残した
+- [ ] PDH-ticket-review: 文書の frontmatter 検査を採用している場合、関係する文書の内容を ticket に反映し、節ごとの採否・照合記録を `related-docs.md` に残した
 
 - [ ] PDH-ticket-review: AC だけを読む worker が、全 AC に «復元できた» を返した。PM が結果を progress に残す
 - [ ] PDH-ticket-review: 残っている `Open-Questions` が、承認者にしか決められないものと、実装しないと分からないものだけである。PM が判断し、残した理由を note の `## PDH-ticket-review. Ticket contract check` の節に書く

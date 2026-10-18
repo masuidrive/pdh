@@ -42,6 +42,24 @@ def payload(target):
             and p.relative_to(target).parts[0] not in ('.git','tmp')}
 
 
+def stage_docs(target, code):
+    for stage in ('ticket-write','ticket-review','implement','review','verify'):
+        output=run(target,'bash','scripts/docs-toc.sh','--stage','PDH-'+stage,code=code)
+        if code:
+            assert 'docs/plain.md' in output and 'frontmatter' in output,output
+        else:
+            assert len(output.splitlines())==1 and '採用していない' in output,output
+    record=target/'tmp/skip-record.md'
+    output=run(target,'python3','scripts/docs-policy.py','record','docs/plain.md',
+               '--base','HEAD','--resolution','unchanged','--reason','project document',
+               '--output',str(record),code=code)
+    assert not record.exists(),'no-op/failed record created a file'
+    if code:
+        assert 'docs/plain.md' in output and 'frontmatter' in output,output
+    else:
+        assert len(output.splitlines())==1 and '採用していない' in output,output
+
+
 with tempfile.TemporaryDirectory(prefix='pdh-install-') as temporary:
     temp=Path(temporary)
     upstream=temp/'upstream'
@@ -141,6 +159,15 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         for src,dst,mode in re.findall(r'^\| `tmp/pdh/([^`]+)` \| `([^`]+)` \| [^|]+ \| (上書き|差分マージ|初回だけ) \|$', (ROOT/engine/'INSTALL.md').read_text(), re.M):
             assert (target/dst).exists(), (engine,dst,'documented install omitted placement')
         documented(target,engine,'verify')
+        stage_docs(target,code=0)
+        # Either active check means adoption, just as in check-pdh-ticket.sh.
+        for name in ('docs-metadata','docs-references'):
+            active=target/f'scripts/checks/{name}.check'
+            shutil.copy2(active.with_suffix('.check.example'),active)
+            stage_docs(target,code=1)
+            active.unlink()
+            stage_docs(target,code=0)
+        print(engine+': five stage TOCs and record skip by default, reject plain docs with either adopted check, name offending file')
         assert (target/'scripts/checks/required-pdh-source-files.check').is_file()
         # Actual disappearance must fail the installed registry.
         guard=target/'scripts/pdh-lock.sh';body=guard.read_bytes();guard.unlink()

@@ -430,7 +430,10 @@ def print_toc(args):
             if args.all and not args.stage:
                 print(f'{path} [measurement/result]')
             continue
-        entry = metadata(path)
+        try:
+            entry = metadata(path)
+        except (ValueError, yaml.YAMLError) as error:
+            raise ValueError(f'{path}: {error}') from error
         if not args.all and entry['status'] in ('superseded', 'retired'):
             continue
         if args.stage and args.stage not in entry['read-at']:
@@ -465,6 +468,11 @@ def main():
     parser.add_argument('--timeout', type=float, default=30, help='check-external: seconds per check (0 < timeout <= 60; default 30)')
     parser.add_argument('files', nargs='*')
     args = parser.parse_intermixed_args()
+    if args.mode in ('toc', 'record') and not any(
+            Path(f'scripts/checks/{name}.check').is_file()
+            for name in ('docs-metadata', 'docs-references')):
+        print('docs-policy: 文書の frontmatter 検査は採用していないため省略')
+        return 0
     try:
         if args.mode == 'check-external':
             if len(args.files) != 1 or not 0 < args.timeout <= 60:
@@ -492,7 +500,7 @@ def main():
         if args.mode == 'check-external':
             print(f'{args.files[0]}: 取得不能: {error}')
             return 2
-        errors = [str(error)]
+        errors = [f'{args.files[0]}: {error}' if args.mode == 'record' else str(error)]
     for error in errors:
         print(f'docs-policy: {error}')
     return bool(errors)
