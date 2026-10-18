@@ -248,6 +248,22 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         (target/'package.json').write_text('{"name": "project"}\n')
         documented(target,engine,'migration-check')
         (target/'package.json').unlink();rg.unlink()
+        # A failed early grep must name every later outstanding item as well.
+        config=target/'.ticket-config.yaml';config_body=config.read_text()
+        config.write_text(config_body.replace('worktree_mode: true','worktree_mode: false')
+                          .replace('Why-not-fix-now:','Old-why-label:'))
+        obsolete=skill_dir/'pdh-dev';obsolete.mkdir()
+        output=documented(target,engine,'migration-check',code=1)
+        for item in ('.ticket-config.yaml worktree_mode: true',
+                     '.ticket-config.yaml Why-not-fix-now:',
+                     f'旧 skill {skill_dir.relative_to(target)}/pdh-dev の削除',
+                     '.ticket-config.yaml の template 本文'):
+            assert '要適用: '+item in output,output
+        assert '済: .pdh-lock の照合' in output,output
+        config.write_text(config_body);obsolete.rmdir()
+        output=documented(target,engine,'migration-check')
+        assert '要適用:' not in output and '済:' in output,output
+        print(engine+': migration-check reports all missing items and returns aggregate status')
         print(engine+': documented install/update twice, custom agents, plain docs, opt-in rejection, disappearance guard, backup and preservation passed')
         if engine=='codex':
             assert not (target/'.claude').exists(),'native installation depends on legacy Claude files'

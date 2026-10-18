@@ -369,27 +369,45 @@ rm -f scripts/hookbus.js
 
 <!-- pdh-shell: migration-check -->
 ```bash
-bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/codex/lock-map.tsv
-bash scripts/pdh-lock.sh check
-test -f .agents/skills/pdh-resume/SKILL.md
-test -f .agents/skills/pdh-pm/_open-ticket.md
-grep -q '^worktree_mode: true' .ticket-config.yaml
-grep -q '^pre_close_command:' .ticket-config.yaml
-grep -q 'Key-User-Journeys:' .ticket-config.yaml
-grep -q 'Reproduction-or-measurement:' .ticket-config.yaml
-grep -q 'Why-not-fix-now:' .ticket-config.yaml
-grep -q 'AC-approved:' .ticket-config.yaml
-! grep -q 'Resume Point' .ticket-config.yaml
+pdh_migration_status=0
+pdh_check() {
+  local item=$1
+  shift
+  if "$@"; then
+    printf '済: %s\n' "$item"
+  else
+    printf '要適用: %s\n' "$item"
+    pdh_migration_status=1
+  fi
+}
+pdh_absent() {
+  local status=0
+  grep -n "$@" || status=$?
+  [ "$status" -eq 1 ]
+}
+pdh_no_path() {
+  [ ! -e "$1" ] && [ ! -L "$1" ]
+}
+pdh_check ".pdh-lock の更新" bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/codex/lock-map.tsv
+pdh_check ".pdh-lock の照合" bash scripts/pdh-lock.sh check
+pdh_check ".agents/skills/pdh-resume/SKILL.md" test -f ".agents/skills/pdh-resume/SKILL.md"
+pdh_check ".agents/skills/pdh-pm/_open-ticket.md" test -f ".agents/skills/pdh-pm/_open-ticket.md"
+pdh_check ".ticket-config.yaml worktree_mode: true" grep -q "^worktree_mode: true" .ticket-config.yaml
+pdh_check ".ticket-config.yaml pre_close_command:" grep -q "^pre_close_command:" .ticket-config.yaml
+pdh_check ".ticket-config.yaml Key-User-Journeys:" grep -q "Key-User-Journeys:" .ticket-config.yaml
+pdh_check ".ticket-config.yaml Reproduction-or-measurement:" grep -q "Reproduction-or-measurement:" .ticket-config.yaml
+pdh_check ".ticket-config.yaml Why-not-fix-now:" grep -q "Why-not-fix-now:" .ticket-config.yaml
+pdh_check ".ticket-config.yaml AC-approved:" grep -q "AC-approved:" .ticket-config.yaml
+pdh_check ".ticket-config.yaml Resume Point の撤去" pdh_absent "Resume Point" .ticket-config.yaml
 for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-rule-write; do
-  test ! -e ".agents/skills/$skill" || exit 1
+  pdh_check "旧 skill .agents/skills/$skill の削除" pdh_no_path ".agents/skills/$skill"
 done
 for path in .claude/settings.json scripts/test-all.sh package.json vitest.config.*; do
   [ -f "$path" ] || continue
-  status=0
-  grep -n 'hookbus' "$path" || status=$?
-  [ "$status" -eq 1 ] || exit 1
+  pdh_check "$path の hookbus 呼び出し撤去" pdh_absent hookbus "$path"
 done
-bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/codex/templates/.ticket-config.yaml
+pdh_check ".ticket-config.yaml の template 本文" bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/codex/templates/.ticket-config.yaml
+exit "$pdh_migration_status"
 ```
 
 上の確認を更新後に再実行する。同じ移行を 2 回行っても差分は出ない。review 集計は `pdh-review-tally.sh`、評価は `pdh-review-eval.sh --help` と `docs/pdh-review-eval/README.md` を読む。評価データは project が集め、実 engine での計測は CI に入れない。
