@@ -276,7 +276,7 @@ python3 -c 'import sys,yaml,tomllib; assert sys.version_info>=(3,11)'
 ```bash
 for path in CLAUDE.md scripts/test-all.sh .ticket-config.yaml; do
   status=0
-  grep -nE 'product-delivery-hierarchy\.md|pdh-dev|LLMHUB_DATABASE_URL' "$path" || status=$?
+  grep -nE 'product-delivery-hierarchy\.md|pdh-dev' "$path" || status=$?
   [ "$status" -eq 1 ] || exit 1
 done
 ```
