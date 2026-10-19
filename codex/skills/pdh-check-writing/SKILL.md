@@ -62,4 +62,4 @@ required_paths=config/settings.yaml
 ## 増やしすぎない
 
 - fast-check は追記専用ではない。消す条件は README「Removing a check」にある（守る対象が消えた・恒久テストや型に一般化した・例外が本来の違反より多く当たる）。足す変更で既存の検査がこの条件に当たったら、同じ変更で消す
-- project が fast-checks 全体の所要時間に上限を置くなら、`CLAUDE.md` に書く。超えたら、消す候補を上の条件で探す
+- project が fast-checks 全体の所要時間に上限を置くなら、`AGENTS.md` に書く。超えたら、消す候補を上の条件で探す
