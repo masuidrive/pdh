@@ -36,7 +36,7 @@
 4. **決めること** — note の `Open-Questions` のうち、承認者にしか決められないもの。件数、依存順、推奨を先に示す。**`N` がいくつでも、ここに «AC と Out-of-scope の全件を承認して実装に入ってよいか» の承認文と、«承認が間違いになる条件» を置く。**権限の依頼があれば、判断とは別の欄としてここに置く。
     - **承認文の前に、コストと利益を置く。**note の `## PDH-ticket-review. Ticket contract check` の節にある `Benefit:`・`DB-changes:`・`API-changes:`・`Complexity:` を、承認者の言葉で 1〜3 行にする。承認者はこれを見て «この利益に、このコストを払うか» を決める。`Feasibility:` は閉じた `<details>` に入れる
     - `DB-changes:` か `API-changes:` が «なし» でないときは、その変更と戻し方を本文に書き、[risk-overlay.md](risk-overlay.md)「不可逆な変更」に当たるかを判定する
-    - **ticket の diff が `[SKILLS_PATH]/pdh-review/SKILL.md`「fail-open を先に探す diff の一覧」に当たる見込みなら、«PDH-review で修正が落ち着いた後に、網羅探索をもう 1 巡回すか» を判断の 1 つとして置く。**当たるかは、ticket の Design-Decisions と影響範囲から decision-board の書き手が判定する。PDH-review に入ってからは聞かない（`[SKILLS_PATH]/pdh-review/SKILL.md`「収束」）。選択肢は «回す（推奨。拒否すべきものを通す経路を、修正の後にもう一度探す）/ 回さない（その 1 巡の時間を使わない）» の 2 つで、答えを ticket の Design-Decisions に書き戻す
+    - **ticket の diff が `[SKILLS_PATH]/pdh-review/SKILL.md`「fail-open を先に探す diff の一覧」に当たる見込みなら、«PDH-review で修正が落ち着いた後に、網羅探索をもう 1 巡回す» を ticket の Design-Decisions に書き、作り方の判断の 1 項として承認者に見せる。**増えるのは review の時間だけなので、判断として聞かない（`PDH-AGENTS.md`「確認が要るのは判断であって、調査ではない」）。承認者は AC の承認と同時に差し戻しで覆せる。当たるかは、ticket の Design-Decisions と影響範囲から decision-board の書き手が判定する
 5. **各判断** — [base.md](base.md)「承認者が必ず読む本文の構成」のとおり。
 6. **返す** — 選択内容または承認文をそのまま返せる文章。
 

@@ -121,7 +121,7 @@ review が終わる条件は、最新 SHA で «いま直す» と判定した C
     - 既存の欠陥（pre-existing）や、CI に前からある flaky。巡を起こさないことと、いま直さないことは別の判断である。«既存だから起票する» にしない
   - 修正が持ち込んだ Critical / Major が出れば、巡は増える。巡の回数を削るための規則ではない
 - 例外は 1 つだけある。«fail-open を先に探す diff の一覧» に当たる diff は、修正が落ち着いた後に網羅探索をもう 1 巡してよい
-  - この 1 巡を回すかは、PDH-ticket-human-review の decision-board で承認者に選ばせ、答えは ticket の Design-Decisions にある（`[SKILLS_PATH]/pdh-decision-board/ticket-gate.md`「本文の固定部」の «決めること»）。実装の後に «やりますか» と聞かない。ticket に答えが無いまま一覧に当たる diff になったときは回す
+  - 一覧に当たる diff では回す。回すことは ticket の Design-Decisions に書いてあり、承認者が AC の承認で覆したときだけ回さない（`[SKILLS_PATH]/pdh-decision-board/ticket-gate.md`「本文の固定部」の «決めること»）。実装の後に «やりますか» と聞かない
   - 一覧に当たらない diff では回さない
 - 同じ種類の Critical が 2 巡で再発したら、ユーザへ持ち込む。原因として、ticket に実装の詳細が混ざっていないか、範囲が膨らんでいないか、reviewer の prompt が偏っていないか、決まっているべき値を Coding Engineer に決めさせていないかを確かめる
 - **2 巡目で設計を見直して人に戻す。**この規則の目的: 3 巡目の修正に入る前に、ユーザが設計の見直しの結論を見て、構造を変えるかを決められること。1 巡目の finding を直した差分への review（2 巡目）で、修正が持ち込んだ Critical / Major が出たら、PM は 3 巡目の修正に入る前に設計の見直しを 1 回回し、その結論を添えてユーザへ渡す
