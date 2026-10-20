@@ -468,6 +468,35 @@ class ScriptTests(unittest.TestCase):
         self.commit('append findings after move')
         self.assertIn(f'{self.ticket}/progress.md:9: Findings 表に «出した人» の列が無い', self.check(1))
 
+    def test_findings_exempts_header_restored_for_append_only(self):
+        old = self.findings(column=False)
+        self.write(f'{self.ticket}/progress.md', old)
+        self.commit('findings without authors')
+        self.write(f'{self.ticket}/progress.md', self.findings())
+        self.commit('rewrite header with authors')
+        self.write(f'{self.ticket}/progress.md', self.findings() + '\n' + old.split('\n')[1] + '\n')
+        self.commit('restore the rewritten header for append_only_files')
+        self.check()
+        # 戻した見出しと同じ文字列でも、表を作るなら新しい表として数える。
+        with (self.root / self.ticket / 'progress.md').open('a') as f:
+            f.write('\n' + self.findings(column=False).replace('review-1', 'review-2'))
+        self.commit('new table reusing the restored header')
+        self.assertIn('列が無い', self.check(1))
+
+    def test_findings_rewritten_header_does_not_exempt_new_table(self):
+        old = self.findings(column=False)
+        self.write(f'{self.ticket}/progress.md', old)
+        self.commit('findings without authors')
+        self.write(f'{self.ticket}/progress.md', self.findings())
+        self.commit('rewrite header with authors')
+        with (self.root / self.ticket / 'progress.md').open('a') as f:
+            f.write('\n' + old.replace('review-1', 'review-2'))
+        self.commit('new table with the old header text')
+        self.assertIn('列が無い', self.check(1))
+        self.write(f'{self.ticket}/progress.md', self.findings() + '\n' + old.split('\n')[1] + '\n\n' + old.split('\n')[1] + '\n')
+        self.commit('restore the header twice')
+        self.assertIn('列が無い', self.check(1))
+
     def test_findings_uses_configured_tickets_dir(self):
         self.run_cmd('git', 'mv', 'tickets', 'work-items')
         self.ticket = 'work-items/sample'

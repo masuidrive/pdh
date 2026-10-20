@@ -15,7 +15,7 @@
 #      PDH-stage のチェックリスト（scripts/pdh-stage-checklist.sh が skill から出す行）がある
 #      PDH-human-review / PDH-close では、PDH-ticket-write〜PDH-verify の各 stage の行もすべてある
 #   8. close 時、ticket が変更した PDH の上書き対象が .pdh-lock と一致する
-#   9. この branch で見出しを追加した Findings 表に «出した人» 列があり、各行が空・—・? ではない
+#   9. この branch で見出しを追加した Findings 表に «出した人» 列があり、各行が空・—・? ではない（branch の commit が書き換えた見出しを元の文字列に戻しただけの行は数えない）
 #  10. この branch の ticket は close gate に review 記録があり、修正確認の各巡に修正が持ち込んだ Critical / Major があれば Checklist にその巡の設計の見直しの発行先がある
 #  11. close 時、説明対象を変えた docs は、更新か Checklist の済み行がある
 #
@@ -329,7 +329,7 @@ check_stage_checklist() {
 
 # progress は追記だけなので、base..tip で見出しを追加した表だけを検査する。
 check_findings_authors() {
-  local f=$1 old=$1 delta headers
+  local f=$1 old=$1 delta headers restored
   [ "$git_ready" -eq 1 ] && [ -n "$pdh_review_base" ] || return 0
   git cat-file -e "$pdh_review_tip:$f" 2>/dev/null || return 0
   # done への移動を新規追加と数えない。rename の類似度に依存せず、移動前の本文と比べる。
@@ -355,27 +355,46 @@ check_findings_authors() {
     /^ / { line++ }
   ') || { failed=1; return; }
   [ -n "$headers" ] || return 0
-  if ! git show "$pdh_review_tip:$f" | awk -F '|' -v file="$f" -v headers="$headers" '
+  # 追記だけの progress では、branch の commit が書き換えた見出しを元の文字列のまま戻す
+  # （ticket.sh の append_only_files）。戻しただけの見出しは表を作らないので数えない。
+  # 数えないのは、次の行が表の行でない見出しを、消された回数までに限る。
+  # --diff-filter=M にして、done への移動（削除 + 追加）で消えた行を «書き換えた» と数えない。
+  restored=$(git log --no-ext-diff --no-textconv --diff-filter=M --unified=0 -p --format= \
+    "$pdh_review_tip" --not "$pdh_review_exclude" -- ":(top)$f" ":(top)$old" |
+    awk '/^-\|[[:space:]]*#[[:space:]]*\|/ && index($0, "判定") { print substr($0, 2) }') || { failed=1; return; }
+  if ! git show "$pdh_review_tip:$f" | awk -F '|' -v file="$f" -v headers="$headers" -v restored="$restored" '
     function trim(value) { sub(/^[[:space:]]+/, "", value); sub(/[[:space:]]+$/, "", value); return value }
-    function report(reason) {
-      printf "check-pdh-ticket: %s:%d: Findings 表に «出した人» の列が%s\n", file, NR, reason
+    function report(reason, at) {
+      printf "check-pdh-ticket: %s:%d: Findings 表に «出した人» の列が%s\n", file, at, reason
       print "  見出し: | # | 出した人 | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |"
       print "  出した人には DA・CR・Why の見方・codex・PM を書く。複数なら + でつなぐ（例: DA+codex）。"
       bad=1
     }
-    BEGIN { split(headers, lines, "\n"); for (i in lines) added[lines[i]]=1 }
+    BEGIN {
+      split(headers, lines, "\n"); for (i in lines) added[lines[i]]=1
+      split(restored, lines, "\n"); for (i in lines) if (lines[i] != "") was[lines[i]]++
+    }
+    # 戻した見出しとして保留した行の次が表の行なら、新しい表として数える。
+    pending {
+      if ($0 ~ /^\|/) report("無い", pending)
+      else used[pending_text]++
+      pending=0
+    }
     /^\|[[:space:]]*#[[:space:]]*\|/ && index($0, "判定") {
       author=0
       if (NR in added) {
         for (i=2; i<=NF; i++) if (trim($i) == "出した人") author=i
-        if (!author) report("無い")
+        if (!author) {
+          if (($0 in was) && used[$0] + 0 < was[$0]) { pending=NR; pending_text=$0 }
+          else report("無い", NR)
+        }
       }
       next
     }
     !/^\|/ { author=0 }
     author && $0 !~ /^[[:space:]|:-]+$/ {
       value=trim($author)
-      if (value == "" || value == "—" || value == "?") report("空")
+      if (value == "" || value == "—" || value == "?") report("空", NR)
     }
     END { exit bad ? 1 : 0 }
   ' >&2; then
