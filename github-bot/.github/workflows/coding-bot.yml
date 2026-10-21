@@ -403,7 +403,12 @@ jobs:
             if [ "$EVENT_IS_PR" = true ]; then
               issue=$(gh api "repos/$REPO/pulls/$EVENT_NUMBER" \
                 | jq -er --arg repo "$REPO" '.head | select(.repo.full_name == $repo) | .ref | capture("^agent/issue-(?<issue>[1-9][0-9]*)$").issue') || issue=""
-              [[ "$issue" =~ ^[1-9][0-9]*$ ]] && pr="$EVENT_NUMBER"
+              if [[ "$issue" =~ ^[1-9][0-9]*$ ]] && gh api "repos/$REPO/issues/$issue" \
+                | jq -e --argjson number "$issue" '.number == $number and (has("pull_request") | not)' >/dev/null; then
+                pr="$EVENT_NUMBER"
+              else
+                issue=""
+              fi
             else
               issue="$EVENT_NUMBER"
             fi
@@ -435,12 +440,17 @@ jobs:
           ISSUE: ${{ env.BOT_ISSUE }}
           TRUSTED_ISSUE: ${{ steps.notification_context.outputs.issue }}
           TRUSTED_PR: ${{ steps.notification_context.outputs.pr }}
+          EVENT_IS_PR: ${{ inputs.pr != '' || github.event_name == 'workflow_run' || github.event.issue.pull_request != null || github.event.pull_request != null }}
           CONCLUSION: ${{ job.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -uo pipefail
           if [ -f "$GITHUB_WORKSPACE/.coding-bot-reported" ]; then
             echo "run-action.sh が最終レポートを投稿済み。何もしない"; exit 0
+          fi
+          if [ "${EVENT_IS_PR:-false}" = true ] && [ -z "${TRUSTED_ISSUE:-}" ]; then
+            echo "報告先の issue を確認できません。PR への報告は出さず、実行ログに残します。"
+            exit 0
           fi
           if [ -n "${PR_INSTRUCTION:-}" ]; then
             body="指定仕事が結果を残さずに終了（${CONCLUSION}）。[実行ログ]($RUN_URL)"
