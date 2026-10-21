@@ -19,6 +19,13 @@ dispatch_branch_ci() {
 }
 
 
+use_pat_for_origin() {
+  git config --local --unset-all 'http.https://github.com/.extraheader' 2>/dev/null || true
+  git config --local 'http.https://github.com/.extraheader' \
+    "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$CODING_BOT_GH_PAT" | base64 | tr -d '\n')"
+}
+
+
 exclude_runner_markers() {
   local exclude_file marker
   exclude_file=$(git rev-parse --git-path info/exclude) || return 1
@@ -916,11 +923,6 @@ export GH_TOKEN="$GITHUB_TOKEN"
 # 差し替えておけば、agent の素の `git push origin` も PAT で出る。gh は GITHUB_TOKEN のまま。
 # ORIGIN_PUSH_AUTH は後処理の CI 再起動の判定が読む（PAT の push は CI を自分で起動する）。
 ORIGIN_PUSH_AUTH=github_token
-use_pat_for_origin() {
-  git config --local --unset-all 'http.https://github.com/.extraheader' 2>/dev/null || true
-  git config --local 'http.https://github.com/.extraheader' \
-    "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$CODING_BOT_GH_PAT" | base64 | tr -d '\n')"
-}
 _close_mode=$(awk '/^github_bot:/{f=1;next} /^[^ #]/{f=0} f && /^[[:space:]]*close:[[:space:]]*/{print $2; exit}' .ticket-config.yaml 2>/dev/null | tr -d "\"'" || true)
 if [ "$_close_mode" = "pr-merge" ] && [ -n "${CODING_BOT_GH_PAT:-}" ] && [ -z "${CI_AUTOFIX_RUN_ID:-}" ]; then
   use_pat_for_origin
