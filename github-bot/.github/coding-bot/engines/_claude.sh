@@ -118,6 +118,7 @@ engine_run() {
     MESSAGE_COUNTER=0  # Track which message/turn we're on to avoid block file overwrites
     BLOCKS_DIR="/tmp/claude-blocks-$ISSUE_NUMBER"
     mkdir -p "$BLOCKS_DIR"
+    rm -f -- "$BLOCKS_DIR"/block-m*-*
 
     timeout "$TIMEOUT_VALUE" claude -p "${ENGINE_ARGS[@]}" \
       ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
@@ -297,7 +298,7 @@ EOF
 engine_extract_result() {
   local AGENT_RESULT_FILE="/tmp/agent-result.md"
 
-  if [ -f "$AGENT_RESULT_FILE" ]; then
+  if [ -z "${PR_ENGINE_MODE:-}" ] && [ -f "$AGENT_RESULT_FILE" ]; then
     echo "✅ Found /tmp/agent-result.md - using it as final result"
     cat "$AGENT_RESULT_FILE" > "$RESULT_OUTPUT_FILE"
     return 0

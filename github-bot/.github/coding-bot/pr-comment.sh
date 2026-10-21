@@ -5,6 +5,7 @@ pr_comment_engine() {
   SYSTEM_PROMPT="$instruction"
   local PR_ENGINE_MODE="${2:-classify}" old_codex_home="${CODEX_HOME:-}" name key value status=0
   local -a header_keys=() header_values=()
+  local CODEX_LAST_MESSAGE_FILE="$RUNNER_DIR/pr-last.txt" CODEX_EXIT_CODE_FILE="$RUNNER_DIR/pr-exit.txt"
   local ENGINE_PROMPT_FILE="$RUNNER_DIR/pr-prompt.txt"
   printf '%s' "$USER_REQUEST" > "$ENGINE_PROMPT_FILE"
   JSON_OUTPUT_FILE="$RUNNER_DIR/pr-output.json"
@@ -12,7 +13,7 @@ pr_comment_engine() {
   RESULT_OUTPUT_FILE="$RUNNER_DIR/pr-result.txt"
   TASK_STATUS_FILE="$RUNNER_DIR/pr-tasks.txt"
   TIMEOUT_VALUE="$RUN_TIMEOUT_SECONDS"
-  rm -f "$RESULT_OUTPUT_FILE" "$JSON_OUTPUT_FILE"
+  rm -f "$RESULT_OUTPUT_FILE" "$JSON_OUTPUT_FILE" "$CODEX_LAST_MESSAGE_FILE"
   while IFS= read -r key; do
     while IFS= read -r value; do
       header_keys+=("$key"); header_values+=("$value")
