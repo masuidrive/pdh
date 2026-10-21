@@ -407,8 +407,7 @@ CI_WORKFLOW="${CODING_BOT_CI_WORKFLOW:-ci.yml}"
 echo "📝 Fetching Issue/PR data..."
 
 # PR か Issue かを判定する。issue_comment は Issue / PR 両方で発火するため、
-# その場合は対象番号が実際に PR かどうかを gh で確認する（PR への 🤖 コメントを
-# PR 扱いにし、PR の head ブランチで作業 + _pr.md を読むため）。
+# その場合は対象番号が実際に PR かどうかを gh で確認し、PR コメントは分類の後に終了する。
 IS_PR=false
 CI_RED_MARKER=""
 PR_COMMENT_ONLY=false
@@ -856,13 +855,11 @@ append_prompt() {
 $extra"
 }
 
-# コンテキスト別の追加プロンプト: PR なら _pr.md、Issue なら _issue.md
+# 内部指定仕事には専用の規則、通常の issue には _issue.md を渡す。
 if [ -n "${PR_INSTRUCTION:-}" ]; then
   SYSTEM_PROMPT="$SYSTEM_PROMPT
 
 $PR_TASK_RULES"
-elif [ "${PR_COMMENT_ONLY:-false}" = true ]; then
-  append_prompt "$SCRIPT_DIR/_pr.md"
 elif [ "${IS_PR:-false}" != "true" ]; then
   append_prompt "$SCRIPT_DIR/_issue.md"
 fi

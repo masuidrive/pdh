@@ -475,7 +475,6 @@ When to emit:
   open PR exists yet for the branch. (If an open PR already exists for
   the branch, do not emit markers — just push the new commits and say
   so in the final comment.)
-- PR mode (`_pr.md`) — PR already exists, do not emit markers.
 - Early-termination state (PDH-verify not finished) — do not emit markers; use the
   Incomplete template instead.
 

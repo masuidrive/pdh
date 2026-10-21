@@ -195,7 +195,7 @@ PDH-verify を終えたら、次の順で行う。既存 PR があればそれ�
    }
    GH_TOKEN="$PR_TOKEN" gh pr ready "$BRANCH_NAME"
    ```
-   ⚠ **`close --no-merge` を PR より前に置かないこと。**承認待ちの行の `発行先:` に書く PR の URL がまだ無い。
+   ⚠ **`close --no-merge` を PR より前に置かないこと。**承認待ちの行の `発行先:` には issue の完成報告コメントの URL を書く。
    `require_checklist` / `require_checklist_groups` / `append_only_files` と `pre_close_command` はこの
    close が検査する。先に検査するなら `--dry-run` を使う。
    **未了なら tree に触れず停止する。**何が未了かを issue にコメントし、draft のまま残す。
