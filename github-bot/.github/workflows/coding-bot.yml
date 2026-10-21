@@ -404,6 +404,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          RESOLVE_CONFLICT_PR: ${{ inputs.resolve_conflict_pr }}
           EVENT_NUMBER: ${{ env.BOT_ISSUE }}
           EVENT_IS_PR: ${{ inputs.pr != '' || github.event_name == 'workflow_run' || github.event.issue.pull_request != null || github.event.pull_request != null }}
         run: |
@@ -417,6 +418,15 @@ jobs:
               fi
             else
               issue="$EVENT_NUMBER"
+              if [ -n "${RESOLVE_CONFLICT_PR:-}" ]; then
+                source .github/coding-bot/trigger-source.sh
+                GITHUB_REPOSITORY="$REPO"
+                if validate_conflict_dispatch "$issue" "$RESOLVE_CONFLICT_PR"; then
+                  pr="$RESOLVE_CONFLICT_PR"
+                else
+                  issue=""
+                fi
+              fi
             fi
           fi
           if [ -z "$issue" ]; then
@@ -439,6 +449,8 @@ jobs:
       - name: Report if the run left nothing
         if: always()
         env:
+          RESOLVE_CONFLICT_PR: ${{ inputs.resolve_conflict_pr }}
+          PR_COMMENT_ONLY: ${{ github.event_name != 'workflow_run' && inputs.pr == '' && (github.event.issue.pull_request != null || github.event.pull_request != null) }}
           PR_INSTRUCTION: ${{ inputs.pr != '' && inputs.instruction || '' }}
           PR: ${{ inputs.pr }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -457,6 +469,22 @@ jobs:
           if [ "${EVENT_IS_PR:-false}" = true ] && [ -z "${TRUSTED_ISSUE:-}" ]; then
             echo "報告先の issue を確認できません。PR への報告は出さず、実行ログに残します。"
             exit 0
+          fi
+          if [ "${PR_COMMENT_ONLY:-false}" = true ]; then
+            source .github/coding-bot/pr-comment.sh
+            TRUSTED_LINKED_ISSUE="$TRUSTED_ISSUE"
+            GITHUB_REPOSITORY="$REPO"
+            response=$(pr_comment_redirect) || exit 1
+            gh issue comment "$TRUSTED_PR" --repo "$REPO" \
+              --body "この run では PR の依頼を受け付けられませんでした。[実行ログ]($RUN_URL) $response"
+            exit $?
+          fi
+          if [ -n "${RESOLVE_CONFLICT_PR:-}" ]; then
+            [ "$RESOLVE_CONFLICT_PR" = "${TRUSTED_PR:-}" ] || exit 0
+            source .github/coding-bot/resolve-conflict.sh
+            GITHUB_REPOSITORY="$REPO"; ISSUE_NUMBER="$TRUSTED_ISSUE"
+            report_conflict_failure "conflict の解消 run が結果を残さずに終了しました（${CONCLUSION}）。[実行ログ]($RUN_URL)"
+            exit $?
           fi
           if [ -n "${PR_INSTRUCTION:-}" ]; then
             body="指定仕事が結果を残さずに終了（${CONCLUSION}）。[実行ログ]($RUN_URL)"

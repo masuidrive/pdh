@@ -113,14 +113,15 @@ class PrCommentContract(MergeProbe):
         with tempfile.TemporaryDirectory(dir=TMP) as temp:
             code=r'''set -e
 BRANCH_NAME=agent/issue-7; GITHUB_REPOSITORY=owner/repo; COMMENT_ID=''; PR_INSTRUCTION=''
-ISSUE_BODY=PR_UNACCEPTED_BODY; TRUSTED_LINKED_ISSUE=7
+ISSUE_BODY=ISSUE_ACCEPTED_BODY; TRUSTED_LINKED_ISSUE=7
+[ "$IS_PR" != true ] || ISSUE_BODY=PR_UNACCEPTED_BODY
 gh() {
  printf '%s\n' "$*" >> "$CALLS"
  case "$2" in
  *issues/9/comments) echo '[{"id":99,"login":"person","body":"PR_UNACCEPTED_IMAGE.png"}]';;
  *issues/7/comments) echo '[{"id":11,"login":"person","body":"ISSUE_ACCEPTED_IMAGE.png"}]';;
  *issues/7) echo ISSUE_ACCEPTED_BODY;;
- graphql) echo ISSUE_HTML;;
+ graphql) printf '%s' '{"data":{"repository":{"issue":{"bodyHTML":"ISSUE_HTML","comments":{"nodes":[]}}}}}' | jq -r "${@: -1}";;
  *) return 98;;
  esac
 }
@@ -130,7 +131,7 @@ gh() {
                     path=Path(temp)/'calls';path.write_text('')
                     env={**os.environ,'BOT':str(BOT),'CALLS':str(path),'EVENT_TYPE':event,'IS_PR':is_pr,
                          'ISSUE_NUMBER':number,'RESOLVE_CONFLICT_PR':resolve}
-                    result=subprocess.run(['bash','-c',code+history+images+'\nprintf "%s\n" "$CONVERSATION_HISTORY_NOTE" "$ALL_COMMENTS_JSON"'],env=env,text=True,capture_output=True)
+                    result=subprocess.run(['bash','-c',code+history+images+'\nprintf "%s\n" "$CONVERSATION_HISTORY_NOTE" "$ALL_COMMENTS_JSON" "$ISSUE_BODY" "$BODY_HTML"'],env=env,text=True,capture_output=True)
                     self.assertEqual(result.returncode,0,result.stderr)
                     self.assertIn('ISSUE_ACCEPTED_IMAGE',result.stdout)
                     self.assertNotIn('PR_UNACCEPTED',result.stdout)
@@ -181,6 +182,7 @@ gh() {
                 self.assertNotEqual(result.returncode,0)
                 self.assertEqual(pushes,[]);self.assertTrue(unchanged)
                 self.assertNotIn('workflow run',calls);self.assertIn('issues/7',calls)
+                self.assertIn('分類できなかったため',calls)
 
     def test_issue_run_only_pushes_a_verified_merge(self):
         for arguments in [{},{'whitespace':True},{'conflict':False},{'conflict':False,'fast_forward':True},{'pat':True}, {'dirty':True},
@@ -191,7 +193,7 @@ gh() {
                 self.assertEqual(result.returncode==0,not unsafe,result.stderr)
                 self.assertEqual(pushes,[] if unsafe or arguments.get('conflict') is False else ['push'])
                 self.assertIn('issue comment 7',calls)
-                self.assertEqual(calls.count('issue comment 9'),0 if unsafe else 1)
+                self.assertEqual(calls.count('issue comment 9'),1)
                 self.assertNotIn('classify',calls)
                 if arguments.get('conflict') is False:
                     self.assertNotIn('resolve',calls)
@@ -200,6 +202,36 @@ gh() {
                 if not unsafe and arguments.get('conflict') is not False:
                     self.assertIn('pat-auth' if arguments.get('pat') else 'ci-workflow',calls)
                     if arguments.get('pat'): self.assertNotIn('ci-workflow',calls)
+
+    def test_interrupted_pr_runs_redirect_without_marking_issue_waiting(self):
+        import textwrap
+        workflow=(BOT.parent/'workflows/coding-bot.yml').read_text()
+        block=workflow.split('- name: Report if the run left nothing',1)[1].split('        run: |',1)[1].split('\n      - name:',1)[0]
+        block=textwrap.dedent(block)
+        for comment_only,resolve in [('true',''),('false','9'),('false','')]:
+            with self.subTest(comment_only=comment_only,resolve=resolve),tempfile.TemporaryDirectory(dir=TMP) as d:
+                env={**os.environ,'PR_COMMENT_ONLY':comment_only,'RESOLVE_CONFLICT_PR':resolve,
+                     'PR_INSTRUCTION':'','REPO':'owner/repo','ISSUE':'7','TRUSTED_ISSUE':'7','TRUSTED_PR':'9',
+                     'EVENT_IS_PR':'true' if comment_only=='true' else 'false',
+                     'CONCLUSION':'failure','RUN_URL':'run','GITHUB_WORKSPACE':d,'CALLS':str(Path(d)/'calls')}
+                code=r'''gh() {
+ printf '%s\n' "$*" >> "$CALLS"
+ if [[ "$1 $2" == 'issue comment' ]]; then printf 'https://github.com/owner/repo/issues/%s#issuecomment-88\n' "$3";
+ elif [[ "$1 $2" == 'issue view' ]]; then echo OPEN;
+ elif [[ "$2" == *comments* ]]; then echo '[]'; else echo '{"number":7}'; fi
+}
+'''
+                result=subprocess.run(['bash','-c',code+block],cwd=ROOT,env=env,text=True,capture_output=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                calls=Path(env['CALLS']).read_text()
+                if comment_only=='true':
+                    self.assertIn('issue comment 9',calls);self.assertIn('issues/7',calls)
+                    self.assertNotIn('issue edit',calls)
+                elif resolve:
+                    self.assertIn('issue comment 7',calls);self.assertIn('issue comment 9',calls)
+                    self.assertIn('issues/7#issuecomment-88',calls)
+                else:self.assertIn('issue edit 7',calls)
+        print('CONTRAST PASS: interrupted ordinary issue work still leaves its waiting label')
 
     def test_classifier_has_no_tools_or_github_credentials(self):
         for engine in ['codex','claude']:

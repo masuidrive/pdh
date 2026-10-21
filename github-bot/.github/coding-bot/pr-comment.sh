@@ -71,7 +71,8 @@ run_pr_comment() (
   else
     status=1
     response=$(pr_comment_redirect) || return 1
-    gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$response" || return 1
+    gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
+      --body "依頼を分類できなかったため、conflict 解消を起動していません。 $response" || return 1
   fi
   : > "$GITHUB_WORKSPACE/.coding-bot-reported"
   return "$status"

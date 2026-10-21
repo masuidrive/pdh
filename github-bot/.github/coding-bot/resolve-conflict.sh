@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 # issue の通常の merge 経路を使い、固定の conflict 解消だけで終える。
+report_conflict_failure() {
+  local report
+  report=$(gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
+    --body "$1 [PR](https://github.com/$GITHUB_REPOSITORY/pull/$RESOLVE_CONFLICT_PR)") || return 1
+  [[ "$report" == "https://github.com/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER#issuecomment-"* ]] || return 1
+  gh issue comment "$RESOLVE_CONFLICT_PR" --repo "$GITHUB_REPOSITORY" \
+    --body "conflict の解消を完了できませんでした。[issue の報告]($report) をお読みください。"
+}
+
 resolve_issue_conflict() {
   local status=0 result snapshot before="$CONFLICT_START_SHA" base="$CONFLICT_BASE_SHA"
   if [ "$MERGE_EXIT_CODE" = 0 ] && git rev-parse -q --verify MERGE_HEAD >/dev/null; then
@@ -39,12 +48,15 @@ resolve_issue_conflict() {
     if [ "$MERGE_EXIT_CODE" = 0 ]; then result='解消する conflict はありません。'
     else result='conflict を解消して push しました。'; fi
     gh issue comment "$RESOLVE_CONFLICT_PR" --repo "$GITHUB_REPOSITORY" --body "$result" || status=1
-  else
+  fi
+  if [ "$status" != 0 ]; then
     git merge --abort >/dev/null 2>&1 || true
     result="conflict の解消を完了できませんでした。このスレッドで対応を相談してください。[実行ログ](https://github.com/$GITHUB_REPOSITORY/actions/runs/${GITHUB_RUN_ID:-})"
+    report_conflict_failure "$result" || return 1
+  else
+    gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
+      --body "$result [PR](https://github.com/$GITHUB_REPOSITORY/pull/$RESOLVE_CONFLICT_PR)" || return 1
   fi
-  gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
-    --body "$result [PR](https://github.com/$GITHUB_REPOSITORY/pull/$RESOLVE_CONFLICT_PR)" || status=1
   : > "$GITHUB_WORKSPACE/.coding-bot-reported"
   return "$status"
 }
