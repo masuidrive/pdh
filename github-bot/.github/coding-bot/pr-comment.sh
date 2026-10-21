@@ -46,6 +46,7 @@ run_pr_comment() {
   chmod +x "$hooks/pre-push"
   git config --local core.hooksPath "$hooks"
   if ! pr_comment_engine "$(cat "$SCRIPT_DIR/_pr.md")"; then return 1; fi
+  jq -e -s 'length == 1 and (.[0] | type == "object" and (.conflict | type) == "boolean" and (.other | type) == "boolean")' "$RESULT_OUTPUT_FILE" >/dev/null || return 1
   action=$(jq -r 'if type == "object" and (.conflict | type) == "boolean" and (.other | type) == "boolean" then .conflict else error("invalid decision") end' "$RESULT_OUTPUT_FILE") || return 1
   other=$(jq -r '.other' "$RESULT_OUTPUT_FILE")
   [ "$(git rev-parse HEAD)" = "$before" ] && git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ] || return 1
@@ -62,7 +63,7 @@ run_pr_comment() {
       # 元の依頼は解決 engine に渡さない。質問や別の修正が混じっても実行されない。
       USER_REQUEST="$(git diff --name-only --diff-filter=U)"
       if ! pr_comment_engine '列挙されたファイルの merge conflict だけを解消してください。git add/commit/push、別の修正、ticket 更新、GitHub への投稿は禁止です。最終出力は JSON だけにし、解消できたら {"resolved":true}、解消できない判断があれば {"resolved":false} を返してください。'; then return 1; fi
-      jq -e 'type == "object" and .resolved == true' "$RESULT_OUTPUT_FILE" >/dev/null || return 1
+      jq -e -s 'length == 1 and (.[0] | type == "object" and .resolved == true)' "$RESULT_OUTPUT_FILE" >/dev/null || return 1
       [ "$(git rev-parse HEAD)" = "$before" ] || return 1
       while IFS= read -r -d '' path; do git add -- "$path" || return 1; done < "$RUNNER_DIR/conflicts"
       pr_comment_index > "$RUNNER_DIR/index-after"
