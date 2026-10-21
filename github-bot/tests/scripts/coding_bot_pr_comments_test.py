@@ -178,6 +178,21 @@ wait "$ENGINE_PID"
                         self.assertIn('--strict-mcp-config',args)
 
 
+    def test_guide_read_failure_cannot_create_a_duplicate(self):
+        with tempfile.TemporaryDirectory(dir=TMP) as d:
+            code='''source "$BOT/pr-comment.sh"
+gh() {
+ if [ "$1" = api ]; then return 1; fi
+ echo POST > "$RUNNER_DIR/writes"
+}
+pr_comment_guide 9 https://github.com/owner/repo/issues/7#issuecomment-77
+'''
+            result=subprocess.run(['bash','-c',code],cwd=ROOT,
+                env={**os.environ,'BOT':str(BOT),'RUNNER_DIR':d,'GITHUB_REPOSITORY':'owner/repo','REPORT_ISSUE':'7'},
+                capture_output=True,text=True)
+            self.assertNotEqual(result.returncode,0)
+            self.assertFalse((Path(d)/'writes').exists())
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

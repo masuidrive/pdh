@@ -26,7 +26,8 @@ codex_post_operational_note() {
   local mode="$1" message="$2" marker bodies
   marker="<!-- coding-bot-provider:$mode:$(date -u +%F) -->"
   bodies=$(_codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}/comments" \
-    --paginate --slurp | jq -r 'flatten | .[].body') || return 1
+    --paginate --slurp) || return 1
+  bodies=$(printf '%s' "$bodies" | jq -r 'flatten | .[].body') || return 1
   [[ "$bodies" != *"$marker"* ]] || return 0
   _codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}/comments" \
     --method POST -f body="$message
@@ -82,7 +83,8 @@ codex_auth_issue() {
       bodies=$(_codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/$issue_number" --jq '.body') || return 1
       if [[ "$bodies" == *"$marker"* ]]; then return 0; fi
       bodies=$(_codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/$issue_number/comments" \
-        --paginate --slurp | jq -r 'flatten | .[].body') || return 1
+        --paginate --slurp) || return 1
+      bodies=$(printf '%s' "$bodies" | jq -r 'flatten | .[].body') || return 1
       if [[ "$bodies" == *"$marker"* ]]; then return 0; fi
     fi
   fi
