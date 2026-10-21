@@ -554,7 +554,7 @@ jobs:
       #   ⚠ 同じ時間に別の run も起票していると、両方の run が同じ issue を見つける。
       #   👀（作業を始めた印）が付いていれば、もう動いているとみなして呼ばない。
       - name: Start runs for 🤖 issues this run opened
-        if: always()
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.issue != '')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}

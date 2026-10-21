@@ -407,8 +407,10 @@ CI_RED_MARKER=""
 PR_COMMENT_ONLY=false
 if [[ "$EVENT_TYPE" == "pull_request"* ]] || [ "$EVENT_TYPE" = workflow_run ]; then
   IS_PR=true
-elif [[ "$EVENT_TYPE" == "issue_comment" ]] && gh pr view "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --json number >/dev/null 2>&1; then
-  IS_PR=true
+elif [ "$EVENT_TYPE" = issue_comment ]; then
+  TRIGGER_ISSUE_DATA=$(gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER") || exit 1
+  IS_PR=$(printf '%s' "$TRIGGER_ISSUE_DATA" | jq -r --argjson number "$ISSUE_NUMBER" \
+    'if .number == $number then has("pull_request") else error("invalid trigger context") end') || exit 1
 fi
 
 if [ "$IS_PR" = true ] && [ -z "${PR_INSTRUCTION:-}" ] && [ "$EVENT_TYPE" != workflow_run ]; then
