@@ -8,13 +8,13 @@
 #   3. Status が human gate なら、note の Checklist に «発行先:» + URL か path の未了行が無ければ足す
 #      （URL は今回の gate コメント）
 #   4. note の Checklist に «未了 + 発行先:» の行があれば awaiting-reply ラベルを付け、無ければ外す
-#      （bot の PR が開いていれば Issue から外して PR にだけ付ける。PR が無ければ Issue に付ける）
+#      （回答する issue に付け、PR からは外す）
 #   5. 導入検査（ラベル・Actions の PR 作成許可）で要追加があれば報告に足す
 #
 # ⚠ awaiting-reply は run の «始め» と «終わり» の両方で動かす。終わりだけだと、人が答えて
 # run が始まっても付いたままになり、«自分の番» を誤って言い続ける。engine が失敗した run では
 # final が呼ばれないので、失敗側からも付ける（止まっていて人の手が要る、という意味は同じ）。
-# ⚠ failed でも PR が開いていれば Issue から外して PR にだけ付ける。開始時は両方から外す。
+# ⚠ failed でも回答待ちは issue に付ける。開始時は両方から外す。
 #
 # usage:
 #   pdh-hooks.sh final <issue> <branch> <comment-id>   # stdin: 最終レポート → stdout: 補正後の本文
@@ -45,12 +45,12 @@ set_awaiting() {  # $1=add|remove  $2=issue  $3=branch  $4=理由
     AWAITING_PR=$(gh pr list --head "$branch" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
     [ "$AWAITING_PR" = null ] && AWAITING_PR=""
   fi
-  [ -z "$AWAITING_PR" ] || issue_action=remove
+  : # 回答待ちは常に issue に表示する
   gh issue edit "$issue" --repo "$REPO" "--${issue_action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
     && log "$AWAITING_LABEL を Issue #$issue に ${issue_action} した（${reason}）" \
     || { [ "$issue_action" = remove ] || log "$AWAITING_LABEL を Issue #$issue に付けられない（ラベルが無いか権限不足。github-bot/INSTALL.md「3. stage ラベルを作る」）"; }
   if [ -n "$AWAITING_PR" ]; then
-    gh issue edit "$AWAITING_PR" --repo "$REPO" "--${action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
+    gh issue edit "$AWAITING_PR" --repo "$REPO" "--remove-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
       && log "$AWAITING_LABEL を PR #$AWAITING_PR に ${action} した（${reason}）" \
       || { [ "$action" = remove ] || log "$AWAITING_LABEL を PR #$AWAITING_PR に付けられない（ラベルが無いか権限不足。github-bot/INSTALL.md「3. stage ラベルを作る」）"; }
   fi
@@ -266,6 +266,9 @@ gate=0; case "$status" in PDH-ticket-human-review|PDH-human-review) gate=1 ;; es
 set_stage_label "$status" "$ISSUE"
 
 # --- 2. 承認導線 ---
+if [ "$gate" -eq 1 ]; then report="$report
+
+<!-- coding-bot:question -->"; fi
 # close gate の答え方は `github_bot.close` で変わる。⚠ `pr-merge` では merge そのものが
 # 承認なので、承認語を求めると承認が 2 回になる（コメント + merge）。
 # 読み方は coding-bot-finalize.yml と同じ（引用符と行末コメントを許す）。
@@ -278,7 +281,7 @@ close_mode=$(awk '
   }' .ticket-config.yaml 2>/dev/null)
 if [ "$status" = "PDH-ticket-human-review" ]; then
   word="🤖 承認"
-  guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。decision-board を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。⚠ **返信には必ず 🤖 を付けてください** — 付いていないコメントは bot に届きません（この Issue では人同士の会話やメモも書かれるため、🤖 が唯一の合図です）。"
+  guide="このスレッドにコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。decision-board を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。⚠ **返信には必ず 🤖 を付けてください** — 付いていないコメントは bot に届きません（このスレッドでは人同士の会話やメモも書かれるため、🤖 が唯一の合図です）。"
 elif [ "$close_mode" = "pr-merge" ]; then
   # ⚠ 単語 `merge` で判定すると、説明文に一度出ただけで導線追加が抑止される。
   # 導線そのものの文を目印にする。
@@ -287,13 +290,13 @@ elif [ "$close_mode" = "pr-merge" ]; then
   # 有り: PR の作者が人になるので CI が自動で走る → 押すのは Merge の 1 回だけ
   # 無し: GITHUB_TOKEN が作った PR なので workflow が承認待ちになる → «Approve and run» が要る
   if [ -n "${CODING_BOT_GH_PAT:-}" ]; then
-    guide="**この PR の CI が緑になったら Merge を 1 回押してください。それが close 承認です。**CI は自動で走っています。直してほしい点があれば、merge せずに \`🤖 修正して: …\` とコメントしてください。"
+    guide="**この PR の CI が緑になったら Merge を 1 回押してください。それが close 承認です。**CI は自動で走っています。直してほしい点があれば、merge せずに \`🤖 修正して: …\` と [issue](https://github.com/$REPO/issues/$ISSUE) にコメントしてください。"
   else
-    guide="**この PR で 2 つ押してください。**① Checks タブの **«Approve and run»**（bot が作った PR なので workflow が承認待ちで止まっています）② 緑になったら **Merge**。⚠ **merge が close 承認です。**直してほしい点があれば、merge せずに \`🤖 修正して: …\` とコメントしてください（修正後はもう一度 «Approve and run» が要ります）。⚠ **`CODING_BOT_GH_PAT` を設定すると、この ① が要らなくなります**（`github-bot/INSTALL.md`）。"
+    guide="**この PR で 2 つ押してください。**① Checks タブの **«Approve and run»**（bot が作った PR なので workflow が承認待ちで止まっています）② 緑になったら **Merge**。⚠ **merge が close 承認です。**直してほしい点があれば、merge せずに \`🤖 修正して: …\` と [issue](https://github.com/$REPO/issues/$ISSUE) にコメントしてください（修正後はもう一度 «Approve and run» が要ります）。⚠ **`CODING_BOT_GH_PAT` を設定すると、この ① が要らなくなります**（`github-bot/INSTALL.md`）。"
   fi
 else
   word="🤖 クローズ承認"
-  guide="この Issue にコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。decision-board を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。⚠ **返信には必ず 🤖 を付けてください** — 付いていないコメントは bot に届きません（この Issue では人同士の会話やメモも書かれるため、🤖 が唯一の合図です）。"
+  guide="このスレッドにコメントで返してください: 承認は \`$word\`、直してほしい点は \`🤖 修正して: …\`、差し戻しは \`🤖 差し戻す: …\`。decision-board を HTML で出している場合は「回答をコピー」の貼り戻し文を 🤖 付きで貼ってください。⚠ **返信には必ず 🤖 を付けてください** — 付いていないコメントは bot に届きません（このスレッドでは人同士の会話やメモも書かれるため、🤖 が唯一の合図です）。"
 fi
 # decision-board が backtick 付きの 🤖 回答手順を持つときは、別の承認語を追加しない。
 has_answer_path() {

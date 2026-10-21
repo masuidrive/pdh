@@ -42,3 +42,7 @@
 - **repo 固有の smoke は `smoke-local.sh` に置き、配布しない。**共通 smoke と prebuild の両方から任意で呼ぶ。
 - **close の既定は `merge`。**`pr` は merge 後の 🤖 を待つ。`pr-merge` は finalize が設定と done 移動を API で確認して Issue を閉じ、stage ラベルを `PDH-close` にする。
 - **PR 出自は fail-closed。**同じ repo の `agent/issue-<N>` と実在の Issue を要求し、拒否は障害扱いせず理由をコメントする。
+
+## やり取りの場所
+
+議論と報告は元の issue のスレッドにまとめる。質問への回答、承認、修正依頼は issue に 🤖 付きで書く。PR はコードの確認と Merge、🤖 付きの conflict 解消の依頼に使う。PR にほかの依頼を書いた場合は issue のリンクが返り、branch には push しない。conflict 解消と質問が混ざる場合は conflict だけを解消し、質問は issue へ案内する。

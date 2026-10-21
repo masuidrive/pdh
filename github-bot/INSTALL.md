@@ -123,7 +123,7 @@ engine 別の認証 secret:
   ```
   ⚠ 手元の `codex` や別用途の secret と同じログインを共有しない。片方が refresh した時点でもう片方の refresh token が失効する（`refresh token was already used`）。
   ⚠ **run は token を更新しない。**run には refresh token を抜いた写し（`auth_mode: "chatgptAuthTokens"`）だけを渡す。token の更新と secret への書き戻しは、毎日動く `coding-bot-codex-auth.yml` だけが行う（同時に動く run が refresh token を取り合わないため）。この workflow を default branch に置き、**置いたらすぐ `gh workflow run coding-bot-codex-auth.yml` で 1 回起こす**（この版を取り込んだ時点から run は書き戻しをやめるので、最初の更新を待たずに通しておく。secret の `last_refresh` が 3 日を超えると `codex-auth` の Issue、8 日を超えると run は codex を使わない）。
-  認証が切れる・更新に失敗すると、ラベル `codex-auth` の Issue 1 つと、止まった run の Issue / PR に再ログインの手順が出る。
+  認証が切れる・更新に失敗すると、ラベル `codex-auth` の Issue 1 つと、止まった run の issue に再ログインの手順が出る。
   codex は API key 課金では動かさない。container の `/etc/codex/requirements.toml` に `allowed_login_methods = ["chatgpt"]` を置く（`codex-requirements.sh`）。`CODING_BOT_OPENAI_API_KEY` は codex の認証には使われない（project のテストが OpenAI を呼ぶための key としてだけ渡る）。
 - **codex（Sign in with ChatGPT = SIWC）**: `CODING_BOT_CODEX_SIWC_JSON`。ChatGPT の利用枠を他のアプリで使う OpenAI のログインで、ChatGPT の設定画面（Usage → App limits）で bot だけの週の上限を決められる。secret があれば SIWC を使う（両方あるときは変数 `CODING_BOT_CODEX_AUTH_MODE` = `siwc` / `codex-login` で選ぶ）。**ブラウザと GitHub の画面だけで作れる**（手元で CLI を動かさない）:
   1. Actions の画面で workflow «SIWC のログインを作る»（`coding-bot-codex-siwc-login.yml`）を、入力なしで default branch から起動する。復号鍵 `CODING_BOT_CODEX_SIWC_KEY` が無ければ、この run が作って保存する
@@ -300,7 +300,7 @@ gh api -X PATCH repos/<owner>/<repo> -F allow_auto_merge=true
 
 ## 任意: bot の PR の CI が落ちたら bot が直す（`CODING_BOT_CI_AUTOFIX`）
 
-**守るのは «bot の PR が赤いまま、人が 🤖 を書くまで止まらないこと» である。**有効にすると、bot の PR（head が `agent/issue-<N>`）の CI が落ちたとき、人が何も書かなくても bot が直す commit を push し、何が落ちて何を直したかを PR にコメントする。同じ PR で続けて落ちたら、直しに行くのは 1 回目と 2 回目だけで、3 回目は issue に «人が見てほしい» と 3 回分の要約とリンクを書いて止まる。4 回目以降は何も書かない。CI が 1 回でも緑になると回数は 0 に戻る。
+**守るのは «bot の PR が赤いまま、人が 🤖 を書くまで止まらないこと» である。**有効にすると、bot の PR（head が `agent/issue-<N>`）の CI が落ちたとき、人が何も書かなくても bot が直す commit を push し、何が落ちて何を直したかを issue にコメントする。同じ PR で続けて落ちたら、直しに行くのは 1 回目と 2 回目だけで、3 回目は issue に «人が見てほしい» と 3 回分の要約とリンクを書いて止まる。4 回目以降は何も書かない。CI が 1 回でも緑になると回数は 0 に戻る。
 
 ```bash
 gh variable set CODING_BOT_CI_AUTOFIX --body 'true'
@@ -625,3 +625,7 @@ printf 'Secrets:\n%s\nVariables:\n%s\n' "$secrets" "$variables"
 [ "$need" -eq 0 ] && echo '適用済み' || echo '要移行'
 )
 ```
+
+## やり取りの場所
+
+議論と報告は元の issue のスレッドにまとめる。質問への回答、承認、修正依頼は issue に 🤖 付きで書く。PR はコードの確認と Merge、🤖 付きの conflict 解消の依頼に使う。PR にほかの依頼を書いた場合は issue のリンクが返り、branch には push しない。conflict 解消と質問が混ざる場合は conflict だけを解消し、質問は issue へ案内する。

@@ -168,7 +168,7 @@ PDH-verify を終えたら、次の順で行う。既存 PR があればそれ�
    GH_TOKEN="$PR_TOKEN" gh pr create --draft --base "$BASE" --head "$BRANCH_NAME" --title … --body "… Refs #N"
    # 既存 PR の場合: GH_TOKEN="$PR_TOKEN" gh pr ready --undo "$BRANCH_NAME"
    ```
-   **PDH-human-review の decision-board を PR にコメントする。**末尾に `<!-- coding-bot -->` を置く。
+   **PDH-human-review の decision-board を issue にコメントし、PR にはそのコメントへのリンクだけを置く。**末尾に `<!-- coding-bot -->` を置く。
    `pr-merge` は `github_bot.pr_link` に関わらず `Refs #N` を使う。`Closes` / `Fixes` で
    Issue を先に閉じると finalize の検査を飛ばしてしまう。
 3. **done へ移す commit を push してから PR を ready にする。**
@@ -198,7 +198,7 @@ PDH-verify を終えたら、次の順で行う。既存 PR があればそれ�
    ⚠ **`close --no-merge` を PR より前に置かないこと。**承認待ちの行の `発行先:` に書く PR の URL がまだ無い。
    `require_checklist` / `require_checklist_groups` / `append_only_files` と `pre_close_command` はこの
    close が検査する。先に検査するなら `--dry-run` を使う。
-   **未了なら tree に触れず停止する。**何が未了かを PR にコメントし、draft のまま残す。
+   **未了なら tree に触れず停止する。**何が未了かを issue にコメントし、draft のまま残す。
    `closed_at` は close を実行した時刻。merge の時刻は PR の `merged_at` に残る。
    承認待ちの行のほかにも、merge の後でなければ満たせない行（close の承認の答えが progress にある、など）は
    `- [-] … - skip: close の承認は PR の merge で受ける` とし、消さない。
@@ -244,7 +244,7 @@ issue / PR の run は自分の push の CI の完了を待たない。その CI
 ### CI が赤いとき、«関係なし» は結論として書かない
 
 この節は CI autofix と、issue / PR の run が CI の失敗を扱う場合の診断に適用する。
-人が 🤖 で CI の確認・修正を依頼したとき、または PR run の依頼文が CI の修正を指示したときは、
+人が 🤖 で CI の確認・修正を依頼したとき、または CI 自動修正の run のときは、
 失敗ログを読んで回答・修正してよい。診断・修正内容・scoped test は報告するが、
 自分の push の CI の完了を待たない。その CI の結果は CI autofix だけが伝える。
 

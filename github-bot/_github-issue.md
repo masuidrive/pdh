@@ -4,6 +4,14 @@ GitHub Issue を «エンジニアと bot がやり取りする場所» とし�
 
 このファイルは cloud（Actions 上の coding-bot）と local（`pdh-gh-pull` で端末に取り込んだ session）の両方が従う。engine 中立の単一コピーで、両 engine で同一に保つ（判断/契約なので engine で変えない）。
 
+## やり取りは issue のこのスレッドで行う
+
+質問・AC 承認・判断待ち・進捗・完成報告・draft を外した知らせ・CI の失敗と復旧は、すべて紐づく issue に本文を投稿する。PR に書くのは変更の要約を持つ本文、issue へのリンクと Merge / conflict 解消の案内、依頼された conflict 解消の報告だけとする。行へのレビューコメントも同じ扱いである。
+
+issue 上の返答では「このスレッド」と呼ぶ。自分のいる issue を「issue #N に答えて」と別の場所のように呼ばない。issue へ誘導するときは必ず `https://github.com/<repo>/issues/<N>` を付け、未回答の質問があればそのコメントの `#issuecomment-<id>` 付き URL も付ける。質問を投稿するコメントには `<!-- coding-bot:question -->` を置く。
+
+外の作業を待つ選択肢には、答える時機（何が済んでからか）と、その完了を知る場所のリンクを同じ選択肢に書く。まだ済んでいなければ回答しても再開しないことを伝え、再開時は完了の証拠を読んでから進む。
+
 ## ⚠ 承認の PDH-stage では自己承認しない
 
 PDH の承認の PDH-stage は **`PDH-ticket-human-review`（実装前）** と **`PDH-human-review`（close 前）** の 2 つ。ここは人間の承認が要る。
@@ -115,7 +123,7 @@ note の待ち行と両方のコメントを読み、どの設問への返答か
 
 Actions の run は 1 回ごとに記憶を失う。承認の PDH-stage や質問で停止するときは、**停止する同じ commit で note の `## Checklist` に「何の答えを待つか」と発行先（承認を求めたコメントか decision-board の URL）を 1 行書く**（`PDH-AGENTS.md`「受け渡し経路」）。次の 🤖 で起動した run は、まずこの行を読んで自分が何を待っていたかを知る。トリガーコメントがどの設問への答えか一意に決まる場合だけ ticket へ反映し、対応する行を `[x]` にする。`.github/coding-bot/` の script が持つ状態ファイルは同じコメントを二度処理しないための印であり、待っているかどうかは note を正とする。経緯（それまでの PDH-stage の遷移・Findings 表・承認の PDH-stage での答え）は `[TICKET_DIR]/progress.md` を読む。
 
-待ち行の `発行先:` には、push 前に分かる URL を書く。発行済みの decision-board の URL、無ければ issue の URL（`https://github.com/<repo>/issues/<n>`）か PR の URL を使う。
+待ち行の `発行先:` には、push 前に分かる URL を書く。発行済みの decision-board の URL、無ければ issue の URL（`https://github.com/<repo>/issues/<n>`）を使う。
 コメントの URL を待って、Status の変更と待ち行を別々の commit にしない。同じ commit に書く。
 bot が pre-push 検査を設置している場合、検査に通らない push は拒否され、拒否メッセージに失敗が列挙される。
 拒否されたら ticket / note を新しい commit で直して push し直す。`--no-verify` で検査を迂回しない。
@@ -126,7 +134,7 @@ bot が pre-push 検査を設置している場合、検査に通らない push 
 - **新規コメントを立てるのは «人間の注意が要る» ときだけ** — 承認の PDH-stage・質問・blocker。それ以外（PDH-stage の遷移・commit・テスト結果）は作業コメントの編集か、ticket.md / note.md / progress.md への記録で済ませる。
   **push 後の CI の結果は CI autofix だけが伝える。issue / PR の run は自分の push の CI の完了を待たない。
   その CI の結果を新規コメント・作業コメントの編集・最終報告に書かない。**
-  人が 🤖 で CI の確認・修正を依頼したとき、または PR run の依頼文が CI の修正を指示したときは、
+  人が 🤖 で CI の確認・修正を依頼したとき、または CI 自動修正の run のときは、
   失敗ログを読んで回答・修正し、診断・修正内容・scoped test を報告してよい（push 後の CI は待たない）。
   `system.md`「CI reporting ownership」に従い、«CI が緑になったら Merge を» の案内は残す。
 - 通知を増やさないことを優先する。人間が読む必要のない途中経過でコメント欄と通知を埋めない。
@@ -195,12 +203,12 @@ bot は PDH-stage の遷移に応じて **issue の PDH stage ラベルを更新
 
 - ⚠ **`pr-merge`**: **PR の merge そのものが close gate（close の承認）である。**bot は
   実装を終えたら PR（本文に **`Refs #N`**。`Closes` / `Fixes` は使わない）を作り、**PDH-human-review の
-  decision-board を PR にコメントして停止する。**⚠ **`tickets/done/` への移動と `closed_at` は、その PR の
+  decision-board を issue にコメントし、PR にはそのコメントへのリンクだけを置いて停止する。**⚠ **`tickets/done/` への移動と `closed_at` は、その PR の
   差分に載せる**（手順は `_pdh.md`「`pr-merge`: done への移動を PR に載せて出す」に従う）。
   人が Files changed を見て merge すると、`coding-bot-finalize.yml` は **issue を close するだけ**を
   行う（API のみ。commit / push はしない。merge 済みの branch は消す）。⚠ **その job は «PR の差分に `tickets/done/…/ticket.md` が
   入っているか» を検査し、入っていなければ issue を閉じずに警告する。**⚠ **`🤖 クローズ承認` というコメントは使わない** — GitHub の承認
-  プリミティブは merge ボタンであり、コメントを足すと承認が 2 回になる。**PR で «修正して» と
+  プリミティブは merge ボタンであり、コメントを足すと承認が 2 回になる。**issue で «修正して» と
   言われたときは `_pr.md` のモードで実装し、また停止する。**
 - **`merge`（既定）**: bot が `bash ticket.sh close --no-delete-remote` で default branch へ squash merge
   して push し、`gh issue close #N` する。1 run で終わる。close の承認は issue の「🤖 クローズ承認」。
