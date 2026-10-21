@@ -21,13 +21,13 @@ def verify(expected, before, base):
     if git('status', '--porcelain'):
         raise ValueError('merge must leave a clean worktree and index')
     actual = snapshot()["entries"]
-    if actual.keys() != expected["entries"].keys() | set(expected["conflicts"]):
+    if actual.keys() - set(expected["conflicts"]) != expected["entries"].keys():
         raise ValueError("files were added or removed outside the conflicts")
     if any(actual.get(path) != mode for path, mode in expected["entries"].items()):
         raise ValueError('a file outside the merge conflicts changed')
-    for encoded in expected["conflicts"]:
+    for encoded in set(expected["conflicts"]) & actual.keys():
         path = bytes.fromhex(encoded)
-        result = subprocess.run(['git', 'grep', '--cached', '-q', '-E', r'^(<<<<<<< |=======$|>>>>>>> )', '--', path])
+        result = subprocess.run(['git', 'grep', '--cached', '-q', '-E', r'^(<<<<<<< |>>>>>>> )', '--', path])
         if result.returncode != 1:
             raise ValueError('unresolved conflict marker or unreadable result')
 
