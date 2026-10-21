@@ -39,7 +39,7 @@ for entry in subprocess.check_output(["git", "ls-files", "--stage", "-z"]).split
 PYINDEX
 }
 
-run_pr_comment() {
+pr_comment_work() {
   local action other before base response merge_status=0 hooks
   before=$(git rev-parse HEAD)
   base=$(git rev-parse "origin/$BASE_BRANCH")
@@ -49,6 +49,7 @@ run_pr_comment() {
   printf '#!/bin/sh\nexit 1\n' > "$hooks/pre-push"
   chmod +x "$hooks/pre-push"
   git config --local core.hooksPath "$hooks"
+  PR_COMMENT_PHASE="依頼の分類"
   if ! pr_comment_engine "$(cat "$SCRIPT_DIR/_pr.md")"; then return 1; fi
   jq -e -s 'length == 1 and (.[0] | type == "object" and (.conflict | type) == "boolean" and (.other | type) == "boolean")' "$RESULT_OUTPUT_FILE" >/dev/null || return 1
   action=$(jq -r 'if type == "object" and (.conflict | type) == "boolean" and (.other | type) == "boolean" then .conflict else error("invalid decision") end' "$RESULT_OUTPUT_FILE") || return 1
@@ -56,6 +57,7 @@ run_pr_comment() {
   [ "$(git rev-parse HEAD)" = "$before" ] && git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ] || return 1
   response=$(pr_comment_redirect) || return 1
   if [ "$action" = true ]; then
+    PR_COMMENT_PHASE="base branch の取り込み"
     git merge --no-commit --no-ff "$base" || merge_status=$?
     if [ "$merge_status" = 0 ]; then
       if git rev-parse -q --verify MERGE_HEAD >/dev/null; then git merge --abort; fi
@@ -66,7 +68,9 @@ run_pr_comment() {
       pr_comment_index > "$RUNNER_DIR/index-before"
       # 元の依頼は解決 engine に渡さない。質問や別の修正が混じっても実行されない。
       USER_REQUEST="$(git diff --name-only --diff-filter=U)"
+      PR_COMMENT_PHASE="conflict の解消"
       if ! pr_comment_engine '列挙されたファイルの merge conflict だけを解消してください。git add/commit/push、別の修正、ticket 更新、GitHub への投稿は禁止です。最終出力は JSON だけにし、解消できたら {"resolved":true}、解消できない判断があれば {"resolved":false} を返してください。'; then return 1; fi
+      PR_COMMENT_PHASE="解消結果の検査"
       jq -e -s 'length == 1 and (.[0] | type == "object" and .resolved == true)' "$RESULT_OUTPUT_FILE" >/dev/null || return 1
       [ "$(git rev-parse HEAD)" = "$before" ] || return 1
       while IFS= read -r -d '' path; do git add -- "$path" || return 1; done < "$RUNNER_DIR/conflicts"
@@ -80,6 +84,7 @@ run_pr_comment() {
       done < "$RUNNER_DIR/conflicts"
       git -c core.hooksPath=/dev/null commit -m "Merge $BASE_BRANCH into $BRANCH_NAME to resolve conflicts" || return 1
       # non-fast-forward は拒否し、人や issue run の並行 push を上書きしない。
+      PR_COMMENT_PHASE="検査済み commit の push"
       git -c core.hooksPath=/dev/null push origin "HEAD:refs/heads/$BRANCH_NAME" || return 1
       if [ "${ORIGIN_PUSH_AUTH:-github_token}" = github_token ]; then dispatch_branch_ci; fi
       response="conflict を解消して push しました。 $response"
@@ -103,3 +108,27 @@ pr_comment_guide() {
     gh issue comment "$pr" --repo "$GITHUB_REPOSITORY" --body "$body"
   fi
 }
+
+
+run_pr_comment() (
+  local status=0 old_hooks="" had_hooks=false
+  if old_hooks=$(git config --local --get core.hooksPath); then had_hooks=true; fi
+  pr_comment_work || status=$?
+  if [ "$status" != 0 ]; then
+    git merge --abort >/dev/null 2>&1 || true
+    local issue_url="https://github.com/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE"
+    local log_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/${GITHUB_RUN_ID:-}"
+    gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
+      --body "conflict の解消を完了できませんでした。理由と続きは [issue]($issue_url) のこの run の報告にあります。" || true
+    if gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID" \
+      -f body="${PR_COMMENT_PHASE:-PR の依頼処理}に失敗しました。自動処理を停止しました。このスレッドで対応を相談してください。[実行ログ]($log_url) / [PR](https://github.com/$GITHUB_REPOSITORY/pull/$ISSUE_NUMBER)"; then
+      : > "$GITHUB_WORKSPACE/.coding-bot-reported"
+    fi
+  fi
+  if [ "$had_hooks" = true ]; then
+    git config --local core.hooksPath "$old_hooks"
+  else
+    git config --local --unset core.hooksPath || true
+  fi
+  exit "$status"
+)
