@@ -73,6 +73,7 @@ run_pr_comment() {
       git -c core.hooksPath=/dev/null commit -m "Merge $BASE_BRANCH into $BRANCH_NAME to resolve conflicts" || return 1
       # non-fast-forward は拒否し、人や issue run の並行 push を上書きしない。
       git -c core.hooksPath=/dev/null push origin "HEAD:refs/heads/$BRANCH_NAME" || return 1
+      if [ "${ORIGIN_PUSH_AUTH:-github_token}" = github_token ]; then dispatch_branch_ci; fi
       response="conflict を解消して push しました。 $response"
     fi
   fi
