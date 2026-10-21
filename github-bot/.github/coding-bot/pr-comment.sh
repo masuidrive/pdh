@@ -3,18 +3,50 @@
 pr_comment_engine() {
   local instruction="$1"
   SYSTEM_PROMPT="$instruction"
-  printf '%s' "$USER_REQUEST" > "/tmp/agent-prompt-$ISSUE_NUMBER.txt"
+  local PR_ENGINE_MODE="${2:-classify}" old_codex_home="${CODEX_HOME:-}" name key value status=0
+  local -a header_keys=() header_values=()
+  local ENGINE_PROMPT_FILE="$RUNNER_DIR/pr-prompt.txt"
+  printf '%s' "$USER_REQUEST" > "$ENGINE_PROMPT_FILE"
   JSON_OUTPUT_FILE="$RUNNER_DIR/pr-output.json"
   PROGRESS_OUTPUT_FILE="$RUNNER_DIR/pr-progress.txt"
   RESULT_OUTPUT_FILE="$RUNNER_DIR/pr-result.txt"
   TASK_STATUS_FILE="$RUNNER_DIR/pr-tasks.txt"
   TIMEOUT_VALUE="$RUN_TIMEOUT_SECONDS"
-  rm -f "$RESULT_OUTPUT_FILE" /tmp/agent-result.md
-  engine_run
-  ENGINE_EXIT_CODE=0
-  wait "$ENGINE_PID" || ENGINE_EXIT_CODE=$?
-  [ "$ENGINE_EXIT_CODE" = 0 ] || return 1
-  engine_extract_result
+  rm -f "$RESULT_OUTPUT_FILE" "$JSON_OUTPUT_FILE"
+  while IFS= read -r key; do
+    while IFS= read -r value; do
+      header_keys+=("$key"); header_values+=("$value")
+    done < <(git config --local --get-all "$key")
+    git config --local --unset-all "$key"
+  done < <(git config --local --name-only --get-regexp '^(http\..*\.extraheader|credential\..*)$' || true)
+  (
+    # CLI に渡す環境は provider 認証と実行に要る項目だけにする。
+    for name in $(compgen -e); do
+      case "$name" in PATH|LANG|LC_*|SSL_CERT_FILE|SSL_CERT_DIR|NODE_EXTRA_CA_CERTS|CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY) ;;
+        *TOKEN*|*SECRET*|*KEY*|*PAT*|*CREDENTIAL*) unset "$name";;
+        *) export -n "$name";;
+      esac
+    done
+    export HOME="$RUNNER_DIR/pr-home" CODEX_HOME="$RUNNER_DIR/pr-home/.codex"
+    export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+    mkdir -p "$CODEX_HOME" "$HOME/empty"
+    if [ -n "$old_codex_home" ]; then
+      [ ! -f "$old_codex_home/auth.json" ] || cp "$old_codex_home/auth.json" "$CODEX_HOME/auth.json"
+      if [ -f "$old_codex_home/siwc-access.json" ]; then
+        CODEX_HOME="$old_codex_home" python3 "$SCRIPT_DIR/siwc-config.py" > "$CODEX_HOME/config.toml"
+      fi
+    fi
+    [ "$PR_ENGINE_MODE" != classify ] || cd "$HOME/empty" || exit 1
+    engine_run
+    ENGINE_EXIT_CODE=0
+    wait "$ENGINE_PID" || ENGINE_EXIT_CODE=$?
+    [ "$ENGINE_EXIT_CODE" = 0 ] || exit 1
+    engine_extract_result
+  ) || status=$?
+  for name in "${!header_keys[@]}"; do
+    git config --local --add "${header_keys[$name]}" "${header_values[$name]}"
+  done
+  return "$status"
 }
 
 pr_comment_redirect() {
@@ -69,7 +101,7 @@ pr_comment_work() {
       # 元の依頼は解決 engine に渡さない。質問や別の修正が混じっても実行されない。
       USER_REQUEST="$(git diff --name-only --diff-filter=U)"
       PR_COMMENT_PHASE="conflict の解消"
-      if ! pr_comment_engine '列挙されたファイルの merge conflict だけを解消してください。git add/commit/push、別の修正、ticket 更新、GitHub への投稿は禁止です。最終出力は JSON だけにし、解消できたら {"resolved":true}、解消できない判断があれば {"resolved":false} を返してください。'; then return 1; fi
+      if ! pr_comment_engine '列挙されたファイルの merge conflict だけを解消してください。git add/commit/push、別の修正、ticket 更新、GitHub への投稿は禁止です。最終出力は JSON だけにし、解消できたら {"resolved":true}、解消できない判断があれば {"resolved":false} を返してください。' resolve; then return 1; fi
       PR_COMMENT_PHASE="解消結果の検査"
       jq -e -s 'length == 1 and (.[0] | type == "object" and .resolved == true)' "$RESULT_OUTPUT_FILE" >/dev/null || return 1
       [ "$(git rev-parse HEAD)" = "$before" ] || return 1

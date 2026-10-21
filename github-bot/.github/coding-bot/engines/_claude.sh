@@ -97,6 +97,16 @@ engine_run() {
   printf '%s' "$SYSTEM_PROMPT" > "$SYSTEM_PROMPT_FILE"
   echo "📄 System prompt: $(wc -c < "$SYSTEM_PROMPT_FILE") bytes → $SYSTEM_PROMPT_FILE"
 
+  local ENGINE_ARGS=(--dangerously-skip-permissions)
+  if [ -n "${PR_ENGINE_MODE:-}" ]; then
+    ENGINE_ARGS=(--setting-sources "" --settings '{"disableAllHooks":true}'
+      --strict-mcp-config --mcp-config '{"mcpServers":{}}'
+      --disable-slash-commands --no-session-persistence --tools "")
+    if [ "$PR_ENGINE_MODE" = resolve ]; then
+      ENGINE_ARGS+=(--tools Read,Edit,Write)
+    fi
+  fi
+
   (
     > "$PROGRESS_OUTPUT_FILE"  # Initialize progress file
     > "$TASK_STATUS_FILE"       # Initialize task status file
@@ -109,11 +119,11 @@ engine_run() {
     BLOCKS_DIR="/tmp/claude-blocks-$ISSUE_NUMBER"
     mkdir -p "$BLOCKS_DIR"
 
-    timeout "$TIMEOUT_VALUE" claude -p --dangerously-skip-permissions \
+    timeout "$TIMEOUT_VALUE" claude -p "${ENGINE_ARGS[@]}" \
       ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
       --system-prompt-file "$SYSTEM_PROMPT_FILE" \
       --output-format stream-json --include-partial-messages --verbose \
-      < "/tmp/agent-prompt-$ISSUE_NUMBER.txt" 2>&1 | \
+      < "${ENGINE_PROMPT_FILE:-/tmp/agent-prompt-$ISSUE_NUMBER.txt}" 2>&1 | \
     while IFS= read -r line; do
       echo "$line" >> "$JSON_OUTPUT_FILE"
 

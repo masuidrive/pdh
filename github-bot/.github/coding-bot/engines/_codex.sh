@@ -60,12 +60,25 @@ engine_run() {
   {
     printf '%s\n\n' "$SYSTEM_PROMPT"
     printf '%s\n\n' "================ TASK INPUT ================"
-    cat "/tmp/agent-prompt-${ISSUE_NUMBER}.txt"
+    cat "${ENGINE_PROMPT_FILE:-/tmp/agent-prompt-${ISSUE_NUMBER}.txt}"
   } > "$FULL_PROMPT_FILE"
 
   local MODEL_ARGS=()
   if [ -n "${CODING_BOT_CODEX_MODEL:-}" ]; then
     MODEL_ARGS=(--model "$CODING_BOT_CODEX_MODEL")
+  fi
+
+  local ENGINE_ARGS=(--dangerously-bypass-approvals-and-sandbox)
+  if [ -n "${PR_ENGINE_MODE:-}" ]; then
+    ENGINE_ARGS=(--ignore-rules --ephemeral --sandbox workspace-write
+      -c 'sandbox_workspace_write.network_access=false' -c 'web_search="disabled"')
+    local feature
+    for feature in apps plugins multi_agent multi_agent_v2 browser_use computer_use image_generation view_image sleep_tool request_permissions_tool memories hooks; do
+      ENGINE_ARGS+=(-c "features.$feature=false")
+    done
+    if [ "$PR_ENGINE_MODE" = classify ]; then
+      ENGINE_ARGS+=(--sandbox read-only -c features.shell_tool=false)
+    fi
   fi
 
   (
@@ -74,7 +87,7 @@ engine_run() {
 
     timeout "$TIMEOUT_VALUE" codex exec --json \
       --skip-git-repo-check \
-      --dangerously-bypass-approvals-and-sandbox \
+      "${ENGINE_ARGS[@]}" \
       ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
       -o "$CODEX_LAST_MESSAGE_FILE" \
       - < "$FULL_PROMPT_FILE" 2>&1 | \
@@ -161,7 +174,7 @@ EOF
 engine_extract_result() {
   local AGENT_RESULT_FILE="/tmp/agent-result.md"
 
-  if [ -f "$AGENT_RESULT_FILE" ]; then
+  if [ -z "${PR_ENGINE_MODE:-}" ] && [ -f "$AGENT_RESULT_FILE" ]; then
     echo "✅ Found /tmp/agent-result.md - using it as final result"
     cat "$AGENT_RESULT_FILE" > "$RESULT_OUTPUT_FILE"
   elif [ -s "$CODEX_LAST_MESSAGE_FILE" ]; then
