@@ -69,7 +69,11 @@ run_pr_comment() {
       pr_comment_index > "$RUNNER_DIR/index-after"
       cmp "$RUNNER_DIR/index-before" "$RUNNER_DIR/index-after" || return 1
       git diff --quiet && [ -z "$(git diff --name-only --diff-filter=U)" ] || return 1
-      git diff --cached --check || return 1
+      while IFS= read -r -d '' path; do
+        local marker_status=0
+        git grep --cached -q -E '^(<<<<<<< |=======$|>>>>>>> )' -- "$path" || marker_status=$?
+        [ "$marker_status" = 1 ] || return 1
+      done < "$RUNNER_DIR/conflicts"
       git -c core.hooksPath=/dev/null commit -m "Merge $BASE_BRANCH into $BRANCH_NAME to resolve conflicts" || return 1
       # non-fast-forward は拒否し、人や issue run の並行 push を上書きしない。
       git -c core.hooksPath=/dev/null push origin "HEAD:refs/heads/$BRANCH_NAME" || return 1
