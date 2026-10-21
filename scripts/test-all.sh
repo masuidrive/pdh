@@ -32,6 +32,7 @@ run "distributed script contracts" bash scripts/test-distributed-scripts.sh
 run "distribution consistency" bash scripts/check-distribution.sh
 run "guard parity (claude/ ↔ codex/)" bash scripts/check-guard-parity.sh
 run "github-bot layer" bash scripts/check-github-bot.sh
+run "PR comment push boundary" python3 github-bot/tests/scripts/coding_bot_pr_comments_test.py
 run "pdh-hooks awaiting-reply" bash scripts/test-pdh-hooks-awaiting.sh
 run "bot attachments" bash scripts/test-bot-attachments.sh
 run "spawn-worker capacity resume" bash scripts/test-spawn-worker-resume.sh

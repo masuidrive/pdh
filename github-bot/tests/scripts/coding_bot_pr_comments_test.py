@@ -1,0 +1,116 @@
+"""Run the PR-comment branch with a stub engine and a local merge conflict."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / ".github/coding-bot/pr-comment.sh").is_file())
+BOT = Path(os.environ.get('BOT_MODULE_PATH', ROOT / '.github/coding-bot'))
+TMP = Path(tempfile.gettempdir())
+
+
+def git(cwd, *args):
+    return subprocess.check_output(['git', '-C', str(cwd), *args], text=True, stderr=subprocess.DEVNULL).strip()
+
+
+class MergeProbe(unittest.TestCase):
+    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False):
+        with tempfile.TemporaryDirectory(dir=TMP) as temp:
+            temp = Path(temp)
+            seed, remote, work, run = [temp / name for name in ['seed', 'remote', 'work', 'run']]
+            seed.mkdir(); run.mkdir()
+            git(seed, 'init', '-b', 'main')
+            git(seed, 'config', 'user.name', 'Test'); git(seed, 'config', 'user.email', 'test@example.invalid')
+            (seed / 'conflict file.txt').write_text('base\n')
+            (seed / 'other.txt').write_text('unchanged\n')
+            git(seed, 'add', '.'); git(seed, 'commit', '-m', 'initial')
+            git(seed, 'checkout', '-b', 'agent/issue-7')
+            (seed / 'conflict file.txt').write_text('feature\n')
+            git(seed, 'commit', '-am', 'feature')
+            git(seed, 'checkout', 'main')
+            (seed / ('conflict file.txt' if conflict else 'main.txt')).write_text('main\n')
+            if whitespace: (seed / 'other.txt').write_text('main whitespace \n')
+            git(seed, 'add', '.'); git(seed, 'commit', '-m', 'main')
+            git(temp, 'clone', '--bare', str(seed), str(remote))
+            git(temp, 'clone', '-b', 'agent/issue-7', str(remote), str(work))
+            git(work, 'config', 'user.name', 'Test'); git(work, 'config', 'user.email', 'test@example.invalid')
+            original = git(work, 'rev-parse', 'HEAD')
+            env = {**os.environ, 'BOT': str(BOT), 'RUNNER_DIR': str(run), 'GITHUB_WORKSPACE': str(run),
+                   'DECISION': json.dumps(decision), 'DIRTY': str(int(dirty)), 'FAIL': str(int(fail)),
+                   'RAW': raw if raw is not None else '{"resolved":true}', 'UNRESOLVED': str(int(unresolved)), 'REFUSED': str(int(refused)),
+                   'GITHUB_REPOSITORY': 'owner/repo', 'TRUSTED_LINKED_ISSUE': '7', 'ISSUE_NUMBER': '9',
+                   'BASE_BRANCH': 'main', 'BRANCH_NAME': 'agent/issue-7', 'PROGRESS_COMMENT_ID': '77',
+                   'RUN_TIMEOUT_SECONDS': '60', 'USER_REQUEST': request}
+            script = r'''
+set -euo pipefail
+source "$BOT/pr-comment.sh"
+SCRIPT_DIR="$BOT"
+dispatch_branch_ci() { printf "ci\n" >> "$RUNNER_DIR/ci"; }
+git() {
+  if [[ " $* " == *" push "* ]]; then echo push >> "$RUNNER_DIR/pushes"; return 0; fi
+  command git "$@"
+}
+gh() {
+  printf '%s\n' "$*" >> "$RUNNER_DIR/gh"
+  if [[ " $* " == *" --paginate "* ]]; then printf '[]'; fi
+}
+pr_comment_engine() {
+  RESULT_OUTPUT_FILE="$RUNNER_DIR/result"
+  if [ -f "$RUNNER_DIR/classified" ]; then
+    if [ "$UNRESOLVED" != 1 ]; then printf 'resolved\n' > 'conflict file.txt'; fi
+    if [ "$REFUSED" = 1 ]; then printf '{"resolved":false}' > "$RESULT_OUTPUT_FILE"; else printf '%s' "$RAW" > "$RESULT_OUTPUT_FILE"; fi
+    if [ "$DIRTY" = 1 ]; then printf 'wrong\n' > other.txt; git add other.txt; fi
+  else
+    touch "$RUNNER_DIR/classified"
+    if [ "$FAIL" = 1 ]; then return 1; fi
+    printf '%s' "$DECISION" > "$RESULT_OUTPUT_FILE"
+  fi
+}
+run_pr_comment
+'''
+            result = subprocess.run(['bash', '-c', script], cwd=work, env=env, text=True, capture_output=True)
+            pushes = (run / 'pushes').read_text().splitlines() if (run / 'pushes').exists() else []
+            calls = (run / 'gh').read_text() if (run / 'gh').exists() else ''
+            head = git(work, 'rev-parse', 'HEAD')
+            return result, pushes, calls, original == head
+
+
+
+class PrCommentContract(MergeProbe):
+    def test_only_requested_conflict_resolution_can_push(self):
+        for decision, conflict, pushes in [
+            ({"conflict":False,"other":True},True,[]),
+            ({"conflict":False,"other":False},True,[]),
+            ({"conflict":True,"other":True},True,["push"]),
+            ({"conflict":True,"other":False},True,["push"]),
+            ({"conflict":True,"other":False},False,[]),
+        ]:
+            with self.subTest(decision=decision,conflict=conflict):
+                result, actual, calls, unchanged = self.run_case(decision,conflict=conflict)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertEqual(actual,pushes)
+                if not pushes: self.assertTrue(unchanged)
+                if decision["other"]: self.assertIn('issues/7',calls)
+
+    def test_invalid_or_unsafe_results_stop_before_push(self):
+        cases=[{"raw":""},{"raw":'{"resolved":false}\n{"resolved":true}'},
+               {"raw":'{}'},{"raw":'false'},{"dirty":True},{"unresolved":True},
+               {"refused":True},{"fail":True}]
+        for args in cases:
+            with self.subTest(args=args):
+                result,pushes,calls,_=self.run_case({"conflict":True,"other":False},**args)
+                self.assertNotEqual(result.returncode,0)
+                self.assertEqual(pushes,[])
+                self.assertIn('issues/7',calls)
+                self.assertIn('PATCH',calls)
+
+    def test_base_whitespace_does_not_block_a_valid_resolution(self):
+        result,pushes,_,_=self.run_case({"conflict":True,"other":False},whitespace=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(pushes,['push'])
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
