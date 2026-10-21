@@ -19,8 +19,7 @@ pr_comment_engine() {
 
 pr_comment_redirect() {
   local question
-  question=$(gh api "repos/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE/comments?per_page=100" --paginate --slurp \
-    --jq '[.[][] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- coding-bot:question -->"))] | last | .html_url // empty') || return 1
+  question=$(gh api "repos/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE/comments?per_page=100" --paginate --slurp | jq -r '[.[][] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- coding-bot:question -->"))] | last | .html_url // empty') || return 1
   printf '依頼・質問への回答は [issue](https://github.com/%s/issues/%s) に書いてください。PR では Merge と conflict 解消の依頼を受け付けます。%s' \
     "$GITHUB_REPOSITORY" "$TRUSTED_LINKED_ISSUE" "${question:+ [質問はこちら]($question)}"
 }
