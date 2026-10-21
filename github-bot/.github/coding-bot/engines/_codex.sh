@@ -42,7 +42,7 @@ engine_setup_auth() {
   post_error_comment "Codex preflight failed, so this run has stopped. See the separate preflight comment for the reason and next steps."
   # ⚠ この経路は ENGINE_EXIT_CODE の分岐へ入らないので run-action.sh の failed hook が呼ばれない。
   # いちばん多い «止まっていて人の手が要る» 停止なので、ここで直接付ける。
-  # ⚠ branch を渡すのは、PR が開いていれば待ち印を PR にだけ付けるため。
+  # ⚠ branch を渡すのは、待ち印と通知に PR のリンクも含めるため。
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
     bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "${BRANCH_NAME:-}" || true
   fi
@@ -60,7 +60,7 @@ engine_run() {
   {
     printf '%s\n\n' "$SYSTEM_PROMPT"
     printf '%s\n\n' "================ TASK INPUT ================"
-    cat "${ENGINE_PROMPT_FILE:-/tmp/agent-prompt-${ISSUE_NUMBER}.txt}"
+    cat "/tmp/agent-prompt-${ISSUE_NUMBER}.txt"
   } > "$FULL_PROMPT_FILE"
 
   local MODEL_ARGS=()
@@ -68,20 +68,6 @@ engine_run() {
     MODEL_ARGS=(--model "$CODING_BOT_CODEX_MODEL")
   fi
 
-  local ENGINE_ARGS=(--dangerously-bypass-approvals-and-sandbox)
-  if [ -n "${PR_ENGINE_MODE:-}" ]; then
-    ENGINE_ARGS=(--ignore-rules --ephemeral
-      -c 'approval_policy="never"' -c 'sandbox_workspace_write.network_access=false' -c 'web_search="disabled"')
-    local feature
-    for feature in apps plugins multi_agent multi_agent_v2 browser_use computer_use image_generation view_image sleep_tool request_permissions_tool memories hooks; do
-      ENGINE_ARGS+=(-c "features.$feature=false")
-    done
-    if [ "$PR_ENGINE_MODE" = classify ]; then
-      ENGINE_ARGS+=(--sandbox read-only -c features.shell_tool=false)
-    else
-      ENGINE_ARGS+=(--sandbox workspace-write)
-    fi
-  fi
 
   (
     > "$PROGRESS_OUTPUT_FILE"
@@ -89,7 +75,7 @@ engine_run() {
 
     timeout "$TIMEOUT_VALUE" codex exec --json \
       --skip-git-repo-check \
-      "${ENGINE_ARGS[@]}" \
+      --dangerously-bypass-approvals-and-sandbox \
       ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
       -o "$CODEX_LAST_MESSAGE_FILE" \
       - < "$FULL_PROMPT_FILE" 2>&1 | \
@@ -176,7 +162,7 @@ EOF
 engine_extract_result() {
   local AGENT_RESULT_FILE="/tmp/agent-result.md"
 
-  if [ -z "${PR_ENGINE_MODE:-}" ] && [ -f "$AGENT_RESULT_FILE" ]; then
+  if [ -f "$AGENT_RESULT_FILE" ]; then
     echo "✅ Found /tmp/agent-result.md - using it as final result"
     cat "$AGENT_RESULT_FILE" > "$RESULT_OUTPUT_FILE"
   elif [ -s "$CODEX_LAST_MESSAGE_FILE" ]; then

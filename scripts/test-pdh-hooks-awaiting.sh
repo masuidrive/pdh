@@ -99,6 +99,10 @@ REPORT
       fail "$label: done の close 承認待ちを PDH-human-review ラベルに反映していない"
     fi
   fi
+  if [ "$cmd" = final ] && [[ "$ticket" = waiting* ]] && [ "$ticket" != waiting-outside ]; then
+    checks=$((checks + 1))
+    [[ "$output" == *'<!-- coding-bot:question -->'* ]] || fail "$label: 質問コメントに目印が無い"
+  fi
   expect_labels "$label" "$expected"
   if [ "$#" -ge 6 ]; then
     checks=$((checks + 1))
@@ -179,23 +183,23 @@ expect_auth_failure() {
   expect_labels "$label" "$expected"
 }
 
-expect '1. failed + open PR 11' failed 11 none $'1 remove\n11 add'
+expect '1. failed + open PR 11' failed 11 none $'1 add\n11 remove'
 expect '2. failed + PR 無し' failed '' none '1 add'
 expect '3. start + open PR 11' start 11 none $'1 remove\n11 remove'
 expect '4. start + PR 無し' start '' none '1 remove'
-expect '5. final（待ち行あり）+ open PR 11' final 11 waiting $'1 remove\n11 add'
+expect '5. final（待ち行あり）+ open PR 11' final 11 waiting $'1 add\n11 remove'
 expect '6. final（待ち行あり）+ PR 無し' final '' waiting '1 add'
-expect 'heading. final（小見出しの待ち行）' final 11 waiting-subheading $'1 remove\n11 add'
+expect 'heading. final（小見出しの待ち行）' final 11 waiting-subheading $'1 add\n11 remove'
 expect 'outside. final（Checklist 節の外の行）' final 11 waiting-outside $'1 remove\n11 remove'
-expect 'long. final（30万字の待ち行あり）' final 11 waiting-long $'1 remove\n11 add'
+expect 'long. final（30万字の待ち行あり）' final 11 waiting-long $'1 add\n11 remove'
 # 見出しが揺れて待ち行を足せないときは、回答待ちのラベルを外さない。
-expect 'heading-variant. final（gate・## Checklist: で待ち行を足せない）' final 11 gate-heading-variant $'1 remove\n11 add'
+expect 'heading-variant. final（gate・## Checklist: で待ち行を足せない）' final 11 gate-heading-variant $'1 add\n11 remove'
 expect '7. final（待ち行なし）+ open PR 11' final 11 none $'1 remove\n11 remove'
 expect '8. final（ticket 未作成）+ PR 無し' final '' missing '1 add' question
 FAKE_ISSUE_STATE=CLOSED expect '15. final（ticket 未作成）+ issue CLOSED' final '' missing '1 remove' ''
 FAKE_ISSUE_STATE=fail expect '16. final（ticket 未作成）+ view 失敗' final '' missing '1 add' question
 FAKE_ISSUE_STATE='' expect '17. final（ticket 未作成）+ view 空' final '' missing '1 add' question
-expect '13. final（done 済みの close gate）+ open PR 11' final 11 done $'1 remove\n11 add' close_gate
+expect '13. final（done 済みの close gate）+ open PR 11' final 11 done $'1 add\n11 remove' close_gate
 # done の古い ticket が残る再依頼も、close gate 以外は issue の状態で回答待ちを決める。
 for done_status in PDH-human-review PDH-close; do
   FAKE_DONE_STATUS="$done_status" expect "done/$done_status: PR 無し + issue OPEN" final '' done '1 add' question
@@ -203,7 +207,7 @@ for done_status in PDH-human-review PDH-close; do
   FAKE_DONE_STATUS="$done_status" FAKE_ISSUE_STATE=fail expect "done/$done_status: PR 無し + view 失敗" final '' done '1 add' question
   FAKE_DONE_STATUS="$done_status" FAKE_ISSUE_STATE='' expect "done/$done_status: PR 無し + view 空" final '' done '1 add' question
 done
-FAKE_DONE_STATUS=PDH-close expect 'done/PDH-close: open PR 11 + issue OPEN' final 11 done-other $'1 remove\n11 add' question
+FAKE_DONE_STATUS=PDH-close expect 'done/PDH-close: open PR 11 + issue OPEN' final 11 done-other $'1 add\n11 remove' question
 FAKE_DONE_STATUS=PDH-close FAKE_ISSUE_STATE=CLOSED expect 'done/PDH-close: open PR 11 + issue CLOSED' final 11 done-other $'1 remove\n11 remove' ''
 
 # 共通関数への集約を、コメント以外のラベル操作行が 2 行以下かで検査する。
@@ -220,8 +224,8 @@ else
   fail "9. 構造検査（ラベル操作が 2 行以下）: $label_lines 行"
 fi
 
-expect_auth_failure '10. codex の認証失敗 + open PR 11' codex test-branch $'1 remove\n11 add'
-expect_auth_failure '11. claude の認証失敗 + open PR 11' claude test-branch $'1 remove\n11 add'
+expect_auth_failure '10. codex の認証失敗 + open PR 11' codex test-branch $'1 add\n11 remove'
+expect_auth_failure '11. claude の認証失敗 + open PR 11' claude test-branch $'1 add\n11 remove'
 expect_auth_failure '12. codex の認証失敗 + BRANCH_NAME 未設定' codex '' '1 add'
 
 if [ "$failures" -ne 0 ]; then

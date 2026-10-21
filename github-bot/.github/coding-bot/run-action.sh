@@ -417,6 +417,10 @@ if [ "$IS_PR" = true ] && [ -z "${PR_INSTRUCTION:-}" ] && [ "$EVENT_TYPE" != wor
   PR_COMMENT_ONLY=true
 fi
 
+if [ -n "${RESOLVE_CONFLICT_PR:-}" ]; then
+  validate_conflict_dispatch "$ISSUE_NUMBER" "$RESOLVE_CONFLICT_PR" || { echo "$TRIGGER_ERROR"; exit 1; }
+fi
+
 # PR head SHA に対する直近の CI run を引き、失敗していれば
 # CI_SECTION に失敗サマリ + 生ログ末尾を設定する（成功 / 実行中 / run 無し なら空文字）。head SHA で引くのは、
 # agent がこの後 origin/$BASE_BRANCH を merge して push し直す前の「ユーザが 🤖 を押した時点で見えて
@@ -502,6 +506,18 @@ if [ "$IS_PR" = true ]; then
       || echo "Warning: failed to post the refusal note"
     : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported" 2>/dev/null || true
     exit 0
+  fi
+  if [ -n "${PR_INSTRUCTION:-}" ]; then
+    [ "$TRUSTED_LINKED_ISSUE" = "${PR_TASK_ISSUE:-}" ] || { echo 'task issue does not match PR head'; exit 1; }
+  fi
+  if [ "${PR_COMMENT_ONLY:-false}" = true ]; then
+    USER_REQUEST=$(fetch_trigger_context "$EVENT_TYPE" "$GITHUB_REPOSITORY" "$ISSUE_NUMBER" "$COMMENT_ID" | jq -er '.body') || exit 1
+    RUN_TIMEOUT_SECONDS="${CODING_BOT_TIMEOUT:-5400}"
+    source "$ENGINE_FILE"
+    engine_setup_auth
+    source "$SCRIPT_DIR/pr-comment.sh"
+    run_pr_comment
+    exit $?
   fi
   # PR の場合
   PR_DATA=$(gh pr view $ISSUE_NUMBER \
@@ -640,6 +656,8 @@ else
 fi
 
 # main を merge
+CONFLICT_START_SHA=$(git rev-parse HEAD)
+CONFLICT_BASE_SHA=$(git rev-parse "origin/$BASE_BRANCH")
 echo "🔀 Merging origin/$BASE_BRANCH into $BRANCH_NAME..."
 if [ -z "${PR_INSTRUCTION:-}" ] && [ "${PR_COMMENT_ONLY:-false}" != true ]; then
   MERGE_OUTPUT=$(git merge origin/$BASE_BRANCH --no-edit 2>&1) || MERGE_EXIT_CODE=$?
@@ -674,10 +692,17 @@ $CONFLICT_FILES
 5. Commit the merge: \`git commit -m \"Merge $BASE_BRANCH into $BRANCH_NAME\"\`
 6. Verify: \`git status\` should show no conflicts
 
-**After resolving conflicts, proceed with the user's original request.**
+
 "
 else
   echo "✅ Merge successful (no conflicts)"
+fi
+
+if [ -n "${RESOLVE_CONFLICT_PR:-}" ]; then
+  # 元の issue の依頼・会話・PR コメントを作業 engine に渡さない。
+  source "$SCRIPT_DIR/resolve-conflict.sh"
+  resolve_issue_conflict
+  exit $?
 fi
 
 # 画像URLを抽出してダウンロード
@@ -927,11 +952,6 @@ engine_setup_auth
 # Claude main also prepares and checks the Codex login used by its workers.
 if [ "$ENGINE" = claude ]; then codex_prepare_auth; fi
 
-if [ "${PR_COMMENT_ONLY:-false}" = true ]; then
-  source "$SCRIPT_DIR/pr-comment.sh"
-  run_pr_comment
-  exit $?
-fi
 
 # 環境を先に調べ、認証・ブラウザなどの実行可否を prompt に渡す。
 ENVIRONMENT_SECTION=""

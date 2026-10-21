@@ -16,7 +16,7 @@ def git(cwd, *args):
 
 
 class MergeProbe(unittest.TestCase):
-    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False):
+    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False, issue_run=False, extra=False):
         with tempfile.TemporaryDirectory(dir=TMP) as temp:
             temp = Path(temp)
             seed, remote, work, run = [temp / name for name in ['seed', 'remote', 'work', 'run']]
@@ -39,8 +39,8 @@ class MergeProbe(unittest.TestCase):
             original = git(work, 'rev-parse', 'HEAD')
             env = {**os.environ, 'BOT': str(BOT), 'RUNNER_DIR': str(run), 'GITHUB_WORKSPACE': str(run),
                    'DECISION': json.dumps(decision), 'DIRTY': str(int(dirty)), 'FAIL': str(int(fail)),
-                   'RAW': raw if raw is not None else '{"resolved":true}', 'UNRESOLVED': str(int(unresolved)), 'REFUSED': str(int(refused)),
-                   'GITHUB_REPOSITORY': 'owner/repo', 'TRUSTED_LINKED_ISSUE': '7', 'ISSUE_NUMBER': '9',
+                   'RAW': raw if raw is not None else json.dumps(decision), 'UNRESOLVED': str(int(unresolved)), 'REFUSED': str(int(refused)),
+                   'ISSUE_RUN': str(int(issue_run)), 'EXTRA': str(int(extra)), 'RESOLVE_CONFLICT_PR':'9', 'ENGINE_FILE': str(run/'engine.sh'), 'GITHUB_REPOSITORY': 'owner/repo', 'TRUSTED_LINKED_ISSUE': '7', 'ISSUE_NUMBER': '9',
                    'BASE_BRANCH': 'main', 'BRANCH_NAME': 'agent/issue-7', 'PROGRESS_COMMENT_ID': '77',
                    'RUN_TIMEOUT_SECONDS': '60', 'USER_REQUEST': request}
             script = r'''
@@ -57,18 +57,39 @@ gh() {
   if [[ " $* " == *" --paginate "* ]]; then printf '[]'; fi
 }
 pr_comment_engine() {
+  echo classify >> "$RUNNER_DIR/gh"
   RESULT_OUTPUT_FILE="$RUNNER_DIR/result"
-  if [ -f "$RUNNER_DIR/classified" ]; then
-    if [ "$UNRESOLVED" != 1 ]; then printf 'resolved\n' > 'conflict file.txt'; fi
-    if [ "$REFUSED" = 1 ]; then printf '{"resolved":false}' > "$RESULT_OUTPUT_FILE"; else printf '%s' "$RAW" > "$RESULT_OUTPUT_FILE"; fi
-    if [ "$DIRTY" = 1 ]; then printf 'wrong\n' > other.txt; git add other.txt; fi
-  else
-    touch "$RUNNER_DIR/classified"
-    if [ "$FAIL" = 1 ]; then return 1; fi
-    printf '%s' "$DECISION" > "$RESULT_OUTPUT_FILE"
-  fi
+  [ "$FAIL" != 1 ] || return 1
+  printf '%s' "$RAW" > "$RESULT_OUTPUT_FILE"
 }
-run_pr_comment
+engine_run() { echo forbidden-working-engine >> "$RUNNER_DIR/gh"; return 97; }
+if [ "$ISSUE_RUN" = 1 ]; then
+ ISSUE_NUMBER=7
+ CONFLICT_START_SHA=$(git rev-parse HEAD)
+ CONFLICT_BASE_SHA=$(git rev-parse origin/main)
+ MERGE_EXIT_CODE=0
+ git merge origin/main --no-edit || MERGE_EXIT_CODE=$?
+ CONFLICT_FILES=$(git diff --name-only --diff-filter=U)
+ CONFLICT_SECTION="FIXED CONFLICT TASK: $CONFLICT_FILES"
+ cat > "$ENGINE_FILE" <<'ENGINE'
+engine_setup_auth() { :; }
+engine_run() {
+ (
+  echo resolve >> "$RUNNER_DIR/gh"
+  if [ "$FAIL" = 1 ]; then exit 1; fi
+  if [ "$UNRESOLVED" != 1 ]; then printf 'resolved\n' > 'conflict file.txt'; fi
+  if [ "$DIRTY" = 1 ]; then printf 'wrong\n' > other.txt; fi
+  if [ "$EXTRA" = 1 ]; then printf 'wrong\n' > added.txt; fi
+  git add .
+  git commit -m 'merge conflicts' || exit 1
+ ) & ENGINE_PID=$!
+}
+ENGINE
+ source "$BOT/resolve-conflict.sh"
+ resolve_issue_conflict
+else
+ run_pr_comment
+fi
 '''
             result = subprocess.run(['bash', '-c', script], cwd=work, env=env, text=True, capture_output=True)
             pushes = (run / 'pushes').read_text().splitlines() if (run / 'pushes').exists() else []
@@ -77,164 +98,83 @@ run_pr_comment
             return result, pushes, calls, original == head
 
 
-
 class PrCommentContract(MergeProbe):
-    def test_only_requested_conflict_resolution_can_push(self):
-        for decision, conflict, pushes in [
-            ({"conflict":False,"other":True},True,[]),
-            ({"conflict":False,"other":False},True,[]),
-            ({"conflict":True,"other":True},True,["push"]),
-            ({"conflict":True,"other":False},True,["push"]),
-            ({"conflict":True,"other":False},False,[]),
-        ]:
-            with self.subTest(decision=decision,conflict=conflict):
-                result, actual, calls, unchanged = self.run_case(decision,conflict=conflict)
+    def test_pr_comments_only_classify_redirect_and_dispatch(self):
+        for decision in [{"conflict":False,"other":True},{"conflict":False,"other":False},
+                         {"conflict":True,"other":True},{"conflict":True,"other":False}]:
+            with self.subTest(decision=decision):
+                result,pushes,calls,unchanged=self.run_case(decision)
                 self.assertEqual(result.returncode,0,result.stderr)
-                self.assertEqual(actual,pushes)
-                if not pushes: self.assertTrue(unchanged)
-                if decision["other"]: self.assertIn('issues/7',calls)
+                self.assertEqual(pushes,[]); self.assertTrue(unchanged)
+                self.assertEqual(calls.count('classify'),1)
+                self.assertNotIn('forbidden-working-engine',calls)
+                self.assertEqual('resolve_conflict_pr=9' in calls,decision['conflict'])
+                if decision['other']: self.assertIn('issues/7',calls)
+                if decision['conflict'] and not decision['other']: self.assertNotIn('issue comment',calls)
+                self.assertNotIn('質問もあります',calls)
 
-    def test_invalid_or_unsafe_results_stop_before_push(self):
-        cases=[{"raw":""},{"raw":'{"resolved":false}\n{"resolved":true}'},
-               {"raw":'{}'},{"raw":'false'},{"dirty":True},{"unresolved":True},
-               {"refused":True},{"fail":True}]
-        for args in cases:
-            with self.subTest(args=args):
-                result,pushes,calls,_=self.run_case({"conflict":True,"other":False},**args)
+    def test_invalid_classifications_never_dispatch_or_push(self):
+        for raw in ['', '{}', 'false', '{"conflict":"true","other":false}',
+                    '{"conflict":true,"other":false}\n{"conflict":false,"other":true}']:
+            with self.subTest(raw=raw):
+                result,pushes,calls,unchanged=self.run_case({},raw=raw)
                 self.assertNotEqual(result.returncode,0)
-                self.assertEqual(pushes,[])
-                self.assertIn('issues/7',calls)
-                self.assertIn('PATCH',calls)
+                self.assertEqual(pushes,[]);self.assertTrue(unchanged)
+                self.assertNotIn('workflow run',calls);self.assertIn('issues/7',calls)
 
-    def test_base_whitespace_does_not_block_a_valid_resolution(self):
-        result,pushes,_,_=self.run_case({"conflict":True,"other":False},whitespace=True)
-        self.assertEqual(result.returncode,0,result.stderr)
-        self.assertEqual(pushes,['push'])
+    def test_issue_run_only_pushes_a_verified_merge(self):
+        for arguments in [{},{'whitespace':True},{'conflict':False}, {'dirty':True},
+                          {'extra':True},{'unresolved':True},{'fail':True}]:
+            with self.subTest(arguments=arguments):
+                result,pushes,calls,_=self.run_case({},issue_run=True,**arguments)
+                unsafe=any(arguments.get(key) for key in ['dirty','extra','unresolved','fail'])
+                self.assertEqual(result.returncode==0,not unsafe,result.stderr)
+                self.assertEqual(pushes,[] if unsafe else ['push'])
+                self.assertIn('issue comment 7',calls)
+                self.assertEqual(calls.count('issue comment 9'),0 if unsafe else 1)
+                self.assertNotIn('classify',calls)
 
-    def test_pr_engine_has_no_write_credentials_and_restores_git_config(self):
-        for mode in ['classify','resolve']:
-            for tamper in ['0','1']:
-                with self.subTest(mode=mode,tamper=tamper), tempfile.TemporaryDirectory(dir=TMP) as d:
-                    root=Path(d);git(root,'init','-b','main')
-                    run=root/'run';run.mkdir()
-                    git(root,'config','http.https://github.com/.extraheader','AUTHORIZATION: probe-only')
-                    before=git(root,'config','--local','--list')
-                    code=r'''source "$BOT/pr-comment.sh"
-engine_run() {
- (
-  printf '%s\n' "${GH_TOKEN:-absent}" "${GITHUB_TOKEN:-absent}" "${CODING_BOT_GH_PAT:-absent}" > "$RUNNER_DIR/child"
-  git config --local --get-regexp '^(http.*extraheader|credential.*)' > "$RUNNER_DIR/git-auth" || true
-  [ "$TAMPER" = 0 ] || git config --local credential.helper '!unexpected'
-  printf '{"resolved":true}' > "$RESULT_OUTPUT_FILE"
- ) & ENGINE_PID=$!
-}
-engine_extract_result() { :; }
-pr_comment_engine classify "$MODE"
-'''
-                    env={**os.environ,'BOT':str(BOT),'RUNNER_DIR':str(run),'USER_REQUEST':'probe',
-                         'ISSUE_NUMBER':'9','RUN_TIMEOUT_SECONDS':'5','MODE':mode,'TAMPER':tamper,
-                         'GH_TOKEN':'write-only-probe','GITHUB_TOKEN':'write-only-probe','CODING_BOT_GH_PAT':'write-only-probe'}
-                    result=subprocess.run(['bash','-c',code],cwd=root,env=env,capture_output=True,text=True)
-                    self.assertEqual(result.returncode==0,tamper=='0',result.stderr)
-                    self.assertEqual((run/'child').read_text(),'absent\nabsent\nabsent\n')
-                    self.assertEqual((run/'git-auth').read_text(),'')
-                    self.assertEqual(git(root,'config','--local','--list'),before)
-
-    def test_pr_engine_cli_uses_one_explicit_permission_mode(self):
+    def test_classifier_has_no_tools_or_github_credentials(self):
         for engine in ['codex','claude']:
-            for mode in ['classify','resolve']:
-                with self.subTest(engine=engine,mode=mode), tempfile.TemporaryDirectory(dir=TMP) as d:
-                    root=Path(d)
-                    source=(BOT/'engines'/('_'+engine+'.sh')).read_text().replace('/tmp/',d+'/')
-                    (root/'engine.sh').write_text(source)
-                    (root/'prompt').write_text('probe')
-                    code=r'''ISSUE_NUMBER=9
-source "$PROBE/engine.sh"
-SYSTEM_PROMPT=probe
-PR_ENGINE_MODE="$MODE"
-TIMEOUT_VALUE=5
-JSON_OUTPUT_FILE="$PROBE/events"
-PROGRESS_OUTPUT_FILE="$PROBE/progress"
-TASK_STATUS_FILE="$PROBE/tasks"
-ENGINE_PROMPT_FILE="$PROBE/prompt"
-timeout() { printf '%s\0' "$@" > "$PROBE/args"; }
-engine_run
-wait "$ENGINE_PID"
+            with self.subTest(engine=engine), tempfile.TemporaryDirectory(dir=TMP) as d:
+                root=Path(d)
+                code=r'''source "$BOT/pr-comment.sh"
+SCRIPT_DIR="$BOT"
+RESULT_OUTPUT_FILE="$RUNNER_DIR/result"
+timeout() {
+ printf '%s\0' "$@" > "$RUNNER_DIR/args"
+ printf '%s\n' "${GH_TOKEN:-absent}" "${GITHUB_TOKEN:-absent}" "${CODING_BOT_GH_PAT:-absent}" > "$RUNNER_DIR/credentials"
+ if [ "$ENGINE" = codex ]; then printf '{"conflict":false,"other":true}' > "$RESULT_OUTPUT_FILE"
+ else printf '%s' '{"result":"{\"conflict\":false,\"other\":true}"}'; fi
+}
+pr_comment_engine 'classify only'
 '''
-                    result=subprocess.run(['bash','-c',code],env={**os.environ,'PROBE':d,'MODE':mode},capture_output=True,text=True)
-                    self.assertEqual(result.returncode,0,result.stderr)
-                    args=(root/'args').read_bytes().decode().split('\0')[:-1]
-                    self.assertNotIn('--dangerously-bypass-approvals-and-sandbox',args)
-                    self.assertNotIn('--dangerously-skip-permissions',args)
-                    if engine=='codex':
-                        self.assertEqual(args.count('--sandbox'),1)
-                        self.assertEqual(args[args.index('--sandbox')+1],'read-only' if mode=='classify' else 'workspace-write')
-                        self.assertIn('sandbox_workspace_write.network_access=false',args)
-                        self.assertIn('approval_policy="never"',args)
-                        if mode=='classify': self.assertIn('features.shell_tool=false',args)
-                    else:
-                        self.assertEqual(args.count('--tools'),1)
-                        self.assertEqual(args[args.index('--tools')+1],'' if mode=='classify' else 'Read,Edit,Write')
-                        self.assertIn('--strict-mcp-config',args)
-
+                env={**os.environ,'BOT':str(BOT),'RUNNER_DIR':d,'ENGINE':engine,
+                     'RUN_TIMEOUT_SECONDS':'60','USER_REQUEST':'untrusted request',
+                     'GH_TOKEN':'fake-token','GITHUB_TOKEN':'fake-token','CODING_BOT_GH_PAT':'fake-token'}
+                result=subprocess.run(['bash','-c',code],cwd=root,env=env,capture_output=True,text=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertEqual((root/'credentials').read_text(),'absent\nabsent\nabsent\n')
+                args=(root/'args').read_bytes().decode().split('\0')[:-1]
+                if engine=='codex':
+                    self.assertEqual(args.count('--sandbox'),1)
+                    self.assertIn('read-only',args);self.assertIn('features.shell_tool=false',args)
+                    self.assertIn('--ignore-rules',args)
+                else:
+                    self.assertEqual(args.count('--tools'),1)
+                    self.assertEqual(args[args.index('--tools')+1],'')
+                    self.assertIn('--strict-mcp-config',args)
+                self.assertNotIn('--dangerously-skip-permissions',args)
+                self.assertNotIn('--dangerously-bypass-approvals-and-sandbox',args)
 
     def test_guide_read_failure_cannot_create_a_duplicate(self):
-        with tempfile.TemporaryDirectory(dir=TMP) as d:
-            code='''source "$BOT/pr-comment.sh"
-gh() {
- if [ "$1" = api ]; then return 1; fi
- echo POST > "$RUNNER_DIR/writes"
-}
-pr_comment_guide 9 https://github.com/owner/repo/issues/7#issuecomment-77
+        code='''source "$BOT/pr-comment.sh"
+gh() { if [ "$1" = api ]; then return 1; else echo forbidden-post; fi; }
+pr_comment_guide 9 https://github.com/owner/repo/issues/7#issuecomment-11
 '''
-            result=subprocess.run(['bash','-c',code],cwd=ROOT,
-                env={**os.environ,'BOT':str(BOT),'RUNNER_DIR':d,'GITHUB_REPOSITORY':'owner/repo','REPORT_ISSUE':'7'},
-                capture_output=True,text=True)
-            self.assertNotEqual(result.returncode,0)
-            self.assertFalse((Path(d)/'writes').exists())
-
-    def test_pr_processing_does_not_remove_another_worktrees_auth(self):
-        with tempfile.TemporaryDirectory(dir=TMP) as d:
-            root=Path(d);base=root/'base';base.mkdir()
-            git(base,'init','-b','main');git(base,'config','user.name','Test');git(base,'config','user.email','test@example.invalid')
-            (base/'file').write_text('base\n');git(base,'add','.');git(base,'commit','-m','base')
-            git(base,'remote','add','origin','https://github.com/owner/repo.git')
-            git(base,'update-ref','refs/remotes/origin/main','HEAD')
-            git(base,'config','http.https://github.com/.extraheader','AUTHORIZATION: other-run-probe')
-            work=root/'feature';git(base,'worktree','add','-b','agent/issue-7',str(work))
-            before=git(base,'config','--local','--list')
-            run=root/'run';run.mkdir()
-            code=r'''source "$BOT/pr-comment.sh"
-engine_run() {
- (
-  touch "$RUNNER_DIR/started"
-  while [ ! -f "$RUNNER_DIR/release" ]; do sleep 0.02; done
-  printf '{"conflict":false,"other":true}' > "$RESULT_OUTPUT_FILE"
- ) & ENGINE_PID=$!
-}
-engine_extract_result() { :; }
-gh() { if [[ "$*" == *--paginate* ]]; then printf '[]'; fi; }
-run_pr_comment
-'''
-            env={**os.environ,'BOT':str(BOT),'SCRIPT_DIR':str(BOT),'RUNNER_DIR':str(run),'GITHUB_WORKSPACE':str(run),
-                 'ISSUE_NUMBER':'9','TRUSTED_LINKED_ISSUE':'7','GITHUB_REPOSITORY':'owner/repo',
-                 'BRANCH_NAME':'agent/issue-7','BASE_BRANCH':'main','PROGRESS_COMMENT_ID':'77',
-                 'RUN_TIMEOUT_SECONDS':'10','USER_REQUEST':'question'}
-            process=subprocess.Popen(['bash','-c',code],cwd=work,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
-            import time
-            try:
-                deadline=time.monotonic()+8
-                while not (run/'started').exists() and process.poll() is None and time.monotonic()<deadline: time.sleep(0.02)
-                self.assertTrue((run/'started').exists(),'engine did not start')
-                during=git(base,'config','--local','--list')
-            finally:
-                (run/'release').touch()
-                stdout,stderr=process.communicate(timeout=10)
-            self.assertEqual(process.returncode,0,stdout+stderr)
-            self.assertEqual(git(base,'config','--local','--list'),before)
-            self.assertEqual(during,before,'another worktree lost authentication while this engine ran')
+        result=subprocess.run(['bash','-c',code],capture_output=True,text=True,
+            env={**os.environ,'BOT':str(BOT),'GITHUB_REPOSITORY':'owner/repo','REPORT_ISSUE':'7'})
+        self.assertNotEqual(result.returncode,0);self.assertNotIn('forbidden-post',result.stdout)
 
 
-
-if __name__ == '__main__':
-    unittest.main(verbosity=2)
+if __name__=='__main__': unittest.main(verbosity=2)

@@ -58,7 +58,7 @@ update is done that way, and stop.
 
 ## Discussion and reporting destination
 
-Post questions, approvals, progress, completion reports and CI reports to the linked Issue, including problems found while inspecting a PR. On that Issue say 「このスレッド」 when asking for replies. PR comments contain only the Issue/report/question links, Merge/conflict-request guidance, and requested conflict-resolution results. Always include the Issue URL when redirecting; include the pending question's comment URL too. Mark question comments with `<!-- coding-bot:question -->`. An option waiting for upstream work must say when to reply and link to where its completion will be reported.
+Post questions, approvals, progress, completion reports and CI reports to the linked Issue, including problems found while inspecting a PR. On that Issue say 「このスレッド」 when asking for replies. PR comments contain only the Issue/report/question links, Merge/conflict-request guidance, and requested conflict-resolution results. Always include the Issue URL when redirecting; include the pending question's comment URL too. The final-report hook marks pending question comments. An option waiting for upstream work must say when to reply and link to where its completion will be reported.
 
 ## Output Contract (file targets `run-action.sh` reads)
 

@@ -20,7 +20,7 @@
 .github/coding-bot/system.md  system-claude.md  system-codex.md
 .github/coding-bot/_issue.md  _pr.md
 .github/coding-bot/engines/_claude.sh  _codex.sh  _stub.sh   # ← engine で割れるのはここだけ
-.github/coding-bot/pr-comment.sh            # PR コメントの分類と conflict 解消専用の実行
+.github/coding-bot/pr-comment.sh            # PR コメントの分類・誘導・issue run の起動
 .github/coding-bot/trigger-source.sh        # event 別の本文取得・PR の出自検査
 .github/coding-bot/notify-devbot.sh         # 止まったことを外の受け口へ署名付きで知らせる（host 側だけで動く）
 .github/coding-bot/codex-auth.sh            # codex の購読ログインの用意・確認・更新された token の書き戻し

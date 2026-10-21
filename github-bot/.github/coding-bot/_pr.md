@@ -11,4 +11,4 @@
 - `other`: 質問・回答・承認・機能の修正など、conflict 解消以外の依頼も含むとき true。
 
 conflict 解消と質問が混じっていれば両方 true。意味が決まらなければ conflict は false。
-分類結果を runner が読み、conflict 解消だけを実行する。ほかの依頼は issue に誘導する。
+分類結果を runner が読み、conflict 解消は issue の run に固定の依頼として渡す。ほかの依頼は issue に誘導する。

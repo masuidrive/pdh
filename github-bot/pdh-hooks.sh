@@ -8,13 +8,13 @@
 #   3. Status が human gate なら、note の Checklist に «発行先:» + URL か path の未了行が無ければ足す
 #      （URL は今回の gate コメント）
 #   4. note の Checklist に «未了 + 発行先:» の行があれば awaiting-reply ラベルを付け、無ければ外す
-#      （bot の PR が開いていれば Issue から外して PR にだけ付ける。PR が無ければ Issue に付ける）
+#      （待ち印は Issue に付け続け、PR に残った旧ラベルは外す）
 #   5. 導入検査（ラベル・Actions の PR 作成許可）で要追加があれば報告に足す
 #
 # ⚠ awaiting-reply は run の «始め» と «終わり» の両方で動かす。終わりだけだと、人が答えて
 # run が始まっても付いたままになり、«自分の番» を誤って言い続ける。engine が失敗した run では
 # final が呼ばれないので、失敗側からも付ける（止まっていて人の手が要る、という意味は同じ）。
-# ⚠ failed でも PR が開いていれば Issue から外して PR にだけ付ける。開始時は両方から外す。
+# ⚠ failed の待ち印も Issue に付ける。開始時は Issue と PR の両方から外す。
 #
 # usage:
 #   pdh-hooks.sh final <issue> <branch> <comment-id>   # stdin: 最終レポート → stdout: 補正後の本文
@@ -45,13 +45,12 @@ set_awaiting() {  # $1=add|remove  $2=issue  $3=branch  $4=理由
     AWAITING_PR=$(gh pr list --head "$branch" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
     [ "$AWAITING_PR" = null ] && AWAITING_PR=""
   fi
-  [ -z "$AWAITING_PR" ] || issue_action=remove
   gh issue edit "$issue" --repo "$REPO" "--${issue_action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
     && log "$AWAITING_LABEL を Issue #$issue に ${issue_action} した（${reason}）" \
     || { [ "$issue_action" = remove ] || log "$AWAITING_LABEL を Issue #$issue に付けられない（ラベルが無いか権限不足。github-bot/INSTALL.md「3. stage ラベルを作る」）"; }
   if [ -n "$AWAITING_PR" ]; then
-    gh issue edit "$AWAITING_PR" --repo "$REPO" "--${action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
-      && log "$AWAITING_LABEL を PR #$AWAITING_PR に ${action} した（${reason}）" \
+    gh issue edit "$AWAITING_PR" --repo "$REPO" "--remove-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
+      && log "$AWAITING_LABEL を PR #$AWAITING_PR から remove した（${reason}）" \
       || { [ "$action" = remove ] || log "$AWAITING_LABEL を PR #$AWAITING_PR に付けられない（ラベルが無いか権限不足。github-bot/INSTALL.md「3. stage ラベルを作る」）"; }
   fi
 }
@@ -192,6 +191,7 @@ finalize_without_active_ticket() {
     set_awaiting remove "$ISSUE" "$BRANCH" "active ticket の無い issue を閉じた"
   else
     set_awaiting add "$ISSUE" "$BRANCH" "active ticket の無いまま run が終わった＝人に聞いている"
+    report+=$'\n\n<!-- coding-bot:question -->'
     write_notify "$ISSUE" question "" "$CID" "$AWAITING_PR"
   fi
 }
@@ -400,6 +400,9 @@ elif [ "$status" = PDH-human-review ] && [ -n "$AWAITING_PR" ]; then
   kind=close_gate
 elif has_waiting_line; then
   kind=blocked
+fi
+if [ -n "$kind" ] && [[ "$report" != *'<!-- coding-bot:question -->'* ]]; then
+  report+=$'\n\n<!-- coding-bot:question -->'
 fi
 [ -z "$kind" ] || write_notify "$ISSUE" "$kind" "$status" "$CID" "$AWAITING_PR"
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# workflow_run の判定。PR 単位の concurrency を取得した後に decide を呼ぶ。
+# workflow_run の判定。issue の workflow lock を取得した後に decide を呼ぶ。
 set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/trigger-source.sh"
@@ -15,7 +15,11 @@ ci_autofix_resolve_pr() {
     prs=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json number)
     number=$(printf '%s' "$prs" | jq -er 'if length <= 1 then .[0].number // "" else error("ambiguous PR head") end')
   fi
-  printf 'pr_number=%s\n' "$number" >> "$GITHUB_OUTPUT"
+  local issue
+  branch=$(jq -er '.workflow_run.head_branch' "$GITHUB_EVENT_PATH")
+  issue=$(printf '%s' "$branch" | sed -n 's#^agent/issue-\([1-9][0-9]*\)$#\1#p')
+  [ -n "$issue" ] || return 1
+  printf 'pr_number=%s\nissue_number=%s\n' "$number" "$issue" >> "$GITHUB_OUTPUT"
 }
 
 ci_autofix_statuses() {

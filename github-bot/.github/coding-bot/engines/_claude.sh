@@ -62,7 +62,7 @@ For more information, see the [Claude Code documentation](https://docs.anthropic
 **After setting the token, try commenting 🤖 \`:robot:\` on this thread again!**"
   # ⚠ この経路は ENGINE_EXIT_CODE の分岐へ入らないので run-action.sh の failed hook が呼ばれない。
   # いちばん多い «止まっていて人の手が要る» 停止なので、ここで直接付ける。
-  # ⚠ branch を渡すのは、PR が開いていれば待ち印を PR にだけ付けるため。
+  # ⚠ branch を渡すのは、待ち印と通知に PR のリンクも含めるため。
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
     bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "${BRANCH_NAME:-}" || true
   fi
@@ -97,17 +97,6 @@ engine_run() {
   printf '%s' "$SYSTEM_PROMPT" > "$SYSTEM_PROMPT_FILE"
   echo "📄 System prompt: $(wc -c < "$SYSTEM_PROMPT_FILE") bytes → $SYSTEM_PROMPT_FILE"
 
-  local ENGINE_ARGS=(--dangerously-skip-permissions)
-  if [ -n "${PR_ENGINE_MODE:-}" ]; then
-    ENGINE_ARGS=(--setting-sources "" --settings '{"disableAllHooks":true}'
-      --strict-mcp-config --mcp-config '{"mcpServers":{}}'
-      --disable-slash-commands --no-session-persistence)
-    if [ "$PR_ENGINE_MODE" = resolve ]; then
-      ENGINE_ARGS+=(--tools Read,Edit,Write --permission-mode acceptEdits)
-    else
-      ENGINE_ARGS+=(--tools "")
-    fi
-  fi
 
   (
     > "$PROGRESS_OUTPUT_FILE"  # Initialize progress file
@@ -122,11 +111,11 @@ engine_run() {
     mkdir -p "$BLOCKS_DIR"
     rm -f -- "$BLOCKS_DIR"/block-m*-*
 
-    timeout "$TIMEOUT_VALUE" claude -p "${ENGINE_ARGS[@]}" \
+    timeout "$TIMEOUT_VALUE" claude -p --dangerously-skip-permissions \
       ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
       --system-prompt-file "$SYSTEM_PROMPT_FILE" \
       --output-format stream-json --include-partial-messages --verbose \
-      < "${ENGINE_PROMPT_FILE:-/tmp/agent-prompt-$ISSUE_NUMBER.txt}" 2>&1 | \
+      < "/tmp/agent-prompt-$ISSUE_NUMBER.txt" 2>&1 | \
     while IFS= read -r line; do
       echo "$line" >> "$JSON_OUTPUT_FILE"
 
@@ -300,7 +289,7 @@ EOF
 engine_extract_result() {
   local AGENT_RESULT_FILE="/tmp/agent-result.md"
 
-  if [ -z "${PR_ENGINE_MODE:-}" ] && [ -f "$AGENT_RESULT_FILE" ]; then
+  if [ -f "$AGENT_RESULT_FILE" ]; then
     echo "✅ Found /tmp/agent-result.md - using it as final result"
     cat "$AGENT_RESULT_FILE" > "$RESULT_OUTPUT_FILE"
     return 0

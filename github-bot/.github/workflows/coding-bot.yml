@@ -17,6 +17,9 @@ on:
   # CI の受け口が PR 番号を解決してから呼ぶ。github.event は呼び出し元を保持する。
   workflow_call:
     inputs:
+      ci_autofix_issue:
+        type: string
+        default: ''
       ci_autofix_pr:
         type: string
         default: ''
@@ -32,8 +35,12 @@ on:
         description: "Run the agent for this issue as if it had just been opened (verify_only is ignored)"
         type: string
         default: ''
+      resolve_conflict_pr:
+        description: "Resolve only the conflicts of this bot PR in its issue run"
+        type: string
+        default: ''
       pr:
-        description: "Continue an existing bot PR (requires instruction; mutually exclusive with issue)"
+        description: "Continue an existing bot PR (requires instruction and linked issue)"
         type: string
         default: ''
       instruction:
@@ -46,41 +53,18 @@ on:
         type: string
         default: ''
 
+# CI の判定から修正まで同じ issue の lock を保持する。PR コメントは push せず別の鍵を使う。
+concurrency:
+  group: coding-bot-${{ inputs.ci_autofix_issue || inputs.issue || (github.event.issue.pull_request != null && format('pr-{0}', github.event.issue.number)) || (github.event.pull_request != null && format('pr-{0}', github.event.pull_request.number)) || github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+  queue: max
+
 # ⚠ 使う action は commit SHA で固定する。tag（@v5 等）は動かせるので、同じ workflow が
 # «いつ走ったか» で別のコードを実行しうる。この bot は repo の書き込み権限と engine の
 # 認証情報を持って走るので、そこは固定しておく。末尾のコメントが人間向けの版表示。
 
 jobs:
-  context:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-      issues: read
-    outputs:
-      issue: ${{ steps.resolve.outputs.issue }}
-    steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          persist-credentials: false
-      - name: Resolve the issue before acquiring its lock
-        id: resolve
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LOCK_DISPATCH_PR: ${{ inputs.pr || inputs.ci_autofix_pr }}
-          LOCK_DISPATCH_ISSUE: ${{ inputs.issue }}
-        run: |
-          source .github/coding-bot/trigger-source.sh
-          issue=$(resolve_lock_issue)
-          echo "issue=$issue" >> "$GITHUB_OUTPUT"
-
   ci-autofix:
-    needs: context
-    concurrency:
-      group: coding-bot-${{ needs.context.outputs.issue || format('verify-{0}', github.run_id) }}
-      cancel-in-progress: false
-      queue: max
     if: github.event_name == 'workflow_run' && vars.CODING_BOT_CI_AUTOFIX == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -108,18 +92,14 @@ jobs:
         run: bash .github/coding-bot/ci-autofix-decision.sh decide
 
   agent:
-    needs: [context, ci-autofix]
-    concurrency:
-      group: coding-bot-${{ needs.context.outputs.issue || format('verify-{0}', github.run_id) }}
-      cancel-in-progress: false
-      queue: max
+    needs: ci-autofix
 
     # 🤖 / :robot: だけが起動の合図（issue の作成ではタイトルだけを見る）。bot 自身と marker 付き投稿は除外する。
     # bot の名義の投稿は除外する。ただし変数 CODING_BOT_TRUSTED_BOTS（カンマ区切りの login）に並べた bot は通す
     # （例: 要望を受けて起票する Slack bot。人の依頼を代わりに書いている）。
     # awaiting-reply は状態表示であり、ラベルの有無では起動しない。
     if: |
-      always() && !cancelled() && needs.context.result == 'success' && (needs.ci-autofix.outputs.repair == 'true' ||
+      always() && !cancelled() && (needs.ci-autofix.outputs.repair == 'true' ||
       github.event_name == 'workflow_dispatch' || (
       (github.event.sender.type != 'Bot' ||
        contains(format(',{0},', vars.CODING_BOT_TRUSTED_BOTS), format(',{0},', github.event.sender.login))) &&
@@ -187,16 +167,22 @@ jobs:
       - name: Validate dispatch task
         if: github.event_name == 'workflow_dispatch'
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISPATCH_ISSUE: ${{ inputs.issue }}
           DISPATCH_PR: ${{ inputs.pr }}
           PR_INSTRUCTION: ${{ inputs.instruction }}
+          RESOLVE_CONFLICT_PR: ${{ inputs.resolve_conflict_pr }}
           PR_TASK_ALLOWED_PATHS: ${{ inputs.allowed_paths }}
         run: |
           source .github/coding-bot/trigger-source.sh
-          validate_dispatch_request "$DISPATCH_ISSUE" "$DISPATCH_PR" "$PR_INSTRUCTION"
+          validate_dispatch_request "$DISPATCH_ISSUE" "$DISPATCH_PR" "$PR_INSTRUCTION" "$RESOLVE_CONFLICT_PR"
           if [ -n "$DISPATCH_PR" ] && [ -z "$PR_TASK_ALLOWED_PATHS" ]; then
             echo '::error::allowed_paths is required for a PR instruction task (non-empty JSON array of paths)'
             exit 1
+          fi
+          if [ -n "$DISPATCH_PR" ]; then
+            validate_pr_context "$GITHUB_REPOSITORY" "$DISPATCH_PR"
+            [ "$TRUSTED_LINKED_ISSUE" = "$DISPATCH_ISSUE" ] || exit 1
           fi
 
       # ⚠ agent が書き換えられる workspace の script を、秘密付きで実行しない。
@@ -306,6 +292,8 @@ jobs:
           CI_AUTOFIX_HEAD_SHA: ${{ needs.ci-autofix.outputs.head_sha }}
           EVENT_TYPE: ${{ env.BOT_EVENT }}
           PR_INSTRUCTION: ${{ inputs.pr != '' && inputs.instruction || '' }}
+          PR_TASK_ISSUE: ${{ inputs.issue }}
+          RESOLVE_CONFLICT_PR: ${{ inputs.resolve_conflict_pr }}
           PR_TASK_ALLOWED_PATHS: ${{ inputs.allowed_paths }}
           COMMENT_ID: ${{ github.event.comment.id || github.event.review.id }}
           DEVCONTAINER_CONFIG_PATH: .devcontainer/devcontainer.json
@@ -345,6 +333,8 @@ jobs:
             -e CI_AUTOFIX_HEAD_SHA \
             -e EVENT_TYPE \
             -e PR_INSTRUCTION \
+            -e PR_TASK_ISSUE \
+            -e RESOLVE_CONFLICT_PR \
             -e PR_TASK_ALLOWED_PATHS \
             -e COMMENT_ID \
             -e DEVCONTAINER_CONFIG_PATH \

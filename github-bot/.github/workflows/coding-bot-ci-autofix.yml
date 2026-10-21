@@ -17,6 +17,7 @@ jobs:
       pull-requests: read
     outputs:
       pr_number: ${{ steps.resolve.outputs.pr_number }}
+      issue_number: ${{ steps.resolve.outputs.issue_number }}
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
@@ -30,11 +31,11 @@ jobs:
 
   autofix:
     needs: context
-    # 判定と agent の両 job が、呼び出し先の coding-bot-<PR> を保持する。
-    # PR への人の 🤖 と同じ group。ここにも concurrency を置くと自分を待つ。
+    # 呼び出し先が issue の workflow lock を判定から修正まで保持する。
     uses: ./.github/workflows/coding-bot.yml
     with:
       ci_autofix_pr: ${{ needs.context.outputs.pr_number }}
+      ci_autofix_issue: ${{ needs.context.outputs.issue_number }}
     secrets: inherit
     # 再利用先の各 job が必要な権限だけに絞る（呼び出し側はその上限）。
     permissions:
