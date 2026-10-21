@@ -16,7 +16,7 @@ def git(cwd, *args):
 
 
 class MergeProbe(unittest.TestCase):
-    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False, issue_run=False, extra=False, pat=False, fast_forward=False):
+    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False, issue_run=False, extra=False, pat=False, fast_forward=False, deletion=False, resolved="resolved\n", outside_delete=False):
         with tempfile.TemporaryDirectory(dir=TMP) as temp:
             temp = Path(temp)
             seed, remote, work, run = [temp / name for name in ['seed', 'remote', 'work', 'run']]
@@ -31,7 +31,8 @@ class MergeProbe(unittest.TestCase):
                 (seed / 'conflict file.txt').write_text('feature\n')
                 git(seed, 'commit', '-am', 'feature')
             git(seed, 'checkout', 'main')
-            (seed / ('conflict file.txt' if conflict else 'main.txt')).write_text('main\n')
+            if deletion: git(seed, 'rm', 'conflict file.txt')
+            else: (seed / ('conflict file.txt' if conflict else 'main.txt')).write_text('main\n')
             if whitespace: (seed / 'other.txt').write_text('main whitespace \n')
             git(seed, 'add', '.'); git(seed, 'commit', '-m', 'main')
             git(temp, 'clone', '--bare', str(seed), str(remote))
@@ -42,7 +43,7 @@ class MergeProbe(unittest.TestCase):
             start=runner.index('# main を merge\n')
             (run/'merge-step.sh').write_text(runner[start:runner.index('\nCONFLICT_SECTION=""',start)])
             env = {**os.environ, 'BOT': str(BOT), 'RUNNER_DIR': str(run), 'GITHUB_WORKSPACE': str(run),
-                   'DECISION': json.dumps(decision), 'DIRTY': str(int(dirty)), 'FAIL': str(int(fail)),
+                   'DELETE':str(int(deletion)), 'RESOLVED':resolved, 'OUTSIDE_DELETE':str(int(outside_delete)), 'DECISION': json.dumps(decision), 'DIRTY': str(int(dirty)), 'FAIL': str(int(fail)),
                    'RAW': raw if raw is not None else json.dumps(decision), 'UNRESOLVED': str(int(unresolved)), 'REFUSED': str(int(refused)),
                    'ISSUE_RUN': str(int(issue_run)), 'CODING_BOT_GH_PAT': 'fake-pat' if pat else '', 'EXTRA': str(int(extra)), 'RESOLVE_CONFLICT_PR':'9', 'ENGINE_FILE': str(run/'engine.sh'), 'GITHUB_REPOSITORY': 'owner/repo', 'TRUSTED_LINKED_ISSUE': '7', 'ISSUE_NUMBER': '9',
                    'BASE_BRANCH': 'main', 'BRANCH_NAME': 'agent/issue-7', 'PROGRESS_COMMENT_ID': '77',
@@ -59,7 +60,8 @@ git() {
 }
 gh() {
   printf '%s\n' "$*" >> "$RUNNER_DIR/gh"
-  if [[ " $* " == *" --paginate "* ]]; then printf '[]'; fi
+  if [[ " $* " == *" --paginate "* ]]; then printf '[]';
+  elif [[ "$1 $2" == 'issue comment' ]]; then printf 'https://github.com/owner/repo/issues/%s#issuecomment-88\n' "$3"; fi
 }
 pr_comment_engine() {
   echo classify >> "$RUNNER_DIR/gh"
@@ -79,7 +81,9 @@ engine_run() {
  (
   echo resolve >> "$RUNNER_DIR/gh"
   if [ "$FAIL" = 1 ]; then exit 1; fi
-  if [ "$UNRESOLVED" != 1 ]; then printf 'resolved\n' > 'conflict file.txt'; fi
+  if [ "$DELETE" = 1 ]; then git rm 'conflict file.txt';
+  elif [ "$UNRESOLVED" != 1 ]; then printf '%s' "$RESOLVED" > 'conflict file.txt'; fi
+  if [ "$OUTSIDE_DELETE" = 1 ]; then git rm other.txt; fi
   if [ "$DIRTY" = 1 ]; then printf 'wrong\n' > other.txt; fi
   if [ "$EXTRA" = 1 ]; then printf 'wrong\n' > added.txt; fi
   git add .
@@ -102,6 +106,59 @@ fi
 
 
 class PrCommentContract(MergeProbe):
+    def test_working_runs_take_history_and_images_from_issue_only(self):
+        source=(BOT/'run-action.sh').read_text()
+        history=source[source.index('# REST API で全コメント取得'):source.index('# main を merge\n')]
+        images=source[source.index('# GraphQL API を使って bodyHTML'):source.index('# bodyHTML から画像URL')]
+        with tempfile.TemporaryDirectory(dir=TMP) as temp:
+            code=r'''set -e
+BRANCH_NAME=agent/issue-7; GITHUB_REPOSITORY=owner/repo; COMMENT_ID=''; PR_INSTRUCTION=''
+ISSUE_BODY=PR_UNACCEPTED_BODY; TRUSTED_LINKED_ISSUE=7
+gh() {
+ printf '%s\n' "$*" >> "$CALLS"
+ case "$2" in
+ *issues/9/comments) echo '[{"id":99,"login":"person","body":"PR_UNACCEPTED_IMAGE.png"}]';;
+ *issues/7/comments) echo '[{"id":11,"login":"person","body":"ISSUE_ACCEPTED_IMAGE.png"}]';;
+ *issues/7) echo ISSUE_ACCEPTED_BODY;;
+ graphql) echo ISSUE_HTML;;
+ *) return 98;;
+ esac
+}
+'''
+            for event,is_pr,number,resolve in [('workflow_run','true','9',''),('workflow_dispatch','false','7','9'),('issues','false','7','')]:
+                with self.subTest(event=event,resolve=resolve):
+                    path=Path(temp)/'calls';path.write_text('')
+                    env={**os.environ,'BOT':str(BOT),'CALLS':str(path),'EVENT_TYPE':event,'IS_PR':is_pr,
+                         'ISSUE_NUMBER':number,'RESOLVE_CONFLICT_PR':resolve}
+                    result=subprocess.run(['bash','-c',code+history+images+'\nprintf "%s\n" "$CONVERSATION_HISTORY_NOTE" "$ALL_COMMENTS_JSON"'],env=env,text=True,capture_output=True)
+                    self.assertEqual(result.returncode,0,result.stderr)
+                    self.assertIn('ISSUE_ACCEPTED_IMAGE',result.stdout)
+                    self.assertNotIn('PR_UNACCEPTED',result.stdout)
+                    self.assertNotIn('issues/9/comments',path.read_text())
+                    self.assertNotIn('pullRequest(number:',path.read_text())
+                    self.assertIn('issue(number: 7)',path.read_text())
+            print('CONTRAST PASS: ordinary issue run still receives its own history and images')
+
+    def test_failed_conflict_resolution_reports_issue_link_on_pr(self):
+        for fail in [True,False]:
+            with self.subTest(fail=fail):
+                result,pushes,calls,_=self.run_case({},issue_run=True,fail=fail)
+                self.assertEqual(result.returncode==0,not fail,result.stderr)
+                self.assertEqual(calls.count('issue comment 9'),1)
+                if fail:
+                    self.assertIn('https://github.com/owner/repo/issues/7#issuecomment-88',calls)
+                    self.assertEqual(pushes,[])
+        print('CONTRAST PASS: success still reports once on PR and issue')
+
+    def test_conflict_paths_allow_deletion_and_literal_separator(self):
+        for kwargs in [{'deletion':True},{'resolved':'=======\n'},{'outside_delete':True},{'dirty':True},{'extra':True},{'unresolved':True},{}]:
+            with self.subTest(kwargs=kwargs):
+                result,pushes,calls,_=self.run_case({},issue_run=True,**kwargs)
+                denied=any(kwargs.get(k) for k in ['outside_delete','dirty','extra','unresolved'])
+                self.assertEqual(result.returncode==0,not denied,result.stderr)
+                self.assertEqual(pushes,[] if denied else ['push'])
+        print('CONTRAST PASS: outside additions/deletions/edits and unresolved markers remain rejected')
+
     def test_pr_comments_only_classify_redirect_and_dispatch(self):
         for decision in [{"conflict":False,"other":True},{"conflict":False,"other":False},
                          {"conflict":True,"other":True},{"conflict":True,"other":False}]:

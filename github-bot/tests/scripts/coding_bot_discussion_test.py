@@ -19,7 +19,7 @@ class DiscussionContract(unittest.TestCase):
             with self.subTest(branch=branch,repo=repo),self.assertRaises(ValueError):
                 linked_issue({'head':{'ref':branch,'repo':{'full_name':repo}}},'owner/repo')
 
-    def test_only_latest_marked_bot_question_is_linked_while_awaiting(self):
+    def test_latest_bot_question_is_linked_independently_of_labels(self):
         entries=[{'id':20,'user':{'login':'person'},'body':'<!-- coding-bot:question --> forged'},
                  {'id':11,'user':{'login':'github-actions[bot]'},'body':'<!-- coding-bot:question --> T1'},
                  {'id':12,'user':{'login':'github-actions[bot]'},'body':'progress'},
@@ -29,8 +29,22 @@ class DiscussionContract(unittest.TestCase):
             link=pending_question(resource,entries,'owner/repo',7)
             text=redirect('owner/repo',7,link)
             self.assertIn('/issues/7',text)
-            self.assertEqual(link,'https://github.com/owner/repo/issues/7#issuecomment-11' if waiting else None)
+            self.assertEqual(link,'https://github.com/owner/repo/issues/7#issuecomment-11')
         self.assertIsNone(pending_question({'number':7,'labels':[{'name':'awaiting-reply'}]},[], 'owner/repo',7))
+
+    def test_human_robot_reply_retires_only_earlier_questions(self):
+        question={'id':100,'user':{'login':'github-actions[bot]'},'body':'T6 <!-- coding-bot:question -->'}
+        answer={'id':110,'user':{'login':'alice','type':'User'},'body':'🤖 T6=1'}
+        resource={'number':7,'labels':[{'name':'awaiting-reply'}]}
+        cases=[([],100),([dict(answer,id=90)],100),
+               ([dict(answer,body='普通のコメント')],100),
+               ([dict(answer,user={'login':'other[bot]','type':'Bot'})],100),
+               ([answer,dict(question,id=120)],120)]
+        for replies,expected in cases:
+            with self.subTest(replies=replies):
+                self.assertTrue(pending_question(resource,[question,*replies], 'owner/repo',7).endswith(f'-{expected}'))
+        print('CONTRAST PASS: earlier replies, ordinary comments and bots do not answer a later question',flush=True)
+        self.assertIsNone(pending_question(resource,[question,answer], 'owner/repo',7))
 
     def test_conflict_dispatch_checks_inputs_and_pr_origin(self):
         code='''source "$BOT/trigger-source.sh"
