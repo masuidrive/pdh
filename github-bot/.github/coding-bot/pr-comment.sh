@@ -90,3 +90,16 @@ run_pr_comment() {
     -f body="PR の依頼を処理しました。[PR](https://github.com/$GITHUB_REPOSITORY/pull/$ISSUE_NUMBER) の返信を参照してください。" || return 1
   : > "$GITHUB_WORKSPACE/.coding-bot-reported"
 }
+
+
+pr_comment_guide() {
+  local pr="$1" report="$2" id body
+  body="<!-- coding-bot:pr-guide -->
+[報告・質問]($report) は [issue](https://github.com/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE) にあります。PR では Merge と、🤖 付きの conflict 解消の依頼ができます。"
+  id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$pr/comments?per_page=100" --paginate --slurp | jq -r '[.[][] | select(.user.login == "github-actions[bot]") | select(.body | startswith("<!-- coding-bot:pr-guide -->"))] | first | .id // empty') || return 1
+  if [[ "$id" =~ ^[1-9][0-9]*$ ]]; then
+    gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body"
+  else
+    gh issue comment "$pr" --repo "$GITHUB_REPOSITORY" --body "$body"
+  fi
+}

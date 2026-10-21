@@ -168,7 +168,7 @@ PDH-verify を終えたら、次の順で行う。既存 PR があればそれ�
    GH_TOKEN="$PR_TOKEN" gh pr create --draft --base "$BASE" --head "$BRANCH_NAME" --title … --body "… Refs #N"
    # 既存 PR の場合: GH_TOKEN="$PR_TOKEN" gh pr ready --undo "$BRANCH_NAME"
    ```
-   **PDH-human-review の decision-board を issue にコメントし、PR にはそのコメントへのリンクだけを置く。**末尾に `<!-- coding-bot -->` を置く。
+   **PDH-human-review の decision-board は issue にコメントする。**末尾に `<!-- coding-bot -->` を置く。PR の案内と完成報告へのリンクは runner が 1 通の `<!-- coding-bot:pr-guide -->` コメントを更新して置くので、手で重ねて投稿しない。
    `pr-merge` は `github_bot.pr_link` に関わらず `Refs #N` を使う。`Closes` / `Fixes` で
    Issue を先に閉じると finalize の検査を飛ばしてしまう。
 3. **done へ移す commit を push してから PR を ready にする。**

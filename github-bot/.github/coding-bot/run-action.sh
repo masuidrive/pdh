@@ -1537,7 +1537,8 @@ ${IMG_NOTE}"
   REPORT_URL="https://github.com/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE#issuecomment-$PROGRESS_COMMENT_ID"
   OPEN_PR=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH_NAME" --state open --json number --jq '.[0].number' 2>/dev/null || true)
   if [[ "$OPEN_PR" =~ ^[1-9][0-9]*$ ]]; then
-    gh issue comment "$OPEN_PR" --repo "$GITHUB_REPOSITORY" --body "[報告・質問]($REPORT_URL) は [issue](https://github.com/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE) にあります。PR では Merge と、🤖 付きの conflict 解消の依頼ができます。" || true
+    source "$SCRIPT_DIR/pr-comment.sh"
+    pr_comment_guide "$OPEN_PR" "$REPORT_URL" || true
   fi
   gh api -X PATCH repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID \
     -f body="${CI_RED_MARKER:+$CI_RED_MARKER$'\n\n'}$CLAUDE_OUTPUT_CLEAN$(branch_footer)"
