@@ -30,6 +30,7 @@ class DiscussionContract(unittest.TestCase):
             text=redirect('owner/repo',7,link)
             self.assertIn('/issues/7',text)
             self.assertEqual(link,'https://github.com/owner/repo/issues/7#issuecomment-11')
+            if waiting: print('CONTRAST PASS: awaiting issue still links the latest real bot question',flush=True)
         self.assertIsNone(pending_question({'number':7,'labels':[{'name':'awaiting-reply'}]},[], 'owner/repo',7))
 
     def test_human_robot_reply_retires_only_earlier_questions(self):
