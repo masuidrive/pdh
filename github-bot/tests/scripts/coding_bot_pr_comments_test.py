@@ -47,7 +47,7 @@ class MergeProbe(unittest.TestCase):
 set -euo pipefail
 source "$BOT/pr-comment.sh"
 SCRIPT_DIR="$BOT"
-dispatch_branch_ci() { printf "ci\n" >> "$RUNNER_DIR/ci"; }
+dispatch_branch_ci() { printf "ci-workflow\n" >> "$RUNNER_DIR/gh"; }
 git() {
   if [[ " $* " == *" push "* ]]; then echo push >> "$RUNNER_DIR/pushes"; return 0; fi
   command git "$@"
@@ -81,6 +81,7 @@ engine_run() {
   if [ "$DIRTY" = 1 ]; then printf 'wrong\n' > other.txt; fi
   if [ "$EXTRA" = 1 ]; then printf 'wrong\n' > added.txt; fi
   git add .
+  if [ "$REFUSED" = 1 ]; then rm "$(git rev-parse --git-path MERGE_HEAD)"; fi
   git commit -m 'merge conflicts' || exit 1
  ) & ENGINE_PID=$!
 }
@@ -124,15 +125,16 @@ class PrCommentContract(MergeProbe):
 
     def test_issue_run_only_pushes_a_verified_merge(self):
         for arguments in [{},{'whitespace':True},{'conflict':False}, {'dirty':True},
-                          {'extra':True},{'unresolved':True},{'fail':True}]:
+                          {'extra':True},{'unresolved':True},{'fail':True},{'refused':True}]:
             with self.subTest(arguments=arguments):
                 result,pushes,calls,_=self.run_case({},issue_run=True,**arguments)
-                unsafe=any(arguments.get(key) for key in ['dirty','extra','unresolved','fail'])
+                unsafe=any(arguments.get(key) for key in ['dirty','extra','unresolved','fail','refused'])
                 self.assertEqual(result.returncode==0,not unsafe,result.stderr)
                 self.assertEqual(pushes,[] if unsafe else ['push'])
                 self.assertIn('issue comment 7',calls)
                 self.assertEqual(calls.count('issue comment 9'),0 if unsafe else 1)
                 self.assertNotIn('classify',calls)
+                if not unsafe: self.assertIn('ci-workflow',calls)
 
     def test_classifier_has_no_tools_or_github_credentials(self):
         for engine in ['codex','claude']:
@@ -166,6 +168,39 @@ pr_comment_engine 'classify only'
                     self.assertIn('--strict-mcp-config',args)
                 self.assertNotIn('--dangerously-skip-permissions',args)
                 self.assertNotIn('--dangerously-bypass-approvals-and-sandbox',args)
+
+    def test_pr_runner_exits_before_branch_work_or_working_engine(self):
+        source=(BOT/'run-action.sh').read_text()
+        start=source.index('if [ "$IS_PR" = true ]; then\n  # ⚠ PR')
+        block=source[start:source.index('\nelse\n  # Issue の場合',start)]+'\nfi\necho forbidden-continuation\n'
+        with tempfile.TemporaryDirectory(dir=TMP) as d:
+            code=r'''set -euo pipefail
+SCRIPT_DIR="$BOT"
+IS_PR=true
+PR_COMMENT_ONLY=true
+ENGINE=codex
+RUN_TIMEOUT_SECONDS=60
+ENGINE_FILE=/dev/null
+BASE_BRANCH=main
+validate_pr_context() { TRUSTED_LINKED_ISSUE=7; }
+fetch_trigger_context() { echo '{"body":"🤖 other request"}'; }
+engine_setup_auth() { :; }
+engine_run() { echo forbidden-working-engine; return 97; }
+gh() {
+ printf '%s\n' "$*" >> "$RUNNER_DIR/gh"
+ if [[ "$*" == *--paginate* ]]; then echo '[]';
+ elif [[ "$*" == *'api repos/owner/repo/issues/7'* ]]; then echo '{"number":7}'; fi
+}
+timeout() { printf '{"conflict":false,"other":true}' > "$RESULT_OUTPUT_FILE"; }
+'''
+            env={**os.environ,'BOT':str(BOT),'RUNNER_DIR':d,'GITHUB_WORKSPACE':d,'ISSUE_NUMBER':'9',
+                 'GITHUB_REPOSITORY':'owner/repo','EVENT_TYPE':'issue_comment','COMMENT_ID':'77','PR_INSTRUCTION':''}
+            result=subprocess.run(['bash','-c',code+block],env=env,text=True,capture_output=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertNotIn('forbidden-',result.stdout)
+            calls=(Path(d)/'gh').read_text()
+            self.assertIn('issue comment 9',calls)
+            self.assertNotIn('pr view',calls)
 
     def test_guide_read_failure_cannot_create_a_duplicate(self):
         code='''source "$BOT/pr-comment.sh"

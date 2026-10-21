@@ -24,7 +24,12 @@ resolve_issue_conflict() {
   fi
   if [ "$status" = 0 ]; then
     if [ "$(git rev-parse HEAD)" != "$before" ]; then
-      git push origin "HEAD:refs/heads/$BRANCH_NAME" || status=1
+      if [ -n "${CODING_BOT_GH_PAT:-}" ]; then
+        use_pat_for_origin
+        git push origin "HEAD:refs/heads/$BRANCH_NAME" || status=1
+      else
+        git push origin "HEAD:refs/heads/$BRANCH_NAME" && dispatch_branch_ci || status=1
+      fi
     fi
   fi
   if [ "$status" = 0 ]; then
