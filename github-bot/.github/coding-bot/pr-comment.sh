@@ -62,12 +62,14 @@ run_pr_comment() {
       pr_comment_index > "$RUNNER_DIR/index-before"
       # 元の依頼は解決 engine に渡さない。質問や別の修正が混じっても実行されない。
       USER_REQUEST="$(git diff --name-only --diff-filter=U)"
-      if ! pr_comment_engine '列挙されたファイルの merge conflict だけを解消してください。git add/commit/push、別の修正、ticket 更新、GitHub への投稿は禁止です。解消できない判断は作業を止めて最終結果に書いてください。'; then return 1; fi
+      if ! pr_comment_engine '列挙されたファイルの merge conflict だけを解消してください。git add/commit/push、別の修正、ticket 更新、GitHub への投稿は禁止です。最終出力は JSON だけにし、解消できたら {"resolved":true}、解消できない判断があれば {"resolved":false} を返してください。'; then return 1; fi
+      jq -e 'type == "object" and .resolved == true' "$RESULT_OUTPUT_FILE" >/dev/null || return 1
       [ "$(git rev-parse HEAD)" = "$before" ] || return 1
       while IFS= read -r -d '' path; do git add -- "$path" || return 1; done < "$RUNNER_DIR/conflicts"
       pr_comment_index > "$RUNNER_DIR/index-after"
       cmp "$RUNNER_DIR/index-before" "$RUNNER_DIR/index-after" || return 1
       git diff --quiet && [ -z "$(git diff --name-only --diff-filter=U)" ] || return 1
+      git diff --cached --check || return 1
       git -c core.hooksPath=/dev/null commit -m "Merge $BASE_BRANCH into $BRANCH_NAME to resolve conflicts" || return 1
       # non-fast-forward は拒否し、人や issue run の並行 push を上書きしない。
       git -c core.hooksPath=/dev/null push origin "HEAD:refs/heads/$BRANCH_NAME" || return 1
