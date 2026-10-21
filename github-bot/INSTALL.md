@@ -16,6 +16,7 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 | コピー元（この repo） | コピー先（あなたの project） | 役割 |
 |---|---|---|
 | `github-bot/.github/` | `.github/` | coding-bot 一式と workflow（prebuild は任意） |
+| `github-bot/.github/coding-bot/pr-comment.sh` | `.github/coding-bot/pr-comment.sh` | PR コメントの意味を読み、conflict 解消だけを実行する |
 | `github-bot/.github/coding-bot/run-in-container.sh` | `.github/coding-bot/run-in-container.sh` | container 内の実行入口・共通 smoke |
 | `github-bot/.github/coding-bot/engines/_stub.sh` | `.github/coding-bot/engines/_stub.sh` | 明示 opt-in のローカル試験専用。Actions では実行を拒否 |
 | `github-bot/.devcontainer/` | `.devcontainer/` | Actions が使う devcontainer。**既存の devcontainer があればマージ**（上書き前に diff を確認） |

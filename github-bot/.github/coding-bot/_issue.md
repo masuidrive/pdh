@@ -178,4 +178,4 @@ PDH は `_pdh.md` に従って bot が作る PR、非 PDH は marker に書く�
 - AC / Architectural-Invariants / Out-of-scope をユーザー承認なしに変更しない。
 - `product-brief.md` の編集は内容提示＋承認を得る。
 
-既存 PR への修正依頼もこの issue で受ける。ticket が tickets/done/ にあるときは、まず `bash ticket.sh reopen <ticket 名>` で戻してから PDH-implement を再開する。PR の merge は close の承認として扱う。
+既存 PR への修正依頼もこの issue で受ける。ticket が tickets/done/ にあるときは、まず `bash ticket.sh reopen <ticket 名>` で戻してから PDH-implement を再開する。`github_bot.close: pr-merge` では PR の merge を close の承認として扱う。

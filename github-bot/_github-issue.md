@@ -209,7 +209,7 @@ bot は PDH-stage の遷移に応じて **issue の PDH stage ラベルを更新
   行う（API のみ。commit / push はしない。merge 済みの branch は消す）。⚠ **その job は «PR の差分に `tickets/done/…/ticket.md` が
   入っているか» を検査し、入っていなければ issue を閉じずに警告する。**⚠ **`🤖 クローズ承認` というコメントは使わない** — GitHub の承認
   プリミティブは merge ボタンであり、コメントを足すと承認が 2 回になる。**issue で «修正して» と
-  言われたときは `_pr.md` のモードで実装し、また停止する。**
+  言われたときは `_issue.md` の B で実装し、また停止する。**
 - **`merge`（既定）**: bot が `bash ticket.sh close --no-delete-remote` で default branch へ squash merge
   して push し、`gh issue close #N` する。1 run で終わる。close の承認は issue の「🤖 クローズ承認」。
   ⚠ **`ticket.sh close` は branch protection の required status check を bypass する**ので、

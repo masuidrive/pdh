@@ -125,7 +125,7 @@ Do not wait for CI completion after your own push or write that CI result
 in comments, work-comment edits, or the final report. Only CI autofix reports CI results
 after a push; if CI autofix is disabled, the bot posts no automatic CI results.
 For CI questions or repairs requested with 🤖, or when following the
-PR run's injected CI repair instruction, read the failed logs, answer the
+CI autofix run's repair instruction, read the failed logs, answer the
 question, and repair the failure as requested. Report the diagnosis, changes,
 and scoped tests, without waiting for CI after your push.
 Keep the next action "CI が緑になったら Merge を".

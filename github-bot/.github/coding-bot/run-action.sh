@@ -495,7 +495,7 @@ if [ "$IS_PR" = true ]; then
     # 出自の拒否は障害ではない。理由をコメントし、報告済みとして exit 0 にする。
     gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$(printf '%s\n\n%s\n\n%s' \
       "**この PR では動きません**（${TRIGGER_ERROR}）。" \
-      "coding-bot が触れるのは、自分が作った \`agent/issue-<番号>\` branch の PR だけです。依頼は元の Issue に 🤖 付きでコメントしてください。" \
+      "coding-bot が触れるのは、自分が作った \`agent/issue-<番号>\` branch の PR だけです。依頼は [issue](https://github.com/$GITHUB_REPOSITORY/issues) に 🤖 付きでコメントしてください。" \
       "<!-- coding-bot -->")" >/dev/null 2>&1 \
       || echo "Warning: failed to post the refusal note"
     : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported" 2>/dev/null || true
@@ -524,7 +524,7 @@ if [ "$IS_PR" = true ]; then
   # PR head に対する直近 CI (test-all) が失敗していれば失敗ログ末尾を context に注入する。
   # command substitution にすると、最終報告用の CI_RED_MARKER が subshell に消える。
   CI_SECTION=""
-  if [ -z "${PR_INSTRUCTION:-}" ] && [ "$PR_COMMENT_ONLY" != true ]; then build_ci_section "$BRANCH_NAME" "$HEAD_SHA"; fi
+  if [ -z "${PR_INSTRUCTION:-}" ] && [ "${PR_COMMENT_ONLY:-false}" != true ]; then build_ci_section "$BRANCH_NAME" "$HEAD_SHA"; fi
   # 観測用: 注入有無を workflow ログに残す（内容は出さず長さのみ）。0 bytes = 失敗 CI 無し。
   echo "🔎 build_ci_section: ${#CI_SECTION} bytes injected for $BRANCH_NAME @ ${HEAD_SHA:0:7}"
 
@@ -639,7 +639,7 @@ fi
 
 # main を merge
 echo "🔀 Merging origin/$BASE_BRANCH into $BRANCH_NAME..."
-if [ -z "${PR_INSTRUCTION:-}" ] && [ "$PR_COMMENT_ONLY" != true ]; then
+if [ -z "${PR_INSTRUCTION:-}" ] && [ "${PR_COMMENT_ONLY:-false}" != true ]; then
   MERGE_OUTPUT=$(git merge origin/$BASE_BRANCH --no-edit 2>&1) || MERGE_EXIT_CODE=$?
 fi
 MERGE_EXIT_CODE=${MERGE_EXIT_CODE:-0}
@@ -852,7 +852,7 @@ if [ -n "${PR_INSTRUCTION:-}" ]; then
   SYSTEM_PROMPT="$SYSTEM_PROMPT
 
 $PR_TASK_RULES"
-elif [ "$PR_COMMENT_ONLY" = true ]; then
+elif [ "${PR_COMMENT_ONLY:-false}" = true ]; then
   append_prompt "$SCRIPT_DIR/_pr.md"
 elif [ "${IS_PR:-false}" != "true" ]; then
   append_prompt "$SCRIPT_DIR/_issue.md"
@@ -925,7 +925,7 @@ engine_setup_auth
 # Claude main also prepares and checks the Codex login used by its workers.
 if [ "$ENGINE" = claude ]; then codex_prepare_auth; fi
 
-if [ "$PR_COMMENT_ONLY" = true ]; then
+if [ "${PR_COMMENT_ONLY:-false}" = true ]; then
   source "$SCRIPT_DIR/pr-comment.sh"
   run_pr_comment
   exit $?

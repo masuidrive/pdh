@@ -8,13 +8,13 @@
 #   3. Status が human gate なら、note の Checklist に «発行先:» + URL か path の未了行が無ければ足す
 #      （URL は今回の gate コメント）
 #   4. note の Checklist に «未了 + 発行先:» の行があれば awaiting-reply ラベルを付け、無ければ外す
-#      （回答する issue に付け、PR からは外す）
+#      （bot の PR が開いていれば Issue から外して PR にだけ付ける。PR が無ければ Issue に付ける）
 #   5. 導入検査（ラベル・Actions の PR 作成許可）で要追加があれば報告に足す
 #
 # ⚠ awaiting-reply は run の «始め» と «終わり» の両方で動かす。終わりだけだと、人が答えて
 # run が始まっても付いたままになり、«自分の番» を誤って言い続ける。engine が失敗した run では
 # final が呼ばれないので、失敗側からも付ける（止まっていて人の手が要る、という意味は同じ）。
-# ⚠ failed でも回答待ちは issue に付ける。開始時は両方から外す。
+# ⚠ failed でも PR が開いていれば Issue から外して PR にだけ付ける。開始時は両方から外す。
 #
 # usage:
 #   pdh-hooks.sh final <issue> <branch> <comment-id>   # stdin: 最終レポート → stdout: 補正後の本文
@@ -45,12 +45,12 @@ set_awaiting() {  # $1=add|remove  $2=issue  $3=branch  $4=理由
     AWAITING_PR=$(gh pr list --head "$branch" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
     [ "$AWAITING_PR" = null ] && AWAITING_PR=""
   fi
-  : # 回答待ちは常に issue に表示する
+  [ -z "$AWAITING_PR" ] || issue_action=remove
   gh issue edit "$issue" --repo "$REPO" "--${issue_action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
     && log "$AWAITING_LABEL を Issue #$issue に ${issue_action} した（${reason}）" \
     || { [ "$issue_action" = remove ] || log "$AWAITING_LABEL を Issue #$issue に付けられない（ラベルが無いか権限不足。github-bot/INSTALL.md「3. stage ラベルを作る」）"; }
   if [ -n "$AWAITING_PR" ]; then
-    gh issue edit "$AWAITING_PR" --repo "$REPO" "--remove-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
+    gh issue edit "$AWAITING_PR" --repo "$REPO" "--${action}-label" "$AWAITING_LABEL" >/dev/null 2>&1 \
       && log "$AWAITING_LABEL を PR #$AWAITING_PR に ${action} した（${reason}）" \
       || { [ "$action" = remove ] || log "$AWAITING_LABEL を PR #$AWAITING_PR に付けられない（ラベルが無いか権限不足。github-bot/INSTALL.md「3. stage ラベルを作る」）"; }
   fi
