@@ -101,9 +101,11 @@ engine_run() {
   if [ -n "${PR_ENGINE_MODE:-}" ]; then
     ENGINE_ARGS=(--setting-sources "" --settings '{"disableAllHooks":true}'
       --strict-mcp-config --mcp-config '{"mcpServers":{}}'
-      --disable-slash-commands --no-session-persistence --tools "")
+      --disable-slash-commands --no-session-persistence)
     if [ "$PR_ENGINE_MODE" = resolve ]; then
       ENGINE_ARGS+=(--tools Read,Edit,Write --permission-mode acceptEdits)
+    else
+      ENGINE_ARGS+=(--tools "")
     fi
   fi
 

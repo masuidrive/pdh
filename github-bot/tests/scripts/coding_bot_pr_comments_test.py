@@ -140,6 +140,44 @@ pr_comment_engine classify "$MODE"
                     self.assertEqual((run/'git-auth').read_text(),'')
                     self.assertEqual(git(root,'config','--local','--list'),before)
 
+    def test_pr_engine_cli_uses_one_explicit_permission_mode(self):
+        for engine in ['codex','claude']:
+            for mode in ['classify','resolve']:
+                with self.subTest(engine=engine,mode=mode), tempfile.TemporaryDirectory(dir=TMP) as d:
+                    root=Path(d)
+                    source=(BOT/'engines'/('_'+engine+'.sh')).read_text().replace('/tmp/',d+'/')
+                    (root/'engine.sh').write_text(source)
+                    (root/'prompt').write_text('probe')
+                    code=r'''ISSUE_NUMBER=9
+source "$PROBE/engine.sh"
+SYSTEM_PROMPT=probe
+PR_ENGINE_MODE="$MODE"
+TIMEOUT_VALUE=5
+JSON_OUTPUT_FILE="$PROBE/events"
+PROGRESS_OUTPUT_FILE="$PROBE/progress"
+TASK_STATUS_FILE="$PROBE/tasks"
+ENGINE_PROMPT_FILE="$PROBE/prompt"
+timeout() { printf '%s\0' "$@" > "$PROBE/args"; }
+engine_run
+wait "$ENGINE_PID"
+'''
+                    result=subprocess.run(['bash','-c',code],env={**os.environ,'PROBE':d,'MODE':mode},capture_output=True,text=True)
+                    self.assertEqual(result.returncode,0,result.stderr)
+                    args=(root/'args').read_bytes().decode().split('\0')[:-1]
+                    self.assertNotIn('--dangerously-bypass-approvals-and-sandbox',args)
+                    self.assertNotIn('--dangerously-skip-permissions',args)
+                    if engine=='codex':
+                        self.assertEqual(args.count('--sandbox'),1)
+                        self.assertEqual(args[args.index('--sandbox')+1],'read-only' if mode=='classify' else 'workspace-write')
+                        self.assertIn('sandbox_workspace_write.network_access=false',args)
+                        self.assertIn('approval_policy="never"',args)
+                        if mode=='classify': self.assertIn('features.shell_tool=false',args)
+                    else:
+                        self.assertEqual(args.count('--tools'),1)
+                        self.assertEqual(args[args.index('--tools')+1],'' if mode=='classify' else 'Read,Edit,Write')
+                        self.assertIn('--strict-mcp-config',args)
+
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

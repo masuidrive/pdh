@@ -70,7 +70,7 @@ engine_run() {
 
   local ENGINE_ARGS=(--dangerously-bypass-approvals-and-sandbox)
   if [ -n "${PR_ENGINE_MODE:-}" ]; then
-    ENGINE_ARGS=(--ignore-rules --ephemeral --sandbox workspace-write
+    ENGINE_ARGS=(--ignore-rules --ephemeral
       -c 'approval_policy="never"' -c 'sandbox_workspace_write.network_access=false' -c 'web_search="disabled"')
     local feature
     for feature in apps plugins multi_agent multi_agent_v2 browser_use computer_use image_generation view_image sleep_tool request_permissions_tool memories hooks; do
@@ -78,6 +78,8 @@ engine_run() {
     done
     if [ "$PR_ENGINE_MODE" = classify ]; then
       ENGINE_ARGS+=(--sandbox read-only -c features.shell_tool=false)
+    else
+      ENGINE_ARGS+=(--sandbox workspace-write)
     fi
   fi
 
