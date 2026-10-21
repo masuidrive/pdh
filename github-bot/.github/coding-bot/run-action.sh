@@ -904,7 +904,7 @@ if [ "$_close_mode" = "pr-merge" ] && [ -n "${CODING_BOT_GH_PAT:-}" ] && [ -z "$
 fi
 
 if [ -n "${CI_AUTOFIX_RUN_ID:-}" ]; then
-  ci_autofix_prepare || { echo 'auto-merge の解除または PR への通知に失敗したため、agent を起動しません。' >&2; exit 1; }
+  ci_autofix_prepare || { echo 'auto-merge の解除または issue への通知に失敗したため、agent を起動しません。' >&2; exit 1; }
 fi
 export ORIGIN_PUSH_AUTH
 

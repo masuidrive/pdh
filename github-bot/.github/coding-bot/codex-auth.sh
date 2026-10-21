@@ -106,7 +106,7 @@ codex_auth_recovery_steps() {
 ### 直し方（repo の write 権限を持つ人が、ブラウザと GitHub の画面で行う）
 $command
 
-summary に「bot はもう SIWC で動ける」と出たら、この Issue / PR に 🤖 とコメントして bot をやり直す。
+summary に「bot はもう SIWC で動ける」と出たら、このスレッドに 🤖 とコメントして bot をやり直す。
 EOF
     return
   fi
@@ -115,7 +115,7 @@ EOF
 1. 手元の端末でログインし、ブラウザで承認して secret に登録する:
    \`$command\`
    手元の普段の codex ログインとも、別の用途の secret とも共有しない（片方の token 更新がもう片方を切るため）。
-2. この Issue / PR に 🤖 とコメントして、bot をやり直す。
+2. このスレッドに 🤖 とコメントして、bot をやり直す。
 EOF
 }
 
@@ -316,12 +316,12 @@ codex_prepare_auth() {
     fi
     echo '::error::Codex の事前確認に失敗しました。'
     codex_report_auth_failure
-    local reason='認証切れで使えない' notification='Issue / PR にコメント済み'
+    local reason='認証切れで使えない' notification='issue にコメント済み'
     if [ "$CODEX_AUTH_FAILURE" = probe ]; then
       reason='利用可否を確認できないため使えない。workflow・設定・利用上限・ネットワークを確認する'
     fi
     if [ "${CODEX_AUTH_REPORTED:-false}" != true ]; then
-      notification='Issue / PR へのコメント投稿にも失敗'
+      notification='issue へのコメント投稿にも失敗'
     fi
     CODEX_AUTH_STATUS="$reason（$notification）。codex の worker を起動しない。最終レポートの先頭にこのことを書く"
   fi

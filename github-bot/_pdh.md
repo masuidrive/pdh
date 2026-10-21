@@ -175,7 +175,7 @@ PDH-verify を終えたら、次の順で行う。既存 PR があればそれ�
    close の前に、note の Checklist にある PDH-human-review の承認待ちの行（何の承認を待つかと `発行先:` を持つ行）を次の形に書き換えて commit する。
    この規則の目的: done への移動を PR に載せても、受けていない承認を受けたことにしないこと。
    ```
-   - [-] <何の承認を待つか> 発行先: <PR の URL> - skip: close の承認は PR の merge で受ける
+   - [-] <何の承認を待つか> 発行先: <issue の完成報告コメントの URL> - skip: close の承認は PR の merge で受ける
    ```
    - `[ ]` のままだと、`require_checklist` が close を拒む。`[x]` にすると、受けていない承認を受けたことになる
    - `.ticket-config.yaml` の `github_bot.close` が `pr-merge` のときだけ、`scripts/check-pdh-ticket.sh` はこの `[-]` の行を承認待ちの行として数える

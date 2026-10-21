@@ -94,7 +94,8 @@ pr_comment_work() {
     git merge --no-commit --no-ff "$base" || merge_status=$?
     if [ "$merge_status" = 0 ]; then
       if git rev-parse -q --verify MERGE_HEAD >/dev/null; then git merge --abort; fi
-      response="解消する conflict はありません。${other:+ $response}"
+      if [ "$other" = true ]; then response="解消する conflict はありません。 $response"
+      else response="解消する conflict はありません。"; fi
     else
       git diff --name-only --diff-filter=U -z > "$RUNNER_DIR/conflicts"
       [ -s "$RUNNER_DIR/conflicts" ] || return 1
