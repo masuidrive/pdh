@@ -40,6 +40,9 @@ AWAITING_LABEL="awaiting-reply"
 AWAITING_PR=""
 set_awaiting() {  # $1=add|remove  $2=issue  $3=branch  $4=理由
   local action="$1" issue="$2" branch="$3" reason="$4" issue_action="$1"
+  if [ "$action" = add ] && [ "${cmd:-}" = final ] && [[ "$report" != *'<!-- coding-bot:question -->'* ]]; then
+    report+=$'\n\n<!-- coding-bot:question -->'
+  fi
   AWAITING_PR=""
   if [ -n "$branch" ]; then
     AWAITING_PR=$(gh pr list --head "$branch" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
@@ -191,7 +194,6 @@ finalize_without_active_ticket() {
     set_awaiting remove "$ISSUE" "$BRANCH" "active ticket の無い issue を閉じた"
   else
     set_awaiting add "$ISSUE" "$BRANCH" "active ticket の無いまま run が終わった＝人に聞いている"
-    report+=$'\n\n<!-- coding-bot:question -->'
     write_notify "$ISSUE" question "" "$CID" "$AWAITING_PR"
   fi
 }
@@ -266,9 +268,6 @@ gate=0; case "$status" in PDH-ticket-human-review|PDH-human-review) gate=1 ;; es
 set_stage_label "$status" "$ISSUE"
 
 # --- 2. 承認導線 ---
-if [ "$gate" -eq 1 ]; then report="$report
-
-<!-- coding-bot:question -->"; fi
 # close gate の答え方は `github_bot.close` で変わる。⚠ `pr-merge` では merge そのものが
 # 承認なので、承認語を求めると承認が 2 回になる（コメント + merge）。
 # 読み方は coding-bot-finalize.yml と同じ（引用符と行末コメントを許す）。
@@ -400,9 +399,6 @@ elif [ "$status" = PDH-human-review ] && [ -n "$AWAITING_PR" ]; then
   kind=close_gate
 elif has_waiting_line; then
   kind=blocked
-fi
-if [ -n "$kind" ] && [[ "$report" != *'<!-- coding-bot:question -->'* ]]; then
-  report+=$'\n\n<!-- coding-bot:question -->'
 fi
 [ -z "$kind" ] || write_notify "$ISSUE" "$kind" "$status" "$CID" "$AWAITING_PR"
 

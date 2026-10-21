@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ticket の対応付けと、対応付けた ticket からの通知・ラベル・AC 表示を検査する。
 set -uo pipefail
-ROOT_DIR=${PDH_TEST_ROOT:?test-distributed-scripts.sh が作る導入先を指定する}
+ROOT_DIR=$(cd "$(dirname "$0")/../.." && pwd) || exit 1
 HOOKS="$ROOT_DIR/.github/coding-bot/pdh-hooks.sh"
 TMP_DIR=$(mktemp -d) || exit 1
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -129,9 +129,9 @@ run_case() (
       start) expected_labels=$'1 remove awaiting-reply\n11 remove awaiting-reply' ;;
       failed)
         expected_kind=failed expected_stage=$stage
-        expected_labels=$'1 remove awaiting-reply\n11 add awaiting-reply' ;;
+        expected_labels=$'1 add awaiting-reply\n11 remove awaiting-reply' ;;
       final)
-        expected_labels=$'1 remove awaiting-reply\n11 add awaiting-reply'
+        expected_labels=$'1 add awaiting-reply\n11 remove awaiting-reply'
         expected_stage=$stage
         case "$state/$stage" in
           missing/*) expected_kind=question ;;
@@ -145,7 +145,7 @@ run_case() (
           expected_labels="1 add $stage"$'\n'"$expected_labels"
         fi
         if [ "$state" = done ]; then
-          equal "$scenario/final report" "$output" Report
+          equal "$scenario/final report" "$output" $'Report\n\n<!-- coding-bot:question -->'
           if [ "$stage" = PDH-human-review ] && [ -n "$FAKE_OPEN_PR" ]; then
             equal "$scenario/close gate log" "$(grep -c 'close gate: PR #11 の Merge 待ち' "$repo/stderr")" 2
           else
