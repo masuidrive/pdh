@@ -151,7 +151,7 @@ codex_report_auth_failure() {
     else
       echo '::error::Codex の事前確認エラーのコメントを投稿できませんでした。'
     fi
-  elif gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments" \
+  elif gh api "repos/$GITHUB_REPOSITORY/issues/${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}/comments" \
     -f body="$message" >/dev/null 2>&1; then
     CODEX_AUTH_REPORTED=true
   else

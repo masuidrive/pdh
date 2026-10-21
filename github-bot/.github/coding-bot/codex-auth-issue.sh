@@ -25,10 +25,10 @@ _codex_auth_issue_api() {
 codex_post_operational_note() {
   local mode="$1" message="$2" marker bodies
   marker="<!-- coding-bot-provider:$mode:$(date -u +%F) -->"
-  bodies=$(_codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments" \
+  bodies=$(_codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}/comments" \
     --paginate --slurp --jq 'flatten | .[].body') || return 1
   [[ "$bodies" != *"$marker"* ]] || return 0
-  _codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments" \
+  _codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}/comments" \
     --method POST -f body="$message
 $marker" >/dev/null
 }

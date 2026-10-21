@@ -39,7 +39,7 @@ ci_autofix_record() {
 
 ci_autofix_resolve_red_comments() {
   local number comments comment id payload
-  for number in "$CI_AUTOFIX_PR" "$TRUSTED_LINKED_ISSUE"; do
+  for number in "$TRUSTED_LINKED_ISSUE"; do
     comments=$(gh api "repos/$GITHUB_REPOSITORY/issues/$number/comments?per_page=100" --paginate --slurp) || return 1
     # 過去 SHA の赤も対象。GITHUB_TOKEN の投稿と先頭行の目印で引用を除外する。
     comments=$(printf '%s' "$comments" | jq -c --arg pr "$CI_AUTOFIX_PR" \
@@ -62,7 +62,7 @@ ci_autofix_resolve_red_comments() {
 
 ci_autofix_note_red_after_green() {
   local number comments comment id payload line="その後、CI run $run_id で再び赤"
-  for number in "$CI_AUTOFIX_PR" "$TRUSTED_LINKED_ISSUE"; do
+  for number in "$TRUSTED_LINKED_ISSUE"; do
     comments=$(gh api "repos/$GITHUB_REPOSITORY/issues/$number/comments?per_page=100" --paginate --slurp) || return 1
     # 解決した緑の head と照合する。元の赤の SHA は修正前なので一致を要求しない。
     # 接頭辞と直後の赤の目印で、引用・別 PR・緑の SHA が不明な旧本文を除外する。

@@ -70,9 +70,9 @@ ci_autofix_prepare() {
     # agent の途中の push も、人が見ていない修正を merge させてはならない。
     if ! gh pr merge "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --disable-auto; then
       reason='auto-merge を外せなかったため、agent を起動しません。'
-    elif ! gh pr comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body \
+    elif ! gh issue comment "$TRUSTED_LINKED_ISSUE" --repo "$GITHUB_REPOSITORY" --body \
       $'auto-merge を外した。直した内容を確かめて Merge してほしい\n\n<!-- coding-bot -->'; then
-      reason='auto-merge は外しましたが、PR への通知に失敗したため、agent を起動しません。'
+      reason='auto-merge は外しましたが、issue への通知に失敗したため、agent を起動しません。'
     fi
   fi
   if [ -n "$reason" ]; then
@@ -132,7 +132,7 @@ ci_autofix_finish() {
     gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID" \
       -f body="$marker
 
-直せなかった。理由は #$TRUSTED_LINKED_ISSUE に報告しました。
+直せなかった。理由はこのスレッドに報告しました。[issue](https://github.com/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE)
 
 <!-- coding-bot -->" || return 1
   else

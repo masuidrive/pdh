@@ -404,10 +404,15 @@ echo "📝 Fetching Issue/PR data..."
 # PR 扱いにし、PR の head ブランチで作業 + _pr.md を読むため）。
 IS_PR=false
 CI_RED_MARKER=""
+PR_COMMENT_ONLY=false
 if [[ "$EVENT_TYPE" == "pull_request"* ]] || [ "$EVENT_TYPE" = workflow_run ]; then
   IS_PR=true
 elif [[ "$EVENT_TYPE" == "issue_comment" ]] && gh pr view "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --json number >/dev/null 2>&1; then
   IS_PR=true
+fi
+
+if [ "$IS_PR" = true ] && [ -z "${PR_INSTRUCTION:-}" ] && [ "$EVENT_TYPE" != workflow_run ]; then
+  PR_COMMENT_ONLY=true
 fi
 
 # PR head SHA に対する直近の CI run を引き、失敗していれば
@@ -519,7 +524,7 @@ if [ "$IS_PR" = true ]; then
   # PR head に対する直近 CI (test-all) が失敗していれば失敗ログ末尾を context に注入する。
   # command substitution にすると、最終報告用の CI_RED_MARKER が subshell に消える。
   CI_SECTION=""
-  if [ -z "${PR_INSTRUCTION:-}" ]; then build_ci_section "$BRANCH_NAME" "$HEAD_SHA"; fi
+  if [ -z "${PR_INSTRUCTION:-}" ] && [ "$PR_COMMENT_ONLY" != true ]; then build_ci_section "$BRANCH_NAME" "$HEAD_SHA"; fi
   # 観測用: 注入有無を workflow ログに残す（内容は出さず長さのみ）。0 bytes = 失敗 CI 無し。
   echo "🔎 build_ci_section: ${#CI_SECTION} bytes injected for $BRANCH_NAME @ ${HEAD_SHA:0:7}"
 
@@ -634,7 +639,7 @@ fi
 
 # main を merge
 echo "🔀 Merging origin/$BASE_BRANCH into $BRANCH_NAME..."
-if [ -z "${PR_INSTRUCTION:-}" ]; then
+if [ -z "${PR_INSTRUCTION:-}" ] && [ "$PR_COMMENT_ONLY" != true ]; then
   MERGE_OUTPUT=$(git merge origin/$BASE_BRANCH --no-edit 2>&1) || MERGE_EXIT_CODE=$?
 fi
 MERGE_EXIT_CODE=${MERGE_EXIT_CODE:-0}
@@ -847,9 +852,9 @@ if [ -n "${PR_INSTRUCTION:-}" ]; then
   SYSTEM_PROMPT="$SYSTEM_PROMPT
 
 $PR_TASK_RULES"
-elif [ "${IS_PR:-false}" = "true" ]; then
+elif [ "$PR_COMMENT_ONLY" = true ]; then
   append_prompt "$SCRIPT_DIR/_pr.md"
-else
+elif [ "${IS_PR:-false}" != "true" ]; then
   append_prompt "$SCRIPT_DIR/_issue.md"
 fi
 
@@ -905,7 +910,8 @@ source "$ENGINE_FILE"
 
 # 初期コメント投稿
 echo "💬 Posting initial progress comment..."
-PROGRESS_COMMENT_ID=$(gh api repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments \
+REPORT_ISSUE="${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}"
+PROGRESS_COMMENT_ID=$(gh api repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments \
   -f body="🤖 **作業中...**" --jq '.id')
 
 echo "Progress comment ID: $PROGRESS_COMMENT_ID"
@@ -918,6 +924,12 @@ engine_setup_auth
 
 # Claude main also prepares and checks the Codex login used by its workers.
 if [ "$ENGINE" = claude ]; then codex_prepare_auth; fi
+
+if [ "$PR_COMMENT_ONLY" = true ]; then
+  source "$SCRIPT_DIR/pr-comment.sh"
+  run_pr_comment
+  exit $?
+fi
 
 # 環境を先に調べ、認証・ブラウザなどの実行可否を prompt に渡す。
 ENVIRONMENT_SECTION=""
@@ -1520,6 +1532,11 @@ ${IMG_NOTE}"
   fi
 
   # 最終結果を投稿（ブランチ情報付き）
+  REPORT_URL="https://github.com/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE#issuecomment-$PROGRESS_COMMENT_ID"
+  OPEN_PR=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH_NAME" --state open --json number --jq '.[0].number' 2>/dev/null || true)
+  if [[ "$OPEN_PR" =~ ^[1-9][0-9]*$ ]]; then
+    gh issue comment "$OPEN_PR" --repo "$GITHUB_REPOSITORY" --body "[報告・質問]($REPORT_URL) は [issue](https://github.com/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE) にあります。PR では Merge と、🤖 付きの conflict 解消の依頼ができます。" || true
+  fi
   gh api -X PATCH repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID \
     -f body="${CI_RED_MARKER:+$CI_RED_MARKER$'\n\n'}$CLAUDE_OUTPUT_CLEAN$(branch_footer)"
 
