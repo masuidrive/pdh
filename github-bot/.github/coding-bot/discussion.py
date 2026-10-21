@@ -22,15 +22,19 @@ def verify_issue(resource: dict, issue: int) -> int:
 
 def pending_question(resource: dict, comments: list, repo: str, issue: int) -> str | None:
     verify_issue(resource, issue)
-    if not any(label.get("name") == "awaiting-reply" for label in resource.get("labels", [])):
-        return None
     marked = [item for item in comments
               if item.get("user", {}).get("login") == "github-actions[bot]"
               and "<!-- coding-bot:question -->" in item.get("body", "")
               and type(item.get("id")) is int]
     if not marked:
         return None
-    return f"https://github.com/{repo}/issues/{issue}#issuecomment-{max(marked, key=lambda item: item['id'])['id']}"
+    question = max(marked, key=lambda item: item['id'])['id']
+    if any(type(item.get("id")) is int and item["id"] > question
+           and item.get("user", {}).get("type") != "Bot"
+           and not item.get("user", {}).get("login", "").endswith("[bot]")
+           and "🤖" in item.get("body", "") for item in comments):
+        return None
+    return f"https://github.com/{repo}/issues/{issue}#issuecomment-{question}"
 
 
 def redirect(repo: str, issue: int, question: str | None = None) -> str:
