@@ -193,6 +193,48 @@ pr_comment_guide 9 https://github.com/owner/repo/issues/7#issuecomment-77
             self.assertNotEqual(result.returncode,0)
             self.assertFalse((Path(d)/'writes').exists())
 
+    def test_pr_processing_does_not_remove_another_worktrees_auth(self):
+        with tempfile.TemporaryDirectory(dir=TMP) as d:
+            root=Path(d);base=root/'base';base.mkdir()
+            git(base,'init','-b','main');git(base,'config','user.name','Test');git(base,'config','user.email','test@example.invalid')
+            (base/'file').write_text('base\n');git(base,'add','.');git(base,'commit','-m','base')
+            git(base,'remote','add','origin','https://github.com/owner/repo.git')
+            git(base,'update-ref','refs/remotes/origin/main','HEAD')
+            git(base,'config','http.https://github.com/.extraheader','AUTHORIZATION: other-run-probe')
+            work=root/'feature';git(base,'worktree','add','-b','agent/issue-7',str(work))
+            before=git(base,'config','--local','--list')
+            run=root/'run';run.mkdir()
+            code=r'''source "$BOT/pr-comment.sh"
+engine_run() {
+ (
+  touch "$RUNNER_DIR/started"
+  while [ ! -f "$RUNNER_DIR/release" ]; do sleep 0.02; done
+  printf '{"conflict":false,"other":true}' > "$RESULT_OUTPUT_FILE"
+ ) & ENGINE_PID=$!
+}
+engine_extract_result() { :; }
+gh() { if [[ "$*" == *--paginate* ]]; then printf '[]'; fi; }
+run_pr_comment
+'''
+            env={**os.environ,'BOT':str(BOT),'SCRIPT_DIR':str(BOT),'RUNNER_DIR':str(run),'GITHUB_WORKSPACE':str(run),
+                 'ISSUE_NUMBER':'9','TRUSTED_LINKED_ISSUE':'7','GITHUB_REPOSITORY':'owner/repo',
+                 'BRANCH_NAME':'agent/issue-7','BASE_BRANCH':'main','PROGRESS_COMMENT_ID':'77',
+                 'RUN_TIMEOUT_SECONDS':'10','USER_REQUEST':'question'}
+            process=subprocess.Popen(['bash','-c',code],cwd=work,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            import time
+            try:
+                deadline=time.monotonic()+8
+                while not (run/'started').exists() and process.poll() is None and time.monotonic()<deadline: time.sleep(0.02)
+                self.assertTrue((run/'started').exists(),'engine did not start')
+                during=git(base,'config','--local','--list')
+            finally:
+                (run/'release').touch()
+                stdout,stderr=process.communicate(timeout=10)
+            self.assertEqual(process.returncode,0,stdout+stderr)
+            self.assertEqual(git(base,'config','--local','--list'),before)
+            self.assertEqual(during,before,'another worktree lost authentication while this engine ran')
+
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

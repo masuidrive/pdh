@@ -118,6 +118,7 @@ pr_comment_work() {
       # non-fast-forward は拒否し、人や issue run の並行 push を上書きしない。
       PR_COMMENT_PHASE="検査済み commit の push"
       git -c core.hooksPath=/dev/null push origin "HEAD:refs/heads/$BRANCH_NAME" || return 1
+      PR_COMMENT_PUSHED=true
       if [ "${ORIGIN_PUSH_AUTH:-github_token}" = github_token ]; then dispatch_branch_ci; fi
       response="conflict を解消して push しました。 $response"
     fi
@@ -144,11 +145,32 @@ pr_comment_guide() {
 
 
 run_pr_comment() (
-  local status=0 old_hooks="" had_hooks=false
-  if old_hooks=$(git config --local --get core.hooksPath); then had_hooks=true; fi
-  pr_comment_work || status=$?
+  local status=0 old_hooks="" had_hooks=false ready=false PR_COMMENT_PUSHED=false
+  local original="$PWD" checkout="$RUNNER_DIR/pr-checkout" before base config_path
+  PR_COMMENT_PHASE="PR 用 checkout の準備"
+  if before=$(git rev-parse HEAD) && base=$(git rev-parse "origin/$BASE_BRANCH") &&
+     config_path=$(git rev-parse --git-path config) &&
+     git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ] &&
+     git clone --quiet --shared --no-checkout "$original" "$checkout" &&
+     cp "$config_path" "$checkout/.git/config" &&
+     git -C "$checkout" config --local core.worktree "$checkout" &&
+     git -C "$checkout" config --local core.bare false &&
+     git -C "$checkout" checkout --quiet --detach "$before" &&
+     git -C "$checkout" update-ref "refs/remotes/origin/$BASE_BRANCH" "$base"; then
+    cd "$checkout" || exit 1
+    ready=true
+    if old_hooks=$(git config --local --get core.hooksPath); then had_hooks=true; fi
+    pr_comment_work || status=$?
+    if [ "$PR_COMMENT_PUSHED" = true ]; then
+      PR_COMMENT_PHASE="push 済み commit のローカル同期"
+      git -C "$original" -c core.hooksPath=/dev/null fetch --quiet --no-tags "$checkout" HEAD &&
+        git -C "$original" -c core.hooksPath=/dev/null merge --quiet --ff-only FETCH_HEAD || status=1
+    fi
+  else
+    status=1
+  fi
   if [ "$status" != 0 ]; then
-    git merge --abort >/dev/null 2>&1 || true
+    if [ "$ready" = true ]; then git merge --abort >/dev/null 2>&1 || true; fi
     local issue_url="https://github.com/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE"
     local log_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/${GITHUB_RUN_ID:-}"
     gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
@@ -158,10 +180,11 @@ run_pr_comment() (
       : > "$GITHUB_WORKSPACE/.coding-bot-reported"
     fi
   fi
-  if [ "$had_hooks" = true ]; then
-    git config --local core.hooksPath "$old_hooks"
-  else
-    git config --local --unset core.hooksPath || true
+  if [ "$ready" = true ]; then
+    if [ "$had_hooks" = true ]; then git config --local core.hooksPath "$old_hooks"
+    else git config --local --unset core.hooksPath || true; fi
   fi
+  cd "$original" || exit 1
+  rm -rf -- "$checkout" "$RUNNER_DIR/pr-home"
   exit "$status"
 )
