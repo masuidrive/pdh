@@ -40,15 +40,13 @@ validate_pr_context() {
     TRIGGER_ERROR="dispatched tasks require an open PR"
     return 1
   fi
-  head_repo=$(printf '%s' "$data" | jq -r '.head.repo.full_name // empty') || return 1
-  head_ref=$(printf '%s' "$data" | jq -r '.head.ref // empty') || return 1
-  [ "$head_repo" = "$repository" ] || { TRIGGER_ERROR="fork PRs cannot drive coding-bot"; return 1; }
-  linked=$(printf '%s' "$head_ref" | sed -n 's#^agent/issue-\([1-9][0-9]*\)$#\1#p')
-  [ -n "$linked" ] || { TRIGGER_ERROR="PR head must be exactly agent/issue-<linked-issue>"; return 1; }
+  linked=$(printf '%s' "$data" | python3 "$(dirname "${BASH_SOURCE[0]}")/discussion.py" resolve "$repository") || {
+    TRIGGER_ERROR="PR head must be a same-repository agent/issue-<linked-issue>"; return 1;
+  }
+  head_ref="agent/issue-$linked"
   issue=$(gh api "repos/$repository/issues/$linked" 2>/dev/null) || { TRIGGER_ERROR="linked Issue API unavailable"; return 1; }
-  printf '%s' "$issue" | jq -e '.number == '"$linked"' and (has("pull_request") | not)' >/dev/null 2>&1 || {
-    TRIGGER_ERROR="PR head does not identify a real linked Issue"
-    return 1
+  printf '%s' "$issue" | python3 "$(dirname "${BASH_SOURCE[0]}")/discussion.py" verify "$linked" >/dev/null || {
+    TRIGGER_ERROR="PR head does not identify a real linked Issue"; return 1;
   }
   TRUSTED_LINKED_ISSUE="$linked"
   TRUSTED_PR_BRANCH="$head_ref"

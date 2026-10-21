@@ -421,13 +421,9 @@ jobs:
           issue=""; pr=""
           if [[ "$EVENT_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
             if [ "$EVENT_IS_PR" = true ]; then
-              issue=$(gh api "repos/$REPO/pulls/$EVENT_NUMBER" \
-                | jq -er --arg repo "$REPO" '.head | select(.repo.full_name == $repo) | .ref | capture("^agent/issue-(?<issue>[1-9][0-9]*)$").issue') || issue=""
-              if [[ "$issue" =~ ^[1-9][0-9]*$ ]] && gh api "repos/$REPO/issues/$issue" \
-                | jq -e --argjson number "$issue" '.number == $number and (has("pull_request") | not)' >/dev/null; then
-                pr="$EVENT_NUMBER"
-              else
-                issue=""
+              source .github/coding-bot/trigger-source.sh
+              if validate_pr_context "$REPO" "$EVENT_NUMBER"; then
+                issue="$TRUSTED_LINKED_ISSUE"; pr="$EVENT_NUMBER"
               fi
             else
               issue="$EVENT_NUMBER"
