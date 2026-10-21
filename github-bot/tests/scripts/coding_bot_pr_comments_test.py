@@ -16,7 +16,7 @@ def git(cwd, *args):
 
 
 class MergeProbe(unittest.TestCase):
-    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False, issue_run=False, extra=False):
+    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False, issue_run=False, extra=False, pat=False):
         with tempfile.TemporaryDirectory(dir=TMP) as temp:
             temp = Path(temp)
             seed, remote, work, run = [temp / name for name in ['seed', 'remote', 'work', 'run']]
@@ -40,7 +40,7 @@ class MergeProbe(unittest.TestCase):
             env = {**os.environ, 'BOT': str(BOT), 'RUNNER_DIR': str(run), 'GITHUB_WORKSPACE': str(run),
                    'DECISION': json.dumps(decision), 'DIRTY': str(int(dirty)), 'FAIL': str(int(fail)),
                    'RAW': raw if raw is not None else json.dumps(decision), 'UNRESOLVED': str(int(unresolved)), 'REFUSED': str(int(refused)),
-                   'ISSUE_RUN': str(int(issue_run)), 'EXTRA': str(int(extra)), 'RESOLVE_CONFLICT_PR':'9', 'ENGINE_FILE': str(run/'engine.sh'), 'GITHUB_REPOSITORY': 'owner/repo', 'TRUSTED_LINKED_ISSUE': '7', 'ISSUE_NUMBER': '9',
+                   'ISSUE_RUN': str(int(issue_run)), 'CODING_BOT_GH_PAT': 'fake-pat' if pat else '', 'EXTRA': str(int(extra)), 'RESOLVE_CONFLICT_PR':'9', 'ENGINE_FILE': str(run/'engine.sh'), 'GITHUB_REPOSITORY': 'owner/repo', 'TRUSTED_LINKED_ISSUE': '7', 'ISSUE_NUMBER': '9',
                    'BASE_BRANCH': 'main', 'BRANCH_NAME': 'agent/issue-7', 'PROGRESS_COMMENT_ID': '77',
                    'RUN_TIMEOUT_SECONDS': '60', 'USER_REQUEST': request}
             script = r'''
@@ -48,6 +48,7 @@ set -euo pipefail
 source "$BOT/pr-comment.sh"
 SCRIPT_DIR="$BOT"
 dispatch_branch_ci() { printf "ci-workflow\n" >> "$RUNNER_DIR/gh"; }
+use_pat_for_origin() { printf "pat-auth\n" >> "$RUNNER_DIR/gh"; }
 git() {
   if [[ " $* " == *" push "* ]]; then echo push >> "$RUNNER_DIR/pushes"; return 0; fi
   command git "$@"
@@ -124,7 +125,7 @@ class PrCommentContract(MergeProbe):
                 self.assertNotIn('workflow run',calls);self.assertIn('issues/7',calls)
 
     def test_issue_run_only_pushes_a_verified_merge(self):
-        for arguments in [{},{'whitespace':True},{'conflict':False}, {'dirty':True},
+        for arguments in [{},{'whitespace':True},{'conflict':False},{'pat':True}, {'dirty':True},
                           {'extra':True},{'unresolved':True},{'fail':True},{'refused':True}]:
             with self.subTest(arguments=arguments):
                 result,pushes,calls,_=self.run_case({},issue_run=True,**arguments)
@@ -134,7 +135,9 @@ class PrCommentContract(MergeProbe):
                 self.assertIn('issue comment 7',calls)
                 self.assertEqual(calls.count('issue comment 9'),0 if unsafe else 1)
                 self.assertNotIn('classify',calls)
-                if not unsafe: self.assertIn('ci-workflow',calls)
+                if not unsafe:
+                    self.assertIn('pat-auth' if arguments.get('pat') else 'ci-workflow',calls)
+                    if arguments.get('pat'): self.assertNotIn('ci-workflow',calls)
 
     def test_classifier_has_no_tools_or_github_credentials(self):
         for engine in ['codex','claude']:
