@@ -103,7 +103,7 @@ engine_run() {
       --strict-mcp-config --mcp-config '{"mcpServers":{}}'
       --disable-slash-commands --no-session-persistence --tools "")
     if [ "$PR_ENGINE_MODE" = resolve ]; then
-      ENGINE_ARGS+=(--tools Read,Edit,Write)
+      ENGINE_ARGS+=(--tools Read,Edit,Write --permission-mode acceptEdits)
     fi
   fi
 

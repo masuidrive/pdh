@@ -111,6 +111,35 @@ class PrCommentContract(MergeProbe):
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertEqual(pushes,['push'])
 
+    def test_pr_engine_has_no_write_credentials_and_restores_git_config(self):
+        for mode in ['classify','resolve']:
+            for tamper in ['0','1']:
+                with self.subTest(mode=mode,tamper=tamper), tempfile.TemporaryDirectory(dir=TMP) as d:
+                    root=Path(d);git(root,'init','-b','main')
+                    run=root/'run';run.mkdir()
+                    git(root,'config','http.https://github.com/.extraheader','AUTHORIZATION: probe-only')
+                    before=git(root,'config','--local','--list')
+                    code=r'''source "$BOT/pr-comment.sh"
+engine_run() {
+ (
+  printf '%s\n' "${GH_TOKEN:-absent}" "${GITHUB_TOKEN:-absent}" "${CODING_BOT_GH_PAT:-absent}" > "$RUNNER_DIR/child"
+  git config --local --get-regexp '^(http.*extraheader|credential.*)' > "$RUNNER_DIR/git-auth" || true
+  [ "$TAMPER" = 0 ] || git config --local credential.helper '!unexpected'
+  printf '{"resolved":true}' > "$RESULT_OUTPUT_FILE"
+ ) & ENGINE_PID=$!
+}
+engine_extract_result() { :; }
+pr_comment_engine classify "$MODE"
+'''
+                    env={**os.environ,'BOT':str(BOT),'RUNNER_DIR':str(run),'USER_REQUEST':'probe',
+                         'ISSUE_NUMBER':'9','RUN_TIMEOUT_SECONDS':'5','MODE':mode,'TAMPER':tamper,
+                         'GH_TOKEN':'write-only-probe','GITHUB_TOKEN':'write-only-probe','CODING_BOT_GH_PAT':'write-only-probe'}
+                    result=subprocess.run(['bash','-c',code],cwd=root,env=env,capture_output=True,text=True)
+                    self.assertEqual(result.returncode==0,tamper=='0',result.stderr)
+                    self.assertEqual((run/'child').read_text(),'absent\nabsent\nabsent\n')
+                    self.assertEqual((run/'git-auth').read_text(),'')
+                    self.assertEqual(git(root,'config','--local','--list'),before)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

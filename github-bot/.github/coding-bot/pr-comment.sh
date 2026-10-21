@@ -3,8 +3,9 @@
 pr_comment_engine() {
   local instruction="$1"
   SYSTEM_PROMPT="$instruction"
-  local PR_ENGINE_MODE="${2:-classify}" old_codex_home="${CODEX_HOME:-}" name key value status=0
-  local -a header_keys=() header_values=()
+  local PR_ENGINE_MODE="${2:-classify}" old_codex_home="${CODEX_HOME:-}" name key status=0 config_path original_config clean_config
+  config_path=$(git rev-parse --git-path config) || return 1
+  original_config=$(base64 < "$config_path") || return 1
   local CODEX_LAST_MESSAGE_FILE="$RUNNER_DIR/pr-last.txt" CODEX_EXIT_CODE_FILE="$RUNNER_DIR/pr-exit.txt"
   local ENGINE_PROMPT_FILE="$RUNNER_DIR/pr-prompt.txt"
   printf '%s' "$USER_REQUEST" > "$ENGINE_PROMPT_FILE"
@@ -15,11 +16,9 @@ pr_comment_engine() {
   TIMEOUT_VALUE="$RUN_TIMEOUT_SECONDS"
   rm -f "$RESULT_OUTPUT_FILE" "$JSON_OUTPUT_FILE" "$CODEX_LAST_MESSAGE_FILE"
   while IFS= read -r key; do
-    while IFS= read -r value; do
-      header_keys+=("$key"); header_values+=("$value")
-    done < <(git config --local --get-all "$key")
-    git config --local --unset-all "$key"
+    git config --local --unset-all "$key" || true
   done < <(git config --local --name-only --get-regexp '^(http\..*\.extraheader|credential\..*)$' || true)
+  clean_config=$(base64 < "$config_path") || return 1
   (
     # CLI に渡す環境は provider 認証と実行に要る項目だけにする。
     for name in $(compgen -e); do
@@ -44,9 +43,8 @@ pr_comment_engine() {
     [ "$ENGINE_EXIT_CODE" = 0 ] || exit 1
     engine_extract_result
   ) || status=$?
-  for name in "${!header_keys[@]}"; do
-    git config --local --add "${header_keys[$name]}" "${header_values[$name]}"
-  done
+  [ "$(base64 < "$config_path")" = "$clean_config" ] || status=1
+  printf '%s' "$original_config" | base64 --decode > "$config_path" || return 1
   return "$status"
 }
 
