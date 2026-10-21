@@ -2,6 +2,9 @@
 # issue の通常の merge 経路を使い、固定の conflict 解消だけで終える。
 resolve_issue_conflict() {
   local status=0 result snapshot before="$CONFLICT_START_SHA" base="$CONFLICT_BASE_SHA"
+  if [ "$MERGE_EXIT_CODE" = 0 ] && git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    git merge --abort || status=1
+  fi
   if [ "$MERGE_EXIT_CODE" != 0 ]; then
     [ -n "$CONFLICT_FILES" ] || status=1
     snapshot=$(python3 "$SCRIPT_DIR/conflict-scope.py" snapshot) || status=1
@@ -33,7 +36,7 @@ resolve_issue_conflict() {
     fi
   fi
   if [ "$status" = 0 ]; then
-    if [ "$MERGE_EXIT_CODE" = 0 ]; then result='解消する conflict はありません。base branch を取り込みました。'
+    if [ "$MERGE_EXIT_CODE" = 0 ]; then result='解消する conflict はありません。'
     else result='conflict を解消して push しました。'; fi
     gh issue comment "$RESOLVE_CONFLICT_PR" --repo "$GITHUB_REPOSITORY" --body "$result" || status=1
   else

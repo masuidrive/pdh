@@ -663,11 +663,13 @@ else
 fi
 
 # main を merge
+MERGE_OPTIONS=(--no-edit)
+if [ -n "${RESOLVE_CONFLICT_PR:-}" ]; then MERGE_OPTIONS+=(--no-commit --no-ff); fi
 CONFLICT_START_SHA=$(git rev-parse HEAD)
 CONFLICT_BASE_SHA=$(git rev-parse "origin/$BASE_BRANCH")
 echo "🔀 Merging origin/$BASE_BRANCH into $BRANCH_NAME..."
 if [ -z "${PR_INSTRUCTION:-}" ] && [ "${PR_COMMENT_ONLY:-false}" != true ]; then
-  MERGE_OUTPUT=$(git merge origin/$BASE_BRANCH --no-edit 2>&1) || MERGE_EXIT_CODE=$?
+  MERGE_OUTPUT=$(git merge "origin/$BASE_BRANCH" "${MERGE_OPTIONS[@]}" 2>&1) || MERGE_EXIT_CODE=$?
 fi
 MERGE_EXIT_CODE=${MERGE_EXIT_CODE:-0}
 

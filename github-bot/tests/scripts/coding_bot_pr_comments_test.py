@@ -16,7 +16,7 @@ def git(cwd, *args):
 
 
 class MergeProbe(unittest.TestCase):
-    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False, issue_run=False, extra=False, pat=False):
+    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False, issue_run=False, extra=False, pat=False, fast_forward=False):
         with tempfile.TemporaryDirectory(dir=TMP) as temp:
             temp = Path(temp)
             seed, remote, work, run = [temp / name for name in ['seed', 'remote', 'work', 'run']]
@@ -27,8 +27,9 @@ class MergeProbe(unittest.TestCase):
             (seed / 'other.txt').write_text('unchanged\n')
             git(seed, 'add', '.'); git(seed, 'commit', '-m', 'initial')
             git(seed, 'checkout', '-b', 'agent/issue-7')
-            (seed / 'conflict file.txt').write_text('feature\n')
-            git(seed, 'commit', '-am', 'feature')
+            if not fast_forward:
+                (seed / 'conflict file.txt').write_text('feature\n')
+                git(seed, 'commit', '-am', 'feature')
             git(seed, 'checkout', 'main')
             (seed / ('conflict file.txt' if conflict else 'main.txt')).write_text('main\n')
             if whitespace: (seed / 'other.txt').write_text('main whitespace \n')
@@ -37,6 +38,9 @@ class MergeProbe(unittest.TestCase):
             git(temp, 'clone', '-b', 'agent/issue-7', str(remote), str(work))
             git(work, 'config', 'user.name', 'Test'); git(work, 'config', 'user.email', 'test@example.invalid')
             original = git(work, 'rev-parse', 'HEAD')
+            runner=(BOT/'run-action.sh').read_text()
+            start=runner.index('# main を merge\n')
+            (run/'merge-step.sh').write_text(runner[start:runner.index('\nCONFLICT_SECTION=""',start)])
             env = {**os.environ, 'BOT': str(BOT), 'RUNNER_DIR': str(run), 'GITHUB_WORKSPACE': str(run),
                    'DECISION': json.dumps(decision), 'DIRTY': str(int(dirty)), 'FAIL': str(int(fail)),
                    'RAW': raw if raw is not None else json.dumps(decision), 'UNRESOLVED': str(int(unresolved)), 'REFUSED': str(int(refused)),
@@ -66,10 +70,7 @@ pr_comment_engine() {
 engine_run() { echo forbidden-working-engine >> "$RUNNER_DIR/gh"; return 97; }
 if [ "$ISSUE_RUN" = 1 ]; then
  ISSUE_NUMBER=7
- CONFLICT_START_SHA=$(git rev-parse HEAD)
- CONFLICT_BASE_SHA=$(git rev-parse origin/main)
- MERGE_EXIT_CODE=0
- git merge origin/main --no-edit || MERGE_EXIT_CODE=$?
+ source "$RUNNER_DIR/merge-step.sh"
  CONFLICT_FILES=$(git diff --name-only --diff-filter=U)
  CONFLICT_SECTION="FIXED CONFLICT TASK: $CONFLICT_FILES"
  cat > "$ENGINE_FILE" <<'ENGINE'
@@ -125,17 +126,21 @@ class PrCommentContract(MergeProbe):
                 self.assertNotIn('workflow run',calls);self.assertIn('issues/7',calls)
 
     def test_issue_run_only_pushes_a_verified_merge(self):
-        for arguments in [{},{'whitespace':True},{'conflict':False},{'pat':True}, {'dirty':True},
+        for arguments in [{},{'whitespace':True},{'conflict':False},{'conflict':False,'fast_forward':True},{'pat':True}, {'dirty':True},
                           {'extra':True},{'unresolved':True},{'fail':True},{'refused':True}]:
             with self.subTest(arguments=arguments):
-                result,pushes,calls,_=self.run_case({},issue_run=True,**arguments)
+                result,pushes,calls,unchanged=self.run_case({},issue_run=True,**arguments)
                 unsafe=any(arguments.get(key) for key in ['dirty','extra','unresolved','fail','refused'])
                 self.assertEqual(result.returncode==0,not unsafe,result.stderr)
-                self.assertEqual(pushes,[] if unsafe else ['push'])
+                self.assertEqual(pushes,[] if unsafe or arguments.get('conflict') is False else ['push'])
                 self.assertIn('issue comment 7',calls)
                 self.assertEqual(calls.count('issue comment 9'),0 if unsafe else 1)
                 self.assertNotIn('classify',calls)
-                if not unsafe:
+                if arguments.get('conflict') is False:
+                    self.assertNotIn('resolve',calls)
+                    self.assertTrue(unchanged)
+                    self.assertNotIn('ci-workflow',calls)
+                if not unsafe and arguments.get('conflict') is not False:
                     self.assertIn('pat-auth' if arguments.get('pat') else 'ci-workflow',calls)
                     if arguments.get('pat'): self.assertNotIn('ci-workflow',calls)
 
