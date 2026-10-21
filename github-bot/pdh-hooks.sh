@@ -286,13 +286,18 @@ elif [ "$close_mode" = "pr-merge" ]; then
   # ⚠ 単語 `merge` で判定すると、説明文に一度出ただけで導線追加が抑止される。
   # 導線そのものの文を目印にする。
   word="merge が close 承認です"
+  if [ -z "$AWAITING_PR" ]; then
+    AWAITING_PR=$(gh pr list --head "$BRANCH" --state open --repo "$REPO" --json number --jq '.[0].number' 2>/dev/null || true)
+  fi
+  guide_pr_url="https://github.com/$REPO/pulls"
+  if [[ "$AWAITING_PR" =~ ^[1-9][0-9]*$ ]]; then guide_pr_url="https://github.com/$REPO/pull/$AWAITING_PR"; fi
   # ⚠ 人のクリック数は CODING_BOT_GH_PAT の有無で変わる。案内も変える。
   # 有り: PR の作者が人になるので CI が自動で走る → 押すのは Merge の 1 回だけ
   # 無し: GITHUB_TOKEN が作った PR なので workflow が承認待ちになる → «Approve and run» が要る
   if [ -n "${CODING_BOT_GH_PAT:-}" ]; then
-    guide="**この PR の CI が緑になったら Merge を 1 回押してください。それが close 承認です。**CI は自動で走っています。直してほしい点があれば、merge せずに \`🤖 修正して: …\` と [issue](https://github.com/$REPO/issues/$ISSUE) にコメントしてください。"
+    guide="**[PR](${guide_pr_url}) の CI が緑になったら Merge を 1 回押してください。それが close 承認です。**CI は自動で走っています。直してほしい点があれば、merge せずに \`🤖 修正して: …\` とこのスレッドにコメントしてください。"
   else
-    guide="**この PR で 2 つ押してください。**① Checks タブの **«Approve and run»**（bot が作った PR なので workflow が承認待ちで止まっています）② 緑になったら **Merge**。⚠ **merge が close 承認です。**直してほしい点があれば、merge せずに \`🤖 修正して: …\` と [issue](https://github.com/$REPO/issues/$ISSUE) にコメントしてください（修正後はもう一度 «Approve and run» が要ります）。⚠ **`CODING_BOT_GH_PAT` を設定すると、この ① が要らなくなります**（`github-bot/INSTALL.md`）。"
+    guide="**[PR](${guide_pr_url}) で 2 つ押してください。**① Checks タブの **«Approve and run»**（bot が作った PR なので workflow が承認待ちで止まっています）② 緑になったら **Merge**。⚠ **merge が close 承認です。**直してほしい点があれば、merge せずに \`🤖 修正して: …\` とこのスレッドにコメントしてください（修正後はもう一度 «Approve and run» が要ります）。⚠ **\`CODING_BOT_GH_PAT\` を設定すると、この ① が要らなくなります**（\`github-bot/INSTALL.md\`）。"
   fi
 else
   word="🤖 クローズ承認"
