@@ -46,26 +46,41 @@ on:
         type: string
         default: ''
 
-# ⚠ 同じ issue で 2 つの run を同時に走らせない。走らせると 2 つの agent が同じ
-# agent/issue-<N> ブランチへ push を取り合い、進捗コメントを奪い合い、ラベルが往復し、
-# CI も二重に起動する。ticket 名は決定的なので
-# ticket が二重になることは無いが、commit は競合する。
-# cancel-in-progress: false — 走っている方を殺さず、次を待たせる。人の 🤖 コメントは
-# «前の作業を捨てて» の意味ではないため。
-concurrency:
-  group: coding-bot-${{ inputs.ci_autofix_pr || inputs.pr || inputs.issue || github.event.issue.number || github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: false
-  # 判定と修正を同じロックの中に置く。single では待機 run が押し出され、
-  # count だけ残って修正が走らない／緑を見落とすため max にする。
-  # 最大 100 本。満杯のときは新規 run が cancel される（既存の待機は失われない）。
-  queue: max
-
 # ⚠ 使う action は commit SHA で固定する。tag（@v5 等）は動かせるので、同じ workflow が
 # «いつ走ったか» で別のコードを実行しうる。この bot は repo の書き込み権限と engine の
 # 認証情報を持って走るので、そこは固定しておく。末尾のコメントが人間向けの版表示。
 
 jobs:
+  context:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    outputs:
+      issue: ${{ steps.resolve.outputs.issue }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Resolve the issue before acquiring its lock
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LOCK_DISPATCH_PR: ${{ inputs.pr || inputs.ci_autofix_pr }}
+          LOCK_DISPATCH_ISSUE: ${{ inputs.issue }}
+        run: |
+          source .github/coding-bot/trigger-source.sh
+          issue=$(resolve_lock_issue)
+          echo "issue=$issue" >> "$GITHUB_OUTPUT"
+
   ci-autofix:
+    needs: context
+    concurrency:
+      group: coding-bot-${{ needs.context.outputs.issue || format('verify-{0}', github.run_id) }}
+      cancel-in-progress: false
+      queue: max
     if: github.event_name == 'workflow_run' && vars.CODING_BOT_CI_AUTOFIX == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -93,13 +108,18 @@ jobs:
         run: bash .github/coding-bot/ci-autofix-decision.sh decide
 
   agent:
-    needs: ci-autofix
+    needs: [context, ci-autofix]
+    concurrency:
+      group: coding-bot-${{ needs.context.outputs.issue || format('verify-{0}', github.run_id) }}
+      cancel-in-progress: false
+      queue: max
+
     # 🤖 / :robot: だけが起動の合図（issue の作成ではタイトルだけを見る）。bot 自身と marker 付き投稿は除外する。
     # bot の名義の投稿は除外する。ただし変数 CODING_BOT_TRUSTED_BOTS（カンマ区切りの login）に並べた bot は通す
     # （例: 要望を受けて起票する Slack bot。人の依頼を代わりに書いている）。
     # awaiting-reply は状態表示であり、ラベルの有無では起動しない。
     if: |
-      always() && !cancelled() && (needs.ci-autofix.outputs.repair == 'true' ||
+      always() && !cancelled() && needs.context.result == 'success' && (needs.ci-autofix.outputs.repair == 'true' ||
       github.event_name == 'workflow_dispatch' || (
       (github.event.sender.type != 'Bot' ||
        contains(format(',{0},', vars.CODING_BOT_TRUSTED_BOTS), format(',{0},', github.event.sender.login))) &&

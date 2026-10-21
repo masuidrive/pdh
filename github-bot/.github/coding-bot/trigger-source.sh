@@ -53,3 +53,23 @@ validate_pr_context() {
   TRUSTED_LINKED_ISSUE="$linked"
   TRUSTED_PR_BRANCH="$head_ref"
 }
+
+
+resolve_lock_issue() {
+  local pr="${LOCK_DISPATCH_PR:-${CI_AUTOFIX_PR:-}}" issue="${LOCK_DISPATCH_ISSUE:-}" data
+  if [ -z "$pr$issue" ]; then
+    pr=$(jq -r 'if (.issue // {} | has("pull_request")) then .issue.number else .pull_request.number // empty end' "$GITHUB_EVENT_PATH") || return 1
+    issue=$(jq -r 'if .issue and (.issue | has("pull_request") | not) then .issue.number else empty end' "$GITHUB_EVENT_PATH") || return 1
+  fi
+  if [ -n "$pr" ]; then
+    [[ "$pr" =~ ^[1-9][0-9]*$ ]] || return 1
+    validate_pr_context "$GITHUB_REPOSITORY" "$pr" || return 1
+    issue="$TRUSTED_LINKED_ISSUE"
+  fi
+  if [ -n "$issue" ]; then
+    [[ "$issue" =~ ^[1-9][0-9]*$ ]] || return 1
+    data=$(gh api "repos/$GITHUB_REPOSITORY/issues/$issue") || return 1
+    printf '%s' "$data" | jq -e --argjson n "$issue" '.number == $n and (has("pull_request") | not)' >/dev/null || return 1
+    printf '%s' "$issue"
+  fi
+}
