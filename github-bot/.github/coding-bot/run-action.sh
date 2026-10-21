@@ -585,26 +585,12 @@ else
 fi
 
 # REST API で全コメント取得（数値 ID 付き。COMMENT_ID とのマッチングに必要）
-ALL_COMMENTS_JSON=$(gh api repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments --paginate \
+CONTEXT_ISSUE="${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}"
+ALL_COMMENTS_JSON=$(gh api "repos/$GITHUB_REPOSITORY/issues/$CONTEXT_ISSUE/comments" --paginate \
   --jq '[.[] | {id: .id, login: .user.login, body: .body}]' 2>/dev/null || echo '[]')
-
-# PR の場合、対応する issue (head ブランチ agent/issue-<N>) のコメントも会話履歴に含める。
-# AC 議論など PR 以前の文脈は issue 側に残っているため、PR スレッドだけだと欠落する。
-# issue コメントを時系列で前に、PR コメントを後ろに連結する（GitHub のコメント ID は
-# グローバル一意なので両者を混ぜても COMMENT_ID マッチングは壊れない）。
-if [ "$IS_PR" = true ]; then
-  LINKED_ISSUE_NUMBER=$(printf '%s' "$BRANCH_NAME" | sed -n 's#^agent/issue-\([0-9]\{1,\}\)$#\1#p')
-  if [ -n "$LINKED_ISSUE_NUMBER" ] && [ "$LINKED_ISSUE_NUMBER" != "$ISSUE_NUMBER" ]; then
-    LINKED_ISSUE_COMMENTS_JSON=$(gh api repos/$GITHUB_REPOSITORY/issues/$LINKED_ISSUE_NUMBER/comments --paginate \
-      --jq '[.[] | {id: .id, login: .user.login, body: .body}]' 2>/dev/null || echo '[]')
-    ALL_COMMENTS_JSON=$(jq -n \
-      --argjson issue "$LINKED_ISSUE_COMMENTS_JSON" \
-      --argjson pr "$ALL_COMMENTS_JSON" \
-      '$issue + $pr' 2>/dev/null || echo "$ALL_COMMENTS_JSON")
-    echo "🧵 Merged $(echo "$LINKED_ISSUE_COMMENTS_JSON" | jq 'length') comment(s) from linked issue #$LINKED_ISSUE_NUMBER"
-  fi
+if [ "$EVENT_TYPE" = workflow_run ] || [ -n "${RESOLVE_CONFLICT_PR:-}" ]; then
+  ISSUE_BODY=$(gh api "repos/$GITHUB_REPOSITORY/issues/$CONTEXT_ISSUE" --jq '.body // ""') || exit 1
 fi
-
 
 # === コメントの構造化: トリガーコメント vs 過去ログ ===
 # COMMENT_ID が設定されている場合、そのコメントがトリガー（＝ユーザの指示）
@@ -727,30 +713,17 @@ ORIGINAL_IMAGE_URLS=$(printf '%s\n%s\n' "$ISSUE_BODY" "$(printf '%s' "$ALL_COMME
   grep -oE '(https?://[^)"\s]+\.(png|jpg|jpeg|gif|webp|svg))|(https?://github\.com/user-attachments/assets/[^)"\s]+)|(https?://user-images\.githubusercontent\.com/[^)"\s]+)' | \
   sort -u)
 
-# GraphQL API を使って bodyHTML を取得（JWT付きの実際の画像URLを含む）
-if [ "$IS_PR" = true ]; then
-  BODY_HTML=$(gh api graphql -f query="
-    query {
-      repository(owner: \"$(echo $GITHUB_REPOSITORY | cut -d/ -f1)\", name: \"$(echo $GITHUB_REPOSITORY | cut -d/ -f2)\") {
-        pullRequest(number: $ISSUE_NUMBER) {
-          bodyHTML
-          comments(last: 50) { nodes { bodyHTML } }
-        }
+# GraphQL API を使って bodyHTML を取得（issue の本文とコメントのみ）
+BODY_HTML=$(gh api graphql -f query="
+  query {
+    repository(owner: \"$(echo $GITHUB_REPOSITORY | cut -d/ -f1)\", name: \"$(echo $GITHUB_REPOSITORY | cut -d/ -f2)\") {
+      issue(number: $CONTEXT_ISSUE) {
+        bodyHTML
+        comments(last: 50) { nodes { bodyHTML } }
       }
     }
-  " --jq '[.data.repository.pullRequest.bodyHTML] + [.data.repository.pullRequest.comments.nodes[].bodyHTML] | join("\n")' 2>/dev/null || echo "")
-else
-  BODY_HTML=$(gh api graphql -f query="
-    query {
-      repository(owner: \"$(echo $GITHUB_REPOSITORY | cut -d/ -f1)\", name: \"$(echo $GITHUB_REPOSITORY | cut -d/ -f2)\") {
-        issue(number: $ISSUE_NUMBER) {
-          bodyHTML
-          comments(last: 50) { nodes { bodyHTML } }
-        }
-      }
-    }
-  " --jq '[.data.repository.issue.bodyHTML] + [.data.repository.issue.comments.nodes[].bodyHTML] | join("\n")' 2>/dev/null || echo "")
-fi
+  }
+" --jq '[.data.repository.issue.bodyHTML] + [.data.repository.issue.comments.nodes[].bodyHTML] | join("\n")' 2>/dev/null || echo "")
 
 # bodyHTML から画像URLを抽出（JWT付きのprivate-user-images URLと通常の画像URL）
 # sed を使って href と src 属性から URL を抽出
