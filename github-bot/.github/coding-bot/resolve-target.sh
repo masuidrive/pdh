@@ -52,7 +52,7 @@ target_api() {
   for attempt in 0 1 2 3; do
     if value=$(gh api "$path" 2>"$error"); then rm -f "$error"; printf '%s\n' "$value"; return 0; fi
     cat "$error" >&2
-    if [ "$attempt" = 3 ] || ! grep -Eiq 'HTTP 5[0-9]{2}|rate limit|timed? ?out|timeout|connection (refused|reset)|dial tcp|no such host|network is unreachable|TLS handshake|unexpected EOF' "$error"; then
+    if [ "$attempt" = 3 ] || ! grep -Eiq 'HTTP (5[0-9]{2}|429)|rate limit|timed? ?out|timeout|connection (refused|reset)|dial tcp|no such host|network is unreachable|TLS handshake|unexpected EOF' "$error"; then
       rm -f "$error"; return 1
     fi
     sleep 2
