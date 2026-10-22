@@ -183,7 +183,8 @@ run_selection() (
   must cd "$repo"
   unset GITHUB_WORKSPACE
   must source "$TMP_DIR/workspace.sh"
-  IS_PR=$kind ISSUE_NUMBER=$number GITHUB_REPOSITORY=example/project
+  IS_PR=$kind ISSUE_NUMBER=$number TARGET_ISSUE=$number GITHUB_REPOSITORY=example/project
+  TRUSTED_LINKED_ISSUE="${branch#agent/issue-}"
   SCRIPT_DIR="$ROOT_DIR/.github/coding-bot" PR_INSTRUCTION='' GITHUB_RUN_ID=1
   validate_pr_context() { TRUSTED_LINKED_ISSUE="${branch#agent/issue-}"; }
   gh() {
