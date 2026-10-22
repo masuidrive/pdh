@@ -336,6 +336,8 @@ gh() {
         r=subprocess.run(['bash','-c',stub+'source "$BOT/resolve-target.sh"; resolve_target'],env={**env,'BOT':str(BOT)},text=True,capture_output=True)
         self.assertEqual(r.returncode,0,r.stderr)
         target=dict(line.split('=',1) for line in output.read_text().splitlines())
+        snapshot=self.dir/'coding-bot-target';snapshot.mkdir(exist_ok=True)
+        shutil.copy2(BOT/'resolve-target.sh',snapshot/'resolve-target.sh')
         notice=next((x for x in self.steps() if x.get('name')=='Report unresolved dispatch'),None)
         if not target['issue'] and notice:
             r=subprocess.run(['bash','-c',stub+notice['run']],env={**env,'TARGET_REASON':target['reason']},text=True,capture_output=True)

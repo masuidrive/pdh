@@ -123,8 +123,9 @@ validate_pr_context team/repo 34 && [ "$TARGET_PR_STATE" = open ]
         for mode in ("start", "progress", "failed", "final"):
             with self.subTest(mode=mode):
                 result = self.bash('gh() { echo unexpected-write >&2; return 99; }; export -f gh; '
-                                   'bash .github/coding-bot/pdh-hooks.sh "$TASK_MODE" 12 agent/issue-12 1',
-                                   PR_INSTRUCTION="task", TASK_MODE=mode)
+                                   'bash "$HOOK_SCRIPT" "$TASK_MODE" 12 agent/issue-12 1',
+                                   PR_INSTRUCTION="task", TASK_MODE=mode,
+                                   HOOK_SCRIPT=str(next(p for p in (ROOT/".github/coding-bot/pdh-hooks.sh", ROOT/"pdh-hooks.sh") if p.is_file())))
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(result.stderr, "")
