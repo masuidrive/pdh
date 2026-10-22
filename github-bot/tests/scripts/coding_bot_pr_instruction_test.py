@@ -300,7 +300,7 @@ report_pr_task_result "$(cat "$GITHUB_WORKSPACE/body")"
                 self.assertEqual(result.returncode,0,result.stderr)
                 calls=(Path(d)/'calls').read_text()
                 self.assertIn('PR が閉じているため',calls)
-                self.assertIn('/pull/9',calls)
+                self.assertIn('[PR](https://github.com/team/repo/pull/9) / [実行ログ](run)',calls)
                 self.assertNotIn('作業は進んでいません',calls)
                 self.assertNotIn('awaiting-reply',calls)
 

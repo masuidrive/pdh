@@ -550,7 +550,7 @@ jobs:
             exit 0
           fi
           if [ "${TARGET_REASON:-}" = 'PR が閉じています' ] && [ -n "${TRUSTED_PR:-}" ]; then
-            gh issue comment "$TRUSTED_ISSUE" --repo "$REPO" --body "PR が閉じているため動きません。[PR](https://github.com/$REPO/pull/$TRUSTED_PR)[実行ログ]($RUN_URL)" || echo 'Warning: closed PR notice delivery failed' >&2
+            gh issue comment "$TRUSTED_ISSUE" --repo "$REPO" --body "PR が閉じているため動きません。[PR](https://github.com/$REPO/pull/$TRUSTED_PR) / [実行ログ]($RUN_URL)" || echo 'Warning: closed PR notice delivery failed' >&2
             exit 0
           fi
           if [ "${CONCLUSION:-}" = success ]; then
