@@ -166,9 +166,9 @@ class DeliveryIsolationContract(HostProbe,unittest.TestCase):
     def test_dispatch_fallback_reuses_validated_issue_without_api(self):
         steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
         context=next(x for x in steps if x.get('id')=='notification_context')
-        for validated in ['7','']:
-            with self.subTest(validated=validated):
-                env={**self.env,'GITHUB_EVENT_NAME':'workflow_dispatch','EVENT_NUMBER':'7','EVENT_IS_PR':'false',
+        for validated, is_pr in [('7','false'),('','false'),('7','true'),('','true')]:
+            with self.subTest(validated=validated,is_pr=is_pr):
+                env={**self.env,'GITHUB_EVENT_NAME':'workflow_dispatch','EVENT_NUMBER':'9' if is_pr=='true' else '7','EVENT_IS_PR':is_pr,'DISPATCH_ISSUE':'7',
                      'VALIDATED_ISSUE':validated,'GITHUB_OUTPUT':str(self.dir/'outputs')}
                 (self.dir/'outputs').write_text('')
                 result=subprocess.run(['bash','-c',context['run']],cwd=self.dir,env=env,text=True,capture_output=True)
