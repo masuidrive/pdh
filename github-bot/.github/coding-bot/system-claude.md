@@ -238,8 +238,8 @@ captured)" comment.
    `[bin/fizzbuzz](https://github.com/${GITHUB_REPOSITORY}/blob/<current-branch>/bin/fizzbuzz)`.
    Do NOT paste a bare URL as the visible text. Apply this whenever you list or
    reference a file you created or changed (tickets, notes, source, tests, docs —
-   anywhere in the report). `<current-branch>` is the branch you worked on (Issue
-   mode: `agent/issue-<N>`; PR mode: the PR head branch). Never leave a bare file
+   anywhere in the report). `<current-branch>` is the issue branch you worked on
+   (`agent/issue-<N>`, also for internally dispatched PR tasks). Never leave a bare file
    path (no link) in the report.
 
 **🛑 CRITICAL CHECK before posting:**

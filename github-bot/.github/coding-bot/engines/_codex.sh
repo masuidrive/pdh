@@ -44,7 +44,7 @@ engine_setup_auth() {
   # ⚠ この経路は ENGINE_EXIT_CODE の分岐へ入らないので run-action.sh の failed hook が呼ばれない。
   # いちばん多い «止まっていて人の手が要る» 停止なので、ここで直接付ける。
   # ⚠ branch を渡すのは、待ち印と通知に PR のリンクも含めるため。
-  if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
+  if [ "${PR_COMMENT_ONLY:-false}" != true ] && [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
     bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "${BRANCH_NAME:-}" || true
   fi
   exit 1

@@ -527,12 +527,13 @@ if [ "$IS_PR" = true ]; then
   fi
   # PR の場合
   PR_DATA=$(gh pr view $ISSUE_NUMBER \
-    --json title,body,comments,headRefName,headRefOid,labels \
+    --json headRefName,headRefOid \
     --repo $GITHUB_REPOSITORY)
 
-  ISSUE_TITLE=$(echo "$PR_DATA" | jq -r '.title')
-  ISSUE_BODY=$(echo "$PR_DATA" | jq -r '.body // ""')
-  ISSUE_LABELS=$(echo "$PR_DATA" | jq -r '[.labels[].name] | join(", ")')
+  ISSUE_DATA=$(gh api "repos/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE") || exit 1
+  ISSUE_TITLE=$(echo "$ISSUE_DATA" | jq -r '.title')
+  ISSUE_BODY=$(echo "$ISSUE_DATA" | jq -r '.body // ""')
+  ISSUE_LABELS=$(echo "$ISSUE_DATA" | jq -r '[.labels[].name] | join(", ")')
 
   # PR の場合: head ブランチ名を取得
   BRANCH_NAME=$(echo "$PR_DATA" | jq -r '.headRefName')

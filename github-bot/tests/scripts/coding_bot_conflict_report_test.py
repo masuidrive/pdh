@@ -11,7 +11,7 @@ import yaml
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'.github/coding-bot/pr-comment.sh').is_file())
 BOT=Path(os.environ.get('BOT_MODULE_PATH',ROOT/'.github/coding-bot'))
 
-class HostReport(unittest.TestCase):
+class HostProbe:
     def setUp(self):
         self.temp=self.enterContext(tempfile.TemporaryDirectory())
         self.dir=Path(self.temp);self.state=self.dir/'state.json';self.bindir=self.dir/'bin';self.bindir.mkdir()
@@ -63,6 +63,7 @@ done(entry if a[0]=='api' else url)
         if step is None:step=next(s for s in steps if s.get('name')=='Report if the run left nothing')
         return subprocess.run(['bash','-c',step['run']],cwd=ROOT,env=self.env,text=True,capture_output=True)
 
+class HostReport(HostProbe,unittest.TestCase):
     def test_closed_pr_reports_even_when_dispatch_validation_failed(self):
         self.env.update(TRUSTED_ISSUE='',TRUSTED_PR='')
         self.data['pr']['head']['ref']='human-feature';self.save()
@@ -88,5 +89,71 @@ done(entry if a[0]=='api' else url)
         self.assertTrue(all('<!-- coding-bot:conflict-report run=123 -->' in x['body'] for x in posts))
         self.report();self.assertEqual(self.load()['posts'],posts)
         print('CONTRAST PASS: a completed report is never duplicated',flush=True)
+
+class HostStateContract(HostProbe,unittest.TestCase):
+    def test_observed_head_and_mergeability_determine_report(self):
+        import importlib.util
+        from unittest.mock import patch
+        spec=importlib.util.spec_from_file_location('conflict_report',BOT/'conflict-report.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        for state,changed,mergeable,expected in [
+            ('open',True,True,'conflict を解消して push しました'),
+            ('open',False,True,'解消を完了できませんでした'),
+            ('open',False,False,'解消を完了できませんでした'),
+            ('open',False,None,'解消を完了できませんでした'),
+            ('open',True,False,'push したが、まだ merge できる状態か確かめられません'),
+            ('open',True,None,'push したが、まだ merge できる状態か確かめられません'),
+            ('closed',True,True,'PR が閉じているため解消しませんでした')]:
+            with self.subTest(state=state,changed=changed,mergeable=mergeable):
+                self.data['posts']=[];self.data['calls']=[]
+                self.data['pr'].update(state=state,mergeable=mergeable)
+                self.data['pr']['head']['sha']=('b' if changed else 'a')*40;self.save()
+                with patch.dict(os.environ,self.env),patch.object(module.time,'sleep'):
+                    module.report('owner/repo','9','a'*40,'123')
+                data=self.load();posts=data['posts']
+                self.assertEqual([x['target'] for x in posts],[7] if state=='closed' else [7,9])
+                self.assertIn(expected,posts[0]['body'])
+                if changed and mergeable is None and state=='open':
+                    self.assertEqual(sum(any('/pulls/9' in x for x in a) for a in data['calls']),4)
+                if state=='open' and changed and mergeable is not True:
+                    self.assertNotIn('完了できません',posts[0]['body'])
+
+    def test_host_observation_survives_validation_and_runner_failure(self):
+        steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+        names=[x.get('name') for x in steps]
+        start=steps[names.index('Record conflict starting head')]
+        end=steps[names.index('Report conflict resolution')]
+        fallback=steps[names.index('Report if the run left nothing')]
+        self.assertLess(names.index('Record conflict starting head'),names.index('Validate dispatch task'))
+        self.assertLess(names.index('Report conflict resolution'),names.index('Report if the run left nothing'))
+        self.assertIn('always()',end['if'])
+        self.assertIn("inputs.resolve_conflict_pr != ''",end['if'])
+        self.assertIn("inputs.resolve_conflict_pr == ''",fallback['if'])
+        self.assertIn('git show',start['run']);self.assertIn('$RUNNER_TEMP',start['run'])
+        with tempfile.TemporaryDirectory() as d:
+            env={**self.env,'GITHUB_ENV':str(Path(d)/'env')}
+            result=subprocess.run(['python3','-I',str(BOT/'conflict-report.py'),'start'],env=env,text=True,capture_output=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual(Path(env['GITHUB_ENV']).read_text(),'CONFLICT_START_HEAD='+'b'*40+'\n')
+
+class EngineAuthContract(unittest.TestCase):
+    def test_pr_auth_failure_does_not_run_issue_failed_hook(self):
+        for engine in ['_claude.sh','_codex.sh']:
+            for pr_only in ['false','true']:
+                with self.subTest(engine=engine,pr_only=pr_only),tempfile.TemporaryDirectory() as d:
+                    root=Path(d);(root/'tickets').mkdir();(root/'product-brief.md').touch()
+                    (root/'pdh-hooks.sh').write_text('echo failed >> "$AUTH_LOG"\n')
+                    code='''post_error_comment() { :; }
+codex_prepare_auth() { CODEX_AUTH_STATUS=unavailable; }
+codex_report_auth_failure() { :; }
+source "$ENGINE_SOURCE"
+engine_setup_auth
+'''
+                    env={**os.environ,'SCRIPT_DIR':d,'ISSUE_NUMBER':'7','GITHUB_REPOSITORY':'owner/repo','BRANCH_NAME':'agent/issue-7',
+                         'RESOLVE_CONFLICT_PR':'','PR_COMMENT_ONLY':pr_only,'CLAUDE_CODE_OAUTH_TOKEN':'',
+                         'ENGINE_SOURCE':str(BOT/'engines'/engine),'AUTH_LOG':str(root/'auth.log')}
+                    result=subprocess.run(['bash','-c',code],cwd=root,env=env,text=True,capture_output=True)
+                    self.assertEqual(result.returncode,1)
+                    self.assertEqual((root/'auth.log').exists(),pr_only=='false')
 
 if __name__=='__main__':unittest.main(verbosity=2)

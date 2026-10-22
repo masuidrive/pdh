@@ -26,7 +26,7 @@ PDH-flow の手順は `[SKILLS_PATH]/pdh-pm/` と PDH-stage ごとの skill で�
 5. `[SKILLS_PATH]/pdh-pm/_execution-team.md` — 実行モデル: team（あなたは PM として worker を spawn する。spawn 機構・並行起動を含む）
 6. `.claude/agents/pdh-*.md` — worker の手順（役割ごとに 1 本。CLI で起動する worker には、その本文を prompt の冒頭に渡す）
 
-**上の 1〜6 は必須。** 一部でも欠けている場合（PDH の skill が未インストール / 古い）、**実装に進まず「`[SKILLS_PATH]/pdh-pm/` などの PDH の skill が不足しているので進めません。PDH-repo（masuidrive/pdh）から install してください」と報告して停止**する。`_issue.md` / `_pr.md` は PDH 固有の規則（commit の頻度・review の収束・test-all が落ちたときの処置 等）を書き直さない方針なので、PDH の skill 無しでは正しく動かない。
+**上の 1〜6 は必須。** 一部でも欠けている場合（PDH の skill が未インストール / 古い）、**実装に進まず「`[SKILLS_PATH]/pdh-pm/` などの PDH の skill が不足しているので進めません。PDH-repo（masuidrive/pdh）から install してください」と報告して停止**する。通常の作業 engine が読む `_issue.md` は PDH 固有の規則（commit の頻度・review の収束・test-all が落ちたときの処置 等）を書き直さない方針なので、PDH の skill 無しでは正しく動かない。
 
 ## チケットの単位・ブランチ・命名（決定的）
 - 1 Issue = 1 ticket = 1 作業単位。ブランチは `agent/issue-<N>`。
