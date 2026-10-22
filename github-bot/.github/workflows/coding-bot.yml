@@ -164,7 +164,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Record conflict starting head
+      - name: Preserve conflict reporter on host
         if: inputs.resolve_conflict_pr != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -176,7 +176,6 @@ jobs:
           for file in conflict-report.py discussion.py; do
             git show "origin/${{ github.event.repository.default_branch }}:.github/coding-bot/$file" > "$RUNNER_TEMP/coding-bot-conflict/$file"
           done
-          python3 -I "$RUNNER_TEMP/coding-bot-conflict/conflict-report.py" start
 
       - name: Validate dispatch task
         if: github.event_name == 'workflow_dispatch'

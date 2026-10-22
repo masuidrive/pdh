@@ -75,13 +75,13 @@ def result_text(data, result, ref):
     return 'push しましたが、まだ merge できる状態か確かめられません。'
 
 
-def report(repo, pr, start, run):
+def report(repo, pr, run):
     observed = target(repo, pr)
     if observed is None:
         return
     data, issue = observed
     text = UNKNOWN
-    if re.fullmatch(r'[0-9a-f]{40}', start):
+    if result_file().exists():
         result = runner_result(json.loads(result_file().read_text()))
         ref = None
         if result['result'] == 'pushed':
@@ -122,16 +122,10 @@ def main():
     repo, pr = os.environ['REPO'], os.environ['RESOLVE_CONFLICT_PR']
     if not re.fullmatch(r'[1-9][0-9]*', pr):
         raise ValueError('resolve_conflict_pr must be a positive PR number')
-    if sys.argv[1] == 'start':
-        observed = target(repo, pr)
-        if observed is not None:
-            with open(os.environ['GITHUB_ENV'], 'a') as env:
-                env.write(f"CONFLICT_START_HEAD={observed[0]['head']['sha']}\n")
-    else:
-        run = os.environ['GITHUB_RUN_ID']
-        if not re.fullmatch(r'[1-9][0-9]*', run):
-            raise ValueError('run id must be positive')
-        report(repo, pr, os.environ.get('CONFLICT_START_HEAD', ''), run)
+    run = os.environ['GITHUB_RUN_ID']
+    if not re.fullmatch(r'[1-9][0-9]*', run):
+        raise ValueError('run id must be positive')
+    report(repo, pr, run)
 
 
 if __name__ == '__main__':

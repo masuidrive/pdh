@@ -52,7 +52,7 @@ s['posts'].append(entry)
 done(entry if a[0]=='api' else url)
 ''');gh.chmod(0o755)
         self.env={**os.environ,'PATH':str(self.bindir)+':'+os.environ['PATH'],'GH_STATE':str(self.state),
-                  'REPO':'owner/repo','GITHUB_REPOSITORY':'owner/repo','RESOLVE_CONFLICT_PR':'9','CONFLICT_START_HEAD':'a'*40,
+                  'REPO':'owner/repo','GITHUB_REPOSITORY':'owner/repo','RESOLVE_CONFLICT_PR':'9',
                   'GITHUB_RUN_ID':'123','RUN_URL':'https://github.com/owner/repo/actions/runs/123','GITHUB_ENV':str(self.dir/'env'),
                   'RUNNER_TEMP':self.temp,'GITHUB_WORKSPACE':self.temp,'PR_INSTRUCTION':'','PR_COMMENT_ONLY':'false',
                   'ISSUE':'7','TRUSTED_ISSUE':'7','TRUSTED_PR':'9','EVENT_IS_PR':'false','CONCLUSION':'failure'}
@@ -184,7 +184,7 @@ class HostStateContract(HostProbe,unittest.TestCase):
                 self.data['pr']['head']['sha']=('b' if changed else 'a')*40;self.save()
                 self.result_file.write_text(json.dumps({'result':'pushed','sha':'b'*40} if changed else {'result':'no_conflict'} if mergeable is True else {'result':'failed'}))
                 with patch.dict(os.environ,self.env),patch.object(module.time,'sleep'):
-                    module.report('owner/repo','9','a'*40,'123')
+                    module.report('owner/repo','9','123')
                 data=self.load();posts=data['posts']
                 self.assertEqual([x['target'] for x in posts],[7] if state=='closed' else [7,9])
                 self.assertIn(expected,posts[0]['body'])
@@ -196,20 +196,17 @@ class HostStateContract(HostProbe,unittest.TestCase):
     def test_host_observation_survives_validation_and_runner_failure(self):
         steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
         names=[x.get('name') for x in steps]
-        start=steps[names.index('Record conflict starting head')]
+        start=steps[names.index('Preserve conflict reporter on host')]
         end=steps[names.index('Report conflict resolution')]
         fallback=steps[names.index('Report if the run left nothing')]
-        self.assertLess(names.index('Record conflict starting head'),names.index('Validate dispatch task'))
+        self.assertLess(names.index('Preserve conflict reporter on host'),names.index('Validate dispatch task'))
         self.assertLess(names.index('Report conflict resolution'),names.index('Report if the run left nothing'))
         self.assertIn('always()',end['if'])
         self.assertIn("inputs.resolve_conflict_pr != ''",end['if'])
         self.assertIn("inputs.resolve_conflict_pr == ''",fallback['if'])
         self.assertIn('git show',start['run']);self.assertIn('$RUNNER_TEMP',start['run'])
-        with tempfile.TemporaryDirectory() as d:
-            env={**self.env,'GITHUB_ENV':str(Path(d)/'env')}
-            result=subprocess.run(['python3','-I',str(BOT/'conflict-report.py'),'start'],env=env,text=True,capture_output=True)
-            self.assertEqual(result.returncode,0,result.stderr)
-            self.assertEqual(Path(env['GITHUB_ENV']).read_text(),'CONFLICT_START_HEAD='+'b'*40+'\n')
+        self.assertNotIn('CONFLICT_START_HEAD',(BOT/'conflict-report.py').read_text())
+        self.assertNotIn('conflict-report.py" start',start['run'])
 
 class EngineAuthContract(unittest.TestCase):
     def test_pr_auth_failure_does_not_run_issue_failed_hook(self):
@@ -255,16 +252,15 @@ class RunnerResultContract(HostProbe,unittest.TestCase):
                 self.data['posts']=[];self.data['pr']['state']=state;self.data['pr']['head']['sha']=head*40;self.save()
                 self.outcome(outcome);self.assertIn(expected,self.text())
 
-    def test_missing_start_result_script_or_api_uses_host_fallback(self):
+    def test_missing_result_script_or_api_uses_host_fallback(self):
         self.data['pr']['head']['ref']='human-feature';self.save()
         self.assertEqual(self.report().returncode,0)
         self.assertEqual(self.load()['posts'],[])
         print('CONTRAST PASS: unrelated PR stays silent',flush=True)
         self.data['pr']['head']['ref']='agent/issue-7'
-        for missing in ['start','result','script','api']:
+        for missing in ['result','script','api']:
             with self.subTest(missing=missing):
                 self.data['posts']=[];self.save()
-                self.env['CONFLICT_START_HEAD']='' if missing=='start' else 'a'*40
                 self.outcome({'result':'pushed','sha':'b'*40})
                 script=self.dir/'coding-bot-conflict/conflict-report.py'
                 script.write_text((BOT/'conflict-report.py').read_text())
