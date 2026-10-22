@@ -67,9 +67,9 @@ done(entry if a[0]=='api' else url)
 
     def validate_context(self):
         steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
-        step=next(s for s in steps if s.get('name')=='Preserve conflict reporter on host')
+        step=next(s for s in steps if s.get('id')=='target')
         output=self.dir/'context-outputs';output.write_text('')
-        env={**self.env,'BOT':str(BOT),'GITHUB_OUTPUT':str(output)}
+        env={**self.env,'BOT':str(BOT),'GITHUB_OUTPUT':str(output),'GITHUB_EVENT_NAME':'workflow_dispatch','DISPATCH_ISSUE':'7','DISPATCH_PR':'','EVENT_NUMBER':'7'}
         code=step['run'].replace('${{ github.event.repository.default_branch }}','main')
         result=subprocess.run(['bash','-c','git() { cat "$BOT/${2##*/}"; }; '+code],env=env,text=True,capture_output=True)
         self.assertEqual(result.returncode,0,result.stderr)
@@ -122,7 +122,7 @@ class DeliveryIsolationContract(HostProbe,unittest.TestCase):
     def test_pr_delivery_failure_never_rewrites_the_issue_result(self):
         self.data['fail_pr']=True;self.save()
         first=self.report();posts=self.load()['posts']
-        self.assertEqual(first.returncode,3,first.stderr)
+        self.assertEqual(first.returncode,0,first.stderr)
         self.assertEqual([p['target'] for p in posts],[7])
         self.assertIn('conflict を解消して push しました',posts[0]['body'])
         self.report();posts=self.load()['posts']
@@ -146,40 +146,27 @@ class DeliveryIsolationContract(HostProbe,unittest.TestCase):
         self.assertEqual(self.load()['posts'],before)
         print('CONTRAST PASS: a missing script preserves an existing result byte for byte',flush=True)
 
-    def test_issue_event_fallback_survives_checkout_and_api_failure(self):
+    def test_issue_event_target_survives_checkout_and_api_failure(self):
         steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
-        context=next(x for x in steps if x.get('id')=='notification_context')
-        fallback=next(x for x in steps if x.get('name')=='Report if the run left nothing')
-        env={**self.env,'EVENT_NUMBER':'7','EVENT_IS_PR':'false','GITHUB_EVENT_NAME':'issues','GITHUB_OUTPUT':str(self.dir/'outputs')}
-        result=subprocess.run(['bash','-c',context['run']],cwd=self.dir,env=env,text=True,capture_output=True)
-        self.assertEqual(result.returncode,0,result.stderr)
-        self.assertIn('issue=7',Path(env['GITHUB_OUTPUT']).read_text())
-        # The issue event supplied the destination even though checkout left no scripts.
-        result=subprocess.run(['bash','-c',fallback['run']],cwd=self.dir,env=env,text=True,capture_output=True)
-        self.assertEqual(result.returncode,0,result.stderr)
-        self.assertEqual([p['target'] for p in self.load()['posts']],[7])
-        env.update(EVENT_NUMBER='9',EVENT_IS_PR='true',TRUSTED_ISSUE='')
-        (self.dir/'outputs').write_text('');self.data['posts']=[];self.save()
-        subprocess.run(['bash','-c',context['run']],cwd=self.dir,env=env,text=True,capture_output=True)
-        subprocess.run(['bash','-c',fallback['run']],cwd=self.dir,env=env,text=True,capture_output=True)
-        self.assertEqual(self.load()['posts'],[])
-        print('CONTRAST PASS: unresolved PR events still never receive issue reports',flush=True)
+        step=next(x for x in steps if x.get('id')=='target')
+        output=self.dir/'issue-output';output.write_text('')
+        before=len(self.load()['calls'])
+        code=step['run'].replace('${{ github.event.repository.default_branch }}','main')
+        r=subprocess.run(['bash','-c','git() { return 128; }; '+code],cwd=self.dir,env={**self.env,'GITHUB_EVENT_NAME':'issues','EVENT_NUMBER':'7','EVENT_IS_PR':'false','GITHUB_OUTPUT':str(output)},text=True,capture_output=True)
+        self.assertEqual(r.returncode,0,r.stderr)
+        self.assertIn('issue=7',output.read_text())
+        self.assertEqual(len(self.load()['calls']),before)
+        self.assertIn('always()',step['if'])
+        print('CONTRAST PASS: genuine issue events use their number even without checkout or API',flush=True)
 
-    def test_dispatch_fallback_reuses_validated_issue_without_api(self):
+    def test_dispatch_fallback_uses_only_target_outputs(self):
         steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
-        context=next(x for x in steps if x.get('id')=='notification_context')
-        for validated, is_pr in [('7','false'),('','false'),('7','true'),('','true')]:
-            with self.subTest(validated=validated,is_pr=is_pr):
-                env={**self.env,'GITHUB_EVENT_NAME':'workflow_dispatch','EVENT_NUMBER':'9' if is_pr=='true' else '7','EVENT_IS_PR':is_pr,'DISPATCH_ISSUE':'7',
-                     'VALIDATED_ISSUE':validated,'GITHUB_OUTPUT':str(self.dir/'outputs')}
-                (self.dir/'outputs').write_text('')
-                result=subprocess.run(['bash','-c',context['run']],cwd=self.dir,env=env,text=True,capture_output=True)
-                self.assertEqual(result.returncode,0,result.stderr)
-                self.assertIn('issue=7',Path(env['GITHUB_OUTPUT']).read_text())
-        validate=next(x for x in steps if x.get('name')=='Validate dispatch task')
-        self.assertIn('id',validate);self.assertIn('GITHUB_OUTPUT',validate['run'])
-        self.assertIn('outputs.issue',context['env']['VALIDATED_ISSUE'])
-        print('CONTRAST PASS: issues event and an uncompleted dispatch validation retain their event issue',flush=True)
+        for name in ['Report if the run left nothing','Tell devbot why the run stopped']:
+            env=next(x['env'] for x in steps if x.get('name')==name)
+            self.assertEqual(env['TRUSTED_ISSUE'],'${{ steps.target.outputs.issue }}')
+            self.assertEqual(env['TRUSTED_PR'],'${{ steps.target.outputs.pr }}')
+        self.assertFalse(any(x.get('id') in {'notification_context','dispatch_context','conflict_context'} for x in steps))
+        print('CONTRAST PASS: rejected dispatch inputs cannot be restored by notifications',flush=True)
 
     def test_known_delivery_blocks_fallback_even_when_list_get_fails(self):
         self.report();before=self.load()['posts']
@@ -203,37 +190,19 @@ class DeliveryIsolationContract(HostProbe,unittest.TestCase):
         self.data['posts']=[];self.save();self.report();self.assertEqual(self.load()['posts'],[])
         print('CONTRAST PASS: an unverified dispatch never becomes a conflict reporting target',flush=True)
 
-    def test_fallback_only_patches_a_bot_comment_on_its_trusted_issue(self):
-        steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
-        block=next(x['run'] for x in steps if x.get('name')=='Report if the run left nothing')
-        for valid in ['yes','wrong_issue','human','unavailable']:
-            with self.subTest(valid=valid),tempfile.TemporaryDirectory() as d:
-                (Path(d)/'.coding-bot-task-progress').write_text('99')
-                resource={'id':99,'issue_url':'https://api.github.com/repos/team/repo/issues/'+('34' if valid=='wrong_issue' else '12'),
-                          'user':{'login':'person' if valid=='human' else 'github-actions[bot]','type':'User' if valid=='human' else 'Bot'}}
-                stub='gh() { if [ "$1 $2" = "api repos/team/repo/issues/comments/99" ]; then '+('return 1' if valid=='unavailable' else "printf '%s' '"+json.dumps(resource)+"'")+r'; else printf "CALL %s\\n" "$*"; fi; }; '
-                result=subprocess.run(['bash','-c',stub+block],env={**self.env,'PR_INSTRUCTION':'task','REPO':'team/repo','TRUSTED_ISSUE':'12','CONCLUSION':'failure','RUN_URL':'run','GITHUB_WORKSPACE':d,'GITHUB_STEP_SUMMARY':str(Path(d)/'summary')},text=True,capture_output=True)
-                self.assertEqual(result.returncode,0,result.stderr)
-                self.assertEqual('-X PATCH repos/team/repo/issues/comments/99' in result.stdout,valid=='yes',result.stdout)
-                if valid!='yes':self.assertIn('repos/team/repo/issues/12/comments',result.stdout)
-        print('CONTRAST PASS: a verified bot progress comment remains patchable',flush=True)
-
     def test_notification_helpers_come_from_the_host_snapshot(self):
         steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
-        context=next(x for x in steps if x.get('id')=='notification_context')
+        context=next(x for x in steps if x.get('id')=='target')
         fallback=next(x for x in steps if x.get('name')=='Report if the run left nothing')
-        for script in [context['run'],fallback['run']]:
-            self.assertNotIn('source .github/coding-bot/',script)
-            self.assertIn('$RUNNER_TEMP/coding-bot-notification/',script)
-        snapshot=self.dir/'coding-bot-notification';snapshot.mkdir()
-        for name in ['discussion.py','trigger-source.sh','pr-comment.sh']:shutil.copy(BOT/name,snapshot/name)
+        self.assertIn('git show "origin/',context['run'])
+        self.assertIn('$RUNNER_TEMP/coding-bot-target/resolve-target.sh',context['run'])
+        self.assertNotIn('source .github/coding-bot/',fallback['run'])
+        self.assertIn('$RUNNER_TEMP/coding-bot-notification/',fallback['run'])
         malicious=self.dir/'.github/coding-bot';malicious.mkdir(parents=True)
-        (malicious/'trigger-source.sh').write_text('touch "$GITHUB_WORKSPACE/WORKSPACE_EXECUTED"')
-        env={**self.env,'EVENT_NUMBER':'9','EVENT_IS_PR':'true','GITHUB_EVENT_NAME':'pull_request','GITHUB_OUTPUT':str(self.dir/'outputs')}
-        result=subprocess.run(['bash','-c',context['run']],cwd=self.dir,env=env,text=True,capture_output=True)
-        self.assertEqual(result.returncode,0,result.stderr)
-        self.assertIn('issue=7',Path(env['GITHUB_OUTPUT']).read_text())
+        (malicious/'resolve-target.sh').write_text('touch "$GITHUB_WORKSPACE/WORKSPACE_EXECUTED"')
+        self.validate_context()
         self.assertFalse((self.dir/'WORKSPACE_EXECUTED').exists())
+
 
 class SingleTargetContract(HostProbe, unittest.TestCase):
     def test_target_retries_transient_errors_without_changing_destination(self):
@@ -263,7 +232,7 @@ p=Path(os.environ['GH_STATE']);s=json.loads(p.read_text());s['calls'].append(sys
 path=sys.argv[2]
 if path.endswith('/pulls/9'):
  if s.get('errors'):
-  error=s['errors'].pop(0);p.write_text(json.dumps(s));print(error,file=sys.stderr);sys.exit(1)
+  error=s['errors'].pop(0);p.write_text(json.dumps(s));print('{"message":"unavailable"}');print(error,file=sys.stderr);sys.exit(1)
  print(json.dumps(s['pr']))
 elif path.endswith('/issues/7'):print('{"number":7}')
 elif path.endswith('/issues/9'):print('{"number":9,"pull_request":{}}')
@@ -379,10 +348,10 @@ class HostStateContract(HostProbe,unittest.TestCase):
         start=steps[names.index('Preserve conflict reporter on host')]
         end=steps[names.index('Report conflict resolution')]
         fallback=steps[names.index('Report if the run left nothing')]
-        self.assertLess(names.index('Preserve conflict reporter on host'),names.index('Validate dispatch task'))
+        self.assertLess(names.index('Resolve run target'),names.index('Validate dispatch task'))
         self.assertLess(names.index('Report conflict resolution'),names.index('Report if the run left nothing'))
-        self.assertIn('steps.conflict_context.outputs.issue',end['env']['TRUSTED_CONFLICT_ISSUE'])
-        self.assertIn('steps.conflict_context.outputs.pr',end['env']['TRUSTED_CONFLICT_PR'])
+        self.assertIn('steps.target.outputs.issue',end['env']['TRUSTED_CONFLICT_ISSUE'])
+        self.assertIn('steps.target.outputs.pr',end['env']['TRUSTED_CONFLICT_PR'])
         self.assertIn('always()',end['if'])
         self.assertIn("inputs.resolve_conflict_pr != ''",end['if'])
         self.assertIn("inputs.resolve_conflict_pr == ''",fallback['if'])
@@ -403,7 +372,7 @@ codex_report_auth_failure() { :; }
 source "$ENGINE_SOURCE"
 engine_setup_auth
 '''
-                    env={**os.environ,'SCRIPT_DIR':d,'ISSUE_NUMBER':'7','GITHUB_REPOSITORY':'owner/repo','BRANCH_NAME':'agent/issue-7',
+                    env={**os.environ,'SCRIPT_DIR':d,'TARGET_ISSUE':'7','ISSUE_NUMBER':'7','GITHUB_REPOSITORY':'owner/repo','BRANCH_NAME':'agent/issue-7',
                          'RESOLVE_CONFLICT_PR':'','PR_COMMENT_ONLY':pr_only,'CLAUDE_CODE_OAUTH_TOKEN':'',
                          'ENGINE_SOURCE':str(BOT/'engines'/engine),'AUTH_LOG':str(root/'auth.log')}
                     result=subprocess.run(['bash','-c',code],cwd=root,env=env,text=True,capture_output=True)

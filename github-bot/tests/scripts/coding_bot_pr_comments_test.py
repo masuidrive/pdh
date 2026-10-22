@@ -132,7 +132,7 @@ class PrCommentContract(MergeProbe):
         with tempfile.TemporaryDirectory(dir=TMP) as temp:
             code=r'''set -e
 BRANCH_NAME=agent/issue-7; GITHUB_REPOSITORY=owner/repo; COMMENT_ID=''; PR_INSTRUCTION=''
-ISSUE_BODY=ISSUE_ACCEPTED_BODY; TRUSTED_LINKED_ISSUE=7
+ISSUE_BODY=ISSUE_ACCEPTED_BODY; TRUSTED_LINKED_ISSUE=7; TARGET_ISSUE=7
 [ "$IS_PR" != true ] || ISSUE_BODY=PR_UNACCEPTED_BODY
 gh() {
  printf '%s\n' "$*" >> "$CALLS"
@@ -250,7 +250,7 @@ gh() {
                 self.assertNotIn('forbidden-working-engine',calls)
                 self.assertEqual('resolve_conflict_pr=9' in calls,decision['conflict'])
                 if decision['other']: self.assertIn('issues/7',calls)
-                if decision['conflict'] and not decision['other']: self.assertNotIn('issue comment',calls)
+                if decision['conflict'] and not decision['other']: self.assertIn('conflict の解消を始めました',calls)
                 self.assertNotIn('質問もあります',calls)
 
     def test_invalid_classifications_never_dispatch_or_push(self):
@@ -373,7 +373,7 @@ pr_comment_engine 'classify only'
 
     def test_pr_runner_exits_before_branch_work_or_working_engine(self):
         source=(BOT/'run-action.sh').read_text()
-        start=source.index('if [ "$IS_PR" = true ]; then\n  # ⚠ PR')
+        start=source.index('if [ "$IS_PR" = true ]; then\n  if [ "${PR_COMMENT_ONLY')
         block=source[start:source.index('\nelse\n  # Issue の場合',start)]+'\nfi\necho forbidden-continuation\n'
         with tempfile.TemporaryDirectory(dir=TMP) as d:
             code=r'''set -euo pipefail
@@ -384,7 +384,7 @@ ENGINE=codex
 RUN_TIMEOUT_SECONDS=60
 ENGINE_FILE=/dev/null
 BASE_BRANCH=main
-validate_pr_context() { TRUSTED_LINKED_ISSUE=7; }
+TRUSTED_LINKED_ISSUE=7; TARGET_ISSUE=7
 fetch_trigger_context() { echo '{"body":"🤖 other request"}'; }
 engine_setup_auth() { :; }
 engine_run() { echo forbidden-working-engine; return 97; }

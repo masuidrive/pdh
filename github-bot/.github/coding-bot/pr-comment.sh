@@ -63,6 +63,10 @@ run_pr_comment() (
       gh workflow run coding-bot.yml --repo "$GITHUB_REPOSITORY" --ref "$BASE_BRANCH" \
         -f issue="$TRUSTED_LINKED_ISSUE" -f resolve_conflict_pr="$ISSUE_NUMBER" -f verify_only=false || status=1
     fi
+    if [ "$decision" = true ] && [ "$status" = 0 ]; then
+      REPORT_ISSUE="$TRUSTED_LINKED_ISSUE"
+      pr_comment_guide "$ISSUE_NUMBER" "https://github.com/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE" "conflict の解消を始めました。結果は [issue](https://github.com/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE) に出ます。" || echo 'Warning: conflict start notice delivery failed' >&2
+    fi
     if [ "$decision" != true ] || [ "$other" = true ] || [ "$status" != 0 ]; then
       if response=$(pr_comment_redirect); then
         [ "$status" = 0 ] || response="解消の起動に失敗しました。 $response"
@@ -88,7 +92,9 @@ run_pr_comment() (
 pr_comment_guide() {
   local pr="$1" report="$2" id body comments
   body="<!-- coding-bot:pr-guide -->
-[報告・質問]($report) は [issue](https://github.com/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE) にあります。PR では Merge と、🤖 付きの conflict 解消の依頼ができます。"
+[報告・質問]($report) は [issue](https://github.com/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE) にあります。PR では Merge と、🤖 付きの conflict 解消の依頼ができます。${3:+
+
+$3}"
   comments=$(gh api "repos/$GITHUB_REPOSITORY/issues/$pr/comments?per_page=100" --paginate --slurp) || return 1
   id=$(printf '%s' "$comments" | jq -r '[.[][] | select(.user.login == "github-actions[bot]") | select(.body | startswith("<!-- coding-bot:pr-guide -->"))] | first | .id // empty') || return 1
   if [[ "$id" =~ ^[1-9][0-9]*$ ]]; then

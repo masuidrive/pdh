@@ -264,7 +264,7 @@ $error_message
     if [ ! -f "$notify" ]; then
       {
         printf 'issue=%s\nkind=failed\ncomment_id=%s\n' \
-          "$(printf '%s' "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" | tr -d '\r\n=')" \
+          "$(printf '%s' "$TARGET_ISSUE" | tr -d '\r\n=')" \
           "$(printf '%s' "$PROGRESS_COMMENT_ID" | tr -d '\r\n=')"
       } > "$notify" 2>/dev/null || true
     fi
@@ -315,8 +315,8 @@ source "$SCRIPT_DIR/ci-autofix-result.sh"
 source "$SCRIPT_DIR/codex-auth.sh"
 codex_snapshot_helpers
 source "$CODING_BOT_AUTH_HELPERS_DIR/codex-auth.sh"
-TRUSTED_LINKED_ISSUE=""
-TRUSTED_PR_BRANCH=""
+TRUSTED_LINKED_ISSUE="${TARGET_ISSUE:-}"
+TRUSTED_PR_BRANCH="agent/issue-${TARGET_ISSUE:-}"
 TRIGGER_ERROR=""
 
 # Select execution engine (claude | codex). MUST be set explicitly — no default.
@@ -406,27 +406,15 @@ CI_WORKFLOW="${CODING_BOT_CI_WORKFLOW:-ci.yml}"
 # Issue/PR情報の取得
 echo "📝 Fetching Issue/PR data..."
 
-# PR か Issue かを判定する。issue_comment は Issue / PR 両方で発火するため、
-# その場合は対象番号が実際に PR かどうかを gh で確認し、PR コメントは分類の後に終了する。
+# 宛先と PR の区別は host の target だけが決める。
+[[ "${TARGET_ISSUE:-}" =~ ^[1-9][0-9]*$ ]] || { echo 'host target issue is required'; exit 1; }
 IS_PR=false
+[ -z "${TARGET_PR:-}" ] || IS_PR=true
+[ -z "${RESOLVE_CONFLICT_PR:-}" ] || IS_PR=false
 CI_RED_MARKER=""
 PR_COMMENT_ONLY=false
-if [[ "$EVENT_TYPE" == "pull_request"* ]] || [ "$EVENT_TYPE" = workflow_run ]; then
-  IS_PR=true
-elif [ "$EVENT_TYPE" = issues ]; then
-  validate_issue_context "$GITHUB_REPOSITORY" "$ISSUE_NUMBER" || exit 1
-elif [ "$EVENT_TYPE" = issue_comment ]; then
-  TRIGGER_ISSUE_DATA=$(gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER") || exit 1
-  IS_PR=$(printf '%s' "$TRIGGER_ISSUE_DATA" | jq -r --argjson number "$ISSUE_NUMBER" \
-    'if .number == $number then has("pull_request") else error("invalid trigger context") end') || exit 1
-fi
-
 if [ "$IS_PR" = true ] && [ -z "${PR_INSTRUCTION:-}" ] && [ "$EVENT_TYPE" != workflow_run ]; then
   PR_COMMENT_ONLY=true
-fi
-
-if [ -n "${RESOLVE_CONFLICT_PR:-}" ]; then
-  validate_conflict_dispatch "$ISSUE_NUMBER" "$RESOLVE_CONFLICT_PR" || { echo "$TRIGGER_ERROR"; exit 1; }
 fi
 
 # PR head SHA に対する直近の CI run を引き、失敗していれば
@@ -502,22 +490,6 @@ EOF
 }
 
 if [ "$IS_PR" = true ]; then
-  # ⚠ PR の出自を fail-closed で検査する。これが無いと、同じ repo の無関係な PR に 🤖 と
-  # 書くだけで、write token を持つ agent がその head branch を checkout して起動する。
-  if ! validate_pr_context "$GITHUB_REPOSITORY" "$ISSUE_NUMBER"; then
-    echo "⛔ Untrusted PR context: $TRIGGER_ERROR"
-    # 出自の拒否は障害ではない。理由をコメントし、報告済みとして exit 0 にする。
-    gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$(printf '%s\n\n%s\n\n%s' \
-      "**この PR では動きません**（${TRIGGER_ERROR}）。" \
-      "coding-bot が触れるのは、自分が作った \`agent/issue-<番号>\` branch の PR だけです。依頼は [issue](https://github.com/$GITHUB_REPOSITORY/issues) に 🤖 付きでコメントしてください。" \
-      "<!-- coding-bot -->")" >/dev/null 2>&1 \
-      || echo "Warning: failed to post the refusal note"
-    : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported" 2>/dev/null || true
-    exit 0
-  fi
-  if [ -n "${PR_INSTRUCTION:-}" ]; then
-    [ "$TRUSTED_LINKED_ISSUE" = "${PR_TASK_ISSUE:-}" ] || { echo 'task issue does not match PR head'; exit 1; }
-  fi
   if [ "${PR_COMMENT_ONLY:-false}" = true ]; then
     USER_REQUEST=$(fetch_trigger_context "$EVENT_TYPE" "$GITHUB_REPOSITORY" "$ISSUE_NUMBER" "$COMMENT_ID" | jq -er '.body') || exit 1
     RUN_TIMEOUT_SECONDS="${CODING_BOT_TIMEOUT:-5400}"
@@ -557,7 +529,7 @@ if [ "$IS_PR" = true ]; then
 
 else
   # Issue の場合
-  ISSUE_DATA=$(gh issue view $ISSUE_NUMBER \
+  ISSUE_DATA=$(gh issue view "$TARGET_ISSUE" \
     --json title,body,comments,labels \
     --repo $GITHUB_REPOSITORY)
 
@@ -570,7 +542,7 @@ else
   ISSUE_LABELS=$(echo "$ISSUE_DATA" | jq -r '[.labels[].name] | join(", ")')
 
   # Issue の場合: 新しいブランチ名を作成
-  BRANCH_NAME="agent/issue-${ISSUE_NUMBER}"
+  BRANCH_NAME="agent/issue-${TARGET_ISSUE}"
   echo "📌 Issue branch: $BRANCH_NAME"
 
   if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
@@ -587,7 +559,7 @@ else
 fi
 
 # REST API で全コメント取得（数値 ID 付き。COMMENT_ID とのマッチングに必要）
-CONTEXT_ISSUE="${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}"
+CONTEXT_ISSUE="$TARGET_ISSUE"
 ALL_COMMENTS_JSON=$(gh api "repos/$GITHUB_REPOSITORY/issues/$CONTEXT_ISSUE/comments" --paginate \
   --jq '[.[] | {id: .id, login: .user.login, body: .body}]' 2>/dev/null || echo '[]')
 if [ "$EVENT_TYPE" = workflow_run ] || [ -n "${RESOLVE_CONFLICT_PR:-}" ]; then
@@ -916,7 +888,7 @@ source "$ENGINE_FILE"
 
 # 初期コメント投稿
 echo "💬 Posting initial progress comment..."
-REPORT_ISSUE="${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}"
+REPORT_ISSUE="$TARGET_ISSUE"
 PROGRESS_COMMENT_ID=$(gh api repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments \
   -f body="🤖 **作業中...**" --jq '.id')
 
@@ -1089,7 +1061,7 @@ engine_run
 
 # engine 起動直後に待ち印を外す。終了後だけでは、run 中も人の番と表示される。
 if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
-  bash "$SCRIPT_DIR/pdh-hooks.sh" start "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "$BRANCH_NAME" || true
+  bash "$SCRIPT_DIR/pdh-hooks.sh" start "$TARGET_ISSUE" "$BRANCH_NAME" || true
 fi
 
 # GitHub Actions URL を取得
@@ -1150,7 +1122,7 @@ ${PLAN_SUMMARY}"
   # PDH 側パッチ: AC の進み具合を計画要約の直後に出す（github-bot/pdh-hooks.sh。PDH mode のみ）。
   # ⚠ AC の本当の状態は ticket.md にあるので、そこから読む。API は呼ばない。
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
-    AC_BLOCK=$(bash "$SCRIPT_DIR/pdh-hooks.sh" progress "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" 2>/dev/null || true)
+    AC_BLOCK=$(bash "$SCRIPT_DIR/pdh-hooks.sh" progress "$TARGET_ISSUE" 2>/dev/null || true)
     if [ -n "$AC_BLOCK" ]; then
       COMMENT_BODY="${COMMENT_BODY}
 
@@ -1511,8 +1483,8 @@ ${IMG_NOTE}"
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
     # ⚠ PR run では ISSUE_NUMBER は PR 番号。ticket は Issue 番号で探す
     # （名前 *-issue-<N> か frontmatter の branch: agent/issue-<N> / issue: <N>）。
-    # 紐づく Issue 番号（validate_pr_context が設定）を渡す。
-    HOOK_ISSUE="${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}"
+    # host の target が渡した issue 番号を使う。
+    HOOK_ISSUE="$TARGET_ISSUE"
     HOOKED=$(printf '%s' "$CLAUDE_OUTPUT_CLEAN" | bash "$SCRIPT_DIR/pdh-hooks.sh" final "$HOOK_ISSUE" "$BRANCH_NAME" "$PROGRESS_COMMENT_ID") \
       && [ -n "$HOOKED" ] && CLAUDE_OUTPUT_CLEAN="$HOOKED" || echo "Warning: pdh-hooks.sh failed; posting report unchanged"
   fi
@@ -1551,13 +1523,13 @@ else
   # ⚠ この経路では pdh-hooks の final が呼ばれない（成功側の中にしかない）。止まっていて人の手が
   # 要るという意味は gate 停止と同じなので、失敗側からも awaiting-reply を付ける。
   if [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
-    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "$BRANCH_NAME" "$PROGRESS_COMMENT_ID" || true
+    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "$TARGET_ISSUE" "$BRANCH_NAME" "$PROGRESS_COMMENT_ID" || true
   fi
   # ⚠ PDH の無い repo / hook 失敗でも、engine の失敗は host へ伝える。
   if [ ! -f "$CODING_BOT_NOTIFY_FILE" ]; then
     {
       printf 'issue=%s\nkind=failed\ncomment_id=%s\n' \
-        "$(printf '%s' "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" | tr -d '\r\n=')" \
+        "$(printf '%s' "$TARGET_ISSUE" | tr -d '\r\n=')" \
         "$(printf '%s' "$PROGRESS_COMMENT_ID" | tr -d '\r\n=')"
     } > "$CODING_BOT_NOTIFY_FILE" || true
   fi

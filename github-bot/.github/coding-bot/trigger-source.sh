@@ -1,6 +1,5 @@
 #!/bin/bash
 # イベント本文の取得と、共有の宛先検証。
-source "$(dirname "${BASH_SOURCE[0]}")/resolve-target.sh"
 
 fetch_trigger_context() {
   local event_type="$1" repository="$2" issue_number="$3" comment_id="$4"

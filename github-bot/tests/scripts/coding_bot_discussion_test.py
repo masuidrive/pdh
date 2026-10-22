@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
 ROOT = next(p for p in Path(__file__).resolve().parents if (p/'.github/coding-bot/discussion.py').is_file())
 BOT=Path(os.environ.get('BOT_MODULE_PATH', ROOT/'.github/coding-bot'))
@@ -48,24 +49,22 @@ class DiscussionContract(unittest.TestCase):
         self.assertIsNone(pending_question(resource,[question,answer], 'owner/repo',7))
 
     def test_conflict_dispatch_checks_inputs_and_pr_origin(self):
-        code='''source "$BOT/trigger-source.sh"
-gh() {
- if [[ "$2" == */pulls/9 ]]; then printf '{"state":"open","head":{"ref":"%s","repo":{"full_name":"owner/repo"}}}' "$HEAD_REF";
- elif [[ "$2" == */issues/7 ]]; then echo '{"number":7}'; else return 98; fi
-}
-validate_conflict_dispatch "$ISSUE" "$PR"
-'''
-        for issue,pr,ref,instruction,paths,ok in [
-            ('7','9','agent/issue-7','','',True),('8','9','agent/issue-7','','',False),
-            ('7','9','human-feature','','',False),('7','9','agent/issue-7','other task','',False),
-            ('7','9','agent/issue-7','','["src/app.py"]',False),
-            ('0','9','agent/issue-7','','',False),('7','9;echo wrong','agent/issue-7','','',False),
-            ('7','','agent/issue-7','','',False)]:
-            with self.subTest(issue=issue,pr=pr,ref=ref,instruction=instruction,paths=paths):
-                env={**os.environ,'BOT':str(BOT),'GITHUB_REPOSITORY':'owner/repo','ISSUE':issue,'PR':pr,
-                     'HEAD_REF':ref,'PR_INSTRUCTION':instruction,'PR_TASK_ALLOWED_PATHS':paths,'RESOLVE_CONFLICT_PR':pr}
-                result=subprocess.run(['bash','-c',code],env=env,text=True,capture_output=True)
-                self.assertEqual(result.returncode==0,ok,result.stderr)
+        with tempfile.TemporaryDirectory() as d:
+            for issue,pr,ref,instruction,paths,ok in [
+                ('7','9','agent/issue-7','','',True),('8','9','agent/issue-7','','',False),
+                ('7','9','human-feature','','',False),('7','9','agent/issue-7','other task','',False),
+                ('7','9','agent/issue-7','','["src/app.py"]',False),
+                ('0','9','agent/issue-7','','',False),('7','9;echo wrong','agent/issue-7','','',False)]:
+                with self.subTest(issue=issue,pr=pr,ref=ref,instruction=instruction,paths=paths):
+                    output=Path(d)/'output';output.write_text('')
+                    code='source "$BOT/resolve-target.sh"\ngh() { if [[ "$2" == */pulls/9 ]]; then printf \'{ "state":"open","head":{"ref":"%s","repo":{"full_name":"owner/repo"}}}\' "$HEAD_REF"; else echo \'{"number":7}\'; fi; }\nresolve_target'
+                    env={**os.environ,'BOT':str(BOT),'GITHUB_REPOSITORY':'owner/repo','GITHUB_EVENT_NAME':'workflow_dispatch',
+                         'DISPATCH_ISSUE':issue,'DISPATCH_PR':'','GITHUB_OUTPUT':str(output),'RUNNER_TEMP':d,
+                         'HEAD_REF':ref,'PR_INSTRUCTION':instruction,'PR_TASK_ALLOWED_PATHS':paths,'RESOLVE_CONFLICT_PR':pr}
+                    result=subprocess.run(['bash','-c',code],env=env,text=True,capture_output=True)
+                    self.assertEqual(result.returncode,0,result.stderr)
+                    values=dict(x.split('=',1) for x in output.read_text().splitlines())
+                    self.assertEqual(values['issue']=='7',ok,values)
 
 class IssueInputContract(unittest.TestCase):
     def test_only_issue_comments_are_answers_in_working_engine_rules(self):
@@ -92,19 +91,16 @@ class IssueInputContract(unittest.TestCase):
             self.assertNotIn('Issue/PR',text.split('---',1)[0])
             self.assertIn('Issue thread',text.split('---',1)[0])
 
-    def test_issue_only_dispatch_and_ordinary_issue_input_reject_pr_numbers(self):
-        source=(BOT/'run-action.sh').read_text()
-        block=source[source.index('IS_PR=false'):source.index('if [ "$IS_PR" = true ] &&')]
-        for resource,expected in [({'number':7},True),({'number':7,'pull_request':{}},False),({'number':8},False)]:
-            for route in ['dispatch','issues','issue_comment']:
-                if route=='issue_comment' and 'pull_request' in resource:continue
-                code='source "$BOT/trigger-source.sh"\ngh() { printf "%s\\n" "$RESOURCE"; }\n'
-                code+=('validate_dispatch_request 7 "" ""' if route=='dispatch' else block)
-                env={**os.environ,'BOT':str(BOT),'RESOURCE':json.dumps(resource),'ISSUE_NUMBER':'7',
-                     'GITHUB_REPOSITORY':'owner/repo','EVENT_TYPE':route,'RESOLVE_CONFLICT_PR':'','PR_INSTRUCTION':''}
-                with self.subTest(route=route,resource=resource):
-                    result=subprocess.run(['bash','-c',code],env=env,text=True,capture_output=True)
-                    self.assertEqual(result.returncode==0,expected,result.stderr)
-        print('CONTRAST PASS: real issue input remains accepted',flush=True)
+    def test_issue_only_dispatch_rejects_pr_numbers(self):
+        with tempfile.TemporaryDirectory() as d:
+            for resource,ok in [({'number':7},True),({'number':7,'pull_request':{}},False),({'number':8},False)]:
+                output=Path(d)/'output';output.write_text('')
+                code='source "$BOT/resolve-target.sh"\ngh() { printf "%s\\n" "$RESOURCE"; }\nresolve_target'
+                env={**os.environ,'BOT':str(BOT),'RESOURCE':json.dumps(resource),'DISPATCH_ISSUE':'7','DISPATCH_PR':'',
+                     'GITHUB_REPOSITORY':'owner/repo','GITHUB_EVENT_NAME':'workflow_dispatch','RESOLVE_CONFLICT_PR':'','PR_INSTRUCTION':'','RUNNER_TEMP':d,'GITHUB_OUTPUT':str(output)}
+                result=subprocess.run(['bash','-c',code],env=env,text=True,capture_output=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertEqual('issue=7' in output.read_text(),ok)
+        print('CONTRAST PASS: real issue dispatch remains accepted',flush=True)
 
 if __name__=='__main__':unittest.main(verbosity=2)

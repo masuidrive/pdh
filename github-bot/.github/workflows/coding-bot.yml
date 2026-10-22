@@ -131,8 +131,40 @@ jobs:
       actions: write # bot が最終 SHA の CI を workflow_dispatch で明示起動するために必要
 
     steps:
+      # ステップ2: コードチェックアウト
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve run target
+        id: target
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NUMBER: ${{ env.BOT_ISSUE }}
+          EVENT_IS_PR: ${{ github.event_name == 'workflow_run' || github.event.issue.pull_request != null || github.event.pull_request != null }}
+          DISPATCH_ISSUE: ${{ inputs.issue }}
+          DISPATCH_PR: ${{ inputs.pr }}
+          PR_INSTRUCTION: ${{ inputs.instruction }}
+          RESOLVE_CONFLICT_PR: ${{ inputs.resolve_conflict_pr }}
+          PR_TASK_ALLOWED_PATHS: ${{ inputs.allowed_paths }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] && [ "$EVENT_IS_PR" != true ]; then
+            printf 'issue=%s\npr=\nreason=\n' "$EVENT_NUMBER" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/coding-bot-target"
+          for file in resolve-target.sh discussion.py; do
+            git show "origin/${{ github.event.repository.default_branch }}:.github/coding-bot/$file" > "$RUNNER_TEMP/coding-bot-target/$file"
+          done
+          bash "$RUNNER_TEMP/coding-bot-target/resolve-target.sh"
+
       # ステップ1: 即座に 👀 リアクションを追加
       - name: Add eyes reaction to comment
+        if: steps.target.outputs.issue != ''
         run: |
           # この run が起票した issue を、終わりに見分けるための時刻
           echo "BOT_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
@@ -157,57 +189,29 @@ jobs:
               -d '{"content":"eyes"}'
           fi
 
-      # ステップ2: コードチェックアウト
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Preserve conflict reporter on host
-        id: conflict_context
         if: inputs.resolve_conflict_pr != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          RESOLVE_CONFLICT_PR: ${{ inputs.resolve_conflict_pr }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/coding-bot-conflict"
-          [[ "$RESOLVE_CONFLICT_PR" =~ ^[1-9][0-9]*$ ]] || exit 1
-          data=$(gh api "repos/$REPO/pulls/$RESOLVE_CONFLICT_PR")
-          issue=$(printf '%s' "$data" | jq -er --arg repo "$REPO" '
-            select(.head.repo.full_name == $repo) | .head.ref |
-            capture("^agent/issue-(?<issue>[1-9][0-9]*)$").issue') || exit 0
-          resource=$(gh api "repos/$REPO/issues/$issue")
-          printf '%s' "$resource" | jq -e --argjson n "$issue" '.number == $n and (has("pull_request") | not)' >/dev/null || exit 0
-          printf 'issue=%s\npr=%s\n' "$issue" "$RESOLVE_CONFLICT_PR" >> "$GITHUB_OUTPUT"
-          for file in conflict-report.py discussion.py; do
-            git show "origin/${{ github.event.repository.default_branch }}:.github/coding-bot/$file" > "$RUNNER_TEMP/coding-bot-conflict/$file"
-          done
+          git show "origin/${{ github.event.repository.default_branch }}:.github/coding-bot/conflict-report.py" > "$RUNNER_TEMP/coding-bot-conflict/conflict-report.py"
 
       - name: Validate dispatch task
-        id: dispatch_context
         if: github.event_name == 'workflow_dispatch'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DISPATCH_ISSUE: ${{ inputs.issue }}
+          TARGET_REASON: ${{ steps.target.outputs.reason }}
           DISPATCH_PR: ${{ inputs.pr }}
-          PR_INSTRUCTION: ${{ inputs.instruction }}
-          RESOLVE_CONFLICT_PR: ${{ inputs.resolve_conflict_pr }}
           PR_TASK_ALLOWED_PATHS: ${{ inputs.allowed_paths }}
         run: |
-          source .github/coding-bot/trigger-source.sh
-          validate_dispatch_request "$DISPATCH_ISSUE" "$DISPATCH_PR" "$PR_INSTRUCTION" "$RESOLVE_CONFLICT_PR"
+          if [ -n "$TARGET_REASON" ]; then
+            echo "::error::$TARGET_REASON"
+            echo "$TARGET_REASON" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           if [ -n "$DISPATCH_PR" ] && [ -z "$PR_TASK_ALLOWED_PATHS" ]; then
             echo '::error::allowed_paths is required for a PR instruction task (non-empty JSON array of paths)'
             exit 1
           fi
-          if [ -n "$DISPATCH_PR" ]; then
-            validate_pr_context "$GITHUB_REPOSITORY" "$DISPATCH_PR"
-            [ "$TRUSTED_LINKED_ISSUE" = "$DISPATCH_ISSUE" ] || exit 1
-          fi
-          printf 'issue=%s\n' "$DISPATCH_ISSUE" >> "$GITHUB_OUTPUT"
 
       # ⚠ agent が書き換えられる workspace の script を、秘密付きで実行しない。
       # container に mount されない場所へ、default branch の版を git から直接退避する。
@@ -220,7 +224,7 @@ jobs:
             echo "Warning: default branch の通知 script を退避できない"
           fi
           mkdir -p "$RUNNER_TEMP/coding-bot-notification"
-          for file in discussion.py trigger-source.sh pr-comment.sh; do
+          for file in discussion.py pr-comment.sh; do
             if ! git show "origin/${{ github.event.repository.default_branch }}:.github/coding-bot/$file" > "$RUNNER_TEMP/coding-bot-notification/$file"; then
               rm -f "$RUNNER_TEMP/coding-bot-notification/$file"
               echo "Warning: default branch の $file を退避できない"
@@ -299,6 +303,7 @@ jobs:
       #   中身は .github/coding-bot/run-in-container.sh にある（元は runCmd: の inline）。
       - name: Run Agent
         id: run_claude
+        if: steps.target.outputs.reason == '' && (steps.target.outputs.issue != '' || inputs.verify_only)
         # secret は env から値なしの -e で渡し、shell の引用と command line への露出を避ける。
         env:
           CODING_BOT_ENGINE: ${{ vars.CODING_BOT_ENGINE }}
@@ -318,12 +323,13 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GITHUB_RUN_ID: ${{ github.run_id }}
-          ISSUE_NUMBER: ${{ env.BOT_ISSUE }}
+          ISSUE_NUMBER: ${{ steps.target.outputs.pr || steps.target.outputs.issue }}
+          TARGET_ISSUE: ${{ steps.target.outputs.issue }}
+          TARGET_PR: ${{ steps.target.outputs.pr }}
           CI_AUTOFIX_RUN_ID: ${{ needs.ci-autofix.outputs.run_id }}
           CI_AUTOFIX_HEAD_SHA: ${{ needs.ci-autofix.outputs.head_sha }}
           EVENT_TYPE: ${{ env.BOT_EVENT }}
           PR_INSTRUCTION: ${{ inputs.pr != '' && inputs.instruction || '' }}
-          PR_TASK_ISSUE: ${{ inputs.issue }}
           RESOLVE_CONFLICT_PR: ${{ inputs.resolve_conflict_pr }}
           PR_TASK_ALLOWED_PATHS: ${{ inputs.allowed_paths }}
           COMMENT_ID: ${{ github.event.comment.id || github.event.review.id }}
@@ -361,11 +367,12 @@ jobs:
             -e GITHUB_DEFAULT_BRANCH \
             -e GITHUB_RUN_ID \
             -e ISSUE_NUMBER \
+            -e TARGET_ISSUE \
+            -e TARGET_PR \
             -e CI_AUTOFIX_RUN_ID \
             -e CI_AUTOFIX_HEAD_SHA \
             -e EVENT_TYPE \
             -e PR_INSTRUCTION \
-            -e PR_TASK_ISSUE \
             -e RESOLVE_CONFLICT_PR \
             -e PR_TASK_ALLOWED_PATHS \
             -e COMMENT_ID \
@@ -381,7 +388,7 @@ jobs:
 
       # エラー時の処理: 👀 を削除して 😟 を追加
       - name: Handle error - Remove eyes and add confused reaction
-        if: failure()
+        if: failure() && steps.target.outputs.issue != ''
         run: |
           # イベントタイプに応じてコメントIDとURLを設定
           if [ "$BOT_EVENT" = "issue_comment" ]; then
@@ -434,37 +441,6 @@ jobs:
               -d '{"content":"confused"}'
           fi
 
-      # workspace の通知ファイルとは別に、イベントと GitHub API から依頼 issue を決める。
-      - name: Resolve devbot notification issue
-        id: notification_context
-        if: always() && inputs.resolve_conflict_pr == ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          EVENT_NUMBER: ${{ env.BOT_ISSUE }}
-          VALIDATED_ISSUE: ${{ steps.dispatch_context.outputs.issue }}
-          DISPATCH_ISSUE: ${{ inputs.issue }}
-          EVENT_IS_PR: ${{ inputs.pr != '' || github.event_name == 'workflow_run' || github.event.issue.pull_request != null || github.event.pull_request != null }}
-        run: |
-          set -uo pipefail
-          issue=""; pr=""
-          if [[ "$EVENT_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-            if [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ]; then
-              issue="${VALIDATED_ISSUE:-$DISPATCH_ISSUE}"
-              if [ "$EVENT_IS_PR" = true ]; then pr="$EVENT_NUMBER"; fi
-            elif [ "$EVENT_IS_PR" = true ]; then
-              if source "$RUNNER_TEMP/coding-bot-notification/trigger-source.sh" && validate_pr_context "$REPO" "$EVENT_NUMBER"; then
-                issue="$TRUSTED_LINKED_ISSUE"; pr="$EVENT_NUMBER"
-              fi
-            else
-              issue="$EVENT_NUMBER"
-            fi
-          fi
-          if [ -z "$issue" ]; then
-            echo "Warning: 通知先の依頼 issue を確認できない。送信しない"
-          fi
-          printf 'issue=%s\npr=%s\n' "$issue" "$pr" >> "$GITHUB_OUTPUT"
-
       # ⚠ run が «何も残さずに» 死ぬのを塞ぐ（F1）。
       #
       # 実測（ある導入先の issue）: run が failure で終わったが、
@@ -482,17 +458,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          TRUSTED_CONFLICT_PR: ${{ steps.conflict_context.outputs.pr }}
-          TRUSTED_CONFLICT_ISSUE: ${{ steps.conflict_context.outputs.issue }}
+          TRUSTED_CONFLICT_PR: ${{ steps.target.outputs.pr }}
+          TRUSTED_CONFLICT_ISSUE: ${{ steps.target.outputs.issue }}
         run: |
           set -uo pipefail
           report_status=0
           python3 -I "$RUNNER_TEMP/coding-bot-conflict/conflict-report.py" report || report_status=$?
-          case "$report_status" in 0|3) exit "$report_status" ;; esac
+          case "$report_status" in 0|3) exit 0 ;; esac
           # Only the context verified before the engine can select a destination.
           issue="${TRUSTED_CONFLICT_ISSUE:-}"
           [[ "$issue" =~ ^[1-9][0-9]*$ ]] && [[ "${TRUSTED_CONFLICT_PR:-}" =~ ^[1-9][0-9]*$ ]] || exit 0
-          delivered="$RUNNER_TEMP/coding-bot-conflict/issue-comment-$GITHUB_RUN_ATTEMPT"
+          delivered="$RUNNER_TEMP/coding-bot-conflict/issue-comment-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           if [ -f "$delivered" ] && [[ "$(cat "$delivered")" =~ ^[1-9][0-9]*$ ]]; then exit 0; fi
           marker="<!-- coding-bot:conflict-report run=$GITHUB_RUN_ID attempt=$GITHUB_RUN_ATTEMPT -->"
           body="conflict の解消の結果を確かめられませんでした。このスレッドで対応を相談してください。
@@ -516,8 +492,10 @@ jobs:
           PR: ${{ inputs.pr }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          TRUSTED_ISSUE: ${{ steps.notification_context.outputs.issue }}
-          TRUSTED_PR: ${{ steps.notification_context.outputs.pr }}
+          TRUSTED_ISSUE: ${{ steps.target.outputs.issue }}
+          TRUSTED_PR: ${{ steps.target.outputs.pr }}
+          TARGET_REASON: ${{ steps.target.outputs.reason }}
+          EVENT_PR: ${{ github.event.issue.number || github.event.pull_request.number }}
           CONCLUSION: ${{ job.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -526,37 +504,32 @@ jobs:
             echo "run-action.sh が最終レポートを投稿済み。何もしない"; exit 0
           fi
           if [ -z "${TRUSTED_ISSUE:-}" ]; then
-            echo "報告先の issue を確認できません。PR への報告は出さず、実行ログに残します。"
+            if [ "${PR_COMMENT_ONLY:-false}" = true ]; then
+              case "${TARGET_REASON:-}" in
+                '対象外:'*) body="この PR では動きません（$TARGET_REASON）。coding-bot が作った agent/issue-<番号> の PR だけが対象です。" ;;
+                *) body="依頼先の issue を確かめられませんでした（${TARGET_REASON:-宛先を取得できません}）。少し待ってもう一度 🤖 を書いてください。" ;;
+              esac
+              gh issue comment "$EVENT_PR" --repo "$REPO" --body "$body [実行ログ]($RUN_URL)" || echo 'Warning: PR target notice delivery failed' >&2
+            else
+              echo "::error::${TARGET_REASON:-報告先の issue を確認できません}"
+              echo "${TARGET_REASON:-報告先の issue を確認できません}" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            fi
             exit 0
           fi
           if [ "${PR_COMMENT_ONLY:-false}" = true ]; then
             source "$RUNNER_TEMP/coding-bot-notification/pr-comment.sh"
             TRUSTED_LINKED_ISSUE="$TRUSTED_ISSUE"
             GITHUB_REPOSITORY="$REPO"
-            response=$(pr_comment_redirect) || exit 1
+            response=$(pr_comment_redirect) || response="[issue](https://github.com/$REPO/issues/$TRUSTED_ISSUE) に書いてください。"
             gh issue comment "$TRUSTED_PR" --repo "$REPO" \
-              --body "この依頼の処理は結果を残さずに終わりました。conflict の解消が始まったかは確かめられていません。もう一度頼むには、conflict 解消はこの PR に 🤖 を付けて、その他の依頼は issue に書いてください。 $response [実行ログ]($RUN_URL)"
-            exit $?
+              --body "この依頼の処理は結果を残さずに終わりました。conflict の解消が始まったかは確かめられていません。もう一度頼むには、conflict 解消はこの PR に 🤖 を付けて、その他の依頼は issue に書いてください。 $response [実行ログ]($RUN_URL)" || echo 'Warning: PR redirect delivery failed' >&2
+            exit 0
           fi
           if [ -n "${PR_INSTRUCTION:-}" ]; then
             body="指定仕事が結果を残さずに終了（${CONCLUSION}）。[実行ログ]($RUN_URL)"
             echo "$body" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
-            # The runner saves the exact progress ID before starting the agent.
-            progress_file="$GITHUB_WORKSPACE/.coding-bot-task-progress"
-            progress_id=""
-            if [ -f "$progress_file" ]; then progress_id=$(cat "$progress_file"); fi
-            progress=""
-            if [[ "$progress_id" =~ ^[1-9][0-9]*$ ]]; then
-              progress=$(gh api "repos/$REPO/issues/comments/$progress_id") || progress=""
-            fi
-            if [ -n "$progress" ] && printf '%s' "$progress" | jq -e --arg url "https://api.github.com/repos/$REPO/issues/$TRUSTED_ISSUE" '
-              .issue_url == $url and .user.login == "github-actions[bot]"' >/dev/null 2>&1; then
-              gh api -X PATCH "repos/$REPO/issues/comments/$progress_id" -f body="$body" || \
-                echo 'Could not update task progress; see logs/summary' >&2
-            elif [[ "${TRUSTED_ISSUE:-}" =~ ^[1-9][0-9]*$ ]]; then
-              gh api "repos/$REPO/issues/$TRUSTED_ISSUE/comments" -f body="$body" || \
-                echo 'Could not post task result; see logs/summary' >&2
-            fi
+            gh api "repos/$REPO/issues/$TRUSTED_ISSUE/comments" -f body="$body" || \
+              echo 'Could not post task result; see logs/summary' >&2
             exit 0
           fi
           ISSUE="$TRUSTED_ISSUE"
@@ -588,8 +561,8 @@ jobs:
       - name: Tell devbot why the run stopped
         if: always() && (github.event_name != 'workflow_dispatch' || inputs.issue != '')
         env:
-          TRUSTED_ISSUE: ${{ steps.notification_context.outputs.issue }}
-          TRUSTED_PR: ${{ steps.notification_context.outputs.pr }}
+          TRUSTED_ISSUE: ${{ steps.target.outputs.issue }}
+          TRUSTED_PR: ${{ steps.target.outputs.pr }}
           CODING_BOT_NOTIFY_URL: ${{ vars.CODING_BOT_NOTIFY_URL }}
           # 未設定なら送らない（INSTALL.md「任意: 止まったことを外へ知らせる」）
           CODING_BOT_NOTIFY_SECRET: ${{ secrets.CODING_BOT_NOTIFY_SECRET }}
@@ -616,20 +589,8 @@ jobs:
               pr) pr="$value" ;;
             esac
           done < "$GITHUB_WORKSPACE/.coding-bot-notify"
-          if [ -z "$TRUSTED_ISSUE" ] || [ "$issue" != "$TRUSTED_ISSUE" ]; then
-            echo "Warning: 通知ファイルの issue が確認済みの依頼 issue と一致しない。送信しない"
-            exit 0
-          fi
-          # ⚠ PR から起動した run では、pr も event から決まる。ファイルに無ければ補い
-          #   （runner の失敗経路は pr を書かない）、違う PR を名乗っていれば送らない。
-          if [ -n "${TRUSTED_PR:-}" ]; then
-            if [ -z "$pr" ]; then
-              pr="$TRUSTED_PR"
-            elif [ "$pr" != "$TRUSTED_PR" ]; then
-              echo "Warning: 通知ファイルの pr が起動元の PR と一致しない。送信しない"
-              exit 0
-            fi
-          fi
+          [ -n "$TRUSTED_ISSUE" ] || exit 0
+          issue="$TRUSTED_ISSUE"; pr="$TRUSTED_PR"
           "$RUNNER_TEMP/notify-devbot.sh" "$issue" "$kind" "$stage" "$comment_id" "$pr" "$RUN_URL" || true
           exit 0
 

@@ -65,7 +65,7 @@ For more information, see the [Claude Code documentation](https://docs.anthropic
   # いちばん多い «止まっていて人の手が要る» 停止なので、ここで直接付ける。
   # ⚠ branch を渡すのは、待ち印と通知に PR のリンクも含めるため。
   if [ "${PR_COMMENT_ONLY:-false}" != true ] && [ -f "$SCRIPT_DIR/pdh-hooks.sh" ] && [ -f product-brief.md ] && [ -d tickets ]; then
-    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "${TRUSTED_LINKED_ISSUE:-$ISSUE_NUMBER}" "${BRANCH_NAME:-}" || true
+    bash "$SCRIPT_DIR/pdh-hooks.sh" failed "$TARGET_ISSUE" "${BRANCH_NAME:-}" || true
   fi
   exit 1
 }

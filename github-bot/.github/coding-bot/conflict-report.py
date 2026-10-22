@@ -96,7 +96,7 @@ def report(repo, pr, run, issue):
 
     comment = upsert(issue, f'{text}\n\n[PR](https://github.com/{repo}/pull/{pr}) / '
                      f'[実行ログ](https://github.com/{repo}/actions/runs/{run})\n\n{marker}')
-    (result_file().parent / f'issue-comment-{attempt}').write_text(str(comment['id']))
+    (result_file().parent / f'issue-comment-{run}-{attempt}').write_text(str(comment['id']))
     if data is not None and data['state'] == 'open':
         try:
             url = comment['html_url']

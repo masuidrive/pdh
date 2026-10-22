@@ -2,7 +2,7 @@
 # workflow_run の判定。issue の workflow lock を取得した後に decide を呼ぶ。
 set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-source "$SCRIPT_DIR/trigger-source.sh"
+source "$SCRIPT_DIR/resolve-target.sh"
 source "$SCRIPT_DIR/ci-autofix-result.sh"
 TRIGGER_ERROR=""
 
