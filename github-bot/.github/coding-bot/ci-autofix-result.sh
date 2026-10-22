@@ -86,6 +86,13 @@ ci_autofix_prepare() {
   fi
 }
 
+ci_autofix_comment() {
+  local payload script_dir="${SCRIPT_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}"
+  payload=$(printf '%s' "$3" | python3 -I "$script_dir/comment-body.py" \
+    "https://github.com/$GITHUB_REPOSITORY/actions/runs/${GITHUB_RUN_ID:-}") || return 1
+  gh api -X "$1" "$2" --input - <<< "$payload"
+}
+
 ci_autofix_finish() {
   local reason="" pr_data new_sha summary body auto_merge_note="" changes marker
   marker=$(ci_autofix_red_marker "$ISSUE_NUMBER" "$CI_AUTOFIX_HEAD_SHA" "$CI_AUTOFIX_RUN_ID")
@@ -127,19 +134,28 @@ ci_autofix_finish() {
   if [ -n "$reason" ]; then
     body=$(printf '%s\n\n直せなかった: %s\n\n%s\n\n%s\n\n%s\n\n<!-- coding-bot -->' \
       "$marker" "$reason" "$body" "$CLAUDE_OUTPUT" "$auto_merge_note")
-    gh issue comment "$TRUSTED_LINKED_ISSUE" --repo "$GITHUB_REPOSITORY" --body "$body" || return 1
-    gh issue edit "$TRUSTED_LINKED_ISSUE" --repo "$GITHUB_REPOSITORY" --add-label awaiting-reply || return 1
-    gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID" \
-      -f body="$marker
+    [ "$ENGINE_EXIT_CODE" -ne 0 ] || ENGINE_EXIT_CODE=1
+    if ! ci_autofix_comment POST "repos/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE/comments" "$body"; then
+      echo 'Warning: could not deliver CI failure report; workflow fallback will report' >&2
+      return 0
+    fi
+    : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported"
+    gh issue edit "$TRUSTED_LINKED_ISSUE" --repo "$GITHUB_REPOSITORY" --add-label awaiting-reply \
+      || echo 'Warning: could not add awaiting-reply to CI failure report' >&2
+    ci_autofix_comment PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID" "$marker
 
 直せなかった。理由はこのスレッドに報告しました。[issue](https://github.com/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE)
 
-<!-- coding-bot -->" || return 1
+<!-- coding-bot -->" || echo 'Warning: could not update CI failure progress link' >&2
   else
-    changes=$(git log --format='- %s' "$CI_AUTOFIX_START_SHA..HEAD") || return 1
+    changes=$(git log --format='- %s' "$CI_AUTOFIX_START_SHA..HEAD") \
+      || changes="変更の要約を取得できませんでした。修正 commit: $new_sha"
     body=$(printf '%s\n\n%s\n\n何を直したか:\n%s\n\n%s\n\n%s\n\n修正 commit: %s\n\nCI の結果を確認し、緑なら Merge してください。\n\n<!-- coding-bot -->' \
       "$marker" "$body" "$CLAUDE_OUTPUT" "$changes" "$auto_merge_note" "$new_sha")
-    gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID" -f body="$body" || return 1
+    if ! ci_autofix_comment PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID" "$body"; then
+      echo 'Warning: could not deliver CI completion report; workflow fallback will report' >&2
+      return 0
+    fi
   fi
   : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported"
 }
