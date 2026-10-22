@@ -4,7 +4,7 @@ set -euo pipefail
 resolved_link() {
   python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
 }
-ROOT_DIR=${PDH_TEST_ROOT:?test-distributed-scripts.sh が作る導入先を指定する}
+ROOT_DIR=${PDH_TEST_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}
 ENTER="$ROOT_DIR/.github/coding-bot/enter-branch-worktree.sh"
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
