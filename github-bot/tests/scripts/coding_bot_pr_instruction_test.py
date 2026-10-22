@@ -140,10 +140,15 @@ validate_pr_context team/repo 34 && [ "$TARGET_PR_STATE" = open ]
                     PR_INSTRUCTION="task", GITHUB_WORKSPACE=d, GITHUB_STEP_SUMMARY=str(Path(d)/"summary"),
                     ISSUE="34", TRUSTED_ISSUE="12", REPO="team/repo", CONCLUSION=conclusion, RUN_URL="run")
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("repos/team/repo/issues/12/comments", result.stdout)
+                if conclusion == 'success':
+                    self.assertIn("issue comment 12", result.stdout)
+                    self.assertIn("作業は終わりましたが、報告の投稿に失敗しました", result.stdout)
+                else:
+                    self.assertIn("repos/team/repo/issues/12/comments", result.stdout)
                 self.assertNotIn("awaiting-reply", result.stdout)
                 self.assertNotIn("もう一度やらせるには", result.stdout)
-                self.assertIn(conclusion, (Path(d)/"summary").read_text())
+                summary=(Path(d)/"summary").read_text()
+                self.assertIn('報告の投稿に失敗しました' if conclusion=='success' else conclusion,summary)
 
     def test_task_final_result_updates_existing_progress(self):
         source = (ROOT / ".github/coding-bot/run-action.sh").read_text()
@@ -152,12 +157,13 @@ validate_pr_context team/repo 34 && [ "$TARGET_PR_STATE" = open ]
             with self.subTest(exit_code=exit_code), tempfile.TemporaryDirectory() as d:
                 helper = source.split("report_pr_task_result() {", 1)[1].split("\n}\n", 1)[0]
                 result = self.bash('report_pr_task_result() {' + helper + '\n}\n'
-                                   'gh() { printf "CALL %s\\n" "$*"; }; ' + block,
+                                   'gh() { printf "CALL %s\\n" "$*"; jq -r .body; }; ' + block,
                     PR_INSTRUCTION="task", GITHUB_REPOSITORY="team/repo", ISSUE_NUMBER="34",
                     PROGRESS_COMMENT_ID="99", CLAUDE_OUTPUT="final result", ENGINE_EXIT_CODE=str(exit_code),
                     GITHUB_WORKSPACE=d)
                 self.assertEqual(result.returncode, exit_code, result.stderr)
-                self.assertIn("-X PATCH repos/team/repo/issues/comments/99 -f body=final result", result.stdout)
+                self.assertIn("-X PATCH repos/team/repo/issues/comments/99 --input -", result.stdout)
+                self.assertIn("final result", result.stdout)
                 self.assertNotIn("issue comment", result.stdout)
                 self.assertTrue((Path(d)/".coding-bot-reported").exists())
 
@@ -169,10 +175,10 @@ validate_pr_context team/repo 34 && [ "$TARGET_PR_STATE" = open ]
         install_block = 'if [ -n "${PR_INSTRUCTION:-}" ]; then\n  install_pdh_pre_push_hook' + install_block
         with tempfile.TemporaryDirectory() as d:
             result = self.bash(prefix + "\n" + reporting + """
-python3() { if [ "$2" = install ]; then return 1; fi; }
+python3() { if [ "$2" = install ]; then return 1; else command python3 "$@"; fi; }
 git() { printf '%s\n' "$TEST_HOOKS"; }
-gh() { printf 'PATCH %s\n' "$*"; }
-""" + install_block, PR_INSTRUCTION="task", SCRIPT_DIR="unused",
+gh() { printf 'PATCH %s\n' "$*"; jq -r .body; }
+""" + install_block, PR_INSTRUCTION="task", SCRIPT_DIR=str(ROOT/".github/coding-bot"),
                 BRANCH_NAME="agent/issue-12", HEAD_SHA="base", PR_ALLOWED_PATHS="allowed/.*",
                 PROGRESS_COMMENT_ID="99", GITHUB_REPOSITORY="team/repo", GITHUB_RUN_ID="123",
                 GITHUB_WORKSPACE=d, TEST_HOOKS=str(Path(d) / "hooks"))
@@ -194,7 +200,8 @@ REPORT_ISSUE=7;BRANCH_NAME=agent/issue-7
 branch_footer() { :; }
 gh() {
  [ "$1 $2" != 'pr list' ] || return 0
- printf '%s\n' "$*" >> "$GITHUB_WORKSPACE/calls"
+ body=$(jq -r .body)
+ printf '%s body=%s\n' "$*" "$body" >> "$GITHUB_WORKSPACE/calls"
  n=$(wc -l < "$GITHUB_WORKSPACE/calls")
  [ "$n" -gt "$FAILURES" ]
 }

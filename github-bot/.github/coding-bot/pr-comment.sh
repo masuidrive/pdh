@@ -58,6 +58,14 @@ run_pr_comment() (
     jq -e -s 'length == 1 and (.[0] | type == "object" and (.conflict | type) == "boolean" and (.other | type) == "boolean")' "$RESULT_OUTPUT_FILE" >/dev/null; then
     decision=$(jq -r '.conflict' "$RESULT_OUTPUT_FILE")
     other=$(jq -r '.other' "$RESULT_OUTPUT_FILE")
+    if [ "${TARGET_REASON:-}" = 'PR が閉じています' ]; then
+      response='PR が閉じているため動きません。'
+      [ "$decision" != true ] || response='PR が閉じているため解消しませんでした。'
+      response+=" $(pr_comment_redirect)" || response+=" [issue](https://github.com/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE) に書いてください。"
+      gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$response" || return 1
+      : > "$GITHUB_WORKSPACE/.coding-bot-reported"
+      return 0
+    fi
     if [ "$decision" = true ]; then
       # 依頼者の文は渡さず、確認済みの番号だけで固定の仕事を起動する。
       gh workflow run coding-bot.yml --repo "$GITHUB_REPOSITORY" --ref "$BASE_BRANCH" \
@@ -82,8 +90,10 @@ run_pr_comment() (
   else
     status=1
     response=$(pr_comment_redirect) || return 1
-    gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
-      --body "依頼を分類できなかったため、conflict 解消を起動していません。 $response" || return 1
+    if [ "${TARGET_REASON:-}" = 'PR が閉じています' ]; then
+      response="PR が閉じているため動きません。 $response"
+    else response="依頼を分類できなかったため、conflict 解消を起動していません。 $response"; fi
+    gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$response" || return 1
   fi
   : > "$GITHUB_WORKSPACE/.coding-bot-reported"
   return "$status"

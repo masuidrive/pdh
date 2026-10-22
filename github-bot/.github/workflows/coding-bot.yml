@@ -320,7 +320,7 @@ jobs:
       #   中身は .github/coding-bot/run-in-container.sh にある（元は runCmd: の inline）。
       - name: Run Agent
         id: run_claude
-        if: steps.target.outputs.reason == '' && (steps.target.outputs.issue != '' || inputs.verify_only)
+        if: (steps.target.outputs.reason == '' && (steps.target.outputs.issue != '' || inputs.verify_only)) || (steps.target.outputs.reason == 'PR が閉じています' && github.event_name != 'workflow_run' && github.event_name != 'workflow_dispatch' && (github.event.issue.pull_request != null || github.event.pull_request != null))
         # secret は env から値なしの -e で渡し、shell の引用と command line への露出を避ける。
         env:
           CODING_BOT_ENGINE: ${{ vars.CODING_BOT_ENGINE }}
@@ -343,6 +343,7 @@ jobs:
           ISSUE_NUMBER: ${{ steps.target.outputs.pr || steps.target.outputs.issue }}
           TARGET_ISSUE: ${{ steps.target.outputs.issue }}
           TARGET_PR: ${{ steps.target.outputs.pr }}
+          TARGET_REASON: ${{ steps.target.outputs.reason }}
           CI_AUTOFIX_RUN_ID: ${{ needs.ci-autofix.outputs.run_id }}
           CI_AUTOFIX_HEAD_SHA: ${{ needs.ci-autofix.outputs.head_sha }}
           EVENT_TYPE: ${{ env.BOT_EVENT }}
@@ -386,6 +387,7 @@ jobs:
             -e ISSUE_NUMBER \
             -e TARGET_ISSUE \
             -e TARGET_PR \
+            -e TARGET_REASON \
             -e CI_AUTOFIX_RUN_ID \
             -e CI_AUTOFIX_HEAD_SHA \
             -e EVENT_TYPE \
@@ -537,7 +539,7 @@ jobs:
           fi
           if [ "${PR_COMMENT_ONLY:-false}" = true ]; then
             if [ "${TARGET_REASON:-}" = 'PR が閉じています' ]; then
-              gh issue comment "$TRUSTED_PR" --repo "$REPO" --body "PR が閉じているため解消しませんでした。[issue](https://github.com/$REPO/issues/$TRUSTED_ISSUE) で対応を相談してください。" || echo 'Warning: closed PR notice delivery failed' >&2
+              gh issue comment "$TRUSTED_PR" --repo "$REPO" --body "PR が閉じているため動きません。[issue](https://github.com/$REPO/issues/$TRUSTED_ISSUE) で対応を相談してください。" || echo 'Warning: closed PR notice delivery failed' >&2
               exit 0
             fi
             source "$RUNNER_TEMP/coding-bot-notification/pr-comment.sh"
@@ -546,6 +548,16 @@ jobs:
             response=$(pr_comment_redirect) || response="[issue](https://github.com/$REPO/issues/$TRUSTED_ISSUE) に書いてください。"
             gh issue comment "$TRUSTED_PR" --repo "$REPO" \
               --body "この依頼の処理は結果を残さずに終わりました。conflict の解消が始まったかは確かめられていません。もう一度頼むには、conflict 解消はこの PR に 🤖 を付けて、その他の依頼は issue に書いてください。 $response [実行ログ]($RUN_URL)" || echo 'Warning: PR redirect delivery failed' >&2
+            exit 0
+          fi
+          if [ "${TARGET_REASON:-}" = 'PR が閉じています' ] && [ -n "${TRUSTED_PR:-}" ]; then
+            gh issue comment "$TRUSTED_ISSUE" --repo "$REPO" --body "PR が閉じているため動きません。[PR](https://github.com/$REPO/pull/$TRUSTED_PR)[実行ログ]($RUN_URL)" || echo 'Warning: closed PR notice delivery failed' >&2
+            exit 0
+          fi
+          if [ "${CONCLUSION:-}" = success ]; then
+            body="作業は終わりましたが、報告の投稿に失敗しました。[実行ログ]($RUN_URL) と [branch](https://github.com/$REPO/tree/agent/issue-$TRUSTED_ISSUE) で結果を確かめてください。"
+            echo "$body" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            gh issue comment "$TRUSTED_ISSUE" --repo "$REPO" --body "$body" || echo 'Warning: completion fallback delivery failed' >&2
             exit 0
           fi
           if [ -n "${PR_INSTRUCTION:-}" ]; then

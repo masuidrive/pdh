@@ -2,9 +2,11 @@
 set -e
 
 report_pr_task_result() {
-  local body="$1" attempt
+  local payload attempt
+  payload=$(printf '%s' "$1" | python3 -I "${SCRIPT_DIR:-.github/coding-bot}/comment-body.py" \
+    "https://github.com/$GITHUB_REPOSITORY/actions/runs/${GITHUB_RUN_ID:-}") || return 1
   for attempt in 1 2; do
-    if gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID" -f body="$body"; then
+    if gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID" --input - <<< "$payload"; then
       : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported"
       return 0
     fi
