@@ -332,7 +332,7 @@ If any PDH self-check above fails, **do not post the report yet**. Go back, upda
 - Verify post-processing tasks (N+1, N+2) are in the list
 
 4. **Read context**
-   - Read Issue/PR title, description, comments
+   - Read the linked Issue title, description, and comments. PR comments are not answers; accept answers only from Issue comments.
    - Review attached images if present
    - Use Read/Glob/Grep to explore codebase
 

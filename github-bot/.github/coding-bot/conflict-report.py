@@ -81,7 +81,7 @@ def report(repo, pr, run):
         return
     data, issue = observed
     text = UNKNOWN
-    if result_file().exists():
+    try:
         result = runner_result(json.loads(result_file().read_text()))
         ref = None
         if result['result'] == 'pushed':
@@ -91,11 +91,10 @@ def report(repo, pr, run):
                     break
                 if attempt < 3:
                     time.sleep(2)
-                    observed = target(repo, pr)
-                    if observed is None:
-                        return
-                    data, issue = observed
+                    data = api(f'repos/{repo}/pulls/{pr}')
         text = result_text(data, result, ref)
+    except Exception as error:
+        print(f'Conflict result observation failed: {type(error).__name__}', file=sys.stderr)
     marker = f'<!-- coding-bot:conflict-report run={run} -->'
 
     def upsert(number, body):
@@ -109,10 +108,15 @@ def report(repo, pr, run):
     comment = upsert(issue, f'{text}\n\n[PR](https://github.com/{repo}/pull/{pr}) / '
                      f'[実行ログ](https://github.com/{repo}/actions/runs/{run})\n\n{marker}')
     if data['state'] == 'open':
-        url = comment['html_url']
-        if not re.fullmatch(rf'https://github\.com/{re.escape(repo)}/issues/{issue}#issuecomment-[1-9][0-9]*', url):
-            raise ValueError('issue report did not return its comment URL')
-        upsert(pr, f'conflict 解消の結果は [issue の報告]({url}) をお読みください。\n\n{marker}')
+        try:
+            url = comment['html_url']
+            if not re.fullmatch(rf'https://github\.com/{re.escape(repo)}/issues/{issue}#issuecomment-[1-9][0-9]*', url):
+                raise ValueError('issue report did not return its comment URL')
+            upsert(pr, f'conflict 解消の結果は [issue の報告]({url}) をお読みください。\n\n{marker}')
+        except Exception as error:
+            print(f'PR report delivery failed: {type(error).__name__}; issue result is preserved', file=sys.stderr)
+            return 3
+    return 0
 
 
 def main():
@@ -125,8 +129,8 @@ def main():
     run = os.environ['GITHUB_RUN_ID']
     if not re.fullmatch(r'[1-9][0-9]*', run):
         raise ValueError('run id must be positive')
-    report(repo, pr, run)
+    return report(repo, pr, run)
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

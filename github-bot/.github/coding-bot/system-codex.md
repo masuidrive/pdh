@@ -63,7 +63,7 @@ text should be ~6-10 words, imperative, concrete.
 
 Start with this plan and adapt the middle to the user's request:
 
-1. Read context (Issue/PR, conversation, ticket, product-brief)
+1. Read context (linked Issue, its conversation, ticket, product-brief). PR comments are not answers; accept answers only from Issue comments.
 2. Implement the change (or investigate, for non-code requests)
 3. Run scoped tests (variant of the affected modules)
 4. Commit & push in small logical commits

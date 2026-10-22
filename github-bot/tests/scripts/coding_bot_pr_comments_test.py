@@ -276,10 +276,12 @@ gh() {
         block=textwrap.dedent(block)
         for comment_only,resolve in [('true',''),('false','')]:
             with self.subTest(comment_only=comment_only,resolve=resolve),tempfile.TemporaryDirectory(dir=TMP) as d:
+                snapshot=Path(d)/'coding-bot-notification';snapshot.mkdir()
+                for name in ['pr-comment.sh','discussion.py']:(snapshot/name).write_text((BOT/name).read_text())
                 env={**os.environ,'PR_COMMENT_ONLY':comment_only,'RESOLVE_CONFLICT_PR':resolve,
                      'PR_INSTRUCTION':'','REPO':'owner/repo','ISSUE':'7','TRUSTED_ISSUE':'7','TRUSTED_PR':'9',
                      'EVENT_IS_PR':'true' if comment_only=='true' else 'false',
-                     'CONCLUSION':'failure','RUN_URL':'run','GITHUB_WORKSPACE':d,'CALLS':str(Path(d)/'calls')}
+                     'CONCLUSION':'failure','RUN_URL':'run','GITHUB_WORKSPACE':d,'RUNNER_TEMP':d,'CALLS':str(Path(d)/'calls')}
                 code=r'''gh() {
  printf '%s\n' "$*" >> "$CALLS"
  if [[ "$1 $2" == 'issue comment' ]]; then printf 'https://github.com/owner/repo/issues/%s#issuecomment-88\n' "$3";

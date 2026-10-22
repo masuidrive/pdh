@@ -42,10 +42,10 @@ $USER_REQUEST" > "$RUNNER_DIR/classifier.log" 2>&1
 
 pr_comment_redirect() {
   local resource comments
-  resource=$(gh api "repos/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE") || resource='{}'
-  comments=$(gh api "repos/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE/comments?per_page=100" --paginate --slurp) || comments='[]'
-  [ -n "$resource" ] || resource='{}'
-  [ -n "$comments" ] || comments='[]'
+  resource=$(gh api "repos/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE") || { echo 'Warning: issue API unavailable; pending question link omitted' >&2; resource='{}'; }
+  comments=$(gh api "repos/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE/comments?per_page=100" --paginate --slurp) || { echo 'Warning: comment API unavailable; pending question link omitted' >&2; comments='[]'; }
+  [ -n "$resource" ] || { echo 'Warning: issue API unavailable; pending question link omitted' >&2; resource='{}'; }
+  [ -n "$comments" ] || { echo 'Warning: comment API unavailable; pending question link omitted' >&2; comments='[]'; }
   jq -n --argjson issue "$resource" --argjson comments "$comments" '{issue:$issue,comments:$comments}' |
     python3 "$(dirname "${BASH_SOURCE[0]}")/discussion.py" redirect "$GITHUB_REPOSITORY" "$TRUSTED_LINKED_ISSUE"
 }
@@ -64,9 +64,16 @@ run_pr_comment() (
         -f issue="$TRUSTED_LINKED_ISSUE" -f resolve_conflict_pr="$ISSUE_NUMBER" -f verify_only=false || status=1
     fi
     if [ "$decision" != true ] || [ "$other" = true ] || [ "$status" != 0 ]; then
-      response=$(pr_comment_redirect) || return 1
-      [ "$status" = 0 ] || response="解消の起動に失敗しました。 $response"
-      gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$response" || return 1
+      if response=$(pr_comment_redirect); then
+        [ "$status" = 0 ] || response="解消の起動に失敗しました。 $response"
+        gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$response" || {
+          [ "$decision" = true ] && [ "$status" = 0 ] || return 1
+          echo 'Warning: redirect delivery failed; conflict run was dispatched' >&2
+        }
+      else
+        [ "$decision" = true ] && [ "$status" = 0 ] || return 1
+        echo 'Warning: redirect unavailable; conflict run was dispatched' >&2
+      fi
     fi
   else
     status=1

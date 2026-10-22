@@ -208,6 +208,13 @@ jobs:
             rm -f "$RUNNER_TEMP/notify-devbot.sh" || true
             echo "Warning: default branch の通知 script を退避できない"
           fi
+          mkdir -p "$RUNNER_TEMP/coding-bot-notification"
+          for file in discussion.py trigger-source.sh pr-comment.sh; do
+            if ! git show "origin/${{ github.event.repository.default_branch }}:.github/coding-bot/$file" > "$RUNNER_TEMP/coding-bot-notification/$file"; then
+              rm -f "$RUNNER_TEMP/coding-bot-notification/$file"
+              echo "Warning: default branch の $file を退避できない"
+            fi
+          done
 
       # ステップ3: GHCR にログイン（事前ビルド済みイメージの pull 用）
       - name: Login to GHCR
@@ -430,13 +437,13 @@ jobs:
           issue=""; pr=""
           if [[ "$EVENT_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
             if [ "$EVENT_IS_PR" = true ]; then
-              source .github/coding-bot/trigger-source.sh
-              if validate_pr_context "$REPO" "$EVENT_NUMBER"; then
+              if source "$RUNNER_TEMP/coding-bot-notification/trigger-source.sh" && validate_pr_context "$REPO" "$EVENT_NUMBER"; then
                 issue="$TRUSTED_LINKED_ISSUE"; pr="$EVENT_NUMBER"
               fi
+            elif [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ]; then
+              if source "$RUNNER_TEMP/coding-bot-notification/trigger-source.sh" && validate_issue_context "$REPO" "$EVENT_NUMBER"; then issue="$EVENT_NUMBER"; fi
             else
-              source .github/coding-bot/trigger-source.sh
-              if validate_issue_context "$REPO" "$EVENT_NUMBER"; then issue="$EVENT_NUMBER"; fi
+              issue="$EVENT_NUMBER"
             fi
           fi
           if [ -z "$issue" ]; then
@@ -464,7 +471,9 @@ jobs:
           RESOLVE_CONFLICT_PR: ${{ inputs.resolve_conflict_pr }}
         run: |
           set -uo pipefail
-          if python3 -I "$RUNNER_TEMP/coding-bot-conflict/conflict-report.py" report; then exit 0; fi
+          report_status=0
+          python3 -I "$RUNNER_TEMP/coding-bot-conflict/conflict-report.py" report || report_status=$?
+          case "$report_status" in 0|3) exit "$report_status" ;; esac
           # Script extraction and API errors share this host-only fallback.
           data=$(gh api "repos/$REPO/pulls/$RESOLVE_CONFLICT_PR") || exit 1
           issue=$(printf '%s' "$data" | jq -er --arg repo "$REPO" '
@@ -478,13 +487,13 @@ jobs:
           [実行ログ](https://github.com/$REPO/actions/runs/$GITHUB_RUN_ID)
 
           $marker"
-          entries=$(gh api "repos/$REPO/issues/$issue/comments?per_page=100" --paginate --slurp) || exit 1
-          id=$(printf '%s' "$entries" | jq -r --arg marker "$marker" '[.[][] | select(.user.login == "github-actions[bot]" and (.body | contains($marker)))] | first | .id // empty') || exit 1
-          if [[ "$id" =~ ^[1-9][0-9]*$ ]]; then
-            gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body"
-          else
-            gh api "repos/$REPO/issues/$issue/comments" -f body="$body"
-          fi
+          entries=$(gh api "repos/$REPO/issues/$issue/comments?per_page=100" --paginate --slurp) || {
+            echo 'Warning: report list unavailable; trying a single POST' >&2
+            entries='[]'
+          }
+          id=$(printf '%s' "$entries" | jq -r --arg marker "$marker" '[.[][] | select(.user.login == "github-actions[bot]" and (.body | contains($marker)))] | first | .id // empty') || id=""
+          [ -z "$id" ] || exit 0
+          gh api "repos/$REPO/issues/$issue/comments" -f body="$body"
 
       - name: Report if the run left nothing
         if: always() && inputs.resolve_conflict_pr == ''
@@ -494,10 +503,8 @@ jobs:
           PR: ${{ inputs.pr }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          ISSUE: ${{ env.BOT_ISSUE }}
           TRUSTED_ISSUE: ${{ steps.notification_context.outputs.issue }}
           TRUSTED_PR: ${{ steps.notification_context.outputs.pr }}
-          EVENT_IS_PR: ${{ inputs.pr != '' || github.event_name == 'workflow_run' || github.event.issue.pull_request != null || github.event.pull_request != null }}
           CONCLUSION: ${{ job.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -510,7 +517,7 @@ jobs:
             exit 0
           fi
           if [ "${PR_COMMENT_ONLY:-false}" = true ]; then
-            source .github/coding-bot/pr-comment.sh
+            source "$RUNNER_TEMP/coding-bot-notification/pr-comment.sh"
             TRUSTED_LINKED_ISSUE="$TRUSTED_ISSUE"
             GITHUB_REPOSITORY="$REPO"
             response=$(pr_comment_redirect) || exit 1
@@ -534,10 +541,7 @@ jobs:
             fi
             exit 0
           fi
-          ISSUE="${TRUSTED_ISSUE:-$ISSUE}"
-          if [ -z "${ISSUE:-}" ]; then
-            echo "issue 番号が取れない（workflow_dispatch など）。何もしない"; exit 0
-          fi
+          ISSUE="$TRUSTED_ISSUE"
           echo "最終レポートが投稿されていない（job.status=${CONCLUSION}）。1 行残す"
           BODY=$(printf '%s\n\n%s\n\n- %s\n- %s\n\n%s' \
             "**この run は結果を残さずに終わりました**（${CONCLUSION}）。" \
@@ -549,10 +553,8 @@ jobs:
             # ⚠ fallback が実際に残したコメントへ通知を結び付ける。
             CID="${COMMENT_URL##*#issuecomment-}"
             [[ "$CID" =~ ^[0-9]+$ ]] || CID=""
-            if [ -n "$TRUSTED_ISSUE" ]; then
-              printf 'issue=%s\nkind=failed\ncomment_id=%s\npr=%s\n' "$TRUSTED_ISSUE" "$CID" "$TRUSTED_PR" \
-                > "$GITHUB_WORKSPACE/.coding-bot-notify" || true
-            fi
+            printf 'issue=%s\nkind=failed\ncomment_id=%s\npr=%s\n' "$TRUSTED_ISSUE" "$CID" "$TRUSTED_PR" \
+              > "$GITHUB_WORKSPACE/.coding-bot-notify" || true
           else
             echo "Warning: failed to post the fallback report"
           fi

@@ -35,7 +35,11 @@ resolve_issue_conflict() {
         use_pat_for_origin
         git push origin "HEAD:refs/heads/$BRANCH_NAME" || status=1
       else
-        git push origin "HEAD:refs/heads/$BRANCH_NAME" && dispatch_branch_ci || status=1
+        if git push origin "HEAD:refs/heads/$BRANCH_NAME"; then
+          dispatch_branch_ci || echo 'Warning: pushed successfully but CI dispatch failed' >&2
+        else
+          status=1
+        fi
       fi
       if [ "$status" = 0 ]; then
         CONFLICT_RUN_RESULT=pushed
