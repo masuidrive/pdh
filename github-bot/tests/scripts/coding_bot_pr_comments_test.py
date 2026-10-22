@@ -16,7 +16,7 @@ def git(cwd, *args):
 
 
 class MergeProbe(unittest.TestCase):
-    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False, issue_run=False, extra=False, pat=False, fast_forward=False, ci_fail=False, deletion=False, resolved="resolved\n", outside_delete=False, renamed=False, fail_pr_post=False):
+    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False, issue_run=False, extra=False, pat=False, fast_forward=False, ci_fail=False, deletion=False, resolved="resolved\n", outside_delete=False, renamed=False, fail_pr_post=False, closed=False):
         with tempfile.TemporaryDirectory(dir=TMP) as temp:
             temp = Path(temp)
             seed, remote, work, run = [temp / name for name in ['seed', 'remote', 'work', 'run']]
@@ -45,7 +45,7 @@ class MergeProbe(unittest.TestCase):
             (run/'merge-step.sh').write_text(runner[start:runner.index('\nCONFLICT_SECTION=""',start)])
             (run/'resolve-step.sh').write_text((BOT/'resolve-conflict.sh').read_text().replace('/tmp/agent-prompt-',str(run/'agent-prompt-')))
             env = {**os.environ, 'BOT': str(BOT), 'RUNNER_DIR': str(run), 'GITHUB_WORKSPACE': str(run),
-                   'CI_FAIL':str(int(ci_fail)), 'FAIL_PR_POST':str(int(fail_pr_post)), 'CONFLICT_PATH':'renamed conflict file.txt' if renamed else 'conflict file.txt', 'DELETE':str(int(deletion)), 'RESOLVED':resolved, 'OUTSIDE_DELETE':str(int(outside_delete)), 'DECISION': json.dumps(decision), 'DIRTY': str(int(dirty)), 'FAIL': str(int(fail)),
+                   'TARGET_REASON':'PR が閉じています' if closed else '', 'CI_FAIL':str(int(ci_fail)), 'FAIL_PR_POST':str(int(fail_pr_post)), 'CONFLICT_PATH':'renamed conflict file.txt' if renamed else 'conflict file.txt', 'DELETE':str(int(deletion)), 'RESOLVED':resolved, 'OUTSIDE_DELETE':str(int(outside_delete)), 'DECISION': json.dumps(decision), 'DIRTY': str(int(dirty)), 'FAIL': str(int(fail)),
                    'RAW': raw if raw is not None else json.dumps(decision), 'UNRESOLVED': str(int(unresolved)), 'REFUSED': str(int(refused)),
                    'ISSUE_RUN': str(int(issue_run)), 'CODING_BOT_GH_PAT': 'fake-pat' if pat else '', 'EXTRA': str(int(extra)), 'RESOLVE_CONFLICT_PR':'9', 'ENGINE_FILE': str(run/'engine.sh'), 'GITHUB_REPOSITORY': 'owner/repo', 'TRUSTED_LINKED_ISSUE': '7', 'ISSUE_NUMBER': '9',
                    'BASE_BRANCH': 'main', 'BRANCH_NAME': 'agent/issue-7', 'PROGRESS_COMMENT_ID': '77',
@@ -124,6 +124,28 @@ class PrCommentContract(MergeProbe):
         self.assertTrue(result.reported)
         self.assertEqual(pushes,[])
         print('CONTRAST PASS: failed start notice cannot undo an accepted conflict dispatch',flush=True)
+
+    def test_closed_pr_requests_use_classification_without_dispatch_or_push(self):
+        for decision,request,expected in [
+            ({'conflict':True,'other':False},'🤖 main に合わせて通せるようにして','PR が閉じているため解消しませんでした。'),
+            ({'conflict':False,'other':True},'🤖 conflict は解消せず質問に答えて','PR が閉じているため動きません。'),
+            ({'conflict':True,'other':True},'🤖 main との衝突を直して質問にも答えて','PR が閉じているため解消しませんでした。')]:
+            with self.subTest(decision=decision):
+                result,pushes,calls,_=self.run_case(decision,request=request,closed=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertIn('classify',calls)
+                self.assertIn(expected,calls)
+                self.assertIn('https://github.com/owner/repo/issues/7',calls)
+                self.assertNotIn('workflow run',calls)
+                self.assertNotIn('解消を始めました',calls)
+                self.assertEqual(pushes,[])
+        import yaml
+        steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+        agent=next(x for x in steps if x.get('name')=='Run Agent')
+        self.assertEqual(agent['env']['TARGET_REASON'],'${{ steps.target.outputs.reason }}')
+        self.assertIn('-e TARGET_REASON',agent['run'])
+        self.assertIn("'PR が閉じています'",agent['if'])
+        print('CONTRAST PASS: open conflict dispatch and failed classifier contracts stay covered separately',flush=True)
 
     def test_working_runs_take_history_and_images_from_issue_only(self):
         source=(BOT/'run-action.sh').read_text()

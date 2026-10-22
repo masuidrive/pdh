@@ -209,6 +209,93 @@ gh() {
                 self.assertEqual((Path(d)/'.coding-bot-reported').exists(),failures<2)
         print('CONTRAST PASS: delivered completion is marked, undelivered completion allows fallback',flush=True)
 
+    def test_successful_work_keeps_success_when_completion_and_fallback_run(self):
+        source=(ROOT/'.github/coding-bot/run-action.sh').read_text()
+        prefix=source[:source.index('# Resolve this script')]
+        start=source.index('  # 最終結果を投稿（ブランチ情報付き）')
+        completion=source[start:source.index('\nelse\n  echo "❌ Task failed',start)]
+        steps=yaml.safe_load((ROOT/'.github/workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+        fallback=next(x['run'] for x in steps if x.get('name')=='Report if the run left nothing')
+        stub=r"""
+gh() {
+ case "$1 $2" in
+  'pr list') return 0;;
+  'api -X') cat >/dev/null; return 1;;
+  'issue comment') printf '%s\n' "$*" >> "$GITHUB_WORKSPACE/calls"; echo 'https://github.com/team/repo/issues/7#issuecomment-101';;
+  'issue view') echo OPEN;;
+  'issue edit') printf '%s\n' "$*" >> "$GITHUB_WORKSPACE/calls";;
+  *) return 98;;
+ esac
+}
+branch_footer() { :; }
+"""
+        for conclusion in ('failure','success'):
+            with self.subTest(conclusion=conclusion),tempfile.TemporaryDirectory() as d:
+                env=dict(GITHUB_WORKSPACE=d,GITHUB_REPOSITORY='team/repo',GITHUB_RUN_ID='123',
+                    CI_RED_MARKER='',CLAUDE_OUTPUT_CLEAN='作業と push は成功しました',ENGINE_EXIT_CODE='0',
+                    REPORT_ISSUE='7',ISSUE_NUMBER='7',TARGET_ISSUE='7',PROGRESS_COMMENT_ID='100',
+                    PR_INSTRUCTION='',BRANCH_NAME='agent/issue-7',REPO='team/repo',TRUSTED_ISSUE='7',
+                    TRUSTED_PR='',TARGET_REASON='',PR_COMMENT_ONLY='false',CONCLUSION=conclusion,RUN_URL='run')
+                result=self.bash(prefix+stub+completion+'\nexit "$ENGINE_EXIT_CODE"',**env)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertFalse((Path(d)/'.coding-bot-reported').exists())
+                result=self.bash(stub+fallback,**env)
+                self.assertEqual(result.returncode,0,result.stderr)
+                calls=(Path(d)/'calls').read_text()
+                notice=Path(d)/'.coding-bot-notify'
+                if conclusion=='success':
+                    self.assertIn('作業は終わりましたが、報告の投稿に失敗しました',calls)
+                    self.assertNotIn('作業は進んでいません',calls)
+                    self.assertNotIn('awaiting-reply',calls)
+                    self.assertFalse(notice.exists())
+                    self.assertIn('[実行ログ](run)',calls)
+                    self.assertIn('branch',calls)
+                else:
+                    self.assertIn('作業は進んでいません',calls)
+                    self.assertIn('awaiting-reply',calls)
+                    self.assertIn('kind=failed',notice.read_text())
+                    print('CONTRAST PASS: a genuinely failed run retains its failure notice and label',flush=True)
+
+    def test_final_report_fits_comment_limit_and_preserves_valid_bodies(self):
+        source=(ROOT/'.github/coding-bot/run-action.sh').read_text()
+        prefix=source[:source.index('# Resolve this script')]
+        for length in (0,65535,65536,80000):
+            for char in ('a','界','🤖'):
+                with self.subTest(length=length,char=char),tempfile.TemporaryDirectory() as d:
+                    body=Path(d)/'body';body.write_text(char*length)
+                    code=prefix+r"""
+gh() {
+ if [[ " $* " == *' --input - '* ]]; then jq -j .body > "$GITHUB_WORKSPACE/delivered";
+ else for value in "$@"; do case "$value" in body=*) printf '%s' "${value#body=}" > "$GITHUB_WORKSPACE/delivered";; esac; done; fi
+ python3 -c 'import sys; from pathlib import Path; sys.exit(len(Path(sys.argv[1]).read_text())>=65536)' "$GITHUB_WORKSPACE/delivered"
+}
+report_pr_task_result "$(cat "$GITHUB_WORKSPACE/body")"
+"""
+                    result=self.bash(code,GITHUB_WORKSPACE=d,GITHUB_REPOSITORY='team/repo',GITHUB_RUN_ID='123',PROGRESS_COMMENT_ID='100',SCRIPT_DIR=str(ROOT/'.github/coding-bot'))
+                    self.assertEqual(result.returncode,0,result.stderr)
+                    delivered=(Path(d)/'delivered').read_text()
+                    self.assertLess(len(delivered),65536)
+                    if length<65536:self.assertEqual(delivered,char*length)
+                    else:
+                        self.assertTrue(delivered.endswith('[実行ログ](https://github.com/team/repo/actions/runs/123)'))
+                        self.assertTrue(delivered.startswith(char))
+        print('CONTRAST PASS: valid empty and 65535-character bodies remain unchanged, including Unicode',flush=True)
+
+    def test_ci_fallback_explains_closed_pr_after_decision(self):
+        steps=yaml.safe_load((ROOT/'.github/workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+        fallback=next(x['run'] for x in steps if x.get('name')=='Report if the run left nothing')
+        for conclusion in ('success','failure'):
+            with self.subTest(conclusion=conclusion),tempfile.TemporaryDirectory() as d:
+                stub=r"""gh() { printf '%s\n' "$*" >> "$GITHUB_WORKSPACE/calls"; [ "$1 $2" != 'issue view' ] || echo OPEN; }; """
+                result=self.bash(stub+fallback,GITHUB_WORKSPACE=d,REPO='team/repo',TRUSTED_ISSUE='7',TRUSTED_PR='9',
+                    TARGET_REASON='PR が閉じています',CONCLUSION=conclusion,RUN_URL='run',EVENT_TYPE='workflow_run')
+                self.assertEqual(result.returncode,0,result.stderr)
+                calls=(Path(d)/'calls').read_text()
+                self.assertIn('PR が閉じているため',calls)
+                self.assertIn('/pull/9',calls)
+                self.assertNotIn('作業は進んでいません',calls)
+                self.assertNotIn('awaiting-reply',calls)
+
     def test_task_patch_failure_retries_and_never_marks_an_unposted_result(self):
         source = (ROOT / ".github/coding-bot/run-action.sh").read_text()
         prefix = source.split("save_unpushed_commits() {", 1)[0]

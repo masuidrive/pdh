@@ -363,6 +363,34 @@ gh() {
     def test_issue_dispatch_transient_failure_reports_to_input_once(self):
         self.check_dispatch_failure(False)
 
+    def test_ambiguous_notice_post_checks_latest_comments_before_retry(self):
+        steps=self.steps();notice=next(x for x in steps if x.get('name')=='Report unresolved dispatch')
+        snapshot=self.dir/'coding-bot-target';snapshot.mkdir(exist_ok=True)
+        shutil.copy2(BOT/'resolve-target.sh',snapshot/'resolve-target.sh')
+        for author,expected in [('human',2),('github-actions',1)]:
+            with self.subTest(author=author):
+                calls=self.dir/'retry-calls';calls.write_text('')
+                code=r"""
+sleep() { :; }
+gh() {
+ if [[ " $* " == *' graphql '* ]]; then
+   echo GET >> "$CALLS"
+   jq -n --arg author "$AUTHOR" --arg body '結果を確かめられませんでした。このスレッドで対応を相談してください。' '{data:{repository:{issueOrPullRequest:{comments:{nodes:[{body:$body,author:{login:$author}}]}}}}}'
+   return 0
+ fi
+ echo POST >> "$CALLS"
+ n=$(grep -c POST "$CALLS")
+ if [ "$n" = 1 ]; then echo 'gh: response lost (HTTP 502)' >&2; return 1; fi
+ return 0
+}
+"""+notice['run']
+                result=subprocess.run(['bash','-c',code],env={**self.env,'TARGET_REASON':'一時的な失敗: PR API unavailable','DISPATCH_ISSUE':'7','CALLS':str(calls),'AUTHOR':author},text=True,capture_output=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                actions=calls.read_text().splitlines()
+                self.assertEqual(actions.count('POST'),expected,actions)
+                self.assertIn('GET',actions)
+                if expected==2:print('CONTRAST PASS: a human copying the notice cannot suppress its delivery',flush=True)
+
     def test_closed_dispatch_without_runner_result_reports_closed(self):
         self.data['pr']['state']='closed';self.save();self.validate_context()
         self.result_file.unlink(missing_ok=True)
