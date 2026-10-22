@@ -165,6 +165,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Preserve conflict reporter on host
+        id: conflict_context
         if: inputs.resolve_conflict_pr != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -173,11 +174,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/coding-bot-conflict"
+          [[ "$RESOLVE_CONFLICT_PR" =~ ^[1-9][0-9]*$ ]] || exit 1
+          data=$(gh api "repos/$REPO/pulls/$RESOLVE_CONFLICT_PR")
+          issue=$(printf '%s' "$data" | jq -er --arg repo "$REPO" '
+            select(.head.repo.full_name == $repo) | .head.ref |
+            capture("^agent/issue-(?<issue>[1-9][0-9]*)$").issue') || exit 0
+          resource=$(gh api "repos/$REPO/issues/$issue")
+          printf '%s' "$resource" | jq -e --argjson n "$issue" '.number == $n and (has("pull_request") | not)' >/dev/null || exit 0
+          printf 'issue=%s\npr=%s\n' "$issue" "$RESOLVE_CONFLICT_PR" >> "$GITHUB_OUTPUT"
           for file in conflict-report.py discussion.py; do
             git show "origin/${{ github.event.repository.default_branch }}:.github/coding-bot/$file" > "$RUNNER_TEMP/coding-bot-conflict/$file"
           done
 
       - name: Validate dispatch task
+        id: dispatch_context
         if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -197,6 +207,7 @@ jobs:
             validate_pr_context "$GITHUB_REPOSITORY" "$DISPATCH_PR"
             [ "$TRUSTED_LINKED_ISSUE" = "$DISPATCH_ISSUE" ] || exit 1
           fi
+          printf 'issue=%s\n' "$DISPATCH_ISSUE" >> "$GITHUB_OUTPUT"
 
       # ⚠ agent が書き換えられる workspace の script を、秘密付きで実行しない。
       # container に mount されない場所へ、default branch の版を git から直接退避する。
@@ -431,6 +442,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           EVENT_NUMBER: ${{ env.BOT_ISSUE }}
+          VALIDATED_ISSUE: ${{ steps.dispatch_context.outputs.issue }}
           EVENT_IS_PR: ${{ inputs.pr != '' || github.event_name == 'workflow_run' || github.event.issue.pull_request != null || github.event.pull_request != null }}
         run: |
           set -uo pipefail
@@ -441,7 +453,7 @@ jobs:
                 issue="$TRUSTED_LINKED_ISSUE"; pr="$EVENT_NUMBER"
               fi
             elif [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ]; then
-              if source "$RUNNER_TEMP/coding-bot-notification/trigger-source.sh" && validate_issue_context "$REPO" "$EVENT_NUMBER"; then issue="$EVENT_NUMBER"; fi
+              issue="${VALIDATED_ISSUE:-$EVENT_NUMBER}"
             else
               issue="$EVENT_NUMBER"
             fi
@@ -468,20 +480,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          RESOLVE_CONFLICT_PR: ${{ inputs.resolve_conflict_pr }}
+          TRUSTED_CONFLICT_PR: ${{ steps.conflict_context.outputs.pr }}
+          TRUSTED_CONFLICT_ISSUE: ${{ steps.conflict_context.outputs.issue }}
         run: |
           set -uo pipefail
           report_status=0
           python3 -I "$RUNNER_TEMP/coding-bot-conflict/conflict-report.py" report || report_status=$?
           case "$report_status" in 0|3) exit "$report_status" ;; esac
-          # Script extraction and API errors share this host-only fallback.
-          data=$(gh api "repos/$REPO/pulls/$RESOLVE_CONFLICT_PR") || exit 1
-          issue=$(printf '%s' "$data" | jq -er --arg repo "$REPO" '
-            select(.head.repo.full_name == $repo) | .head.ref |
-            capture("^agent/issue-(?<issue>[1-9][0-9]*)$").issue') || exit 0
-          resource=$(gh api "repos/$REPO/issues/$issue") || exit 1
-          printf '%s' "$resource" | jq -e --argjson n "$issue" '.number == $n and (has("pull_request") | not)' >/dev/null || exit 0
-          marker="<!-- coding-bot:conflict-report run=$GITHUB_RUN_ID -->"
+          # Only the context verified before the engine can select a destination.
+          issue="${TRUSTED_CONFLICT_ISSUE:-}"
+          [[ "$issue" =~ ^[1-9][0-9]*$ ]] && [[ "${TRUSTED_CONFLICT_PR:-}" =~ ^[1-9][0-9]*$ ]] || exit 0
+          delivered="$RUNNER_TEMP/coding-bot-conflict/issue-comment-$GITHUB_RUN_ATTEMPT"
+          if [ -f "$delivered" ] && [[ "$(cat "$delivered")" =~ ^[1-9][0-9]*$ ]]; then exit 0; fi
+          marker="<!-- coding-bot:conflict-report run=$GITHUB_RUN_ID attempt=$GITHUB_RUN_ATTEMPT -->"
           body="conflict の解消の結果を確かめられませんでした。このスレッドで対応を相談してください。
 
           [実行ログ](https://github.com/$REPO/actions/runs/$GITHUB_RUN_ID)
@@ -522,7 +533,7 @@ jobs:
             GITHUB_REPOSITORY="$REPO"
             response=$(pr_comment_redirect) || exit 1
             gh issue comment "$TRUSTED_PR" --repo "$REPO" \
-              --body "$response [実行ログ]($RUN_URL)"
+              --body "この依頼の処理は結果を残さずに終わりました。conflict の解消が始まったかは確かめられていません。もう一度頼むには、conflict 解消はこの PR に 🤖 を付けて、その他の依頼は issue に書いてください。 $response [実行ログ]($RUN_URL)"
             exit $?
           fi
           if [ -n "${PR_INSTRUCTION:-}" ]; then
@@ -532,7 +543,12 @@ jobs:
             progress_file="$GITHUB_WORKSPACE/.coding-bot-task-progress"
             progress_id=""
             if [ -f "$progress_file" ]; then progress_id=$(cat "$progress_file"); fi
+            progress=""
             if [[ "$progress_id" =~ ^[1-9][0-9]*$ ]]; then
+              progress=$(gh api "repos/$REPO/issues/comments/$progress_id") || progress=""
+            fi
+            if [ -n "$progress" ] && printf '%s' "$progress" | jq -e --arg url "https://api.github.com/repos/$REPO/issues/$TRUSTED_ISSUE" '
+              .issue_url == $url and .user.login == "github-actions[bot]"' >/dev/null 2>&1; then
               gh api -X PATCH "repos/$REPO/issues/comments/$progress_id" -f body="$body" || \
                 echo 'Could not update task progress; see logs/summary' >&2
             elif [[ "${TRUSTED_ISSUE:-}" =~ ^[1-9][0-9]*$ ]]; then

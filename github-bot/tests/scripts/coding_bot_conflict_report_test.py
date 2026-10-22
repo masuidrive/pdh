@@ -61,6 +61,18 @@ done(entry if a[0]=='api' else url)
         self.result_file.write_text(json.dumps({'result':'pushed','sha':'b'*40}))
         for name in ['conflict-report.py','discussion.py']:
             if (BOT/name).exists():shutil.copy(BOT/name,trusted/name)
+        self.validate_context()
+
+    def validate_context(self):
+        steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+        step=next(s for s in steps if s.get('name')=='Preserve conflict reporter on host')
+        output=self.dir/'context-outputs';output.write_text('')
+        env={**self.env,'BOT':str(BOT),'GITHUB_OUTPUT':str(output)}
+        code=step['run'].replace('${{ github.event.repository.default_branch }}','main')
+        result=subprocess.run(['bash','-c','git() { cat "$BOT/${2##*/}"; }; '+code],env=env,text=True,capture_output=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        context=dict(line.split('=',1) for line in output.read_text().splitlines())
+        self.env.update(TRUSTED_CONFLICT_ISSUE=context.get('issue',''),TRUSTED_CONFLICT_PR=context.get('pr',''))
 
     def save(self):self.state.write_text(json.dumps(self.data))
     def load(self):return json.loads(self.state.read_text())
@@ -73,10 +85,10 @@ done(entry if a[0]=='api' else url)
 class HostReport(HostProbe,unittest.TestCase):
     def test_closed_pr_reports_even_when_dispatch_validation_failed(self):
         self.env.update(TRUSTED_ISSUE='',TRUSTED_PR='')
-        self.data['pr']['head']['ref']='human-feature';self.save()
+        self.data['pr']['head']['ref']='human-feature';self.save();self.validate_context()
         self.report();self.assertEqual(self.load()['posts'],[])
         print('CONTRAST PASS: non-bot PR is never a report target',flush=True)
-        self.data['pr']['head']['ref']='agent/issue-7';self.data['pr']['state']='closed';self.save()
+        self.data['pr']['head']['ref']='agent/issue-7';self.data['pr']['state']='closed';self.save();self.validate_context()
         self.env.update(TRUSTED_ISSUE='',TRUSTED_PR='')
         self.result_file.write_text(json.dumps({'result':'failed'}))
         result=self.report();posts=self.load()['posts']
@@ -241,7 +253,7 @@ class HostStateContract(HostProbe,unittest.TestCase):
                 self.data['pr']['head']['sha']=('b' if changed else 'a')*40;self.save()
                 self.result_file.write_text(json.dumps({'result':'pushed','sha':'b'*40} if changed else {'result':'no_conflict'} if mergeable is True else {'result':'failed'}))
                 with patch.dict(os.environ,self.env),patch.object(module.time,'sleep'):
-                    module.report('owner/repo','9','123')
+                    module.report('owner/repo','9','123',7)
                 data=self.load();posts=data['posts']
                 self.assertEqual([x['target'] for x in posts],[7] if state=='closed' else [7,9])
                 self.assertIn(expected,posts[0]['body'])
@@ -258,6 +270,8 @@ class HostStateContract(HostProbe,unittest.TestCase):
         fallback=steps[names.index('Report if the run left nothing')]
         self.assertLess(names.index('Preserve conflict reporter on host'),names.index('Validate dispatch task'))
         self.assertLess(names.index('Report conflict resolution'),names.index('Report if the run left nothing'))
+        self.assertIn('steps.conflict_context.outputs.issue',end['env']['TRUSTED_CONFLICT_ISSUE'])
+        self.assertIn('steps.conflict_context.outputs.pr',end['env']['TRUSTED_CONFLICT_PR'])
         self.assertIn('always()',end['if'])
         self.assertIn("inputs.resolve_conflict_pr != ''",end['if'])
         self.assertIn("inputs.resolve_conflict_pr == ''",fallback['if'])
@@ -310,14 +324,15 @@ class RunnerResultContract(HostProbe,unittest.TestCase):
                 self.outcome(outcome);self.assertIn(expected,self.text())
 
     def test_missing_result_script_or_api_uses_host_fallback(self):
-        self.data['pr']['head']['ref']='human-feature';self.save()
+        self.data['pr']['head']['ref']='human-feature';self.save();self.validate_context()
         self.assertEqual(self.report().returncode,0)
         self.assertEqual(self.load()['posts'],[])
         print('CONTRAST PASS: unrelated PR stays silent',flush=True)
-        self.data['pr']['head']['ref']='agent/issue-7'
+        self.data['pr']['head']['ref']='agent/issue-7';self.save();self.validate_context()
         for missing in ['result','script','api']:
             with self.subTest(missing=missing):
                 self.data['posts']=[];self.save()
+                for record in self.result_file.parent.glob('issue-comment-*'):record.unlink()
                 self.outcome({'result':'pushed','sha':'b'*40})
                 script=self.dir/'coding-bot-conflict/conflict-report.py'
                 script.write_text((BOT/'conflict-report.py').read_text())

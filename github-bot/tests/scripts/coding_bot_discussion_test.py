@@ -87,7 +87,10 @@ class IssueInputContract(unittest.TestCase):
         claude=(BOT/'system-claude.md').read_text();codex=(BOT/'system-codex.md').read_text()
         self.assertNotIn('Read Issue/PR title, description, comments',claude)
         self.assertNotIn('Read context (Issue/PR,',codex)
-        for text in [claude,codex]:self.assertIn('PR comments are not answers',text)
+        for text in [claude,codex]:
+            self.assertIn('PR comments are not answers',text)
+            self.assertNotIn('Issue/PR',text.split('---',1)[0])
+            self.assertIn('Issue thread',text.split('---',1)[0])
 
     def test_issue_only_dispatch_and_ordinary_issue_input_reject_pr_numbers(self):
         source=(BOT/'run-action.sh').read_text()

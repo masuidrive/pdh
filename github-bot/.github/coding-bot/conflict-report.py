@@ -9,7 +9,6 @@ import time
 from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from discussion import linked_issue, verify_issue
 
 
 def api(path, body=None, pages=False, method="POST"):
@@ -23,15 +22,6 @@ def api(path, body=None, pages=False, method="POST"):
     data = json.loads(result.stdout)
     return [item for page in data for item in page] if pages else data
 
-
-def target(repo, pr):
-    data = api(f'repos/{repo}/pulls/{pr}')
-    try:
-        issue = linked_issue(data, repo)
-    except ValueError:
-        return None
-    verify_issue(api(f'repos/{repo}/issues/{issue}'), issue)
-    return data, issue
 
 
 UNKNOWN = 'conflict の解消の結果を確かめられませんでした。このスレッドで対応を相談してください。'
@@ -75,27 +65,26 @@ def result_text(data, result, ref):
     return 'push しましたが、まだ merge できる状態か確かめられません。'
 
 
-def report(repo, pr, run):
-    observed = target(repo, pr)
-    if observed is None:
-        return
-    data, issue = observed
+def report(repo, pr, run, issue):
+    attempt = os.environ['GITHUB_RUN_ATTEMPT']
+    data = None
     text = UNKNOWN
     try:
+        data = api(f'repos/{repo}/pulls/{pr}')
         result = runner_result(json.loads(result_file().read_text()))
         ref = None
         if result['result'] == 'pushed':
-            for attempt in range(4):
+            for retry in range(4):
                 ref = api(f"repos/{repo}/git/ref/heads/{quote(data['head']['ref'], safe='/')}")['object']['sha']
                 if ref == result['sha'] and data.get('mergeable') is not None:
                     break
-                if attempt < 3:
+                if retry < 3:
                     time.sleep(2)
                     data = api(f'repos/{repo}/pulls/{pr}')
         text = result_text(data, result, ref)
     except Exception as error:
         print(f'Conflict result observation failed: {type(error).__name__}', file=sys.stderr)
-    marker = f'<!-- coding-bot:conflict-report run={run} -->'
+    marker = f'<!-- coding-bot:conflict-report run={run} attempt={attempt} -->'
 
     def upsert(number, body):
         old = next((item for item in api(f'repos/{repo}/issues/{number}/comments?per_page=100', pages=True)
@@ -107,7 +96,8 @@ def report(repo, pr, run):
 
     comment = upsert(issue, f'{text}\n\n[PR](https://github.com/{repo}/pull/{pr}) / '
                      f'[実行ログ](https://github.com/{repo}/actions/runs/{run})\n\n{marker}')
-    if data['state'] == 'open':
+    (result_file().parent / f'issue-comment-{attempt}').write_text(str(comment['id']))
+    if data is not None and data['state'] == 'open':
         try:
             url = comment['html_url']
             if not re.fullmatch(rf'https://github\.com/{re.escape(repo)}/issues/{issue}#issuecomment-[1-9][0-9]*', url):
@@ -123,13 +113,20 @@ def main():
     if sys.argv[1] == 'capture':
         capture(*sys.argv[2:])
         return
-    repo, pr = os.environ['REPO'], os.environ['RESOLVE_CONFLICT_PR']
+    repo = os.environ['REPO']
+    pr, issue = os.environ.get('TRUSTED_CONFLICT_PR', ''), os.environ.get('TRUSTED_CONFLICT_ISSUE', '')
+    if not pr or not issue:
+        return 0
+    if not re.fullmatch(r'[1-9][0-9]*', issue):
+        raise ValueError('trusted conflict issue must be positive')
+    if not re.fullmatch(r'[1-9][0-9]*', os.environ['GITHUB_RUN_ATTEMPT']):
+        raise ValueError('run attempt must be positive')
     if not re.fullmatch(r'[1-9][0-9]*', pr):
         raise ValueError('resolve_conflict_pr must be a positive PR number')
     run = os.environ['GITHUB_RUN_ID']
     if not re.fullmatch(r'[1-9][0-9]*', run):
         raise ValueError('run id must be positive')
-    return report(repo, pr, run)
+    return report(repo, pr, run, int(issue))
 
 
 if __name__ == '__main__':
