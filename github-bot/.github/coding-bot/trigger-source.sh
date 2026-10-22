@@ -12,7 +12,17 @@ validate_dispatch_request() {
     [[ "$pr" =~ ^[1-9][0-9]*$ ]] && [[ "$issue" =~ ^[1-9][0-9]*$ ]] && [ -n "$instruction" ] || return 1
   else
     [ -z "$instruction" ] || return 1
+    if [ -n "$issue" ]; then
+      validate_issue_context "$GITHUB_REPOSITORY" "$issue" || return 1
+    fi
   fi
+}
+
+validate_issue_context() {
+  local repository="$1" number="$2" resource
+  [[ "$number" =~ ^[1-9][0-9]*$ ]] || return 1
+  resource=$(gh api "repos/$repository/issues/$number") || return 1
+  printf '%s' "$resource" | python3 "$(dirname "${BASH_SOURCE[0]}")/discussion.py" verify "$number" >/dev/null
 }
 
 fetch_trigger_context() {

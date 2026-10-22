@@ -96,7 +96,10 @@ engine_run() {
 }
 ENGINE
  source "$RUNNER_DIR/resolve-step.sh"
- resolve_issue_conflict
+ conflict_status=0
+ resolve_issue_conflict || conflict_status=$?
+ printf 'CODING_BOT_CONFLICT_RESULT {"result":"%s","sha":"%s"}\n' "$CONFLICT_RUN_RESULT" "$CONFLICT_PUSHED_SHA"
+ exit "$conflict_status"
 else
  run_pr_comment
 fi
@@ -193,6 +196,17 @@ gh() {
                 self.assertEqual(result.returncode==0,not denied,result.stderr)
                 self.assertEqual(pushes,[] if denied else ['push'])
         print('CONTRAST PASS: outside additions/deletions/edits and unresolved markers remain rejected')
+
+    def test_resolver_emits_the_result_only_after_verified_push(self):
+        for options,expected in [({'conflict':False},'no_conflict'),({'fast_forward':True},'no_conflict'),({'fail':True},'failed'),({},'pushed')]:
+            with self.subTest(options=options):
+                result,pushes,calls,_=self.run_case({},issue_run=True,**options)
+                last=result.stdout.splitlines()[-1]
+                self.assertTrue(last.startswith('CODING_BOT_CONFLICT_RESULT '),result.stdout)
+                value=json.loads(last.split(' ',1)[1])
+                self.assertEqual(value['result'],expected)
+                self.assertEqual(len(pushes),int(expected=='pushed'))
+                if expected=='pushed':self.assertRegex(value['sha'],r'^[0-9a-f]{40}$')
 
     def test_pr_comments_only_classify_redirect_and_dispatch(self):
         for decision in [{"conflict":False,"other":True},{"conflict":False,"other":False},

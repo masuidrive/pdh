@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # issue の通常の merge 経路を使い、固定の conflict 解消だけで終える。
 resolve_issue_conflict() {
+  CONFLICT_RUN_RESULT=failed
+  CONFLICT_PUSHED_SHA=''
   local status=0 snapshot before="$CONFLICT_START_SHA" base="$CONFLICT_BASE_SHA"
   if [ "$MERGE_EXIT_CODE" = 0 ] && git rev-parse -q --verify MERGE_HEAD >/dev/null; then
     git merge --abort || status=1
@@ -26,12 +28,18 @@ resolve_issue_conflict() {
     fi
   fi
   if [ "$status" = 0 ]; then
+    CONFLICT_RUN_RESULT=no_conflict
     if [ "$(git rev-parse HEAD)" != "$before" ]; then
+      CONFLICT_RUN_RESULT=failed
       if [ -n "${CODING_BOT_GH_PAT:-}" ]; then
         use_pat_for_origin
         git push origin "HEAD:refs/heads/$BRANCH_NAME" || status=1
       else
         git push origin "HEAD:refs/heads/$BRANCH_NAME" && dispatch_branch_ci || status=1
+      fi
+      if [ "$status" = 0 ]; then
+        CONFLICT_RUN_RESULT=pushed
+        CONFLICT_PUSHED_SHA=$(git rev-parse HEAD)
       fi
     fi
   fi

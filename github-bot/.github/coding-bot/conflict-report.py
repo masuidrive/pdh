@@ -1,4 +1,4 @@
-"""Host-only conflict reports use observed GitHub state, not engine output."""
+"""Host reports combine this runner’s result with the verified branch ref."""
 import json
 import os
 from pathlib import Path
@@ -6,15 +6,16 @@ import re
 import subprocess
 import sys
 import time
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from discussion import linked_issue, verify_issue
 
 
-def api(path, body=None, pages=False):
+def api(path, body=None, pages=False, method="POST"):
     args = ['gh', 'api', path]
     if body is not None:
-        args += ['--method', 'POST', '--input', '-']
+        args += ['--method', method, '--input', '-']
     if pages:
         args += ['--paginate', '--slurp']
     result = subprocess.run(args, input=json.dumps(body) if body is not None else None,
@@ -33,16 +34,45 @@ def target(repo, pr):
     return data, issue
 
 
-def result_text(data, start):
-    if data['state'] != 'open':
-        return 'PR が閉じているため解消しませんでした。'
-    if not re.fullmatch(r'[0-9a-f]{40}', start):
-        raise ValueError('starting PR head was not recorded; result cannot be determined')
-    if data['head']['sha'] == start:
-        return 'conflict の解消を完了できませんでした。'
-    if data['mergeable'] is True:
+UNKNOWN = 'conflict の解消の結果を確かめられませんでした。このスレッドで対応を相談してください。'
+
+
+def result_file():
+    return Path(os.environ['RUNNER_TEMP']) / 'coding-bot-conflict/result.json'
+
+
+def runner_result(value):
+    if not isinstance(value, dict) or value.get('result') not in {'no_conflict', 'pushed', 'failed'}:
+        raise ValueError('invalid runner result')
+    if value['result'] == 'pushed' and not re.fullmatch(r'[0-9a-f]{40}', value.get('sha', '')):
+        raise ValueError('pushed result requires a commit SHA')
+    return value
+
+
+def capture(status, path):
+    # The host file is outside the container mounts; only the final runner line is a result.
+    prefix = 'CODING_BOT_CONFLICT_RESULT '
+    last = Path(path).read_text().splitlines()[-1]
+    if not last.startswith(prefix):
+        raise ValueError('runner did not finish with a result')
+    value = runner_result(json.loads(last[len(prefix):]))
+    if status != '0' and value['result'] != 'failed':
+        raise ValueError('successful result requires runner exit 0')
+    result_file().write_text(json.dumps(value))
+
+
+def result_text(data, result, ref):
+    if result['result'] != 'pushed':
+        if data['state'] != 'open':
+            return 'PR が閉じているため解消しませんでした。'
+        if result['result'] == 'no_conflict':
+            return '解消する conflict はありません。'
+        return 'conflict の解消を完了できませんでした。このスレッドで対応を相談してください。'
+    if ref != result['sha']:
+        return UNKNOWN
+    if data.get('mergeable') is True:
         return 'conflict を解消して push しました。'
-    return 'push したが、まだ merge できる状態か確かめられません。'
+    return 'push しましたが、まだ merge できる状態か確かめられません。'
 
 
 def report(repo, pr, start, run):
@@ -50,36 +80,45 @@ def report(repo, pr, start, run):
     if observed is None:
         return
     data, issue = observed
-    for _ in range(3):
-        if data['state'] != 'open' or data['head']['sha'] == start or data.get('mergeable') is not None:
-            break
-        time.sleep(2)
-        observed = target(repo, pr)
-        if observed is None:
-            return
-        data, issue = observed
-    text = result_text(data, start)
+    text = UNKNOWN
+    if re.fullmatch(r'[0-9a-f]{40}', start):
+        result = runner_result(json.loads(result_file().read_text()))
+        ref = None
+        if result['result'] == 'pushed':
+            for attempt in range(4):
+                ref = api(f"repos/{repo}/git/ref/heads/{quote(data['head']['ref'], safe='/')}")['object']['sha']
+                if ref == result['sha'] and data.get('mergeable') is not None:
+                    break
+                if attempt < 3:
+                    time.sleep(2)
+                    observed = target(repo, pr)
+                    if observed is None:
+                        return
+                    data, issue = observed
+        text = result_text(data, result, ref)
     marker = f'<!-- coding-bot:conflict-report run={run} -->'
 
-    def existing(number):
-        return next((item for item in api(f'repos/{repo}/issues/{number}/comments?per_page=100', pages=True)
-                     if item.get('user', {}).get('login') == 'github-actions[bot]'
-                     and marker in item.get('body', '')), None)
+    def upsert(number, body):
+        old = next((item for item in api(f'repos/{repo}/issues/{number}/comments?per_page=100', pages=True)
+                    if item.get('user', {}).get('login') == 'github-actions[bot]'
+                    and marker in item.get('body', '')), None)
+        if old is not None:
+            return api(f"repos/{repo}/issues/comments/{old['id']}", {'body': body}, method='PATCH')
+        return api(f'repos/{repo}/issues/{number}/comments', {'body': body})
 
-    comment = existing(issue)
-    if comment is None:
-        comment = api(f'repos/{repo}/issues/{issue}/comments', {
-            'body': f'{text}\n\n[PR](https://github.com/{repo}/pull/{pr}) / '
-                    f'[実行ログ](https://github.com/{repo}/actions/runs/{run})\n\n{marker}'})
-    if data['state'] == 'open' and existing(pr) is None:
+    comment = upsert(issue, f'{text}\n\n[PR](https://github.com/{repo}/pull/{pr}) / '
+                     f'[実行ログ](https://github.com/{repo}/actions/runs/{run})\n\n{marker}')
+    if data['state'] == 'open':
         url = comment['html_url']
         if not re.fullmatch(rf'https://github\.com/{re.escape(repo)}/issues/{issue}#issuecomment-[1-9][0-9]*', url):
             raise ValueError('issue report did not return its comment URL')
-        api(f'repos/{repo}/issues/{pr}/comments', {
-            'body': f'conflict 解消の結果は [issue の報告]({url}) をお読みください。\n\n{marker}'})
+        upsert(pr, f'conflict 解消の結果は [issue の報告]({url}) をお読みください。\n\n{marker}')
 
 
 def main():
+    if sys.argv[1] == 'capture':
+        capture(*sys.argv[2:])
+        return
     repo, pr = os.environ['REPO'], os.environ['RESOLVE_CONFLICT_PR']
     if not re.fullmatch(r'[1-9][0-9]*', pr):
         raise ValueError('resolve_conflict_pr must be a positive PR number')

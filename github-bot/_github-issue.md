@@ -8,7 +8,7 @@ GitHub Issue を «エンジニアと bot がやり取りする場所» とし�
 
 質問・AC 承認・判断待ち・進捗・完成報告・draft を外した知らせ・CI の失敗と復旧は、すべて紐づく issue に本文を投稿する。PR に書くのは変更の要約を持つ本文、issue へのリンクと Merge / conflict 解消の案内、依頼された conflict 解消の報告だけとする。行へのレビューコメントも同じ扱いである。
 
-issue 上の返答では「このスレッド」と呼ぶ。自分のいる issue を「issue #N に答えて」と別の場所のように呼ばない。issue へ誘導するときは必ず `https://github.com/<repo>/issues/<N>` を付け、未回答の質問があればそのコメントの `#issuecomment-<id>` 付き URL も付ける。質問コメントの目印は最終報告の hook が付ける。PR からの誘導では、issue に `awaiting-reply` が付いている間だけ、目印付きの最新の bot コメントを質問として案内する。
+issue 上の返答では「このスレッド」と呼ぶ。自分のいる issue を「issue #N に答えて」と別の場所のように呼ばない。issue へ誘導するときは必ず `https://github.com/<repo>/issues/<N>` を付け、未回答の質問があればそのコメントの `#issuecomment-<id>` 付き URL も付ける。質問コメントの目印は最終報告の hook が付ける。PR からの誘導では、目印付きの最新の bot コメントより後に人の 🤖 付きの返答が無いとき、そのコメントを質問として案内する。
 
 外の作業を待つ選択肢には、答える時機（何が済んでからか）と、その完了を知る場所のリンクを同じ選択肢に書く。まだ済んでいなければ回答しても再開しないことを伝え、再開時は完了の証拠を読んでから進む。
 
@@ -117,9 +117,9 @@ PDH の承認の PDH-stage は **`PDH-ticket-human-review`（実装前）** と 
 
 ## 再起動したら、何を待っていたかを note から読む
 
-設問番号と返答の解釈は `system.md`「Question IDs and replies」に従う。issue と PR で答えを待っている
+設問番号と返答の解釈は `system.md`「Question IDs and replies」に従う。issue で答えを待っている
 設問すべての中で T 番号を重ねず、decision-board ごとに T1 から振り直さず続きの番号にする。
-note の待ち行と両方のコメントを読み、どの設問への返答か決められないときは推測せず聞き返す。
+答えは issue のコメントだけから読む。PR のコメントは答えとして扱わない。note の待ち行と issue のコメントを読み、どの設問への返答か決められないときは推測せず聞き返す。
 
 Actions の run は 1 回ごとに記憶を失う。承認の PDH-stage や質問で停止するときは、**停止する同じ commit で note の `## Checklist` に「何の答えを待つか」と発行先（承認を求めたコメントか decision-board の URL）を 1 行書く**（`PDH-AGENTS.md`「受け渡し経路」）。次の 🤖 で起動した run は、まずこの行を読んで自分が何を待っていたかを知る。トリガーコメントがどの設問への答えか一意に決まる場合だけ ticket へ反映し、対応する行を `[x]` にする。`.github/coding-bot/` の script が持つ状態ファイルは同じコメントを二度処理しないための印であり、待っているかどうかは note を正とする。経緯（それまでの PDH-stage の遷移・Findings 表・承認の PDH-stage での答え）は `[TICKET_DIR]/progress.md` を読む。
 

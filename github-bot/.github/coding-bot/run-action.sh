@@ -413,6 +413,8 @@ CI_RED_MARKER=""
 PR_COMMENT_ONLY=false
 if [[ "$EVENT_TYPE" == "pull_request"* ]] || [ "$EVENT_TYPE" = workflow_run ]; then
   IS_PR=true
+elif [ "$EVENT_TYPE" = issues ]; then
+  validate_issue_context "$GITHUB_REPOSITORY" "$ISSUE_NUMBER" || exit 1
 elif [ "$EVENT_TYPE" = issue_comment ]; then
   TRIGGER_ISSUE_DATA=$(gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER") || exit 1
   IS_PR=$(printf '%s' "$TRIGGER_ISSUE_DATA" | jq -r --argjson number "$ISSUE_NUMBER" \
@@ -672,7 +674,7 @@ if [ $MERGE_EXIT_CODE -ne 0 ]; then
 
 # 🚨 IMPORTANT: Git Merge Conflict Detected
 
-**You MUST resolve the merge conflicts BEFORE starting the user's task.**
+**Resolve only these merge conflicts, commit the merge, and end this run. Do not start the original issue task.**
 
 ## Conflicted Files:
 \`\`\`
@@ -696,8 +698,10 @@ fi
 if [ -n "${RESOLVE_CONFLICT_PR:-}" ]; then
   # 元の issue の依頼・会話・PR コメントを作業 engine に渡さない。
   source "$SCRIPT_DIR/resolve-conflict.sh"
-  resolve_issue_conflict
-  exit $?
+  conflict_status=0
+  resolve_issue_conflict || conflict_status=$?
+  printf 'CODING_BOT_CONFLICT_RESULT {"result":"%s","sha":"%s"}\n' "$CONFLICT_RUN_RESULT" "$CONFLICT_PUSHED_SHA"
+  exit "$conflict_status"
 fi
 
 # 画像URLを抽出してダウンロード

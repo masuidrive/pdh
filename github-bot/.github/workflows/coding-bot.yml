@@ -321,6 +321,7 @@ jobs:
           if [ -n "$CODING_BOT_COMPOSE_OVERRIDE" ] && [ -f "$CODING_BOT_COMPOSE_OVERRIDE" ]; then
             compose_args+=(-f "$CODING_BOT_COMPOSE_OVERRIDE")
           fi
+          set +e
           docker compose "${compose_args[@]}" \
             exec -T -u "$CODING_BOT_USER" -w "$CODING_BOT_WORKSPACE" \
             -e CODING_BOT_ENGINE \
@@ -354,7 +355,12 @@ jobs:
             -e DEVCONTAINER_CONFIG_PATH \
             -e CODING_BOT_TIMEOUT \
             -e VERIFY_ONLY \
-            "$CODING_BOT_SERVICE" bash .github/coding-bot/run-in-container.sh
+            "$CODING_BOT_SERVICE" bash .github/coding-bot/run-in-container.sh | tee "$RUNNER_TEMP/coding-bot-runner.log"
+          runner_status=${PIPESTATUS[0]}
+          if [ -n "${RESOLVE_CONFLICT_PR:-}" ]; then
+            (umask 077; python3 -I "$RUNNER_TEMP/coding-bot-conflict/conflict-report.py" capture "$runner_status" "$RUNNER_TEMP/coding-bot-runner.log") || true
+          fi
+          exit "$runner_status"
 
       # エラー時の処理: 👀 を削除して 😟 を追加
       - name: Handle error - Remove eyes and add confused reaction
@@ -430,8 +436,8 @@ jobs:
                 issue="$TRUSTED_LINKED_ISSUE"; pr="$EVENT_NUMBER"
               fi
             else
-              issue="$EVENT_NUMBER"
-
+              source .github/coding-bot/trigger-source.sh
+              if validate_issue_context "$REPO" "$EVENT_NUMBER"; then issue="$EVENT_NUMBER"; fi
             fi
           fi
           if [ -z "$issue" ]; then
@@ -458,7 +464,28 @@ jobs:
           REPO: ${{ github.repository }}
           RESOLVE_CONFLICT_PR: ${{ inputs.resolve_conflict_pr }}
         run: |
-          python3 -I "$RUNNER_TEMP/coding-bot-conflict/conflict-report.py" report
+          set -uo pipefail
+          if python3 -I "$RUNNER_TEMP/coding-bot-conflict/conflict-report.py" report; then exit 0; fi
+          # Script extraction and API errors share this host-only fallback.
+          data=$(gh api "repos/$REPO/pulls/$RESOLVE_CONFLICT_PR") || exit 1
+          issue=$(printf '%s' "$data" | jq -er --arg repo "$REPO" '
+            select(.head.repo.full_name == $repo) | .head.ref |
+            capture("^agent/issue-(?<issue>[1-9][0-9]*)$").issue') || exit 0
+          resource=$(gh api "repos/$REPO/issues/$issue") || exit 1
+          printf '%s' "$resource" | jq -e --argjson n "$issue" '.number == $n and (has("pull_request") | not)' >/dev/null || exit 0
+          marker="<!-- coding-bot:conflict-report run=$GITHUB_RUN_ID -->"
+          body="conflict の解消の結果を確かめられませんでした。このスレッドで対応を相談してください。
+
+          [実行ログ](https://github.com/$REPO/actions/runs/$GITHUB_RUN_ID)
+
+          $marker"
+          entries=$(gh api "repos/$REPO/issues/$issue/comments?per_page=100" --paginate --slurp) || exit 1
+          id=$(printf '%s' "$entries" | jq -r --arg marker "$marker" '[.[][] | select(.user.login == "github-actions[bot]" and (.body | contains($marker)))] | first | .id // empty') || exit 1
+          if [[ "$id" =~ ^[1-9][0-9]*$ ]]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body"
+          else
+            gh api "repos/$REPO/issues/$issue/comments" -f body="$body"
+          fi
 
       - name: Report if the run left nothing
         if: always() && inputs.resolve_conflict_pr == ''
@@ -479,7 +506,7 @@ jobs:
           if [ -f "$GITHUB_WORKSPACE/.coding-bot-reported" ]; then
             echo "run-action.sh が最終レポートを投稿済み。何もしない"; exit 0
           fi
-          if [ "${EVENT_IS_PR:-false}" = true ] && [ -z "${TRUSTED_ISSUE:-}" ]; then
+          if [ -z "${TRUSTED_ISSUE:-}" ]; then
             echo "報告先の issue を確認できません。PR への報告は出さず、実行ログに残します。"
             exit 0
           fi
@@ -489,7 +516,7 @@ jobs:
             GITHUB_REPOSITORY="$REPO"
             response=$(pr_comment_redirect) || exit 1
             gh issue comment "$TRUSTED_PR" --repo "$REPO" \
-              --body "この run では PR の依頼を受け付けられませんでした。[実行ログ]($RUN_URL) $response"
+              --body "この run の処理結果は [実行ログ]($RUN_URL) にあります。conflict 解消が起動したかは [issue](https://github.com/$REPO/issues/$TRUSTED_ISSUE) の報告をお読みください。 $response"
             exit $?
           fi
           if [ -n "${PR_INSTRUCTION:-}" ]; then

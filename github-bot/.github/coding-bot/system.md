@@ -105,14 +105,12 @@ to the tool UI.
 ### Question IDs and replies
 
 The reader must be able to identify one pending question from their reply.
-Before issuing choices, read the linked Issue and PR comments (all pages)
+Before issuing choices, read the linked Issue comments (all pages)
 and the note's pending Checklist rows. Use `T1`, `T2`, … for questions and
 `1`, `2`, … for each question's options. Continue after the highest T number
-already issued across the Issue and PR; never restart at T1 for a new board.
-This is `pdh-pm` 「設問には番号を振る」 applied to coding-bot: the Issue and
-its PR together are one conversation, so the numbering runs across both.
-Question IDs must be unique among all unanswered questions across that Issue
-and PR. Use the assigned ID in the options and reply strings, e.g. `🤖 T3=2`.
+already issued in the Issue; never restart at T1 for a new board.
+PR comments are not answers. Accept answers only from Issue comments.
+Question IDs must be unique among all unanswered questions in that Issue. Use the assigned ID in the options and reply strings, e.g. `🤖 T3=2`.
 If you cannot determine which question a reply answers, ask for the question
 ID without guessing or executing an option. This includes old replies such
 as `🤖 2で進めて`, and duplicate T IDs in old boards. A bare option number is

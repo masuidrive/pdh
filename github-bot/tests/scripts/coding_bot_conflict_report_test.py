@@ -34,9 +34,10 @@ elif a[0]=='api':
  if path.endswith('/issues/7'):done({'number':7})
  if '/comments' in path:
   if '/issues/comments/' in path:
-   entry=next(x for x in s['posts'] if str(x['id'])==path.split('/')[-1]);entry['body']=json.load(sys.stdin)['body'];done(entry)
+   entry=next(x for x in s['posts'] if str(x['id'])==path.split('/')[-1]);entry['body']=json.load(sys.stdin)['body'] if '--input' in a else a[a.index('-f')+1].removeprefix('body=');done(entry)
   n=int(path.split('/issues/')[1].split('/')[0])
   if '--input' in a:body=json.load(sys.stdin)['body']
+  elif '-f' in a:body=a[a.index('-f')+1].removeprefix('body=')
   else:
    entries=[x for x in s['posts'] if x['target']==n]
    done([entries] if '--slurp' in a else entries)
@@ -107,8 +108,8 @@ class HostStateContract(HostProbe,unittest.TestCase):
             ('open',False,True,'解消する conflict はありません'),
             ('open',False,False,'解消を完了できませんでした'),
             ('open',False,None,'解消を完了できませんでした'),
-            ('open',True,False,'push したが、まだ merge できる状態か確かめられません'),
-            ('open',True,None,'push したが、まだ merge できる状態か確かめられません'),
+            ('open',True,False,'push しましたが、まだ merge できる状態か確かめられません'),
+            ('open',True,None,'push しましたが、まだ merge できる状態か確かめられません'),
             ('closed',True,True,'conflict を解消して push しました')]:
             with self.subTest(state=state,changed=changed,mergeable=mergeable):
                 self.data['posts']=[];self.data['calls']=[]
@@ -233,5 +234,30 @@ class RunnerResultContract(HostProbe,unittest.TestCase):
         print('CONTRAST PASS: verified success remains successful',flush=True)
         self.data['posts']=[];self.save();self.outcome({'result':'failed'})
         self.assertIn('conflict の解消を完了できませんでした。このスレッドで対応を相談してください。',self.text())
+
+    def test_host_capture_uses_final_runner_result_and_rejects_partial_output(self):
+        import importlib.util
+        from unittest.mock import patch
+        spec=importlib.util.spec_from_file_location('report_capture',BOT/'conflict-report.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        log=self.dir/'runner.log'
+        for content,status,valid in [
+            ('engine log\nCODING_BOT_CONFLICT_RESULT {"result":"no_conflict","sha":""}\n','0',True),
+            ('CODING_BOT_CONFLICT_RESULT {"result":"pushed","sha":"'+'b'*40+'"}\nengine failed\n','1',False),
+            ('CODING_BOT_CONFLICT_RESULT {"result":"pushed","sha":"'+'b'*40+'"}\n','1',False),
+            ('CODING_BOT_CONFLICT_RESULT {"result":"pushed","sha":"short"}\n','0',False)]:
+            log.write_text(content)
+            with self.subTest(content=content,status=status),patch.dict(os.environ,self.env):
+                if valid:module.capture(status,str(log));self.assertEqual(json.loads(self.result_file.read_text())['result'],'no_conflict')
+                else:
+                    with self.assertRaises(ValueError):module.capture(status,str(log))
+
+    def test_pr_number_in_issue_input_never_gets_a_fallback_comment(self):
+        steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+        fallback=next(s for s in steps if s.get('name')=='Report if the run left nothing')
+        env={**self.env,'TRUSTED_ISSUE':'','TRUSTED_PR':'','EVENT_IS_PR':'false','ISSUE':'9'}
+        result=subprocess.run(['bash','-c',fallback['run']],cwd=ROOT,env=env,text=True,capture_output=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(self.load()['posts'],[])
 
 if __name__=='__main__':unittest.main(verbosity=2)
