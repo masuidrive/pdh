@@ -245,6 +245,8 @@ else:sys.exit(98)
             ('transient-then-ok','issue_comment','true','',['gh: unavailable (HTTP 503)'],'agent/issue-7','7',3),
             ('connection-then-ok','issue_comment','true','',['dial tcp: connection refused'],'agent/issue-7','7',3),
             ('rate-limit-then-ok','issue_comment','true','',['API rate limit exceeded (HTTP 403)'],'agent/issue-7','7',3),
+            ('rate-limit-429-then-ok','issue_comment','true','',['gh: Too Many Requests (HTTP 429)'],'agent/issue-7','7',3),
+            ('permanent-403','issue_comment','true','',['gh: Forbidden (HTTP 403)'],'agent/issue-7','',1),
             ('permanent-404','issue_comment','true','',['gh: Not Found (HTTP 404)'],'agent/issue-7','',1),
             ('exhausted','issue_comment','true','',['gh: unavailable (HTTP 502)']*4,'agent/issue-7','',4),
             ('wrong-branch','issue_comment','true','','','human-branch','',1),
