@@ -443,17 +443,19 @@ jobs:
           REPO: ${{ github.repository }}
           EVENT_NUMBER: ${{ env.BOT_ISSUE }}
           VALIDATED_ISSUE: ${{ steps.dispatch_context.outputs.issue }}
+          DISPATCH_ISSUE: ${{ inputs.issue }}
           EVENT_IS_PR: ${{ inputs.pr != '' || github.event_name == 'workflow_run' || github.event.issue.pull_request != null || github.event.pull_request != null }}
         run: |
           set -uo pipefail
           issue=""; pr=""
           if [[ "$EVENT_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-            if [ "$EVENT_IS_PR" = true ]; then
+            if [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ]; then
+              issue="${VALIDATED_ISSUE:-$DISPATCH_ISSUE}"
+              if [ "$EVENT_IS_PR" = true ]; then pr="$EVENT_NUMBER"; fi
+            elif [ "$EVENT_IS_PR" = true ]; then
               if source "$RUNNER_TEMP/coding-bot-notification/trigger-source.sh" && validate_pr_context "$REPO" "$EVENT_NUMBER"; then
                 issue="$TRUSTED_LINKED_ISSUE"; pr="$EVENT_NUMBER"
               fi
-            elif [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ]; then
-              issue="${VALIDATED_ISSUE:-$EVENT_NUMBER}"
             else
               issue="$EVENT_NUMBER"
             fi
