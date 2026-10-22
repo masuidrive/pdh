@@ -315,6 +315,101 @@ else:sys.exit(98)
         self.assertEqual(self.load()['posts'],[])
         print('CONTRAST PASS: unresolved manual dispatch never posts to an input number',flush=True)
 
+class TargetFailureContract(HostProbe, unittest.TestCase):
+    def steps(self):
+        return yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+
+    def dispatch_failure(self, conflict, error):
+        output=self.dir/'target-output';output.write_text('')
+        calls=self.dir/'dispatch-calls';calls.write_text('')
+        env={**self.env,'GITHUB_EVENT_NAME':'workflow_dispatch','DISPATCH_ISSUE':'7',
+             'RESOLVE_CONFLICT_PR':'9' if conflict else '', 'DISPATCH_PR':'', 'PR_INSTRUCTION':'',
+             'PR_TASK_ALLOWED_PATHS':'','GITHUB_OUTPUT':str(output),'CALLS':str(calls),'API_ERROR':error}
+        stub=r"""
+sleep() { :; }
+gh() {
+ printf '%s\n' "$*" >> "$CALLS"
+ case "$*" in *'body='*) return 0;; esac
+ echo "$API_ERROR" >&2; return 1
+}
+"""
+        r=subprocess.run(['bash','-c',stub+'source "$BOT/resolve-target.sh"; resolve_target'],env={**env,'BOT':str(BOT)},text=True,capture_output=True)
+        self.assertEqual(r.returncode,0,r.stderr)
+        target=dict(line.split('=',1) for line in output.read_text().splitlines())
+        notice=next((x for x in self.steps() if x.get('name')=='Report unresolved dispatch'),None)
+        if not target['issue'] and notice:
+            r=subprocess.run(['bash','-c',stub+notice['run']],env={**env,'TARGET_REASON':target['reason']},text=True,capture_output=True)
+            self.assertEqual(r.returncode,0,r.stderr)
+        return target,calls.read_text()
+
+    def check_dispatch_failure(self, conflict):
+        target,calls=self.dispatch_failure(conflict,'gh: Not Found (HTTP 404)')
+        self.assertEqual(target['issue'],'');self.assertNotIn('body=',calls)
+        print('CONTRAST PASS: rejected dispatch never posts to its input issue',flush=True)
+        target,calls=self.dispatch_failure(conflict,'gh: unavailable (HTTP 503)')
+        self.assertEqual(target['issue'],'')
+        self.assertIn('一時的な失敗:',target['reason'])
+        posts=[line for line in calls.splitlines() if 'body=' in line]
+        self.assertEqual(len(posts),1,calls)
+        self.assertIn('repos/owner/repo/issues/7/comments',posts[0])
+        self.assertIn('body=結果を確かめられませんでした。このスレッドで対応を相談してください。',posts[0])
+        self.assertNotIn('awaiting-reply',calls);self.assertNotIn('coding-bot:conflict-report',calls)
+
+    def test_conflict_dispatch_transient_failure_reports_to_input_once(self):
+        self.check_dispatch_failure(True)
+
+    def test_issue_dispatch_transient_failure_reports_to_input_once(self):
+        self.check_dispatch_failure(False)
+
+    def test_closed_dispatch_without_runner_result_reports_closed(self):
+        self.data['pr']['state']='closed';self.save();self.validate_context()
+        self.result_file.unlink(missing_ok=True)
+        result=self.report();self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual([p['target'] for p in self.load()['posts']],[7])
+        self.assertIn('PR が閉じているため解消しませんでした',self.load()['posts'][0]['body'])
+        self.data=self.load();self.data['posts']=[];self.save()
+        self.result_file.write_text(json.dumps({'result':'pushed','sha':'b'*40}))
+        self.report();self.assertIn('push しました',self.load()['posts'][0]['body'])
+        print('CONTRAST PASS: closing after a push preserves the pushed fact',flush=True)
+
+    def test_closed_pr_comment_never_starts_conflict(self):
+        self.data['pr']['state']='closed';self.save()
+        output=self.dir/'closed-target';output.write_text('')
+        r=subprocess.run(['bash',str(BOT/'resolve-target.sh')],env={**self.env,'GITHUB_EVENT_NAME':'issue_comment','EVENT_NUMBER':'9','EVENT_IS_PR':'true','GITHUB_OUTPUT':str(output)},text=True,capture_output=True)
+        target=dict(line.split('=',1) for line in output.read_text().splitlines())
+        self.assertEqual(target['issue'],'7');self.assertIn('閉じて',target['reason'])
+        fallback=next(x for x in self.steps() if x.get('name')=='Report if the run left nothing')['run']
+        r=subprocess.run(['bash','-c',fallback],env={**self.env,'TRUSTED_ISSUE':target['issue'],'TRUSTED_PR':target['pr'],'TARGET_REASON':target['reason'],'PR_COMMENT_ONLY':'true','EVENT_PR':'9','RUN_URL':'run'},text=True,capture_output=True)
+        self.assertEqual(r.returncode,0,r.stderr)
+        self.assertIn('閉じているため',self.load()['posts'][0]['body'])
+        self.assertNotIn('解消を始めました',self.load()['posts'][0]['body'])
+        self.assertFalse(any('workflow' in c for c in self.load()['calls']))
+        print('CONTRAST PASS: open PR start notices remain covered by PrCommentContract',flush=True)
+
+    def test_missing_linked_issue_gets_permanent_guidance(self):
+        fallback=next(x for x in self.steps() if x.get('name')=='Report if the run left nothing')['run']
+        # Resolve the actual 404, rather than hand-picking a reason string.
+        code=r"""source "$BOT/resolve-target.sh"
+gh() { case "$2" in */pulls/9) echo '{"state":"open","head":{"ref":"agent/issue-7","repo":{"full_name":"owner/repo"}}}';; *) echo 'gh: Not Found (HTTP 404)' >&2; return 1;; esac; }
+resolve_target
+"""
+        output=self.dir/'missing';output.write_text('')
+        r=subprocess.run(['bash','-c',code],env={**self.env,'BOT':str(BOT),'GITHUB_EVENT_NAME':'issue_comment','EVENT_NUMBER':'9','EVENT_IS_PR':'true','GITHUB_OUTPUT':str(output)},text=True,capture_output=True)
+        target=dict(line.split('=',1) for line in output.read_text().splitlines())
+        r=subprocess.run(['bash','-c',fallback],env={**self.env,'TRUSTED_ISSUE':'','TARGET_REASON':target['reason'],'PR_COMMENT_ONLY':'true','EVENT_PR':'9','RUN_URL':'run'},text=True,capture_output=True)
+        self.assertEqual(r.returncode,0,r.stderr)
+        body=self.load()['posts'][0]['body'];self.assertNotIn('少し待って',body);self.assertIn('この PR では動きません',body)
+        print('CONTRAST PASS: transient guidance remains covered by SingleTargetContract',flush=True)
+
+    def test_verify_only_success_has_no_error_annotation(self):
+        fallback=next(x for x in self.steps() if x.get('name')=='Report if the run left nothing')['run']
+        for conclusion, expected in [('failure',True),('success',False)]:
+            r=subprocess.run(['bash','-c',fallback],env={**self.env,'TRUSTED_ISSUE':'','VERIFY_ONLY':'true','TARGET_REASON':'','CONCLUSION':conclusion},text=True,capture_output=True)
+            self.assertEqual(r.returncode,0,r.stderr)
+            self.assertEqual('::error::' in r.stdout,expected,r.stdout)
+        self.assertEqual(self.load()['posts'],[])
+        print('CONTRAST PASS: actual verify-only failures retain their error annotation',flush=True)
+
 class HostStateContract(HostProbe,unittest.TestCase):
     def test_observed_head_and_mergeability_determine_report(self):
         import importlib.util
