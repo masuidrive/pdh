@@ -113,6 +113,18 @@ fi
 
 
 class PrCommentContract(MergeProbe):
+    def test_dispatched_conflict_has_a_start_notice_even_if_redirect_delivery_fails(self):
+        result,pushes,calls,_=self.run_case({'conflict':True,'other':False})
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('conflict の解消を始めました',calls)
+        self.assertIn('https://github.com/owner/repo/issues/7',calls)
+        self.assertEqual(pushes,[])
+        result,pushes,calls,_=self.run_case({'conflict':True,'other':False},fail_pr_post=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertTrue(result.reported)
+        self.assertEqual(pushes,[])
+        print('CONTRAST PASS: failed start notice cannot undo an accepted conflict dispatch',flush=True)
+
     def test_working_runs_take_history_and_images_from_issue_only(self):
         source=(BOT/'run-action.sh').read_text()
         history=source[source.index('# REST API で全コメント取得'):source.index('# main を merge\n')]

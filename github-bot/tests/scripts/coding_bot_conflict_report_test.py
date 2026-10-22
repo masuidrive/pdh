@@ -233,6 +233,112 @@ class DeliveryIsolationContract(HostProbe,unittest.TestCase):
         self.assertIn('issue=7',Path(env['GITHUB_OUTPUT']).read_text())
         self.assertFalse((self.dir/'WORKSPACE_EXECUTED').exists())
 
+class SingleTargetContract(HostProbe, unittest.TestCase):
+    def test_target_retries_transient_errors_without_changing_destination(self):
+        steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+        target=next((x for x in steps if x.get('id')=='target'), None)
+        self.assertIsNotNone(target, 'one host target step must precede reactions and engines')
+        self.assertLess(steps.index(target),next(i for i,x in enumerate(steps) if x.get('name')=='Add eyes reaction to comment'))
+        self.assertNotIn('notification_context',str(steps))
+        self.assertNotIn('validate_pr_context',(BOT/'run-action.sh').read_text())
+        self.assertNotIn('validate_conflict_dispatch',(BOT/'trigger-source.sh').read_text())
+        self.assertNotIn('TRUSTED_LINKED_ISSUE:-',(BOT/'run-action.sh').read_text())
+        self.assertNotIn('EVENT_IS_PR',next(x['env'] for x in steps if x.get('name')=='Report if the run left nothing'))
+        print('CONTRAST PASS: destination consumers never recover rejected raw inputs',flush=True)
+
+    def test_target_validates_once_and_retries_only_transient_failures(self):
+        resolver=BOT/'resolve-target.sh'
+        self.assertTrue(resolver.is_file(), 'target resolver must be executable independently')
+        # A real CLI subprocess boundary, with only the GitHub transport replaced.
+        stub=self.bindir/'gh'
+        stub.write_text("""#!/usr/bin/env python3
+import os,sys,json
+from pathlib import Path
+p=Path(os.environ['GH_STATE']);s=json.loads(p.read_text());s['calls'].append(sys.argv[1:]);p.write_text(json.dumps(s))
+path=sys.argv[2]
+if path.endswith('/pulls/9'):
+ if s.get('errors'):
+  error=s['errors'].pop(0);p.write_text(json.dumps(s));print(error,file=sys.stderr);sys.exit(1)
+ print(json.dumps(s['pr']))
+elif path.endswith('/issues/7'):print('{"number":7}')
+elif path.endswith('/issues/9'):print('{"number":9,"pull_request":{}}')
+else:sys.exit(98)
+""")
+        sleep=self.bindir/'sleep';sleep.write_text('#!/bin/sh\nexit 0\n');sleep.chmod(0o755)
+        for name, event, is_pr, supplied, errors, ref, expected, calls in [
+            ('issue-no-api','issues','false','','','agent/issue-7','7',0),
+            ('valid-pr','issue_comment','true','','','agent/issue-7','7',2),
+            ('transient-then-ok','issue_comment','true','',['gh: unavailable (HTTP 503)'],'agent/issue-7','7',3),
+            ('connection-then-ok','issue_comment','true','',['dial tcp: connection refused'],'agent/issue-7','7',3),
+            ('rate-limit-then-ok','issue_comment','true','',['API rate limit exceeded (HTTP 403)'],'agent/issue-7','7',3),
+            ('permanent-404','issue_comment','true','',['gh: Not Found (HTTP 404)'],'agent/issue-7','',1),
+            ('exhausted','issue_comment','true','',['gh: unavailable (HTTP 502)']*4,'agent/issue-7','',4),
+            ('wrong-branch','issue_comment','true','','','human-branch','',1),
+            ('mismatched-dispatch','workflow_dispatch','true','8','','agent/issue-7','',2),
+            ('matching-dispatch','workflow_dispatch','true','7','','agent/issue-7','7',2),
+            ('pr-used-as-issue','workflow_dispatch','false','9','','agent/issue-7','',1),
+        ]:
+            with self.subTest(name=name):
+                self.data['calls']=[];self.data['errors']=list(errors);self.data['pr']['head']['ref']=ref;self.save()
+                output=self.dir/'target-output';output.write_text('')
+                env={**self.env,'EVENT_NUMBER':'7' if event=='issues' else '9','GITHUB_EVENT_NAME':event,'EVENT_IS_PR':is_pr,
+                     'DISPATCH_ISSUE':supplied,'DISPATCH_PR':'9' if supplied and is_pr=='true' else '',
+                     'PR_INSTRUCTION':'task' if supplied and is_pr=='true' else '', 'PR_TASK_ALLOWED_PATHS':'["test.py"]',
+                     'RESOLVE_CONFLICT_PR':'','GITHUB_OUTPUT':str(output)}
+                r=subprocess.run(['bash',str(resolver)],env=env,text=True,capture_output=True)
+                self.assertEqual(r.returncode,0,r.stderr)
+                values=dict(line.split('=',1) for line in output.read_text().splitlines())
+                self.assertEqual(values['issue'],expected)
+                self.assertEqual(len(self.load()['calls']),calls,self.load()['calls'])
+                if not expected:self.assertTrue(values['reason'])
+                self.assertEqual(set(values),{'issue','pr','reason'})
+        print('CONTRAST PASS: valid issue events need no API; 404 and ineligible heads are never retried',flush=True)
+
+    def test_task_fallback_creates_without_overwriting_another_report(self):
+        block=next(x['run'] for x in yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps'] if x.get('name')=='Report if the run left nothing')
+        (self.dir/'.coding-bot-task-progress').write_text('100')
+        prior={'id':100,'target':7,'body':'previous run succeeded','issue_url':'https://api.github.com/repos/owner/repo/issues/7','user':{'login':'github-actions[bot]','type':'Bot'}}
+        self.data['posts']=[prior.copy()];self.save()
+        self.env.update(PR_INSTRUCTION='fixed task')
+        r=subprocess.run(['bash','-c',block],env=self.env,cwd=self.dir,text=True,capture_output=True)
+        self.assertEqual(r.returncode,0,r.stderr)
+        self.assertEqual(self.load()['posts'][0],prior)
+        self.assertEqual([x['target'] for x in self.load()['posts']],[7,7])
+        self.assertFalse(any('PATCH' in a for a in self.load()['calls']))
+        print('CONTRAST PASS: missing reports are created on the trusted issue',flush=True)
+
+    def test_receipt_is_scoped_to_run_and_attempt(self):
+        self.report()
+        self.assertTrue((self.result_file.parent/'issue-comment-123-1').exists())
+        self.env['GITHUB_RUN_ID']='124'
+        (self.result_file.parent/'conflict-report.py').unlink()
+        self.data=self.load();self.data['fail_list']=True;self.save()
+        r=self.report()
+        self.assertEqual(r.returncode,0,r.stderr)
+        self.assertEqual([x['target'] for x in self.load()['posts']],[7,9,7])
+        print('CONTRAST PASS: another run receipt never suppresses a missing report',flush=True)
+
+    def test_pr_notice_failure_does_not_fail_the_reporting_step(self):
+        self.data['fail_pr']=True;self.save()
+        r=self.report()
+        self.assertEqual(r.returncode,0,r.stderr)
+        self.assertIn('conflict を解消して push しました',self.load()['posts'][0]['body'])
+        self.assertEqual([x['target'] for x in self.load()['posts']],[7])
+        print('CONTRAST PASS: an issue report remains successful when its PR notice fails',flush=True)
+
+    def test_unresolved_pr_target_gets_transient_retry_guidance(self):
+        fallback=next(x['run'] for x in yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps'] if x.get('name')=='Report if the run left nothing')
+        self.env.update(PR_COMMENT_ONLY='true',TRUSTED_ISSUE='',TRUSTED_PR='',TARGET_REASON='API unavailable',EVENT_PR='9')
+        r=subprocess.run(['bash','-c',fallback],cwd=self.dir,env=self.env,text=True,capture_output=True)
+        self.assertEqual(r.returncode,0,r.stderr)
+        posts=self.load()['posts'];self.assertEqual([x['target'] for x in posts],[9])
+        self.assertIn('少し待ってもう一度 🤖',posts[0]['body'])
+        self.assertNotIn('この PR では動きません',posts[0]['body'])
+        self.data=self.load();self.data['posts']=[];self.save();self.env['PR_COMMENT_ONLY']='false'
+        subprocess.run(['bash','-c',fallback],cwd=self.dir,env=self.env,text=True,capture_output=True)
+        self.assertEqual(self.load()['posts'],[])
+        print('CONTRAST PASS: unresolved manual dispatch never posts to an input number',flush=True)
+
 class HostStateContract(HostProbe,unittest.TestCase):
     def test_observed_head_and_mergeability_determine_report(self):
         import importlib.util
