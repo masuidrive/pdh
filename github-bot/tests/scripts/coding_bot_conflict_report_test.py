@@ -34,7 +34,9 @@ elif a[0]=='api':
  if path.endswith('/issues/7'):done(None,1) if s.get('fail_issue_get') else done({'number':7})
  if '/comments' in path:
   if '/issues/comments/' in path:
-   entry=next(x for x in s['posts'] if str(x['id'])==path.split('/')[-1]);entry['body']=json.load(sys.stdin)['body'] if '--input' in a else a[a.index('-f')+1].removeprefix('body=');done(entry)
+   entry=next(x for x in s['posts'] if str(x['id'])==path.split('/')[-1])
+   if '--input' not in a and '-f' not in a:done(entry)
+   entry['body']=json.load(sys.stdin)['body'] if '--input' in a else a[a.index('-f')+1].removeprefix('body=');done(entry)
   n=int(path.split('/issues/')[1].split('/')[0])
   if '--input' in a:body=json.load(sys.stdin)['body']
   elif '-f' in a:body=a[a.index('-f')+1].removeprefix('body=')
