@@ -1206,7 +1206,7 @@ if [ -n "${PR_INSTRUCTION:-}" ]; then
       dispatch_branch_ci
     fi
   fi
-  if ! report_pr_task_result "$CLAUDE_OUTPUT"; then ENGINE_EXIT_CODE=1; fi
+  report_pr_task_result "$CLAUDE_OUTPUT" || echo 'Warning: task result delivery failed; engine result is preserved' >&2
   exit "$ENGINE_EXIT_CODE"
 fi
 
@@ -1511,12 +1511,8 @@ ${IMG_NOTE}"
     source "$SCRIPT_DIR/pr-comment.sh"
     pr_comment_guide "$OPEN_PR" "$REPORT_URL" || true
   fi
-  gh api -X PATCH repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID \
-    -f body="${CI_RED_MARKER:+$CI_RED_MARKER$'\n\n'}$CLAUDE_OUTPUT_CLEAN$(branch_footer)"
-
-  # ⚠ 最終レポートを投稿した印。coding-bot.yml の «Report if the run left nothing» が
-  # これを見て二重投稿を避ける。置かないと、そちらが必ずもう 1 通出す。
-  : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported" 2>/dev/null || true
+  report_pr_task_result "${CI_RED_MARKER:+$CI_RED_MARKER$'\n\n'}$CLAUDE_OUTPUT_CLEAN$(branch_footer)" || \
+    echo 'Warning: completion delivery failed; engine result is preserved' >&2
 else
   echo "❌ Task failed with exit code $ENGINE_EXIT_CODE"
 
@@ -1543,8 +1539,7 @@ else
   # =========================================================================
   # POST ERROR REPORT TO GITHUB
   # =========================================================================
-  gh api -X PATCH repos/$GITHUB_REPOSITORY/issues/comments/$PROGRESS_COMMENT_ID \
-    -f body="${CI_RED_MARKER:+$CI_RED_MARKER$'\n\n'}$ERROR_DETAILS
+  report_pr_task_result "${CI_RED_MARKER:+$CI_RED_MARKER$'\n\n'}$ERROR_DETAILS
 
 ---
 
@@ -1562,11 +1557,7 @@ else
 $(engine_output_tail 200)
 \`\`\`
 
-</details>"
-
-  # ⚠ 最終レポートを投稿した印。coding-bot.yml の «Report if the run left nothing» が
-  # これを見て二重投稿を避ける。置かないと、そちらが必ずもう 1 通出す。
-  : > "${GITHUB_WORKSPACE:-.}/.coding-bot-reported" 2>/dev/null || true
+</details>" || echo 'Warning: failure result delivery failed; engine result is preserved' >&2
 
   exit $ENGINE_EXIT_CODE
 fi
