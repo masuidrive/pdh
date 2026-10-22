@@ -34,6 +34,7 @@ run "guard parity (claude/ ↔ codex/)" bash scripts/check-guard-parity.sh
 run "github-bot layer" bash scripts/check-github-bot.sh
 run "issue discussion and dispatch policy" python3 github-bot/tests/scripts/coding_bot_discussion_test.py
 run "workflow issue lock" env BOT_WORKFLOW_PATH="$PWD/github-bot/.github/workflows/coding-bot.yml" python3 github-bot/tests/scripts/coding_bot_lock_test.py
+run "host conflict reporting" python3 github-bot/tests/scripts/coding_bot_conflict_report_test.py
 run "PR comment push boundary" python3 github-bot/tests/scripts/coding_bot_pr_comments_test.py
 run "pdh-hooks awaiting-reply" bash scripts/test-pdh-hooks-awaiting.sh
 run "bot attachments" bash scripts/test-bot-attachments.sh

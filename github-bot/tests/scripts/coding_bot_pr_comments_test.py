@@ -16,7 +16,7 @@ def git(cwd, *args):
 
 
 class MergeProbe(unittest.TestCase):
-    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False, issue_run=False, extra=False, pat=False, fast_forward=False, deletion=False, resolved="resolved\n", outside_delete=False, renamed=False):
+    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False, issue_run=False, extra=False, pat=False, fast_forward=False, deletion=False, resolved="resolved\n", outside_delete=False, renamed=False, fail_pr_post=False):
         with tempfile.TemporaryDirectory(dir=TMP) as temp:
             temp = Path(temp)
             seed, remote, work, run = [temp / name for name in ['seed', 'remote', 'work', 'run']]
@@ -44,7 +44,7 @@ class MergeProbe(unittest.TestCase):
             start=runner.index('# main を merge\n')
             (run/'merge-step.sh').write_text(runner[start:runner.index('\nCONFLICT_SECTION=""',start)])
             env = {**os.environ, 'BOT': str(BOT), 'RUNNER_DIR': str(run), 'GITHUB_WORKSPACE': str(run),
-                   'CONFLICT_PATH':'renamed conflict file.txt' if renamed else 'conflict file.txt', 'DELETE':str(int(deletion)), 'RESOLVED':resolved, 'OUTSIDE_DELETE':str(int(outside_delete)), 'DECISION': json.dumps(decision), 'DIRTY': str(int(dirty)), 'FAIL': str(int(fail)),
+                   'FAIL_PR_POST':str(int(fail_pr_post)), 'CONFLICT_PATH':'renamed conflict file.txt' if renamed else 'conflict file.txt', 'DELETE':str(int(deletion)), 'RESOLVED':resolved, 'OUTSIDE_DELETE':str(int(outside_delete)), 'DECISION': json.dumps(decision), 'DIRTY': str(int(dirty)), 'FAIL': str(int(fail)),
                    'RAW': raw if raw is not None else json.dumps(decision), 'UNRESOLVED': str(int(unresolved)), 'REFUSED': str(int(refused)),
                    'ISSUE_RUN': str(int(issue_run)), 'CODING_BOT_GH_PAT': 'fake-pat' if pat else '', 'EXTRA': str(int(extra)), 'RESOLVE_CONFLICT_PR':'9', 'ENGINE_FILE': str(run/'engine.sh'), 'GITHUB_REPOSITORY': 'owner/repo', 'TRUSTED_LINKED_ISSUE': '7', 'ISSUE_NUMBER': '9',
                    'BASE_BRANCH': 'main', 'BRANCH_NAME': 'agent/issue-7', 'PROGRESS_COMMENT_ID': '77',
@@ -61,6 +61,7 @@ git() {
 }
 gh() {
   printf '%s\n' "$*" >> "$RUNNER_DIR/gh"
+  if [ "${FAIL_PR_POST:-0}" = 1 ] && [ "$1 $2 $3" = "issue comment 9" ]; then return 1; fi
   if [[ " $* " == *" --paginate "* ]]; then printf '[]';
   elif [[ "$1 $2" == 'issue comment' ]]; then printf 'https://github.com/owner/repo/issues/%s#issuecomment-88\n' "$3"; fi
 }
@@ -152,6 +153,37 @@ gh() {
                     self.assertIn('https://github.com/owner/repo/issues/7#issuecomment-88',calls)
                     self.assertEqual(pushes,[])
         print('CONTRAST PASS: success still reports once on PR and issue')
+
+    def test_resolver_push_result_does_not_depend_on_comment_delivery(self):
+        ordinary=self.run_case({'conflict':False,'other':True})
+        self.assertEqual(ordinary[1],[])
+        print('CONTRAST PASS: ordinary PR requests never push',flush=True)
+        result,pushes,calls,_=self.run_case({},issue_run=True,fail_pr_post=True)
+        self.assertEqual(pushes,['push'])
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertNotIn('issue comment',calls)
+
+    def test_working_pr_tasks_use_issue_title_and_body(self):
+        source=(BOT/'run-action.sh').read_text()
+        start=source.index('  # PR の場合\n  PR_DATA=')
+        block=source[start:source.index('  # PR の場合: head ブランチ名',start)]
+        code=r'''GITHUB_REPOSITORY=owner/repo; ISSUE_NUMBER=9; TRUSTED_LINKED_ISSUE=7
+gh() {
+ if [ "$1" = pr ]; then echo '{"title":"PR_UNACCEPTED_TITLE","body":"PR_UNACCEPTED_BODY"}';
+ else echo '{"title":"ISSUE_TITLE","body":"ISSUE_BODY","labels":[]}'; fi
+}
+'''
+        normal='\n'.join(source[source.index('  ISSUE_TITLE=$(echo "$ISSUE_DATA"'):].splitlines()[:3])
+        ordinary=subprocess.run(['bash','-c','ISSUE_DATA=\'{"title":"ISSUE_TITLE","body":"ISSUE_BODY","labels":[]}\'\n'+normal+'\nprintf "%s\n" "$ISSUE_TITLE" "$ISSUE_BODY"'],text=True,capture_output=True)
+        self.assertEqual(ordinary.stdout,'ISSUE_TITLE\nISSUE_BODY\n')
+        print('CONTRAST PASS: ordinary issue metadata remains intact',flush=True)
+        for event,instruction in [('workflow_run',''),('workflow_dispatch','fixed script task')]:
+            with self.subTest(event=event):
+                env={**os.environ,'EVENT_TYPE':event,'PR_INSTRUCTION':instruction}
+                result=subprocess.run(['bash','-c',code+block+'\nprintf "%s\n" "$ISSUE_TITLE" "$ISSUE_BODY"'],env=env,text=True,capture_output=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertEqual(result.stdout,'ISSUE_TITLE\nISSUE_BODY\n')
+        print('CONTRAST PASS: task text remains the fixed internal instruction',flush=True)
 
     def test_conflict_paths_allow_deletion_and_literal_separator(self):
         for kwargs in [{'deletion':True},{'deletion':True,'renamed':True},{'resolved':'=======\n'},{'outside_delete':True},{'dirty':True},{'extra':True},{'unresolved':True},{}]:
