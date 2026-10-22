@@ -162,6 +162,23 @@ jobs:
           done
           bash "$RUNNER_TEMP/coding-bot-target/resolve-target.sh"
 
+      - name: Report unresolved dispatch
+        if: always() && github.event_name == 'workflow_dispatch' && steps.target.outputs.issue == '' && startsWith(steps.target.outputs.reason, '一時的な失敗:')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISPATCH_ISSUE: ${{ inputs.issue }}
+          TARGET_REASON: ${{ steps.target.outputs.reason }}
+        run: |
+          case "${TARGET_REASON:-}" in '一時的な失敗:'*) ;; *) exit 0 ;; esac
+          [[ "${DISPATCH_ISSUE:-}" =~ ^[1-9][0-9]*$ ]] || exit 0
+          if source "$RUNNER_TEMP/coding-bot-target/resolve-target.sh"; then
+            target_api "repos/$GITHUB_REPOSITORY/issues/$DISPATCH_ISSUE/comments" \
+              -f body="結果を確かめられませんでした。このスレッドで対応を相談してください。" >/dev/null || \
+              echo 'Warning: unresolved dispatch notice delivery failed' >&2
+          else
+            echo 'Warning: trusted dispatch notice helper unavailable' >&2
+          fi
+
       # ステップ1: 即座に 👀 リアクションを追加
       - name: Add eyes reaction to comment
         if: steps.target.outputs.issue != ''
@@ -487,6 +504,7 @@ jobs:
       - name: Report if the run left nothing
         if: always() && inputs.resolve_conflict_pr == ''
         env:
+          VERIFY_ONLY: ${{ inputs.verify_only }}
           PR_COMMENT_ONLY: ${{ github.event_name != 'workflow_run' && inputs.pr == '' && (github.event.issue.pull_request != null || github.event.pull_request != null) }}
           PR_INSTRUCTION: ${{ inputs.pr != '' && inputs.instruction || '' }}
           PR: ${{ inputs.pr }}
@@ -504,6 +522,7 @@ jobs:
             echo "run-action.sh が最終レポートを投稿済み。何もしない"; exit 0
           fi
           if [ -z "${TRUSTED_ISSUE:-}" ]; then
+            if [ "${VERIFY_ONLY:-false}" = true ] && [ "${CONCLUSION:-}" = success ] && [ -z "${TARGET_REASON:-}" ]; then exit 0; fi
             if [ "${PR_COMMENT_ONLY:-false}" = true ]; then
               case "${TARGET_REASON:-}" in
                 '対象外:'*) body="この PR では動きません（$TARGET_REASON）。coding-bot が作った agent/issue-<番号> の PR だけが対象です。" ;;
@@ -517,6 +536,10 @@ jobs:
             exit 0
           fi
           if [ "${PR_COMMENT_ONLY:-false}" = true ]; then
+            if [ "${TARGET_REASON:-}" = 'PR が閉じています' ]; then
+              gh issue comment "$TRUSTED_PR" --repo "$REPO" --body "PR が閉じているため解消しませんでした。[issue](https://github.com/$REPO/issues/$TRUSTED_ISSUE) で対応を相談してください。" || echo 'Warning: closed PR notice delivery failed' >&2
+              exit 0
+            fi
             source "$RUNNER_TEMP/coding-bot-notification/pr-comment.sh"
             TRUSTED_LINKED_ISSUE="$TRUSTED_ISSUE"
             GITHUB_REPOSITORY="$REPO"

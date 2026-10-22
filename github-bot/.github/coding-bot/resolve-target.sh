@@ -13,7 +13,7 @@ validate_dispatch_request() {
   else
     [ -z "$instruction" ] || return 1
     if [ -n "$issue" ]; then
-      validate_issue_context "$GITHUB_REPOSITORY" "$issue" || return 1
+      validate_issue_context "$GITHUB_REPOSITORY" "$issue" || return $?
     fi
   fi
 }
@@ -21,7 +21,7 @@ validate_dispatch_request() {
 validate_issue_context() {
   local repository="$1" number="$2" resource
   [[ "$number" =~ ^[1-9][0-9]*$ ]] || return 1
-  resource=$(target_api "repos/$repository/issues/$number") || return 1
+  resource=$(target_api "repos/$repository/issues/$number") || return $?
   printf '%s' "$resource" | python3 "$(dirname "${BASH_SOURCE[0]}")/discussion.py" verify "$number" >/dev/null
 }
 
@@ -31,12 +31,12 @@ validate_issue_context() {
 # （名前 *-issue-<N> か frontmatter の branch: agent/issue-<N> / issue: <N>）。
 validate_pr_context() {
   local repository="$1" pr_number="$2" data head_repo head_ref linked issue
-  data=$(target_api "repos/$repository/pulls/$pr_number") || { TRIGGER_ERROR="PR context API unavailable"; return 1; }
+  data=$(target_api "repos/$repository/pulls/$pr_number") || { TRIGGER_ERROR="$(target_failure_reason $? PR)"; return 1; }
   linked=$(printf '%s' "$data" | python3 "$(dirname "${BASH_SOURCE[0]}")/discussion.py" resolve "$repository") || {
     TRIGGER_ERROR="対象外: PR head must be a same-repository agent/issue-<linked-issue>"; return 1;
   }
   head_ref="agent/issue-$linked"
-  issue=$(target_api "repos/$repository/issues/$linked") || { TRIGGER_ERROR="linked Issue API unavailable"; return 1; }
+  issue=$(target_api "repos/$repository/issues/$linked") || { TRIGGER_ERROR="$(target_failure_reason $? 'linked Issue')"; return 1; }
   printf '%s' "$issue" | python3 "$(dirname "${BASH_SOURCE[0]}")/discussion.py" verify "$linked" >/dev/null || {
     TRIGGER_ERROR="対象外: PR head does not identify a real linked Issue"; return 1;
   }
@@ -46,15 +46,21 @@ validate_pr_context() {
 }
 
 
+target_failure_reason() {
+  if [ "$1" = 75 ]; then printf '一時的な失敗: %s API unavailable' "$2"
+  else printf '対象外: %s API unavailable' "$2"; fi
+}
+
 target_api() {
-  local path="$1" error attempt value
+  local error attempt value
   error=$(mktemp "$RUNNER_TEMP/target-api.XXXXXX") || return 1
   for attempt in 0 1 2 3; do
-    if value=$(gh api "$path" 2>"$error"); then rm -f "$error"; printf '%s\n' "$value"; return 0; fi
+    if value=$(gh api "$@" 2>"$error"); then rm -f "$error"; printf '%s\n' "$value"; return 0; fi
     cat "$error" >&2
-    if [ "$attempt" = 3 ] || ! grep -Eiq 'HTTP (5[0-9]{2}|429)|rate limit|timed? ?out|timeout|connection (refused|reset)|dial tcp|no such host|network is unreachable|TLS handshake|unexpected EOF' "$error"; then
+    if ! grep -Eiq 'HTTP (5[0-9]{2}|429)|rate limit|timed? ?out|timeout|connection (refused|reset)|dial tcp|no such host|network is unreachable|TLS handshake|unexpected EOF' "$error"; then
       rm -f "$error"; return 1
     fi
+    [ "$attempt" != 3 ] || { rm -f "$error"; return 75; }
     sleep 2
   done
 }
@@ -62,9 +68,7 @@ target_api() {
 resolve_target() {
   local issue="" pr="" reason="" number="${EVENT_NUMBER:-}" requested_pr
   if [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ]; then
-    if ! validate_dispatch_request "${DISPATCH_ISSUE:-}" "${DISPATCH_PR:-}" "${PR_INSTRUCTION:-}" "${RESOLVE_CONFLICT_PR:-}"; then
-      reason='dispatch の入力を確認できません'
-    else
+    if validate_dispatch_request "${DISPATCH_ISSUE:-}" "${DISPATCH_PR:-}" "${PR_INSTRUCTION:-}" "${RESOLVE_CONFLICT_PR:-}"; then
       requested_pr="${RESOLVE_CONFLICT_PR:-${DISPATCH_PR:-}}"
       if [ -n "$requested_pr" ]; then
         if validate_pr_context "$GITHUB_REPOSITORY" "$requested_pr"; then
@@ -76,10 +80,11 @@ resolve_target() {
           fi
         else reason="$TRIGGER_ERROR"; fi
       else issue="${DISPATCH_ISSUE:-}"; fi
-    fi
+    else reason="$(target_failure_reason $? dispatch)"; fi
   elif [ "${EVENT_IS_PR:-false}" = true ]; then
     if [[ "$number" =~ ^[1-9][0-9]*$ ]] && validate_pr_context "$GITHUB_REPOSITORY" "$number"; then
       issue="$TRUSTED_LINKED_ISSUE"; pr="$number"
+      if [ "$TARGET_PR_STATE" != open ]; then reason='PR が閉じています'; fi
     else reason="${TRIGGER_ERROR:-PR 番号を確認できません}"; fi
   elif [[ "$number" =~ ^[1-9][0-9]*$ ]]; then
     issue="$number"

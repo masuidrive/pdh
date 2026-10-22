@@ -71,7 +71,8 @@ def report(repo, pr, run, issue):
     text = UNKNOWN
     try:
         data = api(f'repos/{repo}/pulls/{pr}')
-        result = runner_result(json.loads(result_file().read_text()))
+        result = ({'result': 'failed'} if data['state'] != 'open' and not result_file().exists()
+                  else runner_result(json.loads(result_file().read_text())))
         ref = None
         if result['result'] == 'pushed':
             for retry in range(4):
