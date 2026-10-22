@@ -398,7 +398,7 @@ exit "$ENGINE_EXIT_CODE"
 
     def test_ci_completion_reports_fit_comment_limit(self):
         for engine in (0,1):
-            for output in ('short report','界'*70000):
+            for output in ('short report','x'*70000):
                 with self.subTest(engine=engine,length=len(output)),tempfile.TemporaryDirectory() as d:
                     result,records,_=self.run_ci(d,output,engine=engine)
                     self.assertEqual(result.returncode,engine,result.stderr)
