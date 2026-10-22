@@ -185,12 +185,13 @@ run_selection() (
   must source "$TMP_DIR/workspace.sh"
   IS_PR=$kind ISSUE_NUMBER=$number GITHUB_REPOSITORY=example/project
   SCRIPT_DIR="$ROOT_DIR/.github/coding-bot" PR_INSTRUCTION='' GITHUB_RUN_ID=1
-  validate_pr_context() { return 0; }
+  validate_pr_context() { TRUSTED_LINKED_ISSUE="${branch#agent/issue-}"; }
   gh() {
     case "$1 $2" in
       'issue view') printf '%s\n' '{"title":"worktree","body":"","labels":[]}' ;;
       'pr view') printf '{"title":"worktree","body":"","labels":[],"headRefName":"%s","headRefOid":"%s"}\n' \
         "$branch" "$(git rev-parse "refs/heads/$branch")" ;;
+      "api repos/$GITHUB_REPOSITORY/issues/$TRUSTED_LINKED_ISSUE") printf '%s\n' '{"title":"worktree","body":"","labels":[]}' ;;
       'pr diff') ;;
       *) echo "Unexpected gh: $*" >&2; exit 1 ;;
     esac
