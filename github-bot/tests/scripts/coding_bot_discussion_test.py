@@ -67,4 +67,29 @@ validate_conflict_dispatch "$ISSUE" "$PR"
                 result=subprocess.run(['bash','-c',code],env=env,text=True,capture_output=True)
                 self.assertEqual(result.returncode==0,ok,result.stderr)
 
+class IssueInputContract(unittest.TestCase):
+    def test_only_issue_comments_are_answers_in_working_engine_rules(self):
+        system=(BOT/'system.md').read_text();github=next(p for p in [BOT/'_github-issue.md',BOT.parents[1]/'_github-issue.md'] if p.exists()).read_text()
+        self.assertIn('Before issuing choices',system)
+        self.assertNotIn('linked Issue and PR comments',system)
+        self.assertNotIn('numbering runs across both',system)
+        self.assertNotIn('note の待ち行と両方のコメント',github)
+        self.assertIn('PR comments are not answers',system)
+        self.assertIn('PR のコメントは答えとして扱わない',github)
+
+    def test_issue_only_dispatch_and_ordinary_issue_input_reject_pr_numbers(self):
+        source=(BOT/'run-action.sh').read_text()
+        block=source[source.index('IS_PR=false'):source.index('if [ "$IS_PR" = true ] &&')]
+        for resource,expected in [({'number':7},True),({'number':7,'pull_request':{}},False),({'number':8},False)]:
+            for route in ['dispatch','issues','issue_comment']:
+                if route=='issue_comment' and 'pull_request' in resource:continue
+                code='source "$BOT/trigger-source.sh"\ngh() { printf "%s\\n" "$RESOURCE"; }\n'
+                code+=('validate_dispatch_request 7 "" ""' if route=='dispatch' else block)
+                env={**os.environ,'BOT':str(BOT),'RESOURCE':json.dumps(resource),'ISSUE_NUMBER':'7',
+                     'GITHUB_REPOSITORY':'owner/repo','EVENT_TYPE':route,'RESOLVE_CONFLICT_PR':'','PR_INSTRUCTION':''}
+                with self.subTest(route=route,resource=resource):
+                    result=subprocess.run(['bash','-c',code],env=env,text=True,capture_output=True)
+                    self.assertEqual(result.returncode==0,expected,result.stderr)
+        print('CONTRAST PASS: real issue input remains accepted',flush=True)
+
 if __name__=='__main__':unittest.main(verbosity=2)
