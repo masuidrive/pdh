@@ -16,7 +16,7 @@ def git(cwd, *args):
 
 
 class MergeProbe(unittest.TestCase):
-    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False, issue_run=False, extra=False, pat=False, fast_forward=False, deletion=False, resolved="resolved\n", outside_delete=False, renamed=False, fail_pr_post=False):
+    def run_case(self, decision, *, conflict=True, dirty=False, fail=False, unresolved=False, refused=False, request="🤖 解消して。質問もあります", raw=None, whitespace=False, issue_run=False, extra=False, pat=False, fast_forward=False, ci_fail=False, deletion=False, resolved="resolved\n", outside_delete=False, renamed=False, fail_pr_post=False):
         with tempfile.TemporaryDirectory(dir=TMP) as temp:
             temp = Path(temp)
             seed, remote, work, run = [temp / name for name in ['seed', 'remote', 'work', 'run']]
@@ -45,7 +45,7 @@ class MergeProbe(unittest.TestCase):
             (run/'merge-step.sh').write_text(runner[start:runner.index('\nCONFLICT_SECTION=""',start)])
             (run/'resolve-step.sh').write_text((BOT/'resolve-conflict.sh').read_text().replace('/tmp/agent-prompt-',str(run/'agent-prompt-')))
             env = {**os.environ, 'BOT': str(BOT), 'RUNNER_DIR': str(run), 'GITHUB_WORKSPACE': str(run),
-                   'FAIL_PR_POST':str(int(fail_pr_post)), 'CONFLICT_PATH':'renamed conflict file.txt' if renamed else 'conflict file.txt', 'DELETE':str(int(deletion)), 'RESOLVED':resolved, 'OUTSIDE_DELETE':str(int(outside_delete)), 'DECISION': json.dumps(decision), 'DIRTY': str(int(dirty)), 'FAIL': str(int(fail)),
+                   'CI_FAIL':str(int(ci_fail)), 'FAIL_PR_POST':str(int(fail_pr_post)), 'CONFLICT_PATH':'renamed conflict file.txt' if renamed else 'conflict file.txt', 'DELETE':str(int(deletion)), 'RESOLVED':resolved, 'OUTSIDE_DELETE':str(int(outside_delete)), 'DECISION': json.dumps(decision), 'DIRTY': str(int(dirty)), 'FAIL': str(int(fail)),
                    'RAW': raw if raw is not None else json.dumps(decision), 'UNRESOLVED': str(int(unresolved)), 'REFUSED': str(int(refused)),
                    'ISSUE_RUN': str(int(issue_run)), 'CODING_BOT_GH_PAT': 'fake-pat' if pat else '', 'EXTRA': str(int(extra)), 'RESOLVE_CONFLICT_PR':'9', 'ENGINE_FILE': str(run/'engine.sh'), 'GITHUB_REPOSITORY': 'owner/repo', 'TRUSTED_LINKED_ISSUE': '7', 'ISSUE_NUMBER': '9',
                    'BASE_BRANCH': 'main', 'BRANCH_NAME': 'agent/issue-7', 'PROGRESS_COMMENT_ID': '77',
@@ -54,7 +54,7 @@ class MergeProbe(unittest.TestCase):
 set -euo pipefail
 source "$BOT/pr-comment.sh"
 SCRIPT_DIR="$BOT"
-dispatch_branch_ci() { printf "ci-workflow\n" >> "$RUNNER_DIR/gh"; }
+dispatch_branch_ci() { printf "ci-workflow\n" >> "$RUNNER_DIR/gh"; [ "$CI_FAIL" != 1 ]; }
 use_pat_for_origin() { printf "pat-auth\n" >> "$RUNNER_DIR/gh"; }
 git() {
   if [[ " $* " == *" push "* ]]; then echo push >> "$RUNNER_DIR/pushes"; return 0; fi
@@ -207,6 +207,24 @@ gh() {
                 self.assertEqual(value['result'],expected)
                 self.assertEqual(len(pushes),int(expected=='pushed'))
                 if expected=='pushed':self.assertRegex(value['sha'],r'^[0-9a-f]{40}$')
+
+    def test_successful_push_is_independent_of_ci_dispatch_delivery(self):
+        for ci_fail in [False,True]:
+            with self.subTest(ci_fail=ci_fail):
+                result,pushes,_,_=self.run_case({},issue_run=True,ci_fail=ci_fail)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertEqual(pushes,['push'])
+                self.assertEqual(json.loads(result.stdout.splitlines()[-1].split(' ',1)[1])['result'],'pushed')
+        print('CONTRAST PASS: a successful CI dispatch retains the same pushed result',flush=True)
+
+    def test_dispatched_conflict_is_not_failed_by_a_redirect_post(self):
+        for conflict,expected in [(False,1),(True,0)]:
+            with self.subTest(conflict=conflict):
+                result,pushes,calls,_=self.run_case({'conflict':conflict,'other':True},fail_pr_post=True)
+                self.assertEqual(result.returncode,expected,result.stderr)
+                self.assertEqual(pushes,[])
+                self.assertEqual('resolve_conflict_pr=9' in calls,conflict)
+        print('CONTRAST PASS: an undelivered ordinary redirect still fails without dispatch',flush=True)
 
     def test_pr_comments_only_classify_redirect_and_dispatch(self):
         for decision in [{"conflict":False,"other":True},{"conflict":False,"other":False},

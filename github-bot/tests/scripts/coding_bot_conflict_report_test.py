@@ -39,6 +39,7 @@ elif a[0]=='api':
   if '--input' in a:body=json.load(sys.stdin)['body']
   elif '-f' in a:body=a[a.index('-f')+1].removeprefix('body=')
   else:
+   if s.get('fail_list',False):done(None,1)
    entries=[x for x in s['posts'] if x['target']==n]
    done([entries] if '--slurp' in a else entries)
  else:done({},98)
@@ -86,8 +87,10 @@ class HostReport(HostProbe,unittest.TestCase):
     def test_partial_delivery_is_idempotent_on_rerun(self):
         self.data['fail_pr']=True;self.save()
         self.report()
-        self.assertEqual([x['target'] for x in self.load()['posts']],[7])
-        print('CONTRAST PASS: a failed PR delivery preserves the issue report',flush=True)
+        first=self.load()['posts']
+        self.assertEqual([x['target'] for x in first],[7])
+        self.assertIn('conflict を解消して push しました',first[0]['body'])
+        print('CONTRAST PASS: issue success text survives a failed PR delivery',flush=True)
         self.report()
         posts=self.load()['posts']
         self.assertEqual([x['target'] for x in posts],[7,9])
@@ -96,6 +99,70 @@ class HostReport(HostProbe,unittest.TestCase):
         self.assertTrue(all('<!-- coding-bot:conflict-report run=123 -->' in x['body'] for x in posts))
         self.report();self.assertEqual(self.load()['posts'],posts)
         print('CONTRAST PASS: a completed report is never duplicated',flush=True)
+
+class DeliveryIsolationContract(HostProbe,unittest.TestCase):
+    def test_pr_delivery_failure_never_rewrites_the_issue_result(self):
+        self.data['fail_pr']=True;self.save()
+        first=self.report();posts=self.load()['posts']
+        self.assertEqual(first.returncode,3,first.stderr)
+        self.assertEqual([p['target'] for p in posts],[7])
+        self.assertIn('conflict を解消して push しました',posts[0]['body'])
+        self.report();posts=self.load()['posts']
+        self.assertEqual([p['target'] for p in posts],[7,9])
+        self.assertIn('conflict を解消して push しました',posts[0]['body'])
+        print('CONTRAST PASS: a rerun completes only the missing PR delivery',flush=True)
+
+    def test_fallback_posts_once_when_only_the_comment_list_get_fails(self):
+        self.data['fail_list']=True;self.save()
+        result=self.report();posts=self.load()['posts']
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual([p['target'] for p in posts],[7])
+        self.assertIn('結果を確かめられませんでした',posts[0]['body'])
+        print('CONTRAST PASS: POST remains available while list GET fails',flush=True)
+
+    def test_fallback_never_patches_an_existing_report(self):
+        self.report();before=self.load()['posts']
+        (self.dir/'coding-bot-conflict/conflict-report.py').unlink()
+        result=self.report()
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(self.load()['posts'],before)
+        print('CONTRAST PASS: a missing script preserves an existing result byte for byte',flush=True)
+
+    def test_issue_event_fallback_survives_checkout_and_api_failure(self):
+        steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+        context=next(x for x in steps if x.get('id')=='notification_context')
+        fallback=next(x for x in steps if x.get('name')=='Report if the run left nothing')
+        env={**self.env,'EVENT_NUMBER':'7','EVENT_IS_PR':'false','GITHUB_EVENT_NAME':'issues','GITHUB_OUTPUT':str(self.dir/'outputs')}
+        result=subprocess.run(['bash','-c',context['run']],cwd=self.dir,env=env,text=True,capture_output=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('issue=7',Path(env['GITHUB_OUTPUT']).read_text())
+        # The issue event supplied the destination even though checkout left no scripts.
+        result=subprocess.run(['bash','-c',fallback['run']],cwd=self.dir,env=env,text=True,capture_output=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual([p['target'] for p in self.load()['posts']],[7])
+        env.update(EVENT_NUMBER='9',EVENT_IS_PR='true',TRUSTED_ISSUE='')
+        (self.dir/'outputs').write_text('');self.data['posts']=[];self.save()
+        subprocess.run(['bash','-c',context['run']],cwd=self.dir,env=env,text=True,capture_output=True)
+        subprocess.run(['bash','-c',fallback['run']],cwd=self.dir,env=env,text=True,capture_output=True)
+        self.assertEqual(self.load()['posts'],[])
+        print('CONTRAST PASS: unresolved PR events still never receive issue reports',flush=True)
+
+    def test_notification_helpers_come_from_the_host_snapshot(self):
+        steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+        context=next(x for x in steps if x.get('id')=='notification_context')
+        fallback=next(x for x in steps if x.get('name')=='Report if the run left nothing')
+        for script in [context['run'],fallback['run']]:
+            self.assertNotIn('source .github/coding-bot/',script)
+            self.assertIn('$RUNNER_TEMP/coding-bot-notification/',script)
+        snapshot=self.dir/'coding-bot-notification';snapshot.mkdir()
+        for name in ['discussion.py','trigger-source.sh','pr-comment.sh']:shutil.copy(BOT/name,snapshot/name)
+        malicious=self.dir/'.github/coding-bot';malicious.mkdir(parents=True)
+        (malicious/'trigger-source.sh').write_text('touch "$GITHUB_WORKSPACE/WORKSPACE_EXECUTED"')
+        env={**self.env,'EVENT_NUMBER':'9','EVENT_IS_PR':'true','GITHUB_EVENT_NAME':'pull_request','GITHUB_OUTPUT':str(self.dir/'outputs')}
+        result=subprocess.run(['bash','-c',context['run']],cwd=self.dir,env=env,text=True,capture_output=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('issue=7',Path(env['GITHUB_OUTPUT']).read_text())
+        self.assertFalse((self.dir/'WORKSPACE_EXECUTED').exists())
 
 class HostStateContract(HostProbe,unittest.TestCase):
     def test_observed_head_and_mergeability_determine_report(self):
