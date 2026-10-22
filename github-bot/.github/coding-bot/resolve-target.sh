@@ -69,6 +69,28 @@ target_api() {
   done
 }
 
+post_unresolved_notice() {
+  local repo="$1" issue="$2" attempt error comments
+  local body='結果を確かめられませんでした。このスレッドで対応を相談してください。'
+  error=$(mktemp "$RUNNER_TEMP/notice-api.XXXXXX") || return 1
+  for attempt in 0 1 2 3; do
+    if gh api "repos/$repo/issues/$issue/comments" -f body="$body" > /dev/null 2>"$error"; then
+      rm -f "$error"; return 0
+    fi
+    cat "$error" >&2
+    if [ "$attempt" = 3 ] || ! target_api_transient_error "$error"; then rm -f "$error"; return 1; fi
+    if comments=$(gh api graphql \
+      -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issueOrPullRequest(number:$number){... on Issue{comments(last:5){nodes{body author{login}}}} ... on PullRequest{comments(last:5){nodes{body author{login}}}}}}}' \
+      -f owner="${repo%/*}" -f name="${repo#*/}" -F number="$issue"); then
+      if printf '%s' "$comments" | jq -e --arg body "$body" \
+        'any(.data.repository.issueOrPullRequest.comments.nodes[]?; (.author.login == "github-actions" or .author.login == "github-actions[bot]") and .body == $body)' >/dev/null; then
+        rm -f "$error"; return 0
+      fi
+    else echo 'Warning: notice lookup unavailable; retrying delivery' >&2; fi
+    sleep 2
+  done
+}
+
 resolve_target() {
   local issue="" pr="" reason="" number="${EVENT_NUMBER:-}" requested_pr
   if [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ]; then

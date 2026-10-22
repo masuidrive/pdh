@@ -172,8 +172,7 @@ jobs:
           case "${TARGET_REASON:-}" in '一時的な失敗:'*) ;; *) exit 0 ;; esac
           [[ "${DISPATCH_ISSUE:-}" =~ ^[1-9][0-9]*$ ]] || exit 0
           if source "$RUNNER_TEMP/coding-bot-target/resolve-target.sh"; then
-            target_api "repos/$GITHUB_REPOSITORY/issues/$DISPATCH_ISSUE/comments" \
-              -f body="結果を確かめられませんでした。このスレッドで対応を相談してください。" >/dev/null || \
+            post_unresolved_notice "$GITHUB_REPOSITORY" "$DISPATCH_ISSUE" || \
               echo 'Warning: unresolved dispatch notice delivery failed' >&2
           else
             echo 'Warning: trusted dispatch notice helper unavailable' >&2
