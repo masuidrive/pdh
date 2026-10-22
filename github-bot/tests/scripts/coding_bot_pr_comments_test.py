@@ -105,6 +105,7 @@ else
 fi
 '''
             result = subprocess.run(['bash', '-c', script], cwd=work, env=env, text=True, capture_output=True)
+            result.reported = (run / '.coding-bot-reported').exists()
             pushes = (run / 'pushes').read_text().splitlines() if (run / 'pushes').exists() else []
             calls = (run / 'gh').read_text() if (run / 'gh').exists() else ''
             head = git(work, 'rev-parse', 'HEAD')
@@ -268,6 +269,28 @@ gh() {
                 if not unsafe and arguments.get('conflict') is not False:
                     self.assertIn('pat-auth' if arguments.get('pat') else 'ci-workflow',calls)
                     if arguments.get('pat'): self.assertNotIn('ci-workflow',calls)
+
+    def test_pr_fallback_explains_failure_and_successful_dispatch_skips_it(self):
+        import yaml,shutil
+        result,_,_,_=self.run_case({'conflict':True,'other':True},fail_pr_post=True)
+        self.assertEqual(result.returncode,0,result.stderr);self.assertTrue(result.reported)
+        steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+        block=next(x['run'] for x in steps if x.get('name')=='Report if the run left nothing')
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d);snap=path/'coding-bot-notification';snap.mkdir()
+            for name in ['pr-comment.sh','discussion.py']:shutil.copy(BOT/name,snap/name)
+            env={**os.environ,'RUNNER_TEMP':d,'GITHUB_WORKSPACE':d,'REPO':'owner/repo','TRUSTED_ISSUE':'7',
+                 'TRUSTED_PR':'9','PR_COMMENT_ONLY':'true','PR_INSTRUCTION':'','RUN_URL':'https://github.com/owner/repo/actions/runs/123'}
+            code=r'gh() { if [ "$1" = api ]; then echo "[]"; else printf "%s\n" "$*"; fi; }; '
+            failed=subprocess.run(['bash','-c',code+block],env=env,text=True,capture_output=True)
+            self.assertEqual(failed.returncode,0,failed.stderr)
+            self.assertIn('結果を残さずに終わりました',failed.stdout)
+            self.assertIn('conflict の解消が始まったかは確かめられていません',failed.stdout)
+            self.assertIn('もう一度',failed.stdout);self.assertIn('issues/7',failed.stdout)
+            (path/'.coding-bot-reported').touch()
+            success=subprocess.run(['bash','-c',code+block],env=env,text=True,capture_output=True)
+            self.assertEqual(success.returncode,0,success.stderr);self.assertNotIn('issue comment',success.stdout)
+        print('CONTRAST PASS: dispatched work has its marker and does not enter the PR failure fallback',flush=True)
 
     def test_interrupted_pr_runs_redirect_without_marking_issue_waiting(self):
         import textwrap

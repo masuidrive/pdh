@@ -29,9 +29,9 @@ if a[0]=='issue' and a[1]=='comment':
  n=int(a[2]);body=a[a.index('--body')+1]
 elif a[0]=='api':
  path=next(x for x in a if x.startswith('repos/'))
- if '/pulls/' in path:done(s['pr'])
+ if '/pulls/' in path:done(None,1) if s.get('fail_pr_get') else done(s['pr'])
  if '/git/ref/heads/' in path:done({'object':{'sha':s['ref']}})
- if path.endswith('/issues/7'):done({'number':7})
+ if path.endswith('/issues/7'):done(None,1) if s.get('fail_issue_get') else done({'number':7})
  if '/comments' in path:
   if '/issues/comments/' in path:
    entry=next(x for x in s['posts'] if str(x['id'])==path.split('/')[-1]);entry['body']=json.load(sys.stdin)['body'] if '--input' in a else a[a.index('-f')+1].removeprefix('body=');done(entry)
@@ -53,7 +53,7 @@ done(entry if a[0]=='api' else url)
 ''');gh.chmod(0o755)
         self.env={**os.environ,'PATH':str(self.bindir)+':'+os.environ['PATH'],'GH_STATE':str(self.state),
                   'REPO':'owner/repo','GITHUB_REPOSITORY':'owner/repo','RESOLVE_CONFLICT_PR':'9',
-                  'GITHUB_RUN_ID':'123','RUN_URL':'https://github.com/owner/repo/actions/runs/123','GITHUB_ENV':str(self.dir/'env'),
+                  'TRUSTED_CONFLICT_ISSUE':'7','TRUSTED_CONFLICT_PR':'9','GITHUB_RUN_ATTEMPT':'1','GITHUB_RUN_ID':'123','RUN_URL':'https://github.com/owner/repo/actions/runs/123','GITHUB_ENV':str(self.dir/'env'),
                   'RUNNER_TEMP':self.temp,'GITHUB_WORKSPACE':self.temp,'PR_INSTRUCTION':'','PR_COMMENT_ONLY':'false',
                   'ISSUE':'7','TRUSTED_ISSUE':'7','TRUSTED_PR':'9','EVENT_IS_PR':'false','CONCLUSION':'failure'}
         trusted=self.dir/'coding-bot-conflict';trusted.mkdir()
@@ -86,19 +86,23 @@ class HostReport(HostProbe,unittest.TestCase):
 
     def test_partial_delivery_is_idempotent_on_rerun(self):
         self.data['fail_pr']=True;self.save()
-        self.report()
-        first=self.load()['posts']
-        self.assertEqual([x['target'] for x in first],[7])
+        self.report();first=self.load()['posts']
+        self.assertEqual([p['target'] for p in first],[7])
         self.assertIn('conflict を解消して push しました',first[0]['body'])
-        print('CONTRAST PASS: issue success text survives a failed PR delivery',flush=True)
-        self.report()
-        posts=self.load()['posts']
-        self.assertEqual([x['target'] for x in posts],[7,9])
-        self.assertIn('conflict を解消して push しました',posts[0]['body'])
-        self.assertIn(posts[0]['html_url'],posts[1]['body'])
-        self.assertTrue(all('<!-- coding-bot:conflict-report run=123 -->' in x['body'] for x in posts))
+        self.report();before=self.load()['posts']
+        self.assertEqual([p['target'] for p in before],[7,9])
+        print('CONTRAST PASS: retry inside one attempt completes only its missing PR notice',flush=True)
+        fresh=self.dir/'attempt-2';trusted=fresh/'coding-bot-conflict';trusted.mkdir(parents=True)
+        for name in ['conflict-report.py','discussion.py']:shutil.copy(BOT/name,trusted/name)
+        (trusted/'result.json').write_text(json.dumps({'result':'no_conflict'}))
+        self.env.update(RUNNER_TEMP=str(fresh),GITHUB_RUN_ATTEMPT='2')
+        result=self.report();posts=self.load()['posts']
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual([p['target'] for p in posts],[7,9,7,9])
+        self.assertEqual(posts[:2],before)
+        self.assertIn('解消する conflict はありません',posts[2]['body'])
+        self.assertIn('attempt=1',posts[0]['body']);self.assertIn('attempt=2',posts[2]['body'])
         self.report();self.assertEqual(self.load()['posts'],posts)
-        print('CONTRAST PASS: a completed report is never duplicated',flush=True)
 
 class DeliveryIsolationContract(HostProbe,unittest.TestCase):
     def test_pr_delivery_failure_never_rewrites_the_issue_result(self):
@@ -146,6 +150,59 @@ class DeliveryIsolationContract(HostProbe,unittest.TestCase):
         subprocess.run(['bash','-c',fallback['run']],cwd=self.dir,env=env,text=True,capture_output=True)
         self.assertEqual(self.load()['posts'],[])
         print('CONTRAST PASS: unresolved PR events still never receive issue reports',flush=True)
+
+    def test_dispatch_fallback_reuses_validated_issue_without_api(self):
+        steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+        context=next(x for x in steps if x.get('id')=='notification_context')
+        for validated in ['7','']:
+            with self.subTest(validated=validated):
+                env={**self.env,'GITHUB_EVENT_NAME':'workflow_dispatch','EVENT_NUMBER':'7','EVENT_IS_PR':'false',
+                     'VALIDATED_ISSUE':validated,'GITHUB_OUTPUT':str(self.dir/'outputs')}
+                (self.dir/'outputs').write_text('')
+                result=subprocess.run(['bash','-c',context['run']],cwd=self.dir,env=env,text=True,capture_output=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertIn('issue=7',Path(env['GITHUB_OUTPUT']).read_text())
+        validate=next(x for x in steps if x.get('name')=='Validate dispatch task')
+        self.assertIn('id',validate);self.assertIn('GITHUB_OUTPUT',validate['run'])
+        self.assertIn('outputs.issue',context['env']['VALIDATED_ISSUE'])
+        print('CONTRAST PASS: issues event and an uncompleted dispatch validation retain their event issue',flush=True)
+
+    def test_known_delivery_blocks_fallback_even_when_list_get_fails(self):
+        self.report();before=self.load()['posts']
+        self.data=self.load();self.data['fail_list']=True;self.save()
+        result=self.report()
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(self.load()['posts'],before)
+        print('CONTRAST PASS: a genuinely missing report still gets one POST when list GET fails',flush=True)
+
+    def test_verified_conflict_target_survives_observation_api_failure(self):
+        for failure in ['fail_pr_get','fail_issue_get']:
+            with self.subTest(failure=failure):
+                self.data['posts']=[];self.data['calls']=[];self.data['fail_pr_get']=False;self.data['fail_issue_get']=False
+                self.data[failure]=True;self.save()
+                result=self.report();posts=self.load()['posts']
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertTrue(posts,result.stderr);self.assertEqual(posts[0]['target'],7)
+                self.assertIn('結果を確かめられませんでした' if failure=='fail_pr_get' else 'push しました',posts[0]['body'])
+                self.assertFalse(any(a[1]=='repos/owner/repo/issues/7' for a in self.load()['calls']))
+        self.env.update(TRUSTED_CONFLICT_ISSUE='',TRUSTED_CONFLICT_PR='')
+        self.data['posts']=[];self.save();self.report();self.assertEqual(self.load()['posts'],[])
+        print('CONTRAST PASS: an unverified dispatch never becomes a conflict reporting target',flush=True)
+
+    def test_fallback_only_patches_a_bot_comment_on_its_trusted_issue(self):
+        steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+        block=next(x['run'] for x in steps if x.get('name')=='Report if the run left nothing')
+        for valid in ['yes','wrong_issue','human','unavailable']:
+            with self.subTest(valid=valid),tempfile.TemporaryDirectory() as d:
+                (Path(d)/'.coding-bot-task-progress').write_text('99')
+                resource={'id':99,'issue_url':'https://api.github.com/repos/team/repo/issues/'+('34' if valid=='wrong_issue' else '12'),
+                          'user':{'login':'person' if valid=='human' else 'github-actions[bot]','type':'User' if valid=='human' else 'Bot'}}
+                stub='gh() { if [ "$1 $2" = "api repos/team/repo/issues/comments/99" ]; then '+('return 1' if valid=='unavailable' else "printf '%s' '"+json.dumps(resource)+"'")+r'; else printf "CALL %s\\n" "$*"; fi; }; '
+                result=subprocess.run(['bash','-c',stub+block],env={**self.env,'PR_INSTRUCTION':'task','REPO':'team/repo','TRUSTED_ISSUE':'12','CONCLUSION':'failure','RUN_URL':'run','GITHUB_WORKSPACE':d,'GITHUB_STEP_SUMMARY':str(Path(d)/'summary')},text=True,capture_output=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertEqual('-X PATCH repos/team/repo/issues/comments/99' in result.stdout,valid=='yes',result.stdout)
+                if valid!='yes':self.assertIn('repos/team/repo/issues/12/comments',result.stdout)
+        print('CONTRAST PASS: a verified bot progress comment remains patchable',flush=True)
 
     def test_notification_helpers_come_from_the_host_snapshot(self):
         steps=yaml.safe_load((BOT.parent/'workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
