@@ -516,7 +516,7 @@ jobs:
             GITHUB_REPOSITORY="$REPO"
             response=$(pr_comment_redirect) || exit 1
             gh issue comment "$TRUSTED_PR" --repo "$REPO" \
-              --body "この run の処理結果は [実行ログ]($RUN_URL) にあります。conflict 解消が起動したかは [issue](https://github.com/$REPO/issues/$TRUSTED_ISSUE) の報告をお読みください。 $response"
+              --body "$response [実行ログ]($RUN_URL)"
             exit $?
           fi
           if [ -n "${PR_INSTRUCTION:-}" ]; then

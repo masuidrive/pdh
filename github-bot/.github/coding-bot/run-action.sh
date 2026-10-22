@@ -674,7 +674,7 @@ if [ $MERGE_EXIT_CODE -ne 0 ]; then
 
 # 🚨 IMPORTANT: Git Merge Conflict Detected
 
-**Resolve only these merge conflicts, commit the merge, and end this run. Do not start the original issue task.**
+**Resolve the merge conflicts listed below and commit the merge.**
 
 ## Conflicted Files:
 \`\`\`

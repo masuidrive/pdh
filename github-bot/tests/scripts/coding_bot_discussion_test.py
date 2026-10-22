@@ -76,6 +76,12 @@ class IssueInputContract(unittest.TestCase):
         self.assertNotIn('note の待ち行と両方のコメント',github)
         self.assertIn('PR comments are not answers',system)
         self.assertIn('PR のコメントは答えとして扱わない',github)
+        waiting=github.split('PR からの誘導では、',1)[1].split('\n',1)[0]
+        self.assertNotIn('awaiting-reply',waiting)
+        self.assertIn('人の 🤖 付きの返答が無いとき',waiting)
+        conflict=(BOT/'run-action.sh').read_text().split('# 🚨 IMPORTANT: Git Merge Conflict Detected',1)[1].split('## Conflicted Files:',1)[0]
+        self.assertNotIn("BEFORE starting the user's task",conflict)
+        self.assertNotIn('Do not start the original issue task',conflict)
 
     def test_issue_only_dispatch_and_ordinary_issue_input_reject_pr_numbers(self):
         source=(BOT/'run-action.sh').read_text()

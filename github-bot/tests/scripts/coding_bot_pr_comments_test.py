@@ -274,6 +274,8 @@ gh() {
                 calls=Path(env['CALLS']).read_text()
                 if comment_only=='true':
                     self.assertIn('issue comment 9',calls);self.assertIn('issues/7',calls)
+                    self.assertNotIn('依頼を受け付けられませんでした',calls)
+                    self.assertNotIn('conflict 解消が起動したかは',calls)
                     self.assertNotIn('issue edit',calls)
                 elif resolve:
                     self.assertIn('issue comment 7',calls);self.assertIn('issue comment 9',calls)
