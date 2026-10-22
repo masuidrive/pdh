@@ -251,6 +251,9 @@ class SingleTargetContract(HostProbe, unittest.TestCase):
     def test_target_validates_once_and_retries_only_transient_failures(self):
         resolver=BOT/'resolve-target.sh'
         self.assertTrue(resolver.is_file(), 'target resolver must be executable independently')
+        probe_output=self.dir/'probe-output';probe_output.write_text('')
+        probe=subprocess.run(['bash',str(resolver)],env={**self.env,'EVENT_NUMBER':'7','EVENT_IS_PR':'false','GITHUB_EVENT_NAME':'issues','GITHUB_OUTPUT':str(probe_output)},text=True,capture_output=True)
+        self.assertIn('issue=7',probe_output.read_text(),probe.stderr)
         # A real CLI subprocess boundary, with only the GitHub transport replaced.
         stub=self.bindir/'gh'
         stub.write_text("""#!/usr/bin/env python3
