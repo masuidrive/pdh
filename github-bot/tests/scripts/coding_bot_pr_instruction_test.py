@@ -1,5 +1,6 @@
 """Dispatched PR tasks preserve the normal bot trust and push boundaries."""
 import os
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -337,3 +338,137 @@ gh() { calls=$((calls + 1)); echo "CALL $calls"; [ "$calls" -gt "$FAILURES" ]; }
                 self.assertIn("repos/team/repo/issues/12/comments", result.stdout)
                 self.assertNotIn("awaiting-reply", result.stdout)
                 self.assertNotIn("もう一度やらせるには", result.stdout)
+
+
+class CompletionDeliveryTest(unittest.TestCase):
+    def run_ci(self, directory, output, engine=0, push=0, fail=""):
+        directory = Path(directory)
+        (directory / "output").write_text(output)
+        stub = directory / "gh"
+        stub.write_text(r"""#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+args=sys.argv[1:]
+if args[:2]==['api','repos/team/repo/pulls/9']:
+    print(json.dumps(dict(state='open',draft=False,head=dict(sha='start'),auto_merge=None)))
+    sys.exit(0)
+if args[:2]==['issue','view']:
+    print('OPEN');sys.exit(0)
+body=''
+if '--input' in args:
+    body=json.load(sys.stdin)['body']
+elif '--body' in args:
+    body=args[args.index('--body')+1]
+else:
+    body=next((a[5:] for a in args if a.startswith('body=')), '')
+with open(Path(os.environ['GITHUB_WORKSPACE'])/'calls','a') as f:
+    f.write(json.dumps(dict(args=args,body=body),ensure_ascii=False)+'\n')
+if len(body)>65535: sys.exit(22)
+if os.environ['FAIL_DELIVERY']=='all' and args[0]=='api': sys.exit(1)
+if os.environ['FAIL_DELIVERY']=='aux' and (args[:2]==['issue','edit'] or '-X' in args and args[args.index('-X')+1]=='PATCH'): sys.exit(1)
+print('https://github.com/team/repo/issues/7#issuecomment-100')
+""")
+        stub.chmod(0o755)
+        env = dict(os.environ,PATH=f"{directory}:{os.environ['PATH']}",GITHUB_WORKSPACE=str(directory),
+            SCRIPT_DIR=str(ROOT/'.github/coding-bot'),GITHUB_REPOSITORY='team/repo',GITHUB_RUN_ID='123',
+            ISSUE_NUMBER='9',TRUSTED_LINKED_ISSUE='7',PROGRESS_COMMENT_ID='100',BRANCH_NAME='agent/issue-7',
+            CI_AUTOFIX_START_SHA='start',CI_AUTOFIX_HEAD_SHA='start',CI_AUTOFIX_RUN_ID='90',
+            ENGINE_EXIT_CODE=str(engine),CODING_BOT_GH_PAT='stub',PUSH_EXIT=str(push),FAIL_DELIVERY=fail)
+        script = r"""
+set -Ee
+source "$SCRIPT_DIR/ci-autofix-result.sh"
+CLAUDE_OUTPUT=$(cat "$GITHUB_WORKSPACE/output")
+ci_failure_steps() { echo pytest; }
+use_pat_for_origin() { :; }
+git() {
+ case "$1" in
+  rev-parse) echo fixed;; diff) return 0;;
+  push) echo push >> "$GITHUB_WORKSPACE/git"; return "$PUSH_EXIT";;
+  log) echo '- fix';;
+  *) return 90;;
+ esac
+}
+trap 'echo UnexpectedError >> "$GITHUB_WORKSPACE/traps"' ERR
+ci_autofix_finish
+exit "$ENGINE_EXIT_CODE"
+"""
+        result=subprocess.run(['bash','-c',script],env=env,cwd=ROOT,text=True,capture_output=True)
+        records=[json.loads(line) for line in (directory/'calls').read_text().splitlines()]
+        return result, records, env
+
+    def test_ci_completion_reports_fit_comment_limit(self):
+        for engine in (0,1):
+            for output in ('short report','界'*70000):
+                with self.subTest(engine=engine,length=len(output)),tempfile.TemporaryDirectory() as d:
+                    result,records,_=self.run_ci(d,output,engine=engine)
+                    self.assertEqual(result.returncode,engine,result.stderr)
+                    reports=[r['body'] for r in records if r['body'].startswith('<!-- coding-bot:ci-red')]
+                    self.assertTrue(reports)
+                    self.assertTrue(all(len(b)<=65535 for b in reports))
+                    full=reports[0]
+                    if len(output)>65535:
+                        self.assertIn('[実行ログ](https://github.com/team/repo/actions/runs/123)',full)
+                    else:
+                        self.assertIn(output,full)
+                    self.assertTrue((Path(d)/'.coding-bot-reported').exists())
+                    self.assertFalse((Path(d)/'traps').exists())
+        print('CONTRAST PASS: short CI reports retain their contents; engine failure stays failure',flush=True)
+
+    def test_ci_delivery_failure_preserves_push_result_and_allows_success_fallback(self):
+        for push,fail in ((0,''),(0,'all'),(1,'all')):
+            with self.subTest(push=push,fail=fail),tempfile.TemporaryDirectory() as d:
+                result,records,env=self.run_ci(d,'completed',push=push,fail=fail)
+                self.assertEqual(result.returncode,push,result.stderr)
+                self.assertEqual((Path(d)/'git').read_text(),'push\n')
+                self.assertFalse((Path(d)/'traps').exists())
+                self.assertEqual((Path(d)/'.coding-bot-reported').exists(),not fail)
+                if not fail or push: continue
+                steps=yaml.safe_load((ROOT/'.github/workflows/coding-bot.yml').read_text())['jobs']['agent']['steps']
+                fallback=next(s['run'] for s in steps if s.get('name')=='Report if the run left nothing')
+                env.update(REPO='team/repo',TRUSTED_ISSUE='7',TRUSTED_PR='9',TARGET_REASON='',
+                    CONCLUSION='success',PR_COMMENT_ONLY='false',PR_INSTRUCTION='',RUN_URL='run')
+                result=subprocess.run(['bash','-c',fallback],cwd=ROOT,env=env,text=True,capture_output=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                calls=(Path(d)/'calls').read_text()
+                self.assertIn('作業は終わりましたが、報告の投稿に失敗しました',calls)
+                self.assertNotIn('awaiting-reply',calls)
+                self.assertFalse((Path(d)/'.coding-bot-notify').exists())
+        print('CONTRAST PASS: a rejected push remains failure despite failed report delivery',flush=True)
+
+    def test_ci_auxiliary_delivery_cannot_erase_a_delivered_failure_report(self):
+        with tempfile.TemporaryDirectory() as d:
+            result,records,_=self.run_ci(d,'engine failure',engine=1,fail='aux')
+            self.assertEqual(result.returncode,1,result.stderr)
+            self.assertFalse((Path(d)/'traps').exists())
+            self.assertTrue((Path(d)/'.coding-bot-reported').exists())
+            self.assertIn('engine failure',records[0]['body'])
+
+    def test_comment_bytes_are_utf8_with_replacement_in_every_locale(self):
+        for locale in ('C','C.UTF-8','en_US.UTF-8'):
+            for body in (b'valid\r\n"\\ @/etc/passwd', '日本語🤖'.encode(), b'bad\xff\xfe text'):
+                with self.subTest(locale=locale,body=body):
+                    result=subprocess.run(['python3','-I',str(ROOT/'.github/coding-bot/comment-body.py'),'run'],
+                        input=body,capture_output=True,env=dict(os.environ,LC_ALL=locale,PYTHONUTF8='0',PYTHONCOERCECLOCALE='0'))
+                    self.assertEqual(result.returncode,0,result.stderr)
+                    self.assertEqual(json.loads(result.stdout.decode('utf-8'))['body'],body.decode('utf-8',errors='replace'))
+        print('CONTRAST PASS: valid Unicode, CRLF, quotes and literal paths stay unchanged',flush=True)
+
+    def test_truncated_comment_closes_only_its_open_code_fence_before_log_link(self):
+        cases=(('```python\n', '```'),('~~~~ bash\n','~~~~'),('   ````js\n','````'),
+            ('```\n~~~\n','```'),('```\nx\n```\n',''),('inline ``` text\n',''))
+        for prefix,closing in cases:
+            with self.subTest(prefix=prefix):
+                result=subprocess.run(['python3','-I',str(ROOT/'.github/coding-bot/comment-body.py'),'run'],
+                    input=(prefix+'x'*70000).encode(),capture_output=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                body=json.loads(result.stdout)['body']
+                self.assertLessEqual(len(body),65535)
+                before,link=body.rsplit('\n\n…',1)
+                self.assertTrue(link.endswith('[実行ログ](run)'))
+                if closing: self.assertTrue(before.endswith('\n'+closing),before[-100:])
+                else: self.assertTrue(before.endswith('x'))
+        print('CONTRAST PASS: closed fences and inline backticks do not add a closing fence',flush=True)
+
+
+if __name__ == '__main__':
+    unittest.main()
