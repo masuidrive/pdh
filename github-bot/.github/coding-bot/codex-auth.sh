@@ -134,6 +134,7 @@ EOF
 }
 
 codex_report_auth_failure() {
+  [ -z "${RESOLVE_CONFLICT_PR:-}" ] || return 0
   [ "${CODEX_AUTH_REPORTED:-false}" = true ] && return 0
   local message
   local report_mode="${CODING_BOT_CODEX_AUTH_MODE:-codex-login}" kind=auth

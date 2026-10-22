@@ -25,6 +25,7 @@ engine_setup_auth() {
     return 0
   fi
 
+  [ -z "${RESOLVE_CONFLICT_PR:-}" ] || exit 1
   echo "❌ ERROR: CLAUDE_CODE_OAUTH_TOKEN is not set!"
   post_error_comment "### 🔑 Authentication Error
 

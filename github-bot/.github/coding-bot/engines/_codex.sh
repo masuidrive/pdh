@@ -38,6 +38,7 @@ engine_setup_auth() {
   codex_prepare_auth
   [ "$CODEX_AUTH_STATUS" = '使える（ChatGPT ログイン）' ] && return 0
 
+  [ -z "${RESOLVE_CONFLICT_PR:-}" ] || exit 1
   codex_report_auth_failure
   post_error_comment "Codex preflight failed, so this run has stopped. See the separate preflight comment for the reason and next steps."
   # ⚠ この経路は ENGINE_EXIT_CODE の分岐へ入らないので run-action.sh の failed hook が呼ばれない。

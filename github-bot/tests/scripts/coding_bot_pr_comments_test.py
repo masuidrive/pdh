@@ -43,6 +43,7 @@ class MergeProbe(unittest.TestCase):
             runner=(BOT/'run-action.sh').read_text()
             start=runner.index('# main を merge\n')
             (run/'merge-step.sh').write_text(runner[start:runner.index('\nCONFLICT_SECTION=""',start)])
+            (run/'resolve-step.sh').write_text((BOT/'resolve-conflict.sh').read_text().replace('/tmp/agent-prompt-',str(run/'agent-prompt-')))
             env = {**os.environ, 'BOT': str(BOT), 'RUNNER_DIR': str(run), 'GITHUB_WORKSPACE': str(run),
                    'FAIL_PR_POST':str(int(fail_pr_post)), 'CONFLICT_PATH':'renamed conflict file.txt' if renamed else 'conflict file.txt', 'DELETE':str(int(deletion)), 'RESOLVED':resolved, 'OUTSIDE_DELETE':str(int(outside_delete)), 'DECISION': json.dumps(decision), 'DIRTY': str(int(dirty)), 'FAIL': str(int(fail)),
                    'RAW': raw if raw is not None else json.dumps(decision), 'UNRESOLVED': str(int(unresolved)), 'REFUSED': str(int(refused)),
@@ -94,7 +95,7 @@ engine_run() {
  ) & ENGINE_PID=$!
 }
 ENGINE
- source "$BOT/resolve-conflict.sh"
+ source "$RUNNER_DIR/resolve-step.sh"
  resolve_issue_conflict
 else
  run_pr_comment
@@ -143,16 +144,15 @@ gh() {
                     self.assertIn('comments(last: 50) { nodes { bodyHTML } }',path.read_text())
             print('CONTRAST PASS: ordinary issue run still receives its own history and images')
 
-    def test_failed_conflict_resolution_reports_issue_link_on_pr(self):
+    def test_resolver_never_posts_running_engine_result(self):
         for fail in [True,False]:
             with self.subTest(fail=fail):
                 result,pushes,calls,_=self.run_case({},issue_run=True,fail=fail)
                 self.assertEqual(result.returncode==0,not fail,result.stderr)
-                self.assertEqual(calls.count('issue comment 9'),1)
+                self.assertEqual(calls.count('issue comment 9'),0)
                 if fail:
-                    self.assertIn('https://github.com/owner/repo/issues/7#issuecomment-88',calls)
                     self.assertEqual(pushes,[])
-        print('CONTRAST PASS: success still reports once on PR and issue')
+        print('CONTRAST PASS: success and failure both leave reporting to the host')
 
     def test_resolver_push_result_does_not_depend_on_comment_delivery(self):
         ordinary=self.run_case({'conflict':False,'other':True})
@@ -226,8 +226,8 @@ gh() {
                 unsafe=any(arguments.get(key) for key in ['dirty','extra','unresolved','fail','refused'])
                 self.assertEqual(result.returncode==0,not unsafe,result.stderr)
                 self.assertEqual(pushes,[] if unsafe or arguments.get('conflict') is False else ['push'])
-                self.assertIn('issue comment 7',calls)
-                self.assertEqual(calls.count('issue comment 9'),1)
+                self.assertNotIn('issue comment 7',calls)
+                self.assertEqual(calls.count('issue comment 9'),0)
                 self.assertNotIn('classify',calls)
                 if arguments.get('conflict') is False:
                     self.assertNotIn('resolve',calls)
@@ -242,7 +242,7 @@ gh() {
         workflow=(BOT.parent/'workflows/coding-bot.yml').read_text()
         block=workflow.split('- name: Report if the run left nothing',1)[1].split('        run: |',1)[1].split('\n      - name:',1)[0]
         block=textwrap.dedent(block)
-        for comment_only,resolve in [('true',''),('false','9'),('false','')]:
+        for comment_only,resolve in [('true',''),('false','')]:
             with self.subTest(comment_only=comment_only,resolve=resolve),tempfile.TemporaryDirectory(dir=TMP) as d:
                 env={**os.environ,'PR_COMMENT_ONLY':comment_only,'RESOLVE_CONFLICT_PR':resolve,
                      'PR_INSTRUCTION':'','REPO':'owner/repo','ISSUE':'7','TRUSTED_ISSUE':'7','TRUSTED_PR':'9',
