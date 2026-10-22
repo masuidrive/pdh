@@ -163,7 +163,7 @@ expect_auth_failure() {
     # run-action.sh と同様に、未設定の認証変数を空として評価する。
     set +u
     post_error_comment() { :; }
-    ISSUE_NUMBER=1  # Codex は source 時にも参照する。
+    TARGET_ISSUE=1 ISSUE_NUMBER=1  # host が確定した宛先を渡す。
     source "$engine_file" || exit 2
     unset CLAUDE_CODE_OAUTH_TOKEN CODING_BOT_CODEX_AUTH_JSON OPENAI_API_KEY TRUSTED_LINKED_ISSUE
     export CODEX_HOME="$TMP_DIR/codex-home-$checks" HOME="$TMP_DIR/home-$checks"
