@@ -51,13 +51,17 @@ target_failure_reason() {
   else printf '対象外: %s API unavailable' "$2"; fi
 }
 
+target_api_transient_error() {
+  grep -Eiq 'HTTP (5[0-9]{2}|429)|rate limit|timed? ?out|timeout|connection (refused|reset)|dial tcp|no such host|network is unreachable|TLS handshake|unexpected EOF' "$error"
+}
+
 target_api() {
   local error attempt value
   error=$(mktemp "$RUNNER_TEMP/target-api.XXXXXX") || return 1
   for attempt in 0 1 2 3; do
     if value=$(gh api "$@" 2>"$error"); then rm -f "$error"; printf '%s\n' "$value"; return 0; fi
     cat "$error" >&2
-    if ! grep -Eiq 'HTTP (5[0-9]{2}|429)|rate limit|timed? ?out|timeout|connection (refused|reset)|dial tcp|no such host|network is unreachable|TLS handshake|unexpected EOF' "$error"; then
+    if ! target_api_transient_error "$error"; then
       rm -f "$error"; return 1
     fi
     [ "$attempt" != 3 ] || { rm -f "$error"; return 75; }
