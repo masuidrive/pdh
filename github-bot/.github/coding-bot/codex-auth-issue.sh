@@ -25,8 +25,10 @@ _codex_auth_issue_api() {
 codex_post_operational_note() {
   local mode="$1" message="$2" marker bodies
   marker="<!-- coding-bot-provider:$mode:$(date -u +%F) -->"
-  bodies=$(_codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments" \
-    --paginate --slurp --jq 'flatten | .[].body') || return 1
+  # gh rejects --slurp together with --jq, so filter the slurped pages with jq.
+  bodies=$(set -o pipefail
+    _codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments" \
+      --paginate --slurp | jq -r 'flatten | .[].body') || return 1
   [[ "$bodies" != *"$marker"* ]] || return 0
   _codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments" \
     --method POST -f body="$message
@@ -81,8 +83,9 @@ codex_auth_issue() {
       local bodies
       bodies=$(_codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/$issue_number" --jq '.body') || return 1
       if [[ "$bodies" == *"$marker"* ]]; then return 0; fi
-      bodies=$(_codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/$issue_number/comments" \
-        --paginate --slurp --jq 'flatten | .[].body') || return 1
+      bodies=$(set -o pipefail
+        _codex_auth_issue_api "repos/$GITHUB_REPOSITORY/issues/$issue_number/comments" \
+          --paginate --slurp | jq -r 'flatten | .[].body') || return 1
       if [[ "$bodies" == *"$marker"* ]]; then return 0; fi
     fi
   fi
