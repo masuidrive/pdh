@@ -328,34 +328,61 @@ echo "🔌 Engine: $ENGINE"
 
 # The exported key names appear in the prompt; never print their values.
 # The list describes runner controls and exported keys, not the whole environment.
-ENV_JSON_KEY_LINES=""
-if [ -n "${CODING_BOT_ENV_JSON:-}" ]; then
-  if printf '%s' "$CODING_BOT_ENV_JSON" | jq -e . >/dev/null 2>&1; then
-    while IFS= read -r _env_key; do
-      [ -n "$_env_key" ] || continue
-      _env_val="$(printf '%s' "$CODING_BOT_ENV_JSON" | jq -r --arg k "$_env_key" '.[$k]')"
-      echo "::add-mask::$_env_val"
-      export "$_env_key=$_env_val"
-      echo "🔑 CODING_BOT_ENV_JSON: exported $_env_key"
-      ENV_JSON_KEY_LINES="$ENV_JSON_KEY_LINES
+# One extra secret, named by repository variables, wins over the CODING_BOT_ENV_JSON key of
+# the same name, so a repository can rotate one credential without rewriting the whole JSON.
+export_coding_bot_env() {
+  local _env_key _env_val
+  local extra_secret="${CODING_BOT_EXTRA_ENV_SECRET:-}" extra_name="${CODING_BOT_EXTRA_ENV_NAME:-}"
+  local extra_value="${CODING_BOT_EXTRA_ENV_VALUE:-}"
+  # The agent reads its secrets by the configured name only, never through this carrier.
+  unset CODING_BOT_EXTRA_ENV_VALUE
+  ENV_JSON_KEY_LINES=""
+  if [ -n "${CODING_BOT_ENV_JSON:-}" ]; then
+    if printf '%s' "$CODING_BOT_ENV_JSON" | jq -e . >/dev/null 2>&1; then
+      while IFS= read -r _env_key; do
+        [ -n "$_env_key" ] || continue
+        _env_val="$(printf '%s' "$CODING_BOT_ENV_JSON" | jq -r --arg k "$_env_key" '.[$k]')"
+        echo "::add-mask::$_env_val"
+        export "$_env_key=$_env_val"
+        echo "🔑 CODING_BOT_ENV_JSON: exported $_env_key"
+        ENV_JSON_KEY_LINES="$ENV_JSON_KEY_LINES
 - $_env_key"
-    done < <(printf '%s' "$CODING_BOT_ENV_JSON" | jq -r 'keys[]')
-    unset _env_key _env_val
-  else
-    echo "⚠️  CODING_BOT_ENV_JSON is set but is not valid JSON; skipping."
+      done < <(printf '%s' "$CODING_BOT_ENV_JSON" | jq -r 'keys[]')
+    else
+      echo "⚠️  CODING_BOT_ENV_JSON is set but is not valid JSON; skipping."
+    fi
   fi
-fi
 
-if [ -n "$ENV_JSON_KEY_LINES" ]; then
-  ENV_JSON_KEYS_SECTION="
-Also exported for you from this repository's CODING_BOT_ENV_JSON secret (names only — the
-values are set in your environment and masked in logs; read them as \$NAME, and
-never echo, log, or commit a value):$ENV_JSON_KEY_LINES"
-else
-  ENV_JSON_KEYS_SECTION="
+  if [ -n "$extra_secret" ] || [ -n "$extra_name" ]; then
+    if [ -z "$extra_secret" ] || [ -z "$extra_name" ]; then
+      echo "⚠️  CODING_BOT_EXTRA_ENV_SECRET and CODING_BOT_EXTRA_ENV_NAME must both be set; the extra secret is not exported."
+    elif ! [[ "$extra_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      echo "⚠️  CODING_BOT_EXTRA_ENV_NAME '$extra_name' is not a valid environment variable name; secret $extra_secret is not exported."
+    elif [ -n "$extra_value" ]; then
+      echo "::add-mask::$extra_value"
+      export "$extra_name=$extra_value"
+      echo "🔑 $extra_name: from secret $extra_secret (overrides CODING_BOT_ENV_JSON)"
+      ENV_JSON_KEY_LINES="$(printf '%s\n' "$ENV_JSON_KEY_LINES" | grep -vxF -- "- $extra_name" || true)
+- $extra_name (from secret $extra_secret)"
+    elif printf '%s\n' "$ENV_JSON_KEY_LINES" | grep -qxF -- "- $extra_name"; then
+      echo "🔑 $extra_name: secret $extra_secret is empty or unset; keeping the value from CODING_BOT_ENV_JSON"
+    else
+      echo "⚠️  $extra_name: secret $extra_secret is empty or unset, and CODING_BOT_ENV_JSON has no $extra_name; not exported."
+    fi
+  fi
+
+  if [ -n "$ENV_JSON_KEY_LINES" ]; then
+    ENV_JSON_KEYS_SECTION="
+Also exported for you from this repository's secrets — CODING_BOT_ENV_JSON, or the secret
+named after the key (names only — the values are set in your environment and masked in
+logs; read them as \$NAME, and never echo, log, or commit a value):$ENV_JSON_KEY_LINES"
+  else
+    ENV_JSON_KEYS_SECTION="
 This repository set no CODING_BOT_ENV_JSON secret, so no project keys were exported by the
 runner. Other variables may still be present from the devcontainer or image."
-fi
+  fi
+}
+export_coding_bot_env
 
 echo "🤖 coding-bot starting..."
 

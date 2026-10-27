@@ -278,6 +278,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CODING_BOT_GH_PAT: ${{ secrets.CODING_BOT_GH_PAT }}
           CODING_BOT_ENV_JSON: ${{ secrets.CODING_BOT_ENV_JSON }}
+          # Optional: one more secret, named by a repository variable, exported under its own name.
+          CODING_BOT_EXTRA_ENV_SECRET: ${{ vars.CODING_BOT_EXTRA_ENV_SECRET }}
+          CODING_BOT_EXTRA_ENV_NAME: ${{ vars.CODING_BOT_EXTRA_ENV_NAME }}
+          CODING_BOT_EXTRA_ENV_VALUE: ${{ vars.CODING_BOT_EXTRA_ENV_SECRET != '' && secrets[vars.CODING_BOT_EXTRA_ENV_SECRET] || '' }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GITHUB_RUN_ID: ${{ github.run_id }}
@@ -317,6 +321,9 @@ jobs:
             -e GITHUB_ACTIONS \
             -e CODING_BOT_GH_PAT \
             -e CODING_BOT_ENV_JSON \
+            -e CODING_BOT_EXTRA_ENV_SECRET \
+            -e CODING_BOT_EXTRA_ENV_NAME \
+            -e CODING_BOT_EXTRA_ENV_VALUE \
             -e GITHUB_REPOSITORY \
             -e GITHUB_DEFAULT_BRANCH \
             -e GITHUB_RUN_ID \

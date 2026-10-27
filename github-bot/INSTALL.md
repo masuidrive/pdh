@@ -143,6 +143,26 @@ project 固有の env が要るテストがあるなら、まとめて 1 つの 
 gh secret set CODING_BOT_ENV_JSON --body '{"SOME_API_KEY":"...","BASE_URL":"..."}'
 ```
 
+#### 追加の secret を 1 つ、別に渡す（任意）
+
+`CODING_BOT_ENV_JSON` のキーを 1 つだけ別の secret に分けたいときに使う。期限のある token を、JSON 全体を作り直さずに入れ替えられる（GitHub は secret の値を読み出させないので、JSON を作り直すにはほかのキーの値も手元に要る）。
+
+変数を 2 つ設定する。`CODING_BOT_EXTRA_ENV_SECRET` に渡す secret の名前を、`CODING_BOT_EXTRA_ENV_NAME` に run の中で読む環境変数名を書く。
+
+```bash
+gh secret set MY_SERVICE_SECRET --body '<値>'
+gh variable set CODING_BOT_EXTRA_ENV_SECRET --body MY_SERVICE_SECRET
+gh variable set CODING_BOT_EXTRA_ENV_NAME --body MY_SERVICE_TOKEN
+```
+
+- この secret の値は、`CODING_BOT_ENV_JSON` の同じ名前のキーより優先する。secret が空か未登録なら、`CODING_BOT_ENV_JSON` の値がそのまま残る
+- 渡せる secret は 1 つだけである
+- run のログには、どの secret から取ったかが名前で出る。値は出ない（`::add-mask::` で伏せる）
+  - 値があるとき: `🔑 MY_SERVICE_TOKEN: from secret MY_SERVICE_SECRET (overrides CODING_BOT_ENV_JSON)`
+  - 空のとき: `🔑 MY_SERVICE_TOKEN: secret MY_SERVICE_SECRET is empty or unset; keeping the value from CODING_BOT_ENV_JSON`
+- 変数が片方だけのとき、環境変数名が不正なとき（`^[A-Za-z_][A-Za-z0-9_]*$` に合わない）は、warning を出して渡さない
+- 2 つとも未設定なら、何も変わらない
+
 ### Actions に PR 作成を許可する
 
 `pr` は close 承認後、`pr-merge` は merge 承認より前に bot が PR を作る。`merge` は PR を使わない。既定の repo 設定では GitHub Actions は PR を作れず、`gh pr create` が `GitHub Actions is not permitted to create or approve pull requests` で落ちる（smoke 実測）。Settings → Actions → General → Workflow permissions の「Allow GitHub Actions to create and approve pull requests」を有効にする:
