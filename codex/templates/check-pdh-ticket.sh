@@ -16,7 +16,9 @@
 #      PDH-human-review / PDH-close では、PDH-ticket-write〜PDH-verify の各 stage の行もすべてある
 #   8. close 時、ticket が変更した PDH の上書き対象が .pdh-lock と一致する
 #   9. この branch で見出しを追加した Findings 表に «出した人» 列があり、各行が空・—・? ではない（branch の commit が書き換えた見出しを元の文字列に戻しただけの行は数えない）
-#  10. この branch の ticket は close gate に review 記録があり、修正確認の各巡に修正が持ち込んだ Critical / Major があれば Checklist にその巡の設計の見直しの発行先がある
+#  10. この branch の ticket は close gate に review 記録があり、pdh-review「収束」の表に従っている:
+#      S3・S4 で止まるべき巡に Checklist の S7 の行がある・S7 の行が未回答のまま次の巡へ進んでいない（S5）・
+#      PDH-verify 以降は S7 の行がすべて回答済み
 #  11. close 時、説明対象を変えた docs は、更新か Checklist の済み行がある
 #
 #   bash scripts/check-pdh-ticket.sh --ac-hash <ticket.md>   # いまの AC と Out-of-scope のハッシュを出す
@@ -204,70 +206,101 @@ check_ticket_why_intake_evidence() {
   fi
 }
 
-# close gate の review 記録と、review が続いたときの設計の見直しの受け渡しを確かめる。
+# close gate の review 記録と、pdh-review「収束」の表で止まるべき巡の S7 の行を確かめる。
+# 巡は Findings 表の見出しの N（通算の巡）で読む。S4 の «同じ種類が 2 巡続いた» は判断なので数えない。
 check_ticket_review_handover() {
-  local d=${1%/ticket.md} reviews rounds round
+  local d=${1%/ticket.md} reviews result kind round status
   [ -f "$d/progress.md" ] || return 0
   reviews=$(pdh_review_sha_records "$d/progress.md" review | awk 'NF && !seen[$0]++ { count++ } END { print count+0 }')
   if grep -Eq '^(- )?close-gate-sha:' "$d/progress.md" && [ "$reviews" -eq 0 ]; then
     printf 'check-pdh-ticket: %s は close-gate-sha: があるのに有効な review-sha: が 0 件（各巡で reviewer が読んだ SHA を progress.md に review-sha: <SHA> として追記する）\n' "$d" >&2
     failed=1
   fi
-  rounds=$(awk -F '|' -v reviews="$reviews" '
+  result=$(awk -F '|' -v reviews="$reviews" '
     function trim(value) { sub(/^[[:space:]]+/, "", value); sub(/[[:space:]]+$/, "", value); return value }
-    function record(number, done) {
-      if (!(number in gate) || done) gate[number]=done
-    }
     FILENAME == ARGV[1] {
-      if ($0 ~ /^## Status: PDH-(verify|human-review|close)([^A-Za-z-]|$)/) require_answer=1
+      if ($0 ~ /^## Status: PDH-(verify|human-review|close)([^A-Za-z-]|$)/) {
+        status=$0; sub(/^## Status:[[:space:]]*/, "", status); sub(/[[:space:]].*$/, "", status)
+      }
       if ($0 ~ /^## Checklist[[:space:]]*$/) { checklist=1; next }
       if ($0 ~ /^##? /) checklist=0
-      if (checklist && /^- \[[ xX-]\]/ && /発行先:/ && /設計の見直し/) {
+      if (checklist && /^- \[[ xX-]\]/ && /発行先:/ && /[^A-Za-z0-9_]S7([^0-9]|$)/ && match($0, /PDH-review-[0-9]+/)) {
+        number=substr($0, RSTART, RLENGTH); sub(/^PDH-review-/, "", number); number+=0
         done=($0 ~ /^- \[[xX]\]/)
-        if (match($0, /PDH-review-[0-9]+/)) {
-          number=substr($0, RSTART, RLENGTH); sub(/^PDH-review-/, "", number)
-          record(number+0, done)
-        } else record(2, done)
+        if (!(number in gate) || done) gate[number]=done
+        if (number > last) last=number
+      }
+      next
+    }
+    # «処置の変更: 起票する → いま直す — 理由» の行は、PDH-review-N #M の行の判定を置き換える。
+    /処置の変更/ && match($0, /PDH-review-[0-9]+[[:space:]]*#[0-9]+/) {
+      id=substr($0, RSTART, RLENGTH); number=id; sub(/^PDH-review-/, "", number); sub(/[^0-9].*$/, "", number)
+      sub(/^.*#/, "", id)
+      verdict=substr($0, index($0, "処置の変更"))
+      if (index(verdict, "→")) {
+        verdict=substr(verdict, index(verdict, "→") + length("→"))
+        if (index(verdict, "—")) verdict=substr(verdict, 1, index(verdict, "—") - 1)
+        changed[(number+0) SUBSEP id]=(index(verdict, "いま直す") > 0)
       }
       next
     }
     /^#+ / {
-      round=sev=summary=0
+      round=sev=summary=verdict_col=id_col=0
       if ($0 ~ /^###+ Findings(-| ?(（|\())PDH-review-[0-9]+([^0-9]|$)/) {
         number=$0; sub(/^.*PDH-review-/, "", number); sub(/[^0-9].*$/, "", number)
-        if (number+0 >= 2 && number+0 <= reviews) {
-          round=number+0
-          if ($0 !~ /網羅探索/) correction[round]=1
-        }
+        if (number+0 >= 2 && number+0 <= reviews) round=number+0
       }
       next
     }
     round && /^[[:space:]]*\|/ {
-      header_sev=header_summary=0
-      for (i=2; i<=NF; i++) {
-        if (trim($i) == "Sev") header_sev=i
-        if (trim($i) == "要旨") header_summary=i
+      header=0
+      for (i=2; i<=NF; i++) if (trim($i) == "Sev") header=i
+      if (header) {
+        sev=header; summary=verdict_col=id_col=0
+        for (i=2; i<=NF; i++) {
+          if (trim($i) == "要旨") summary=i
+          if (trim($i) == "判定") verdict_col=i
+          if (trim($i) == "#") id_col=i
+        }
+        next
       }
-      if (header_sev && header_summary) { sev=header_sev; summary=header_summary; next }
-      if (sev && summary && (trim($sev) == "Critical" || trim($sev) == "Major") &&
-          trim($summary) !~ /^\[既存\]/) required[round]=1
+      if (sev && (trim($sev) == "Critical" || trim($sev) == "Major")) {
+        key=round SUBSEP ((id_col && trim($id_col) != "") ? trim($id_col) : "row" NR)
+        row_round[key]=round
+        existing[key]=(summary && trim($summary) ~ /^\[既存\]/)
+        fix[key]=(!verdict_col || trim($verdict_col) ~ /^いま直す/)
+      }
       next
     }
-    { sev=summary=0 }
+    { sev=0 }
     END {
-      for (n=2; n<=reviews; n++) {
-        exempt=(n>2 && !correction[n] && prior_answer)
-        if (required[n] && !exempt && (!(n in gate) || (require_answer && !gate[n]))) print n
-        if (gate[n]) prior_answer=1
+      for (key in row_round) {
+        if (!((key in changed) ? changed[key] : fix[key])) continue
+        fix_round[row_round[key]]=1
+        if (!existing[key]) new_round[row_round[key]]=1
+      }
+      if (reviews > last) last=reviews
+      for (n=1; n<=last; n++) {
+        if (fix_round[n] && n >= 3 && !(n in gate)) print "S3\t" n
+        else if (new_round[n] && !(n in gate)) print "S4\t" n
+        if ((n in gate) && !gate[n]) {
+          if (n < reviews) print "S5\t" n
+          else if (status != "") print "S7\t" n "\t" status
+        }
       }
     }
   ' <(if [ -f "$d/note.md" ]; then ticket_visible_lines "$d/note.md"; fi) \
     <(ticket_visible_lines "$d/progress.md")) || { failed=1; return; }
-  while IFS= read -r round; do
-    [ -n "$round" ] || continue
-    printf 'check-pdh-ticket: %s は PDH-review-%s の修正確認の Findings 表に修正が持ち込んだ Critical / Major があるのに Checklist に «発行先:» と «設計の見直し» の両方を含む行が無い（対象の PDH-review-%s を付けて、設計の見直しの結論と待つ答えを記録する。verify 以降の未回答も拒否する）\n' "$d" "$round" "$round" >&2
+  while IFS=$'\t' read -r kind round status; do
+    case "$kind" in
+      S3) printf 'check-pdh-ticket: %s は S3 で止まるべき: PDH-review-%s（通算 3 巡目以降）の Findings 表に判定が «いま直す» の Critical / Major があるのに、Checklist に «S7»・«PDH-review-%s»・«発行先:» を含む行が無い（pdh-review「収束」の S7 で前提の見直しを回し、人の答えを待つ）\n' "$d" "$round" "$round" >&2 ;;
+      S4) printf 'check-pdh-ticket: %s は S4 で止まるべき: PDH-review-%s の Findings 表に、[既存] でない判定 «いま直す» の Critical / Major があるのに、Checklist に «S7»・«PDH-review-%s»・«発行先:» を含む行が無い（pdh-review「収束」の S7 で前提の見直しを回し、人の答えを待つ）\n' "$d" "$round" "$round" >&2 ;;
+      S5) printf 'check-pdh-ticket: %s は S5 で止まるべき: PDH-review-%s の S7 の行が未回答のまま、次の review-sha: が増えた（人の答えを反映して [x] にしてから次の巡へ進む）\n' "$d" "$round" >&2 ;;
+      S7) printf 'check-pdh-ticket: %s は S7 の答えを待ったまま %s に進んだ: PDH-review-%s の S7 の行が未回答（人の答えを反映して [x] にする）\n' "$d" "$status" "$round" >&2 ;;
+      *) continue ;;
+    esac
     failed=1
-  done <<<"$rounds"
+  done <<<"$result"
 }
 
 # AC と Out-of-scope の承認の記録（«AC-approved: <いまの AC と Out-of-scope のハッシュ>»）を確かめる。
