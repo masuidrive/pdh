@@ -358,9 +358,12 @@ breaks if it is guessed wrong.]
   > 1. A 案: <pros / cons>（推奨）
   > 2. B 案: <pros / cons>
   > 3. 取りやめ
-- For **blocker** / **non-convergence**: state the choice as
-  fix / deferred / cancel (per `[SKILLS_PATH]/pdh-review/SKILL.md` 処置の判断) with
-  context for each.
+- For **blocker**: state the choice as fix / deferred / cancel (per
+  `[SKILLS_PATH]/pdh-review/SKILL.md` 処置の判断) with context for each.
+- For **non-convergence** in PDH-review: attach the S7 premise review's
+  conclusion and state the choice as もう 1 巡直す / 前提から書き直す（案ごと）/
+  戻してやり直す (per `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」S8). Leave the
+  S7 Checklist line unchecked until the user's answer is reflected.
 - For **time**: propose `🤖 続行` to pick up where you left off, plus
   any prep the user can do (env var, secret, larger budget) to reduce
   the next-run risk.
@@ -385,7 +388,7 @@ characters away makes the user scroll back to answer.
 **Category**: time | decision | blocker | non-convergence | spawn-failure
 **Detail**: [1–3 lines: what triggered the stop, with concrete numbers
 where applicable — e.g. "DEADLINE_UNIX まで 6 分、test-all 想定 20 分", or
-"PDH-review の 3 巡目で同一 Critical (X) が再発", or "API 仕様が AC2 と矛盾"]
+"PDH-review の通算 3 巡を済ませても Critical (X) が残る（収束の S3）", or "API 仕様が AC2 と矛盾"]
 
 ### What was done (committed)
 - [commit hash short] [type(scope): subject]

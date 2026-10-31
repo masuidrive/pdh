@@ -156,7 +156,7 @@ Issue に 🤖 が付いたら、**コメントに書かれたことを全部や
      - **時間切れ系**: `DEADLINE_UNIX` 近接で test-all / 長時間 worker を起こす前に止めた、PDH-review の巡の途中で deadline が来た等 → category `time`、残時間と必要だった時間を書く。
      - **判断要求系**: AC 解釈の分岐、scope 拡大の可否、product-brief.md と矛盾する要求等 → category `decision`、2–4 個の選択肢と trade-off。
      - **未解決問題系**: pre-existing major、環境ブロッカー、矛盾する要求等 → category `blocker`、`[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」の 4 つ（いま直す / 起票する / 記録だけ残す / 棄却する）で諮る。
-     - **収束しない**: PDH-review の finding か test-all の失敗が、同じ型で 3 巡以上続けて出る → category `non-convergence`、`[SKILLS_PATH]/pdh-review/SKILL.md`「収束」に従って、範囲を切り直すか中止するかをユーザーに諮る。
+     - **収束しない**: PDH-review が `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」の表で S7 に進んだ、または test-all の失敗が同じ型で 3 巡以上続けて出る → category `non-convergence`。PDH-review では S7 の前提の見直しを回し、その結論を添えて «もう 1 巡直す / 前提から書き直す（案ごと）/ 戻してやり直す» をユーザーに諮る。⚠ **S7 の行は、ユーザーの答えを反映するまで `[ ]` のままにする。**bot が自分で `[x]` にしたり、答えの無い S7 の行を足して検査を通したりしない。
      - **spawn 失敗**: Coding Engineer / reviewer / AC 裏取り worker が起動不能 → category `spawn-failure`。⚠ **Evidence pointers には note の path を書く** — rc や stderr の中身をコメントへ貼らない。コメントに書くのは «何が起動できず、そのせいで何が終わっていないか» を言葉で。
 5. 最終コメントは `[SKILLS_PATH]/pdh-decision-board/close-gate.md`（PDH-human-review の decision-board。PDH-verify まで終えたとき）か、共通 `system.md` の「For Incomplete / Early Termination」（途中終了時）のどちらかに従う。⚠ **PDH では「`_pdh.md` の close モードに従って何を行ったか」を 1 行で明記する。**非 PDH では marker / 既存 PR の更新のどちらかを書く。途中終了なら途中終了テンプレを使ったことを 1 行で明記。
 
