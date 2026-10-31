@@ -300,10 +300,10 @@ skill の分け方は skill `pdh-change` にある。
   - 意味: PDH-verify の最後に、最後に review した commit より後に入った ticket 自身の commit を review すること。
   - 定義する場所: `[SKILLS_PATH]/pdh-verify/SKILL.md`
   - 使わない語: 最終 code-review gate
-- **2 巡目で設計を見直して人に戻す**
-  - 意味: 1 巡目の finding を直した差分への review（2 巡目）で、修正が新しい Critical / Major を持ち込んだら、3 巡目の修正に入る前に、経緯を渡さない worker に設計を見直させ、その結論を添えてユーザに判断を渡すこと。
-  - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`
-  - 使わない語: 遮断器、circuit breaker
+- **前提の見直し**
+  - 意味: PDH-review の «収束» の表の S7 で review を止め、経緯と今の差分を渡さない worker 1 人に前提を疑わせて案を出させ、その結論を添えてユーザに次の手を選ばせること。
+  - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」
+  - 使わない語: 遮断器、circuit breaker、設計の見直し、2 巡目で設計を見直して人に戻す
 - **user journey**
   - 意味: 利用者が通る操作の流れ。
   - 注意: まだどこにも定義されていない。定義を足すまでは、意味を同じ文の中で開いて書く。

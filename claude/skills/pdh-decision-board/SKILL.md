@@ -20,7 +20,7 @@ decision-board は、承認者に留保された判断について、decision-bo
 **この規則の目的: ticket と close の判断に、後から引ける根拠が残ること。**会話に材料を並べて質問だけを出すと、何を根拠に決めたかが会話の中にしか残らない。
 
 - 承認の PDH-stage の 2 つ（実装前・close 前）
-- `[SKILLS_PATH]/pdh-review/SKILL.md` がユーザへ持ち込むと定めた判断（修正が永続の state や公開 surface を増やす・AC が Why に届かない・同じ種類の Critical が 2 巡で再発する・2 巡目で修正が Critical / Major を持ち込み、設計の見直しの結論を添えて渡す）と、`[SKILLS_PATH]/pdh-pm/SKILL.md`「気づいたバグは同じ ticket で直す」がユーザに聞くと定めた判断
+- `[SKILLS_PATH]/pdh-review/SKILL.md` がユーザへ持ち込むと定めた判断（修正が永続の state や公開 surface を増やす・AC が Why に届かない・「収束」の S7 で止まり、前提の見直しの結論を添えて渡す）と、`[SKILLS_PATH]/pdh-pm/SKILL.md`「気づいたバグは同じ ticket で直す」がユーザに聞くと定めた判断
 
 finding の処置は PM が選ぶ（`[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」）。finding ごとに decision-board を作らない。選んだ処置は PDH-human-review の decision-board の «直さなかった finding» で承認者に見せる（`close-gate.md`）。
 
