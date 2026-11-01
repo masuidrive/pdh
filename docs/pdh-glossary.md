@@ -301,7 +301,7 @@ skill の分け方は skill `pdh-change` にある。
   - 定義する場所: `[SKILLS_PATH]/pdh-verify/SKILL.md`
   - 使わない語: 最終 code-review gate
 - **前提の見直し**
-  - 意味: PDH-review の «収束» の表の S7 で review を止め、経緯と今の差分を渡さない worker 1 人に前提を疑わせて案を出させ、その結論を添えてユーザに次の手を選ばせること。
+  - 意味: PDH-review の «収束» の表の S7 で review を止め、経緯と今の差分を渡さない、PM と別の engine の worker 1 人に前提を疑わせて案を出させ、PM がその結論から次の手を選ぶこと。立て直した後の巡でも欠陥が尽きなければ、S8 で結論を添えてユーザに次の手を選ばせる。
   - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」
   - 使わない語: 遮断器、circuit breaker、設計の見直し、2 巡目で設計を見直して人に戻す
 - **user journey**

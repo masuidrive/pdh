@@ -22,6 +22,7 @@ PM が worker を起動するときに読む。worker の手順は、役割ご�
 
 - **PM は自身の engine・model・profile・reasoning effort を変更しない。**その変更を許可できるのは、現在の作業に対する明示のユーザ指示だけである。worker への model 割り当ては別の話で、下の項目と `CLAUDE.md`（codex では `AGENTS.md`）に従う
 - **実装（Coding Engineer）と review（reviewer）は、既定で別の engine にする。**同じ engine が実装と review の両方で見落とす欠陥を、別の engine に見つけさせるためである。engine が 1 つしか無い環境では、同じ engine で review したことと、その理由（別の engine が無い）を progress に記録する
+- **PDH-review の «収束» の S7 の前提の見直しは、PM と別の engine で、その engine で使える最も強い推論の model と最も高い effort にする。**PM と同じ見落としをせず、PM の考えた枠の外から案を出させるためである。model の名前は `CLAUDE.md`（codex では `AGENTS.md`）で指定でき、無ければ CLI の既定を使う
 - それ以外の worker の engine は、既定で PM と同じにする。役割ごとの engine / model の上書きは、`CLAUDE.md`（codex では `AGENTS.md`）に明示された場合だけ許す
 - 実装と判断（review を含む）は標準以上の model を使う。比べるのは «1 回の単価» ではなく «完了 1 件までの合計» である — 取り違えればやり直し・review の巡数・人が承認や再実行の操作をする回数が増え、その合計は 1 回を安く済ませた差より大きい。**単価だけを見ると、必ず非力な側が勝つように見える**。列挙・抽出・出力の整理は軽量な model も使える。判断は任せた側が持つ。仕事に判断が含まれるかは内容で決まるため、機械では数えられず PM が割り当て時に確かめる
 - 委譲先の model は名前で固定しない。CLI の既定（codex は `-m` を付けない）か、CLI の alias（claude は `opus` など）を使う。名前を書くと、書いた側だけが古くなる。どの model で動いたかは worker の出力（stderr の冒頭など）から読む
