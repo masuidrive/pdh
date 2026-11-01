@@ -132,7 +132,7 @@ reviewer の finding は仮説であり、実装の命令ではない。PM は f
 - «前提から書き直す» では、`.codex/agents/pdh-coding-engineer.toml`「finding を直すときは、壊していないことを反例で固定する」の順序で、再現テスト・«まとめる»・«直す» の差分を分ける。AC が変わるなら、S7 でも S8 でも、ユーザの承認を得て再合意する
 - `scripts/check-pdh-ticket.sh` は、Findings 表の見出しの N で巡を読み、S3 で止まるべき巡に S7 の行が無いこと、S7 を回した後の巡に S8 の行が無いこと、S7・S8 の行が未回答のまま次の `review-sha:` が増えたこと（S5）、PDH-verify 以降に未回答の S7・S8 の行が残っていることを落とす
 
-**S7 の前提の見直し**は、経緯を持たない worker 1 人に回す。engine は PM と別にし、その engine で使える最も強い推論の model と最も高い effort を使う（`[SKILLS_PATH]/pdh-pm/_execution-team.md`「エンジン割り当て」）。PM と同じ engine の worker は、PM と同じところを見落とし、PM の考えた枠の中で案を組み替えがちだからである。
+**S7 の前提の見直し**は、経緯を持たない worker 1 人に回す。engine は PM と別にし、その engine で使える最も強い推論の model と最も高い effort（claude は `max`、codex は `xhigh`）を使う（`[SKILLS_PATH]/pdh-pm/_execution-team.md`「エンジン割り当て」）。PM と同じ engine の worker は、PM と同じところを見落とし、PM の考えた枠の中で案を組み替えがちだからである。
 
 - 渡すのは、Why・AC・外の契約（API などの仕様）・ticket の前の base のコードと文書と、それまでの Findings の要旨を «構造で起きなくしたい失敗» の種類として整理した一覧である。今の差分・Findings 表・note・progress・PM の考えた案は渡さない。今の作りの局所的な組み替えではなく、前提から案を出させるためである
 - 問いは «本当に難しいのは何かと、問題の立て方・AC・責任の置き場所のどこに無理があるかを挙げる。前提（状態をどこに持つか・誰が何を知るか・何に任せられるか）を疑い、AC を変える案も含めて案を 2〜3 個出し、案ごとにどの失敗が構造で起きなくなるか・AC と API の変更・作る量・確かめやすさ・作る前に確かめる前提を書く。今の実装を直し続ける場合との比べと、進め方の問題も書く» である
