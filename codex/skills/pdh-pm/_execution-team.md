@@ -22,12 +22,16 @@ PM が worker を起動するときに読む。worker の手順は、役割ご�
 
 - **PM は自身の engine・model・profile・reasoning effort を変更しない。**その変更を許可できるのは、現在の作業に対する明示のユーザ指示だけである。worker への model 割り当ては別の話で、下の項目と `AGENTS.md`に従う
 - **実装（Coding Engineer）と review（reviewer）は、既定で別の engine にする。**同じ engine が実装と review の両方で見落とす欠陥を、別の engine に見つけさせるためである。engine が 1 つしか無い環境では、同じ engine で review したことと、その理由（別の engine が無い）を progress に記録する
-- **PDH-review の «収束» の S7 の前提の見直しは、PM と別の engine で、その engine で使える最も強い推論の model と最も高い effort にする。**PM と同じ見落としをせず、PM の考えた枠の外から案を出させるためである。model の名前は `AGENTS.md`で指定でき、無ければ CLI の既定を使う
+- **PDH-review の «収束» の S7 の前提の見直しは、PM と別の engine で、その engine で使える最も強い推論の model と最も高い effort（claude は `max`、codex は `xhigh`）にする。**PM と同じ見落としをせず、PM の考えた枠の外から案を出させるためである。model の名前は `AGENTS.md`で指定でき、無ければ CLI の既定を使う
 - それ以外の worker の engine は、既定で PM と同じにする。役割ごとの engine / model の上書きは、`AGENTS.md`に明示された場合だけ許す
 - 実装と判断（review を含む）は標準以上の model を使う。比べるのは «1 回の単価» ではなく «完了 1 件までの合計» である — 取り違えればやり直し・review の巡数・人が承認や再実行の操作をする回数が増え、その合計は 1 回を安く済ませた差より大きい。**単価だけを見ると、必ず非力な側が勝つように見える**。列挙・抽出・出力の整理は軽量な model も使える。判断は任せた側が持つ。仕事に判断が含まれるかは内容で決まるため、機械では数えられず PM が割り当て時に確かめる
-- 委譲先の model は名前で固定しない。CLI の既定（codex は `-m` を付けない）か、CLI の alias（claude は `opus` など）を使う。名前を書くと、書いた側だけが古くなる。どの model で動いたかは worker の出力（stderr の冒頭など）から読む
+- 委譲先の model は名前で固定しない。CLI の既定（codex は `-m` を付けない）か、CLI の alias（claude は `opus` など）を使う。名前を書くと、書いた側だけが古くなる。どの model と effort で動いたかは worker の出力（codex は stderr の冒頭の `model:` と `reasoning effort:`）から読む
 - PM の engine が未指定で曖昧なときだけ、利用可能な CLI を確認してユーザへ聞く。既に指定されていれば聞かず、session 中は継続する。headless / CI では、その実行系が定義する環境変数を PM の engine とする
-- Coding Engineer を最上位クラスの汎用 coding モデルで動かすときは、reasoning effort を `medium` にする。探索・判断・review の役（architecture 検討、root cause 切り分け、review / verify）は既定の effort を使う
+- **worker を起動するときは、model と一緒に reasoning effort を起動の引数で指定する。**CLI の既定に任せない。CLI の既定の effort は推論しない（codex の `none` など）ことがあり、浅く読んだ reviewer は、巡ごとに別の場所から欠陥を少しずつ出して、review が収まらない。claude は `--effort <level>`、codex は `-c model_reasoning_effort=<level>` で指定する。役ごとの既定は次のとおりで、`AGENTS.md`で上書きできる
+  - Coding Engineer: `medium`。統合・判断を含む難しい実装は `high`
+  - reviewer・QA・AC 裏取り・Surface Observer・判断ボードの独立 reviewer・調査（architecture の検討、root cause の切り分け）: `xhigh`
+  - AC だけを読む worker（`pdh-ac-reader`）: `high`。この役は effort を上げると、かえって AC を読み落とすことがある
+  - S7 の前提の見直し: 上の項目のとおり、その engine の最も高い effort
 - Coding Engineer の profile は、委譲された product / UX / AC の判断を «自分で決めて進む» のではなく «止めて差し戻す» 側を既定にする（`.codex/agents/pdh-coding-engineer.toml`「例外」の停止条件どおり）
   - 判断が残る ticket は、`PDH-ticket-human-review` で解消してから Coding Engineer を起動する
   - 判断を埋めさせるために «進む» model を worker へ当てない — 実装者が決める失敗になる
@@ -91,7 +95,7 @@ prompt は file へ書き出す。claude には stdin で渡し、codex には�
 本文と材料を prompt に含め、tools を使わず stdout だけで返す claude の役は次で起動できる。結果は `$d/stdout.txt` から回収する。
 
 ```bash
-PDH_ROLE="$role" bash scripts/spawn-worker.sh --stdin "$promptfile" "$d" -- claude -p --tools ""
+PDH_ROLE="$role" bash scripts/spawn-worker.sh --stdin "$promptfile" "$d" -- claude -p --tools "" --effort "$effort"
 ```
 
 file やコマンドが必要な役は、許可済みの範囲に合う `--permission-mode`・`--allowedTools` などを project の起動例に指定する。必要な許可が無い場合は、既存の in-process 機構か stdout で完遂できる範囲を使い、完遂できなければ既存の「worker を起動できないとき」に従う。
@@ -102,14 +106,15 @@ worker は `scripts/spawn-worker.sh` で起動する（理由は下の「並行�
 
 ```bash
 # $d は <TMP_DIR>/workers/<名前>、$role は役割（例: pdh-coding-engineer）、$taskfile は «入れるもの» と task 固有依頼
+# $effort は «エンジン割り当て» の役ごとの effort（例: reviewer は xhigh）
 # prompt = 役割の本文（developer_instructions を読む）+ $taskfile
 { python3 -c 'import sys,tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["developer_instructions"])' ".codex/agents/$role.toml"; cat "$taskfile"; } > "$promptfile"
 
 # claude（prompt は --stdin で渡す。成果物は worker が <RESULT_FILE>=$d/result.md へ書く）
-PDH_ROLE="$role" bash scripts/spawn-worker.sh --stdin "$promptfile" "$d" -- claude -p
+PDH_ROLE="$role" bash scripts/spawn-worker.sh --stdin "$promptfile" "$d" -- claude -p --effort "$effort"
 
 # codex（prompt は引数。stdin は spawn-worker.sh が /dev/null にする。-o は最終 message の控え。成果物は同上）
-PDH_ROLE="$role" bash scripts/spawn-worker.sh "$d" -- codex exec -o "$d/last-message.txt" "$(cat "$promptfile")"
+PDH_ROLE="$role" bash scripts/spawn-worker.sh "$d" -- codex exec -c model_reasoning_effort="$effort" -o "$d/last-message.txt" "$(cat "$promptfile")"
 ```
 
 回収は `<RESULT_FILE>` を読む。無ければ無言終了として扱い、`$d/rc.txt`・`$d/stdout.txt`・`$d/stderr.txt`（codex は `$d/last-message.txt` も）の末尾から原因を診断する。
@@ -145,10 +150,10 @@ worker ごとに、engine の JSON・usage から取れる当該実行分のト�
 ```bash
 # PDH-review の第 3 reviewer（既存のバグも探させるので codex exec。sandbox を外すことが `AGENTS.md` で許可されている環境の例）
 # $review_prompt は .codex/agents/pdh-reviewer.toml の本文（developer_instructions を読む）+ «入れるもの»（review 対象の SHA を含む）
-PDH_ROLE=pdh-reviewer bash scripts/spawn-worker.sh "$d" -- codex exec --sandbox danger-full-access -o "$d/codex-review.txt" "$review_prompt"
+PDH_ROLE=pdh-reviewer bash scripts/spawn-worker.sh "$d" -- codex exec --sandbox danger-full-access -c model_reasoning_effort="xhigh" -o "$d/codex-review.txt" "$review_prompt"
 # close 前 review（区間は指示文で渡す。結論は stdout.txt に出る）
 p=$(bash scripts/pdh-review-range.sh <ticket dir> --from last-review --prompt) && \
-  bash scripts/spawn-worker.sh "$d" -- codex exec review -c sandbox_mode="danger-full-access" "$p"
+  bash scripts/spawn-worker.sh "$d" -- codex exec review -c sandbox_mode="danger-full-access" -c model_reasoning_effort="xhigh" "$p"
 # 終わってから（--wait が 0 を返してから）
 grep -cE '^bwrap: ' "$d/stderr.txt"   # 0 でなければ、review は実行されていない
 ```
@@ -177,8 +182,8 @@ engine 自身の background 機構（Claude Code の `run_in_background`）を�
 
 ```bash
 # 起動する呼び出し: worker の数だけ spawn-worker.sh を呼んで、この呼び出しは «待たずに» 終える
-PDH_ROLE=pdh-reviewer bash scripts/spawn-worker.sh --stdin "$TMP_DIR/workers/da/prompt.txt" "$TMP_DIR/workers/da" -- claude -p
-PDH_ROLE=pdh-reviewer bash scripts/spawn-worker.sh "$TMP_DIR/workers/codex" -- codex exec -o "$TMP_DIR/workers/codex/last-message.txt" "$(cat "$TMP_DIR/workers/codex/prompt.txt")"
+PDH_ROLE=pdh-reviewer bash scripts/spawn-worker.sh --stdin "$TMP_DIR/workers/da/prompt.txt" "$TMP_DIR/workers/da" -- claude -p --effort xhigh
+PDH_ROLE=pdh-reviewer bash scripts/spawn-worker.sh "$TMP_DIR/workers/codex" -- codex exec -c model_reasoning_effort="xhigh" -o "$TMP_DIR/workers/codex/last-message.txt" "$(cat "$TMP_DIR/workers/codex/prompt.txt")"
 ```
 
 待つのは **別の shell 呼び出し**で行い、**1 回を短く区切る**。

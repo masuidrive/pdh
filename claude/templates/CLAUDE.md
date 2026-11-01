@@ -93,29 +93,30 @@ pdh-pm が spawn するチームメンバーの engine / モデル設定。
 engine 割り当ての規則（実装と review の分離、main engine の選び方、spawn 機構）は pdh-pm `_execution-team.md`「エンジン割り当て」「spawn 機構」に従う。ここには **この project 固有の上書きだけ**を書く。
 
 - main = claude → 実装 worker = `codex exec -c model_reasoning_effort="medium"`（機械的な実装は `medium`、統合・判断を含む難しい実装は `high`）
-- main = codex → 実装 worker = `claude -p --model opus`
+- main = codex → 実装 worker = `claude -p --model opus --effort medium`（同上）
 
-**下表は「役割ごとに engine / model を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。PDH stage の定義と gate 条件は `PDH-AGENTS.md` と `/pdh-pm` に従い、この表は project 固有の role / model override だけを書く。
+**下表は「役割ごとに engine / model / effort を既定から変えたいとき」の上書き例（任意）**。指定したロールだけ上書きされ、他は既定（= main と同一 engine）のまま。PDH stage の定義と gate 条件は `PDH-AGENTS.md` と `/pdh-pm` に従い、この表は project 固有の role / model override だけを書く。
 
-**この表は消さないこと。** どの step にどの engine / model を割り当てるかは project 依存で、skill 側の既定値では決められない。判断材料の例:
+**この表は消さないこと。** どの step にどの engine / model / effort を割り当てるかは project 依存で、skill 側の既定値では決められない。判断材料の例:
 
 - **タスクの難易度**: 設計判断や統合を含む step に強いモデルを当てる、といった step ごとの使い分け。機械的な変更でも最小能力の軽量モデルへは落とさない（pdh-pm `_execution-team.md`「エンジン割り当て」）
 - **コスト / スループット**: 比べるのは «1 回の単価» ではなく «完了 1 件までの合計»（やり直し・review の巡数・人が押す回数を含む）
 - **独立性**: cross-model review が要る step には、生成側と別のモデルを明示指定する
 
-割り当てを変えたら、その理由も 1 行添えておくと後から検証できる。
+割り当てを変えたら、その理由も 1 行添えておくと後から検証できる。effort の列は既定（pdh-pm `_execution-team.md`「エンジン割り当て」）で、CLI の既定に任せず起動の引数で渡す。
 
-| 役割 | step | 上書き例 | 備考 |
-|---|---|---|---|
-| PM（Director） | 全体 | （main） | 進行・dispatch・統合・判断・ユーザ報告。worker を spawn する側 |
-| Ticket contract | ticket contract / AC gate | （main） | PM が担当。project 固有の invariant / dependency / approval 補足を書く |
-| Coding Engineer | implementation | （main） | 実装 worker。project 固有の実装制約や required skill があれば書く |
-| QA Engineer | tests / verification | （main） | test command、E2E、doc regeneration など project 固有の確認観点を書く |
-| Devil's Advocate | review | （main） | セキュリティ、設計、AC 達成の実質判定など project 固有の重点観点を書く |
-| 追加 reviewer（任意） | review | 例: codex を1人追加 | 独立視点を増やしたいとき、別 engine の reviewer を明示追加してよい（混在）|
-| AC 裏取り | verification | （main） | project 固有の AC evidence や canonical docs 照合観点を書く |
-| Surface Observer | surface check | （main） | UI / HTTP API / SDK / CLI など、この project の consumer surface を書く |
-| 判断ボードの独立 reviewer | board の完成検査 | （main の別 worker） | 書き手とは別に起こす。別 engine を指定すると、engine が違うことで見つかる盲点も拾える（`pdh-decision-board` の `final-check.md`） |
+| 役割 | step | 上書き例 | effort | 備考 |
+|---|---|---|---|---|
+| PM（Director） | 全体 | （main） | （変えない） | 進行・dispatch・統合・判断・ユーザ報告。worker を spawn する側 |
+| Ticket contract | ticket contract / AC gate | （main） | （PM と同じ） | PM が担当。project 固有の invariant / dependency / approval 補足を書く |
+| Coding Engineer | implementation | （main） | `medium` | 実装 worker。project 固有の実装制約や required skill があれば書く |
+| QA Engineer | tests / verification | （main） | `xhigh` | test command、E2E、doc regeneration など project 固有の確認観点を書く |
+| Devil's Advocate | review | （main） | `xhigh` | セキュリティ、設計、AC 達成の実質判定など project 固有の重点観点を書く |
+| 追加 reviewer（任意） | review | 例: codex を1人追加 | `xhigh` | 独立視点を増やしたいとき、別 engine の reviewer を明示追加してよい（混在）|
+| AC 裏取り | verification | （main） | `xhigh` | project 固有の AC evidence や canonical docs 照合観点を書く |
+| Surface Observer | surface check | （main） | `xhigh` | UI / HTTP API / SDK / CLI など、この project の consumer surface を書く |
+| 判断ボードの独立 reviewer | board の完成検査 | （main の別 worker） | `xhigh` | 書き手とは別に起こす。別 engine を指定すると、engine が違うことで見つかる盲点も拾える（`pdh-decision-board` の `final-check.md`） |
+| 前提の見直し（S7） | PDH-review の «収束» | PM と別の engine の最も強い model | 最高（claude `max`・codex `xhigh`） | `pdh-review`「収束」 |
 
 共通の worker / spawn / context ルールは `PDH-AGENTS.md` に置く。以下にはこの project / tool 固有の起動方法だけを書く。
 
