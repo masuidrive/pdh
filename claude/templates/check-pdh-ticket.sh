@@ -17,8 +17,8 @@
 #   8. close 時、ticket が変更した PDH の上書き対象が .pdh-lock と一致する
 #   9. この branch で見出しを追加した Findings 表に «出した人» 列があり、各行が空・—・? ではない（branch の commit が書き換えた見出しを元の文字列に戻しただけの行は数えない）
 #  10. この branch の ticket は close gate に review 記録があり、pdh-review「収束」の表に従っている:
-#      S3・S4 で止まるべき巡に Checklist の S7 の行がある・S7 の行が未回答のまま次の巡へ進んでいない（S5）・
-#      PDH-verify 以降は S7 の行がすべて回答済み
+#      S3 で止まるべき最初の巡に Checklist の S7 の行、その後の巡に S8 の行がある・S7・S8 の行が未回答のまま
+#      次の巡へ進んでいない（S5）・PDH-verify 以降は S7・S8 の行がすべて回答済み
 #  11. close 時、説明対象を変えた docs は、更新か Checklist の済み行がある
 #
 #   bash scripts/check-pdh-ticket.sh --ac-hash <ticket.md>   # いまの AC と Out-of-scope のハッシュを出す
@@ -207,7 +207,7 @@ check_ticket_why_intake_evidence() {
 }
 
 # close gate の review 記録と、pdh-review「収束」の表で止まるべき巡の S7 の行を確かめる。
-# 巡は Findings 表の見出しの N（通算の巡）で読む。S4 の «同じ種類が 2 巡続いた» は判断なので数えない。
+# 巡は Findings 表の見出しの N（通算の巡）で読む。最初に止まる巡は S7（別の engine の前提の見直し）、その後の巡は S8（人）の行を求める。
 check_ticket_review_handover() {
   local d=${1%/ticket.md} reviews result kind round status
   [ -f "$d/progress.md" ] || return 0
@@ -224,10 +224,14 @@ check_ticket_review_handover() {
       }
       if ($0 ~ /^## Checklist[[:space:]]*$/) { checklist=1; next }
       if ($0 ~ /^##? /) checklist=0
-      if (checklist && /^- \[[ xX-]\]/ && /発行先:/ && /[^A-Za-z0-9_]S7([^0-9]|$)/ && match($0, /PDH-review-[0-9]+/)) {
+      if (checklist && /^- \[[ xX-]\]/ && /発行先:/ && match($0, /[^A-Za-z0-9_]S[78]([^0-9]|$)/)) {
+        kind=substr($0, RSTART + 2, 1)
+        if (!match($0, /PDH-review-[0-9]+/)) next
         number=substr($0, RSTART, RLENGTH); sub(/^PDH-review-/, "", number); number+=0
         done=($0 ~ /^- \[[xX]\]/)
-        if (!(number in gate) || done) gate[number]=done
+        key=number SUBSEP kind
+        if (!(key in gate) || done) gate[key]=done
+        if (kind == 7 && (first7 == "" || number < first7)) first7=number
         if (number > last) last=number
       }
       next
@@ -245,7 +249,7 @@ check_ticket_review_handover() {
       next
     }
     /^#+ / {
-      round=sev=summary=verdict_col=id_col=0
+      round=sev=verdict_col=id_col=0
       if ($0 ~ /^###+ Findings(-| ?(（|\())PDH-review-[0-9]+([^0-9]|$)/) {
         number=$0; sub(/^.*PDH-review-/, "", number); sub(/[^0-9].*$/, "", number)
         if (number+0 >= 2 && number+0 <= reviews) round=number+0
@@ -256,9 +260,8 @@ check_ticket_review_handover() {
       header=0
       for (i=2; i<=NF; i++) if (trim($i) == "Sev") header=i
       if (header) {
-        sev=header; summary=verdict_col=id_col=0
+        sev=header; verdict_col=id_col=0
         for (i=2; i<=NF; i++) {
-          if (trim($i) == "要旨") summary=i
           if (trim($i) == "判定") verdict_col=i
           if (trim($i) == "#") id_col=i
         }
@@ -267,7 +270,6 @@ check_ticket_review_handover() {
       if (sev && (trim($sev) == "Critical" || trim($sev) == "Major")) {
         key=round SUBSEP ((id_col && trim($id_col) != "") ? trim($id_col) : "row" NR)
         row_round[key]=round
-        existing[key]=(summary && trim($summary) ~ /^\[既存\]/)
         fix[key]=(!verdict_col || trim($verdict_col) ~ /^いま直す/)
       }
       next
@@ -277,26 +279,27 @@ check_ticket_review_handover() {
       for (key in row_round) {
         if (!((key in changed) ? changed[key] : fix[key])) continue
         fix_round[row_round[key]]=1
-        if (!existing[key]) new_round[row_round[key]]=1
       }
       if (reviews > last) last=reviews
       for (n=1; n<=last; n++) {
-        if (fix_round[n] && n >= 3 && !(n in gate)) print "S3\t" n
-        else if (new_round[n] && !(n in gate)) print "S4\t" n
-        if ((n in gate) && !gate[n]) {
-          if (n < reviews) print "S5\t" n
-          else if (status != "") print "S7\t" n "\t" status
+        if (fix_round[n]) {
+          if (first7 != "" && n > first7) { if (!((n SUBSEP 8) in gate)) print "S4\t" n "\t" first7 }
+          else if (!((n SUBSEP 7) in gate)) print "S3\t" n
+        }
+        for (kind=7; kind<=8; kind++) if (((n SUBSEP kind) in gate) && !gate[n SUBSEP kind]) {
+          if (n < reviews) print "S5\t" n "\t" kind
+          else if (status != "") print "WAIT\t" n "\t" kind "\t" status
         }
       }
     }
   ' <(if [ -f "$d/note.md" ]; then ticket_visible_lines "$d/note.md"; fi) \
     <(ticket_visible_lines "$d/progress.md")) || { failed=1; return; }
-  while IFS=$'\t' read -r kind round status; do
+  while IFS=$'\t' read -r kind round extra status; do
     case "$kind" in
-      S3) printf 'check-pdh-ticket: %s は S3 で止まるべき: PDH-review-%s（通算 3 巡目以降）の Findings 表に判定が «いま直す» の Critical / Major があるのに、Checklist に «S7»・«PDH-review-%s»・«発行先:» を含む行が無い（pdh-review「収束」の S7 で前提の見直しを回し、人の答えを待つ）\n' "$d" "$round" "$round" >&2 ;;
-      S4) printf 'check-pdh-ticket: %s は S4 で止まるべき: PDH-review-%s の Findings 表に、[既存] でない判定 «いま直す» の Critical / Major があるのに、Checklist に «S7»・«PDH-review-%s»・«発行先:» を含む行が無い（pdh-review「収束」の S7 で前提の見直しを回し、人の答えを待つ）\n' "$d" "$round" "$round" >&2 ;;
-      S5) printf 'check-pdh-ticket: %s は S5 で止まるべき: PDH-review-%s の S7 の行が未回答のまま、次の review-sha: が増えた（人の答えを反映して [x] にしてから次の巡へ進む）\n' "$d" "$round" >&2 ;;
-      S7) printf 'check-pdh-ticket: %s は S7 の答えを待ったまま %s に進んだ: PDH-review-%s の S7 の行が未回答（人の答えを反映して [x] にする）\n' "$d" "$status" "$round" >&2 ;;
+      S3) printf 'check-pdh-ticket: %s は S3 で止まるべき: PDH-review-%s（通算 2 巡目以降）の Findings 表に判定が «いま直す» の Critical / Major があるのに、Checklist に «S7»・«PDH-review-%s»・«発行先:» を含む行が無い（pdh-review「収束」の S7 で、別の engine に前提の見直しを回す）\n' "$d" "$round" "$round" >&2 ;;
+      S4) printf 'check-pdh-ticket: %s は S4 で止まるべき: PDH-review-%s で S7 の前提の見直しを回した後の PDH-review-%s の Findings 表に、判定が «いま直す» の Critical / Major があるのに、Checklist に «S8»・«PDH-review-%s»・«発行先:» を含む行が無い（pdh-review「収束」の S8 で人に聞く）\n' "$d" "$extra" "$round" "$round" >&2 ;;
+      S5) printf 'check-pdh-ticket: %s は S5 で止まるべき: PDH-review-%s の S%s の行が未回答のまま、次の review-sha: が増えた（答えを反映して [x] にしてから次の巡へ進む）\n' "$d" "$round" "$extra" >&2 ;;
+      WAIT) printf 'check-pdh-ticket: %s は S%s の答えを待ったまま %s に進んだ: PDH-review-%s の S%s の行が未回答（答えを反映して [x] にする）\n' "$d" "$extra" "$status" "$round" "$extra" >&2 ;;
       *) continue ;;
     esac
     failed=1
