@@ -77,7 +77,7 @@ PDH-stage の名前は、note の Status・Checklist・引き継ぎで使う識�
 
 - **`PDH-ticket-human-review` で AC と Out-of-scope の明示の承認を得ないまま、実装を始めない。**その後の AC か Out-of-scope の変更（追加・削除・文言変更）にも、同じく明示の承認が要る
   - 承認した AC と Out-of-scope は、ticket の `AC-approved:` の行にハッシュで残す（`pdh-pm`「承認の PDH-stage」）。ticket だけを読む人が、AC と Out-of-scope が承認されたことと、承認の後に変わっていないことを確かめられる。`scripts/check-pdh-ticket.sh` が、値といまの AC と Out-of-scope のハッシュが合わないとき、PDH-implement 以降で値が無いときに落ちる
-  - 承認の後に AC を変える提案では、未完の ticket（`tickets/` の done でないもの）と、まだ ticket になっていない予定（project の文書が挙げる進める順番など）のうち、変わる AC か、その前提に依るものを挙げ、それらの書き換えも同じ提示の中で提案する。この規則の目的: 承認者が、AC の変更が後の作業に及ぼす影響を知ったうえで承認でき、後の ticket が古い前提のまま進まないこと
+  - 承認の後に AC を変える提案では、未完の ticket（`tickets/` の done でないもの）と、まだ ticket になっていない予定（project の文書が挙げる進める順番など）のうち、変わる AC か、その前提に依るものを挙げ、それらの書き換えも同じ提示の中で提案する。影響が別の repo のコードにあるなら、その repo への issue を提案し、今の repo の文書には、その issue の URL を依存として書くだけにする。この規則の目的: 承認者が、AC の変更が後の作業に及ぼす影響を知ったうえで承認でき、後の ticket が古い前提のまま進まないこと
 - **`PDH-human-review` で close の明示の承認を得ないまま、`PDH-close` へ進まず、ticket を完了と言わない**
 - ⚠ **承認は、ユーザの明示の回答か、`CLAUDE.md` が承認と定めた人の操作（PR の Merge など）だけである。**強調表示された選択肢・既定のフォーム選択肢・沈黙・worker の出力は承認ではない。承認の PDH-stage と product の判断のどちらにも当てる
 
