@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Regenerate the native Codex payload from the canonical Claude distribution.
 
+Also regenerates claude/templates/agents/codex/*.toml (the Codex agents shipped in the
+Claude distribution) with claude/templates/gen-codex-agents.sh.
+
 INSTALL, AGENTS.md and its local example remain native Codex entrypoints.
 Run --check in CI; generation never edits consuming projects.
 """
@@ -84,6 +87,17 @@ for file in (ROOT/'claude/templates/agents/claude').glob('pdh-*.md'):
     text += 'description = '+json.dumps(fields['description'].strip(),ensure_ascii=False)+'\n'
     text += 'developer_instructions = '+json.dumps(native(body.lstrip('\n')),ensure_ascii=False)+'\n'
     outputs[ROOT/'codex/templates/agents/codex'/f'{file.stem}.toml'] = text.encode()
+# The Claude distribution also ships Codex agents for mixed teams. A consuming repo checks them
+# with scripts/gen-codex-agents.sh, so generate them with that same script, not a second renderer.
+import subprocess, tempfile
+with tempfile.TemporaryDirectory() as tmp:
+    tmp=Path(tmp)
+    (tmp/'scripts').mkdir()
+    shutil.copy(ROOT/'claude/templates/gen-codex-agents.sh', tmp/'scripts/gen-codex-agents.sh')
+    shutil.copytree(ROOT/'claude/templates/agents/claude', tmp/'.claude/agents')
+    subprocess.run(['bash', str(tmp/'scripts/gen-codex-agents.sh')], check=True)
+    for file in sorted((tmp/'.codex/agents').glob('pdh-*.toml')):
+        outputs[ROOT/'claude/templates/agents/codex'/file.name] = file.read_bytes()
 # Match required paths to the actual standalone installation.
 p=ROOT/'codex/templates/checks/required-pdh-files.check'
 if p in outputs:
@@ -94,7 +108,7 @@ if p in outputs:
     text=text.replace(line,'required_paths='+','.join(paths))
     outputs[p]=text.encode()
 expected=set(outputs)
-managed=[ROOT/'codex/skills',ROOT/'codex/templates/agents/codex']
+managed=[ROOT/'codex/skills',ROOT/'codex/templates/agents/codex',ROOT/'claude/templates/agents/codex']
 stale=[]
 for directory in managed:
     for file in directory.rglob('*'):
