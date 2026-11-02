@@ -37,7 +37,7 @@ flowchart TD
 
 - `git merge-base --is-ancestor origin/<base> HEAD` を確かめ、false なら `git merge origin/<base> --no-edit` してから review する（base は ticket frontmatter の `base_branch`。`ticket.sh new` はそこに `default` と書く。値が `default`（大文字小文字を問わない）・空・欄が無いときは `.ticket-config.yaml` の `merge_to`（古い設定の名前）、それも無ければ `default_branch` に読み替える。`./ticket.sh help` の `base_branch`）
 - ticket に書かれていない consumer surface・破壊的な操作・権限の変更を、diff から機械的に列挙する。見つけたら Critical として承認の PDH-stage へ出す
-- reviewer の prompt に、review 対象の commit SHA と、ticket を始めた SHA（«由来を記録する»）を書く。`[SKILLS_PATH]/pdh-pm/_execution-team.md`「review 専用 worktree」で起動前後の HEAD と作業ツリーを照合する
+- reviewer の prompt に、review 対象の commit SHA と、ticket を始めた SHA（`bash scripts/pdh-review-range.sh [TICKET_DIR] --start` の値。«由来を記録する»）を書く。`[SKILLS_PATH]/pdh-pm/_execution-team.md`「review 専用 worktree」で起動前後の HEAD と作業ツリーを照合する
 - 初回の review は reviewer を 1 人以上並行で起動し、同じ SHA の diff 全体を見せる（Why の見方 を除く）。最新 commit の diff（`<SHA>~1..<SHA>`）だけを渡すと、同じ ticket の前の commit が作った状態に起因する欠陥は原理的に見つからない。ユーザが reviewer の構成を指定したら、省略・短縮・統合で代えない。finding の修正は Coding Engineer に、テストの再実行は QA に任せる
 - codex の reviewer の起動の仕方（`codex exec review` ではなく `codex exec` に指示文を渡す理由を含む）は `[SKILLS_PATH]/pdh-pm/_execution-team.md`「reviewer に `codex exec review` を使うとき」にある
 - 初回の reviewer には diff 全体を渡す。AC の見方 は通常の reviewer が diff とともに行うので、AC・作り方の判断・実装者の完了の主張も渡す。Why の見方の reviewer には Why だけを渡す（下の「2 つの見方」）
@@ -70,7 +70,7 @@ reviewer は diff を 2 つの見方で確かめる。«AC の見方» は通常
 ### 巡
 
 - 巡は 2 種類ある。**網羅探索の巡**では、reviewer が diff 全体を読み、網羅探索と「diff の外を読む」を行う。初回の巡と、「収束」の表の S6・S8 が指す巡がこれに当たる
-- **修正確認の巡**では、«いま直す» と判定した finding、再現条件、修正の diff、実装者が記録した修正前後の出力だけを、同じ reviewer へ渡す。広い探索の review を繰り返さない
+- **修正確認の巡**では、«いま直す» と判定した finding、再現条件、修正の diff、実装者が記録した修正前後の出力だけを、同じ reviewer へ渡す。広い探索の review を繰り返さない。Minor を直した差分も、影響する範囲をこの巡で読む。Minor の印だけでは巡を省かない — 小さい修正も退行を持ち込むからである
 - 途中の巡では、変更したファイルと、その import の連鎖の上にある影響するテストだけを実行する
 - 巡ごとに、reviewer が読んだ SHA を progress へ `review-sha:` の行で追記する（行の形は `[SKILLS_PATH]/pdh-pm/_records.md`）
 - 修正の後、«いま直す» と判定した Critical / Major の件数と、修正前に落ちるテストの本数を突き合わせる。足りなければ、それ自体を finding にする（テストを置く規則は `.claude/agents/pdh-coding-engineer.md`「finding を直すときは、壊していないことを反例で固定する」）
@@ -82,12 +82,11 @@ reviewer の finding は仮説であり、実装の命令ではない。PM は f
 - **いま直す** — 次のどれかに当たる finding だけを、この ticket で直す。この skill ではこれを «必須の修正» と呼ぶ
   - 直さないと AC を満たさない
   - この ticket の変更が持ち込んだ退行。Minor も含み、同じ ticket の前の巡の修正が持ち込んだものも含む
-  - 由来が «未判定» の欠陥（下の «由来を記録する»）。退行でないと示せないものは、退行として扱う
   - この ticket の変更が通る経路から到達できる Critical。既存のものも含む。到達するかを示せないときは、到達を確かめるか、到達するものとして扱う
   - この ticket の変更が、既存の振る舞いか他者が使う契約を壊す
-  - 同じ根本原因が、実際に出荷された欠陥を再発させる
-- **起票する** — 実在するが «必須の修正» に当たらない欠陥。別の ticket にして、この ticket の close の前に作る（下の「Findings 表」）。«あとで起票する» は処置ではない
-- **記録だけ残す** — 実在するが、作業にする価値が無いもの
+  - 同じ根本原因が、実際に出荷された欠陥を再発させ、その経路がこの ticket の変更・承認された目的・この ticket が保つ契約のどれかに関わる。関わらないものは、急ぐなら急ぐ旨を書いた別の ticket に «起票する»
+- **起票する** — 実在する欠陥のうち «必須の修正» に当たらないものは、すべてこれにする。別の ticket にして、この ticket の close の前に作る（下の「Findings 表」）。«あとで起票する» は処置ではない
+- **記録だけ残す** — 欠陥ではない観察と改善の候補（読みにくい名前・将来の拡張の案など）。実在する欠陥にはこの処置を選ばない
   - 後から検索できる anchor（シンボル名・ファイルパス・endpoint・設定キー）を 1 つ以上付ける。anchor を付けられない finding は、後から使うには曖昧すぎるので、書き直すか棄却する
 - **棄却する** — 誤検出か、前提の誤り（下の «先に裏取りをする»）
 
@@ -100,10 +99,12 @@ reviewer の finding は仮説であり、実装の命令ではない。PM は f
 - finding が承認済み AC の要求する動作を指している場合は、該当する AC とコード・テストで実際の動作を示し、Why との整合を判断する。AC も Why も満たし finding の前提が誤りなら、その前提とコードの根拠を理由に棄却する。AC を満たしても Why に届かないなら、棄却せず、ユーザの承認を得て AC を強めるか、別の ticket にする。未測定の外部 API の応答などの不足する証拠は、バグの判定と分けて記録する
 - reviewer の間、または見方の間で結論が割れたら、全員の finding を足し合わせるだけや多数決で決めない。前提の差を確かめて決着する。各 reviewer の元の評価・異なる前提・決着に使ったコードの根拠・PM の最終評価を、Findings 表の理由の列か、その列から参照する決着行に残す
 - `PDH-review-2` 以降で初回の finding が誤検出と分かったら棄却する。今回と無関係なら調べて分かったこととして記録し、元の AC と user journey だけを確かめる。2 巡目以降の発見も、«必須の修正» に当たるものだけをいま直す
-- **由来を記録する。**この規則の目的: PM と承認者が、この ticket が持ち込んだ欠陥と、ticket の前からある欠陥を取り違えずに分けられること。«既存» とする finding には、Findings 表の理由の列に次のどれかを書く。直前の巡の SHA と比べただけでは «既存» にしない — 同じ ticket の前の巡の修正が持ち込んだ欠陥も、直前の巡には既にあるからである
-  - `由来: 既存 <開始 SHA>` — ticket を始めた SHA で同じ欠陥を再現した。再現の記録（実行したコマンドと出力か、その SHA での path:行）を添える。開始 SHA は、ticket の branch の最初の commit の親である（`git rev-parse "$(git rev-list --first-parent HEAD ^origin/<base> | tail -1)^"`）
+- **由来を記録する。**この規則の目的: PM と承認者が、この ticket が持ち込んだ欠陥と、ticket の前からある欠陥を取り違えずに分けられること。PM は finding ごとに、欠陥が実在するか・どこから来たか・この ticket が直す責任を持つかを別々に判定する。実在するバグには、Findings 表の理由の列に次のどれかを書く。直前の巡の SHA と比べただけでは «既存» にしない — 同じ ticket の前の巡の修正が持ち込んだ欠陥も、直前の巡には既にあるからである
+  - `由来: この ticket <commit か根拠>` — この ticket の commit が持ち込んだ（退行）。持ち込んだ commit（blame・bisect）か、開始 SHA では再現しない記録を添える
+  - `由来: 既存 <開始 SHA>` — ticket を始めた SHA で同じ欠陥を再現した。再現の記録（実行したコマンドと出力か、その SHA での path:行）を添える
   - `由来: 上流 <commit>` — ticket を始めた後に base から取り込んだ commit が持ち込んだ。その commit を添える
-  - `由来: 未判定` — 上のどちらも示せなかった。«必須の修正» として扱う
+  - `由来: 未判定` — 調べる途中の印である。開始 SHA での再現・blame・bisect で上の 3 つのどれかに決める。決まらないまま処置を選ぶときは、どこまで調べて何が足りないかを添える。退行だった場合に «必須の修正» の他の条件（AC・到達する Critical・契約の破壊）に当たらない Minor なら、`由来: 未判定` のまま «起票する» にする。それ以外は、«いま直す» にも «起票する» にもせず、調べた結果を添えて人に聞く（Checklist の待ち行は S8 と同じ形で書く）。«既存» として外へ出さず、«必須の修正» として範囲を広げもしない
+  - 開始 SHA は、PDH-open が progress に書いた `start-sha:` の行の値である。`bash scripts/pdh-review-range.sh [TICKET_DIR] --start` が、その行・`[start]` の commit の親・ticket の `started_at` の順に探し、値と取り方を返す。どれからも取れなければ、由来は «未判定» にする。base との差（`HEAD ^origin/<base>`）からは求めない — base が ticket の commit を取り込むと値が変わるからである
 - ユーザに聞いてから直す場合は `pdh-pm`「気づいたバグの行き先」にだけ書いてある
 - 1 つの finding のために、永続の column / table・公開の endpoint・画面・権限・state の名前か遷移を 2 つ以上増やすことになるなら、自動で直すのを止めてユーザに相談する。1 つでも、より単純な案で AC か security の約束を満たせない理由を note に残す
 - 修正のたびに、Coding Engineer の報告にある «足した部品» の一覧を巡ごとに並べ、この ticket の修正が足した部品（状態の項目・フラグ・分岐・見張りの job・後始末）の累計に、別の部品の欠陥を補うために足したものがあるかを問う。あれば、「収束」の表の段を待たずに S7 へ進んでよい。部品を補う部品が積み重なるのは、構造が合っていない合図だからである
@@ -117,16 +118,16 @@ reviewer の finding は仮説であり、実装の命令ではない。PM は f
 
 | 段 | 判定の材料 | はい | いいえ |
 |---|---|---|---|
-| S2 | 最新の Findings 表に、判定が «いま直す» の Critical・Major がある | S3 | S6 |
-| S3 | progress の有効な `review-sha:` の異なる SHA が 2 つ以上ある（通算 2 巡を済ませた） | S4 | S5 |
+| S2 | 最新の Findings 表に、判定が «いま直す» の finding がある（Minor を含む） | S3 | S6 |
+| S3 | そのうち Critical・Major があり、progress の有効な `review-sha:` の異なる SHA が 2 つ以上ある（通算 2 巡を済ませた） | S4 | S5 |
 | S4 | この ticket で、前の巡に S7 の前提の見直しを回した | S8 | S7 |
 | S5 | `scripts/check-pdh-ticket.sh` が通る（PM は修正を Coding Engineer に渡す前に回す） | 直して S1 に戻る | 止まる（S7・S8 の答えを待つ） |
 | S6 | diff が «fail-open を先に探す diff の一覧» に当たり、落ち着いた後の網羅探索がまだ | S1（網羅探索） | review を終える |
 | S7 | 止める。前提の見直しを別の engine の 1 人に回し、note の Checklist に «S7» と対象の通算巡と «発行先:» を含む行を書く。PM が結論から次の手を選ぶ | 必須の修正に絞る → 下の «収束の出口» ／ もう 1 巡直す → S5 ／ 前提から書き直す → 書き直して網羅探索の巡へ（通算は数え続ける）／ 戻してやり直す → PDH-implement | — |
 | S8 | 止める。S7 の結論と、その後の巡の finding を添えて人に聞き、note の Checklist に «S8» と対象の通算巡と «発行先:» を含む行を書く。人の答え | S7 と同じ 4 つ | — |
 
-- **収束の出口。**この規則の目的: 必須の修正が尽きた ticket が、残りの finding を別の作業へ渡して PDH-verify へ進めること。最新の Findings 表の «いま直す» を «処置の判断» の «必須の修正» と照らし直し、当たらないものを «起票する» か «記録だけ残す» に変える（表の後ろに «処置の変更» の行を追記する。下の「Findings 表」）。残った必須の修正だけを直して S5 へ進み、必須の修正が 0 件なら S6 へ進む。AC を満たさない欠陥と、この ticket の退行を残す出口にはしない。PDH-verify と承認の PDH-stage は省かない
-- S2 が «いいえ» でも、判定が «いま直す» の Minor（この ticket の退行）は、review を終える前に直し、影響するテストを回す。この修正では次の巡を起こさない
+- **収束の出口。**この規則の目的: 必須の修正が尽きた ticket が、残りの finding を別の作業へ渡して PDH-verify へ進めること。最新の Findings 表の «いま直す» を «処置の判断» の «必須の修正» と照らし直し、当たらないものを «起票する» に変える（表の後ろに «処置の変更» の行を追記する。下の「Findings 表」）。残った必須の修正があれば S5 へ進み、S5 が通ってから Coding Engineer に渡し、直した差分を修正確認の巡で読む（S1）。必須の修正が 0 件なら S6 へ進む。AC を満たさない欠陥と、この ticket の退行を残す出口にはしない。PDH-verify と承認の PDH-stage は省かない
+- 止まるか進むかの例。必須の修正をすべて直した後でも、S7・S8 の行が未回答なら止まる（S5 の «いいえ»）。S7 の結論で PM が «必須の修正に絞る» を選び、S7 の行を `[x]` にして直した後の修正確認の巡で «いま直す» が 0 件なら、S6 を経て PDH-verify へ進む。S8 で人が «必須の修正に絞る» と答え、progress に答えを書いて S8 の行を `[x]` にした後も同じである。直した差分に修正確認の巡で新しい «いま直す» の Critical・Major が付けば、S3 から当て直す
 - 通算の巡は、progress の有効な `review-sha:` の異なる SHA の数である。同じ SHA の訂正の追記は数えない。Findings 表の見出しの N を通算の巡にし、書き直しや差し戻しの後も数え直さない
 - 人に聞くのは、S7 の見直しで立て直した後の巡でも欠陥が尽きないときである。S7 を回した後は、人が «もう 1 巡直す» を選んでも、次の巡でまた S8 で止まる。巡ごとに人の答えが要る
 - S8 で人に «もう 1 巡直す» を選ばせてよいのは、S7 の見直しの結論が、やる前に答えるための材料になるからである

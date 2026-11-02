@@ -94,10 +94,44 @@ pdh_review_base_tip() {
     pdh_review_exclude=$(git rev-parse 'HEAD^1') || return 2
   fi
 }
+# ticket を始めた SHA（由来の比較の基点）を «SHA 取り方» の形で返す。取れなければ 3。
+# base の取り込みや base への ticket の commit の吸収で動かないよう、base との差からは求めない。
+pdh_review_start_sha() {
+  local ticket_dir=$1 name sha started
+  name=$(basename "$ticket_dir")
+  # 値の先頭の 16 進並びだけを読む（review-sha: 行と同じ。_records.md）。
+  sha=$(awk '{ sub(/^- /, "") } /^start-sha:/ { sub(/^start-sha:[[:space:]]*/, ""); match($0, /^[0-9a-fA-F]+/); print substr($0, 1, RLENGTH) }' "$ticket_dir/progress.md" 2>/dev/null | awk 'END { print }')
+  if [[ "$sha" =~ ^[0-9a-fA-F]{7,40}$ ]] && git cat-file -e "$sha^{commit}" 2>/dev/null; then
+    printf '%s progress\n' "$(git rev-parse "$sha")"
+    return 0
+  fi
+  # ./ticket.sh start は branch に «[start] <branch>» の commit を作る。その親が始めた時点の base である。
+  sha=$(git log --first-parent --format='%H %s' HEAD |
+    awk -v n="$name" '{ s = $0; sub(/^[^ ]+ /, "", s) } s ~ /^\[start\] / { b = s; sub(/^\[start\] /, "", b); sub(/.*\//, "", b); if (b == n) { print $1; exit } }')
+  if [ -n "$sha" ] && git rev-parse -q --verify "$sha^1" >/dev/null; then
+    printf '%s start-commit\n' "$(git rev-parse "$sha^1")"
+    return 0
+  fi
+  started=$(awk '/^started_at:/ { sub(/^started_at:[[:space:]]*/, ""); gsub(/["\047]/, ""); print $1; exit }' "$ticket_dir/ticket.md" 2>/dev/null)
+  if [ -n "$started" ] && [ "$started" != null ]; then
+    sha=$(git rev-list -1 --first-parent --before="$started" HEAD 2>/dev/null)
+    if [ -n "$sha" ]; then
+      printf '%s started-at\n' "$sha"
+      return 0
+    fi
+  fi
+  return 3
+}
 [ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 
+if [ "$#" -eq 2 ] && [ "$2" = --start ]; then
+  [ -d "$1" ] || { printf 'pdh-review-range: %s がありません\n' "$1" >&2; exit 2; }
+  pdh_review_start_sha "$1" && exit 0
+  printf 'pdh-review-range: 開始 SHA を progress の start-sha: 行・[start] commit・started_at のどれからも取れない。由来は «未判定» にする\n' >&2
+  exit 3
+fi
 if [ "$#" -ne 4 ] || [ "$2" != --from ]; then
-  printf '使い方: %s <ticket ディレクトリ> --from close-gate|last-review --commits|--stat|--prompt\n' "$0" >&2
+  printf '使い方: %s <ticket ディレクトリ> --from close-gate|last-review --commits|--stat|--prompt\n       %s <ticket ディレクトリ> --start\n' "$0" "$0" >&2
   exit 64
 fi
 ticket_dir=$1
