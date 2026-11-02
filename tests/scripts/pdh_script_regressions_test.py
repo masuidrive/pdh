@@ -595,6 +595,27 @@ class ScriptTests(unittest.TestCase):
         self.commit('record findings without a base')
         self.check()
 
+    def test_findings_filed_row_requires_origin_evidence(self):
+        header = '| # | 出した人 | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |\n' + '|' + ' --- |' * 8 + '\n'
+        def table(verdict, reason):
+            return f'### Findings-PDH-review-1\n{header}| 1 | DA | AC | Major | 入力の欠落 | {verdict} | 260101-x | {reason} |\n'
+        for reason in ('由来: 既存 abc1234 f.sh:10 に同じ正規表現がある',
+                       '由来: 未判定 再現: まだ',
+                       '由来: 既存 abc1234 経路: main → f:10（条件が無い）',
+                       '別件なので起票'):
+            with self.subTest(reason=reason):
+                self.write(f'{self.ticket}/progress.md', table('起票する', reason))
+                self.commit(f'file {reason}')
+                self.assertIn(f'{self.ticket}/progress.md:4: «起票する» の行の理由に、由来と既存の証拠が無い', self.check(1))
+        for verdict, reason in (('起票する', '由来: 既存 abc1234 再現: bash run.sh → exit 1'),
+                                ('起票する', '由来: 既存 abc1234 経路: main.sh:5 → f.sh:10 条件: 引数が空のとき同じ分岐'),
+                                ('起票する', '由来: 上流 def5678'),
+                                ('いま直す', '由来: 未判定')):
+            with self.subTest(verdict=verdict, reason=reason):
+                self.write(f'{self.ticket}/progress.md', table(verdict, reason))
+                self.commit(f'{verdict} {reason}')
+                self.check()
+
     def test_findings_checks_committed_table(self):
         self.write(f'{self.ticket}/progress.md', self.findings(''))
         self.commit('record empty author')

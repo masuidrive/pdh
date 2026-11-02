@@ -62,7 +62,7 @@ worker の手順は、役割ごとの `.codex/agents/pdh-<役割>.toml` の本�
 - `<PROGRESS_FILE>` は `[TICKET_DIR]/progress.md`、`<TMP_DIR>` は `./ticket.sh start` の出力の `tmp_dir:` パス、`<TESTS_DIR>` は `[TICKET_DIR]/tests/`（legacy flat layout では `tests/tickets/<id>/`）で導出する
 - `<RESULT_FILE>` は worker が file tool で書く成果物 file であり、stdout とは別のパス（例: `$d/result.md`）を worker ごとに割り当てる
 - QA には `.codex/agents/pdh-qa.toml`「結果の貼り方」が定めるログの実パスも prompt に書いて渡す
-- Why の見方の reviewer には `<TICKET_FILE>`・`<NOTE_FILE>`・`<PROGRESS_FILE>`・diff を渡さない。Why の原文と review 対象の commit SHA を prompt 本文へ書く
+- Why の見方の reviewer には `<TICKET_FILE>`・`<NOTE_FILE>`・`<PROGRESS_FILE>`・diff を渡さない。Why の原文と、review 対象の commit SHA と、ticket を始めた SHA を prompt 本文へ書く
 
 #### PM が worker の prompt に入れるもの
 
@@ -72,10 +72,11 @@ worker は PM の会話状態を引き継がない。PM は、すべての worke
 - 対象ファイルパスまたは担当境界（`<SCOPE>`）
 - ticket の Why・Acceptance Criteria・Architectural-Invariants-check・Design-Decisions・Out-of-scope の節
 - その worker の正確な責務と、ほかの worker との書き込み先の境界（各役の本文の「書き込み境界」）
+- reviewer（どちらの見方も）には、ticket を始めた SHA。`bash scripts/pdh-review-range.sh [TICKET_DIR] --start` の値を書き、取れなければ «取れない» と書く。reviewer はこの SHA で由来を確かめる（`[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」の «由来を記録する»）
 - 上の placeholder の実値
 - テストを行う役には、実行する検査と場所（手元・CI）、手元で回さない検査、CI に委ねる場合に回収する workflow・対象 SHA・必須チェック名。PM が project の規則を読んで決め、worker の結果と照合する。この照合は implement / verify の既存の検査結果の Checklist で数える
 
-例外: Why の見方の reviewer の prompt には、ticket file・AC・実装者の結論を入れない。Why の原文だけを載せる（`[SKILLS_PATH]/pdh-review/SKILL.md`「2 つの見方」）。
+例外: Why の見方の reviewer の prompt には、ticket file・AC・実装者の結論を入れない。Why の原文と、上の 2 つの SHA だけを載せる（`[SKILLS_PATH]/pdh-review/SKILL.md`「2 つの見方」）。
 
 #### 本文の渡し方
 

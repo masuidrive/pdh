@@ -22,7 +22,7 @@
 - PDH-stage の skill の «出力» を通らないまま、次の PDH-stage 名へ Status を進めない
 - progress は追記のみ。1 出来事 1 見出しで `## <UTC 日時> [<PDH-stage>] <題>` の形にし、書いた後は編集しない（消す・書き換えると `ticket.sh close` が `append_only_files` で拒否する）。見出しを書く直前に `date -u +%Y-%m-%dT%H:%M:%SZ` で実時刻を取得する。手入力の日時差から経過時間を算出せず、実行の開始・終了の記録を使う。時刻の取得元は文章だけでは数えられないため、PM が追記時に確かめる。書くのは diff を生まない出来事だけ（diff を生む変更は commit が持つ）
 - 2 巡目以降は progress に `### Findings-PDH-review-2` のように見出しを自分で追加する
-- review と close 前 review が読んだ SHA は、progress の行頭に `review-sha: <SHA>` / `close-gate-sha: <SHA>` の形で書く（行頭の `- ` を許す。値の先頭に続く 16 進の並び全体が 7〜40 桁なら SHA として読み、その直後に空白なしで全角括弧や句読点などの説明を続けてよい。説明の先頭を 16 進文字にすると SHA の続きとして読まれるため、空白などで区切る）。`scripts/pdh-review-range.sh` は 2 種のうち最後に現れた行を起点にし、`scripts/check-pdh-ticket.sh` は最後の `close-gate-sha:` を読む
+- review と close 前 review が読んだ SHA は、progress の行頭に `review-sha: <SHA>` / `close-gate-sha: <SHA>` の形で書く（行頭の `- ` を許す。値の先頭に続く 16 進の並び全体が 7〜40 桁なら SHA として読み、その直後に空白なしで全角括弧や句読点などの説明を続けてよい。説明の先頭を 16 進文字にすると SHA の続きとして読まれるため、空白などで区切る）。`scripts/pdh-review-range.sh` は 2 種のうち最後に現れた行を起点にし、`scripts/check-pdh-ticket.sh` は最後の `close-gate-sha:` を読む。ticket を始めた SHA は `start-sha: <SHA>` の行で、同じ形で書く（PDH-open で 1 回書く。`[SKILLS_PATH]/pdh-pm/_open-ticket.md`）。`scripts/pdh-review-range.sh --start` は最後の `start-sha:` を読む
 - 中断するときは `pdh-pm`「中断するときと再開するとき」に、再開するときは `pdh-resume` に従う
 - 検証の checkbox は、対象 SHA・実 command・実 output を progress へ貼ってから note で check する
 

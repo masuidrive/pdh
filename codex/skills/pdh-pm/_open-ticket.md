@@ -11,6 +11,7 @@ skill `pdh-open`（新しく始めるとき）と `pdh-resume`（作業が中断
    - worktree を作る `start` は、`.ticket-config.yaml` の `post_start_command`（依存のインストールなど）を走らせることがあり、長くかかる。timeout を長くして呼ぶ。`post_start_command` が途中で止まった・失敗したときは、同じコマンド（失敗したときは `start` が再実行の行を出す）を worktree の root で回す
 2. `start` の出力から、worktree のパス（worktree を作らない設定では main の checkout のパス）と、`ticket:`・`note:`・`ticket_dir:` のパスを確かめる。`ticket_dir:` のパスを、skill では `[TICKET_DIR]` と書く。progress は `[TICKET_DIR]/progress.md` である。以後の作業の仕方は `[SKILLS_PATH]/pdh-pm/_execution-team.md`「ticket の worktree で作業する」に従う
 3. ticket・note・progress を読む
+4. progress に `start-sha:` の行が無ければ、worktree の root で `bash scripts/pdh-review-range.sh [TICKET_DIR] --start` を実行し、出力の SHA を `- start-sha: <SHA>（PDH-open で記録）` の形で progress へ追記する。この SHA は、PDH-review が finding の由来（この ticket か既存か）を判定する起点である（`[SKILLS_PATH]/pdh-review/SKILL.md`「由来を記録する」）。`start` の後に base を取り込むと branch と base の分岐点が動くので、始めた時点で残す。終了コード 3（取れない）なら `- start-sha: 未判定（<出力の理由>）` と書く
 
 ## 開けたかを確かめるコマンド
 
@@ -25,5 +26,6 @@ cd "$worktree_path" &&
 test "$(basename "$ticket_dir")" = "$name" &&
 test -f "$ticket_dir/ticket.md" &&
 test -f "$ticket_dir/note.md" &&
-test -f "$ticket_dir/progress.md"
+test -f "$ticket_dir/progress.md" &&
+grep -qE '^(- )?start-sha: ' "$ticket_dir/progress.md"
 ```

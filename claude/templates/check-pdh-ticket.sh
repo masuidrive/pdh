@@ -15,7 +15,8 @@
 #      PDH-stage のチェックリスト（scripts/pdh-stage-checklist.sh が skill から出す行）がある
 #      PDH-human-review / PDH-close では、PDH-ticket-write〜PDH-verify の各 stage の行もすべてある
 #   8. close 時、ticket が変更した PDH の上書き対象が .pdh-lock と一致する
-#   9. この branch で見出しを追加した Findings 表に «出した人» 列があり、各行が空・—・? ではない（branch の commit が書き換えた見出しを元の文字列に戻しただけの行は数えない）
+#   9. この branch で見出しを追加した Findings 表に «出した人» 列があり、各行が空・—・? ではない（branch の commit が書き換えた見出しを元の文字列に戻しただけの行は数えない）。
+#      同じ表の判定が «起票する» の行は、理由に «由来: 上流» か、«既存の証拠»（再現: か、経路: と 条件:）付きの «由来: 既存» がある
 #  10. この branch の ticket は close gate に review 記録があり、pdh-review「収束」の表に従っている:
 #      S3 で止まるべき最初の巡に Checklist の S7 の行、その後の巡に S8 の行がある・S7・S8 の行が未回答のまま
 #      次の巡へ進んでいない（S5）・PDH-verify 以降は S7・S8 の行がすべて回答済み
@@ -406,6 +407,14 @@ check_findings_authors() {
       print "  出した人には DA・CR・Why の見方・codex・PM を書く。複数なら + でつなぐ（例: DA+codex）。"
       bad=1
     }
+    function origin(reason, at) {
+      if (reason ~ /由来:[[:space:]]*上流/) return
+      if (reason ~ /由来:[[:space:]]*既存/ && (index(reason, "再現:") || (index(reason, "経路:") && index(reason, "条件:")))) return
+      printf "check-pdh-ticket: %s:%d: «起票する» の行の理由に、由来と既存の証拠が無い\n", file, at
+      print "  «由来: 上流 <commit>» か、«由来: 既存 <開始 SHA>» に «再現: <コマンドと出力>» か «経路: <入口から欠陥の行までの path:行> 条件: <同じ結果になる条件>» を書く。"
+      print "  同じ行が開始 SHA にあるだけでは証拠にしない。由来が決まらなければ起票せず、未判定として調べて人に聞く（pdh-review「処置の判断」）。"
+      bad=1
+    }
     BEGIN {
       split(headers, lines, "\n"); for (i in lines) added[lines[i]]=1
       split(restored, lines, "\n"); for (i in lines) if (lines[i] != "") was[lines[i]]++
@@ -417,9 +426,13 @@ check_findings_authors() {
       pending=0
     }
     /^\|[[:space:]]*#[[:space:]]*\|/ && index($0, "判定") {
-      author=0
+      author=0; verdict=0; why=0
       if (NR in added) {
-        for (i=2; i<=NF; i++) if (trim($i) == "出した人") author=i
+        for (i=2; i<=NF; i++) {
+          if (trim($i) == "出した人") author=i
+          if (trim($i) == "判定") verdict=i
+          if (trim($i) == "理由") why=i
+        }
         if (!author) {
           if (($0 in was) && used[$0] + 0 < was[$0]) { pending=NR; pending_text=$0 }
           else report("無い", NR)
@@ -427,10 +440,14 @@ check_findings_authors() {
       }
       next
     }
-    !/^\|/ { author=0 }
+    !/^\|/ { author=0; verdict=0; why=0 }
     author && $0 !~ /^[[:space:]|:-]+$/ {
       value=trim($author)
       if (value == "" || value == "—" || value == "?") report("空", NR)
+    }
+    verdict && why && $0 !~ /^[[:space:]|:-]+$/ && trim($verdict) == "起票する" {
+      reason=""; for (i=why; i<NF; i++) reason=reason "|" $i
+      origin(reason, NR)
     }
     END { exit bad ? 1 : 0 }
   ' >&2; then
