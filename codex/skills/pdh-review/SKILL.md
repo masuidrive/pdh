@@ -40,7 +40,7 @@ flowchart TD
 - reviewer の prompt に、review 対象の commit SHA と、ticket を始めた SHA（`bash scripts/pdh-review-range.sh [TICKET_DIR] --start` の値。«由来を記録する»）を書く。`[SKILLS_PATH]/pdh-pm/_execution-team.md`「review 専用 worktree」で起動前後の HEAD と作業ツリーを照合する
 - 初回の review は reviewer を 1 人以上並行で起動し、同じ SHA の diff 全体を見せる（Why の見方 を除く）。最新 commit の diff（`<SHA>~1..<SHA>`）だけを渡すと、同じ ticket の前の commit が作った状態に起因する欠陥は原理的に見つからない。ユーザが reviewer の構成を指定したら、省略・短縮・統合で代えない。finding の修正は Coding Engineer に、テストの再実行は QA に任せる
 - codex の reviewer の起動の仕方（`codex exec review` ではなく `codex exec` に指示文を渡す理由を含む）は `[SKILLS_PATH]/pdh-pm/_execution-team.md`「reviewer に `codex exec review` を使うとき」にある
-- 初回の reviewer には diff 全体を渡す。AC の見方 は通常の reviewer が diff とともに行うので、AC・作り方の判断・実装者の完了の主張も渡す。Why の見方の reviewer には Why だけを渡す（下の「2 つの見方」）
+- 初回の reviewer には diff 全体を渡す。AC の見方 は通常の reviewer が diff とともに行うので、AC・作り方の判断・実装者の完了の主張も渡す。Why の見方の reviewer には Why と、review 対象の SHA と、ticket を始めた SHA だけを渡す（下の「2 つの見方」）
 - diff が下の «fail-open を先に探す diff の一覧» に当たるときは、review を省かない。そのうち少なくとも 1 つの review を、コードを書いた model とは別の model に行わせる
   - 別 model の review が完遂できないときは、別 model の reviewer に PM 自身のコードの読解を加えて代わりにし、その理由を progress に書く
 
@@ -62,7 +62,7 @@ diff がどれかに当たるなら、reviewer は happy path より先に、拒
 
 ### 2 つの見方
 
-reviewer は diff を 2 つの見方で確かめる。«AC の見方» は通常の reviewer が網羅探索と一緒に行い、«Why の見方» は Why だけを渡された専任の reviewer が行う。その reviewer には ticket・AC・実装者の結論を渡さないので、ticket の書き方に引きずられずに、Why が本当に満たされたかを見られる。
+reviewer は diff を 2 つの見方で確かめる。«AC の見方» は通常の reviewer が網羅探索と一緒に行い、«Why の見方» は Why と 2 つの SHA だけを渡された専任の reviewer が行う。その reviewer には ticket・AC・実装者の結論を渡さないので、ticket の書き方に引きずられずに、Why が本当に満たされたかを見られる。
 
 - AC の見方の reviewer: `.codex/agents/pdh-reviewer.toml`
 - Why の見方の reviewer: `.codex/agents/pdh-reviewer-lens1.toml`
@@ -85,7 +85,7 @@ reviewer の finding は仮説であり、実装の命令ではない。PM は f
   - この ticket の変更が通る経路から到達できる Critical。既存のものも含む。到達するかを示せないときは、到達を確かめるか、到達するものとして扱う
   - この ticket の変更が、既存の振る舞いか他者が使う契約を壊す
   - 同じ根本原因が、実際に出荷された欠陥を再発させ、その経路がこの ticket の変更・承認された目的・この ticket が保つ契約のどれかに関わる。関わらないものは、急ぐなら急ぐ旨を書いた別の ticket に «起票する»
-- **起票する** — 実在する欠陥のうち «必須の修正» に当たらないものは、すべてこれにする。別の ticket にして、この ticket の close の前に作る（下の「Findings 表」）。«あとで起票する» は処置ではない
+- **起票する** — 実在する欠陥のうち «必須の修正» に当たらないものは、すべてこれにする。由来が `既存` か `上流` に決まったものだけを起票し、`既存` を理由に分けるなら下の «既存の証拠» を理由の列に書く。証拠が無いものは `未判定` のまま調べ、決まらなければ人に聞く（«由来を記録する»）。証拠が無いことを理由に «いま直す» へ広げない。別の ticket にして、この ticket の close の前に作る（下の「Findings 表」）。«あとで起票する» は処置ではない
 - **記録だけ残す** — 欠陥ではない観察と改善の候補（読みにくい名前・将来の拡張の案など）。実在する欠陥にはこの処置を選ばない
   - 後から検索できる anchor（シンボル名・ファイルパス・endpoint・設定キー）を 1 つ以上付ける。anchor を付けられない finding は、後から使うには曖昧すぎるので、書き直すか棄却する
 - **棄却する** — 誤検出か、前提の誤り（下の «先に裏取りをする»）
@@ -101,7 +101,10 @@ reviewer の finding は仮説であり、実装の命令ではない。PM は f
 - `PDH-review-2` 以降で初回の finding が誤検出と分かったら棄却する。今回と無関係なら調べて分かったこととして記録し、元の AC と user journey だけを確かめる。2 巡目以降の発見も、«必須の修正» に当たるものだけをいま直す
 - **由来を記録する。**この規則の目的: PM と承認者が、この ticket が持ち込んだ欠陥と、ticket の前からある欠陥を取り違えずに分けられること。PM は finding ごとに、欠陥が実在するか・どこから来たか・この ticket が直す責任を持つかを別々に判定する。実在するバグには、Findings 表の理由の列に次のどれかを書く。直前の巡の SHA と比べただけでは «既存» にしない — 同じ ticket の前の巡の修正が持ち込んだ欠陥も、直前の巡には既にあるからである
   - `由来: この ticket <commit か根拠>` — この ticket の commit が持ち込んだ（退行）。持ち込んだ commit（blame・bisect）か、開始 SHA では再現しない記録を添える
-  - `由来: 既存 <開始 SHA>` — ticket を始めた SHA で同じ欠陥を再現した。再現の記録（実行したコマンドと出力か、その SHA での path:行）を添える
+  - `由来: 既存 <開始 SHA>` — ticket を始めた SHA で同じ欠陥が起きる。続けて «既存の証拠» を次のどちらかの形で書く
+    - `再現:` 開始 SHA で実行したコマンドと、欠陥が出た出力
+    - `経路:` 欠陥が起きる入口から欠陥の行までの呼び出しの連鎖（各段の、開始 SHA での path:行）と、`条件:` その入力が開始 SHA でも同じ連鎖を通り、欠陥の行で同じ結果になる条件（引数・分岐・設定・呼び出し側の前提）
+    - 同じ行や同じ正規表現が開始 SHA にあるだけでは証拠にしない。この ticket が呼び出し側・入力・周りの条件を変えて、初めて欠陥に届くようにしたことがあるからである
   - `由来: 上流 <commit>` — ticket を始めた後に base から取り込んだ commit が持ち込んだ。その commit を添える
   - `由来: 未判定` — 調べる途中の印である。開始 SHA での再現・blame・bisect で上の 3 つのどれかに決める。調べてこの ticket の退行ではないと示せたら、決まった由来で処置する（«必須の修正» に当たらなければ起票する）。退行の可能性を消せず処置が決まらないものは、Minor でも、«いま直す» にも «起票する» にもせず、どこまで調べたか・何が足りないかを添えて人に聞く（Checklist の待ち行は S8 と同じ形で書く）。この ticket の退行は severity に関わらず必須の修正なので、Minor であることを理由に外へ出さない。«必須の修正» として範囲を広げもしない
   - 開始 SHA は、PDH-open が progress に書いた `start-sha:` の行の値である。`bash scripts/pdh-review-range.sh [TICKET_DIR] --start` が、その行・`[start]` の commit の親の順に探し、値と取り方を返す。どちらからも取れなければ、由来は «未判定» にする。ticket の `started_at` は確定値にせず、調べる手掛かりにだけ使う — 時刻の同値・書き換え・履歴の並びで、その時刻より前の最新の commit が開始の直前と一致する保証が無いからである。base との差（`HEAD ^origin/<base>`）からは求めない — base が ticket の commit を取り込むと値が変わるからである
