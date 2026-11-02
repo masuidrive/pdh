@@ -510,7 +510,9 @@ check_findings_authors() {
   restored=$(git log --no-ext-diff --no-textconv --diff-filter=M --unified=0 -p --format= \
     "$pdh_review_tip" --not "$pdh_review_exclude" -- ":(top)$f" ":(top)$old" |
     awk '/^-\|[[:space:]]*#[[:space:]]*\|/ && index($0, "判定") { print substr($0, 2) }') || { failed=1; return; }
-  if ! git show "$pdh_review_tip:$f" | awk -F '|' -v file="$f" -v headers="$headers" -v restored="$restored" '
+  # 見出しの行番号と戻した見出しは改行区切りの複数行になる。BSD awk は -v の値の改行を
+  # «newline in string» で拒むので、環境変数で渡す。
+  if ! git show "$pdh_review_tip:$f" | PDH_HEADERS="$headers" PDH_RESTORED="$restored" awk -F '|' -v file="$f" '
     function trim(value) { sub(/^[[:space:]]+/, "", value); sub(/[[:space:]]+$/, "", value); return value }
     function report(reason, at) {
       printf "check-pdh-ticket: %s:%d: Findings 表に «出した人» の列が%s\n", file, at, reason
@@ -527,8 +529,8 @@ check_findings_authors() {
       bad=1
     }
     BEGIN {
-      split(headers, lines, "\n"); for (i in lines) added[lines[i]]=1
-      split(restored, lines, "\n"); for (i in lines) if (lines[i] != "") was[lines[i]]++
+      split(ENVIRON["PDH_HEADERS"], lines, "\n"); for (i in lines) added[lines[i]]=1
+      split(ENVIRON["PDH_RESTORED"], lines, "\n"); for (i in lines) if (lines[i] != "") was[lines[i]]++
     }
     # 戻した見出しとして保留した行の次が表の行なら、新しい表として数える。
     pending {
