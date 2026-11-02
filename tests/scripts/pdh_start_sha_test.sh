@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ticket を始めた SHA が、base の取り込み・base への ticket の commit の吸収・空の差分で動かないことを検査する。
+# ticket を始めた SHA が、base の取り込み・base への ticket の commit の吸収・空の差分で動かず、時刻だけからは確定しないことを検査する。
 set -uo pipefail
 ROOT_DIR=${PDH_TEST_ROOT:?test-distributed-scripts.sh が作る導入先を指定する}
 TMP_DIR=$(mktemp -d) || exit 1
@@ -100,18 +100,27 @@ must git commit -q --amend --allow-empty -m '[start] features/empty'
 expect 0 '空の差分' bash scripts/pdh-review-range.sh tickets/empty --start
 same "$base start-commit" '空の差分'
 
-# [start] が無く started_at だけがある（squash などで題が消えた）
+# [start] が無く started_at だけがある（squash などで題が消えた）: 時刻からは確定せず、由来は未判定
 must git switch -q -c features/squashed "$base"
-printf -- '---\nstarted_at: 2026-01-02T12:00:00Z\n---\n' > tickets/t1/ticket.md
 printf '# progress\n' > tickets/t1/progress.md
+printf 'squashed\n' >> app.txt
 must git add -A
 commit 'squashed work'
-expect 0 'started_at から復元' start_sha
-same "$base started-at" 'started_at から復元'
+work=$(git rev-parse HEAD)
+work_time=$(git log -1 --format=%cI HEAD)
+# 開始時刻と実装の commit の時刻が同じ: 時刻で探すと実装の後の SHA が開始の基準になってしまう
+printf -- '---\nstarted_at: %s\n---\n' "$work_time" > tickets/t1/ticket.md
+expect 3 'started_at だけ（実装の commit と同時刻）' start_sha
+[[ "$output" == *未判定* ]] || fail "started_at だけのときに未判定と書いていない: $output"
+[[ "$output" == *"$work"* ]] && fail "実装の commit $work を開始 SHA として出した: $output"
+[[ "$output" == *"手掛かり"*"$work_time"* ]] || fail "started_at を手掛かりとして見せていない: $output"
+[ "$(git rev-list -1 --first-parent --before="$work_time" HEAD)" = "$work" ] ||
+  fail "fixture: 時刻で探すと実装の commit が当たる場面になっていない"
 
 # どれからも取れない: 由来は未判定
 printf -- '---\nstarted_at: null\n---\n' > tickets/t1/ticket.md
 expect 3 '取れない' start_sha
 [[ "$output" == *未判定* ]] || fail "取れないときに未判定と書いていない: $output"
+[[ "$output" == *手掛かり* ]] && fail "started_at が無いのに手掛かりを出した: $output"
 
 printf 'pdh_start_sha_test: %d checks passed\n' "$checks"

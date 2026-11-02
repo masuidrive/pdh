@@ -94,10 +94,10 @@ pdh_review_base_tip() {
     pdh_review_exclude=$(git rev-parse 'HEAD^1') || return 2
   fi
 }
-# ticket を始めた SHA（由来の比較の基点）を «SHA 取り方» の形で返す。取れなければ 3。
+# ticket を始めた SHA（由来の比較の基点）を «SHA 取り方» の形で返す。progress の記録か [start] の親だけを使い、取れなければ 3。
 # base の取り込みや base への ticket の commit の吸収で動かないよう、base との差からは求めない。
 pdh_review_start_sha() {
-  local ticket_dir=$1 name sha started
+  local ticket_dir=$1 name sha
   name=$(basename "$ticket_dir")
   # 値の先頭の 16 進並びだけを読む（review-sha: 行と同じ。_records.md）。
   sha=$(awk '{ sub(/^- /, "") } /^start-sha:/ { sub(/^start-sha:[[:space:]]*/, ""); match($0, /^[0-9a-fA-F]+/); print substr($0, 1, RLENGTH) }' "$ticket_dir/progress.md" 2>/dev/null | awk 'END { print }')
@@ -112,14 +112,6 @@ pdh_review_start_sha() {
     printf '%s start-commit\n' "$(git rev-parse "$sha^1")"
     return 0
   fi
-  started=$(awk '/^started_at:/ { sub(/^started_at:[[:space:]]*/, ""); gsub(/["\047]/, ""); print $1; exit }' "$ticket_dir/ticket.md" 2>/dev/null)
-  if [ -n "$started" ] && [ "$started" != null ]; then
-    sha=$(git rev-list -1 --first-parent --before="$started" HEAD 2>/dev/null)
-    if [ -n "$sha" ]; then
-      printf '%s started-at\n' "$sha"
-      return 0
-    fi
-  fi
   return 3
 }
 [ "${BASH_SOURCE[0]}" = "$0" ] || return 0
@@ -127,7 +119,12 @@ pdh_review_start_sha() {
 if [ "$#" -eq 2 ] && [ "$2" = --start ]; then
   [ -d "$1" ] || { printf 'pdh-review-range: %s がありません\n' "$1" >&2; exit 2; }
   pdh_review_start_sha "$1" && exit 0
-  printf 'pdh-review-range: 開始 SHA を progress の start-sha: 行・[start] commit・started_at のどれからも取れない。由来は «未判定» にする\n' >&2
+  printf 'pdh-review-range: 開始 SHA を progress の start-sha: 行と [start] commit のどちらからも取れない。由来は «未判定» にする\n' >&2
+  # 時刻は同値・書き換え・履歴の並びで開始の直前と一致する保証が無いので、確定値にせず調べる手掛かりとして見せるだけにする。
+  started=$(awk '/^started_at:/ { sub(/^started_at:[[:space:]]*/, ""); gsub(/["\047]/, ""); print $1; exit }' "$1/ticket.md" 2>/dev/null)
+  if [ -n "$started" ] && [ "$started" != null ]; then
+    printf 'pdh-review-range: 手掛かり（確定値ではない）: started_at %s\n' "$started" >&2
+  fi
   exit 3
 fi
 if [ "$#" -ne 4 ] || [ "$2" != --from ]; then
