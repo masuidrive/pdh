@@ -63,7 +63,7 @@ python3 scripts/docs-policy.py record docs/example.md#scope --base <base> --note
 この規則の目的: 別の ticket で見つかって起票・集約された finding を、同じ箇所を変えるこの ticket が見落とさないこと。次の 2 つを探し、取り込むかを決める。取り込むなら AC か Out-of-scope に書いて承認者に渡す。
 
 - この ticket を指す `起票:` の行 — `git grep -n '起票:.*→ <この ticket 名>' -- <tickets_dir>`（done を含む）
-- `拾う時機: 近くを触るとき` の ticket のうち、この ticket が変える箇所に触るもの — `git grep -ln '拾う時機:.*近くを触るとき' -- <tickets_dir>` で出た ticket の anchor を、この ticket の影響範囲と突き合わせる
+- `拾う時機: 近くを触るとき` の ticket のうち、この ticket が変える箇所に触るもの — `git grep -lE '^[[:space:]]*(-[[:space:]]+)?拾う時機:[^<]*近くを触るとき' -- <tickets_dir>` で出た ticket の anchor を、この ticket の影響範囲と突き合わせる
 
 0 件でも、実行したコマンドと «0 件» を progress に書く。
 

@@ -784,6 +784,13 @@ output=$(git grep -lE "$pattern" -- tickets | sort | tr '\n' ' ')
 [ "$output" = 'tickets/260401-000000-wait/ticket.md tickets/done/260401-000001-done/ticket.md ' ] ||
   fail "症状の報告時の検索が想定と違う: $output"
 checks=$((checks + 1))
+# pdh-ticket-review の «近くを触るとき» の検索も、テンプレートの説明のコメントには当たらない。
+pattern=$(grep -o "git grep -lE '[^']*' -- <tickets_dir>" "$ROOT_DIR/.claude/skills/pdh-ticket-review/SKILL.md" | sed "s/^git grep -lE '//; s/' -- <tickets_dir>\$//")
+[ -n "$pattern" ] || fail 'pdh-ticket-review に近くを触るときの検索コマンドが無い'
+output=$(git grep -lE "$pattern" -- tickets | sort | tr '\n' ' ')
+[ "$output" = 'tickets/260401-000003-near/ticket.md ' ] ||
+  fail "近くを触るときの検索が想定と違う: $output"
+checks=$((checks + 1))
 
 must python3 "$ROOT_DIR/tests/scripts/pdh_script_regressions_test.py"
 printf 'PASS: pdh ticket evidence checks (%s 件)\n' "$checks"
