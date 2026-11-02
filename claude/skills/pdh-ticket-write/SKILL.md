@@ -69,7 +69,7 @@ ticket の節は `.ticket-config.yaml` の `default_content`、note の節は `n
 この規則の目的: 同じ欠陥や要望の ticket が 2 つにならないこと。作る前に、tickets と tickets/done（GitHub の issue を起票先にする project では issue も）を、原因・対象・期待する修正の言葉で検索する。見つかったときの分け方は `[SKILLS_PATH]/pdh-review/SKILL.md`「同じ欠陥の ticket があるとき」に従う。検索語・件数・判断を progress に書く。
 
 - 0 件でも、検索語と «該当 0 件» を書いて Checklist の行を `[x]` にする
-- 検索する対象が無い（tickets にほかの ticket が無い）ときは、行を `- [-] … - skip: 検索する ticket が無い` にする
+- 検索する対象が全く無い（tickets にも tickets/done にもほかの ticket が無く、GitHub の issue を起票先にしない project で、GitHub の検索も要らない）ときだけ、行を `- [-] … - skip: 検索する ticket が無い` にする。検索して一致が無かったときは skip にせず、上のとおり記録して `[x]` にする
 - 起票元の PM が同じ検索をして記録を残したときは、その記録の場所を書いて `[x]` にする
 
 この ticket が良くする Product Brief の Key User Journeys（例: J3）を、`Key-User-Journeys:` の行に 1 つ以上書く。恩恵を受ける人と使い方は、`What` 冒頭の 1 文と AC が書くので、別の節は作らない。どのジャーニーにも当たらない ticket（内部の整理など）は «該当なし» と理由を書く。
