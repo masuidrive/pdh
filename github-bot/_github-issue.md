@@ -179,6 +179,23 @@ bot は PDH-stage の遷移に応じて **issue の PDH stage ラベルを更新
   - タイトルに 🤖 を付けたかは、守れたかを数える仕組み（fast-check・テストなど）では数えられない。`gh issue create` は repo の差分に残らない
   - ⚠ **bot の run の中で起票した 🤖 issue は、その場では動かない。**run の中の `gh issue create` は `GITHUB_TOKEN` で行うので、GitHub は `issues: opened` から workflow を起こさない（workflow の連鎖を止める決まり）。`coding-bot.yml` の最後の step が、この run が起票した 🤖 issue を見つけて `workflow_dispatch`（`issue` に番号を渡す）で作業を始めさせる。agent は自分で起動しようとしない
 
+## review の finding を issue にする
+
+この規則の目的: PDH-review が別件にした finding を、修正を持つ repo の issue として残し、同じ欠陥の issue を二重に作らないこと。`.ticket-config.yaml` の `github_bot.findings_issue_repos` に起票先の repo を書いた project だけが使う。書いていなければ、起票先は repo の中の ticket だけである（`pdh-review`「起票した ticket に書くこと」）。
+
+- **起票先は、修正を持つ repo にする。**共有コード（PDH-repo・共有ライブラリ）の欠陥は、使う側の repo ではなく、そのコードを直す repo に起票する。その repo を `findings_issue_repos` に書く
+- **作る前に探す。**原因・対象・期待する修正の語で `gh issue list --repo <owner/repo> --state all --search '<語>'` を引き、検索語と件数（0 件を含む）を progress に書く。症状が似ているだけでは同じ issue と決めない。`gh issue view <N> --repo <owner/repo> --json state,stateReason,body` で原因・対象・期待する修正が同じかを読む
+  - open → 新しく作らない。証拠は自分の ticket の progress に書き、note の `起票:` の行にその issue を書く。既存の issue へのコメントは、その issue を進めている人の作業と競合しないときだけにする
+  - closed（completed）→ 直った後のコードで再現するかを確かめる。再現すれば再発として新しく作り、本文で元の issue を指す。再現しなければ作らず、理由を progress に書く
+  - closed（not planned）→ 却下の理由を読む。理由がいまも当てはまるなら作らず、当てはまらないなら、変わったことを本文に書いて作る
+  - duplicate → 重複先として示された issue をたどり、そちらで上の判断をする
+- **作るときの本文**: `派生元:`・`拾う時機:`・再現か測定の証拠・`Why-not-fix-now:`・後から探せる anchor を書く。項目の意味は `pdh-review`「起票した ticket に書くこと」と同じで、上の «本文は、ticket を開かなくても…» の規則も当てる
+  ```bash
+  gh issue create --repo <owner/repo> --title "<症状と対象 1 行>" --body-file <本文のファイル>
+  ```
+- note の `## Checklist` には `- [ ] 起票: <anchor> → <owner/repo>#<N>` と書き、issue の URL を progress に書く。`check-pdh-ticket.sh` は `findings_issue_repos` に無い repo の参照を落とす。issue があるかは GitHub に問い合わせないと分からないので、検査は形と起票先の設定だけを数え、実在は起票した PM が `gh issue view` で確かめる
+- ⚠ 起票した issue のタイトルには `🤖 ` を付けない。`拾う時機: すぐ対応` でも、着手するかは人が決める（上の «依頼として起票するとき» は、bot に作業させると人が決めたときだけ）
+
 ## bot への依頼には、手順を書かない
 
 **この規則の目的: bot の run が、bot の手順書どおりに動けたかの試験になること。**

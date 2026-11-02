@@ -61,7 +61,16 @@ ticket の節は `.ticket-config.yaml` の `default_content`、note の節は `n
 `Why` には、`product-brief.md` のどの問題を解くかを書き、次の 2 行を埋める。
 
 - `Reproduction-or-measurement:` 何を開いて・何を実行して・何が見えたか。バグなら再現手順と結果、要望なら原文の所在と、現状を 1 回確かめた結果
-- `Why-not-fix-now:` 進行中の ticket から派生したなら、別の問題であり、かつそこで直すと高くつく理由（«高くつく» の意味は `PDH-AGENTS.md`「変更のコストの数え方」）。要望起点なら «該当なし（要望起点。進行中の ticket から派生していない）»
+- `Why-not-fix-now:` 進行中の ticket から派生したなら、その ticket の必須の修正（`[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」）に当たらない理由。直す手間や規模は理由にしない。要望起点なら «該当なし（要望起点。進行中の ticket から派生していない）»
+- 進行中の ticket から派生したなら、`派生元:` と `拾う時機:` も書く（`[SKILLS_PATH]/pdh-review/SKILL.md`「起票した ticket に書くこと」）
+
+### 同じ ticket を探す
+
+この規則の目的: 同じ欠陥や要望の ticket が 2 つにならないこと。作る前に、tickets と tickets/done（GitHub の issue を起票先にする project では issue も）を、原因・対象・期待する修正の言葉で検索する。見つかったときの分け方は `[SKILLS_PATH]/pdh-review/SKILL.md`「同じ欠陥の ticket があるとき」に従う。検索語・件数・判断を progress に書く。
+
+- 0 件でも、検索語と «該当 0 件» を書いて Checklist の行を `[x]` にする
+- 検索する対象が無い（tickets にほかの ticket が無い）ときは、行を `- [-] … - skip: 検索する ticket が無い` にする
+- 起票元の PM が同じ検索をして記録を残したときは、その記録の場所を書いて `[x]` にする
 
 この ticket が良くする Product Brief の Key User Journeys（例: J3）を、`Key-User-Journeys:` の行に 1 つ以上書く。恩恵を受ける人と使い方は、`What` 冒頭の 1 文と AC が書くので、別の節は作らない。どのジャーニーにも当たらない ticket（内部の整理など）は «該当なし» と理由を書く。
 
@@ -137,6 +146,7 @@ test -z "$(git status --porcelain -- "$ticket_dir")"
 - [ ] PDH-ticket-write: `What` 冒頭の 1 文と AC 全件が「AC の書き方」を満たしている
 - [ ] PDH-ticket-write: 実装の詳細、今回要らない拡張、将来の要件向けの設計が入っていない
 - [ ] PDH-ticket-write: 未決の事項が note の `Open-Questions` に `- [ ]` で残っている
+- [ ] PDH-ticket-write: 同じ原因・対象・期待する修正の ticket を検索した。検索語と件数（該当 0 件を含む）と、新しく作るか既存へ集約するかの判断が progress にある
 
 満たさない項目があれば直す。
 

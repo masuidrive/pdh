@@ -612,5 +612,115 @@ must git checkout -qb features/260228-235959-ac
 expect 1 '導入前に作られた ticket も実装以降は記録を求める' bash scripts/check-pdh-ticket.sh
 contains 'AC の承認の記録（AC-approved:）が無い'
 
+# 別件の起票先に求める項目を、base のある repo で、新規起票・既存への集約・GitHub の参照・更新前の記録に分けて検査する。
+must mkdir -p "$TMP_DIR/derived/scripts" "$TMP_DIR/derived/tickets/260101-000000-existing"
+must cp "$ROOT_DIR/scripts/check-pdh-ticket.sh" "$ROOT_DIR/scripts/pdh-review-range.sh" "$TMP_DIR/derived/scripts/"
+install_stage_fixture "$TMP_DIR/derived"
+must cd "$TMP_DIR/derived"
+must git init -q -b main
+src=260301-000000-src
+# 引数: ticket 名・Status・Checklist に足す行（任意）
+src_note() {
+  printf '## Status: %s\n## Checklist\n- [x] PDH-ticket-write: 証拠がある\n- [x] PDH-open: 証拠がある\n- [x] PDH-ticket-review: 証拠がある\n- [x] PDH-ticket-human-review: 証拠がある\n- [x] PDH-implement: 証拠がある\n- [x] PDH-review: 証拠がある\n- [x] PDH-verify: 証拠がある\n- [x] PDH-human-review: 証拠がある\n- [x] PDH-close: 証拠がある\n- [ ] 承認の回答を待つ 発行先: /board\n%b' "$2" "${3:-}" > "tickets/$1/note.md"
+}
+# 引数: ticket 名・Why に足す行
+target_ticket() {
+  must mkdir -p "tickets/$1"
+  printf '### Why\n別件を検査する\nReproduction-or-measurement: 検査用 fixture\n%b### What\n- [ ] 結果を読める\n' "$2" > "tickets/$1/ticket.md"
+  : > "tickets/$1/progress.md"
+}
+target_ticket 260101-000000-existing 'Why-not-fix-now: 該当なし\n'
+commit 既存のticket
+must git checkout -qb feature
+must mkdir -p "tickets/$src"
+printf '### Why\n起票元\nReproduction-or-measurement: 検査用 fixture\nWhy-not-fix-now: 該当なし\n### What\n- [ ] 結果を読める\nAC-approved: ebdc012f008a4f1d\n' > "tickets/$src/ticket.md"
+: > "tickets/$src/progress.md"
+new=260301-000001-new
+full="Why-not-fix-now: $src の AC にも退行にも当たらない\n派生元: $src\n拾う時機: 次に選ぶ\n"
+target_ticket "$new" "$full"
+src_note "$src" PDH-review "- [ ] 起票: 問題 → $new\n"
+commit 新規起票
+expect 0 '新規起票: 項目がそろう' bash scripts/check-pdh-ticket.sh
+src_note "$src" PDH-implement "- [ ] 起票: 問題 → $new\n"
+target_ticket "$new" 'Why-not-fix-now: 該当なし\n'
+expect 0 'PDH-review より前は項目を求めない' bash scripts/check-pdh-ticket.sh
+src_note "$src" PDH-review "- [ ] 起票: 問題 → $new\n"
+expect 1 '新規起票: 項目が無い' bash scripts/check-pdh-ticket.sh
+contains "派生元: に起票元の ticket 名 $src を書く"
+contains '拾う時機: に すぐ対応 / 次に選ぶ / 近くを触るとき / 症状の報告時'
+contains "$src の必須の修正に当たらない理由"
+target_ticket "$new" "Why-not-fix-now: 直すと高くつく\n派生元: 260101-000000-other\n拾う時機: いつか\n"
+expect 1 '新規起票: 派生元が起票元でなく、拾う時機が 4 区分にない' bash scripts/check-pdh-ticket.sh
+contains '派生元:'
+contains '拾う時機:'
+excludes '必須の修正に当たらない理由'
+target_ticket "$new" "Why-not-fix-now: 権限の検査が抜けていて、$src の範囲の外\n派生元: \`$src\`, 260101-000000-existing\n拾う時機: すぐ対応\n"
+expect 1 'すぐ対応: 人へ渡した行が無い' bash scripts/check-pdh-ticket.sh
+contains '«発行先:»'
+src_note "$src" PDH-review "- [ ] 起票: 問題 → $new\n- [ ] $new の すぐ対応 を人に知らせた 発行先: /board-2\n"
+expect 0 'すぐ対応: 人へ渡した行がある' bash scripts/check-pdh-ticket.sh
+target_ticket "$new" "$full"
+commit 新規起票の項目
+
+src_note "$src" PDH-review '- [ ] 起票: 問題 → 260101-000000-existing\n'
+expect 0 '既存への集約: base にあった ticket には項目を求めない' bash scripts/check-pdh-ticket.sh
+must mkdir -p tickets/done
+must git -c commit.gpgsign=false mv tickets/260101-000000-existing tickets/done/260101-000000-existing
+expect 0 '既存への集約: base にあった ticket を branch で done へ移しても項目を求めない' bash scripts/check-pdh-ticket.sh
+must git -c commit.gpgsign=false reset -q --hard HEAD
+
+src_note "$src" PDH-review '- [ ] 起票: 問題 → owner/lib#12\n'
+expect 1 'GitHub の参照: 連携の設定が無い' bash scripts/check-pdh-ticket.sh
+contains 'github_bot.findings_issue_repos'
+printf 'github_bot:\n  enabled: true\n  findings_issue_repos: other/app, owner/lib  # 起票先\n' > .ticket-config.yaml
+expect 0 'GitHub の参照: 設定にある repo' bash scripts/check-pdh-ticket.sh
+src_note "$src" PDH-review '- [ ] 起票: 問題 → owner/libx#12\n'
+expect 1 'GitHub の参照: 設定に無い repo' bash scripts/check-pdh-ticket.sh
+must rm .ticket-config.yaml
+
+# 印の無い版の検査 script で作った起票先と ticket を、その時点の規則で閉じられるように残す。
+must cp scripts/check-pdh-ticket.sh "$TMP_DIR/check-current.sh"
+grep -vxF '# derived-ticket-fields: v1' "$TMP_DIR/check-current.sh" > scripts/check-pdh-ticket.sh
+old=260301-000002-old
+target_ticket "$old" 'Why-not-fix-now: 直すと高くつく\n'
+presrc=260301-000003-presrc
+must mkdir -p "tickets/$presrc"
+printf '### Why\n更新前の起票元\nReproduction-or-measurement: 検査用 fixture\nWhy-not-fix-now: 該当なし\n### What\n- [ ] 結果を読める\nAC-approved: ebdc012f008a4f1d\n' > "tickets/$presrc/ticket.md"
+: > "tickets/$presrc/progress.md"
+src_note "$presrc" PDH-human-review "- [ ] 起票: 問題 → $old\n"
+src_note "$src" PDH-review
+commit 更新前の起票
+must cp "$TMP_DIR/check-current.sh" scripts/check-pdh-ticket.sh
+commit 検査scriptの更新
+expect 0 '更新前の記録: 印の無い版で作った起票先と ticket はそのまま通る' bash scripts/check-pdh-ticket.sh
+src_note "$src" PDH-review "- [ ] 起票: 問題 → $old\n"
+expect 0 '更新前の記録: 更新後の ticket から集約しても項目を求めない' bash scripts/check-pdh-ticket.sh
+src_note "$src" PDH-review
+target_ticket 260301-000004-later 'Why-not-fix-now: 直すと高くつく\n'
+src_note "$presrc" PDH-human-review '- [ ] 起票: 問題 → 260301-000004-later\n'
+expect 1 '更新前の ticket でも、更新後に作った起票先には項目を求める' bash scripts/check-pdh-ticket.sh
+contains "$presrc"
+must rm -r tickets/260301-000004-later
+src_note "$presrc" PDH-human-review "- [ ] 起票: 問題 → $old\n"
+
+# 後から足した PDH-stage の行は、更新後に作った ticket だけに求める。
+for st in ticket-write ticket-review; do
+  sed -n '/^late_stage_lines=/,/^EOF$/p' scripts/check-pdh-ticket.sh | grep "^PDH-$st:" | sed 's/^/- [ ] /' >> ".claude/skills/pdh-$st/SKILL.md"
+done
+src_note "$src" PDH-human-review
+expect 1 '後から足した行: 更新後に作った ticket には求める' bash scripts/check-pdh-ticket.sh
+contains "tickets/$src/note.md"
+excludes "tickets/$presrc/note.md"
+late=$(sed -n '/^late_stage_lines=/,/^EOF$/p' scripts/check-pdh-ticket.sh | grep '^PDH-' | sed 's/^/- [x] /')
+src_note "$src" PDH-human-review "$late"$'\n'
+expect 0 '後から足した行: 更新前の ticket には求めない' bash scripts/check-pdh-ticket.sh
+# 検査が抜く行は、配布した skill の行と一字一句同じである。
+while IFS= read -r line; do
+  st=${line%%:*}; st=${st#PDH-}
+  grep -qxF -- "- [ ] $line" "$ROOT_DIR/.claude/skills/pdh-$st/SKILL.md" ||
+    fail "check-pdh-ticket.sh の late_stage_lines が skill に無い: $line"
+  checks=$((checks + 1))
+done < <(sed -n '/^late_stage_lines=/,/^EOF$/p' scripts/check-pdh-ticket.sh | grep '^PDH-')
+
 must python3 "$ROOT_DIR/tests/scripts/pdh_script_regressions_test.py"
 printf 'PASS: pdh ticket evidence checks (%s 件)\n' "$checks"
