@@ -11,7 +11,8 @@
 #   5. この branch の未完了 ticket の Why に根拠の 2 行がある。
 #      Status が PDH-review 以降なら、この branch で新しく作った起票先の Why に 派生元:・拾う時機: があり、
 #      Why-not-fix-now: が «該当なし» でない。拾う時機が «すぐ対応» なら、Checklist に起票先と «発行先:» の行がある。
-#      base にあった起票先（既存への集約）と、この印より前の版で作った起票先は数えない（下の derived_fields_marker）
+#      拾う時機が «症状の報告時» なら、起票先の Why に 観察できる症状: がある。
+#      base にあった起票先（既存への集約）と、各印より前の版で作った起票先は数えない（下の derived_fields_marker）
 #   6. ticket の «AC-approved:» の値が、いまの AC と Out-of-scope のハッシュと一致する。
 #      PDH-implement 以降なら値がある（AC と Out-of-scope が承認されたこと・承認後に変わっていないこと）
 #
@@ -63,22 +64,30 @@ close_mode=$(github_bot_value close | tr -d '[:space:]')
 findings_issue_repos=" $(github_bot_value findings_issue_repos | tr ',[]' '   ') "
 
 # derived-ticket-fields: v1
-# この印を持つ版の scripts/check-pdh-ticket.sh で作った ticket から、別件の項目（派生元:・拾う時機:）と
-# 後から足した PDH-stage の行を求める。印の無い版で作った ticket は、作った時点の規則で閉じられる。
+# derived-ticket-fields: v2
+# 印を持つ版の scripts/check-pdh-ticket.sh で作った ticket から、その印の項目と後から足した PDH-stage の行を求める。
+# v1 は別件の項目（派生元:・拾う時機:）と late_stage_lines、v2 は症状の報告時の 観察できる症状: と late_stage_lines_v2。
+# 印の無い版で作った ticket は、作った時点の規則で閉じられる。
 derived_fields_marker='# derived-ticket-fields: v1'
+symptom_fields_marker='# derived-ticket-fields: v2'
 late_stage_lines=$(cat <<'EOF'
 PDH-ticket-write: 同じ原因・対象・期待する修正の ticket を検索した。検索語と件数（該当 0 件を含む）と、新しく作るか既存へ集約するかの判断が progress にある
 PDH-ticket-review: この ticket を指す `起票:` の行と、`拾う時機: 近くを触るとき` の ticket のうち同じ箇所に触るものを探し、コマンド・件数（0 件を含む）・取り込むかの判断が progress にある
 EOF
 )
-# 引数の path を最初に追加した commit の版の検査 script に印が無ければ 0。未 commit なら 1。
+late_stage_lines_v2=$(cat <<'EOF'
+PDH-ticket-write: 報告から書くなら、`拾う時機: 症状の報告時` の ticket を症状の言葉でも探した。検索語・候補ごとの判断（同じ欠陥・別の欠陥・未判定）と、同じ欠陥なら `拾う時機:` の再判断が progress にある
+EOF
+)
+# 引数（印・path…）の path を最初に追加した commit の版の検査 script に印が無ければ 0。未 commit なら 1。
 created_before_marker() {
-  local first
+  local marker=$1 first
+  shift
   [ "${git_ready:-0}" -eq 1 ] || return 1
   first=$(git log --diff-filter=A --format=%H HEAD -- "$@" 2>/dev/null | tail -n 1)
   [ -n "$first" ] || return 1
   # grep -q で先に閉じると、pipefail の下で git show の SIGPIPE が «印が無い» に化ける。
-  ! git show "$first:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF -- "$derived_fields_marker" >/dev/null
+  ! git show "$first:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF -- "$marker" >/dev/null
 }
 
 # HTML コメントを除き、inline code と元の行番号を保つ。
@@ -247,7 +256,7 @@ check_derived_targets() {
         # base が分からないと、集約か新規かを分けられない。commit 済みの起票先は数えない。
         continue
       fi
-      created_before_marker "$tickets_dir/$name/ticket.md" "$tickets_dir/done/$name/ticket.md" && continue
+      created_before_marker "$derived_fields_marker" "$tickets_dir/$name/ticket.md" "$tickets_dir/done/$name/ticket.md" && continue
     fi
     fields=$(why_fields "$target") || { failed=1; return; }
     src=$(awk -F'\t' '$1 == "派生元" { print $2; exit }' <<<"$fields")
@@ -262,6 +271,11 @@ check_derived_targets() {
     if [[ "$timing" == すぐ対応* ]] &&
        ! awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f' "$n" | grep -F -- "$name" | grep -F '発行先:' >/dev/null; then
       problems+=$'\n'"  拾う時機が すぐ対応 なので、$n の Checklist に $name と «発行先:» を含む行を書いて人に渡す"
+    fi
+    if [[ "$timing" == 症状の報告時* ]] &&
+       ! created_before_marker "$symptom_fields_marker" "$tickets_dir/$name/ticket.md" "$tickets_dir/done/$name/ticket.md" &&
+       [ -z "$(awk -F'\t' '$1 == "観察できる症状" && $2 ~ /[^[:space:]]/ { print $2; exit }' <<<"$fields")" ]; then
+      problems+=$'\n''  拾う時機が 症状の報告時 なので、観察できる症状: に、報告者が見る症状と起きる条件を書く'
     fi
     if [ -n "$problems" ]; then
       printf 'check-pdh-ticket: %s: %s から起票した ticket の Why が足りない:%s\n' "$target" "$self" "$problems" >&2
@@ -449,8 +463,12 @@ check_stage_checklist() {
   }
   # 印より前の版で作った ticket には、後から足した行を求めない。
   local d=${n%/note.md}
-  if created_before_marker "$d/ticket.md" "$tickets_dir/${d##*/}/ticket.md"; then
+  if created_before_marker "$derived_fields_marker" "$d/ticket.md" "$tickets_dir/${d##*/}/ticket.md"; then
     expected=$(printf '%s\n' "$expected" | grep -vxF -- "$late_stage_lines")
+    [ -n "$expected" ] || return 0
+  fi
+  if created_before_marker "$symptom_fields_marker" "$d/ticket.md" "$tickets_dir/${d##*/}/ticket.md"; then
+    expected=$(printf '%s\n' "$expected" | grep -vxF -- "$late_stage_lines_v2")
     [ -n "$expected" ] || return 0
   fi
   have=$(awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f' "$n" | sed -n 's/^- \[[ xX-]\] //p' | sed 's/ - skip: .*$//; s/[[:space:]]*$//')

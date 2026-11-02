@@ -662,6 +662,18 @@ expect 0 'すぐ対応: 人へ渡した行がある' bash scripts/check-pdh-tick
 target_ticket "$new" "$full"
 commit 新規起票の項目
 
+target_ticket "$new" "Why-not-fix-now: 害は表示の崩れだけ\n派生元: $src\n拾う時機: 症状の報告時\n"
+expect 1 '症状の報告時: 観察できる症状が無い' bash scripts/check-pdh-ticket.sh
+contains '観察できる症状: に、報告者が見る症状と起きる条件を書く'
+target_ticket "$new" "Why-not-fix-now: 害は表示の崩れだけ\n派生元: $src\n拾う時機: 症状の報告時\n観察できる症状: \n"
+expect 1 '症状の報告時: 観察できる症状が空' bash scripts/check-pdh-ticket.sh
+contains '観察できる症状:'
+target_ticket "$new" "Why-not-fix-now: 害は表示の崩れだけ\n派生元: $src\n拾う時機: \`症状の報告時\`\n- 観察できる症状： 一覧を 2 ページ目へ送ると、件数の表示が 0 になる\n"
+expect 0 '症状の報告時: 観察できる症状がある' bash scripts/check-pdh-ticket.sh
+target_ticket "$new" "Why-not-fix-now: 害は表示の崩れだけ\n派生元: $src\n拾う時機: 近くを触るとき\n"
+expect 0 '症状の報告時以外: 観察できる症状を求めない' bash scripts/check-pdh-ticket.sh
+target_ticket "$new" "$full"
+
 src_note "$src" PDH-review '- [ ] 起票: 問題 → 260101-000000-existing\n'
 expect 0 '既存への集約: base にあった ticket には項目を求めない' bash scripts/check-pdh-ticket.sh
 must mkdir -p tickets/done
@@ -680,7 +692,7 @@ must rm .ticket-config.yaml
 
 # 印の無い版の検査 script で作った起票先と ticket を、その時点の規則で閉じられるように残す。
 must cp scripts/check-pdh-ticket.sh "$TMP_DIR/check-current.sh"
-grep -vxF '# derived-ticket-fields: v1' "$TMP_DIR/check-current.sh" > scripts/check-pdh-ticket.sh
+grep -vxF -e '# derived-ticket-fields: v1' -e '# derived-ticket-fields: v2' "$TMP_DIR/check-current.sh" > scripts/check-pdh-ticket.sh
 old=260301-000002-old
 target_ticket "$old" 'Why-not-fix-now: 直すと高くつく\n'
 presrc=260301-000003-presrc
@@ -703,6 +715,17 @@ contains "$presrc"
 must rm -r tickets/260301-000004-later
 src_note "$presrc" PDH-human-review "- [ ] 起票: 問題 → $old\n"
 
+# v1 の印だけを持つ版で作った起票先には、v2 の観察できる症状を求めない。
+grep -vxF '# derived-ticket-fields: v2' "$TMP_DIR/check-current.sh" > scripts/check-pdh-ticket.sh
+v1only=260301-000005-v1only
+target_ticket "$v1only" "Why-not-fix-now: 害は表示の崩れだけ\n派生元: $src\n拾う時機: 症状の報告時\n"
+src_note "$src" PDH-review "- [ ] 起票: 問題 → $v1only\n"
+commit v1の版の起票
+must cp "$TMP_DIR/check-current.sh" scripts/check-pdh-ticket.sh
+commit 検査scriptのv2への更新
+expect 0 'v1 の版の起票先: 観察できる症状を求めない' bash scripts/check-pdh-ticket.sh
+src_note "$src" PDH-review
+
 # 後から足した PDH-stage の行は、更新後に作った ticket だけに求める。
 for st in ticket-write ticket-review; do
   sed -n '/^late_stage_lines=/,/^EOF$/p' scripts/check-pdh-ticket.sh | grep "^PDH-$st:" | sed 's/^/- [ ] /' >> ".claude/skills/pdh-$st/SKILL.md"
@@ -714,13 +737,53 @@ excludes "tickets/$presrc/note.md"
 late=$(sed -n '/^late_stage_lines=/,/^EOF$/p' scripts/check-pdh-ticket.sh | grep '^PDH-' | sed 's/^/- [x] /')
 src_note "$src" PDH-human-review "$late"$'\n'
 expect 0 '後から足した行: 更新前の ticket には求めない' bash scripts/check-pdh-ticket.sh
+# v2 で足した行は、v2 の版で作った ticket だけに求め、v1 の版で作った ticket には求めない。
+sed -n '/^late_stage_lines_v2=/,/^EOF$/p' scripts/check-pdh-ticket.sh | grep '^PDH-ticket-write:' | sed 's/^/- [ ] /' >> .claude/skills/pdh-ticket-write/SKILL.md
+expect 1 'v2 で足した行: v2 の版で作った ticket には求める' bash scripts/check-pdh-ticket.sh
+contains "tickets/$src/note.md"
+contains '報告から書くなら'
+excludes "tickets/$presrc/note.md"
+late_v2=$(sed -n '/^late_stage_lines_v2=/,/^EOF$/p' scripts/check-pdh-ticket.sh | grep '^PDH-' | sed 's/^/- [-] /; s/$/ - skip: 報告ではない/')
+src_note "$src" PDH-human-review "$late"$'\n'"$late_v2"$'\n'
+expect 0 'v2 で足した行: skip の理由付きでも数える' bash scripts/check-pdh-ticket.sh
+grep -vxF '# derived-ticket-fields: v2' "$TMP_DIR/check-current.sh" > scripts/check-pdh-ticket.sh
+v1note=260301-000006-v1note
+must mkdir -p "tickets/$v1note"
+printf '### Why\nv1 の版の ticket\nReproduction-or-measurement: 検査用 fixture\nWhy-not-fix-now: 該当なし\n### What\n- [ ] 結果を読める\nAC-approved: ebdc012f008a4f1d\n' > "tickets/$v1note/ticket.md"
+: > "tickets/$v1note/progress.md"
+src_note "$v1note" PDH-human-review "$late"$'\n'
+commit v1の版のticket
+must cp "$TMP_DIR/check-current.sh" scripts/check-pdh-ticket.sh
+commit 検査scriptのv2への更新2
+expect 0 'v2 で足した行: v1 の版で作った ticket には求めない' bash scripts/check-pdh-ticket.sh
+src_note "$v1note" PDH-human-review
+expect 1 'v2 で足した行: 対照として v1 の版の ticket も v1 の行は求める' bash scripts/check-pdh-ticket.sh
+contains "tickets/$v1note/note.md"
+excludes '報告から書くなら'
+src_note "$v1note" PDH-human-review "$late"$'\n'
 # 検査が抜く行は、配布した skill の行と一字一句同じである。
 while IFS= read -r line; do
   st=${line%%:*}; st=${st#PDH-}
   grep -qxF -- "- [ ] $line" "$ROOT_DIR/.claude/skills/pdh-$st/SKILL.md" ||
-    fail "check-pdh-ticket.sh の late_stage_lines が skill に無い: $line"
+    fail "check-pdh-ticket.sh の late_stage_lines / late_stage_lines_v2 が skill に無い: $line"
   checks=$((checks + 1))
-done < <(sed -n '/^late_stage_lines=/,/^EOF$/p' scripts/check-pdh-ticket.sh | grep '^PDH-')
+done < <(sed -n -e '/^late_stage_lines=/,/^EOF$/p' -e '/^late_stage_lines_v2=/,/^EOF$/p' scripts/check-pdh-ticket.sh | grep '^PDH-')
+
+# pdh-ticket-write の候補の検索コマンドは、拾う時機の行だけに当たり、テンプレートの説明のコメントには当たらない。
+pattern=$(grep -o "git grep -lE '[^']*' -- <tickets_dir>" "$ROOT_DIR/.claude/skills/pdh-ticket-write/SKILL.md" | sed "s/^git grep -lE '//; s/' -- <tickets_dir>\$//")
+[ -n "$pattern" ] || fail 'pdh-ticket-write に症状の報告時の検索コマンドが無い'
+must mkdir -p "$TMP_DIR/symptom/tickets/260401-000000-wait" "$TMP_DIR/symptom/tickets/done/260401-000001-done" "$TMP_DIR/symptom/tickets/260401-000002-plain" "$TMP_DIR/symptom/tickets/260401-000003-near"
+must cd "$TMP_DIR/symptom"
+must git init -q -b main
+printf '### Why\n- 拾う時機: 症状の報告時\n観察できる症状: 一覧の件数が 0 になる\n' > tickets/260401-000000-wait/ticket.md
+printf '### Why\n拾う時機: `症状の報告時`\n' > tickets/done/260401-000001-done/ticket.md
+printf '### Why\nWhy-not-fix-now: 該当なし <!-- 派生したなら、派生元: <ticket 名> と 拾う時機: <すぐ対応 / 次に選ぶ / 近くを触るとき / 症状の報告時> の行も足す -->\n' > tickets/260401-000002-plain/ticket.md
+printf '### Why\n拾う時機: 近くを触るとき\n' > tickets/260401-000003-near/ticket.md
+commit 候補の検索
+output=$(git grep -lE "$pattern" -- tickets | sort | tr '\n' ' ')
+[ "$output" = 'tickets/260401-000000-wait/ticket.md tickets/done/260401-000001-done/ticket.md ' ] ||
+  fail "症状の報告時の検索が想定と違う: $output"
+checks=$((checks + 1))
 
 must python3 "$ROOT_DIR/tests/scripts/pdh_script_regressions_test.py"
 printf 'PASS: pdh ticket evidence checks (%s 件)\n' "$checks"
