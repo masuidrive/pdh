@@ -58,6 +58,15 @@ python3 scripts/docs-policy.py record docs/example.md#scope --base <base> --note
 - 達成できると確かめていない AC は、確かめる手段を note の `## Required-Probes` に書き、この PDH-stage の中で実行する。実行した command と output を progress に書いてから、note の行を `[x]` にする（`[SKILLS_PATH]/pdh-pm/_records.md`）
 - 実装しないと分からない AC は、«測って記録する＋この値を下回ったら止めて報告する» の形に書き直す
 
+### 別件として残された finding を拾う
+
+この規則の目的: 別の ticket で見つかって起票・集約された finding を、同じ箇所を変えるこの ticket が見落とさないこと。次の 2 つを探し、取り込むかを決める。取り込むなら AC か Out-of-scope に書いて承認者に渡す。
+
+- この ticket を指す `起票:` の行 — `git grep -n '起票:.*→ <この ticket 名>' -- <tickets_dir>`（done を含む）
+- `拾う時機: 近くを触るとき` の ticket のうち、この ticket が変える箇所に触るもの — `git grep -ln '拾う時機:.*近くを触るとき' -- <tickets_dir>` で出た ticket の anchor を、この ticket の影響範囲と突き合わせる
+
+0 件でも、実行したコマンドと «0 件» を progress に書く。
+
 ### コストと利益を確かめる
 
 承認者が «この利益に、このコストを払うか» を判断できるように、次の 5 行を note の `## PDH-ticket-review. Ticket contract check` に書く。コストの数え方は `PDH-AGENTS.md`「変更のコストの数え方」に従う。
@@ -123,6 +132,7 @@ done) &&
 - [ ] PDH-ticket-review: 残っている `Open-Questions` が、承認者にしか決められないものと、実装しないと分からないものだけである。PM が判断し、残した理由を note の `## PDH-ticket-review. Ticket contract check` の節に書く
 - [ ] PDH-ticket-review: Design-Decisions の各項を AC と 1 件ずつ突き合わせ、AC と食い違う項（ある条件で AC が求める振る舞いを壊す作り方）が無いか確かめた。あれば Open-Questions に残した
 - [ ] PDH-ticket-review: コストと利益の 5 行が、作り方を決めずに書かれている（テーブル・列・関数の形を選んでいない）。PM が読んで判断する
+- [ ] PDH-ticket-review: この ticket を指す `起票:` の行と、`拾う時機: 近くを触るとき` の ticket のうち同じ箇所に触るものを探し、コマンド・件数（0 件を含む）・取り込むかの判断が progress にある
 
 ## 例外
 

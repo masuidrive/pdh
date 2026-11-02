@@ -376,3 +376,14 @@ exit "$pdh_migration_status"
 ```
 
 上の確認を更新後に再実行する。同じ移行を 2 回行っても差分は出ない。review 集計は `pdh-review-tally.sh`、評価は `pdh-review-eval.sh --help` と `docs/pdh-review-eval/README.md` を読む。評価データは project が集め、実 engine での計測は CI に入れない。
+
+#### review から起票した ticket の Why の項目
+
+`check-pdh-ticket.sh` は、review の finding から起票した ticket の Why に `派生元:`・`拾う時機:` と、必須の修正に当たらない理由の `Why-not-fix-now:` を求める。更新の前に作った ticket と完了の記録は書き換えない。
+
+- ticket を最初に足した commit の `scripts/check-pdh-ticket.sh` に `# derived-ticket-fields: v1` の行が無ければ、更新前の ticket として新しい項目を求めない。更新前に作った起票先を指す `起票:` の行も、そのまま close できる
+- 更新前の ticket には、`pdh-ticket-write` と `pdh-ticket-review` に足した同じ欠陥の検索の Checklist の行も求めない
+- 起票元の base にすでにあった ticket へ集約したときは、実在だけを確かめる
+- done の ticket は検査しない
+- GitHub の issue へ起票する導入先は、`.ticket-config.yaml` の `github_bot.findings_issue_repos` に repo を書く（`github-bot/.ticket-config.snippet.yaml`）。書かない導入先では、起票先は repo の中の ticket だけになる
+

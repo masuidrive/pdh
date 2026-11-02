@@ -6,8 +6,12 @@
 #   2. note の Status が human gate なら、Checklist に «発行先:» を含む未了行がある
 #      （PDH-AGENTS.md「受け渡し経路」）。pr-merge の close 承認待ちは、URL か path と定めた skip 理由の行でもよい
 #   3. close 前 review の後に、ticket 自身の未 review の commit が残っていない
-#   4. 未完了 ticket の note の Checklist に書かれた起票先が実在する
-#   5. この branch の未完了 ticket の Why に根拠の 2 行がある
+#   4. 未完了 ticket の note の Checklist に書かれた起票先が実在する。owner/repo#N の起票先は、
+#      github_bot.findings_issue_repos に載る repo のときだけ形を認める（実在は確かめない）
+#   5. この branch の未完了 ticket の Why に根拠の 2 行がある。
+#      Status が PDH-review 以降なら、この branch で新しく作った起票先の Why に 派生元:・拾う時機: があり、
+#      Why-not-fix-now: が «該当なし» でない。拾う時機が «すぐ対応» なら、Checklist に起票先と «発行先:» の行がある。
+#      base にあった起票先（既存への集約）と、この印より前の版で作った起票先は数えない（下の derived_fields_marker）
 #   6. ticket の «AC-approved:» の値が、いまの AC と Out-of-scope のハッシュと一致する。
 #      PDH-implement 以降なら値がある（AC と Out-of-scope が承認されたこと・承認後に変わっていないこと）
 #
@@ -47,11 +51,35 @@ if [ -f .ticket-config.yaml ]; then
 fi
 tickets_dir=${tickets_dir%/}
 tickets_dir=${tickets_dir#./}
-close_mode=$(awk '
-  /^github_bot:[[:space:]]*(#.*)?$/ {section=1; next}
-  section && /^[^[:space:]#]/ {section=0}
-  section && /^  close:/ {sub(/^  close:[[:space:]]*/, ""); sub(/[[:space:]]+#.*/, ""); gsub(/["\047[:space:]]/, ""); print; exit}
-' .ticket-config.yaml 2>/dev/null)
+github_bot_value() {
+  awk -v key="$1" '
+    /^github_bot:[[:space:]]*(#.*)?$/ {section=1; next}
+    section && /^[^[:space:]#]/ {section=0}
+    section && index($0, "  " key ":") == 1 {sub(/^  [^:]*:[[:space:]]*/, ""); sub(/[[:space:]]+#.*/, ""); gsub(/["\047]/, ""); print; exit}
+  ' .ticket-config.yaml 2>/dev/null
+}
+close_mode=$(github_bot_value close | tr -d '[:space:]')
+# 空白区切りの owner/repo。findings の起票先に GitHub の issue を使う repo（github-bot の opt-in）。
+findings_issue_repos=" $(github_bot_value findings_issue_repos | tr ',[]' '   ') "
+
+# derived-ticket-fields: v1
+# この印を持つ版の scripts/check-pdh-ticket.sh で作った ticket から、別件の項目（派生元:・拾う時機:）と
+# 後から足した PDH-stage の行を求める。印の無い版で作った ticket は、作った時点の規則で閉じられる。
+derived_fields_marker='# derived-ticket-fields: v1'
+late_stage_lines=$(cat <<'EOF'
+PDH-ticket-write: 同じ原因・対象・期待する修正の ticket を検索した。検索語と件数（該当 0 件を含む）と、新しく作るか既存へ集約するかの判断が progress にある
+PDH-ticket-review: この ticket を指す `起票:` の行と、`拾う時機: 近くを触るとき` の ticket のうち同じ箇所に触るものを探し、コマンド・件数（0 件を含む）・取り込むかの判断が progress にある
+EOF
+)
+# 引数の path を最初に追加した commit の版の検査 script に印が無ければ 0。未 commit なら 1。
+created_before_marker() {
+  local first
+  [ "${git_ready:-0}" -eq 1 ] || return 1
+  first=$(git log --diff-filter=A --format=%H HEAD -- "$@" 2>/dev/null | tail -n 1)
+  [ -n "$first" ] || return 1
+  # grep -q で先に閉じると、pipefail の下で git show の SIGPIPE が «印が無い» に化ける。
+  ! git show "$first:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF -- "$derived_fields_marker" >/dev/null
+}
 
 # HTML コメントを除き、inline code と元の行番号を保つ。
 ticket_visible_lines() {
@@ -151,6 +179,13 @@ check_kihyo_ticket_exists() {
     # 名前は 1 つの ticket を指す。親ディレクトリなどを実在先に数えない。
     if [ -z "$name" ]; then
       reason="→ の後が空です。$reason"
+    elif [[ "$name" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+$ ]]; then
+      # issue の実在と状態は起票した人が gh で確かめる（github-bot/_github-issue.md）。ここは形と opt-in だけを見る。
+      if [[ "$findings_issue_repos" == *" ${name%#*} "* ]]; then
+        exists=1
+      else
+        reason="GitHub の issue を起票先にするのは、.ticket-config.yaml の github_bot.findings_issue_repos に載る repo だけ（github-bot の opt-in）。載せるか、ticket を作る"
+      fi
     elif [[ ! "$name" =~ ^(CANCELED-)?[0-9]{6}-[0-9]{6}- || "$name" == */* ]]; then
       reason="ticket 名の形ではない（YYMMDD-hhmmss- または CANCELED-YYMMDD-hhmmss- で始まる名前を書く）。$reason"
     elif [ "$name" = "$self" ]; then
@@ -171,6 +206,75 @@ check_kihyo_ticket_exists() {
       failed=1
     fi
   done <<< "$rows"
+}
+
+# ticket の Why 節から、ラベルの値を 1 行ずつ「ラベル<TAB>値」で出す。
+why_fields() {
+  ticket_visible_lines "$1" | awk '
+    /^### Why/ { why=1; next }
+    /^#(#(#)?)?[[:space:]]/ { why=0 }
+    why {
+      sub(/^[[:space:]]*/, "")
+      sub(/^-([[:space:]]+)(\[[ xX]\][[:space:]]*)?/, "")
+      gsub(/：/, ":")
+      if (!index($0, ":")) next
+      label=$0; sub(/:.*/, "", label)
+      sub(/^[^:]*:[[:space:]]*/, "")
+      gsub(/`/, "")
+      print label "\t" $0
+    }
+  '
+}
+
+# この branch で新しく作った起票先が、別件として拾える項目を持つかを検査する。
+# base にあった起票先（既存への集約）と、印より前の版で作った起票先は、作った時点の規則で数える。
+check_derived_targets() {
+  local n=$1 self d name target fields src timing wnfn problems
+  self=${n#"$tickets_dir/"}
+  self=${self%/note.md}
+  while IFS= read -r name; do
+    [[ "$name" =~ ^[0-9]{6}-[0-9]{6}- && "$name" != */* ]] || continue
+    target=''
+    for d in "$tickets_dir/$name" "$tickets_dir/done/$name"; do
+      [ -f "$d/ticket.md" ] && { target="$d/ticket.md"; break; }
+    done
+    [ -n "$target" ] || continue
+    if [ "${git_ready:-0}" -eq 1 ]; then
+      if [ -n "$pdh_review_exclude" ]; then
+        git cat-file -e "$pdh_review_exclude:$tickets_dir/$name/ticket.md" 2>/dev/null && continue
+        git cat-file -e "$pdh_review_exclude:$tickets_dir/done/$name/ticket.md" 2>/dev/null && continue
+      elif [ -n "$(git log -1 --format=%H HEAD -- "$tickets_dir/$name/ticket.md" "$tickets_dir/done/$name/ticket.md" 2>/dev/null)" ]; then
+        # base が分からないと、集約か新規かを分けられない。commit 済みの起票先は数えない。
+        continue
+      fi
+      created_before_marker "$tickets_dir/$name/ticket.md" "$tickets_dir/done/$name/ticket.md" && continue
+    fi
+    fields=$(why_fields "$target") || { failed=1; return; }
+    src=$(awk -F'\t' '$1 == "派生元" { print $2; exit }' <<<"$fields")
+    timing=$(awk -F'\t' '$1 == "拾う時機" { print $2; exit }' <<<"$fields")
+    wnfn=$(awk -F'\t' 'tolower($1) == "why-not-fix-now" { print $2; exit }' <<<"$fields")
+    problems=''
+    [[ "$src" == *"$self"* ]] || problems+=$'\n'"  派生元: に起票元の ticket 名 $self を書く（2 つ以上なら並べる）"
+    [[ "$timing" =~ ^(すぐ対応|次に選ぶ|近くを触るとき|症状の報告時) ]] ||
+      problems+=$'\n''  拾う時機: に すぐ対応 / 次に選ぶ / 近くを触るとき / 症状の報告時 のどれかを書く'
+    [[ -n "$wnfn" && "$wnfn" != 該当なし* ]] ||
+      problems+=$'\n'"  Why-not-fix-now: に、$self の必須の修正に当たらない理由を書く"
+    if [[ "$timing" == すぐ対応* ]] &&
+       ! awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f' "$n" | grep -F -- "$name" | grep -F '発行先:' >/dev/null; then
+      problems+=$'\n'"  拾う時機が すぐ対応 なので、$n の Checklist に $name と «発行先:» を含む行を書いて人に渡す"
+    fi
+    if [ -n "$problems" ]; then
+      printf 'check-pdh-ticket: %s: %s から起票した ticket の Why が足りない:%s\n' "$target" "$self" "$problems" >&2
+      failed=1
+    fi
+  done <<< "$(ticket_visible_lines "$n" | awk '
+    { gsub(/：/, ":") }
+    /^## Checklist[[:space:]]*$/ { checklist=1; next }
+    /^##? / { checklist=0 }
+    checklist && /^[[:space:]]*[-*] \[[ xX]\][[:space:]]*起票:/ && index($0, "→") {
+      sub(/.*→/, ""); gsub(/`/, ""); sub(/（.*/, ""); print $1
+    }
+  ')"
 }
 
 # 未完了 ticket の Why の根拠を検査する。
@@ -202,6 +306,7 @@ check_ticket_why_intake_evidence() {
   if [ -n "$missing" ]; then
     printf 'check-pdh-ticket: %s: Why 節で次の行が無いか空です:\n%s\n' "$f" "$missing" >&2
     printf '%s\n' '  Why 節に「Reproduction-or-measurement: <確かめた手順と結果>」と「Why-not-fix-now: <理由>」を書く。' \
+      '  進行中の ticket から起票したなら、Why-not-fix-now: はその ticket の必須の修正に当たらない理由。' \
       '  要望起点なら「Why-not-fix-now: 該当なし（要望起点。進行中の ticket から派生していない）」でよい。' >&2
     failed=1
   fi
@@ -342,6 +447,12 @@ check_stage_checklist() {
     failed=1
     return 0
   }
+  # 印より前の版で作った ticket には、後から足した行を求めない。
+  local d=${n%/note.md}
+  if created_before_marker "$d/ticket.md" "$tickets_dir/${d##*/}/ticket.md"; then
+    expected=$(printf '%s\n' "$expected" | grep -vxF -- "$late_stage_lines")
+    [ -n "$expected" ] || return 0
+  fi
   have=$(awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f' "$n" | sed -n 's/^- \[[ xX-]\] //p' | sed 's/ - skip: .*$//; s/[[:space:]]*$//')
   have=$(printf '%s\n' "$have" | sed '
     s|^PDH-ticket-write: 上のコマンドが 0 で終わった$|PDH-ticket-write: `pdh-ticket-write`「機械で確かめるもの」のコマンドが 0 で終わった|
@@ -572,6 +683,10 @@ for t in "$tickets_dir"/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
          | sed -E 's/^[[:space:]]*(PDH-[a-z-]+).*/\1/')
   fi
   check_ac_approved "$t" "$st"
+  case "$st" in
+    PDH-review|PDH-verify|PDH-human-review|PDH-close)
+      [[ "$t" == "$tickets_dir/done/"* ]] || check_derived_targets "$n" ;;
+  esac
   [[ "$t" == "$tickets_dir/done/"* ]] || check_stage_checklist "$n" "$st"
   case "$st" in
     PDH-human-review|PDH-close)
@@ -652,5 +767,5 @@ fi
 if [ "$seen" -eq 0 ]; then
   printf 'check-pdh-ticket: 検査対象の ticket なし・起票先の検査を通過\n'
 else
-  printf 'check-pdh-ticket: progress.md・gate の待ち行・close 前 review の記録と区間・起票先・Why の根拠・AC の承認の記録・PDH-stage のチェックリストの検査を通過\n'
+  printf 'check-pdh-ticket: progress.md・gate の待ち行・close 前 review の記録と区間・起票先・起票した ticket の項目・Why の根拠・AC の承認の記録・PDH-stage のチェックリストの検査を通過\n'
 fi

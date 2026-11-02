@@ -30,3 +30,8 @@ github_bot:
   # finalize も merge 時点のこの値を読む。未設定は merge。pr では自動 close しない。
   # 環境値は repo 変数、固有の検査は .github/coding-bot/smoke-local.sh へ置く（INSTALL.md）。
   close: merge
+
+  # review の finding を起票してよい GitHub の repo（owner/repo をカンマで区切る）。
+  # 書いた repo だけ、note の `起票:` の行に `owner/repo#N` を書ける（check-pdh-ticket.sh が形を確かめる）。
+  # 書かなければ、起票先は repo の中の ticket だけになる。手順は _github-issue.md「review の finding を issue にする」。
+  # findings_issue_repos: owner/repo, owner/shared-lib
