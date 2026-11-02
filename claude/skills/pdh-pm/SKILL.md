@@ -79,14 +79,14 @@ PDH-stage の skill は PM の手順である。worker の手順は `.claude/age
 
 compact の後で同じ session が続いているときは、作業ディレクトリは worktree のままなので、pdh-resume「どこまで進んでいたかを読み取る」と「続ける」だけを行う。
 
-### 気づいたバグは同じ ticket で直す
+### 気づいたバグの行き先
 
-この規則の目的: **作業の途中で気づいたバグが、別の ticket という名の積み残しにならず、気づいた人の手で直ること。**
+この規則の目的: **作業の途中で気づいたバグが、この ticket の出荷を止めずに、行き先（この ticket の修正か、別の ticket）を持つこと。**
 
-- 実装・review・検証のどこで気づいたバグも、この ticket の Why と無関係でも、同じ ticket で直すのが既定である。既定から外れる場合は、下の 2 つだけである。どちらの扱いも、この節にだけ書く（`[SKILLS_PATH]/pdh-review/SKILL.md` と `.claude/agents/pdh-coding-engineer.md` はここを指す）
-- ticket の変更と混ざらないよう、別の commit で直す。修正前に落ちる ticket-local-test を先に置く決まりも同じに当てる。progress に «気づいたバグを直した» と 1 行書く
-- 直すと DB の変更か他者が使う契約の変更が要るとき、または直し方に製品の判断が要るときは、ユーザに聞いてから同じ ticket で直す（`PDH-AGENTS.md`「変更のコストの数え方」— 承認者が見ていないコストなので）
-- 別の ticket にするのは、直す差分がこの ticket 本来の差分より大きくなる見込みのときだけである。そのときは close の前にその ticket を作り、close の報告で名前を挙げる
+- 実装・review・検証のどこで気づいたバグも、この ticket で直すのは «必須の修正»（この ticket の変更が持ち込んだ退行・AC を満たさない欠陥・変更が通る経路から到達できる Critical など）だけである。何が当たるかは `[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」にだけ書く（`.claude/agents/pdh-coding-engineer.md` はここを指す）
+- «必須の修正» に当たらない実在するバグは、安く直せても、この ticket で直さない。close の前に別の ticket を作り（`[SKILLS_PATH]/pdh-review/SKILL.md`「Findings 表」の `起票:` の行）、close の報告で名前を挙げる。直すたびに、確かめ直す範囲と退行の危険がこの ticket に増え、review が閉じなくなるからである
+- この ticket で直すときは、ticket の変更と混ざらないよう、別の commit で直す。修正前に落ちる ticket-local-test を先に置く決まりも同じに当てる。progress に «気づいたバグを直した» と 1 行書く
+- 直すと DB の変更か他者が使う契約の変更が要るとき、または直し方に製品の判断が要るときは、ユーザに聞いてから直す（`PDH-AGENTS.md`「変更のコストの数え方」— 承認者が見ていないコストなので）
 
 worker の手順（別の commit で直す・直せないものを PM へ渡す）は `.claude/agents/pdh-coding-engineer.md`「実装」に、PM の処置の判断は `[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」にある。
 
