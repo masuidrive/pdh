@@ -23,17 +23,20 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 | `github-bot/_pdh.md` | `.github/coding-bot/_pdh.md` | **PDH mode を定義する**（machinery 側には `_pdh.md` を置かない） |
 | `github-bot/_github-issue.md` | `.github/coding-bot/_github-issue.md` | gate→issue プロトコル（cloud / local 共通） |
 | `github-bot/pdh-hooks.sh` | `.github/coding-bot/pdh-hooks.sh` | runner hook。stage ラベル・承認導線・待ち行・待ち印・導入検査を、agent の申告に依らず run の終わりに保証する（`run-action.sh` が呼ぶ） |
-| `github-bot/pdh-gh-pull/` | `.claude/skills/pdh-gh-pull/`（Codex は `.codex/skills/pdh-gh-pull/`） | 「issue 読みに行く」skill。core skill と同じ流儀で symlink する場合はそれに合わせる |
+| `github-bot/pdh-gh-pull/` | `.claude/skills/pdh-gh-pull/`（Codex 単独は `.agents/skills/pdh-gh-pull/`） | 「issue 読みに行く」skill。core skill と同じ場所に置く。Claude と Codex CLI を併用するなら、core skill と同じく `.agents/skills/pdh-gh-pull` を `../../.claude/skills/pdh-gh-pull` への symlink にする |
 | `github-bot/.ticket-config.snippet.yaml` の中身 | `.ticket-config.yaml` の末尾へ追記 | `github_bot:` 設定 |
 
 `.gitignore` に `current-ticket.md` / `current-note.md`（作業ビュー symlink）と `.coding-bot-notify`（run が host の step へ停止理由を渡すファイル）が無ければ足す。
 
-⚠ **`scripts/checks/required-pdh-files.check` に、このレイヤーの分を足す。**core の配布物にはこのレイヤーが入っていないので、**`pdh-gh-pull` が消えても誰も検出しない。**`required_paths=` へ次の 2 つを加える（Codex CLI を使わないなら symlink の行は省く）。
+⚠ **`scripts/checks/required-pdh-files.check` に、このレイヤーの分を足す。**core の配布物にはこのレイヤーが入っていないので、**`pdh-gh-pull` が消えても誰も検出しない。**`required_paths=` へ、導入の形に合う行を加える。
 
-```
-.claude/skills/pdh-gh-pull/SKILL.md
-.agents/skills/pdh-gh-pull
-```
+| 導入の形 | 加える行 |
+|---|---|
+| Claude 単独 | `.claude/skills/pdh-gh-pull/SKILL.md` |
+| Claude と Codex CLI の併用 | `.claude/skills/pdh-gh-pull/SKILL.md` と `.agents/skills/pdh-gh-pull`（symlink そのもの。required_paths は symlink の先のファイルを数えない） |
+| Codex 単独 | `.agents/skills/pdh-gh-pull/SKILL.md` |
+
+Codex は repo の skill を `.agents/skills/`（起動した場所から repo root まで）でしか探さない。`.codex/skills/` に置いた skill は見つからない。以前の版のこの表に従って Codex 単独で `.codex/skills/pdh-gh-pull/` に置いた repo は、`codex/INSTALL.md` の既知の移行手順「pdh-gh-pull を .agents/skills へ移す」で移す。
 
 配置したら、core の INSTALL の「版を記録して検査する」を回す。`.github/workflows/coding-bot.yml` がある repo では、`pdh-lock.sh write` が上の 4 つを `.pdh-lock` に記録する（`<engine>/lock-map.github-bot.tsv`）。上流の版と違うファイルがあると記録せずに止まる。
 

@@ -44,6 +44,35 @@ def verify_install(target, engine):
     if engine=='codex':documented(target,engine,'verify-layout')
 
 
+def bot_required(engine):
+    # Claude runs here with the Codex CLI symlinks, so it takes the combined row.
+    row='Claude と Codex CLI の併用' if engine=='claude' else 'Codex 単独'
+    line=next(l for l in (ROOT/'github-bot/INSTALL.md').read_text().splitlines() if l.startswith('| '+row+' |'))
+    return re.findall(r'`([^`]+)`',line.split('|')[2])
+
+
+def set_required(target, paths):
+    check=target/'scripts/checks/required-pdh-files.check'
+    lines=[]
+    for line in check.read_text().splitlines(True):
+        if line.startswith('required_paths='):
+            keep=[p for p in line.strip().removeprefix('required_paths=').split(',') if 'pdh-gh-pull' not in p]
+            line='required_paths='+','.join(keep+paths)+'\n'
+        lines.append(line)
+    check.write_text(''.join(lines))
+
+
+def assert_bot_skill_discoverable(target, engine):
+    # Codex finds repo skills only under .agents/skills; Claude only under .claude/skills.
+    if engine=='claude':
+        assert (target/'.claude/skills/pdh-gh-pull/SKILL.md').is_file() and not (target/'.claude/skills/pdh-gh-pull').is_symlink()
+        assert os.readlink(target/'.agents/skills/pdh-gh-pull')=='../../.claude/skills/pdh-gh-pull'
+        assert (target/'.agents/skills/pdh-gh-pull/SKILL.md').is_file()
+    else:
+        assert (target/'.agents/skills/pdh-gh-pull/SKILL.md').is_file() and not (target/'.agents/skills/pdh-gh-pull').is_symlink()
+        assert not (target/'.codex/skills').exists(),'skill left outside the Codex search path'
+
+
 def payload(target):
     return {str(p.relative_to(target)): (os.readlink(p) if p.is_symlink() else p.read_bytes())
             for p in target.rglob('*') if (p.is_file() or p.is_symlink())
@@ -208,7 +237,7 @@ cp "$PDH_TICKET_FIXTURE" "$4"
             documented(target,engine,'merge-diff')
         # Optional bot update: the workflow decides installation, never the four shared files.
         bot=target/'.github/coding-bot'
-        skills=target/('.claude/skills' if engine=='claude' else '.codex/skills')
+        skills=target/('.claude/skills' if engine=='claude' else '.agents/skills')
         documented(target,engine,'bot-update')
         assert not bot.exists() and not (skills/'pdh-gh-pull').exists()
         bot.mkdir(parents=True)
@@ -229,8 +258,8 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         assert (skills/'pdh-gh-pull/SKILL.md').read_bytes()==(upstream/'github-bot/pdh-gh-pull/SKILL.md').read_bytes()
         assert (bot/'system.md').read_text()=='project-owned bot setup\n'
         assert (skills/'project-bot-skill').is_dir()
-        if engine=='claude':
-            assert os.readlink(target/'.agents/skills/pdh-gh-pull')=='../../.claude/skills/pdh-gh-pull'
+        assert_bot_skill_discoverable(target,engine)
+        set_required(target,bot_required(engine))
         before=payload(target);documented(target,engine,'bot-update')
         assert payload(target)==before
         print(engine+': bot-update judges by the workflow, stops on customizations, replaces only the four shared files')
@@ -346,10 +375,47 @@ cp "$PDH_TICKET_FIXTURE" "$4"
             documented(target,engine,'migration-check')
             verify_install(target,engine)
             assert '.github/coding-bot/_pdh.md\t' in lockfile.read_text(),'update did not register the installed bot layer'
+            assert_bot_skill_discoverable(target,engine)
             run(target,'bash','scripts/fast-checks.sh')
             for name,content in preserved.items():assert (target/name).read_bytes()==content,(engine,name)
             if iteration==0:first=payload(target)
             else:assert first==payload(target),'second documented update changed installed payload'
+        if engine=='codex':
+            # A Codex-only repo installed by the old table keeps the skill in .codex/skills, which Codex never searches.
+            locked=lockfile.read_text();required=(target/'scripts/checks/required-pdh-files.check').read_text()
+            old=target/'.codex/skills/pdh-gh-pull';old.parent.mkdir(parents=True)
+            (skills/'pdh-gh-pull').rename(old)
+            lockfile.write_text(locked.replace('.agents/skills/pdh-gh-pull','.codex/skills/pdh-gh-pull'))
+            set_required(target,['.claude/skills/pdh-gh-pull/SKILL.md','.agents/skills/pdh-gh-pull'])
+            # The old placement matches the lock, yet it is not where Codex looks.
+            run(target,'bash','scripts/pdh-lock.sh','check')
+            assert not (skills/'pdh-gh-pull').exists()
+            legacy=payload(target)
+            assert '旧配置' in documented(target,engine,'bot-update',code=1)
+            assert payload(target)==legacy,'bot-update changed files while the old placement remained'
+            (old/'SKILL.md').write_bytes((old/'SKILL.md').read_bytes()+b'project note\n')
+            changed=payload(target)
+            output=documented(target,engine,'bot-skill-move',code=1)
+            assert '.codex/skills/pdh-gh-pull/SKILL.md: 上流のどの版とも違う' in output,output
+            assert payload(target)==changed,'bot-skill-move moved a customized skill'
+            (old/'SKILL.md').write_bytes((upstream/'github-bot/pdh-gh-pull/SKILL.md').read_bytes())
+            (skills/'pdh-gh-pull').mkdir()
+            assert 'どちらを残すか' in documented(target,engine,'bot-skill-move',code=1)
+            assert payload(target)==legacy,'bot-skill-move moved over an existing skill'
+            (skills/'pdh-gh-pull').rmdir()
+            for iteration in range(2):
+                documented(target,engine,'bot-skill-move')
+                assert not old.exists()
+                # Matching files and the search path are separate facts.
+                assert (skills/'pdh-gh-pull/SKILL.md').read_bytes()==(upstream/'github-bot/pdh-gh-pull/SKILL.md').read_bytes()
+                assert_bot_skill_discoverable(target,engine)
+                assert lockfile.read_text()==locked,lockfile.read_text()
+                assert (target/'scripts/checks/required-pdh-files.check').read_text()==required
+            run(target,'bash','scripts/fast-checks.sh')
+            documented(target,engine,'bot-update')
+            verify_install(target,engine)
+            assert lockfile.read_text()==locked
+            print('codex: bot-skill-move stops on customizations and conflicts, then moves pdh-gh-pull into .agents/skills with lock and required paths')
         # Removing coding-bot drops only its rows; core rows, the upstream SHA and drift detection stay.
         locked=lockfile.read_text()
         core_lock=''.join(line for line in locked.splitlines(True)
@@ -362,6 +428,7 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         for name in ('_pdh.md','_github-issue.md','pdh-hooks.sh'):(bot/name).unlink()
         shutil.rmtree(skills/'pdh-gh-pull')
         if engine=='claude':(target/'.agents/skills/pdh-gh-pull').unlink()
+        set_required(target,[])
         for iteration in range(2):
             documented(target,engine,'bot-remove')
             assert lockfile.read_text()==core_lock,lockfile.read_text()

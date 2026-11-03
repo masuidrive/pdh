@@ -1,5 +1,5 @@
 # installed-by: .github/workflows/coding-bot.yml
 github-bot/_github-issue.md	.github/coding-bot/_github-issue.md
 github-bot/_pdh.md	.github/coding-bot/_pdh.md
-github-bot/pdh-gh-pull/	.codex/skills/pdh-gh-pull/
+github-bot/pdh-gh-pull/	.agents/skills/pdh-gh-pull/
 github-bot/pdh-hooks.sh	.github/coding-bot/pdh-hooks.sh
