@@ -35,6 +35,8 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 .agents/skills/pdh-gh-pull
 ```
 
+配置したら、core の INSTALL の「版を記録して検査する」を回す。`.github/workflows/coding-bot.yml` がある repo では、`pdh-lock.sh write` が上の 4 つを `.pdh-lock` に記録する（`<engine>/lock-map.github-bot.tsv`）。上流の版と違うファイルがあると記録せずに止まる。
+
 ## 1.5 既存の devcontainer とマージするとき
 
 **守るのは «run が始まってから «道具が無い» と分かる状態にしないこと» である。**
@@ -212,7 +214,7 @@ done
 
 更新のときの扱いは 2 つに分かれる。
 
-- **まるごと置き換える 4 つ** — `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/`。close モードと base branch はファイルに固定せず、設定から読む。旧カスタマイズは設定へ移す。
+- **まるごと置き換える 4 つ** — `_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/`。core の `.pdh-lock` に記録され、改変と欠落は `pdh-lock.sh check` が検出する。置き換えは core の INSTALL の `bot-update` が行い、上流のどの版とも違うファイルがあれば上書きせずに止まる。close モードと base branch はファイルに固定せず、設定から読む。旧カスタマイズは設定へ移す。
 - ⚠ **machinery は «diff してから» 反映する** — `.github/coding-bot/system.md` `_issue.md` `_pr.md` `run-action.sh` `run-in-container.sh` `engines/` `trigger-source.sh`、`.github/workflows/coding-bot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**
 
 **守るのは «導入先が意図して変えた場所が、更新で黙って消えないこと» である。**⚠ **所有者が PDH に変わるまで、machinery は「この手順では触らない」ものだった**ので、導入先の書き足しは自動的に守られていた。**いまは守られない** — 名前で選んで diff する以外に守る機構は無い。

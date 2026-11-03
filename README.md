@@ -43,7 +43,7 @@ pdh/
   docs/PDH-AGENTS.md          # 共有契約
   docs/pdh-glossary.md        # 用語
   claude/
-    INSTALL.md  lock-map.tsv
+    INSTALL.md  lock-map.tsv  lock-map.github-bot.tsv
     skills/
       pdh-pm/                # SKILL.md / _execution-team.md / _open-ticket.md / _records.md
       pdh-ticket-write/  pdh-open/  pdh-resume/  pdh-ticket-review/
@@ -62,7 +62,7 @@ pdh/
       spawn-worker.sh  test-ticket-local.sh  gen-agents-md.sh  gen-codex-agents.sh
       pdh-review-eval/        # README と空の cases.json。実案件データは配らない
   codex/                     # ネイティブ配置・backup・移行の入口と、生成した skill・worker
-    INSTALL.md  lock-map.tsv  skills/  templates/
+    INSTALL.md  lock-map.tsv  lock-map.github-bot.tsv  skills/  templates/
   github-bot/                # 任意の coding-bot。pdh-gh-pull/ もここから配る
     INSTALL.md  _pdh.md  _github-issue.md  pdh-hooks.sh
     .github/  .devcontainer/  ROBOT.md

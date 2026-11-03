@@ -219,7 +219,7 @@ bash scripts/test-all.sh
 4. `.ticket-config.yaml` は `default_content` と `note_content` を現行 template と一致させる。独自の節がある場合は差分マージして相違を報告する。固有設定（tickets_dir、default_branch、branch_prefix、repository、auto_push、delete_remote_on_close、worktree_copy_files、post_start_command、各 success_message）は戻す。トップレベルの `require_checklist`・`require_checklist_groups`・`pre_close_command`・`ticket_files`・`append_only_files` も個別に確認する
 5. `required-pdh-files.check` を配置した skill・agent の一覧に合わせ、symlink も更新する。project が使わないと明示して外した項目は復活させない。新設された script と hook の配線を忘れない
 6. [既知の移行手順](#既知の移行手順)の全項目を確認する。未完の ticket だけを移行し、`tickets/done/` は歴史記録として保持する。AC と Out-of-scope の内容は一括変更しない。着手時の ticket review と人の承認で直す
-7. `bash ./ticket.sh selfupdate` し、`./ticket.sh list` で確かめる。coding-bot 導入済みなら [github-bot/INSTALL.md](../github-bot/INSTALL.md) の更新・改名・secret の手順も適用する。共有プロトコルは上書きし、workflow・devcontainer の project の設定は差分を読んで保持する
+7. `bash ./ticket.sh selfupdate` し、`./ticket.sh list` で確かめる。coding-bot 導入済みなら [github-bot/INSTALL.md](../github-bot/INSTALL.md) の更新・改名・secret の手順も適用する。共有プロトコルの 4 つは `bot-update` で上書きし、workflow・devcontainer の project の設定は差分を読んで保持する
 8. 「版を記録して検査する」のコマンドを回す。`pdh-lock.sh write` は全件一致しなければ既存 lock を保って止まる。差分マージしていない変更があればそのファイルの `Based on` を進めない
 9. 移行確認コマンドを再実行し、要適用が残れば直す。同じ手順の 2 回目に差分が出ないことを確認する。backup の場所・反映した項目・相違・各検査の終了コードと実出力を報告する
 
@@ -264,6 +264,34 @@ while IFS="$(printf '\t')" read -r source destination; do
     cp -p "tmp/pdh/$source" "$destination"
   fi
 done < tmp/pdh/claude/lock-map.tsv
+```
+
+coding-bot を導入済みなら、PDH 保守分の 4 つも上流の版で置き換える。導入済みかは、`lock-map.github-bot.tsv` の 1 行目が指す workflow があるか、`.pdh-lock` にその 4 つの行があるかで決める。4 つのファイルの有無では決めない（消えたファイルを «未導入» と読まないため）。`local-changes` が止めたときは、挙がったファイルの repo 固有の内容を[既知の移行手順](#coding-bot-の共有ファイルを-pdh-lock-に登録する)に従って移してから再実行する。
+
+<!-- pdh-shell: bot-update -->
+```bash
+bot_map=tmp/pdh/claude/lock-map.github-bot.tsv
+bot_status=0
+bash scripts/pdh-lock.sh installed --map "$bot_map" || bot_status=$?
+[ "$bot_status" -le 1 ] || exit "$bot_status"
+if [ "$bot_status" -eq 0 ]; then
+  bash scripts/pdh-lock.sh local-changes --upstream tmp/pdh --map "$bot_map" || exit 1
+  while IFS="$(printf '\t')" read -r source destination; do
+    case "$source" in '#'*) continue ;; esac
+    destination=${destination%/}
+    mkdir -p "$(dirname "$destination")"
+    if [ -d "tmp/pdh/$source" ]; then
+      rm -rf "$destination"
+      mkdir -p "$destination"
+      cp -RL "tmp/pdh/$source/." "$destination/"
+    else
+      cp -p "tmp/pdh/$source" "$destination"
+    fi
+  done < "$bot_map"
+  if [ -d .agents/skills ] && { [ -L .agents/skills/pdh-gh-pull ] || [ ! -e .agents/skills/pdh-gh-pull ]; }; then
+    ln -snf ../../.claude/skills/pdh-gh-pull .agents/skills/pdh-gh-pull
+  fi
+fi
 ```
 
 ### 既知の移行手順
@@ -376,6 +404,15 @@ exit "$pdh_migration_status"
 ```
 
 上の確認を更新後に再実行する。同じ移行を 2 回行っても差分は出ない。review 集計は `pdh-review-tally.sh`、評価は `pdh-review-eval.sh --help` と `docs/pdh-review-eval/README.md` を読む。評価データは project が集め、実 engine での計測は CI に入れない。
+
+#### coding-bot の共有ファイルを .pdh-lock に登録する
+
+coding-bot を導入した repo では、`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/` も `.pdh-lock` に記録する。`pdh-lock.sh write` は `--map` と同じ場所の `lock-map.github-bot.tsv` も読み、`.github/workflows/coding-bot.yml` があるか、`.pdh-lock` にその行がある repo でだけ記録する。coding-bot を入れていない repo では何も変わらない。
+
+1. 「backup と上書き対象の更新コマンド」の `bot-update`を回す。`local-changes` が挙げたファイルは、上流のどの版とも違う。backup と見比べ、repo 固有の内容を `.ticket-config.yaml`・リポジトリ変数・`CLAUDE.md`・`.github/coding-bot/smoke-local.sh` へ移す。移したら挙がったファイルを消し、`bot-update` を再実行する。欠けたファイルでは止まらない
+2. 「版を記録して検査する」の `pdh-lock.sh write` を回す。4 つが上流の版と一致すれば `.pdh-lock` に入る。違うファイルが残っていれば、既存の lock を保って止まる
+3. `.agents/skills/pdh-gh-pull` の symlink は lock しない。消えたことは `required-pdh-files.check` が検出する
+4. coding-bot を取り外すときは、workflow と 4 つを消してから `.pdh-lock` を消し、`pdh-lock.sh write` で作り直す。lock に行が残る間は、ファイルが消えても導入済みとして扱う
 
 #### review から起票した ticket の Why の項目
 

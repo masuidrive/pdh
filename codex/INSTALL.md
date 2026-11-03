@@ -276,19 +276,34 @@ done < tmp/pdh/codex/lock-map.tsv
 
 上の `rm -rf` は lock-map に列挙した PDH skill だけを置き換える。`.agents/skills/` 全体や、`pdh-` で始まらない user skill / agent 定義は削除しない。
 
-github-bot レイヤーを導入済み（`.github/` 内に `_pdh.md` がある。改名前の配置も含む）なら、先に [改名手順](../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)と同文書の「導入先固有の secret」を確認し、該当する移行と確認コマンドの再実行を行う。その後、PDH 保守分（下の 4 つ）も同じく上流の版で置き換える。
+github-bot レイヤーを導入済み（`.github/workflows/` に coding-bot の workflow がある。改名前の配置も含む）なら、先に [改名手順](../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)と同文書の「導入先固有の secret」を確認し、該当する移行と確認コマンドの再実行を行う。その後、PDH 保守分（下の 4 つ）も同じく上流の版で置き換える。
 
 ⚠ **残りの machinery は «diff してから» 反映する** — `.github/coding-bot/system.md` `_issue.md` `_pr.md` `run-action.sh` `engines/`、`.github/workflows/coding-bot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**導入先はここを意図して変えていることがある（repo 固有の規則を書いた節・action の SHA 固定・timeout・既存 devcontainer とのマージ結果）。⚠ **2026-09-17 に所有者が変わってから、この節は «触らない» ではなくなった** — それまでは外部 repo からの vendoring で「この手順では触らない」ものだったので、導入先の書き足しも自動的に守られていた。**いまは守られない。**
 
 <!-- pdh-shell: bot-update -->
 ```bash
-if [ -f .github/coding-bot/_pdh.md ]; then
-  cp tmp/pdh/github-bot/_pdh.md .github/coding-bot/_pdh.md
-  cp tmp/pdh/github-bot/_github-issue.md .github/coding-bot/_github-issue.md
-  cp tmp/pdh/github-bot/pdh-hooks.sh .github/coding-bot/pdh-hooks.sh
-  rm -rf .codex/skills/pdh-gh-pull && cp -R tmp/pdh/github-bot/pdh-gh-pull .codex/skills/pdh-gh-pull
+bot_map=tmp/pdh/codex/lock-map.github-bot.tsv
+bot_status=0
+bash scripts/pdh-lock.sh installed --map "$bot_map" || bot_status=$?
+[ "$bot_status" -le 1 ] || exit "$bot_status"
+if [ "$bot_status" -eq 0 ]; then
+  bash scripts/pdh-lock.sh local-changes --upstream tmp/pdh --map "$bot_map" || exit 1
+  while IFS="$(printf '\t')" read -r source destination; do
+    case "$source" in '#'*) continue ;; esac
+    destination=${destination%/}
+    mkdir -p "$(dirname "$destination")"
+    if [ -d "tmp/pdh/$source" ]; then
+      rm -rf "$destination"
+      mkdir -p "$destination"
+      cp -RL "tmp/pdh/$source/." "$destination/"
+    else
+      cp -p "tmp/pdh/$source" "$destination"
+    fi
+  done < "$bot_map"
 fi
 ```
+
+導入済みかは、`lock-map.github-bot.tsv` の 1 行目が指す workflow があるか、`.pdh-lock` にその 4 つの行があるかで決める。4 つのファイルの有無では決めない（消えたファイルを «未導入» と読まないため）。`local-changes` が止めたときは、挙がったファイルの repo 固有の内容を [既知の移行手順](#coding-bot-の共有ファイルを-pdh-lock-に登録する)に従って移してから再実行する。
 
 上のコマンドは配置表の「上書き」の script・文書・check も毎回コピーする。「差分マージ」は project の値を保ち、「初回だけ」は既存の本文を保持する。新規の設定ファイルは既存設定へマージする。
 
@@ -447,6 +462,14 @@ chmod +x scripts/spawn-worker.sh
 ```
 
 適用後に確認コマンドを再実行する。同じ版を再度コピーしても差分は出ない。
+
+#### coding-bot の共有ファイルを .pdh-lock に登録する
+
+coding-bot を導入した repo では、`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/` も `.pdh-lock` に記録する。`pdh-lock.sh write` は `--map` と同じ場所の `lock-map.github-bot.tsv` も読み、`.github/workflows/coding-bot.yml` があるか、`.pdh-lock` にその行がある repo でだけ記録する。coding-bot を入れていない repo では何も変わらない。
+
+1. 手順 2 の `bot-update`を回す。`local-changes` が挙げたファイルは、上流のどの版とも違う。backup と見比べ、repo 固有の内容を `.ticket-config.yaml`・リポジトリ変数・`AGENTS.md`・`.github/coding-bot/smoke-local.sh` へ移す。移したら挙がったファイルを消し、`bot-update` を再実行する。欠けたファイルでは止まらない
+2. 「版を記録して検査する」の `pdh-lock.sh write` を回す。4 つが上流の版と一致すれば `.pdh-lock` に入る。違うファイルが残っていれば、既存の lock を保って止まる
+3. coding-bot を取り外すときは、workflow と 4 つを消してから `.pdh-lock` を消し、`pdh-lock.sh write` で作り直す。lock に行が残る間は、ファイルが消えても導入済みとして扱う
 
 #### review から起票した ticket の Why の項目
 
