@@ -350,6 +350,29 @@ cp "$PDH_TICKET_FIXTURE" "$4"
             for name,content in preserved.items():assert (target/name).read_bytes()==content,(engine,name)
             if iteration==0:first=payload(target)
             else:assert first==payload(target),'second documented update changed installed payload'
+        # Removing coding-bot drops only its rows; core rows, the upstream SHA and drift detection stay.
+        locked=lockfile.read_text()
+        core_lock=''.join(line for line in locked.splitlines(True)
+                          if '.github/coding-bot/' not in line and '/pdh-gh-pull/' not in line)
+        assert core_lock!=locked
+        output=documented(target,engine,'bot-remove',code=1)
+        assert '.github/workflows/coding-bot.yml: 残っている' in output,output
+        assert lockfile.read_text()==locked,'bot-remove changed the lock while coding-bot remained'
+        workflow.unlink()
+        for name in ('_pdh.md','_github-issue.md','pdh-hooks.sh'):(bot/name).unlink()
+        shutil.rmtree(skills/'pdh-gh-pull')
+        if engine=='claude':(target/'.agents/skills/pdh-gh-pull').unlink()
+        for iteration in range(2):
+            documented(target,engine,'bot-remove')
+            assert lockfile.read_text()==core_lock,lockfile.read_text()
+        run(target,'bash','scripts/pdh-lock.sh','installed','--map',str(upstream/engine/'lock-map.github-bot.tsv'),code=1)
+        changed=skill_dir/'pdh-resume/SKILL.md';content=changed.read_bytes()
+        changed.write_bytes(content+b'\ndrift\n')
+        output=documented(target,engine,'bot-remove',code=1)
+        assert 'pdh-resume/SKILL.md: lock と sha256 が違う' in output,output
+        assert lockfile.read_text()==core_lock
+        changed.write_bytes(content)
+        print(engine+': bot-remove drops only the coding-bot rows and keeps core drift detection')
         # Migration verification must catch hookbus even when rg cannot run.
         rg=bins/'rg';rg.write_text('#!/bin/sh\nexit 127\n');rg.chmod(0o755)
         (target/'package.json').write_text('{"test": "node scripts/hookbus.js"}\n')

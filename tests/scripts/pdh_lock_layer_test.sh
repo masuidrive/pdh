@@ -129,9 +129,22 @@ expect 2 '上流 checkout に無い lock の commit を通さない' local_chang
 contains '.pdh-lock の upstream commit が上流 checkout にありません'
 must cp "$TMP_DIR/current-lock" .pdh-lock
 
-# 取り外し: lock を消して書き直すと、installed-by の無い layer は外れる。
+# 取り外し: layer の行だけを消すと、core の行と改変の検出が残る。
 must rm -r .github/coding-bot .github/workflows .claude/skills/pdh-gh-pull links
+grep -vF -e .github/coding-bot/ -e .claude/skills/pdh-gh-pull/ .pdh-lock > "$TMP_DIR/core-lock" || fail 'core の行がありません'
+must cp "$TMP_DIR/core-lock" .pdh-lock
+[ "$(rows)" = 'core.md ' ] || fail "core の行が変わった: $(rows)"
+expect 1 '行を消した layer は未導入' installed
+expect 0 'core の行だけで check が通る' lock check
+printf '個別の追記\n' >> core.md
+expect 1 'layer を外した後も core の改変を検出する' lock check
+contains 'core.md: lock と sha256 が違う'
+# lock 全体を消すと、write が止まった後の check は core の改変を通す。
 must rm .pdh-lock
+expect 1 'core が上流と違えば write は止まる' write_lock
+expect 0 'lock が無いと check は改変を通す' lock check
+contains '未導入のため検査対象なし'
+must cp "$TMP_DIR/upstream/core.md" core.md
 expect 0 'lock を作り直すと取り外した layer を外す' write_lock
 [ "$(rows)" = 'core.md ' ] || fail "取り外した layer が残った: $(rows)"
 

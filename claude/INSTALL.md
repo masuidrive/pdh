@@ -412,7 +412,26 @@ coding-bot を導入した repo では、`_pdh.md` / `_github-issue.md` / `pdh-h
 1. 「backup と上書き対象の更新コマンド」の `bot-update`を回す。`local-changes` が挙げたファイルは、上流のどの版とも違う。backup と見比べ、repo 固有の内容を `.ticket-config.yaml`・リポジトリ変数・`CLAUDE.md`・`.github/coding-bot/smoke-local.sh` へ移す。移したら挙がったファイルを消し、`bot-update` を再実行する。欠けたファイルでは止まらない
 2. 「版を記録して検査する」の `pdh-lock.sh write` を回す。4 つが上流の版と一致すれば `.pdh-lock` に入る。違うファイルが残っていれば、既存の lock を保って止まる
 3. `.agents/skills/pdh-gh-pull` の symlink は lock しない。消えたことは `required-pdh-files.check` が検出する
-4. coding-bot を取り外すときは、workflow と 4 つを消してから `.pdh-lock` を消し、`pdh-lock.sh write` で作り直す。lock に行が残る間は、ファイルが消えても導入済みとして扱う
+4. coding-bot を取り外すときは、`.github/workflows/coding-bot.yml` と 4 つ、`.agents/skills/pdh-gh-pull` の symlink を消し、`required-pdh-files.check` に足した 2 行を外す。それから `bot-remove` を回す。lock に行が残る間は、ファイルが消えても導入済みとして扱う
+
+`bot-remove` は `.pdh-lock` から coding-bot の行だけを消し、残りの行で `pdh-lock.sh check` を回す。core の行と先頭の upstream SHA は変えないので、`tmp/pdh` は map を読むためだけに使い、lock の版に揃えなくてよい。`.pdh-lock` 全体を消して write し直さない。write が上流との違いで止まると lock が無いまま残り、その間の `check` は «未導入» として成功し、core の改変を通す。
+
+<!-- pdh-shell: bot-remove -->
+```bash
+bot_map=tmp/pdh/claude/lock-map.github-bot.tsv
+bot_left=0
+while IFS= read -r path; do
+  if [ -e "$path" ] || [ -L "$path" ]; then
+    printf '%s: 残っている。先に消す\n' "$path" >&2
+    bot_left=1
+  fi
+done < <(sed -n '1s/^# installed-by: //p' "$bot_map"; awk -F '\t' 'NR > 1 { sub(/\/$/, "", $2); print $2 }' "$bot_map")
+[ "$bot_left" -eq 0 ] || exit 1
+awk -F '\t' 'NR == FNR { if (FNR > 1) { sub(/\/$/, "", $2); drop[$2] = 1; drop["dir:" $2] = 1 }; next }
+  FNR == 1 || !($1 in drop || $4 in drop)' "$bot_map" .pdh-lock > .pdh-lock.new
+mv .pdh-lock.new .pdh-lock
+bash scripts/pdh-lock.sh check
+```
 
 #### review から起票した ticket の Why の項目
 
