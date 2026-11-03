@@ -340,9 +340,18 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         config.write_text(config_body.replace('worktree_mode: true','worktree_mode: false')
                           .replace('Why-not-fix-now:','Old-why-label:'))
         obsolete=skill_dir/'pdh-dev';obsolete.mkdir()
-        tickets=target/'tickets';(tickets/'260101-000000-old').mkdir(parents=True);(tickets/'done/260101-000001-done').mkdir(parents=True)
-        (tickets/'260101-000000-old/ticket.md').write_text('### Why\n- 拾う時機: 次に選ぶ\n説明の中の 拾う時機 は残す\n')
-        (tickets/'done/260101-000001-done/ticket.md').write_text('### Why\n派生元: 260101-000000-old\n')
+        # 移行の対象は、ticket の項目の行（done を含む）と close 済みでない note の Checklist の行だけ。
+        tickets=target/'tickets';old=tickets/'260101-000000-old';done=tickets/'done/260101-000001-done'
+        old.mkdir(parents=True);done.mkdir(parents=True)
+        (old/'ticket.md').write_text('### Why\n- 拾う時機: 次に選ぶ\n説明の中の 拾う時機 は残す\n> 拾う時機: 引用は残す\n```\n拾う時機: コードブロックも残す\n```\n')
+        (old/'progress.md').write_text('拾う時機: 近くを触るとき を検索した\n派生元: progress の記録\n')
+        old_line='- [x] PDH-ticket-review: `拾う時機: 近くを触るとき` の ticket を探した'
+        (old/'note.md').write_text('## Status: PDH-implement\n## Checklist\n'+old_line+'\n## メモ\n'+old_line+' の引用\n')
+        (done/'ticket.md').write_text('### Why\n拾う時機: 近くを触るとき — 認可の層\n派生元: 260101-000000-old\n完了の判断は 拾う時機 と無関係\n')
+        (done/'note.md').write_text('## Status: PDH-close\n## Checklist\n'+old_line+'\n')
+        search=re.search(r"git grep -lE '([^']*)' -- <tickets_dir>",(skill_dir/'pdh-ticket-review/SKILL.md').read_text()).group(1)
+        run(target,'git','add','tickets')
+        run(target,'git','grep','-lE',search,'--','tickets',code=1)
         output=documented(target,engine,'migration-check',code=1)
         for item in ('.ticket-config.yaml worktree_mode: true',
                      '.ticket-config.yaml Why-not-fix-now:',
@@ -350,13 +359,24 @@ cp "$PDH_TICKET_FIXTURE" "$4"
                      '.ticket-config.yaml の template 本文',
                      'review から起票した ticket の旧い項目名'):
             assert '要適用: '+item in output,output
-        assert '- 拾う時機: 次に選ぶ' in output and '説明の中の' not in output and '260101-000001-done' not in output,output
+        for line in ('260101-000000-old/ticket.md:2: - 拾う時機: 次に選ぶ','260101-000000-old/note.md:3: '+old_line,
+                     '260101-000001-done/ticket.md:2: 拾う時機: 近くを触るとき','260101-000001-done/ticket.md:3: 派生元:'):
+            assert line in output,(line,output)
+        for text in ('説明の中の','引用は残す','コードブロックも残す','progress','の引用','260101-000001-done/note.md','完了の判断'):
+            assert text not in output,(text,output)
         assert '済: .pdh-lock の照合' in output,output
         config.write_text(config_body);obsolete.rmdir()
-        (tickets/'260101-000000-old/ticket.md').write_text('### Why\n- pickup-timing: next-selection\n')
+        # 対象の行だけを移行する。progress・引用・説明文・done の note の旧い名前は残しても «済» になる。
+        (old/'ticket.md').write_text((old/'ticket.md').read_text().replace('- 拾う時機: 次に選ぶ','- pickup-timing: next-selection'))
+        (old/'note.md').write_text((old/'note.md').read_text().replace(old_line+'\n## メモ','- [x] PDH-ticket-review: `pickup-timing: when-touching` の ticket を探した\n## メモ'))
+        (done/'ticket.md').write_text((done/'ticket.md').read_text().replace('拾う時機: 近くを触るとき','pickup-timing: when-touching').replace('派生元:','derived-from:'))
         output=documented(target,engine,'migration-check')
         assert '要適用:' not in output and '済: review から起票した ticket の旧い項目名' in output,output
-        shutil.rmtree(tickets/'260101-000000-old');shutil.rmtree(tickets/'done/260101-000001-done')
+        # 移行した done の項目は、pdh-ticket-review の検索で見つかる。
+        run(target,'git','add','tickets')
+        assert run(target,'git','grep','-lE',search,'--','tickets').split()==['tickets/done/260101-000001-done/ticket.md']
+        run(target,'git','rm','-rq','--cached','tickets/260101-000000-old','tickets/done/260101-000001-done')
+        shutil.rmtree(old);shutil.rmtree(done)
         print(engine+': migration-check reports all missing items and returns aggregate status')
         old_names=('pdh-dev','pdh-coding','pdh-reviewing','pdh-verifying','pdh-rule-write')
         for name in old_names:

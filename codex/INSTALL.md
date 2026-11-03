@@ -425,8 +425,21 @@ done
 pdh_check ".ticket-config.yaml の template 本文" bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/codex/templates/.ticket-config.yaml
 pdh_tickets_dir=$(sed -n 's/^tickets_dir:[[:space:]]*//p' .ticket-config.yaml | sed 's/[[:space:]]*#.*//' | tr -d "\"'" | head -n 1)
 pdh_tickets_dir=${pdh_tickets_dir:-tickets}
+# 検索が読む ticket の項目の行（done を含む）と、close 済みでない note の Checklist の行だけを見る。
+pdh_no_old_derived_fields() {
+  local found
+  found=$(find "$1" -type f \( -name ticket.md -o \( -name note.md ! -path '*/done/*' \) \) -exec awk '
+    FNR == 1 { fence = 0; checklist = 0; note = FILENAME ~ /note[.]md$/ }
+    /^[[:space:]]*```/ { fence = !fence; next }
+    fence { next }
+    note && /^##? / { checklist = /^## Checklist[[:space:]]*$/; next }
+    !note && /^[[:space:]]*(-[[:space:]]+)?(派生元|拾う時機)(:|：)/ { print FILENAME ":" FNR ": " $0 }
+    note && checklist && /^[[:space:]]*- \[.\] PDH-ticket-review:/ && /拾う時機: 近くを触るとき/ { print FILENAME ":" FNR ": " $0 }
+  ' {} +)
+  [ -z "$found" ] || { printf '%s\n' "$found"; return 1; }
+}
 [ ! -d "$pdh_tickets_dir" ] ||
-  pdh_check "review から起票した ticket の旧い項目名" pdh_absent -rE --exclude-dir=done '^[[:space:]]*(-[[:space:]]+)?(派生元|拾う時機)[:：]|拾う時機: 近くを触るとき' "$pdh_tickets_dir"
+  pdh_check "review から起票した ticket の旧い項目名" pdh_no_old_derived_fields "$pdh_tickets_dir"
 exit "$pdh_migration_status"
 ```
 
@@ -476,12 +489,14 @@ review から起票した ticket の項目名と `pickup-timing:` の値は、�
 | `近くを触るとき` | `when-touching` |
 | `症状の報告時` | `on-symptom-report` |
 
-既知の移行手順の確認（migration-check）は、close 済みでない ticket と note に旧い名前が残っていると `要適用: review から起票した ticket の旧い項目名` を出し、残っている行を並べる。`tickets/done` は探さない。
+移行の対象は次の 2 つだけである。既知の移行手順の確認（migration-check）は、この 2 つに旧い名前が残っていると `要適用: review から起票した ticket の旧い項目名` を出し、残っている行を並べる。
 
-- ticket の Why では、項目名と、`pickup-timing:` の値の先頭の区分だけを表どおりに置き換える。値の後に続く説明は変えない
-- note の Checklist の `PDH-ticket-review:` の行では、`拾う時機: 近くを触るとき` を `pickup-timing: when-touching` にする。印と、行の後ろの記録は変えない
-- 説明文・引用・progress の記録は置き換えない。done の ticket は検査しないので書き換えない。git の履歴は書き換えない
-- 置き換えた後、migration-check のこの項目が `済:` になり、`bash scripts/check-pdh-ticket.sh` が exit 0 になる
+- ticket（`tickets/done` を含む）の `ticket.md` の、行頭の `派生元:`・`拾う時機:` の行。項目名と、`pickup-timing:` の値の先頭の区分だけを表どおりに置き換え、値の後に続く説明は変えない。done の ticket は close の検査をしないが、`pickup-timing:` の検索が読むので移行する
+- close 済みでない ticket の note の Checklist にある `PDH-ticket-review:` の行。`拾う時機: 近くを触るとき` を `pickup-timing: when-touching` にし、印と行の後ろの記録は変えない
+
+progress・引用（`>` の行とコードブロック）・説明文の中の旧い名前は対象にせず、置き換えない。done の ticket でも本文と判断は変えず、git の履歴は書き換えない。
+
+置き換えた後、migration-check のこの項目が `済:` になり、`bash scripts/check-pdh-ticket.sh` が exit 0 になる。
 
 ### 3.5 close 済みでない ticket
 
