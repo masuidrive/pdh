@@ -288,6 +288,9 @@ skill の分け方は skill `pdh-change` にある。
   - とりうる値: いま直す / 起票する / 記録だけ残す / 棄却する（Findings 表の判定の列には、この 4 つの文字列だけを書く）
   - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」
   - 使わない語: fix now / file / record only / reject、採用、記録のみ、別 ticket にした、退けた、保留
+- **制約の受け入れ**
+  - 意味: 今の契約を満たさない実在する欠陥を、承認者が契約を狭めて受け入れること。処置は «記録だけ残す» で、元の finding は誤検出として扱わない。初めから契約の外の振る舞いは «棄却する» で、これに当たらない。
+  - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」
 - **処置の判断**
   - 意味: finding の処置を決めること。
   - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」
