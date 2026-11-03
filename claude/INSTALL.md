@@ -372,6 +372,10 @@ for path in .claude/settings.json scripts/test-all.sh package.json vitest.config
   pdh_check "$path の hookbus 呼び出し撤去" pdh_absent hookbus "$path"
 done
 pdh_check ".ticket-config.yaml の template 本文" bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/claude/templates/.ticket-config.yaml
+pdh_tickets_dir=$(sed -n 's/^tickets_dir:[[:space:]]*//p' .ticket-config.yaml | sed 's/[[:space:]]*#.*//' | tr -d "\"'" | head -n 1)
+pdh_tickets_dir=${pdh_tickets_dir:-tickets}
+[ ! -d "$pdh_tickets_dir" ] ||
+  pdh_check "review から起票した ticket の旧い項目名" pdh_absent -rE --exclude-dir=done '^[[:space:]]*(-[[:space:]]+)?(派生元|拾う時機)[:：]|拾う時機: 近くを触るとき' "$pdh_tickets_dir"
 exit "$pdh_migration_status"
 ```
 
@@ -379,12 +383,32 @@ exit "$pdh_migration_status"
 
 #### review から起票した ticket の Why の項目
 
-`check-pdh-ticket.sh` は、review の finding から起票した ticket の Why に `派生元:`・`拾う時機:` と、必須の修正に当たらない理由の `Why-not-fix-now:` を求める。更新の前に作った ticket と完了の記録は書き換えない。
+`check-pdh-ticket.sh` は、review の finding から起票した ticket の Why に `derived-from:`・`pickup-timing:` と、必須の修正に当たらない理由の `Why-not-fix-now:` を求める。更新の前に作った ticket と完了の記録は書き換えない。
 
 - ticket を最初に足した commit の `scripts/check-pdh-ticket.sh` に `# derived-ticket-fields: v1` の行が無ければ、更新前の ticket として新しい項目を求めない。更新前に作った起票先を指す `起票:` の行も、そのまま close できる
 - 更新前の ticket には、`pdh-ticket-write` と `pdh-ticket-review` に足した同じ欠陥の検索の Checklist の行も求めない
-- `拾う時機: 症状の報告時` の起票先の `観察できる症状:` と、`pdh-ticket-write` の «報告から書くなら…» の Checklist の行は、`# derived-ticket-fields: v2` の行を持つ版で作った ticket にだけ求める。v1 の版で作った ticket には足さなくてよい
+- `pickup-timing: on-symptom-report` の起票先の `observable-symptom:` と、`pdh-ticket-write` の «報告から書くなら…» の Checklist の行は、`# derived-ticket-fields: v2` の行を持つ版で作った ticket にだけ求める。v1 の版で作った ticket には足さなくてよい
 - 起票元の base にすでにあった ticket へ集約したときは、実在だけを確かめる
 - done の ticket は検査しない
 - GitHub の issue へ起票する導入先は、`.ticket-config.yaml` の `github_bot.findings_issue_repos` に repo を書く（`github-bot/.ticket-config.snippet.yaml`）。書かない導入先では、起票先は repo の中の ticket だけになる
+
+#### review から起票した ticket の項目名を英語の識別子にする
+
+review から起票した ticket の項目名と `pickup-timing:` の値は、英語の kebab-case で書き、半角コロンで区切る。旧い日本語の項目名と値は、検査で不正な値として落ちる。
+
+| 旧 | 新 |
+|---|---|
+| `拾う時機:` | `pickup-timing:` |
+| `派生元:` | `derived-from:` |
+| `すぐ対応` | `immediate` |
+| `次に選ぶ` | `next-selection` |
+| `近くを触るとき` | `when-touching` |
+| `症状の報告時` | `on-symptom-report` |
+
+既知の移行手順の確認（migration-check）は、close 済みでない ticket と note に旧い名前が残っていると `要適用: review から起票した ticket の旧い項目名` を出し、残っている行を並べる。`tickets/done` は探さない。
+
+- ticket の Why では、項目名と、`pickup-timing:` の値の先頭の区分だけを表どおりに置き換える。値の後に続く説明は変えない
+- note の Checklist の `PDH-ticket-review:` の行では、`拾う時機: 近くを触るとき` を `pickup-timing: when-touching` にする。印と、行の後ろの記録は変えない
+- 説明文・引用・progress の記録は置き換えない。done の ticket は検査しないので書き換えない。git の履歴は書き換えない
+- 置き換えた後、migration-check のこの項目が `済:` になり、`bash scripts/check-pdh-ticket.sh` が exit 0 になる
 

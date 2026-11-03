@@ -62,7 +62,7 @@ ticket の節は `.ticket-config.yaml` の `default_content`、note の節は `n
 
 - `Reproduction-or-measurement:` 何を開いて・何を実行して・何が見えたか。バグなら再現手順と結果、要望なら原文の所在と、現状を 1 回確かめた結果
 - `Why-not-fix-now:` 進行中の ticket から派生したなら、その ticket の必須の修正（`[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」）に当たらない理由。直す手間や規模は理由にしない。要望起点なら «該当なし（要望起点。進行中の ticket から派生していない）»
-- 進行中の ticket から派生したなら、`派生元:` と `拾う時機:` も書く（`[SKILLS_PATH]/pdh-review/SKILL.md`「起票した ticket に書くこと」）
+- 進行中の ticket から派生したなら、`derived-from:` と `pickup-timing:` も書く（`[SKILLS_PATH]/pdh-review/SKILL.md`「起票した ticket に書くこと」）
 
 ### 同じ ticket を探す
 
@@ -76,23 +76,23 @@ ticket の節は `.ticket-config.yaml` の `default_content`、note の節は `n
 
 #### 報告から書くとき
 
-この規則の目的: 原因を知らない報告からでも、`拾う時機: 症状の報告時` で待っている ticket に辿り着き、そのうえで違う欠陥を同じと決めないこと。報告は症状しか持たないことが多く、原因の言葉の検索では当たらない。
+この規則の目的: 原因を知らない報告からでも、`pickup-timing: on-symptom-report` で待っている ticket に辿り着き、そのうえで違う欠陥を同じと決めないこと。報告は症状しか持たないことが多く、原因の言葉の検索では当たらない。
 
 要望が症状の報告（«画面 X で Y が出る» の形）なら、上の検索に加えて次を行う。報告でない要望では、Checklist の該当行を `- [-] … - skip: 報告ではない` にする。
 
-1. **候補を見つける。**`git grep -lE '^[[:space:]]*(-[[:space:]]+)?拾う時機:[^<]*症状の報告時' -- <tickets_dir>` で tickets と tickets/done の ticket を出し、各 ticket の `観察できる症状:`（無い ticket は `Reproduction-or-measurement:` と anchor）を、報告の症状と条件に突き合わせる。症状が近いものを候補にする。GitHub の issue を起票先にする project では issue も探す（`github-bot/_github-issue.md`「review の finding を issue にする」）
+1. **候補を見つける。**`git grep -lE '^[[:space:]]*(-[[:space:]]+)?pickup-timing:[^<]*on-symptom-report' -- <tickets_dir>` で tickets と tickets/done の ticket を出し、各 ticket の `observable-symptom:`（無い ticket は `Reproduction-or-measurement:` と anchor）を、報告の症状と条件に突き合わせる。症状が近いものを候補にする。GitHub の issue を起票先にする project では issue も探す（`github-bot/_github-issue.md`「review の finding を issue にする」）
 2. **同じ欠陥と確定する。**候補ごとに、報告の原因を調べ、原因・対象・期待する修正の 3 つが一致するかで決める（`[SKILLS_PATH]/pdh-review/SKILL.md`「同じ欠陥の ticket があるとき」）。症状が一致しただけでは確定しない。同じ症状でも 3 つのどれかが違えば別の欠陥として扱い、違う項目を progress に書く
-3. **原因が判定できないときは、同じとも別とも決めない。**再現しない・報告から原因へ辿れないときは、この ticket を書き進め、`Why` に `同じ欠陥の候補: <ticket 名> — 未判定: <分からないこと>` を書く。原因が分かった時点で 2 の判定をやり直す
+3. **原因が判定できないときは、同じとも別とも決めない。**再現しない・報告から原因へ辿れないときは、この ticket を書き進め、`Why` に `related-defect-candidate: <ticket 名> — 未判定: <分からないこと>` を書く。原因が分かった時点で 2 の判定をやり直す
 
 同じ欠陥と確定した候補は、その状態で `[SKILLS_PATH]/pdh-review/SKILL.md`「同じ欠陥の ticket があるとき」の分け方を当てる。未完了の候補へ集約するときは、報告の所在と症状をこの ticket の progress に書き、note の Checklist に `- [ ] 起票: <報告の症状> → <候補の ticket 名>` を書く（その ticket を拾う人が、PDH-ticket-review の `起票:` の検索で報告を見つける）。この ticket を続けるか中止するかは人に聞く。
 
-集約した候補の `拾う時機:` は、報告が来たことだけで上げない。報告で分かった次の 3 つから、4 区分を選び直す。
+集約した候補の `pickup-timing:` は、報告が来たことだけで上げない。報告で分かった次の 3 つから、4 区分を選び直す。
 
 - 実害 — 報告者が受けた害の重さと範囲
 - 到達条件 — どの入力・設定・利用者で起きるか。報告で、想定より広く届くと分かったか
 - 回避策 — 報告者がいまとれる回避策があるか
 
-害が重い、または重い害に届くかが分からないなら、`すぐ対応` か `次に選ぶ` にし、待つ区分（`近くを触るとき`・`症状の報告時`）に残さない。選び直した区分と根拠は progress に書き、`すぐ対応` か `次に選ぶ` に上げるなら人に渡す（`PDH-AGENTS.md`「受け渡し経路」の `発行先:` の行）。区分を上げても着手は人が決め、agent はそれを理由に着手しない。候補の ticket のファイルは書き換えない（`[SKILLS_PATH]/pdh-review/SKILL.md`「同じ欠陥の ticket があるとき」）。区分の書き換えは、その ticket を着手する PM が行う。
+害が重い、または重い害に届くかが分からないなら、`immediate` か `next-selection` にし、待つ区分（`when-touching`・`on-symptom-report`）に残さない。選び直した区分と根拠は progress に書き、`immediate` か `next-selection` に上げるなら人に渡す（`PDH-AGENTS.md`「受け渡し経路」の `発行先:` の行）。区分を上げても着手は人が決め、agent はそれを理由に着手しない。候補の ticket のファイルは書き換えない（`[SKILLS_PATH]/pdh-review/SKILL.md`「同じ欠陥の ticket があるとき」）。区分の書き換えは、その ticket を着手する PM が行う。
 
 ### AC の書き方
 
@@ -167,7 +167,7 @@ test -z "$(git status --porcelain -- "$ticket_dir")"
 - [ ] PDH-ticket-write: 実装の詳細、今回要らない拡張、将来の要件向けの設計が入っていない
 - [ ] PDH-ticket-write: 未決の事項が note の `Open-Questions` に `- [ ]` で残っている
 - [ ] PDH-ticket-write: 同じ原因・対象・期待する修正の ticket を検索した。検索語と件数（該当 0 件を含む）と、新しく作るか既存へ集約するかの判断が progress にある
-- [ ] PDH-ticket-write: 報告から書くなら、`拾う時機: 症状の報告時` の ticket を症状の言葉でも探した。検索語・候補ごとの判断（同じ欠陥・別の欠陥・未判定）と、同じ欠陥なら `拾う時機:` の再判断が progress にある
+- [ ] PDH-ticket-write: 報告から書くなら、`pickup-timing: on-symptom-report` の ticket を症状の言葉でも探した。検索語・候補ごとの判断（同じ欠陥・別の欠陥・未判定）と、同じ欠陥なら `pickup-timing:` の再判断が progress にある
 
 満たさない項目があれば直す。
 

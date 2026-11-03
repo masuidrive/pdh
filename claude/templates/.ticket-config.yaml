@@ -122,7 +122,7 @@ default_content: |
        Product Brief の Problem / Solution のどの部分を担うか明記する。 -->
   Key-User-Journeys: <!-- この ticket が良くする Product Brief の Key User Journeys の番号（例: J3）。1 つ以上。どれにも当たらない（内部の整理など）なら «該当なし» と理由 -->
   Reproduction-or-measurement: <!-- 何を開いて・何を実行して・何が見えたか。バグなら再現手順と結果。要望なら原文の所在と、現状を 1 回確かめた結果 -->
-  Why-not-fix-now: <!-- 進行中の ticket から派生したなら、その ticket の必須の修正に当たらない理由（手間や規模は理由にしない）。派生したなら、派生元: <ticket 名> と 拾う時機: <すぐ対応 / 次に選ぶ / 近くを触るとき / 症状の報告時> の行も足し、症状の報告時 なら 観察できる症状: <報告者が見る症状と起きる条件> の行も足す。要望起点なら «該当なし（要望起点。進行中の ticket から派生していない）» -->
+  Why-not-fix-now: <!-- 進行中の ticket から派生したなら、その ticket の必須の修正に当たらない理由（手間や規模は理由にしない）。派生したなら、derived-from: <ticket 名> と pickup-timing: <immediate / next-selection / when-touching / on-symptom-report> の行も足し、on-symptom-report なら observable-symptom: <報告者が見る症状と起きる条件> の行も足す。要望起点なら «該当なし（要望起点。進行中の ticket から派生していない）» -->
 
   ### What / Acceptance Criteria
   <!-- 完了を判定できる条件。プロダクトの観察可能な振る舞いだけを書く。

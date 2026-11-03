@@ -9,9 +9,9 @@
 #   4. 未完了 ticket の note の Checklist に書かれた起票先が実在する。owner/repo#N の起票先は、
 #      github_bot.findings_issue_repos に載る repo のときだけ形を認める（実在は確かめない）
 #   5. この branch の未完了 ticket の Why に根拠の 2 行がある。
-#      Status が PDH-review 以降なら、この branch で新しく作った起票先の Why に 派生元:・拾う時機: があり、
-#      Why-not-fix-now: が «該当なし» でない。拾う時機が «すぐ対応» なら、Checklist に起票先と «発行先:» の行がある。
-#      拾う時機が «症状の報告時» なら、起票先の Why に 観察できる症状: がある。
+#      Status が PDH-review 以降なら、この branch で新しく作った起票先の Why に derived-from:・pickup-timing: があり、
+#      Why-not-fix-now: が «該当なし» でない。pickup-timing が «immediate» なら、Checklist に起票先と «発行先:» の行がある。
+#      pickup-timing が «on-symptom-report» なら、起票先の Why に observable-symptom: がある。
 #      base にあった起票先（既存への集約）と、各印より前の版で作った起票先は数えない（下の derived_fields_marker）
 #   6. ticket の «AC-approved:» の値が、いまの AC と Out-of-scope のハッシュと一致する。
 #      PDH-implement 以降なら値がある（AC と Out-of-scope が承認されたこと・承認後に変わっていないこと）
@@ -66,17 +66,17 @@ findings_issue_repos=" $(github_bot_value findings_issue_repos | tr ',[]' '   ')
 # derived-ticket-fields: v1
 # derived-ticket-fields: v2
 # 印を持つ版の scripts/check-pdh-ticket.sh で作った ticket から、その印の項目と後から足した PDH-stage の行を求める。
-# v1 は別件の項目（派生元:・拾う時機:）と late_stage_lines、v2 は症状の報告時の 観察できる症状: と late_stage_lines_v2。
+# v1 は別件の項目（derived-from:・pickup-timing:）と late_stage_lines、v2 は on-symptom-report の observable-symptom: と late_stage_lines_v2。
 # 印の無い版で作った ticket は、作った時点の規則で閉じられる。
 derived_fields_marker='# derived-ticket-fields: v1'
 symptom_fields_marker='# derived-ticket-fields: v2'
 late_stage_lines=$(cat <<'EOF'
 PDH-ticket-write: 同じ原因・対象・期待する修正の ticket を検索した。検索語と件数（該当 0 件を含む）と、新しく作るか既存へ集約するかの判断が progress にある
-PDH-ticket-review: この ticket を指す `起票:` の行と、`拾う時機: 近くを触るとき` の ticket のうち同じ箇所に触るものを探し、コマンド・件数（0 件を含む）・取り込むかの判断が progress にある
+PDH-ticket-review: この ticket を指す `起票:` の行と、`pickup-timing: when-touching` の ticket のうち同じ箇所に触るものを探し、コマンド・件数（0 件を含む）・取り込むかの判断が progress にある
 EOF
 )
 late_stage_lines_v2=$(cat <<'EOF'
-PDH-ticket-write: 報告から書くなら、`拾う時機: 症状の報告時` の ticket を症状の言葉でも探した。検索語・候補ごとの判断（同じ欠陥・別の欠陥・未判定）と、同じ欠陥なら `拾う時機:` の再判断が progress にある
+PDH-ticket-write: 報告から書くなら、`pickup-timing: on-symptom-report` の ticket を症状の言葉でも探した。検索語・候補ごとの判断（同じ欠陥・別の欠陥・未判定）と、同じ欠陥なら `pickup-timing:` の再判断が progress にある
 EOF
 )
 # 引数（印・path…）の path を最初に追加した commit の版の検査 script に印が無ければ 0。未 commit なら 1。
@@ -238,7 +238,7 @@ why_fields() {
 # この branch で新しく作った起票先が、別件として拾える項目を持つかを検査する。
 # base にあった起票先（既存への集約）と、印より前の版で作った起票先は、作った時点の規則で数える。
 check_derived_targets() {
-  local n=$1 self d name target fields src timing wnfn problems
+  local n=$1 self d name target fields src timing timing_value wnfn problems
   self=${n#"$tickets_dir/"}
   self=${self%/note.md}
   while IFS= read -r name; do
@@ -259,23 +259,25 @@ check_derived_targets() {
       created_before_marker "$derived_fields_marker" "$tickets_dir/$name/ticket.md" "$tickets_dir/done/$name/ticket.md" && continue
     fi
     fields=$(why_fields "$target") || { failed=1; return; }
-    src=$(awk -F'\t' '$1 == "派生元" { print $2; exit }' <<<"$fields")
-    timing=$(awk -F'\t' '$1 == "拾う時機" { print $2; exit }' <<<"$fields")
+    src=$(awk -F'\t' '$1 == "derived-from" { print $2; exit }' <<<"$fields")
+    timing=$(awk -F'\t' '$1 == "pickup-timing" { print $2; exit }' <<<"$fields")
     wnfn=$(awk -F'\t' 'tolower($1) == "why-not-fix-now" { print $2; exit }' <<<"$fields")
     problems=''
-    [[ "$src" == *"$self"* ]] || problems+=$'\n'"  派生元: に起票元の ticket 名 $self を書く（2 つ以上なら並べる）"
-    [[ "$timing" =~ ^(すぐ対応|次に選ぶ|近くを触るとき|症状の報告時) ]] ||
-      problems+=$'\n''  拾う時機: に すぐ対応 / 次に選ぶ / 近くを触るとき / 症状の報告時 のどれかを書く'
+    [[ "$src" == *"$self"* ]] || problems+=$'\n'"  derived-from: に起票元の ticket 名 $self を書く（2 つ以上なら並べる）"
+    timing_value=''
+    [[ "$timing" =~ ^(immediate|next-selection|when-touching|on-symptom-report)([^-_[:alnum:]]|$) ]] && timing_value=${BASH_REMATCH[1]}
+    [ -n "$timing_value" ] ||
+      problems+=$'\n''  pickup-timing: に immediate / next-selection / when-touching / on-symptom-report のどれかを書く'
     [[ -n "$wnfn" && "$wnfn" != 該当なし* ]] ||
       problems+=$'\n'"  Why-not-fix-now: に、$self の必須の修正に当たらない理由を書く"
-    if [[ "$timing" == すぐ対応* ]] &&
+    if [ "$timing_value" = immediate ] &&
        ! awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f' "$n" | grep -F -- "$name" | grep -F '発行先:' >/dev/null; then
-      problems+=$'\n'"  拾う時機が すぐ対応 なので、$n の Checklist に $name と «発行先:» を含む行を書いて人に渡す"
+      problems+=$'\n'"  pickup-timing が immediate なので、$n の Checklist に $name と «発行先:» を含む行を書いて人に渡す"
     fi
-    if [[ "$timing" == 症状の報告時* ]] &&
+    if [ "$timing_value" = on-symptom-report ] &&
        ! created_before_marker "$symptom_fields_marker" "$tickets_dir/$name/ticket.md" "$tickets_dir/done/$name/ticket.md" &&
-       [ -z "$(awk -F'\t' '$1 == "観察できる症状" && $2 ~ /[^[:space:]]/ { print $2; exit }' <<<"$fields")" ]; then
-      problems+=$'\n''  拾う時機が 症状の報告時 なので、観察できる症状: に、報告者が見る症状と起きる条件を書く'
+       [ -z "$(awk -F'\t' '$1 == "observable-symptom" && $2 ~ /[^[:space:]]/ { print $2; exit }' <<<"$fields")" ]; then
+      problems+=$'\n''  pickup-timing が on-symptom-report なので、observable-symptom: に、報告者が見る症状と起きる条件を書く'
     fi
     if [ -n "$problems" ]; then
       printf 'check-pdh-ticket: %s: %s から起票した ticket の Why が足りない:%s\n' "$target" "$self" "$problems" >&2

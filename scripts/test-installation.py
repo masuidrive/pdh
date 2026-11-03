@@ -340,16 +340,23 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         config.write_text(config_body.replace('worktree_mode: true','worktree_mode: false')
                           .replace('Why-not-fix-now:','Old-why-label:'))
         obsolete=skill_dir/'pdh-dev';obsolete.mkdir()
+        tickets=target/'tickets';(tickets/'260101-000000-old').mkdir(parents=True);(tickets/'done/260101-000001-done').mkdir(parents=True)
+        (tickets/'260101-000000-old/ticket.md').write_text('### Why\n- 拾う時機: 次に選ぶ\n説明の中の 拾う時機 は残す\n')
+        (tickets/'done/260101-000001-done/ticket.md').write_text('### Why\n派生元: 260101-000000-old\n')
         output=documented(target,engine,'migration-check',code=1)
         for item in ('.ticket-config.yaml worktree_mode: true',
                      '.ticket-config.yaml Why-not-fix-now:',
                      f'旧 skill {skill_dir.relative_to(target)}/pdh-dev の削除',
-                     '.ticket-config.yaml の template 本文'):
+                     '.ticket-config.yaml の template 本文',
+                     'review から起票した ticket の旧い項目名'):
             assert '要適用: '+item in output,output
+        assert '- 拾う時機: 次に選ぶ' in output and '説明の中の' not in output and '260101-000001-done' not in output,output
         assert '済: .pdh-lock の照合' in output,output
         config.write_text(config_body);obsolete.rmdir()
+        (tickets/'260101-000000-old/ticket.md').write_text('### Why\n- pickup-timing: next-selection\n')
         output=documented(target,engine,'migration-check')
-        assert '要適用:' not in output and '済:' in output,output
+        assert '要適用:' not in output and '済: review から起票した ticket の旧い項目名' in output,output
+        shutil.rmtree(tickets/'260101-000000-old');shutil.rmtree(tickets/'done/260101-000001-done')
         print(engine+': migration-check reports all missing items and returns aggregate status')
         old_names=('pdh-dev','pdh-coding','pdh-reviewing','pdh-verifying','pdh-rule-write')
         for name in old_names:
