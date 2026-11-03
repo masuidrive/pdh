@@ -400,6 +400,7 @@ exit "$pdh_migration_status"
 
 - ticket を最初に足した commit の `scripts/check-pdh-ticket.sh` に `# derived-ticket-fields: v1` の行が無ければ、更新前の ticket として新しい項目を求めない。更新前に作った起票先を指す `起票:` の行も、そのまま close できる
 - 更新前の ticket には、`pdh-ticket-write` と `pdh-ticket-review` に足した同じ欠陥の検索の Checklist の行も求めない
+- `pickup-timing: on-symptom-report` の起票先の `observable-symptom:` と、`pdh-ticket-write` の «報告から書くなら…» の Checklist の行は、`# derived-ticket-fields: v2` の行を持つ版で作った ticket にだけ求める。v1 の版で作った ticket には足さなくてよい
 - 起票元の base にすでにあった ticket へ集約したときは、実在だけを確かめる
 - done の ticket は検査しない
 - GitHub の issue へ起票する導入先は、`.ticket-config.yaml` の `github_bot.findings_issue_repos` に repo を書く（`github-bot/.ticket-config.snippet.yaml`）。書かない導入先では、起票先は repo の中の ticket だけになる

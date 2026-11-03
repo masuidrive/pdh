@@ -180,13 +180,14 @@ finding は、処置の判断で判定と理由まで決めてから、progress 
   - `immediate` — この ticket の範囲外だが、放置すると害が続く。起票元の ticket の «いま直す» には戻さない。PM は起票した時点で人に知らせ、起票元の note の Checklist に、起票先の名前と `発行先:` を含む行を書く（`PDH-AGENTS.md`「受け渡し経路」）
   - `next-selection` — 次に着手する ticket を選ぶときの候補にする
   - `when-touching` — 同じ箇所を変える ticket が PDH-ticket-review で拾う（`pdh-ticket-review` の Checklist の行）
-  - `on-symptom-report` — 症状が報告されるまで待ってよい。害が重いと分かっている欠陥と、重い害に届くかが分からない欠陥には選ばない
+  - `on-symptom-report` — 症状が報告されるまで待ってよい。害が重いと分かっている欠陥と、重い害に届くかが分からない欠陥には選ばない。利用者が観察できる症状を書けない欠陥にも選ばない（報告が来ないので、拾われない）
   - 害の重さの基準は project が決める（`CLAUDE.md`）。基準が無い project では、重いかどうか迷ったら `on-symptom-report` を選ばない
 - `Reproduction-or-measurement:` finding の証拠（`再現:` か `経路:` と `条件:`）をそのまま写す
+- `observable-symptom:` `pickup-timing: on-symptom-report` のときだけ書く。利用者が報告に書く言葉で、どこで・何をすると・何が見えるかと、起きる条件を書く。報告から ticket を書く PM は、この行を症状の言葉で突き合わせる（`pdh-ticket-write`「報告から書くとき」）。`再現:` はコマンドと出力、`経路:` はコードの連鎖で、利用者の言葉ではないため、この行で補う
 - `Why-not-fix-now:` 起票元の ticket の «必須の修正» に当たらない理由。直す手間や規模は理由にしない — 安く直せても、必須の修正でなければ別の ticket にする
 - 後から検索できる anchor（Checklist の `起票:` の行と同じもの）
 
-`scripts/check-pdh-ticket.sh` は、起票元の Status が PDH-review 以降のとき、この branch で新しく作った起票先に `derived-from:`・`pickup-timing:` があり、`Why-not-fix-now:` が «該当なし» でないことを数える。`immediate` なら、起票元の Checklist の `発行先:` の行も数える。既存の ticket への集約と、この検査が入る前に作った ticket は数えない。
+`scripts/check-pdh-ticket.sh` は、起票元の Status が PDH-review 以降のとき、この branch で新しく作った起票先に `derived-from:`・`pickup-timing:` があり、`Why-not-fix-now:` が «該当なし» でないことを数える。`immediate` なら、起票元の Checklist の `発行先:` の行も数え、`on-symptom-report` なら起票先の `observable-symptom:` を数える。既存の ticket への集約と、各検査が入る前に作った ticket は数えない。
 
 #### 同じ欠陥の ticket があるとき
 
