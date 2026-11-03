@@ -62,7 +62,7 @@ ticket の節は `.ticket-config.yaml` の `default_content`、note の節は `n
 
 - `Reproduction-or-measurement:` 何を開いて・何を実行して・何が見えたか。バグなら再現手順と結果、要望なら原文の所在と、現状を 1 回確かめた結果
 - `Why-not-fix-now:` 進行中の ticket から派生したなら、その ticket の必須の修正（`[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」）に当たらない理由。直す手間や規模は理由にしない。要望起点なら «該当なし（要望起点。進行中の ticket から派生していない）»
-- 進行中の ticket から派生したなら、`派生元:` と `拾う時機:` も書く（`[SKILLS_PATH]/pdh-review/SKILL.md`「起票した ticket に書くこと」）
+- 進行中の ticket から派生したなら、`derived-from:` と `pickup-timing:` も書く（`[SKILLS_PATH]/pdh-review/SKILL.md`「起票した ticket に書くこと」）
 
 ### 同じ ticket を探す
 

@@ -189,12 +189,12 @@ bot は PDH-stage の遷移に応じて **issue の PDH stage ラベルを更新
   - closed（completed）→ 直った後のコードで再現するかを確かめる。再現すれば再発として新しく作り、本文で元の issue を指す。再現しなければ作らず、理由を progress に書く
   - closed（not planned）→ 却下の理由を読む。理由がいまも当てはまるなら作らず、当てはまらないなら、変わったことを本文に書いて作る
   - duplicate → 重複先として示された issue をたどり、そちらで上の判断をする
-- **作るときの本文**: `派生元:`・`拾う時機:`・再現か測定の証拠・`Why-not-fix-now:`・後から探せる anchor を書く。項目の意味は `pdh-review`「起票した ticket に書くこと」と同じで、上の «本文は、ticket を開かなくても…» の規則も当てる
+- **作るときの本文**: `derived-from:`・`pickup-timing:`・再現か測定の証拠・`Why-not-fix-now:`・後から探せる anchor を書く。項目の意味は `pdh-review`「起票した ticket に書くこと」と同じで、上の «本文は、ticket を開かなくても…» の規則も当てる
   ```bash
   gh issue create --repo <owner/repo> --title "<症状と対象 1 行>" --body-file <本文のファイル>
   ```
 - note の `## Checklist` には `- [ ] 起票: <anchor> → <owner/repo>#<N>` と書き、issue の URL を progress に書く。`check-pdh-ticket.sh` は `findings_issue_repos` に無い repo の参照を落とす。issue があるかは GitHub に問い合わせないと分からないので、検査は形と起票先の設定だけを数え、実在は起票した PM が `gh issue view` で確かめる
-- ⚠ 起票した issue のタイトルには `🤖 ` を付けない。`拾う時機: すぐ対応` でも、着手するかは人が決める（上の «依頼として起票するとき» は、bot に作業させると人が決めたときだけ）
+- ⚠ 起票した issue のタイトルには `🤖 ` を付けない。`pickup-timing: immediate` でも、着手するかは人が決める（上の «依頼として起票するとき» は、bot に作業させると人が決めたときだけ）
 
 ## bot への依頼には、手順を書かない
 

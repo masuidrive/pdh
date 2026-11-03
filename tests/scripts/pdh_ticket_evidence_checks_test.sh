@@ -636,7 +636,7 @@ must mkdir -p "tickets/$src"
 printf '### Why\n起票元\nReproduction-or-measurement: 検査用 fixture\nWhy-not-fix-now: 該当なし\n### What\n- [ ] 結果を読める\nAC-approved: ebdc012f008a4f1d\n' > "tickets/$src/ticket.md"
 : > "tickets/$src/progress.md"
 new=260301-000001-new
-full="Why-not-fix-now: $src の AC にも退行にも当たらない\n派生元: $src\n拾う時機: 次に選ぶ\n"
+full="Why-not-fix-now: $src の AC にも退行にも当たらない\nderived-from: $src\npickup-timing: next-selection\n"
 target_ticket "$new" "$full"
 src_note "$src" PDH-review "- [ ] 起票: 問題 → $new\n"
 commit 新規起票
@@ -646,19 +646,32 @@ target_ticket "$new" 'Why-not-fix-now: 該当なし\n'
 expect 0 'PDH-review より前は項目を求めない' bash scripts/check-pdh-ticket.sh
 src_note "$src" PDH-review "- [ ] 起票: 問題 → $new\n"
 expect 1 '新規起票: 項目が無い' bash scripts/check-pdh-ticket.sh
-contains "派生元: に起票元の ticket 名 $src を書く"
-contains '拾う時機: に すぐ対応 / 次に選ぶ / 近くを触るとき / 症状の報告時'
+contains "derived-from: に起票元の ticket 名 $src を書く"
+contains 'pickup-timing: に immediate / next-selection / when-touching / on-symptom-report'
 contains "$src の必須の修正に当たらない理由"
-target_ticket "$new" "Why-not-fix-now: 直すと高くつく\n派生元: 260101-000000-other\n拾う時機: いつか\n"
-expect 1 '新規起票: 派生元が起票元でなく、拾う時機が 4 区分にない' bash scripts/check-pdh-ticket.sh
-contains '派生元:'
-contains '拾う時機:'
+target_ticket "$new" "Why-not-fix-now: 直すと高くつく\nderived-from: 260101-000000-other\npickup-timing: いつか\n"
+expect 1 '新規起票: derived-from が起票元でなく、pickup-timing が 4 区分にない' bash scripts/check-pdh-ticket.sh
+contains 'derived-from:'
+contains 'pickup-timing:'
 excludes '必須の修正に当たらない理由'
-target_ticket "$new" "Why-not-fix-now: 権限の検査が抜けていて、$src の範囲の外\n派生元: \`$src\`, 260101-000000-existing\n拾う時機: すぐ対応\n"
-expect 1 'すぐ対応: 人へ渡した行が無い' bash scripts/check-pdh-ticket.sh
+target_ticket "$new" "Why-not-fix-now: 権限の検査が抜けていて、$src の範囲の外\nderived-from: \`$src\`, 260101-000000-existing\npickup-timing: immediate\n"
+expect 1 'immediate: 人へ渡した行が無い' bash scripts/check-pdh-ticket.sh
 contains '«発行先:»'
-src_note "$src" PDH-review "- [ ] 起票: 問題 → $new\n- [ ] $new の すぐ対応 を人に知らせた 発行先: /board-2\n"
-expect 0 'すぐ対応: 人へ渡した行がある' bash scripts/check-pdh-ticket.sh
+src_note "$src" PDH-review "- [ ] 起票: 問題 → $new\n- [ ] $new の immediate を人に知らせた 発行先: /board-2\n"
+expect 0 'immediate: 人へ渡した行がある' bash scripts/check-pdh-ticket.sh
+target_ticket "$new" "Why-not-fix-now: $src の範囲の外\nderived-from: $src\npickup-timing: when-touching — 認可の層\n"
+expect 0 '区分の後に説明を続けてよい' bash scripts/check-pdh-ticket.sh
+target_ticket "$new" "Why-not-fix-now: $src の範囲の外\nderived-from: $src\npickup-timing: immediately\n"
+expect 1 '区分の名前で始まるだけの値は落ちる' bash scripts/check-pdh-ticket.sh
+contains 'pickup-timing: に immediate'
+# 旧い日本語の項目名と値は、互換として受け付けない。
+target_ticket "$new" "Why-not-fix-now: $src の範囲の外\n派生元: $src\n拾う時機: 次に選ぶ\n"
+expect 1 '旧い日本語の項目名は落ちる' bash scripts/check-pdh-ticket.sh
+contains "derived-from: に起票元の ticket 名 $src を書く"
+contains 'pickup-timing: に immediate'
+target_ticket "$new" "Why-not-fix-now: $src の範囲の外\nderived-from: $src\npickup-timing: すぐ対応\n"
+expect 1 '旧い日本語の値は落ちる' bash scripts/check-pdh-ticket.sh
+contains 'pickup-timing: に immediate'
 target_ticket "$new" "$full"
 commit 新規起票の項目
 
@@ -714,6 +727,11 @@ excludes "tickets/$presrc/note.md"
 late=$(sed -n '/^late_stage_lines=/,/^EOF$/p' scripts/check-pdh-ticket.sh | grep '^PDH-' | sed 's/^/- [x] /')
 src_note "$src" PDH-human-review "$late"$'\n'
 expect 0 '後から足した行: 更新前の ticket には求めない' bash scripts/check-pdh-ticket.sh
+old_late=$(sed -e 's/pickup-timing: when-touching/拾う時機: 近くを触るとき/' <<<"$late")
+src_note "$src" PDH-human-review "$old_late"$'\n'
+expect 1 '後から足した行: 旧い日本語の行は数えない' bash scripts/check-pdh-ticket.sh
+contains "tickets/$src/note.md"
+src_note "$src" PDH-human-review "$late"$'\n'
 # 検査が抜く行は、配布した skill の行と一字一句同じである。
 while IFS= read -r line; do
   st=${line%%:*}; st=${st#PDH-}
@@ -721,6 +739,25 @@ while IFS= read -r line; do
     fail "check-pdh-ticket.sh の late_stage_lines が skill に無い: $line"
   checks=$((checks + 1))
 done < <(sed -n '/^late_stage_lines=/,/^EOF$/p' scripts/check-pdh-ticket.sh | grep '^PDH-')
+
+# skill の検索コマンドを合成 repo に当て、新しい項目名と値で書いた ticket だけが出ることを確かめる。
+must mkdir -p "$TMP_DIR/search"
+must cd "$TMP_DIR/search"
+must git init -q -b main
+must mkdir -p tickets/260401-000000-near tickets/done/260401-000001-done tickets/260401-000002-plain tickets/260401-000003-old tickets/260401-000004-next
+printf '### Why\n- pickup-timing: when-touching\n' > tickets/260401-000000-near/ticket.md
+printf '### Why\npickup-timing: `when-touching`\n' > tickets/done/260401-000001-done/ticket.md
+printf '### Why\nWhy-not-fix-now: <!-- pickup-timing: <immediate / next-selection / when-touching / on-symptom-report> -->\n' > tickets/260401-000002-plain/ticket.md
+printf '### Why\n拾う時機: 近くを触るとき\n' > tickets/260401-000003-old/ticket.md
+printf '### Why\npickup-timing: next-selection\n' > tickets/260401-000004-next/ticket.md
+commit 検索用
+cmd=$(grep -o "git grep -l[^\`]*-- <tickets_dir>" "$ROOT_DIR/.claude/skills/pdh-ticket-review/SKILL.md")
+[ -n "$cmd" ] || fail 'pdh-ticket-review に when-touching の検索コマンドが無い'
+output=$(eval "${cmd/<tickets_dir>/tickets}" | sort | tr '\n' ' ')
+[ "$output" = 'tickets/260401-000000-near/ticket.md tickets/done/260401-000001-done/ticket.md ' ] ||
+  fail "when-touching の検索の結果が違う: $output"
+checks=$((checks + 1))
+must cd "$TMP_DIR"
 
 must python3 "$ROOT_DIR/tests/scripts/pdh_script_regressions_test.py"
 printf 'PASS: pdh ticket evidence checks (%s 件)\n' "$checks"
