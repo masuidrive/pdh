@@ -37,7 +37,7 @@ PDH を変える提案は、次の原則と照らし合わせる。原則を外�
 | project の不変条件 | project 固有の `scripts/checks/*.check` |
 | テスト・dev server・seed の中身 | `scripts/test-all.sh`・`scripts/dev-server.sh`・`scripts/seed-pdh-verify.sh`（初回だけ配られ、その後は project のもの） |
 
-どのファイルが PDH-repo から配られて上書きされるかは、PDH-repo の `codex/INSTALL.md` の配置表と、それを展開した `.pdh-lock` にある。ticket が触った上書きのファイルが PDH-repo の版と違うまま close しようとすると、`check-pdh-ticket.sh` が `scripts/pdh-lock.sh check` で止める。ticket の途中で書き換えるのはよい。
+どのファイルが PDH-repo から配られて上書きされるかは、PDH-repo の `codex/INSTALL.md` の配置表と、それを展開した `.pdh-lock` にある。coding-bot の共有ファイルは、coding-bot を導入した repo でだけ `.pdh-lock` に入る（`codex/lock-map.github-bot.tsv`）。ticket が触った上書きのファイルが PDH-repo の版と違うまま close しようとすると、`check-pdh-ticket.sh` が `scripts/pdh-lock.sh check` で止める。ticket の途中で書き換えるのはよい。
 
 **`.pdh-lock` が無い間は、この同期の検査は効かない**（`pdh-lock.sh check` は `.pdh-lock` が無いと何も数えずに通る）。PDH-repo に `codex/lock-map.tsv` を置き、導入先で初回の `pdh-lock.sh write`（下の «変える手順» の 6）を先に行う。
 
@@ -61,7 +61,7 @@ PDH を変える提案は、次の原則と照らし合わせる。原則を外�
 | `require_checklist`（`ticket.sh`、`.ticket-config.yaml`） | `./ticket.sh close` | note の `## Checklist` の未了の checkbox と、必須の節 | PDH-stage の skill の «出力» の行か、note のテンプレート（`.ticket-config.yaml` の `note_content`） |
 | `scripts/pdh-stage-checklist.sh` | PDH-stage に入るとき（`--enter`）と、再開するとき（`--show`） | 数えない。PDH-stage の skill の «出力» の行を note へ写し、未了の行を見せる | PDH-stage の skill の «出力» に `- [ ] <PDH-stage>: …` の行を足す |
 | `scripts/pdh-session-hook.sh`（`.claude/settings.json`・`.codex/hooks.json`） | session の開始・再開・compaction のとき。PM だけ（`PDH_ROLE` が無いとき） | 数えない。`pdh-stage-checklist.sh --show` の出力を PM の context に入れる | — |
-| `scripts/pdh-lock.sh` | `check-pdh-ticket.sh` から（note の Status が `PDH-human-review` か `PDH-close` のとき） | ticket が触った上書きのファイルと `.pdh-lock` のずれ | PDH-repo の `codex/lock-map.tsv` |
+| `scripts/pdh-lock.sh` | `check-pdh-ticket.sh` から（note の Status が `PDH-human-review` か `PDH-close` のとき） | ticket が触った上書きのファイルと `.pdh-lock` のずれ | PDH-repo の `codex/lock-map.tsv`（coding-bot の共有ファイルは `codex/lock-map.github-bot.tsv`） |
 | `tests/scripts/*_test.sh` | `scripts/test-all.sh` | 上の script 自身の振る舞い | script を変えた差分と同じ差分でテストを足す |
 
 ## 置き場所を決める

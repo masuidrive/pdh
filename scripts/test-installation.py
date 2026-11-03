@@ -206,20 +206,34 @@ cp "$PDH_TICKET_FIXTURE" "$4"
             documented(target,engine,'worker-resume-install')
             documented(target,engine,'worker-resume-check')
             documented(target,engine,'merge-diff')
-            # Optional bot update: absent installation, then four PDH files only.
-            documented(target,engine,'bot-update')
-            bot=target/'.github/coding-bot';bot.mkdir(parents=True)
-            (bot/'_pdh.md').write_text('old shared protocol\n')
-            (bot/'system.md').write_text('project-owned bot setup\n')
-            (target/'.codex/skills/my-custom-skill').mkdir(parents=True)
-            documented(target,engine,'bot-update')
-            for name in ('_pdh.md','_github-issue.md','pdh-hooks.sh'):
-                assert (bot/name).read_bytes()==(upstream/'github-bot'/name).read_bytes()
-            assert (target/'.codex/skills/pdh-gh-pull/SKILL.md').is_file()
-            assert (bot/'system.md').read_text()=='project-owned bot setup\n'
-            assert (target/'.codex/skills/my-custom-skill').is_dir()
-            before=payload(target);documented(target,engine,'bot-update')
-            assert payload(target)==before
+        # Optional bot update: the workflow decides installation, never the four shared files.
+        bot=target/'.github/coding-bot'
+        skills=target/('.claude/skills' if engine=='claude' else '.codex/skills')
+        documented(target,engine,'bot-update')
+        assert not bot.exists() and not (skills/'pdh-gh-pull').exists()
+        bot.mkdir(parents=True)
+        (bot/'_pdh.md').write_text('old shared protocol\n')
+        (bot/'system.md').write_text('project-owned bot setup\n')
+        documented(target,engine,'bot-update')
+        assert (bot/'_pdh.md').read_text()=='old shared protocol\n','shared file alone was read as installed'
+        workflow=target/'.github/workflows/coding-bot.yml'
+        workflow.parent.mkdir(parents=True);workflow.write_text('name: coding-bot\n')
+        output=documented(target,engine,'bot-update',code=1)
+        assert '.github/coding-bot/_pdh.md: 上流のどの版とも違う' in output,output
+        assert (bot/'_pdh.md').read_text()=='old shared protocol\n','customization overwritten'
+        (bot/'_pdh.md').unlink()
+        (skills/'project-bot-skill').mkdir(parents=True)
+        documented(target,engine,'bot-update')
+        for name in ('_pdh.md','_github-issue.md','pdh-hooks.sh'):
+            assert (bot/name).read_bytes()==(upstream/'github-bot'/name).read_bytes()
+        assert (skills/'pdh-gh-pull/SKILL.md').read_bytes()==(upstream/'github-bot/pdh-gh-pull/SKILL.md').read_bytes()
+        assert (bot/'system.md').read_text()=='project-owned bot setup\n'
+        assert (skills/'project-bot-skill').is_dir()
+        if engine=='claude':
+            assert os.readlink(target/'.agents/skills/pdh-gh-pull')=='../../.claude/skills/pdh-gh-pull'
+        before=payload(target);documented(target,engine,'bot-update')
+        assert payload(target)==before
+        print(engine+': bot-update judges by the workflow, stops on customizations, replaces only the four shared files')
         skill_dir=target/('.claude/skills' if engine=='claude' else '.agents/skills')
         # Placement is a separate assertion; the installer is never synthesized from it.
         for src,dst,mode in re.findall(r'^\| `tmp/pdh/([^`]+)` \| `([^`]+)` \| [^|]+ \| (上書き|差分マージ|初回だけ) \|$', (ROOT/engine/'INSTALL.md').read_text(), re.M):
@@ -240,6 +254,8 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         verify_install(target,engine)
         entry.write_bytes(entry_body)
         verify_install(target,engine)
+        locked=(target/'.pdh-lock').read_text()
+        assert '.github/coding-bot/_pdh.md\t' in locked and str(skills.relative_to(target))+'/pdh-gh-pull/SKILL.md\t' in locked,locked
         print(engine+': verify rejects missing contract import, bare filename and missing entry; suggests a working line')
         documented(target,engine,'references-check')
         if engine=='codex':
@@ -309,6 +325,10 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         for name in ('AGENTS.md','product-brief.md','.ticket-config.yaml','scripts/test-all.sh'):
             path=target/name;path.write_bytes(path.read_bytes()+b'\n# project customization\n')
         preserved={name:(target/name).read_bytes() for name in ('AGENTS.md','product-brief.md','.ticket-config.yaml','scripts/test-all.sh',*custom)}
+        # An installation from before the bot layer was locked has no rows for it.
+        lockfile=target/'.pdh-lock'
+        lockfile.write_text(''.join(line for line in lockfile.read_text().splitlines(True)
+                                    if '.github/coding-bot/' not in line and '/pdh-gh-pull/' not in line))
         run(target,'git','add','.')
         run(target,'git','-c','commit.gpgsign=false','commit','-qm','before update')
         for iteration in range(2):
@@ -321,13 +341,38 @@ cp "$PDH_TICKET_FIXTURE" "$4"
             assert (backup/'scripts/pdh-related-docs.sh').read_bytes()==(stale if iteration==0 else shared.read_bytes())
             assert (backup/'codex-agents/my-custom-agent.toml').is_file()
             documented(target,engine,'update')
+            documented(target,engine,'bot-update')
             if engine=='claude':documented(target,engine,'symlinks')
             documented(target,engine,'migration-check')
             verify_install(target,engine)
+            assert '.github/coding-bot/_pdh.md\t' in lockfile.read_text(),'update did not register the installed bot layer'
             run(target,'bash','scripts/fast-checks.sh')
             for name,content in preserved.items():assert (target/name).read_bytes()==content,(engine,name)
             if iteration==0:first=payload(target)
             else:assert first==payload(target),'second documented update changed installed payload'
+        # Removing coding-bot drops only its rows; core rows, the upstream SHA and drift detection stay.
+        locked=lockfile.read_text()
+        core_lock=''.join(line for line in locked.splitlines(True)
+                          if '.github/coding-bot/' not in line and '/pdh-gh-pull/' not in line)
+        assert core_lock!=locked
+        output=documented(target,engine,'bot-remove',code=1)
+        assert '.github/workflows/coding-bot.yml: 残っている' in output,output
+        assert lockfile.read_text()==locked,'bot-remove changed the lock while coding-bot remained'
+        workflow.unlink()
+        for name in ('_pdh.md','_github-issue.md','pdh-hooks.sh'):(bot/name).unlink()
+        shutil.rmtree(skills/'pdh-gh-pull')
+        if engine=='claude':(target/'.agents/skills/pdh-gh-pull').unlink()
+        for iteration in range(2):
+            documented(target,engine,'bot-remove')
+            assert lockfile.read_text()==core_lock,lockfile.read_text()
+        run(target,'bash','scripts/pdh-lock.sh','installed','--map',str(upstream/engine/'lock-map.github-bot.tsv'),code=1)
+        changed=skill_dir/'pdh-resume/SKILL.md';content=changed.read_bytes()
+        changed.write_bytes(content+b'\ndrift\n')
+        output=documented(target,engine,'bot-remove',code=1)
+        assert 'pdh-resume/SKILL.md: lock と sha256 が違う' in output,output
+        assert lockfile.read_text()==core_lock
+        changed.write_bytes(content)
+        print(engine+': bot-remove drops only the coding-bot rows and keeps core drift detection')
         # Migration verification must catch hookbus even when rg cannot run.
         rg=bins/'rg';rg.write_text('#!/bin/sh\nexit 127\n');rg.chmod(0o755)
         (target/'package.json').write_text('{"test": "node scripts/hookbus.js"}\n')

@@ -41,7 +41,7 @@ def native(text):
     text = text.replace("and p.suffix == '.md'", "and p.suffix in ('.md', '.toml')")
     text = text.replace('CLAUDE.md', 'AGENTS.md').replace('.claude/skills', '.agents/skills')
     text = re.sub(r'\.claude/agents/([^,`\s"\']+?)\.md', r'.codex/agents/\1.toml', text)
-    text = text.replace('claude/INSTALL.md', 'codex/INSTALL.md').replace('claude/lock-map.tsv', 'codex/lock-map.tsv')
+    text = text.replace('claude/INSTALL.md', 'codex/INSTALL.md').replace('claude/lock-map.tsv', 'codex/lock-map.tsv').replace('claude/lock-map.github-bot.tsv', 'codex/lock-map.github-bot.tsv')
     text = text.replace('tmp/pdh/claude/', 'tmp/pdh/codex/')
     text = text.replace('/blob/main/claude/', '/blob/main/codex/')
     text = text.replace('frontmatter を除いた本文', 'developer_instructions の本文')

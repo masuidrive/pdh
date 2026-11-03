@@ -40,5 +40,31 @@ for engine in ('claude','codex'):
         elif p.is_file() and p.name in ('CLAUDE.md','.ticket-config.yaml','product-brief.md','example-max-source-lines.check','example-max-test-lines.check'):
             expected_footer=f'Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/{src}'
             if expected_footer not in p.read_text():errors.append(f'{src}: merged/initial template lacks its ancestry footer')
+# github-bot の上書き分は、導入時だけ lock する layer map に置く。
+bot=(root/'github-bot/INSTALL.md').read_text()
+owned=re.search(r'PDH 保守分（([^）]+)）',bot)
+names=re.findall(r'`([^`]+)`',owned.group(1)) if owned else []
+if not names:errors.append('github-bot/INSTALL.md: PDH 保守分の一覧が見つからない')
+bot_rows={}
+for line in bot.splitlines():
+    match=re.match(r'\| `github-bot/([^`]+)` \| `([^`]+)`(?:（Codex は `([^`]+)`）)? \|',line)
+    if match:bot_rows[match.group(1)]=match.groups()[1:]
+for engine in ('claude','codex'):
+    layer=root/engine/'lock-map.github-bot.tsv'
+    lines=layer.read_text().splitlines()
+    marker='# installed-by: .github/workflows/coding-bot.yml'
+    if not lines or lines[0]!=marker:errors.append(f'{engine}/lock-map.github-bot.tsv: first line must be {marker}')
+    if not (root/'github-bot/.github/workflows/coding-bot.yml').is_file():errors.append('github-bot/.github/workflows/coding-bot.yml: missing installed-by source')
+    actual=set()
+    for line in lines[1:]:
+        fields=line.split('\t')
+        if len(fields)!=2:errors.append(f'{engine}/lock-map.github-bot.tsv: invalid TSV');continue
+        actual.add(tuple(fields))
+    expected=set()
+    for name in names:
+        if name not in bot_rows:errors.append(f'github-bot/INSTALL.md: no placement row for {name}');continue
+        dst,codex_dst=bot_rows[name]
+        expected.add((f'github-bot/{name}',codex_dst if engine=='codex' and codex_dst else dst))
+    for pair in expected^actual:errors.append(f'{engine}: github-bot layer map mismatch {pair}')
 if errors:sys.exit('\n'.join(errors))
-print('placement: both policy columns and exact overwrite maps agree')
+print('placement: both policy columns, exact overwrite maps and github-bot layer maps agree')
