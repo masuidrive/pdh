@@ -503,7 +503,8 @@ Codex は repo の skill を `.agents/skills/`（起動した場所から repo r
 1. 旧配置のファイルが、`.pdh-lock` の commit の版と今の上流の版のどちらとも違えば、挙げて止まり、何も動かさない。repo 固有の内容を [coding-bot の共有ファイルを .pdh-lock に登録する](#coding-bot-の共有ファイルを-pdh-lock-に登録する)の 1 と同じ置き場所へ移し、旧配置を上流の版に戻してから再実行する
 2. `.agents/skills/pdh-gh-pull` も既にあれば、どちらを残すかを決めるよう求めて止まる
 3. 旧配置を `.agents/skills/pdh-gh-pull/` へ移し、`.pdh-lock` の行の path を書き換え、`required-pdh-files.check` の pdh-gh-pull の行を `.agents/skills/pdh-gh-pull/SKILL.md` の 1 行にする
-4. 最後に `pdh-lock.sh check` を回す。旧配置が無ければ 1 から 3 は何もしない
+4. 旧配置が無ければ 1 から 3 は何もしない。旧配置が無くても、`required-pdh-files.check` に pdh-gh-pull の行があれば、`.agents/skills/pdh-gh-pull/SKILL.md` の 1 行に揃える（以前の版の手順で Claude 用の行を足し、fast-checks が落ちている repo もこれで直る）
+5. 最後に `pdh-lock.sh check` を回す
 
 移した後は `bot-update` と「版を記録して検査する」を回す。`fast-checks.sh` が `required-pdh-files.check` を検査する。
 

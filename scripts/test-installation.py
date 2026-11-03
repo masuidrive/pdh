@@ -416,6 +416,18 @@ cp "$PDH_TICKET_FIXTURE" "$4"
             verify_install(target,engine)
             assert lockfile.read_text()==locked
             print('codex: bot-skill-move stops on customizations and conflicts, then moves pdh-gh-pull into .agents/skills with lock and required paths')
+            # Without the old placement, the Claude rows an earlier table added still collapse to the Codex row.
+            set_required(target,['.claude/skills/pdh-gh-pull/SKILL.md','.agents/skills/pdh-gh-pull'])
+            output=run(target,'bash','scripts/fast-checks.sh',code=1)
+            assert '.claude/skills/pdh-gh-pull/SKILL.md: required file is missing' in output,output
+            check='scripts/checks/required-pdh-files.check'
+            files={k:v for k,v in payload(target).items() if k!=check}
+            for iteration in range(2):
+                documented(target,engine,'bot-skill-move')
+                assert (target/check).read_text()==required
+                assert {k:v for k,v in payload(target).items() if k!=check}==files and lockfile.read_text()==locked
+            run(target,'bash','scripts/fast-checks.sh')
+            print('codex: bot-skill-move without the old placement collapses the Claude rows to the .agents row')
         # Removing coding-bot drops only its rows; core rows, the upstream SHA and drift detection stay.
         locked=lockfile.read_text()
         core_lock=''.join(line for line in locked.splitlines(True)
