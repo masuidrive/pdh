@@ -806,6 +806,27 @@ output=$(git grep -lE "$pattern" -- tickets | sort | tr '\n' ' ')
 [ "$output" = 'tickets/260401-000000-wait/ticket.md tickets/done/260401-000001-done/ticket.md ' ] ||
   fail "on-symptom-report の検索が想定と違う: $output"
 checks=$((checks + 1))
+# pdh-ticket-write の候補の絞り込みは、on-symptom-report の ticket のうち、報告の語を含むものだけを出す。
+narrow=$(awk '/\*\*語で候補を絞る。\*\*/ { f = 1; next } f && /^   ```bash$/ { b = 1; next } b && /^   ```$/ { exit } b { sub(/^   /, ""); print }' "$ROOT_DIR/.claude/skills/pdh-ticket-write/SKILL.md")
+[ -n "$narrow" ] || fail 'pdh-ticket-write に候補を絞るコマンドが無い'
+narrow=${narrow//<tickets_dir>/tickets}
+narrow=${narrow//<症状・対象・到達条件の語を | でつないだもの>/件数|2 ページ目}
+must mkdir -p tickets/260401-000005-other tickets/done/260401-000006-done-match
+printf '### Why\npickup-timing: on-symptom-report\nobservable-symptom: 画像を書き出すと余白が消える\n' > tickets/260401-000005-other/ticket.md
+printf '### Why\npickup-timing: on-symptom-report\nobservable-symptom: 一覧を 2 ページ目へ送ると表示が崩れる\n' > tickets/done/260401-000006-done-match/ticket.md
+printf '### Why\npickup-timing: when-touching\nobservable-symptom: 一覧の件数が 0 になる\n' > tickets/260401-000003-near/ticket.md
+printf '### Why\n拾う時機: 症状の報告時\n観察できる症状: 一覧の件数が 0 になる\n' > tickets/260401-000004-old/ticket.md
+commit 候補の絞り込み
+output=$(bash -c "$narrow" | sort | tr '\n' ' ')
+[ "$output" = 'tickets/260401-000000-wait/ticket.md tickets/done/260401-000006-done-match/ticket.md ' ] ||
+  fail "候補の絞り込みが想定と違う: $output"
+checks=$((checks + 1))
+output=$(bash -c "${narrow//件数|2 ページ目/印刷}")
+[ -z "$output" ] || fail "語が当たらないのに候補が出た: $output"
+checks=$((checks + 1))
+printf '### Why\npickup-timing: when-touching\n' > tickets/260401-000003-near/ticket.md
+printf '### Why\n拾う時機: 症状の報告時\n拾う時機: 近くを触るとき\n' > tickets/260401-000004-old/ticket.md
+commit when-touching の検索の fixture を戻す
 # pdh-ticket-review の «when-touching» の検索も、テンプレートの説明のコメントには当たらない。
 pattern=$(grep -o "git grep -lE '[^']*' -- <tickets_dir>" "$ROOT_DIR/.claude/skills/pdh-ticket-review/SKILL.md" | sed "s/^git grep -lE '//; s/' -- <tickets_dir>\$//")
 [ -n "$pattern" ] || fail 'pdh-ticket-review に when-touching の検索コマンドが無い'

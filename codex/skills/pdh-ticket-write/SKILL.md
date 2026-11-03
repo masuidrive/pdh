@@ -76,13 +76,19 @@ ticket の節は `.ticket-config.yaml` の `default_content`、note の節は `n
 
 #### 報告から書くとき
 
-この規則の目的: 原因を知らない報告からでも、`pickup-timing: on-symptom-report` で待っている ticket に辿り着き、そのうえで違う欠陥を同じと決めないこと。報告は症状しか持たないことが多く、原因の言葉の検索では当たらない。
+この規則の目的: 原因を知らない報告からでも、`pickup-timing: on-symptom-report` で待っている ticket に辿り着き、そのうえで違う欠陥を同じと決めないこと。報告は症状しか持たないことが多く、原因の言葉の検索では当たらない。起票前の照合は、いま手元にある証拠で決められる範囲に留める。重複かどうかを決めるためだけに、原因を最後まで突き止めることは求めない。
 
-要望が症状の報告（«画面 X で Y が出る» の形）なら、上の検索に加えて次を行う。報告でない要望では、Checklist の該当行を `- [-] … - skip: 報告ではない` にする。
+要望が症状の報告（«画面 X で Y が出る» の形）なら、上の検索に加えて次の 3 段を行う。報告でない要望では、Checklist の該当行を `- [-] … - skip: 報告ではない` にする。
 
-1. **候補を見つける。**`git grep -lE '^[[:space:]]*(-[[:space:]]+)?pickup-timing:[^<]*on-symptom-report' -- <tickets_dir>` で tickets と tickets/done の ticket を出し、各 ticket の `observable-symptom:`（無い ticket は `Reproduction-or-measurement:` と anchor）を、報告の症状と条件に突き合わせる。症状が近いものを候補にする。GitHub の issue を起票先にする project では issue も探す（`github-bot/_github-issue.md`「review の finding を issue にする」）
-2. **同じ欠陥と確定する。**候補ごとに、報告の原因を調べ、原因・対象・期待する修正の 3 つが一致するかで決める（`[SKILLS_PATH]/pdh-review/SKILL.md`「同じ欠陥の ticket があるとき」）。症状が一致しただけでは確定しない。同じ症状でも 3 つのどれかが違えば別の欠陥として扱い、違う項目を progress に書く
-3. **原因が判定できないときは、同じとも別とも決めない。**再現しない・報告から原因へ辿れないときは、この ticket を書き進め、`Why` に `related-defect-candidate: <ticket 名> — 未判定: <分からないこと>` を書く。原因が分かった時点で 2 の判定をやり直す
+1. **語で候補を絞る。**報告から、症状（何が見えるか）・対象（画面・API・機能）・到達条件（どの入力・設定・利用者で起きるか）の語を取り出し、`on-symptom-report` の ticket のうちその語を含むものだけを候補にする。tickets と tickets/done を対象に、次を実行する。待っている ticket を 1 件ずつ読み比べることはしない。当たらなければ語を言い換えて引き直し、それでも 0 件なら候補なしとする。GitHub の issue を起票先にする project では issue も探す（`github-bot/_github-issue.md`「review の finding を issue にする」）
+
+   ```bash
+   git grep -lE '^[[:space:]]*(-[[:space:]]+)?pickup-timing:[^<]*on-symptom-report' -- <tickets_dir> |
+     xargs -r grep -liE '<症状・対象・到達条件の語を | でつないだもの>'
+   ```
+
+2. **既存の証拠で照合する。**候補ごとに、候補の ticket に書かれた原因・対象・期待する修正（`Why`・`Reproduction-or-measurement:`・anchor から読む）と、報告とそれに付いた証拠（本文・添付・ログ・すでに取れている再現）を突き合わせ、3 つが一致するかで決める（`[SKILLS_PATH]/pdh-review/SKILL.md`「同じ欠陥の ticket があるとき」）。症状が一致しただけでは同じと決めない。3 つのどれかが違うと証拠から分かれば別の欠陥として扱い、違う項目を progress に書く。この照合のために、新しく再現を試みたり原因を調べたりはしない
+3. **決められなければ、未判定のまま通常の調査へ渡す。**既存の証拠では一致とも不一致とも言えないときは、同じとも別とも決めず、この ticket を書き進める。`Why` に `related-defect-candidate: <ticket 名> — 未判定: <足りない情報>` を書く。原因はこの ticket の通常の調査（PDH-ticket-review 以降）で調べ、分かった時点で 2 の照合をやり直す
 
 同じ欠陥と確定した候補は、その状態で `[SKILLS_PATH]/pdh-review/SKILL.md`「同じ欠陥の ticket があるとき」の分け方を当てる。未完了の候補へ集約するときは、報告の所在と症状をこの ticket の progress に書き、note の Checklist に `- [ ] 起票: <報告の症状> → <候補の ticket 名>` を書く（その ticket を拾う人が、PDH-ticket-review の `起票:` の検索で報告を見つける）。この ticket を続けるか中止するかは人に聞く。
 

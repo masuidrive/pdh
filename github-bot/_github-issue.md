@@ -193,7 +193,7 @@ bot は PDH-stage の遷移に応じて **issue の PDH stage ラベルを更新
   ```bash
   gh issue create --repo <owner/repo> --title "<症状と対象 1 行>" --body-file <本文のファイル>
   ```
-- **報告から ticket を書くとき**（`pdh-ticket-write`「報告から書くとき」）は、`findings_issue_repos` の各 repo で `on-symptom-report` の issue も症状の語で探す。`gh issue list --repo <owner/repo> --state all --search '"on-symptom-report" <症状の語>'` を引き、候補ごとに `gh issue view` で `observable-symptom:` と原因・対象・期待する修正を読む。同じ欠陥の確定と `pickup-timing:` の選び直しは ticket の場合と同じで、候補の issue の本文は書き換えない。同じ欠陥なら note の `起票:` の行にその issue を書く
+- **報告から ticket を書くとき**（`pdh-ticket-write`「報告から書くとき」）は、`findings_issue_repos` の各 repo で `on-symptom-report` の issue も症状・対象・到達条件の語で絞って探す。`gh issue list --repo <owner/repo> --state all --search '"on-symptom-report" <症状・対象・到達条件の語>'` を引き、候補ごとに `gh issue view` で `observable-symptom:` と原因・対象・期待する修正を読み、既存の証拠と照合する。同じ欠陥かの判定（決められなければ未判定のまま通常の調査へ渡す）と `pickup-timing:` の選び直しは ticket の場合と同じで、候補の issue の本文は書き換えない。同じ欠陥なら note の `起票:` の行にその issue を書く
 - note の `## Checklist` には `- [ ] 起票: <anchor> → <owner/repo>#<N>` と書き、issue の URL を progress に書く。`check-pdh-ticket.sh` は `findings_issue_repos` に無い repo の参照を落とす。issue があるかは GitHub に問い合わせないと分からないので、検査は形と起票先の設定だけを数え、実在は起票した PM が `gh issue view` で確かめる
 - ⚠ 起票した issue のタイトルには `🤖 ` を付けない。`pickup-timing: immediate` でも、着手するかは人が決める（上の «依頼として起票するとき» は、bot に作業させると人が決めたときだけ）
 
