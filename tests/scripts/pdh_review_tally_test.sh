@@ -57,11 +57,11 @@ printf '### Findings\n| # | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 
 printf 'review-sha: 123abc0text\n- review-sha: 123ABC0 more\nreview-sha: abcdef\nreview-sha: 12345678901234567890123456789012345678901\n review-sha: abcdef12\nclose-gate-sha: abcdef123\n' > 'work items/sha-only/progress.md'
 : > 'work items/empty/progress.md'
 expect 0 '全 ticket 集計' bash scripts/pdh-review-tally.sh
-contains '| DA | 2 | 1 | 1 | 1 | 1 | 0 | 0 |'
-contains '| codex | 2 | 1 | 0 | 1 | 0 | 0 | 1 |'
-contains '| CR | 1 | 0 | 1 | 0 | 0 | 0 | 1 |'
-contains '| PM | 1 | 0 | 1 | 0 | 0 | 1 | 0 |'
-contains '| Why の見方 | 1 | 0 | 0 | 0 | 0 | 0 | 1 |'
+contains '| DA | 2 | 1 | 1 | 1 | 1 | 0 | 0 | 0 |'
+contains '| codex | 2 | 1 | 0 | 1 | 0 | 0 | 0 | 1 |'
+contains '| CR | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 1 |'
+contains '| PM | 1 | 0 | 1 | 0 | 0 | 1 | 0 | 0 |'
+contains '| Why の見方 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |'
 contains '| alpha | 2 |'
 contains '| beta | 1 |'
 contains '| sha-only | 1 |'
@@ -77,7 +77,7 @@ excludes '| ignored |'
 excludes '| old |'
 excludes '| broken | 4 |'
 expect 0 '対象の指定と重複の除去' bash scripts/pdh-review-tally.sh --ticket 'work items/alpha' --ticket 'work items/done/beta' --ticket 'work items/alpha/'
-contains '| DA | 2 | 1 | 1 | 1 | 1 | 0 | 0 |'
+contains '| DA | 2 | 1 | 1 | 1 | 1 | 0 | 0 | 0 |'
 contains '1 巡で抜けた ticket: 1 / 2 (50.0%)'
 contains '数えなかった ticket の数: 0'
 contains '崩れた行:
@@ -105,4 +105,19 @@ must mkdir absent
 expect 0 'ticket が無いディレクトリ' bash scripts/pdh-review-tally.sh
 contains '1 巡で抜けた ticket: 0 / 0 (0.0%)'
 contains '数えなかった ticket の数: 0'
+# 制約の受け入れは «記録だけ残す» に数え、元の finding が実在したことを «うち制約の受け入れ» に残す。
+# 欠陥でないと分かった訂正と、受け入れの後に処置を戻したものは、その列に数えない。
+must mkdir accepted
+{
+  header 1
+  printf '| 1 | DA | limit | Major | accepted | いま直す | — | reason |\n'
+  printf '| 2 | DA | limit | Major | not a defect | いま直す | — | reason |\n'
+  printf '| 3 | DA | limit | Major | reverted | いま直す | — | reason |\n\n'
+  printf 'PDH-review-1 #1 処置の変更: いま直す → 記録だけ残す — constraint-accepted\n'
+  printf 'PDH-review-1 #2 処置の変更: いま直す → 記録だけ残す — 裏取りで欠陥ではないと分かった\n'
+  printf 'PDH-review-1 #3 処置の変更: いま直す → 記録だけ残す — constraint-accepted\n'
+  printf 'PDH-review-1 #3 処置の変更: 記録だけ残す → いま直す — 承認者が受け入れを取り消した\n'
+} > accepted/progress.md
+expect 0 '制約の受け入れ' bash scripts/pdh-review-tally.sh --ticket accepted
+contains '| DA | 3 | 0 | 3 | 1 | 0 | 2 | 1 | 0 |'
 printf 'PASS: pdh-review-tally (%d checks)\n' "$checks"

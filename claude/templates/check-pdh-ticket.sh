@@ -429,7 +429,7 @@ check_ticket_review_handover() {
 }
 
 # 制約の受け入れの «処置の変更» の行に、同じ finding の constraint-accepted: の記録と approval-ref: があるかを確かめる。
-# 対象は constraint-accepted を書いた行と、«いま直す → 記録だけ残す» の行（必須の修正を記録だけにする道は受け入れしか無い）。
+# 対象は constraint-accepted を書いた行だけ。欠陥でないと分かった評価の訂正（印の無い «→ 記録だけ残す»）は数えない。
 # 承認が有効かは数えない。それは AC-approved: の照合と承認の PDH-stage が確かめる。
 check_constraint_acceptance() {
   local f=$1 result id
@@ -444,8 +444,7 @@ check_constraint_acceptance() {
     block != "" && /^[[:space:]]*(- )?approval-ref:[[:space:]]*[^[:space:]]/ { approved[block]=1; next }
     /処置の変更/ && index($0, "→") {
       id=finding($0); if (id == "") next
-      after=substr($0, index($0, "→")); before=substr($0, 1, index($0, "→"))
-      if (index($0, "constraint-accepted") || (index(before, "いま直す") && after ~ /^→[[:space:]]*記録だけ残す/)) need[id]=1
+      if (index($0, "constraint-accepted")) need[id]=1
     }
     END { for (id in need) if (!(id in record)) print "record\t" id; else if (!(id in approved)) print "approval\t" id }
   ') || { failed=1; return; }

@@ -488,14 +488,14 @@ class ScriptTests(unittest.TestCase):
                     self.check()
 
     def test_constraint_acceptance_requires_record_and_approval_ref(self):
-        # 実在する欠陥を契約の変更で受け入れた «処置の変更» だけが、記録と承認の参照を求められる。
+        # 制約の受け入れの印がある «処置の変更» だけが、記録と承認の参照を求められる。
+        # 欠陥でないと分かった評価の訂正は、元の処置が «いま直す» でも受け入れの記録を求めない。
         base = self.review_progress(1, '### Findings-PDH-review-1')
         change = 'PDH-review-1 #1 処置の変更: いま直す → 記録だけ残す — constraint-accepted\n'
         record = ('\nconstraint-accepted: PDH-review-1 #1\n- 変更前の契約: 合計 S byte まで受け付ける\n'
                   '- 変更後の契約（対応範囲）: 符号化した後で L byte まで\n')
         cases = (
             (change, 'constraint-accepted: PDH-review-1 #1 の記録が無い'),
-            ('PDH-review-1 #1 処置の変更: いま直す → 記録だけ残す — 文書に書いた\n', 'の記録が無い'),
             ('PDH-review-1 #1 処置の変更: 起票する → 記録だけ残す — constraint-accepted\n', 'の記録が無い'),
             (change + record, 'approval-ref:（板と承認者の回答の場所）が無い'),
             (change + record + '- approval-ref:\n', 'approval-ref:（板と承認者の回答の場所）が無い'),
@@ -511,7 +511,9 @@ class ScriptTests(unittest.TestCase):
                       # 初めから契約の外の finding（棄却する）と、ほかの処置の変更は数えない。
                       'PDH-review-1 #1 処置の変更: いま直す → 棄却する — 契約の外。契約の文と 413 の出力\n',
                       'PDH-review-1 #1 処置の変更: いま直す → 起票する — 必須の修正に当たらない\n',
-                      'PDH-review-1 #1 処置の変更: 起票する → 記録だけ残す — 欠陥ではなく改善の候補\n'):
+                      'PDH-review-1 #1 処置の変更: 起票する → 記録だけ残す — 欠陥ではなく改善の候補\n',
+                      'PDH-review-1 #1 処置の変更: いま直す → 記録だけ残す — 裏取りで欠陥ではなく改善の候補と分かった。'
+                      '入力は呼び出し側で検査済み（api.go:42）\n'):
             with self.subTest(lines=lines):
                 self.write(f'{self.ticket}/progress.md', base + lines)
                 self.check()
