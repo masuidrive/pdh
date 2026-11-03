@@ -520,6 +520,13 @@ class ScriptTests(unittest.TestCase):
                 self.commit(f'record author {author}')
                 self.check()
 
+    def test_findings_accepts_two_new_tables(self):
+        # 見出しが 2 つ以上あると行番号が改行区切りになる。BSD awk は -v の値の改行を拒む。
+        self.write(f'{self.ticket}/progress.md',
+                   self.findings() + '\n' + self.findings().replace('review-1', 'review-2'))
+        self.commit('record two findings tables')
+        self.check()
+
     def test_findings_ignores_old_table_even_with_new_rows(self):
         old = self.findings(column=False)
         self.write(f'{self.ticket}/progress.md', old)
