@@ -75,7 +75,12 @@ FNR == 1 { state=0; round="" }
       if (match(change,/^(いま直す|起票する|記録だけ残す|棄却する)/)) {
         decision=substr(change,1,RLENGTH)
         rest=substr(change,RLENGTH+1)
-        if (rest == "" || rest ~ /^[[:space:]（(«`]/) overrides[FILENAME SUBSEP id]=decision
+        if (rest == "" || rest ~ /^[[:space:]（(«`]/) {
+          overrides[FILENAME SUBSEP id]=decision
+          # 制約の受け入れは «記録だけ残す» に数えたうえで、元の finding が実在したことを別の列に残す。
+          if (decision == "記録だけ残す" && index($0, "constraint-accepted")) accepted[FILENAME SUBSEP id]=1
+          else delete accepted[FILENAME SUBSEP id]
+        }
       }
     }
   }
@@ -109,6 +114,7 @@ END {
       person=trim(people[j]); pk=key SUBSEP person
       if (person == "" || person_seen[pk]++) continue
       reviewers[person]++; verdicts[person SUBSEP decision]++
+      if (key in accepted) constrained[person]++
       if (severity[key] == "Critical") critical[person]++
       if (severity[key] == "Major") major[person]++
     }
@@ -118,12 +124,12 @@ END {
     }
   }
   print "### 出した人ごと"
-  print "| 出した人 | finding | Critical | Major | いま直す | 起票する | 記録だけ残す | 棄却する |"
-  print "|---|---|---|---|---|---|---|---|"
+  print "| 出した人 | finding | Critical | Major | いま直す | 起票する | 記録だけ残す | うち制約の受け入れ | 棄却する |"
+  print "|---|---|---|---|---|---|---|---|---|"
   n=sorted(reviewers, keys)
   for (i=1; i<=n; i++) {
     p=keys[i]
-    printf "| %s | %d | %d | %d | %d | %d | %d | %d |\n", p,reviewers[p],critical[p],major[p],verdicts[p SUBSEP "いま直す"],verdicts[p SUBSEP "起票する"],verdicts[p SUBSEP "記録だけ残す"],verdicts[p SUBSEP "棄却する"]
+    printf "| %s | %d | %d | %d | %d | %d | %d | %d | %d |\n", p,reviewers[p],critical[p],major[p],verdicts[p SUBSEP "いま直す"],verdicts[p SUBSEP "起票する"],verdicts[p SUBSEP "記録だけ残す"],constrained[p],verdicts[p SUBSEP "棄却する"]
   }
   print "\n### ticket ごとの巡"
   print "| ticket | 巡 |"

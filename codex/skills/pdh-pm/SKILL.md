@@ -84,7 +84,7 @@ compact の後で同じ session が続いているときは、作業ディレク
 この規則の目的: **作業の途中で気づいたバグが、この ticket の出荷を止めずに、行き先（この ticket の修正か、別の ticket）を持つこと。**
 
 - 実装・review・検証のどこで気づいたバグも、この ticket で直すのは «必須の修正»（この ticket の変更が持ち込んだ退行・AC を満たさない欠陥・変更が通る経路から到達できる Critical など）だけである。何が当たるかは `[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」にだけ書く（`.codex/agents/pdh-coding-engineer.toml` はここを指す）
-- «必須の修正» に当たらない実在するバグは、安く直せても、この ticket で直さない。close の前に別の ticket を作るか既存の ticket へ集約し（`[SKILLS_PATH]/pdh-review/SKILL.md`「Findings 表」の `起票:` の行と「起票した ticket に書くこと」）、close の報告で名前と `pickup-timing:` を挙げる。`immediate` の ticket は、close を待たずに起票した時点で人に知らせる。直すたびに、確かめ直す範囲と退行の危険がこの ticket に増え、review が閉じなくなるからである
+- «必須の修正» に当たらない実在するバグは、安く直せても、この ticket で直さない。承認者が制約として受け入れたもの（`[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」の «制約の受け入れ»）を除き、close の前に別の ticket を作るか既存の ticket へ集約し（`[SKILLS_PATH]/pdh-review/SKILL.md`「Findings 表」の `起票:` の行と「起票した ticket に書くこと」）、close の報告で名前と `pickup-timing:` を挙げる。`immediate` の ticket は、close を待たずに起票した時点で人に知らせる。直すたびに、確かめ直す範囲と退行の危険がこの ticket に増え、review が閉じなくなるからである
 - この ticket で直すときは、ticket の変更と混ざらないよう、別の commit で直す。修正前に落ちる ticket-local-test を先に置く決まりも同じに当てる。progress に «気づいたバグを直した» と 1 行書く
 - 直すと DB の変更か他者が使う契約の変更が要るとき、または直し方に製品の判断が要るときは、ユーザに聞いてから直す（`PDH-AGENTS.md`「変更のコストの数え方」— 承認者が見ていないコストなので）
 

@@ -428,6 +428,36 @@ check_ticket_review_handover() {
   done <<<"$result"
 }
 
+# 制約の受け入れの «処置の変更» の行に、同じ finding の constraint-accepted: の記録と approval-ref: があるかを確かめる。
+# 対象は constraint-accepted を書いた行だけ。欠陥でないと分かった評価の訂正（印の無い «→ 記録だけ残す»）は数えない。
+# 承認が有効かは数えない。それは AC-approved: の照合と承認の PDH-stage が確かめる。
+check_constraint_acceptance() {
+  local f=$1 result id
+  [ -f "$f" ] || return 0
+  result=$(ticket_visible_lines "$f" | awk '
+    function finding(line) {
+      if (!match(line, /PDH-review-[0-9]+[[:space:]]*#[0-9]+/)) return ""
+      line=substr(line, RSTART, RLENGTH); gsub(/[[:space:]]/, "", line); sub(/#/, " #", line); return line
+    }
+    /^(- )?constraint-accepted:/ { block=finding($0); if (block != "") record[block]=1; next }
+    /^#/ || /^[[:space:]]*$/ { block=""; next }
+    block != "" && /^[[:space:]]*(- )?approval-ref:[[:space:]]*[^[:space:]]/ { approved[block]=1; next }
+    /処置の変更/ && index($0, "→") {
+      id=finding($0); if (id == "") next
+      if (index($0, "constraint-accepted")) need[id]=1
+    }
+    END { for (id in need) if (!(id in record)) print "record\t" id; else if (!(id in approved)) print "approval\t" id }
+  ') || { failed=1; return; }
+  while IFS=$'\t' read -r kind id; do
+    case "$kind" in
+      record) printf 'check-pdh-ticket: %s: %s を制約として受け入れる «処置の変更» の行があるのに、constraint-accepted: %s の記録が無い（pdh-review「制約の受け入れの記録」）\n' "$f" "$id" "$id" >&2 ;;
+      approval) printf 'check-pdh-ticket: %s: constraint-accepted: %s の記録に approval-ref:（板と承認者の回答の場所）が無い（pdh-review「制約の受け入れの記録」）\n' "$f" "$id" >&2 ;;
+      *) continue ;;
+    esac
+    failed=1
+  done <<<"$result"
+}
+
 # AC と Out-of-scope の承認の記録（«AC-approved: <いまの AC と Out-of-scope のハッシュ>»）を確かめる。
 check_ac_approved() {
   local t=$1 st=$2 rec cur
@@ -695,6 +725,7 @@ for t in "$tickets_dir"/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
   # Why の根拠も、別の branch の ticket（旧い書式で起票されたものを含む）では落とさない。
   [[ "$t" == "$tickets_dir/done/"* ]] || check_ticket_why_intake_evidence "$t"
   check_findings_authors "$d/progress.md"
+  check_constraint_acceptance "$d/progress.md"
 
   n="$d/note.md"
   if [[ "$t" == "$tickets_dir/done/"* ]]; then
