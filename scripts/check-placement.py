@@ -47,7 +47,7 @@ names=re.findall(r'`([^`]+)`',owned.group(1)) if owned else []
 if not names:errors.append('github-bot/INSTALL.md: PDH 保守分の一覧が見つからない')
 bot_rows={}
 for line in bot.splitlines():
-    match=re.match(r'\| `github-bot/([^`]+)` \| `([^`]+)`(?:（Codex は `([^`]+)`）)? \|',line)
+    match=re.match(r'\| `github-bot/([^`]+)` \| `([^`]+)`(?:（Codex 単独は `([^`]+)`）)? \|',line)
     if match:bot_rows[match.group(1)]=match.groups()[1:]
 for engine in ('claude','codex'):
     layer=root/engine/'lock-map.github-bot.tsv'
@@ -65,6 +65,11 @@ for engine in ('claude','codex'):
         if name not in bot_rows:errors.append(f'github-bot/INSTALL.md: no placement row for {name}');continue
         dst,codex_dst=bot_rows[name]
         expected.add((f'github-bot/{name}',codex_dst if engine=='codex' and codex_dst else dst))
+    # skill は各 engine が探す場所に置く。Codex は repo の .agents/skills/ しか探さない。
+    skill_root={'claude':'.claude/skills/','codex':'.agents/skills/'}[engine]
+    for source,target in actual:
+        if source.endswith('/') and (target.count('/')!=3 or not target.startswith(skill_root)):
+            errors.append(f'{engine}/lock-map.github-bot.tsv: skill {target} is outside {skill_root}')
     for pair in expected^actual:errors.append(f'{engine}: github-bot layer map mismatch {pair}')
 if errors:sys.exit('\n'.join(errors))
 print('placement: both policy columns, exact overwrite maps and github-bot layer maps agree')

@@ -283,6 +283,10 @@ github-bot レイヤーを導入済み（`.github/workflows/` に coding-bot の
 <!-- pdh-shell: bot-update -->
 ```bash
 bot_map=tmp/pdh/codex/lock-map.github-bot.tsv
+if [ -e .codex/skills/pdh-gh-pull ] || [ -L .codex/skills/pdh-gh-pull ]; then
+  printf '%s\n' '.codex/skills/pdh-gh-pull: 旧配置。既知の移行手順「pdh-gh-pull を .agents/skills へ移す」を先に回す' >&2
+  exit 1
+fi
 bot_status=0
 bash scripts/pdh-lock.sh installed --map "$bot_map" || bot_status=$?
 [ "$bot_status" -le 1 ] || exit "$bot_status"
@@ -303,7 +307,7 @@ if [ "$bot_status" -eq 0 ]; then
 fi
 ```
 
-導入済みかは、`lock-map.github-bot.tsv` の 1 行目が指す workflow があるか、`.pdh-lock` にその 4 つの行があるかで決める。4 つのファイルの有無では決めない（消えたファイルを «未導入» と読まないため）。`local-changes` が止めたときは、挙がったファイルの repo 固有の内容を [既知の移行手順](#coding-bot-の共有ファイルを-pdh-lock-に登録する)に従って移してから再実行する。
+導入済みかは、`lock-map.github-bot.tsv` の 1 行目が指す workflow があるか、`.pdh-lock` にその 4 つの行があるかで決める。4 つのファイルの有無では決めない（消えたファイルを «未導入» と読まないため）。`local-changes` が止めたときは、挙がったファイルの repo 固有の内容を [既知の移行手順](#coding-bot-の共有ファイルを-pdh-lock-に登録する)に従って移してから再実行する。`.codex/skills/pdh-gh-pull` が残っていると、新しい配置へ置いて旧配置の変更を置き去りにしないよう、何もせずに止まる。
 
 上のコマンドは配置表の「上書き」の script・文書・check も毎回コピーする。「差分マージ」は project の値を保ち、「初回だけ」は既存の本文を保持する。新規の設定ファイルは既存設定へマージする。
 
@@ -504,6 +508,68 @@ done < <(sed -n '1s/^# installed-by: //p' "$bot_map"; awk -F '\t' 'NR > 1 { sub(
 awk -F '\t' 'NR == FNR { if (FNR > 1) { sub(/\/$/, "", $2); drop[$2] = 1; drop["dir:" $2] = 1 }; next }
   FNR == 1 || !($1 in drop || $4 in drop)' "$bot_map" .pdh-lock > .pdh-lock.new
 mv .pdh-lock.new .pdh-lock
+bash scripts/pdh-lock.sh check
+```
+
+#### pdh-gh-pull を .agents/skills へ移す
+
+Codex は repo の skill を `.agents/skills/`（起動した場所から repo root まで）でしか探さない。以前の github-bot の配置表は Codex 単独の `pdh-gh-pull` を `.codex/skills/pdh-gh-pull/` に置かせていたので、そこにある skill は使われていなかった。`bot-update` はこの旧配置が残っている間は止まる。
+
+次の `bot-skill-move` を、手順 1 の backup の後、`bot-update` の前に回す。
+
+1. 旧配置のファイルが、`.pdh-lock` の commit の版と今の上流の版のどちらとも違えば、挙げて止まり、何も動かさない。repo 固有の内容を [coding-bot の共有ファイルを .pdh-lock に登録する](#coding-bot-の共有ファイルを-pdh-lock-に登録する)の 1 と同じ置き場所へ移し、旧配置を上流の版に戻してから再実行する
+2. `.agents/skills/pdh-gh-pull` も既にあれば、どちらを残すかを決めるよう求めて止まる
+3. 旧配置を `.agents/skills/pdh-gh-pull/` へ移し、`.pdh-lock` の行の path を書き換え、`required-pdh-files.check` の pdh-gh-pull の行を `.agents/skills/pdh-gh-pull/SKILL.md` の 1 行にする
+4. 旧配置が無ければ 1 から 3 は何もしない。旧配置が無くても、`required-pdh-files.check` に pdh-gh-pull の行があれば、`.agents/skills/pdh-gh-pull/SKILL.md` の 1 行に揃える（以前の版の手順で Claude 用の行を足し、fast-checks が落ちている repo もこれで直る）
+5. 最後に `pdh-lock.sh check` を回す
+
+移した後は `bot-update` と「版を記録して検査する」を回す。`fast-checks.sh` が `required-pdh-files.check` を検査する。
+
+<!-- pdh-shell: bot-skill-move -->
+```bash
+old=.codex/skills/pdh-gh-pull
+new=.agents/skills/pdh-gh-pull
+if [ -e "$old" ] || [ -L "$old" ]; then
+  old_map=$(mktemp)
+  printf 'github-bot/pdh-gh-pull/\t%s/\n' "$old" > "$old_map"
+  move_status=0
+  bash scripts/pdh-lock.sh local-changes --upstream tmp/pdh --map "$old_map" || move_status=$?
+  rm -f "$old_map"
+  [ "$move_status" -eq 0 ] || exit 1
+  if [ -e "$new" ] || [ -L "$new" ]; then
+    printf '%s: %s もある。どちらを残すかを決め、片方を消してから再実行する\n' "$old" "$new" >&2
+    exit 1
+  fi
+  mkdir -p .agents/skills
+  mv "$old" "$new"
+  rmdir .codex/skills 2>/dev/null || true
+  if [ -f .pdh-lock ]; then
+    {
+      head -n 1 .pdh-lock
+      tail -n +2 .pdh-lock | awk -F '\t' -v OFS='\t' -v old="$old" -v new="$new" '
+        index($1, old "/") == 1 { $1 = new substr($1, length(old) + 1) }
+        $4 == "dir:" old { $4 = "dir:" new }
+        { print }' | sort
+    } > .pdh-lock.new
+    mv .pdh-lock.new .pdh-lock
+  fi
+fi
+check=scripts/checks/required-pdh-files.check
+if [ -f "$check" ] && grep -q 'pdh-gh-pull' "$check"; then
+  awk -v want="$new/SKILL.md" 'BEGIN { FS = OFS = "," }
+    /^required_paths=/ {
+      sub(/^required_paths=/, "")
+      out = ""
+      for (i = 1; i <= NF; i++) {
+        if ($i ~ /pdh-gh-pull/) continue
+        out = out (out == "" ? "" : ",") $i
+      }
+      print "required_paths=" out (out == "" ? "" : ",") want
+      next
+    }
+    { print }' "$check" > "$check.new"
+  mv "$check.new" "$check"
+fi
 bash scripts/pdh-lock.sh check
 ```
 
