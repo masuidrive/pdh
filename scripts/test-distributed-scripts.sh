@@ -11,7 +11,12 @@ for engine in claude codex; do
   mkdir -p "$target/scripts" "$target/.claude/agents" "$target/.claude/skills" "$target/.codex" "$target/.github/coding-bot"
   cp -RL "$root/$engine/templates/." "$target/scripts/"
   mkdir -p "$target/tests/scripts"
-  cp "$root/tests/scripts/"* "$target/tests/scripts/"
+  # Regular files only: a __pycache__ directory left by a local python run made
+  # cp fail with "is a directory" on every invocation, and cp's status is not
+  # checked here, so the noise was the only sign.
+  for test_file in "$root/tests/scripts/"*; do
+    [ -f "$test_file" ] && cp "$test_file" "$target/tests/scripts/"
+  done
   cp "$root/claude/templates/gen-agents-md.sh" "$root/claude/templates/gen-codex-agents.sh" "$target/scripts/"
   # tests use the canonical source layout as input material, even for Codex's
   # behavioral shell contracts. Native-only installation is tested separately.
