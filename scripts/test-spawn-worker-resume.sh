@@ -273,7 +273,7 @@ report_case
 
 for scope in base commit uncommitted; do
   for with_prompt in yes no; do
-    new_case "AC1/2: review --$scope（指示文=$with_prompt）"
+    new_case "AC1/2: review --${scope}（指示文=${with_prompt}）"
     review_args=(review -c 'sandbox_mode="read-only"' -m chosen-model -o review.txt)
     case "$scope" in
       base) review_args+=(--base feature/base) ;;
@@ -359,12 +359,12 @@ for mode in text json; do
   if [ "$mode" = json ]; then mode_args=(--json); fi
   for wrapper in stream http; do
     new_case "AC1: 最後の混雑エラーに $wrapper wrapper があっても同じ会話を再開 ($mode)"
-    launch "capacity-$wrapper-wrapped,success" "$SCRIPT" "$out" -- codex exec "${mode_args[@]}" '指示'
+    launch "capacity-$wrapper-wrapped,success" "$SCRIPT" "$out" -- codex exec ${mode_args[@]+"${mode_args[@]}"} '指示'
     done_worker
     eq rc 0 "$(cat "$out/rc.txt")"
     eq '起動回数' 2 "$(cat "$trace/count")"
     eq '--wait' 'DONE rc=0 resumes=1' "$wait_output"
-    expect_args exec resume "$sid" "${mode_args[@]}" -
+    expect_args exec resume "$sid" ${mode_args[@]+"${mode_args[@]}"} -
     printf '%s\n指示' "$prefix" > "$case_dir/expected-prompt"
     same "$case_dir/expected-prompt" "$trace/stdin.2"
     report_case
@@ -734,7 +734,7 @@ normalize() {
 }
 for command_kind in other success failure capacity; do
   for input_kind in stdin no-stdin process-substitution fifo; do
-    new_case "AC5: 旧版比較 $command_kind / $input_kind（ファイル全件・--wait・stdin）"
+    new_case "AC5: 旧版比較 $command_kind / ${input_kind}（ファイル全件・--wait・stdin）"
     printf 'stdin の全文\n末尾の改行\n\n' > "$case_dir/input.txt"
     command_args=(codex exec '引数の指示')
     plan="$command_kind"

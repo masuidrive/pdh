@@ -394,7 +394,7 @@ contains $'空です:\nWhy-not-fix-now:\n'
 for heading in '### Why' '### Why / Intent'; do
   for prefix in '' '- ' '- [ ] ' '- [x] ' '- [X] '; do
     printf '%s\n  %sreproduction-or-measurement： 確認した結果\n  %sWHY-NOT-FIX-NOW: 該当なし\n' "$heading" "$prefix" "$prefix" > "$new_ticket"
-    expect 0 "$heading と接頭辞 $prefix（大文字・小文字を区別しない）" bash scripts/check-pdh-ticket.sh
+    expect 0 "$heading と接頭辞 ${prefix}（大文字・小文字を区別しない）" bash scripts/check-pdh-ticket.sh
   done
 done
 printf '### Why\nReproduction-or-measurement: <!-- 見本 -->\nWhy-not-fix-now: 理由\n' > "$new_ticket"

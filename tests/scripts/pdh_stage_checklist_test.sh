@@ -78,7 +78,7 @@ must chmod +x "$TMP_DIR/bin/grep"
 for mode in display enter; do
   args=(PDH-implement)
   [ "$mode" = enter ] && args+=(--enter "$n")
-  expect 1 "grep の失敗を落とす（$mode）" env PATH="$TMP_DIR/bin:$PATH" PDH_TEST_REAL_GREP="$(command -v grep)" bash scripts/pdh-stage-checklist.sh "${args[@]}"
+  expect 1 "grep の失敗を落とす（${mode}）" env PATH="$TMP_DIR/bin:$PATH" PDH_TEST_REAL_GREP="$(command -v grep)" bash scripts/pdh-stage-checklist.sh "${args[@]}"
   contains 'PDH-implement'
   [[ "$output" != *'途中まで読めた行'* ]] || fail "失敗した grep の出力を使った: $output"
   cmp -s "$n" "$TMP_DIR/before" || fail "note が変わった"

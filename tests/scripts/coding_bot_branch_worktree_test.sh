@@ -6,7 +6,9 @@ resolved_link() {
 }
 ROOT_DIR=${PDH_TEST_ROOT:?test-distributed-scripts.sh が作る導入先を指定する}
 ENTER="$ROOT_DIR/.github/coding-bot/enter-branch-worktree.sh"
-TMP_DIR=$(mktemp -d)
+# macOS の mktemp は /var/folders/... を返すが、/var は /private/var への symlink
+# なので、git が返す実パスと期待値が食い違う。測る側の入口で実パスに揃える。
+TMP_DIR=$(resolved_link "$(mktemp -d)")
 trap 'rm -rf "$TMP_DIR"' EXIT
 export LC_ALL=C GIT_CONFIG_GLOBAL="$TMP_DIR/gitconfig" GIT_CONFIG_NOSYSTEM=1
 export GIT_TERMINAL_PROMPT=0

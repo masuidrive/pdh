@@ -12,7 +12,7 @@ expect() {
   local expected=$1 label=$2 actual
   shift 2
   output=$("$@" 2>&1); actual=$?
-  [ "$actual" -eq "$expected" ] || fail "$label: exit $actual（期待 $expected）: $output"
+  [ "$actual" -eq "$expected" ] || fail "$label: exit ${actual}（期待 ${expected}）: $output"
   checks=$((checks + 1))
 }
 contains() { [[ "$output" == *"$1"* ]] || fail "出力に $1 がありません: $output"; }
@@ -215,7 +215,9 @@ expect 0 'ヘルプ' bash scripts/pdh-review-eval.sh -h
 contains '--work <dir>'
 for args in '' '--cases' '--other' '--cases absent --measured' '--cases cases.json' '--cases cases.json --case absent' '--cases cases.json --case null --measured' '--cases cases.json --measured --reviewers da,da' '--cases cases.json --measured --reviewers bad' '--cases cases.json --measured --reviewers da,'; do
   read -r -a argv <<< "$args"
-  expect 2 "使い方の誤り: $args" bash scripts/pdh-review-eval.sh "${argv[@]}"
+  # args='' leaves argv empty, and bash 3.2-4.3 read "${argv[@]}" as an unbound
+  # expansion under set -u. The +alternate form expands to nothing instead.
+  expect 2 "使い方の誤り: $args" bash scripts/pdh-review-eval.sh ${argv[@]+"${argv[@]}"}
 done
 printf '{broken\n' > invalid.json
 expect 2 '壊れた JSON' bash scripts/pdh-review-eval.sh --cases invalid.json --measured

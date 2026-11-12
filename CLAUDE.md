@@ -116,7 +116,7 @@ scripts/                             # この repo 自身の検査。配布物�
 
 `./scripts/test-all.sh` を実行する。中身は 6 つ:
 
-- `scripts/fast-checks.sh` — `scripts/checks/*.check` の宣言的不変条件（`Based on` 行の commit id 置換禁止、配布物からの `templates/` 参照禁止、merge-conflict marker、判断基準ファイル `product-brief.md` / `CLAUDE.md` の存在）
+- `scripts/fast-checks.sh` — `scripts/checks/*.check` の宣言的不変条件（`Based on` 行の commit id 置換禁止、配布物からの `templates/` 参照禁止、merge-conflict marker、判断基準ファイル `product-brief.md` / `CLAUDE.md` の存在、`$var` の直後に多バイト文字を置かない）
 - `scripts/check-distribution.sh` — grep で書けない検査（`Based on` 行の存在とパス一致、`INSTALL.md` 配置表 ↔ 実ファイルの双方向一致、**配布物間の重複行検出**）
 - `scripts/check-guard-parity.sh` — **判断/契約 layer の guard が `claude/` と `codex/` の両方に在るか**の cross-set 検査。重複検出は set 内限定なので、片方のセットで停止条件・実 API 200 verify 等の guard 文が消えても既存検査は落ちない（実測: codex/ が停止を «よしなに でも進む» に緩めて配られ、切り出し再生で F2 を踏んだ。`evals/private/results/2026-09-06-split.md`）。この検査が消失を捕まえる。**新しい load-bearing guard を足したら `check-guard-parity.sh` の `guards` へ登録する**
 - `scripts/check-links.py` — Markdown のリンク検査（リンク先ファイルの存在、**アンカーが実在する見出しを指すか**）。見出しの改名でリンクが静かに切れるのを防ぐ

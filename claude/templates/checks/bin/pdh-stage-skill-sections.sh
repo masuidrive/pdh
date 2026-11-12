@@ -17,7 +17,7 @@ rc=0
 for f in "${stage_skills[@]}"; do
   for h in 入力 処理 出力 例外; do
     if ! grep -qx "## $h" "$f"; then
-      echo "$f: 節「## $h」が無い（pdh-change「PDH-stage の skill の形」）"; rc=1
+      echo "$f: 節「## ${h}」が無い（pdh-change「PDH-stage の skill の形」）"; rc=1
     fi
   done
 done

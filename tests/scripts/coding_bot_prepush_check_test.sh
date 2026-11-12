@@ -9,6 +9,14 @@ trap 'echo "coding_bot_prepush_check_test: failed at line $LINENO" >&2; cat "$tm
 awk '/^install_pdh_pre_push_hook\(\)/{copy=1} copy{print} copy && /^}$/{exit}' \
   .github/coding-bot/run-action.sh > "$tmp/installer.sh"
 source "$tmp/installer.sh"
+# BSD sed requires an argument for -i and GNU sed requires none, so neither
+# spelling runs on both. Edit through a temp file instead: on macOS `sed -i`
+# read the next argument as the backup suffix and the file as the script, and
+# this whole test died on "undefined label" before its first assertion.
+sed_i() {
+  sed "$1" "$2" > "$2.sed-tmp" && mv "$2.sed-tmp" "$2"
+}
+
 # Do not inherit the developer's hooks, signing, or repository environment.
 unset $(git rev-parse --local-env-vars)
 export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0
@@ -554,9 +562,9 @@ TICKET
     expected=allowed
     case "$scenario" in
       missing|custom-dir-missing|inherited-failure|pushed-tree) expected=refused ;;
-      frontmatter|custom-dir|done) sed -i 's@branch: agent/other@branch: feature@' "$ticket_root/task/ticket.md" ;;
+      frontmatter|custom-dir|done) sed_i 's@branch: agent/other@branch: feature@' "$ticket_root/task/ticket.md" ;;
       prefix)
-        sed -i '/^branch:/d' "$ticket_root/task/ticket.md"
+        sed_i '/^branch:/d' "$ticket_root/task/ticket.md"
         echo 'branch_prefix: topic/' >> .ticket-config.yaml
         branch=topic/task
         ;;
@@ -592,7 +600,7 @@ TICKET
     git commit -qm 'proposed push'
     if [ "$scenario" = pushed-tree ]; then
       # Uncommitted ownership in the checkout must not authorize the pushed SHA.
-      sed -i 's@branch: agent/other@branch: feature@' "$ticket_root/task/ticket.md"
+      sed_i 's@branch: agent/other@branch: feature@' "$ticket_root/task/ticket.md"
     fi
     install_pdh_pre_push_hook
     status=0

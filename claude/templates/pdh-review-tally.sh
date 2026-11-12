@@ -28,7 +28,7 @@ if [ "${#files[@]}" -eq 0 ]; then
   shopt -s nullglob
   files=("$tickets_dir"/*/progress.md "$tickets_dir"/done/*/progress.md)
 fi
-for file in "${files[@]}"; do
+for file in ${files[@]+"${files[@]}"}; do
   [ -f "$file" ] && [ -r "$file" ] || fail "progress.md が読めません: $file"
 done
 # 空の対象は stdin の EOF で処理する。ファイル名を argv で渡すので空白も保持する。
@@ -153,5 +153,5 @@ END {
   if (!error_count) print "なし"
   for (i=1; i<=error_count; i++) print errors[i]
 }
-' "${files[@]}" < /dev/null || exit 2
+' ${files[@]+"${files[@]}"} < /dev/null || exit 2
 exit 0

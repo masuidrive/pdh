@@ -323,6 +323,6 @@ codex_prepare_auth() {
     if [ "${CODEX_AUTH_REPORTED:-false}" != true ]; then
       notification='Issue / PR へのコメント投稿にも失敗'
     fi
-    CODEX_AUTH_STATUS="$reason（$notification）。codex の worker を起動しない。最終レポートの先頭にこのことを書く"
+    CODEX_AUTH_STATUS="${reason}（${notification}）。codex の worker を起動しない。最終レポートの先頭にこのことを書く"
   fi
 }

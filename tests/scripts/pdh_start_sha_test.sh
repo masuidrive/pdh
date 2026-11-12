@@ -11,7 +11,7 @@ expect() {
   local expected=$1 label=$2 actual
   shift 2
   output=$("$@" 2>&1); actual=$?
-  [ "$actual" -eq "$expected" ] || fail "$label: exit $actual（期待 $expected）: $output"
+  [ "$actual" -eq "$expected" ] || fail "$label: exit ${actual}（期待 ${expected}）: $output"
   checks=$((checks + 1))
 }
 same() { [ "$output" = "$1" ] || fail "$2: 出力 '$output'（期待 '$1'）"; }
@@ -92,7 +92,7 @@ must mkdir -p tickets/empty
 printf '# progress\n' > tickets/empty/progress.md
 printf -- '---\nstarted_at: null\n---\n' > tickets/empty/ticket.md
 git_subject=$(git log -1 --format=%s)
-[ "$git_subject" = '[start] features/t1' ] || fail "fixture: features/empty の tip が [start] ではない（$git_subject）"
+[ "$git_subject" = '[start] features/t1' ] || fail "fixture: features/empty の tip が [start] ではない（${git_subject}）"
 # 名前の違う ticket の [start] は使わない
 expect 3 '[start] が別の ticket のもの' bash scripts/pdh-review-range.sh tickets/empty --start
 # [start] の題が ticket 名と一致すれば、差分が空でも親を返す

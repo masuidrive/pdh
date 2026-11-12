@@ -67,10 +67,10 @@ codex_install_login_requirement() {
   if [ "$status" -ne 0 ] &&
      { [ "$status" -ne 1 ] || ! grep -qi '^Not logged in' <<< "$diagnostic"; }; then
     if "$siwc"; then
-      echo "::error::SIWC の requirements を確認できないため Codex を使いません（終了コード: $status）。"
+      echo "::error::SIWC の requirements を確認できないため Codex を使いません（終了コード: ${status}）。"
       return 1
     fi
-    echo "::warning::Codex が requirements を読み込めるか確認できなかったため、配置したまま続けます（終了コード: $status）。"
+    echo "::warning::Codex が requirements を読み込めるか確認できなかったため、配置したまま続けます（終了コード: ${status}）。"
   fi
   cmp -s "$directory/requirements.toml" <(printf '%s\n' "$requirement") || return 1
   return 0

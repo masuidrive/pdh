@@ -91,7 +91,7 @@ ci_autofix_finish() {
   marker=$(ci_autofix_red_marker "$ISSUE_NUMBER" "$CI_AUTOFIX_HEAD_SHA" "$CI_AUTOFIX_RUN_ID")
   new_sha=$(git rev-parse HEAD) || return 1
   if [ "$ENGINE_EXIT_CODE" -ne 0 ]; then
-    reason="agent が正常終了しませんでした（exit $ENGINE_EXIT_CODE）。"
+    reason="agent が正常終了しませんでした（exit ${ENGINE_EXIT_CODE}）。"
   elif [ "$new_sha" = "$CI_AUTOFIX_START_SHA" ]; then
     reason="CI の失敗を直す commit を作れませんでした。"
   elif ! git diff --quiet || ! git diff --cached --quiet; then
