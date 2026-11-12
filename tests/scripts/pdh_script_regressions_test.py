@@ -831,6 +831,22 @@ class ScriptTests(unittest.TestCase):
                 self.assertIn(path, result.stdout)
                 file.write_bytes(content)
 
+    def test_single_file_exemption_is_allow_not_exclude(self):
+        # exclude は glob の 4 形しか受けないので、1 ファイルを名指しできない。既存の
+        # 大きいファイルを 1 つ外したい人がまず書くのはそれなので、エラーは出口を名指しする。
+        self.write('scripts/fast-checks.sh', (ROOT / 'scripts/fast-checks.sh').read_text())
+        self.env['CHECKS_DIR'] = str(self.root / 'checks')
+        self.write('big.mjs', '// line\n' * 20)
+        registry = 'reason=too long\nmax_lines=10\nglob=**/*.mjs\n'
+        self.write('checks/size.check', registry)
+        self.assertIn('big.mjs: 20 lines > max 10', self.run_cmd('bash', 'scripts/fast-checks.sh', code=1).stdout)
+        self.write('checks/size.check', registry + 'exclude=big.mjs\n')
+        out = self.run_cmd('bash', 'scripts/fast-checks.sh', code=1).stdout
+        self.assertIn("invalid exclude entry 'big.mjs'", out)
+        self.assertIn('to exempt a single file, use allow=<path>', out)
+        self.write('checks/size.check', registry + 'allow=big.mjs\n')
+        self.run_cmd('bash', 'scripts/fast-checks.sh')
+
     def test_required_paths_accept_directory_symlink_and_reject_absence(self):
         self.write('scripts/fast-checks.sh', (ROOT / 'scripts/fast-checks.sh').read_text())
         self.write('skill/SKILL.md', 'instructions\n')

@@ -1,4 +1,6 @@
 # Example source-size ceiling. Adjust extensions and excludes for the project, or delete it.
+# One existing oversized file goes in `allow=` (exact repo-relative paths, comma
+# separated): `exclude` takes only the glob forms, so it cannot name a single file.
 reason=source file exceeds 1500 lines; split it into cohesive modules
 max_lines=1500
 glob=**/*.ts,**/*.tsx,**/*.js,**/*.jsx,**/*.mjs,**/*.cjs,**/*.py,**/*.rb,**/*.go

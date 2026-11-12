@@ -152,6 +152,12 @@ validate_glob_list() {
   for entry in "${entries[@]}"; do
     if ! parse_glob_entry "$entry"; then
       printf "fast-checks: %s: config error: invalid %s entry '%s'; expected <dir>/** or <dir>/**/*.<ext>, **/*<literal-suffix>, or **/<literal-dir>/**\n" "$check_file" "$key" "$entry" >&2
+      # Naming one file here is the common reason this fires: an existing oversized
+      # file someone wants out of a max_lines check. That escape exists already and
+      # is spelled differently, so say so rather than leaving the forms list as the
+      # only answer - widening the glob language would give the same exemption a
+      # second spelling, and a weaker one (a glob covers files nobody has read yet).
+      printf "fast-checks: %s: to exempt a single file, use allow=<path> (valid with max_lines and linter_command) or a line-local 'checks-allow: <id>' comment (pattern)\n" "$check_file" >&2
       return 1
     fi
   done

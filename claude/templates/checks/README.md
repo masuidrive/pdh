@@ -122,6 +122,11 @@ allow=src/legacy-generated.ts
   `**/*<literal-suffix>` (for example `**/*.test.ts` or `**/*-data.mjs`) and
   `**/<literal-dir>/**` (for example `**/dist/**`). Suffixes must begin with `.`
   or `-`; suffixes and directory names are literals without glob metacharacters.
+  Neither `glob` nor `exclude` can name a single file, by design: to take one
+  existing file out of a check, use `allow=` (exact paths, with `max_lines` or
+  `linter_command`) or the line-local `checks-allow: <id>` comment (with
+  `pattern`). A literal entry here would spell the same exemption a second way,
+  and a weaker one — a glob also covers files nobody has written yet.
 - The scanned file set is `git ls-files --cached --others --exclude-standard`
   (tracked + untracked-not-ignored), so both ripgrep and the grep fallback see the
   same explicit list regardless of their ignore handling.
