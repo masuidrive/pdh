@@ -589,9 +589,10 @@ check_findings_authors() {
       pending=0
     }
     /^\|[[:space:]]*#[[:space:]]*\|/ && index($0, "判定") {
-      author=0; verdict=0; why=0
+      author=0; verdict=0; why=0; idcol=0
       if (NR in added) {
         for (i=2; i<=NF; i++) {
+          if (trim($i) == "#") idcol=i
           if (trim($i) == "出した人") author=i
           if (trim($i) == "判定") verdict=i
           if (trim($i) == "理由") why=i
@@ -603,16 +604,60 @@ check_findings_authors() {
       }
       next
     }
-    !/^\|/ { author=0; verdict=0; why=0 }
+    # 見出しの巡を覚える。«処置の変更» の行は finding を «PDH-review-N #M» で指すので、
+    # 表の行の # だけでは照合できない。
+    /^#+ / {
+      round=0
+      if ($0 ~ /^###+ Findings(-| ?(（|\())PDH-review-[0-9]+([^0-9]|$)/) {
+        number=$0; sub(/^.*PDH-review-/, "", number); sub(/[^0-9].*$/, "", number); round=number+0
+      }
+    }
+    # «処置の変更: PDH-review-N #M 起票する → いま直す — 理由» は、表の行の判定を置き換える
+    # （pdh-review「Findings 表」）。progress は追記だけで元の行を直せないので、置き換えを
+    # 読まなければ «起票する» を外した finding に由来を足す手段が無く、この検査は通らない。
+    /処置の変更/ && match($0, /PDH-review-[0-9]+[[:space:]]*#[0-9]+/) {
+      ident=substr($0, RSTART, RLENGTH); number=ident
+      sub(/^PDH-review-/, "", number); sub(/[^0-9].*$/, "", number)
+      sub(/^.*#/, "", ident)
+      tail=substr($0, index($0, "処置の変更"))
+      if (index(tail, "→")) {
+        after=substr(tail, index(tail, "→") + length("→"))
+        key=(number+0) SUBSEP (ident+0)
+        changed_why[key]=""
+        if (index(after, "—")) {
+          changed_why[key]=substr(after, index(after, "—"))
+          after=substr(after, 1, index(after, "—") - 1)
+        }
+        changed_to[key]=trim(after)
+        changed_at[key]=NR
+      }
+    }
+    !/^\|/ { author=0; verdict=0; why=0; idcol=0 }
     author && $0 !~ /^[[:space:]|:-]+$/ {
       value=trim($author)
       if (value == "" || value == "—" || value == "?") report("空", NR)
     }
-    verdict && why && $0 !~ /^[[:space:]|:-]+$/ && trim($verdict) == "起票する" {
+    # 行は貯めて END で判定する。置き換えの行は表の後ろに来るので、読み終えるまで
+    # その行の判定は決まらない。
+    verdict && why && $0 !~ /^[[:space:]|:-]+$/ {
       reason=""; for (i=why; i<NF; i++) reason=reason "|" $i
-      origin(reason, NR)
+      rows++
+      row_key[rows]=round SUBSEP (idcol ? trim($idcol)+0 : 0)
+      row_verdict[rows]=trim($verdict)
+      row_reason[rows]=reason
+      row_at[rows]=NR
     }
-    END { exit bad ? 1 : 0 }
+    END {
+      for (i=1; i<=rows; i++) {
+        key=row_key[i]
+        if (key in changed_to) {
+          # 置き換えた後の判定で数える。«起票する» へ変えたものは、置き換えの行の理由で
+          # 由来を見る（元の行はもう直せない）。別の判定へ変えたものは対象から外れる。
+          if (index(changed_to[key], "起票する")) origin(changed_why[key], changed_at[key])
+        } else if (row_verdict[i] == "起票する") origin(row_reason[i], row_at[i])
+      }
+      exit bad ? 1 : 0
+    }
   ' >&2; then
     failed=1
   fi

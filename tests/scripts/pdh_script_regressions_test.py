@@ -654,6 +654,36 @@ class ScriptTests(unittest.TestCase):
                 self.commit(f'{verdict} {reason}')
                 self.check()
 
+    def test_findings_origin_follows_the_disposition_change(self):
+        # progress は追記だけなので、表の行は後から直せない。処置を «起票する» から変えた
+        # finding を元の行のまま数えると、由来の証拠を足す場所がどこにも無くなる。
+        header = '| # | 出した人 | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |\n' + '|' + ' --- |' * 8 + '\n'
+        def doc(verdict, reason, change=''):
+            table = f'### Findings-PDH-review-1\n{header}| 1 | DA | AC | Major | 入力の欠落 | {verdict} | 260101-x | {reason} |\n'
+            return table + (f'\n{change}\n' if change else '')
+        for change in ('処置の変更: PDH-review-1 #1 起票する → いま直す — 必須の修正に当たる',
+                       'PDH-review-1 #1 処置の変更: 起票する → 記録だけ残す — 欠陥ではなかった'):
+            with self.subTest(change=change):
+                self.write(f'{self.ticket}/progress.md', doc('起票する', '別件なので起票', change))
+                self.commit(f'change away from filing: {change}')
+                self.check()
+        # 逆向きは、置き換えの行の理由で由来を数える。
+        self.write(f'{self.ticket}/progress.md', doc('いま直す', '由来: 未判定',
+                                                     '処置の変更: PDH-review-1 #1 いま直す → 起票する — 由来: 上流 def5678'))
+        self.commit('change to filing with origin')
+        self.check()
+        self.write(f'{self.ticket}/progress.md', doc('いま直す', '由来: 未判定',
+                                                     '処置の変更: PDH-review-1 #1 いま直す → 起票する — 別件なので起票'))
+        self.commit('change to filing without origin')
+        self.assertIn(f'{self.ticket}/progress.md:6: «起票する» の行の理由に、由来と既存の証拠が無い', self.check(1))
+        # 別の巡・別の # の置き換えでは外れない。
+        for change in ('処置の変更: PDH-review-2 #1 起票する → いま直す — 別の巡',
+                       '処置の変更: PDH-review-1 #2 起票する → いま直す — 別の finding'):
+            with self.subTest(change=change):
+                self.write(f'{self.ticket}/progress.md', doc('起票する', '別件なので起票', change))
+                self.commit(f'change another finding: {change}')
+                self.assertIn(f'{self.ticket}/progress.md:4: «起票する» の行の理由に、由来と既存の証拠が無い', self.check(1))
+
     def test_findings_checks_committed_table(self):
         self.write(f'{self.ticket}/progress.md', self.findings(''))
         self.commit('record empty author')
