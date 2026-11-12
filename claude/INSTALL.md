@@ -158,9 +158,19 @@ bash ticket.sh init
 
 設定の JSON は既存設定へマージする。`settings.json` は PM の session 開始・再開・compact で stage と未了行を context へ戻す。worker には `PDH_ROLE=<役割>` を渡す。Codex の hook を使う場合は `.codex/hooks.json` の信頼設定も確認し、実際の session で表示を確かめる。
 
-#### Codex CLI を使う場合: skill を symlink する
+#### skill を `.agents/skills/` へ symlink する
 
-Claude 併用では `.claude/skills/` に実体を 1 つ置く。
+導入の一部であって、Codex CLI を使う導入先だけの追加ではない。PDH は実装と review を
+既定で別の engine に割り当てるので（pdh-pm `_execution-team.md`「エンジン割り当て」）、
+main が claude の導入先でも worker は codex になり、worker は `.agents/skills/` から skill を
+読む。`required-pdh-files.check` はこの 13 本を列挙しているため、作らずに進むと下の検査で
+`required file is missing` が 13 件出る。
+
+engine を 1 つしか使わないと決めた導入先は、`required-pdh-files.check` の
+`required_paths` から該当の `.agents/skills/*` を外す（「ファイルを配置する」の手順 5）。
+同じ engine で review したことと、その理由は progress に記録する（同「エンジン割り当て」）。
+
+実体は `.claude/skills/` に 1 つだけ置く。
 
 <!-- pdh-shell: symlinks -->
 ```bash
