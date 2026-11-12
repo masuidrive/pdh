@@ -18,6 +18,16 @@ ticket を書く人は全部を読み、PDH-ticket-review で AC を直す人は
 
 `bash scripts/docs-toc.sh --stage PDH-ticket-write` を実行し、出力の読む場面と見出しから ticket に関係する文書・節だけを開く。
 
+### 失敗の許容を決める
+
+この規則の目的: ticket の AC と review が、利用者の許す失敗を基準にできること。`product-brief.md` の `Failure Tolerance` が無いか空（未記入の雛形を含む）なら、PM は ticket を書き進める前に、ユーザと次の 3 つを話して決める。
+
+1. 誰が、どれくらいの量で使うか
+2. 許す失敗の頻度（% か月の回数）と、1 回のコスト（誰の何分・いくら）の目安
+3. 頻度に関係なく許さない失敗（invariant の破れ・秘密の漏えい・データの喪失など）
+
+決めた内容は brief の変更案として見せ、ユーザの承認を得てから brief に書く（`PDH-AGENTS.md`「PDH の構造」）。細かい review 基準は project の `CLAUDE.md` に置く。承認と記入の結果は下の Checklist に残す。
+
 ### ticket を作る
 
 ticket がまだ無いときだけ、`./ticket.sh help` を読み、`./ticket.sh new <slug>` を実行する。slug は英語のケバブケースで内容を短く表す。ticket が既にあるときに `new` を実行すると、同じ要望の ticket が別の名前でもう 1 つできる。
@@ -76,29 +86,9 @@ ticket の節は `.ticket-config.yaml` の `default_content`、note の節は `n
 
 #### 報告から書くとき
 
-この規則の目的: 原因を知らない報告からでも、`pickup-timing: on-symptom-report` で待っている ticket に辿り着き、そのうえで違う欠陥を同じと決めないこと。報告は症状しか持たないことが多く、原因の言葉の検索では当たらない。起票前の照合は、いま手元にある証拠で決められる範囲に留める。重複かどうかを決めるためだけに、原因を最後まで突き止めることは求めない。
+この規則の目的: 症状の報告から、受け入れた制約と同じ欠陥の ticket を見つけられること。報告の症状・対象・到達条件の語で、`CLAUDE.md` が定める制約の文書（既定 `docs/known-limits.md`）と tickets・tickets/done を検索する。原因・anchor・期待する修正を既存の証拠で照合し、同じか決められないものは未判定として通常の調査へ渡す。症状が似ているだけでは同じにしない。
 
-要望が症状の報告（«画面 X で Y が出る» の形）なら、上の検索に加えて次の 3 段を行う。報告でない要望では、Checklist の該当行を `- [-] … - skip: 報告ではない` にする。
-
-1. **語で候補を絞る。**報告から、症状（何が見えるか）・対象（画面・API・機能）・到達条件（どの入力・設定・利用者で起きるか）の語を取り出し、`on-symptom-report` の ticket のうちその語を含むものだけを候補にする。tickets と tickets/done を対象に、次を実行する。待っている ticket を 1 件ずつ読み比べることはしない。当たらなければ語を言い換えて引き直し、それでも 0 件なら候補なしとする。GitHub の issue を起票先にする project では issue も探す（`github-bot/_github-issue.md`「review の finding を issue にする」）
-
-   ```bash
-   git grep -lE '^[[:space:]]*(-[[:space:]]+)?pickup-timing:[^<]*on-symptom-report' -- <tickets_dir> |
-     xargs -r grep -liE '<症状・対象・到達条件の語を | でつないだもの>'
-   ```
-
-2. **既存の証拠で照合する。**候補ごとに、候補の ticket に書かれた原因・対象・期待する修正（`Why`・`Reproduction-or-measurement:`・anchor から読む）と、報告とそれに付いた証拠（本文・添付・ログ・すでに取れている再現）を突き合わせ、3 つが一致するかで決める（`[SKILLS_PATH]/pdh-review/SKILL.md`「同じ欠陥の ticket があるとき」）。症状が一致しただけでは同じと決めない。3 つのどれかが違うと証拠から分かれば別の欠陥として扱い、違う項目を progress に書く。この照合のために、新しく再現を試みたり原因を調べたりはしない
-3. **決められなければ、未判定のまま通常の調査へ渡す。**既存の証拠では一致とも不一致とも言えないときは、同じとも別とも決めず、この ticket を書き進める。`Why` に `related-defect-candidate: <ticket 名> — 未判定: <足りない情報>` を書く。原因はこの ticket の通常の調査（PDH-ticket-review 以降）で調べ、分かった時点で 2 の照合をやり直す
-
-同じ欠陥と確定した候補は、その状態で `[SKILLS_PATH]/pdh-review/SKILL.md`「同じ欠陥の ticket があるとき」の分け方を当てる。未完了の候補へ集約するときは、報告の所在と症状をこの ticket の progress に書き、note の Checklist に `- [ ] 起票: <報告の症状> → <候補の ticket 名>` を書く（その ticket を拾う人が、PDH-ticket-review の `起票:` の検索で報告を見つける）。この ticket を続けるか中止するかは人に聞く。
-
-集約した候補の `pickup-timing:` は、報告が来たことだけで上げない。報告で分かった次の 3 つから、4 区分を選び直す。
-
-- 実害 — 報告者が受けた害の重さと範囲
-- 到達条件 — どの入力・設定・利用者で起きるか。報告で、想定より広く届くと分かったか
-- 回避策 — 報告者がいまとれる回避策があるか
-
-害が重い、または重い害に届くかが分からないなら、`immediate` か `next-selection` にし、待つ区分（`when-touching`・`on-symptom-report`）に残さない。選び直した区分と根拠は progress に書き、`immediate` か `next-selection` に上げるなら人に渡す（`PDH-AGENTS.md`「受け渡し経路」の `発行先:` の行）。区分を上げても着手は人が決め、agent はそれを理由に着手しない。候補の ticket のファイルは書き換えない（`[SKILLS_PATH]/pdh-review/SKILL.md`「同じ欠陥の ticket があるとき」）。区分の書き換えは、その ticket を着手する PM が行う。
+受け入れた制約に当たる報告は、頻度と 1 回のコスト・見直す条件を照合し、直すと決めたときだけ起票する。同じ ticket があれば「同じ ticket を探す」に従う。検索語・候補ごとの判断と、制約を残すか直すかを progress に書く。
 
 ### AC の書き方
 
@@ -173,7 +163,8 @@ test -z "$(git status --porcelain -- "$ticket_dir")"
 - [ ] PDH-ticket-write: 実装の詳細、今回要らない拡張、将来の要件向けの設計が入っていない
 - [ ] PDH-ticket-write: 未決の事項が note の `Open-Questions` に `- [ ]` で残っている
 - [ ] PDH-ticket-write: 同じ原因・対象・期待する修正の ticket を検索した。検索語と件数（該当 0 件を含む）と、新しく作るか既存へ集約するかの判断が progress にある
-- [ ] PDH-ticket-write: 報告から書くなら、`pickup-timing: on-symptom-report` の ticket を症状の言葉でも探した。検索語・候補ごとの判断（同じ欠陥・別の欠陥・未判定）と、同じ欠陥なら `pickup-timing:` の再判断が progress にある
+- [ ] PDH-ticket-write: Failure Tolerance が埋まっている。無いか空だった場合は、3 つの問いへの回答と brief 変更への承認が progress にある
+- [ ] PDH-ticket-write: 報告から書くなら、制約の文書と ticket を症状の言葉で探し、検索語・候補ごとの判断と残すか直すかが progress にある
 
 満たさない項目があれば直す。
 

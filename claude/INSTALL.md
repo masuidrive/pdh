@@ -306,6 +306,38 @@ fi
 
 ### 既知の移行手順
 
+#### Failure Tolerance と制約の記録
+
+`product-brief.md` の Constraints の前に Failure Tolerance（バグを 0 にすることは目指さない／使う人と量／許す失敗の頻度と 1 回のコスト／許さない失敗）を置く。無いか空なら `pdh-ticket-write` でユーザと決め、変更案への承認後に書く。`CLAUDE.md` のディレクトリ構造に、受け入れた制約の置き場所 `docs/known-limits.md`（別の場所ならその path）を指定する。役割の表の上にある «割り当てを変えたら、その理由も 1 行添えておくと後から検証できる» は削除する。理由と経緯は commit message に書く。`.ticket-config.yaml` の Why のガイドから `on-symptom-report` と `observable-symptom:` を外す。
+
+未完の ticket の次の巡から 5 列の Findings 表を追記し、旧 8 列と `constraint-accepted:` の記録は書き換えない。頻度・コストの検査は現行表だけを対象にし、旧表と `tickets/done/` は検査しない。旧い `scripts/checks/findings-table-record-target.check` が残っていれば削除する。出した人の検査は配布 script の上書きで置き換わる。`pdh-review-tally.sh` は現行表の判定と巡だけを集計する。
+
+未完の note の Checklist は、変更した stage の現行行を `pdh-stage-checklist.sh <stage>` で取り出し、不足分だけ印と証拠を確認して手で足す。済んだ stage に `--enter` を使わず、旧行と依頼・判断待ちも残す。巡数だけの S7 待ちは理由付き skip にし、同じ部品の修正が次の «いま直す» を生んだかで判断する。
+
+未完の `on-symptom-report` ticket は着手時に、いつか直すものなら 3 区分の pickup-timing を選び直す。直す予定が無ければユーザと中止を決め、制約の 1 行と、再現できるなら今の振る舞いを確かめる «制約: » のテストへ移す。done は保持する。検査は旧い pickup-timing の記録も読めるが、新しい ticket の区分には選ばない。
+
+次の確認は繰り返してよい。節の内容と承認の有無は PM が判断する。`known-limits.md` を別の場所にした場合は確認コマンドの path も合わせる。
+
+<!-- pdh-shell: failure-tolerance-check -->
+```bash
+pdh_tolerance_status=0
+for pdh_label in '## Failure Tolerance' '使う人と量:' '許す失敗:' '許さない失敗:'; do
+  grep -qF "$pdh_label" product-brief.md || { printf '要適用: %s\n' "$pdh_label"; pdh_tolerance_status=1; }
+done
+grep -qF 'known-limits.md' CLAUDE.md || { echo '要適用: 制約の文書の場所'; pdh_tolerance_status=1; }
+if grep -qF '割り当てを変えたら、その理由も 1 行添えておくと後から検証できる' CLAUDE.md; then
+  echo '要適用: 役割の変更理由の文を削除'; pdh_tolerance_status=1
+fi
+if grep -qE 'on-symptom-report|observable-symptom:' .ticket-config.yaml; then
+  echo '要適用: ticket の Why のガイド'; pdh_tolerance_status=1
+fi
+if [ -e scripts/checks/findings-table-record-target.check ]; then
+  echo '要適用: 旧い記録先の検査を削除'; pdh_tolerance_status=1
+fi
+exit "$pdh_tolerance_status"
+```
+
+
 #### Python 3.11 以降と PyYAML を用意する
 
 既存の導入先は Python 3.11 以降と PyYAML を用意する。確かめ方:

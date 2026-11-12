@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# reviewer・判定・巡・観点の集計契約を、隔離した repo の記録で検査する。
+# 現行の判定・巡、旧表の保持、処置の変更を隔離した repo で検査する。
 set -uo pipefail
 ROOT_DIR=${PDH_TEST_ROOT:?test-distributed-scripts.sh が作る導入先を指定する}
 TMP_DIR=$(mktemp -d) || exit 1
@@ -16,13 +16,10 @@ expect() {
 }
 contains() { [[ "$output" == *"$1"* ]] || fail "出力に $1 がありません: $output"; }
 excludes() { [[ "$output" != *"$1"* ]] || fail "出力に $1 が混入しました: $output"; }
-header() {
-  printf '### Findings-PDH-review-%s\n\n| # | 出した人 | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |\n|---|---|---|---|---|---|---|---|\n' "$1"
-}
+header() { printf '### Findings-PDH-review-%s\n\n| # | 要旨 | 頻度と 1 回のコスト | 判定 | 由来 |\n|---|---|---|---|---|\n' "$1"; }
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_CONFIG GIT_CONFIG_PARAMETERS
-export GIT_CONFIG_COUNT=0 GIT_TEMPLATE_DIR=
-export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
-must mkdir -p "$TMP_DIR/repo/scripts" "$TMP_DIR/repo/work items/alpha" "$TMP_DIR/repo/work items/done/beta" "$TMP_DIR/repo/work items/old" "$TMP_DIR/repo/work items/broken" "$TMP_DIR/repo/work items/sha-only" "$TMP_DIR/repo/work items/empty"
+export GIT_CONFIG_COUNT=0 GIT_TEMPLATE_DIR= GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
+must mkdir -p "$TMP_DIR/repo/scripts" "$TMP_DIR/repo/work items/alpha" "$TMP_DIR/repo/work items/done/beta" "$TMP_DIR/repo/work items/old" "$TMP_DIR/repo/work items/empty"
 must cp "$ROOT_DIR/scripts/pdh-review-tally.sh" "$ROOT_DIR/scripts/pdh-review-range.sh" "$TMP_DIR/repo/scripts/"
 must cd "$TMP_DIR/repo"
 must git init -q -b main
@@ -30,67 +27,45 @@ printf 'tickets_dir: "./work items/" # quoted path\n' > .ticket-config.yaml
 {
   printf 'review-sha: ABCDEF0 details\n- review-sha: abcdef0\nreview-sha: 1234567(rest)\n'
   header 1
-  printf '| 1 | DA+codex | error | Critical | first | 起票する | ticket | reason |\n'
-  printf '| 2 | CR | scope | Major | second | 棄却する | code | reason |\n\n'
-  printf 'PDH-review-1 #1 処置の変更: 起票する → 記録だけ残す — reason\n'
-  printf 'PDH-review-1 #1 処置の変更: 記録だけ残す → いま直す — reason\n'
+  printf '| 1 | first | 実測 1%%・担当 1 分 | 起票する | 既存 |\n'
+  printf '| 2 | second | 0・誤検出 | 棄却する | 既存 |\n\n'
+  printf 'PDH-review-1 #1 処置の変更: 起票する → 受け入れる — 許容内\n'
+  printf 'PDH-review-1 #1 処置の変更: 受け入れる → いま直す — 目安超過\n'
   printf 'PDH-review-9 #1 処置の変更: 起票する → 棄却する — unknown finding\n'
   header 2
-  printf '| 1 | DA | error | Major | third | 記録だけ残す | code | reason |\n\n'
-  printf '処置の変更: 記録だけ残す → 起票する — reason（PDH-review-2 #1）\n'
-  printf '| 99 | PM | ignored | Critical | unrelated table | 棄却する | code | reason |\n'
+  printf '| 1 | third | 推定 月 1 回・100 円 | 記録だけ残す | 既存 |\n\n'
+  printf '処置の変更: 記録だけ残す → 起票する — 直す予定（PDH-review-2 #1）\n'
+  printf '| 99 | unrelated table | 0 | 棄却する | 既存 |\n'
 } > 'work items/alpha/progress.md'
 {
   printf 'review-sha: fedcba9876543210fedcba9876543210fedcba98 explanation\n'
   header 1
-  printf '| 1 | codex+Why の見方 | error | Minor | fourth | 棄却する | code | reason |\n'
-  printf '| 2 | PM | scope | Major | fifth | 記録だけ残す | code | reason |\n'
+  printf '| 1 | fourth | 推定 月 0.1 回・担当 2 分 | 受け入れる | この ticket |\n'
+  printf '| 2 | fifth | 推定 月 0 回・0 円 | 記録だけ残す | 観察 |\n'
 } > 'work items/done/beta/progress.md'
-printf '### Findings\n| # | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |\n| 1 | old | Critical | old | いま直す | code | reason |\n## Prior Findings\n| 1 | DA | ignored | Major | old | 棄却する | code | reason |\n### Findings-PDH-review-1\n| # | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |\n' > 'work items/old/progress.md'
-{
-  header 1
-  printf '| 1 | DA | broken | Major | missing column | いま直す | code |\n'
-  printf '| 2 | | broken | Major | empty reviewer | 起票する | code | reason |\n'
-  printf '| 3 | CR | broken | Major | bad decision | 未定 | code | reason |\n'
-  printf '| 4 | CR | broken | Major | extra column | 棄却する | code | reason | extra |\n'
-} > 'work items/broken/progress.md'
-printf 'review-sha: 123abc0text\n- review-sha: 123ABC0 more\nreview-sha: abcdef\nreview-sha: 12345678901234567890123456789012345678901\n review-sha: abcdef12\nclose-gate-sha: abcdef123\n' > 'work items/sha-only/progress.md'
+printf '### Findings-PDH-review-1\n| # | 出した人 | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |\n| 1 | DA | AC | Major | old | いま直す | — | 既存 |\n\nPDH-review-1 #1 処置の変更: いま直す → 記録だけ残す — constraint-accepted\n' > 'work items/old/progress.md'
 : > 'work items/empty/progress.md'
-expect 0 '全 ticket 集計' bash scripts/pdh-review-tally.sh
-contains '| DA | 2 | 1 | 1 | 1 | 1 | 0 | 0 | 0 |'
-contains '| codex | 2 | 1 | 0 | 1 | 0 | 0 | 0 | 1 |'
-contains '| CR | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 1 |'
-contains '| PM | 1 | 0 | 1 | 0 | 0 | 1 | 0 | 0 |'
-contains '| Why の見方 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |'
+expect 0 '全 ticket の現行表の判定と巡' bash scripts/pdh-review-tally.sh
+contains '| いま直す | 1 |'
+contains '| 起票する | 1 |'
+contains '| 受け入れる | 1 |'
+contains '| 記録だけ残す | 1 |'
+contains '| 棄却する | 1 |'
 contains '| alpha | 2 |'
 contains '| beta | 1 |'
-contains '| sha-only | 1 |'
-contains '1 巡で抜けた ticket: 2 / 3 (66.7%)'
-contains '| error | 3 | alpha, beta |'
-contains '| scope | 2 | alpha, beta |'
-contains '数えなかった ticket の数: 3'
-contains 'broken:5: | 1 | DA | broken | Major | missing column | いま直す | code |'
-contains 'broken:6: | 2 | | broken | Major | empty reviewer | 起票する | code | reason |'
-contains 'broken:7: | 3 | CR | broken | Major | bad decision | 未定 | code | reason |'
-contains 'broken:8: | 4 | CR | broken | Major | extra column | 棄却する | code | reason | extra |'
-excludes '| ignored |'
-excludes '| old |'
-excludes '| broken | 4 |'
-expect 0 '対象の指定と重複の除去' bash scripts/pdh-review-tally.sh --ticket 'work items/alpha' --ticket 'work items/done/beta' --ticket 'work items/alpha/'
-contains '| DA | 2 | 1 | 1 | 1 | 1 | 0 | 0 | 0 |'
 contains '1 巡で抜けた ticket: 1 / 2 (50.0%)'
-contains '数えなかった ticket の数: 0'
-contains '崩れた行:
-なし'
+contains '現行表がない ticket の数: 2'
+excludes '出した人ごと'
+excludes '観点 |'
+expect 0 '対象の指定と重複の除去' bash scripts/pdh-review-tally.sh --ticket 'work items/alpha' --ticket 'work items/done/beta' --ticket 'work items/alpha/'
+contains '| 起票する | 1 |'
+contains '現行表がない ticket の数: 0'
 must cd 'work items'
 expect 0 '子ディレクトリから全件' bash ../scripts/pdh-review-tally.sh
-contains '1 巡で抜けた ticket: 2 / 3 (66.7%)'
-expect 0 '子ディレクトリから相対パスで指定' bash ../scripts/pdh-review-tally.sh --ticket sha-only
-contains '1 巡で抜けた ticket: 1 / 1 (100.0%)'
-contains '数えなかった ticket の数: 1'
-must cd ..
-expect 0 '巡が無い場合' bash scripts/pdh-review-tally.sh --ticket 'work items/empty'
+contains '1 巡で抜けた ticket: 1 / 2 (50.0%)'
+expect 0 '子ディレクトリから相対パス' bash ../scripts/pdh-review-tally.sh --ticket empty
 contains '1 巡で抜けた ticket: 0 / 0 (0.0%)'
+must cd ..
 expect 0 'ヘルプ' bash scripts/pdh-review-tally.sh --help
 contains '--ticket <dir>'
 expect 0 '短いヘルプ' bash scripts/pdh-review-tally.sh -h
@@ -102,22 +77,7 @@ expect 2 'progress の欠落' bash scripts/pdh-review-tally.sh --ticket no-progr
 printf 'tickets_dir: absent\n' > .ticket-config.yaml
 expect 2 'tickets_dir の欠落' bash scripts/pdh-review-tally.sh
 must mkdir absent
-expect 0 'ticket が無いディレクトリ' bash scripts/pdh-review-tally.sh
+expect 0 '空のディレクトリ' bash scripts/pdh-review-tally.sh
 contains '1 巡で抜けた ticket: 0 / 0 (0.0%)'
-contains '数えなかった ticket の数: 0'
-# 制約の受け入れは «記録だけ残す» に数え、元の finding が実在したことを «うち制約の受け入れ» に残す。
-# 欠陥でないと分かった訂正と、受け入れの後に処置を戻したものは、その列に数えない。
-must mkdir accepted
-{
-  header 1
-  printf '| 1 | DA | limit | Major | accepted | いま直す | — | reason |\n'
-  printf '| 2 | DA | limit | Major | not a defect | いま直す | — | reason |\n'
-  printf '| 3 | DA | limit | Major | reverted | いま直す | — | reason |\n\n'
-  printf 'PDH-review-1 #1 処置の変更: いま直す → 記録だけ残す — constraint-accepted\n'
-  printf 'PDH-review-1 #2 処置の変更: いま直す → 記録だけ残す — 裏取りで欠陥ではないと分かった\n'
-  printf 'PDH-review-1 #3 処置の変更: いま直す → 記録だけ残す — constraint-accepted\n'
-  printf 'PDH-review-1 #3 処置の変更: 記録だけ残す → いま直す — 承認者が受け入れを取り消した\n'
-} > accepted/progress.md
-expect 0 '制約の受け入れ' bash scripts/pdh-review-tally.sh --ticket accepted
-contains '| DA | 3 | 0 | 3 | 1 | 0 | 2 | 1 | 0 |'
+contains '現行表がない ticket の数: 0'
 printf 'PASS: pdh-review-tally (%d checks)\n' "$checks"

@@ -271,6 +271,27 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         entry_name='CLAUDE.md' if engine=='claude' else 'AGENTS.md'
         instruction='@PDH-AGENTS.md' if engine=='claude' else 'Read `PDH-AGENTS.md`.'
         entry=target/entry_name;entry_body=entry.read_bytes()
+        # The Failure Tolerance check is read-only and idempotent. Populate only this fixture's approved brief.
+        tolerance=target/'product-brief.md';saved_tolerance=tolerance.read_bytes()
+        config=target/'.ticket-config.yaml';saved_config=config.read_bytes()
+        entry.write_bytes((ROOT/engine/'templates'/entry_name).read_bytes())
+        config.write_bytes((ROOT/engine/'templates/.ticket-config.yaml').read_bytes())
+        tolerance.write_text('## Failure Tolerance\n使う人と量: 社内 200 件/月\n許す失敗: 月 1 回・担当 2 分\n許さない失敗: データ喪失\n')
+        before=payload(target)
+        documented(target,engine,'failure-tolerance-check')
+        documented(target,engine,'failure-tolerance-check')
+        assert payload(target)==before
+        tolerance.write_text('## Constraints\n')
+        assert 'Failure Tolerance' in documented(target,engine,'failure-tolerance-check',code=1)
+        tolerance.write_text('## Failure Tolerance\n使う人と量: 社内 200 件/月\n許す失敗: 月 1 回・担当 2 分\n許さない失敗: データ喪失\n')
+        obsolete=target/'scripts/checks/findings-table-record-target.check'
+        obsolete.write_text('# old record-target check\n')
+        assert '旧い記録先' in documented(target,engine,'failure-tolerance-check',code=1)
+        obsolete.unlink()
+        documented(target,engine,'failure-tolerance-check')
+
+        tolerance.write_bytes(saved_tolerance);config.write_bytes(saved_config);entry.write_bytes(entry_body)
+
         for body in (originals[entry_name], originals[entry_name]+'PDH-AGENTS.md # Shared contract\n'):
             entry.write_text(body)
             output=documented(target,engine,'verify',code=1)

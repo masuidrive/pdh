@@ -197,14 +197,16 @@ class ScriptTests(unittest.TestCase):
                      '--base', 'main', '--note', f'{self.ticket}/note.md', '--resolution', 'retired')
         self.check()
 
-    def findings(self, author='DA+codex', *, column=True):
-        header = '| # | 出した人 | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |'
-        row = f'| 1 | {author} | AC | Major | 入力の欠落 | いま直す | — | 再現した |'
+    def findings(self, cost='推定 月 1 回・担当者 2 分', *, column=True):
         if not column:
-            header = header.replace(' 出した人 |', '')
-            row = row.replace(f' {author} |', '', 1)
-        separator = '|' + ' --- |' * (8 if column else 7)
-        return f'### Findings-PDH-review-1\n{header}\n{separator}\n{row}\n'
+            return ('### Findings-PDH-review-1\n'
+                    '| # | 出した人 | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |\n'
+                    '|---|---|---|---|---|---|---|---|\n'
+                    '| 1 | | AC | Major | 入力の欠落 | 起票する | | 由来: 未判定 |\n')
+        return ('### Findings-PDH-review-1\n'
+                '| # | 要旨 | 頻度と 1 回のコスト | 判定 | 由来 |\n'
+                '|---|---|---|---|---|\n'
+                f'| 1 | 入力の欠落 | {cost} | いま直す | この ticket |\n')
 
     def review_progress(self, count=2, heading='### Findings-PDH-review-2',
                         severity='Major', summary='修正が持ち込んだ欠陥', verdict='いま直す'):
@@ -279,7 +281,7 @@ class ScriptTests(unittest.TestCase):
         self.assertIn('有効な review-sha: が 0 件', self.check(1))
 
     def test_review_handover_second_round_continues_without_s7(self):
-        # S2 のいいえ（Minor・いま直す でない判定）は S7 を求めない。
+        # severity や巡数だけでは S7 を要求しない。因果は PM が判断する。
         for severity, summary, verdict in (('Minor', '修正が持ち込んだ欠陥', 'いま直す'),
                                            ('Info', 'Major という語を含む要旨', 'いま直す'),
                                            ('Major', '修正が持ち込んだ欠陥', '棄却する'),
@@ -290,19 +292,12 @@ class ScriptTests(unittest.TestCase):
                            self.review_progress(3, severity=severity, summary=summary, verdict=verdict))
                 self.check()
 
-    def test_review_handover_uses_named_columns_and_section_boundaries(self):
-        records = self.review_progress(3).split('###', 1)[0]
-        for severity in ('Critical', 'Major'):
-            with self.subTest(severity=severity):
-                table = f'| 要旨 | 出した人 | Sev |\n| :--- | --- | ---: |\n| 新しい欠陥 | DA | {severity} |\n'
-                self.write(f'{self.ticket}/progress.md', records + '### Findings (PDH-review-2)\n' + table)
-                self.assertIn('S3 で止まるべき', self.check(1))
-        for table in ('', '| Sev | 要旨 |\n| --- | --- |\n',
-                      '| Sev | 要旨 |\n| --- | --- |\n| Minor | 軽微 |\n'):
-            with self.subTest(table=table):
-                self.write(f'{self.ticket}/progress.md', records + '### Findings-PDH-review-2\n' + table
-                           + '### 調べて分かったこと\n' + self.table())
-                self.check()
+    def test_findings_cost_uses_named_column_and_section_boundaries(self):
+        table = '| # | 頻度と 1 回のコスト | 判定 | 要旨 | 由来 |\n|---|---|---|---|---|\n| 1 | | いま直す | 問題 | この ticket |\n'
+        self.write(f'{self.ticket}/progress.md', '### Findings-PDH-review-2\n' + table)
+        self.assertIn('コスト» が空', self.check(1))
+        self.write(f'{self.ticket}/progress.md', self.findings() + '\n### 別の表\n| a | b | c | d | e |\n| 1 | | | | |\n')
+        self.check()
 
     def test_review_handover_close_gate_requires_review(self):
         for prefix in ('', '- '):
@@ -317,20 +312,12 @@ class ScriptTests(unittest.TestCase):
                            f'{prefix}review-sha: {self.sha()}\n{prefix}close-gate-sha: {self.sha()}\n')
                 self.check()
 
-    def test_review_handover_s3_stops_from_the_second_round(self):
-        # 2 巡を済ませた後は [既存] でも、どの種類の巡でも S7 が要る。
-        for heading in ('### Findings-PDH-review-2', '#### Findings-PDH-review-2',
-                        '### Findings (PDH-review-2)', '### Findings（PDH-review-2）',
-                        '#### Findings （PDH-review-2）',
-                        '### Findings (PDH-review-2 / round 2 fixes)',
-                        '### Findings-PDH-review-2（網羅探索）'):
-            for severity, summary in (('Major', '修正が持ち込んだ欠陥'), ('Critical', '[既存] 欠陥')):
-                with self.subTest(heading=heading, severity=severity, summary=summary):
-                    self.write(f'{self.ticket}/progress.md',
-                               self.review_progress(heading=heading, severity=severity, summary=summary))
-                    out = self.check(1)
-                    self.assertIn('S3 で止まるべき: PDH-review-2', out)
-                    self.assertIn('Checklist に «S7»・«PDH-review-2»・«発行先:» を含む行が無い', out)
+    def test_review_handover_round_count_does_not_require_s7(self):
+        for count in (1, 2, 3, 10):
+            for severity in ('Critical', 'Major', 'Minor'):
+                with self.subTest(count=count, severity=severity):
+                    self.write(f'{self.ticket}/progress.md', self.review_progress(count, f'### Findings-PDH-review-{count}', severity))
+                    self.check()
 
     def test_review_handover_s7_line_allows_the_round(self):
         self.write(f'{self.ticket}/progress.md', self.review_progress())
@@ -339,18 +326,12 @@ class ScriptTests(unittest.TestCase):
                 self.note('implement', self.s7(2, mark))
                 self.check()
 
-    def test_review_handover_s7_line_needs_s7_round_and_destination(self):
-        self.write(f'{self.ticket}/progress.md', self.review_progress())
-        for waiting in ('- [x] PDH-review-2 設計の見直し 発行先: /board',
-                        '- [x] 設計の見直し 発行先: /board',
-                        '- [x] S7 前提の見直し 発行先: /board',
-                        '- [x] S7 PDH-review-2 前提の見直し',
-                        '- [x] S70 PDH-review-2 前提の見直し 発行先: /board',
-                        '- [x] S7 PDH-review-20 前提の見直し 発行先: /board',
-                        '- [x] S8 PDH-review-2 人の答え 発行先: /board'):
-            with self.subTest(waiting=waiting):
-                self.note('implement', waiting)
-                self.assertIn('S3 で止まるべき', self.check(1))
+    def test_review_handover_visible_pending_s7_blocks_later_round(self):
+        self.write(f'{self.ticket}/progress.md', self.review_progress(3))
+        self.note('implement', self.s7(2, ' '))
+        self.assertIn('S5 で止まるべき', self.check(1))
+        self.note('implement', self.s7(2))
+        self.check()
 
     def test_review_handover_without_second_findings_is_exempt(self):
         for count, heading in ((1, '### Findings-PDH-review-2'),
@@ -360,74 +341,36 @@ class ScriptTests(unittest.TestCase):
                 self.write(f'{self.ticket}/progress.md', self.review_progress(count, heading))
                 self.check()
 
-    def test_review_handover_wait_must_be_one_visible_checklist_line(self):
-        self.write(f'{self.ticket}/progress.md', self.review_progress())
-        for waiting in ('- [x] S7 PDH-review-2\n- [x] 発行先: /board',
-                        '<!-- - [x] S7 PDH-review-2 発行先: /board -->',
-                        '# 次の節\n- [x] S7 PDH-review-2 発行先: /board',
-                        '## 次の節\n- [x] S7 PDH-review-2 発行先: /board'):
-            with self.subTest(waiting=waiting):
-                self.note('implement', waiting)
-                self.assertIn('S3 で止まるべき', self.check(1))
-        for heading in ('### 詳細', '#### 詳細'):
-            with self.subTest(heading=heading):
-                self.note('implement', heading + '\n- [x] S7 PDH-review-2 発行先: /board\n' + 'x' * 200000)
-                self.check()
-
-    def test_review_handover_s4_asks_the_human_after_s7(self):
-        # S7 を回した後の巡は [既存] でも、どの種類の巡でも S8 が要る。S7 をもう一度回しても代わらない。
-        for heading in ('### Findings-PDH-review-3', '### Findings-PDH-review-3（網羅探索）',
-                        '### Findings-PDH-review-3（修正確認）'):
-            for summary in ('[既存] 欠陥', '修正が持ち込んだ欠陥'):
-                with self.subTest(heading=heading, summary=summary):
-                    self.write(f'{self.ticket}/progress.md', self.review_progress(3, heading, summary=summary)
-                               .replace('### Findings-PDH-review-2\n', ''))
-                    for note in (self.s7(2), self.s7(2) + '\n' + self.s7(3)):
-                        self.note('implement', note)
-                        out = self.check(1)
-                        self.assertIn('S4 で止まるべき: PDH-review-2 で S7 の前提の見直しを回した後の PDH-review-3', out)
-                        self.assertIn('Checklist に «S8»・«PDH-review-3»・«発行先:» を含む行が無い', out)
-                    self.note('implement', self.s7(2) + '\n' + self.s8(3, ' '))
-                    self.check()
-        self.write(f'{self.ticket}/progress.md', self.review_progress(3, '### Findings-PDH-review-3', verdict='棄却する'))
-        self.note('implement', self.s7(2))
+    def test_review_handover_commented_gate_is_not_a_pending_gate(self):
+        self.write(f'{self.ticket}/progress.md', self.review_progress(3))
+        self.note('implement', '<!-- ' + self.s7(2, ' ') + ' -->')
         self.check()
+        self.note('implement', '### 詳細\n' + self.s7(2, ' '))
+        self.assertIn('S5 で止まるべき', self.check(1))
 
-    def test_review_handover_first_stop_needs_s7_before_s8(self):
-        self.write(f'{self.ticket}/progress.md', self.review_progress(3, '### Findings-PDH-review-3')
-                   .replace('### Findings-PDH-review-2\n', ''))
-        self.note('implement', self.s8(3, ' '))
-        self.assertIn('S3 で止まるべき: PDH-review-3', self.check(1))
-        self.note('implement', self.s7(3, ' '))
+    def test_review_handover_answered_s7_does_not_force_s8_by_count(self):
+        for count in (3, 4, 9):
+            self.write(f'{self.ticket}/progress.md', self.review_progress(count))
+            self.note('implement', self.s7(2))
+            self.check()
+
+    def test_review_handover_pending_s8_cannot_be_bypassed_by_s7(self):
+        self.write(f'{self.ticket}/progress.md', self.review_progress(4))
+        self.note('implement', self.s7(2) + '\n' + self.s8(3, ' ') + '\n' + self.s7(4))
+        self.assertIn('S5 で止まるべき', self.check(1))
+
+    def test_review_handover_exhaustive_round_has_no_count_threshold(self):
+        for count in (2, 3, 4):
+            self.write(f'{self.ticket}/progress.md', self.review_progress(count, f'### Findings-PDH-review-{count}（網羅探索）'))
+            self.note('verify', self.s7(1))
+            self.check()
+
+    def test_review_handover_each_open_gate_requires_its_own_answer(self):
+        self.write(f'{self.ticket}/progress.md', self.review_progress(5))
+        self.note('implement', self.s7(2) + '\n' + self.s8(3) + '\n' + self.s8(4, ' '))
+        self.assertIn('PDH-review-4 の S8 の行が未回答', self.check(1))
+        self.note('implement', self.s7(2) + '\n' + self.s8(3) + '\n' + self.s8(4))
         self.check()
-
-    def test_review_handover_exhaustive_round_after_answer_requires_its_own_gate(self):
-        # 前の巡の S7 が回答済みでも、書き直しの後の網羅探索の巡は数えから外れず、S8 が要る。
-        for round in (2, 3, 4):
-            for waiting, code in (('', 1),
-                                  ('- [x] S7 PDH-review-2 前提の見直し 発行先: /answered', 1 if round > 2 else 0),
-                                  ('- [x] S7 PDH-review-2 前提の見直し 発行先: /answered\n'
-                                   f'- [x] S8 PDH-review-{round} 人の答え 発行先: /this', 0),
-                                  (f'- [x] S7 PDH-review-{round} 前提の見直し 発行先: /this', 0)):
-                with self.subTest(round=round, waiting=waiting):
-                    self.note('verify', waiting)
-                    self.write(f'{self.ticket}/progress.md', self.review_progress(
-                        round, f'### Findings-PDH-review-{round}（網羅探索）', severity='Critical'))
-                    self.check(code)
-
-    def test_review_handover_each_round_needs_its_own_answer(self):
-        records = ''.join(f'review-sha: {n:07x}\n' for n in range(1, 6))
-        progress = records + '### Findings-PDH-review-2\n' + self.table()
-        progress += '### Findings-PDH-review-3（網羅探索）\n' + self.table()
-        progress += '### Findings-PDH-review-4（修正確認）\n' + self.table()
-        self.write(f'{self.ticket}/progress.md', progress)
-        answered = '\n'.join((self.s7(2), self.s8(3), self.s8(4)))
-        self.note('implement', '\n'.join((self.s7(2), self.s8(3))))
-        self.assertIn('S4 で止まるべき: PDH-review-2 で S7 の前提の見直しを回した後の PDH-review-4', self.check(1))
-        self.note('implement', answered)
-        self.check()
-        self.write(f'{self.ticket}/progress.md', progress + '### Findings-PDH-review-5（修正確認）\n' + self.table())
-        self.assertIn('S4 で止まるべき: PDH-review-2 で S7 の前提の見直しを回した後の PDH-review-5', self.check(1))
 
     def test_review_handover_s5_stops_the_next_round_until_s7_is_answered(self):
         progress = self.review_progress(3) + '### Findings-PDH-review-3\n' + self.table(severity='Minor')
@@ -470,53 +413,22 @@ class ScriptTests(unittest.TestCase):
         self.note('verify', self.s7(2) + '\n' + self.s8(3))
         self.check()
 
-    def test_review_handover_reads_changed_verdicts(self):
-        base = self.review_progress(3, '### Findings-PDH-review-3', verdict='棄却する')
-        for line in ('処置の変更: PDH-review-3 #1 棄却する → いま直す — 再現した',
-                     '- `PDH-review-3 #1` 処置の変更: 棄却する → いま直す — 再現した'):
-            with self.subTest(line=line):
-                self.write(f'{self.ticket}/progress.md', base + '\n' + line + '\n')
-                self.assertIn('S3 で止まるべき: PDH-review-3', self.check(1))
-        fixed = self.review_progress(3, '### Findings-PDH-review-3')
-        for line in ('処置の変更: PDH-review-3 #1 いま直す → 棄却する — 誤検出（いま直すと書いた理由は誤り）',
-                     '処置の変更: PDH-review-3 #2 いま直す → 棄却する — 別の行'):
-            with self.subTest(line=line):
-                self.write(f'{self.ticket}/progress.md', fixed + '\n' + line + '\n')
-                if '#2' in line:
-                    self.assertIn('S3 で止まるべき', self.check(1))
-                else:
-                    self.check()
+    def test_review_handover_changed_verdict_does_not_infer_causality(self):
+        for verdict in ('いま直す', '受け入れる', '起票する'):
+            self.write(f'{self.ticket}/progress.md', self.review_progress(3) +
+                       f'\nPDH-review-2 #1 処置の変更: 棄却する → {verdict} — 根拠\n')
+            self.check()
 
-    def test_constraint_acceptance_requires_record_and_approval_ref(self):
-        # 制約の受け入れの印がある «処置の変更» だけが、記録と承認の参照を求められる。
-        # 欠陥でないと分かった評価の訂正は、元の処置が «いま直す» でも受け入れの記録を求めない。
-        base = self.review_progress(1, '### Findings-PDH-review-1')
+    def test_constraint_acceptance_preserves_legacy_records(self):
+        old = self.findings(column=False)
         change = 'PDH-review-1 #1 処置の変更: いま直す → 記録だけ残す — constraint-accepted\n'
-        record = ('\nconstraint-accepted: PDH-review-1 #1\n- 変更前の契約: 合計 S byte まで受け付ける\n'
-                  '- 変更後の契約（対応範囲）: 符号化した後で L byte まで\n')
-        cases = (
-            (change, 'constraint-accepted: PDH-review-1 #1 の記録が無い'),
-            ('PDH-review-1 #1 処置の変更: 起票する → 記録だけ残す — constraint-accepted\n', 'の記録が無い'),
-            (change + record, 'approval-ref:（板と承認者の回答の場所）が無い'),
-            (change + record + '- approval-ref:\n', 'approval-ref:（板と承認者の回答の場所）が無い'),
-            (change + record + '\n- approval-ref: /board 承認者の回答\n', 'approval-ref:（板と承認者の回答の場所）が無い'),
-            (change + record.replace('#1', '#2') + '- approval-ref: /board\n', 'constraint-accepted: PDH-review-1 #1 の記録が無い'),
-        )
-        for lines, message in cases:
-            with self.subTest(lines=lines):
-                self.write(f'{self.ticket}/progress.md', base + lines)
-                self.assertIn(message, self.check(1))
-        for lines in (change + record + '- approval-ref: /board 承認者の回答\n',
-                      record + '- approval-ref: /board\n\n`PDH-review-1 #1` 処置の変更: いま直す → 記録だけ残す — constraint-accepted\n',
-                      # 初めから契約の外の finding（棄却する）と、ほかの処置の変更は数えない。
-                      'PDH-review-1 #1 処置の変更: いま直す → 棄却する — 契約の外。契約の文と 413 の出力\n',
-                      'PDH-review-1 #1 処置の変更: いま直す → 起票する — 必須の修正に当たらない\n',
-                      'PDH-review-1 #1 処置の変更: 起票する → 記録だけ残す — 欠陥ではなく改善の候補\n',
-                      'PDH-review-1 #1 処置の変更: いま直す → 記録だけ残す — 裏取りで欠陥ではなく改善の候補と分かった。'
-                      '入力は呼び出し側で検査済み（api.go:42）\n'):
-            with self.subTest(lines=lines):
-                self.write(f'{self.ticket}/progress.md', base + lines)
+        for record in ('', 'constraint-accepted: PDH-review-1 #1\n',
+                       'constraint-accepted: PDH-review-1 #1\n- approval-ref: /board\n'):
+            with self.subTest(record=record):
+                self.write(f'{self.ticket}/progress.md', old + '\n' + change + record)
                 self.check()
+        self.write(f'{self.ticket}/progress.md', self.findings().replace('いま直す', '受け入れる'))
+        self.check()
 
     def test_review_handover_checks_done_on_this_branch(self):
         self.write(f'{self.ticket}/progress.md', f'close-gate-sha: {self.sha()}\n')
@@ -530,26 +442,28 @@ class ScriptTests(unittest.TestCase):
         self.run_cmd('git', 'checkout', '-qb', 'features/other')
         self.check()
 
-    def test_findings_requires_author_column(self):
+    def test_findings_legacy_author_columns_are_not_required(self):
         self.write(f'{self.ticket}/progress.md', self.findings(column=False))
-        self.commit('record findings without authors')
-        output = self.check(1)
-        self.assertIn(f'{self.ticket}/progress.md:2: Findings 表に «出した人» の列が無い', output)
-        self.assertIn('| # | 出した人 | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |', output)
+        self.commit('preserve legacy findings')
+        self.check()
 
-    def test_findings_rejects_empty_author(self):
-        for author in ('', '   ', '—', '?'):
-            with self.subTest(author=author):
-                self.write(f'{self.ticket}/progress.md', self.findings(author))
-                self.commit(f'record author {author!r}')
-                self.assertIn(f'{self.ticket}/progress.md:4: Findings 表に «出した人» の列が空', self.check(1))
+    def test_findings_rejects_empty_frequency_and_cost(self):
+        for cost in ('', '   ', '\t'):
+            with self.subTest(cost=cost):
+                self.write(f'{self.ticket}/progress.md', self.findings(cost))
+                self.commit('record empty cost')
+                self.assertIn(f'{self.ticket}/progress.md:4: Findings 表の «頻度と 1 回のコスト» が空', self.check(1))
 
-    def test_findings_accepts_authors(self):
-        for author in ('DA', 'CR', 'Why の見方', 'codex', 'PM', 'DA+codex'):
-            with self.subTest(author=author):
-                self.write(f'{self.ticket}/progress.md', self.findings(author))
-                self.commit(f'record author {author}')
-                self.check()
+    def test_findings_missing_cost_column_is_rejected(self):
+        self.write(f'{self.ticket}/progress.md',
+                   '### Findings-PDH-review-1\n| # | 要旨 | 判定 | 由来 |\n|---|---|---|---|\n| 1 | 問題 | 受け入れる | この ticket |\n')
+        self.assertIn('コスト» が無い', self.check(1))
+
+    def test_findings_accepts_measured_or_estimated_cost(self):
+        for cost in ('実測 0/219 件・人 1 分', '推定 月 1 回・100 円', '0・誤検出のため害なし'):
+            self.write(f'{self.ticket}/progress.md', self.findings(cost))
+            self.commit('record frequency and cost')
+            self.check()
 
     def test_findings_accepts_two_new_tables(self):
         # 見出しが 2 つ以上あると行番号が改行区切りになる。BSD awk は -v の値の改行を拒む。
@@ -588,44 +502,29 @@ class ScriptTests(unittest.TestCase):
         with (self.root / self.ticket / 'progress.md').open('a') as f:
             f.write('\n' + self.findings(column=False))
         self.commit('append findings after move')
-        self.assertIn(f'{self.ticket}/progress.md:9: Findings 表に «出した人» の列が無い', self.check(1))
-
-    def test_findings_exempts_header_restored_for_append_only(self):
-        old = self.findings(column=False)
-        self.write(f'{self.ticket}/progress.md', old)
-        self.commit('findings without authors')
-        self.write(f'{self.ticket}/progress.md', self.findings())
-        self.commit('rewrite header with authors')
-        self.write(f'{self.ticket}/progress.md', self.findings() + '\n' + old.split('\n')[1] + '\n')
-        self.commit('restore the rewritten header for append_only_files')
         self.check()
-        # 戻した見出しと同じ文字列でも、表を作るなら新しい表として数える。
-        with (self.root / self.ticket / 'progress.md').open('a') as f:
-            f.write('\n' + self.findings(column=False).replace('review-1', 'review-2'))
-        self.commit('new table reusing the restored header')
-        self.assertIn('列が無い', self.check(1))
 
-    def test_findings_rewritten_header_does_not_exempt_new_table(self):
+    def test_findings_legacy_header_restored_for_append_only_is_ignored(self):
         old = self.findings(column=False)
-        self.write(f'{self.ticket}/progress.md', old)
-        self.commit('findings without authors')
-        self.write(f'{self.ticket}/progress.md', self.findings())
-        self.commit('rewrite header with authors')
-        with (self.root / self.ticket / 'progress.md').open('a') as f:
-            f.write('\n' + old.replace('review-1', 'review-2'))
-        self.commit('new table with the old header text')
-        self.assertIn('列が無い', self.check(1))
-        self.write(f'{self.ticket}/progress.md', self.findings() + '\n' + old.split('\n')[1] + '\n\n' + old.split('\n')[1] + '\n')
-        self.commit('restore the header twice')
-        self.assertIn('列が無い', self.check(1))
+        self.write(f'{self.ticket}/progress.md', old + '\n' + self.findings())
+        self.commit('keep old header and append current table')
+        self.check()
+        self.write(f'{self.ticket}/progress.md', old + '\n' + self.findings(''))
+        self.assertIn('コスト» が空', self.check(1))
+
+    def test_findings_new_table_is_checked_alongside_legacy_header(self):
+        old = self.findings(column=False)
+        self.write(f'{self.ticket}/progress.md', old + '\n' + self.findings(''))
+        self.commit('append current table after legacy header')
+        self.assertIn('コスト» が空', self.check(1))
 
     def test_findings_uses_configured_tickets_dir(self):
         self.run_cmd('git', 'mv', 'tickets', 'work-items')
         self.ticket = 'work-items/sample'
         self.write('.ticket-config.yaml', 'default_branch: main\nbranch_prefix: features/\ntickets_dir: work-items\n')
-        self.write(f'{self.ticket}/progress.md', self.findings(column=False))
-        self.commit('record findings under configured directory')
-        self.assertIn(f'{self.ticket}/progress.md:2:', self.check(1))
+        self.write(f'{self.ticket}/progress.md', self.findings(''))
+        self.commit('current findings in configured directory')
+        self.assertIn(f'{self.ticket}/progress.md:4:', self.check(1))
 
     def test_findings_skips_check_without_base(self):
         self.run_cmd('git', 'branch', '-D', 'main')
@@ -633,62 +532,22 @@ class ScriptTests(unittest.TestCase):
         self.commit('record findings without a base')
         self.check()
 
-    def test_findings_filed_row_requires_origin_evidence(self):
-        header = '| # | 出した人 | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |\n' + '|' + ' --- |' * 8 + '\n'
-        def table(verdict, reason):
-            return f'### Findings-PDH-review-1\n{header}| 1 | DA | AC | Major | 入力の欠落 | {verdict} | 260101-x | {reason} |\n'
-        for reason in ('由来: 既存 abc1234 f.sh:10 に同じ正規表現がある',
-                       '由来: 未判定 再現: まだ',
-                       '由来: 既存 abc1234 経路: main → f:10（条件が無い）',
-                       '別件なので起票'):
-            with self.subTest(reason=reason):
-                self.write(f'{self.ticket}/progress.md', table('起票する', reason))
-                self.commit(f'file {reason}')
-                self.assertIn(f'{self.ticket}/progress.md:4: «起票する» の行の理由に、由来と既存の証拠が無い', self.check(1))
-        for verdict, reason in (('起票する', '由来: 既存 abc1234 再現: bash run.sh → exit 1'),
-                                ('起票する', '由来: 既存 abc1234 経路: main.sh:5 → f.sh:10 条件: 引数が空のとき同じ分岐'),
-                                ('起票する', '由来: 上流 def5678'),
-                                ('いま直す', '由来: 未判定')):
-            with self.subTest(verdict=verdict, reason=reason):
-                self.write(f'{self.ticket}/progress.md', table(verdict, reason))
-                self.commit(f'{verdict} {reason}')
-                self.check()
+    def test_findings_only_checks_cost_not_origin_or_author(self):
+        for origin in ('未判定', '', '既存 abc1234', '上流 def5678'):
+            self.write(f'{self.ticket}/progress.md', self.findings().replace('この ticket', origin).replace('いま直す', '起票する'))
+            self.commit('origin judgment is PM responsibility')
+            self.check()
 
-    def test_findings_origin_follows_the_disposition_change(self):
-        # progress は追記だけなので、表の行は後から直せない。処置を «起票する» から変えた
-        # finding を元の行のまま数えると、由来の証拠を足す場所がどこにも無くなる。
-        header = '| # | 出した人 | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |\n' + '|' + ' --- |' * 8 + '\n'
-        def doc(verdict, reason, change=''):
-            table = f'### Findings-PDH-review-1\n{header}| 1 | DA | AC | Major | 入力の欠落 | {verdict} | 260101-x | {reason} |\n'
-            return table + (f'\n{change}\n' if change else '')
-        for change in ('処置の変更: PDH-review-1 #1 起票する → いま直す — 必須の修正に当たる',
-                       'PDH-review-1 #1 処置の変更: 起票する → 記録だけ残す — 欠陥ではなかった'):
-            with self.subTest(change=change):
-                self.write(f'{self.ticket}/progress.md', doc('起票する', '別件なので起票', change))
-                self.commit(f'change away from filing: {change}')
-                self.check()
-        # 逆向きは、置き換えの行の理由で由来を数える。
-        self.write(f'{self.ticket}/progress.md', doc('いま直す', '由来: 未判定',
-                                                     '処置の変更: PDH-review-1 #1 いま直す → 起票する — 由来: 上流 def5678'))
-        self.commit('change to filing with origin')
-        self.check()
-        self.write(f'{self.ticket}/progress.md', doc('いま直す', '由来: 未判定',
-                                                     '処置の変更: PDH-review-1 #1 いま直す → 起票する — 別件なので起票'))
-        self.commit('change to filing without origin')
-        self.assertIn(f'{self.ticket}/progress.md:6: «起票する» の行の理由に、由来と既存の証拠が無い', self.check(1))
-        # 別の巡・別の # の置き換えでは外れない。
-        for change in ('処置の変更: PDH-review-2 #1 起票する → いま直す — 別の巡',
-                       '処置の変更: PDH-review-1 #2 起票する → いま直す — 別の finding'):
-            with self.subTest(change=change):
-                self.write(f'{self.ticket}/progress.md', doc('起票する', '別件なので起票', change))
-                self.commit(f'change another finding: {change}')
-                self.assertIn(f'{self.ticket}/progress.md:4: «起票する» の行の理由に、由来と既存の証拠が無い', self.check(1))
+    def test_findings_disposition_change_cannot_fill_empty_cost(self):
+        self.write(f'{self.ticket}/progress.md', self.findings('') +
+                   '\nPDH-review-1 #1 処置の変更: いま直す → 受け入れる — 推定 月 1 回・担当 1 分\n')
+        self.assertIn('コスト» が空', self.check(1))
 
-    def test_findings_checks_committed_table(self):
+    def test_findings_checks_working_table_before_commit(self):
+        self.write(f'{self.ticket}/progress.md', self.findings())
+        self.commit('valid table')
         self.write(f'{self.ticket}/progress.md', self.findings(''))
-        self.commit('record empty author')
-        self.write(f'{self.ticket}/progress.md', self.findings('PM'))
-        self.assertIn('列が空', self.check(1))
+        self.assertIn('コスト» が空', self.check(1))
 
     def test_01_pr_merge_skip(self):
         self.write('.ticket-config.yaml', 'github_bot:\n  close: "pr-merge" # merge で承認\n')

@@ -31,6 +31,10 @@ PDH は、Product Brief と ticket の 2 層で、**なぜ作るか**と**いま
 
 **Product Brief は、どの節でも、変える前に変更の内容を見せてユーザの承認を得る。**
 
+## 失敗の許容
+
+この規則の目的: 利用者が許す失敗の頻度と 1 回のコストを基準に、直すものと受け入れる制約を決められること。Product Brief の `Failure Tolerance` に、使う人と量・許す失敗・許さない失敗を置き、finding には頻度と 1 回のコストを書く。許容の判断は `pdh-review`「処置の判断」に従う。基準の内容と finding の照合は PM が判断し、各 stage の Checklist に残す。
+
 ## PDH-flow
 
 ```mermaid

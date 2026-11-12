@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 現行の Findings 表と review-sha の記録から reviewer・巡・共通の観点を数える。
+# 現行の Findings 表と review-sha の記録から 判定と巡を数える。
 set -uo pipefail
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd) || exit 2
 # tickets_dir の解決は review 区間の検査と共通にする。
@@ -34,7 +34,7 @@ done
 # 空の対象は stdin の EOF で処理する。ファイル名を argv で渡すので空白も保持する。
 awk '
 function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
-function valid(s) { return s == "いま直す" || s == "起票する" || s == "記録だけ残す" || s == "棄却する" }
+function valid(s) { return s == "受け入れる" || s == "いま直す" || s == "起票する" || s == "記録だけ残す" || s == "棄却する" }
 function sorted(a, keys,    k,n,i,j,v) {
   n=0
   for (k in a) keys[++n]=k
@@ -45,9 +45,8 @@ function sorted(a, keys,    k,n,i,j,v) {
   }
   return n
 }
-function bad() { errors[++error_count]=names[FILENAME] ":" FNR ": " $0 }
 BEGIN {
-  header="#|出した人|観点|Sev|要旨|判定|記録先|理由"
+  header="#|要旨|頻度と 1 回のコスト|判定|由来"
   for (i=1; i<ARGC; i++) {
     f=ARGV[i]
     if (f in names) { ARGV[i]=""; continue }
@@ -72,14 +71,12 @@ FNR == 1 { state=0; round="" }
     if (index(change,"→")) {
       sub(/^[^→]*→[[:space:]]*/, "", change); sub(/[[:space:]]*—.*$/, "", change)
       # 識別子を後置した場合の括弧や backtick も判定の一部にしない。
-      if (match(change,/^(いま直す|起票する|記録だけ残す|棄却する)/)) {
+      if (match(change,/^(いま直す|受け入れる|起票する|記録だけ残す|棄却する)/)) {
         decision=substr(change,1,RLENGTH)
         rest=substr(change,RLENGTH+1)
         if (rest == "" || rest ~ /^[[:space:]（(«`]/) {
           overrides[FILENAME SUBSEP id]=decision
-          # 制約の受け入れは «記録だけ残す» に数えたうえで、元の finding が実在したことを別の列に残す。
-          if (decision == "記録だけ残す" && index($0, "constraint-accepted")) accepted[FILENAME SUBSEP id]=1
-          else delete accepted[FILENAME SUBSEP id]
+
         }
       }
     }
@@ -99,38 +96,22 @@ FNR == 1 { state=0; round="" }
     next
   }
   if (body ~ /^[[:space:]:|\-]+$/) next
-  if (n != 8 || cols[2] == "" || !valid(cols[6])) { bad(); next }
+  if (n != 5 || !valid(cols[4])) next
   key=FILENAME SUBSEP round SUBSEP cols[1]
   finding_keys[++finding_count]=key
-  authors[key]=cols[2]; lenses[key]=cols[3]; severity[key]=cols[4]; decisions[key]=cols[6]; owner[key]=FILENAME
+  decisions[key]=cols[4]; owner[key]=FILENAME
 }
 END {
   for (i=1; i<=finding_count; i++) {
-    key=finding_keys[i]; f=owner[key]; lens=lenses[key]
+    key=finding_keys[i]; f=owner[key]
     decision=(key in overrides) ? overrides[key] : decisions[key]
-    # 同じ finding で同じ人が重複しても、その人には 1 件と数える。
-    n=split(authors[key], people, /[+]/)
-    for (j=1; j<=n; j++) {
-      person=trim(people[j]); pk=key SUBSEP person
-      if (person == "" || person_seen[pk]++) continue
-      reviewers[person]++; verdicts[person SUBSEP decision]++
-      if (key in accepted) constrained[person]++
-      if (severity[key] == "Critical") critical[person]++
-      if (severity[key] == "Major") major[person]++
-    }
-    lens_count[lens]++
-    if (!lens_seen[lens SUBSEP f]++) {
-      lens_tickets[lens]++; lens_names[lens]=lens_names[lens] (lens_names[lens] ? ", " : "") names[f]
-    }
+    verdicts[decision]++
   }
-  print "### 出した人ごと"
-  print "| 出した人 | finding | Critical | Major | いま直す | 起票する | 記録だけ残す | うち制約の受け入れ | 棄却する |"
-  print "|---|---|---|---|---|---|---|---|---|"
-  n=sorted(reviewers, keys)
-  for (i=1; i<=n; i++) {
-    p=keys[i]
-    printf "| %s | %d | %d | %d | %d | %d | %d | %d | %d |\n", p,reviewers[p],critical[p],major[p],verdicts[p SUBSEP "いま直す"],verdicts[p SUBSEP "起票する"],verdicts[p SUBSEP "記録だけ残す"],constrained[p],verdicts[p SUBSEP "棄却する"]
-  }
+  print "### 判定ごと"
+  print "| 判定 | finding |"
+  print "|---|---|"
+  n=sorted(verdicts, keys)
+  for (i=1; i<=n; i++) printf "| %s | %d |\n", keys[i],verdicts[keys[i]]
   print "\n### ticket ごとの巡"
   print "| ticket | 巡 |"
   print "|---|---|"
@@ -143,15 +124,7 @@ END {
     }
   }
   printf "1 巡で抜けた ticket: %d / %d (%.1f%%)\n",single,measured,measured ? 100*single/measured : 0
-  print "\n### 2 つ以上の ticket で出た観点"
-  print "| 観点 | finding | ticket |"
-  print "|---|---|---|"
-  n=sorted(lens_count, keys)
-  for (i=1; i<=n; i++) { lens=keys[i]; if (lens_tickets[lens]>=2) printf "| %s | %d | %s |\n",lens,lens_count[lens],lens_names[lens] }
-  printf "\n数えなかった ticket の数: %d\n",skipped
-  print "崩れた行:"
-  if (!error_count) print "なし"
-  for (i=1; i<=error_count; i++) print errors[i]
+  printf "\n現行表がない ticket の数: %d\n",skipped
 }
 ' ${files[@]+"${files[@]}"} < /dev/null || exit 2
 exit 0

@@ -12,6 +12,7 @@ product-brief.md            # プロダクト概要・方針【変更にはユ�
 PDH-AGENTS.md               # PDH 共有契約
 docs/
   pdh-glossary.md           # PDH の用語
+  known-limits.md           # 受け入れた制約
 tickets/                    # Ticket（実行作業。ticket.sh が管理）
   done/                     # 完了した Ticket
 ```
@@ -103,7 +104,7 @@ engine 割り当ての規則（実装と review の分離、main engine の選�
 - **コスト / スループット**: 比べるのは «1 回の単価» ではなく «完了 1 件までの合計»（やり直し・review の巡数・人が押す回数を含む）
 - **独立性**: cross-model review が要る step には、生成側と別のモデルを明示指定する
 
-割り当てを変えたら、その理由も 1 行添えておくと後から検証できる。effort の列は既定（pdh-pm `_execution-team.md`「エンジン割り当て」）で、CLI の既定に任せず起動の引数で渡す。
+effort の列は既定（pdh-pm `_execution-team.md`「エンジン割り当て」）で、CLI の既定に任せず起動の引数で渡す。
 
 | 役割 | step | 上書き例 | effort | 備考 |
 |---|---|---|---|---|

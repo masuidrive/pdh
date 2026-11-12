@@ -11,6 +11,7 @@ product-brief.md                 # Product purpose and direction
 PDH-AGENTS.md                    # Shared PDH contract
 docs/
   pdh-glossary.md                # PDH terminology
+  known-limits.md                # Accepted limitations
 tickets/                         # Managed by ticket.sh
   done/
 ```

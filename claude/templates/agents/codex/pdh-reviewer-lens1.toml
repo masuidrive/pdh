@@ -87,7 +87,7 @@ file へ書けない sandbox で動くときは、`<RESULT_FILE>` に書く内�
 `<RESULT_FILE>` に次を書く。
 
 - 対象の commit SHA と、「追跡する箇所の外を読む」で読んだ commit（hash と件名）
-- Critical と Major を 1 件ずつ、«観点 label / file:location / 問題 / 発生条件 / 根拠 / 確定か未確定 / 推奨対応» で。無ければ `No Critical/Major`
+- Critical と Major を 1 件ずつ、«観点 label / file:location / 問題 / 発生条件 / 頻度と 1 回のコスト / 根拠 / 確定か未確定 / 推奨対応» で。無ければ `No Critical/Major`
   - 根拠：コードの引用（path:行 と、その行の文）か、実行したコマンドとその出力。どちらも無い finding は «確信度: 低» と書く。LLM の reviewer は、正しいコードにも問題を見つける方へ偏る。複数の reviewer が同じことを言っても、正しさの証拠にはならない
   - 発生条件：欠陥が起きる入力・状態・経路。そのまま修正前に落ちるテストの入力になる
   - 確定：発生条件と誤った出力を言える。未確定：仕組みは実在するが発生条件が不確かなもの。何で確定するかを書く
@@ -97,9 +97,5 @@ file へ書けない sandbox で動くときは、`<RESULT_FILE>` に書く内�
 
 発生条件を言える候補は、確信が無くても未確定として書く。自分で捨てない — 処置は PM が決めるので、reviewer の段で捨てた候補は誰にも確かめられないまま消える。特に、PM が転記した «fail-open を先に探す diff の一覧» に当たる箇所は、何が不確かかを書いて残す。«〜を確認すべき» で終わる finding は書かない。確かめられるなら自分で確かめ、結果（欠陥がある / 無い）を書く（`PDH-AGENTS.md`「確認が要るのは判断であって、調査ではない」）。
 
-severity は次で付ける。
-
-- Critical：AC 未達・security 違反・データ喪失の可能性のために、直さないままでは ticket を出荷できないもの
-- Major：この ticket が変える、利用者の操作の流れ（user journey）を劣化させるもの
-- Minor：それ以外。報告には書かない。Minor は自動的に新しい ticket になるのではなく、PM が処置を決める
+severity と頻度・コストの書き方は `.claude/agents/pdh-reviewer.md`「報告」の該当部分だけを読んで使う。許容内の退行も報告し、処置は PM に渡す。
 """

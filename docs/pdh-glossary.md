@@ -281,15 +281,15 @@ skill の分け方は skill `pdh-change` にある。
   - 意味: reviewer の指摘。仮説であって、実装の命令ではない。
   - 使わない語: 指摘、指摘事項
 - **Critical / Major / Minor**
-  - 意味: Critical は直さないと出荷できないもの。Major はこの ticket の user journey を劣化させるもの。Minor はそれ以外。
+  - 意味: 頻度 × 1 回のコストと Failure Tolerance で付ける重大さ。
   - 定義する場所: `.claude/agents/pdh-reviewer.md`「報告」
 - **処置**
   - 意味: finding ごとに決める扱い。
-  - とりうる値: いま直す / 起票する / 記録だけ残す / 棄却する（Findings 表の判定の列には、この 4 つの文字列だけを書く）
+  - とりうる値: いま直す / 受け入れる / 起票する / 記録だけ残す / 棄却する（Findings 表の判定の列には、この 5 つの文字列だけを書く）
   - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」
   - 使わない語: fix now / file / record only / reject、採用、記録のみ、別 ticket にした、退けた、保留
 - **制約の受け入れ**
-  - 意味: 今の契約を満たさない実在する欠陥を、承認者が契約を狭めて受け入れること。処置は «記録だけ残す» で、元の finding は誤検出として扱わない。初めから契約の外の振る舞いは «棄却する» で、これに当たらない。
+  - 意味: Failure Tolerance に収まる欠陥を、制約の文書とテストへ残すこと。処置は «受け入れる»。AC や公開の契約を狭める場合は再承認する。初めから契約の外の振る舞いは «棄却する» で、これに当たらない。
   - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`「処置の判断」
 - **処置の判断**
   - 意味: finding の処置を決めること。
@@ -304,7 +304,7 @@ skill の分け方は skill `pdh-change` にある。
   - 定義する場所: `[SKILLS_PATH]/pdh-verify/SKILL.md`
   - 使わない語: 最終 code-review gate
 - **前提の見直し**
-  - 意味: PDH-review の «収束» の表の S7 で review を止め、経緯と今の差分を渡さない、PM と別の engine の worker 1 人に前提を疑わせて案を出させ、PM がその結論から次の手を選ぶこと。立て直した後の巡でも欠陥が尽きなければ、S8 で結論を添えてユーザに次の手を選ばせる。
+  - 意味: PDH-review の «収束» の表の S7 で review を止め、経緯と今の差分を渡さない、PM と別の engine の worker 1 人に前提を疑わせて案を出させ、PM がその結論から次の手を選ぶこと。立て直した後も同じ部品の修正が次の «いま直す» を生んだら、S8 で結論を添えてユーザに次の手を選ばせる。
   - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」
   - 使わない語: 遮断器、circuit breaker、設計の見直し、2 巡目で設計を見直して人に戻す
 - **user journey**

@@ -52,6 +52,10 @@ python3 scripts/docs-policy.py record docs/example.md#scope --base <base> --note
   - 文面の無い «◯◯が入る»
   - 対象を列挙していない件数
 
+### AC の場面の頻度を測る
+
+この規則の目的: 承認者が、現実に起きる頻度と失敗のコストを知って AC の範囲を決められること。«必ず〜» «すべての〜» のように絶対の形で AC を書く前に、端の場面の頻度を測る手段・担当・コマンドを `Required-Probes` に書いて実行する。既存のログ・データで測れるなら実測し、期間・母数・件数を残す。実測できなければ推定と根拠・未確認の範囲を明記する。頻度と 1 回のコストが Failure Tolerance の目安に収まる場面は、AC の範囲から外すか、«止めて知らせる» 動作にして AC の承認で決める。
+
 ### AC が達成できるかを確かめる
 
 - 実行する前に担当を分ける。PM は読み取り・検索・使い捨てコマンドによる事実の測定を行い、test runner・E2E・doc 再生成は調査用の worker に委譲する。Required-Probes の各行には担当とコマンドを書く。実行結果は同じ行の証拠として progress へ残す
@@ -66,6 +70,8 @@ python3 scripts/docs-policy.py record docs/example.md#scope --base <base> --note
 - `pickup-timing: when-touching` の ticket のうち、この ticket が変える箇所に触るもの — `git grep -lE '^[[:space:]]*(-[[:space:]]+)?pickup-timing:[^<]*when-touching' -- <tickets_dir>` で出た ticket の anchor を、この ticket の影響範囲と突き合わせる
 
 0 件でも、実行したコマンドと «0 件» を progress に書く。
+
+`CLAUDE.md` が定める制約の文書（既定 `docs/known-limits.md`）の anchor と、この ticket が触るファイルを突き合わせ、当たる行だけ一緒に直すか残すかを決める。Failure Tolerance の目安を変えたときは全行を見直す。PLAN の段（マイルストーン）を閉じる ticket では «テストなし» の行も見直す。
 
 ### コストと利益を確かめる
 
@@ -128,6 +134,8 @@ done) &&
 
 - [ ] PDH-ticket-review: 文書の frontmatter 検査を採用している場合、関係する文書の内容を ticket に反映し、節ごとの採否・照合記録を `related-docs.md` に残した
 
+- [ ] PDH-ticket-review: 絶対の形の AC は、Required-Probes に場面の頻度を測った結果と 1 回のコストがあり、Failure Tolerance と照合した範囲になっている
+- [ ] PDH-ticket-review: 変更箇所と制約の anchor を照合し、該当行を直すか残すかが progress にある。目安の変更時は全行、マイルストーンを閉じるときは «テストなし» の行も見直した
 - [ ] PDH-ticket-review: AC だけを読む worker が、全 AC に «復元できた» を返した。PM が結果を progress に残す
 - [ ] PDH-ticket-review: 残っている `Open-Questions` が、承認者にしか決められないものと、実装しないと分からないものだけである。PM が判断し、残した理由を note の `## PDH-ticket-review. Ticket contract check` の節に書く
 - [ ] PDH-ticket-review: Design-Decisions の各項を AC と 1 件ずつ突き合わせ、AC と食い違う項（ある条件で AC が求める振る舞いを壊す作り方）が無いか確かめた。あれば Open-Questions に残した

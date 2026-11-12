@@ -20,10 +20,9 @@
 #      PDH-stage のチェックリスト（scripts/pdh-stage-checklist.sh が skill から出す行）がある
 #      PDH-human-review / PDH-close では、PDH-ticket-write〜PDH-verify の各 stage の行もすべてある
 #   8. close 時、ticket が変更した PDH の上書き対象が .pdh-lock と一致する
-#   9. この branch で見出しを追加した Findings 表に «出した人» 列があり、各行が空・—・? ではない（branch の commit が書き換えた見出しを元の文字列に戻しただけの行は数えない）。
-#      同じ表の判定が «起票する» の行は、理由に «由来: 上流» か、«既存の証拠»（再現: か、経路: と 条件:）付きの «由来: 既存» がある
+#   9. 未完の ticket の現行 Findings 表の «頻度と 1 回のコスト» が空でない。旧表と done は見ない。
 #  10. この branch の ticket は close gate に review 記録があり、pdh-review「収束」の表に従っている:
-#      S3 で止まるべき最初の巡に Checklist の S7 の行、その後の巡に S8 の行がある・S7・S8 の行が未回答のまま
+#      S7・S8 の行が未回答のまま
 #      次の巡へ進んでいない（S5）・PDH-verify 以降は S7・S8 の行がすべて回答済み
 #  11. close 時、説明対象を変えた docs は、更新か Checklist の済み行がある
 #
@@ -76,7 +75,7 @@ PDH-ticket-review: この ticket を指す `起票:` の行と、`pickup-timing:
 EOF
 )
 late_stage_lines_v2=$(cat <<'EOF'
-PDH-ticket-write: 報告から書くなら、`pickup-timing: on-symptom-report` の ticket を症状の言葉でも探した。検索語・候補ごとの判断（同じ欠陥・別の欠陥・未判定）と、同じ欠陥なら `pickup-timing:` の再判断が progress にある
+PDH-ticket-write: 報告から書くなら、制約の文書と ticket を症状の言葉で探し、検索語・候補ごとの判断と残すか直すかが progress にある
 EOF
 )
 # 引数（印・path…）の path を最初に追加した commit の版の検査 script に印が無ければ 0。未 commit なら 1。
@@ -328,8 +327,7 @@ check_ticket_why_intake_evidence() {
   fi
 }
 
-# close gate の review 記録と、pdh-review「収束」の表で止まるべき巡の S7 の行を確かめる。
-# 巡は Findings 表の見出しの N（通算の巡）で読む。最初に止まる巡は S7（別の engine の前提の見直し）、その後の巡は S8（人）の行を求める。
+# close gate の review 記録と、未回答の S7・S8 を残して進んでいないことを確かめる。
 check_ticket_review_handover() {
   local d=${1%/ticket.md} reviews result kind round status
   [ -f "$d/progress.md" ] || return 0
@@ -358,56 +356,9 @@ check_ticket_review_handover() {
       }
       next
     }
-    # «処置の変更: 起票する → いま直す — 理由» の行は、PDH-review-N #M の行の判定を置き換える。
-    /処置の変更/ && match($0, /PDH-review-[0-9]+[[:space:]]*#[0-9]+/) {
-      id=substr($0, RSTART, RLENGTH); number=id; sub(/^PDH-review-/, "", number); sub(/[^0-9].*$/, "", number)
-      sub(/^.*#/, "", id)
-      verdict=substr($0, index($0, "処置の変更"))
-      if (index(verdict, "→")) {
-        verdict=substr(verdict, index(verdict, "→") + length("→"))
-        if (index(verdict, "—")) verdict=substr(verdict, 1, index(verdict, "—") - 1)
-        changed[(number+0) SUBSEP id]=(index(verdict, "いま直す") > 0)
-      }
-      next
-    }
-    /^#+ / {
-      round=sev=verdict_col=id_col=0
-      if ($0 ~ /^###+ Findings(-| ?(（|\())PDH-review-[0-9]+([^0-9]|$)/) {
-        number=$0; sub(/^.*PDH-review-/, "", number); sub(/[^0-9].*$/, "", number)
-        if (number+0 >= 2 && number+0 <= reviews) round=number+0
-      }
-      next
-    }
-    round && /^[[:space:]]*\|/ {
-      header=0
-      for (i=2; i<=NF; i++) if (trim($i) == "Sev") header=i
-      if (header) {
-        sev=header; verdict_col=id_col=0
-        for (i=2; i<=NF; i++) {
-          if (trim($i) == "判定") verdict_col=i
-          if (trim($i) == "#") id_col=i
-        }
-        next
-      }
-      if (sev && (trim($sev) == "Critical" || trim($sev) == "Major")) {
-        key=round SUBSEP ((id_col && trim($id_col) != "") ? trim($id_col) : "row" NR)
-        row_round[key]=round
-        fix[key]=(!verdict_col || trim($verdict_col) ~ /^いま直す/)
-      }
-      next
-    }
-    { sev=0 }
     END {
-      for (key in row_round) {
-        if (!((key in changed) ? changed[key] : fix[key])) continue
-        fix_round[row_round[key]]=1
-      }
       if (reviews > last) last=reviews
       for (n=1; n<=last; n++) {
-        if (fix_round[n]) {
-          if (first7 != "" && n > first7) { if (!((n SUBSEP 8) in gate)) print "S4\t" n "\t" first7 }
-          else if (!((n SUBSEP 7) in gate)) print "S3\t" n
-        }
         for (kind=7; kind<=8; kind++) if (((n SUBSEP kind) in gate) && !gate[n SUBSEP kind]) {
           if (n < reviews) print "S5\t" n "\t" kind
           else if (status != "") print "WAIT\t" n "\t" kind "\t" status
@@ -418,40 +369,8 @@ check_ticket_review_handover() {
     <(ticket_visible_lines "$d/progress.md")) || { failed=1; return; }
   while IFS=$'\t' read -r kind round extra status; do
     case "$kind" in
-      S3) printf 'check-pdh-ticket: %s は S3 で止まるべき: PDH-review-%s（通算 2 巡目以降）の Findings 表に判定が «いま直す» の Critical / Major があるのに、Checklist に «S7»・«PDH-review-%s»・«発行先:» を含む行が無い（pdh-review「収束」の S7 で、別の engine に前提の見直しを回す）\n' "$d" "$round" "$round" >&2 ;;
-      S4) printf 'check-pdh-ticket: %s は S4 で止まるべき: PDH-review-%s で S7 の前提の見直しを回した後の PDH-review-%s の Findings 表に、判定が «いま直す» の Critical / Major があるのに、Checklist に «S8»・«PDH-review-%s»・«発行先:» を含む行が無い（pdh-review「収束」の S8 で人に聞く）\n' "$d" "$extra" "$round" "$round" >&2 ;;
       S5) printf 'check-pdh-ticket: %s は S5 で止まるべき: PDH-review-%s の S%s の行が未回答のまま、次の review-sha: が増えた（答えを反映して [x] にしてから次の巡へ進む）\n' "$d" "$round" "$extra" >&2 ;;
       WAIT) printf 'check-pdh-ticket: %s は S%s の答えを待ったまま %s に進んだ: PDH-review-%s の S%s の行が未回答（答えを反映して [x] にする）\n' "$d" "$extra" "$status" "$round" "$extra" >&2 ;;
-      *) continue ;;
-    esac
-    failed=1
-  done <<<"$result"
-}
-
-# 制約の受け入れの «処置の変更» の行に、同じ finding の constraint-accepted: の記録と approval-ref: があるかを確かめる。
-# 対象は constraint-accepted を書いた行だけ。欠陥でないと分かった評価の訂正（印の無い «→ 記録だけ残す»）は数えない。
-# 承認が有効かは数えない。それは AC-approved: の照合と承認の PDH-stage が確かめる。
-check_constraint_acceptance() {
-  local f=$1 result id
-  [ -f "$f" ] || return 0
-  result=$(ticket_visible_lines "$f" | awk '
-    function finding(line) {
-      if (!match(line, /PDH-review-[0-9]+[[:space:]]*#[0-9]+/)) return ""
-      line=substr(line, RSTART, RLENGTH); gsub(/[[:space:]]/, "", line); sub(/#/, " #", line); return line
-    }
-    /^(- )?constraint-accepted:/ { block=finding($0); if (block != "") record[block]=1; next }
-    /^#/ || /^[[:space:]]*$/ { block=""; next }
-    block != "" && /^[[:space:]]*(- )?approval-ref:[[:space:]]*[^[:space:]]/ { approved[block]=1; next }
-    /処置の変更/ && index($0, "→") {
-      id=finding($0); if (id == "") next
-      if (index($0, "constraint-accepted")) need[id]=1
-    }
-    END { for (id in need) if (!(id in record)) print "record\t" id; else if (!(id in approved)) print "approval\t" id }
-  ') || { failed=1; return; }
-  while IFS=$'\t' read -r kind id; do
-    case "$kind" in
-      record) printf 'check-pdh-ticket: %s: %s を制約として受け入れる «処置の変更» の行があるのに、constraint-accepted: %s の記録が無い（pdh-review「制約の受け入れの記録」）\n' "$f" "$id" "$id" >&2 ;;
-      approval) printf 'check-pdh-ticket: %s: constraint-accepted: %s の記録に approval-ref:（板と承認者の回答の場所）が無い（pdh-review「制約の受け入れの記録」）\n' "$f" "$id" >&2 ;;
       *) continue ;;
     esac
     failed=1
@@ -525,142 +444,35 @@ check_stage_checklist() {
   fi
 }
 
-# progress は追記だけなので、base..tip で見出しを追加した表だけを検査する。
-check_findings_authors() {
-  local f=$1 old=$1 delta headers restored
-  [ "$git_ready" -eq 1 ] && [ -n "$pdh_review_base" ] || return 0
-  git cat-file -e "$pdh_review_tip:$f" 2>/dev/null || return 0
-  # done への移動を新規追加と数えない。rename の類似度に依存せず、移動前の本文と比べる。
-  if [[ "$f" == "$tickets_dir/done/"* ]] &&
-     ! git cat-file -e "$pdh_review_exclude:$old" 2>/dev/null; then
-    old="$tickets_dir/${f#"$tickets_dir/done/"}"
-  fi
-  if git cat-file -e "$pdh_review_exclude:$old" 2>/dev/null; then
-    delta=$(git diff --no-ext-diff --no-textconv --unified=0 \
-      "$pdh_review_exclude:$old" "$pdh_review_tip:$f") || { failed=1; return; }
-  else
-    delta=$(git diff --no-ext-diff --no-textconv --unified=0 \
-      "$pdh_review_exclude" "$pdh_review_tip" -- ":(top)$f") || { failed=1; return; }
-  fi
-  headers=$(printf '%s\n' "$delta" | awk '
-    /^@@ / { split($3, pos, ","); line=substr(pos[1], 2)+0; next }
-    /^\+\+\+/ { next }
-    /^\+/ {
-      if ($0 ~ /^\+\|[[:space:]]*#[[:space:]]*\|/ && index($0, "判定")) print line
-      line++
-      next
-    }
-    /^ / { line++ }
-  ') || { failed=1; return; }
-  [ -n "$headers" ] || return 0
-  # 追記だけの progress では、branch の commit が書き換えた見出しを元の文字列のまま戻す
-  # （ticket.sh の append_only_files）。戻しただけの見出しは表を作らないので数えない。
-  # 数えないのは、次の行が表の行でない見出しを、消された回数までに限る。
-  # --diff-filter=M にして、done への移動（削除 + 追加）で消えた行を «書き換えた» と数えない。
-  restored=$(git log --no-ext-diff --no-textconv --diff-filter=M --unified=0 -p --format= \
-    "$pdh_review_tip" --not "$pdh_review_exclude" -- ":(top)$f" ":(top)$old" |
-    awk '/^-\|[[:space:]]*#[[:space:]]*\|/ && index($0, "判定") { print substr($0, 2) }') || { failed=1; return; }
-  # 見出しの行番号と戻した見出しは改行区切りの複数行になる。BSD awk は -v の値の改行を
-  # «newline in string» で拒むので、環境変数で渡す。
-  if ! git show "$pdh_review_tip:$f" | PDH_HEADERS="$headers" PDH_RESTORED="$restored" awk -F '|' -v file="$f" '
-    function trim(value) { sub(/^[[:space:]]+/, "", value); sub(/[[:space:]]+$/, "", value); return value }
-    function report(reason, at) {
-      printf "check-pdh-ticket: %s:%d: Findings 表に «出した人» の列が%s\n", file, at, reason
-      print "  見出し: | # | 出した人 | 観点 | Sev | 要旨 | 判定 | 記録先 | 理由 |"
-      print "  出した人には DA・CR・Why の見方・codex・PM を書く。複数なら + でつなぐ（例: DA+codex）。"
-      bad=1
-    }
-    function origin(reason, at) {
-      if (reason ~ /由来:[[:space:]]*上流/) return
-      if (reason ~ /由来:[[:space:]]*既存/ && (index(reason, "再現:") || (index(reason, "経路:") && index(reason, "条件:")))) return
-      printf "check-pdh-ticket: %s:%d: «起票する» の行の理由に、由来と既存の証拠が無い\n", file, at
-      print "  «由来: 上流 <commit>» か、«由来: 既存 <開始 SHA>» に «再現: <コマンドと出力>» か «経路: <入口から欠陥の行までの path:行> 条件: <同じ結果になる条件>» を書く。"
-      print "  同じ行が開始 SHA にあるだけでは証拠にしない。由来が決まらなければ起票せず、未判定として調べて人に聞く（pdh-review「処置の判断」）。"
-      bad=1
-    }
-    BEGIN {
-      split(ENVIRON["PDH_HEADERS"], lines, "\n"); for (i in lines) added[lines[i]]=1
-      split(ENVIRON["PDH_RESTORED"], lines, "\n"); for (i in lines) if (lines[i] != "") was[lines[i]]++
-    }
-    # 戻した見出しとして保留した行の次が表の行なら、新しい表として数える。
-    pending {
-      if ($0 ~ /^\|/) report("無い", pending)
-      else used[pending_text]++
-      pending=0
-    }
-    /^\|[[:space:]]*#[[:space:]]*\|/ && index($0, "判定") {
-      author=0; verdict=0; why=0; idcol=0
-      if (NR in added) {
-        for (i=2; i<=NF; i++) {
-          if (trim($i) == "#") idcol=i
-          if (trim($i) == "出した人") author=i
-          if (trim($i) == "判定") verdict=i
-          if (trim($i) == "理由") why=i
-        }
-        if (!author) {
-          if (($0 in was) && used[$0] + 0 < was[$0]) { pending=NR; pending_text=$0 }
-          else report("無い", NR)
-        }
+# 旧 8 列の記録は保持し、現行 5 列の頻度・コストだけを検査する。
+check_findings_cost() {
+  local f=$1
+  [[ "$f" != "$tickets_dir/done/"* ]] || return 0
+  [ -f "$f" ] || return 0
+  if ! ticket_visible_lines "$f" | awk -F '|' -v file="$f" '
+    function trim(v) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v); return v }
+    /^#+ / { findings=($0 ~ /^###+ Findings(-| ?(（|\())PDH-review-[0-9]+/); cost=0 }
+    findings && /^\|[[:space:]]*#[[:space:]]*\|/ {
+      cost=legacy=0
+      for (i=2; i<NF; i++) {
+        label=trim($i)
+        if (label == "頻度と 1 回のコスト") cost=i
+        if (label == "Sev" || label == "出した人" || label == "記録先") legacy=1
+      }
+      if (legacy) cost=0
+      else if (!cost) {
+        printf "check-pdh-ticket: %s:%d: Findings 表の «頻度と 1 回のコスト» が無い\n", file, NR
+        bad=1
       }
       next
     }
-    # 見出しの巡を覚える。«処置の変更» の行は finding を «PDH-review-N #M» で指すので、
-    # 表の行の # だけでは照合できない。
-    /^#+ / {
-      round=0
-      if ($0 ~ /^###+ Findings(-| ?(（|\())PDH-review-[0-9]+([^0-9]|$)/) {
-        number=$0; sub(/^.*PDH-review-/, "", number); sub(/[^0-9].*$/, "", number); round=number+0
-      }
+    !/^\|/ { cost=0 }
+    cost && $0 !~ /^[[:space:]|:-]+$/ && trim($cost) == "" {
+      printf "check-pdh-ticket: %s:%d: Findings 表の «頻度と 1 回のコスト» が空\n", file, NR
+      bad=1
     }
-    # «処置の変更: PDH-review-N #M 起票する → いま直す — 理由» は、表の行の判定を置き換える
-    # （pdh-review「Findings 表」）。progress は追記だけで元の行を直せないので、置き換えを
-    # 読まなければ «起票する» を外した finding に由来を足す手段が無く、この検査は通らない。
-    /処置の変更/ && match($0, /PDH-review-[0-9]+[[:space:]]*#[0-9]+/) {
-      ident=substr($0, RSTART, RLENGTH); number=ident
-      sub(/^PDH-review-/, "", number); sub(/[^0-9].*$/, "", number)
-      sub(/^.*#/, "", ident)
-      tail=substr($0, index($0, "処置の変更"))
-      if (index(tail, "→")) {
-        after=substr(tail, index(tail, "→") + length("→"))
-        key=(number+0) SUBSEP (ident+0)
-        changed_why[key]=""
-        if (index(after, "—")) {
-          changed_why[key]=substr(after, index(after, "—"))
-          after=substr(after, 1, index(after, "—") - 1)
-        }
-        changed_to[key]=trim(after)
-        changed_at[key]=NR
-      }
-    }
-    !/^\|/ { author=0; verdict=0; why=0; idcol=0 }
-    author && $0 !~ /^[[:space:]|:-]+$/ {
-      value=trim($author)
-      if (value == "" || value == "—" || value == "?") report("空", NR)
-    }
-    # 行は貯めて END で判定する。置き換えの行は表の後ろに来るので、読み終えるまで
-    # その行の判定は決まらない。
-    verdict && why && $0 !~ /^[[:space:]|:-]+$/ {
-      reason=""; for (i=why; i<NF; i++) reason=reason "|" $i
-      rows++
-      row_key[rows]=round SUBSEP (idcol ? trim($idcol)+0 : 0)
-      row_verdict[rows]=trim($verdict)
-      row_reason[rows]=reason
-      row_at[rows]=NR
-    }
-    END {
-      for (i=1; i<=rows; i++) {
-        key=row_key[i]
-        if (key in changed_to) {
-          # 置き換えた後の判定で数える。«起票する» へ変えたものは、置き換えの行の理由で
-          # 由来を見る（元の行はもう直せない）。別の判定へ変えたものは対象から外れる。
-          if (index(changed_to[key], "起票する")) origin(changed_why[key], changed_at[key])
-        } else if (row_verdict[i] == "起票する") origin(row_reason[i], row_at[i])
-      }
-      exit bad ? 1 : 0
-    }
-  ' >&2; then
-    failed=1
-  fi
+    END { exit bad ? 1 : 0 }
+  ' >&2; then failed=1; fi
 }
 
 # base から分岐した後、branch 自身の commit が done へ移した ticket も検査する。
@@ -769,8 +581,7 @@ for t in "$tickets_dir"/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
   check_ticket_review_handover "$t"
   # Why の根拠も、別の branch の ticket（旧い書式で起票されたものを含む）では落とさない。
   [[ "$t" == "$tickets_dir/done/"* ]] || check_ticket_why_intake_evidence "$t"
-  check_findings_authors "$d/progress.md"
-  check_constraint_acceptance "$d/progress.md"
+  check_findings_cost "$d/progress.md"
 
   n="$d/note.md"
   if [[ "$t" == "$tickets_dir/done/"* ]]; then
