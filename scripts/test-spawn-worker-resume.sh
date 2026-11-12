@@ -732,8 +732,17 @@ normalize() {
     *) cat "$file" ;;
   esac
 }
+# AC5 が測るのは «fallback を持たない baseline と byte 一致» である。BSD ps の環境では
+# baseline の session_leader に ps の keyword 一覧が入り（現行版は -o sess= の fallback を
+# 持つので入らない）、両版は原理的に一致しない。それを退行として報告すると、本当の退行と
+# 区別できなくなる。測れないことを出して飛ばし、GNU ps の環境で測る。
+ac5_comparable=1
+ps_sid_probe=$(ps -o sid= -p "$$" 2>/dev/null | tr -d ' ')
+case "$ps_sid_probe" in ''|*[!0-9]*) ac5_comparable=0 ;; esac
+[ "$ac5_comparable" = 1 ] || printf 'SKIP: AC5 旧版比較 16 件（この環境の ps は -o sid= を受け付けず、baseline の session_leader が比較できない）\n'
 for command_kind in other success failure capacity; do
   for input_kind in stdin no-stdin process-substitution fifo; do
+    [ "$ac5_comparable" = 1 ] || continue
     new_case "AC5: 旧版比較 $command_kind / ${input_kind}（ファイル全件・--wait・stdin）"
     printf 'stdin の全文\n末尾の改行\n\n' > "$case_dir/input.txt"
     command_args=(codex exec '引数の指示')

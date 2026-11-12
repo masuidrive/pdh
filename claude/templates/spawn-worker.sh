@@ -121,7 +121,14 @@ if [ "${_SPAWN_WORKER_SUPERVISOR:-}" = "1" ]; then
   {
     printf 'started_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf 'self_pid=%s parent_pid=%s\n' "$$" "$PPID"
-    printf 'session_leader=%s\n' "$( { ps -o sid= -p "$$" 2>/dev/null || ps -o sess= -p "$$" 2>/dev/null; } | tr -d ' ')"
+    # BSD ps は -o sid= を受け付けず、有効な keyword の一覧を stdout に吐いて 0 以外で
+    # 終わる。2>/dev/null は stderr しか捨てないので、|| の fallback の前にその一覧が
+    # 記録へ入っていた（macOS で実測）。値が数字でなければ捨てる。この行に入るのは
+    # session id か空であって、ps の説明文ではない。
+    session_leader=$(ps -o sid= -p "$$" 2>/dev/null | tr -d ' ')
+    case "$session_leader" in ''|*[!0-9]*) session_leader=$(ps -o sess= -p "$$" 2>/dev/null | tr -d ' ') ;; esac
+    case "$session_leader" in ''|*[!0-9]*) session_leader="" ;; esac
+    printf 'session_leader=%s\n' "$session_leader"
     printf 'command=%s\n' "$*"
   } > "$out/spawn.txt" 2>/dev/null || true
 
