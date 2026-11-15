@@ -284,6 +284,10 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         tolerance.write_text('## Constraints\n')
         assert 'Failure Tolerance' in documented(target,engine,'failure-tolerance-check',code=1)
         tolerance.write_text('## Failure Tolerance\n使う人と量: 社内 200 件/月\n許す失敗: 月 1 回・担当 2 分\n許さない失敗: データ喪失\n')
+        tolerance.write_text('## Failure Tolerance\nバグを 0 にすることは目指さない。使っていて困るものから直す。\n使う人と量: 社内 200 件/月\n許す失敗: 月 1 回・担当 2 分\n許さない失敗: データ喪失\n')
+        assert '冒頭の 2 文' in documented(target,engine,'failure-tolerance-check',code=1)
+        tolerance.write_text('## Failure Tolerance\n許す失敗の範囲の不具合は、使っていて困るものから直す。許さない失敗は、頻度に関係なく直す。\n使う人と量: 社内 200 件/月\n許す失敗: 月 1 回・担当 2 分\n許さない失敗: データ喪失\n')
+        documented(target,engine,'failure-tolerance-check')
         obsolete=target/'scripts/checks/findings-table-record-target.check'
         obsolete.write_text('# old record-target check\n')
         assert '旧い記録先' in documented(target,engine,'failure-tolerance-check',code=1)

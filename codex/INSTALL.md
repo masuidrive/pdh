@@ -341,7 +341,7 @@ git diff --no-index -- scripts/test-all.sh tmp/pdh/codex/templates/test-all.sh |
 
 #### Failure Tolerance と制約の記録
 
-`product-brief.md` の Constraints の前に Failure Tolerance（バグを 0 にすることは目指さない／使う人と量／許す失敗の頻度と 1 回のコスト／許さない失敗）を置く。無いか空なら `pdh-ticket-write` でユーザと決め、変更案への承認後に書く。`AGENTS.md` のディレクトリ構造に、受け入れた制約の置き場所 `docs/known-limits.md`（別の場所ならその path）を指定する。役割の表の上にある «割り当てを変えたら、その理由も 1 行添えておくと後から検証できる» は削除する。理由と経緯は commit message に書く。`.ticket-config.yaml` の Why のガイドから `on-symptom-report` と `observable-symptom:` を外す。
+`product-brief.md` の Constraints の前に Failure Tolerance（許す失敗の範囲の不具合は使っていて困るものから直し、許さない失敗は頻度に関係なく直す／使う人と量／許す失敗の頻度と 1 回のコスト／許さない失敗）を置く。無いか空なら `pdh-ticket-write` でユーザと決め、変更案への承認後に書く。`AGENTS.md` のディレクトリ構造に、受け入れた制約の置き場所 `docs/known-limits.md`（別の場所ならその path）を指定する。役割の表の上にある «割り当てを変えたら、その理由も 1 行添えておくと後から検証できる» は削除する。理由と経緯は commit message に書く。`.ticket-config.yaml` の Why のガイドから `on-symptom-report` と `observable-symptom:` を外す。既に Failure Tolerance を書いてある場合は、冒頭の «バグを 0 にすることは目指さない。使っていて困るものから直す。» を template の 2 文（«許す失敗の範囲の不具合は、使っていて困るものから直す。許さない失敗は、頻度に関係なく直す。»）に置き換える。1 文だけだと、許さない失敗も困るまで後回しにしてよいと読める。
 
 未完の ticket の次の巡から 5 列の Findings 表を追記し、旧 8 列と `constraint-accepted:` の記録は書き換えない。頻度・コストの検査は現行表だけを対象にし、旧表と `tickets/done/` は検査しない。旧い `scripts/checks/findings-table-record-target.check` が残っていれば削除する。出した人の検査は配布 script の上書きで置き換わる。`pdh-review-tally.sh` は現行表の判定と巡だけを集計する。
 
@@ -357,6 +357,9 @@ pdh_tolerance_status=0
 for pdh_label in '## Failure Tolerance' '使う人と量:' '許す失敗:' '許さない失敗:'; do
   grep -qF "$pdh_label" product-brief.md || { printf '要適用: %s\n' "$pdh_label"; pdh_tolerance_status=1; }
 done
+if grep -qF 'バグを 0 にすることは目指さない。使っていて困るものから直す。' product-brief.md; then
+  echo '要適用: Failure Tolerance の冒頭の 2 文'; pdh_tolerance_status=1
+fi
 grep -qF 'known-limits.md' AGENTS.md || { echo '要適用: 制約の文書の場所'; pdh_tolerance_status=1; }
 if grep -qF '割り当てを変えたら、その理由も 1 行添えておくと後から検証できる' AGENTS.md; then
   echo '要適用: 役割の変更理由の文を削除'; pdh_tolerance_status=1
