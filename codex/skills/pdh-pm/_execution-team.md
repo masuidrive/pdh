@@ -31,6 +31,7 @@ PM が worker を起動するときに読む。worker の手順は、役割ご�
   - Coding Engineer: `medium`。統合・判断を含む難しい実装は `high`
   - reviewer・QA・AC 裏取り・Surface Observer・判断ボードの独立 reviewer・調査（architecture の検討、root cause の切り分け）: `xhigh`
   - AC だけを読む worker（`pdh-ac-reader`）: `high`。この役は effort を上げると、かえって AC を読み落とすことがある
+  - ticket の review（書いた ticket を、書き手と別の model に読ませる役）: `high`。PDH-ticket-review の手順には含めていないので、この役を起こすかは project が決める。ticket の誤りは実装・review・verify を通った後に見つかると最もやり直しが大きく、1 回で読む量は小さい
   - S7 の前提の見直し: `medium`。上の項目のとおり、速い model と組にする
 - Coding Engineer の profile は、委譲された product / UX / AC の判断を «自分で決めて進む» のではなく «止めて差し戻す» 側を既定にする（`.codex/agents/pdh-coding-engineer.toml`「例外」の停止条件どおり）
   - 判断が残る ticket は、`PDH-ticket-human-review` で解消してから Coding Engineer を起動する

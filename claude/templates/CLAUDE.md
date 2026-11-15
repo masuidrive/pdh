@@ -118,6 +118,7 @@ effort の列は既定（pdh-pm `_execution-team.md`「エンジン割り当て�
 | Surface Observer | surface check | （main） | `xhigh` | UI / HTTP API / SDK / CLI など、この project の consumer surface を書く |
 | 判断ボードの独立 reviewer | board の完成検査 | （main の別 worker） | `xhigh` | 書き手とは別に起こす。別 engine を指定すると、engine が違うことで見つかる盲点も拾える（`pdh-decision-board` の `final-check.md`） |
 | 前提の見直し（S7） | PDH-review の «収束» | PM と別の engine の速い model（例: claude `fable`、codex `gpt-6-astra`） | `medium` | `pdh-review`「収束」 |
+| ticket の review（任意） | PDH-ticket-review | ticket を書いた model と別の model | `high` | 書いた ticket を別の model に読ませるとき。段を置くかは project が決める（pdh-pm `_execution-team.md`「エンジン割り当て」） |
 
 共通の worker / spawn / context ルールは `PDH-AGENTS.md` に置く。以下にはこの project / tool 固有の起動方法だけを書く。
 
