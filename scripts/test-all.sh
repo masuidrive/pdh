@@ -78,7 +78,7 @@ while IFS= read -r script; do
   if ! bash -n "$script"; then
     syntax_failed=1
   fi
-done < <(git ls-files -- '*.sh')
+done < <(git ls-files --cached --others --exclude-standard -- '*.sh')
 if [[ "$syntax_failed" -ne 0 ]]; then
   failed=1
 else

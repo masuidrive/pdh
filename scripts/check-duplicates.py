@@ -10,7 +10,9 @@ allowed={(entry['line'],tuple(entry['files'])) for entry in json.loads((root/'sc
 errors=[]
 for engine in ('claude','codex'):
     lines=defaultdict(set)
-    names=subprocess.check_output(['git','ls-files','--','docs/*',engine+'/skills/*',engine+'/templates/*'],cwd=root,text=True).splitlines()
+    # --others --exclude-standard so a file that is not committed yet is checked too:
+    # otherwise a new role file passes the local gate and fails CI after the commit.
+    names=subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','--','docs/*',engine+'/skills/*',engine+'/templates/*'],cwd=root,text=True).splitlines()
     for name in names:
         p=root/name
         # TOML holds the same body generated from the Markdown role definition.

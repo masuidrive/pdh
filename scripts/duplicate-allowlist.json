@@ -135,7 +135,8 @@
       "claude/templates/agents/claude/pdh-qa.md",
       "claude/templates/agents/claude/pdh-reviewer-lens1.md",
       "claude/templates/agents/claude/pdh-reviewer.md",
-      "claude/templates/agents/claude/pdh-surface-observer.md"
+      "claude/templates/agents/claude/pdh-surface-observer.md",
+      "claude/templates/agents/claude/pdh-ticket-reviewer.md"
     ],
     "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
   },
@@ -322,7 +323,8 @@
       "claude/templates/agents/claude/pdh-qa.md",
       "claude/templates/agents/claude/pdh-reviewer-lens1.md",
       "claude/templates/agents/claude/pdh-reviewer.md",
-      "claude/templates/agents/claude/pdh-surface-observer.md"
+      "claude/templates/agents/claude/pdh-surface-observer.md",
+      "claude/templates/agents/claude/pdh-ticket-reviewer.md"
     ],
     "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
   },

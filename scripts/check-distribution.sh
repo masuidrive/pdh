@@ -79,7 +79,7 @@ check_set() {
       fi
     done <<< "$install_sources"
     [[ "$listed" -eq 1 ]] || fail "$dist is distributable but is not listed in $install's placement table"
-  done < <(git ls-files -- "$set/templates/*" "$set/skills/*" "$set/scripts/*" 'docs/*')
+  done < <(git ls-files --cached --others --exclude-standard -- "$set/templates/*" "$set/skills/*" "$set/scripts/*" 'docs/*')
 
 
 }
