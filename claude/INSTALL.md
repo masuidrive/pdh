@@ -345,7 +345,7 @@ exit "$pdh_tolerance_status"
 
 #### ticket の review worker と前提の見直し
 
-`.claude/agents/pdh-ticket-reviewer.md` が配置表で届く。既存の導入先は `scripts/checks/required-pdh-files.check` の `required_paths` にこの path を足す（この check は初回だけコピーされるので、上書きでは届かない）。`DB-changes:` か `API-changes:` が «なし» でない ticket と、新しい仕組みを作る ticket では、PDH-ticket-review で前提の見直しを 1 回回す。model と effort の既定は役割の表の «前提の見直し» の行にある。
+`.claude/agents/pdh-ticket-reviewer.md` が配置表で届く。既存の導入先は `scripts/checks/required-pdh-files.check` の `required_paths` にこの path を足す（この check は初回だけコピーされるので、上書きでは届かない）。`DB-changes:` か `API-changes:` が «なし» でない ticket と、新しい仕組みを作る ticket では、PDH-ticket-review で前提の見直しを 1 回回すことを勧める（必須ではない。回す条件・渡すもの・記録先は skill の «前提を疑う» にある）。model と effort の既定は役割の表の «前提の見直し» の行にある。
 
 確認（冪等）:
 
