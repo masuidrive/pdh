@@ -20,6 +20,7 @@ codex/templates/agents/codex/pdh-qa.toml	.codex/agents/pdh-qa.toml
 codex/templates/agents/codex/pdh-reviewer-lens1.toml	.codex/agents/pdh-reviewer-lens1.toml
 codex/templates/agents/codex/pdh-reviewer.toml	.codex/agents/pdh-reviewer.toml
 codex/templates/agents/codex/pdh-surface-observer.toml	.codex/agents/pdh-surface-observer.toml
+codex/templates/agents/codex/pdh-ticket-reviewer.toml	.codex/agents/pdh-ticket-reviewer.toml
 codex/templates/check-pdh-ticket.sh	scripts/check-pdh-ticket.sh
 codex/templates/check-ticket-template-drift.sh	scripts/check-ticket-template-drift.sh
 codex/templates/checks/README.md	scripts/checks/README.md

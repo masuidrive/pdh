@@ -52,6 +52,16 @@ python3 scripts/docs-policy.py record docs/example.md#scope --base <base> --note
   - 文面の無い «◯◯が入る»
   - 対象を列挙していない件数
 
+### 前提を疑う
+
+この規則の目的: 戻しにくい判断を、PM が考えた作り方の中だけで決めないこと。note の `DB-changes:` か `API-changes:` が «なし» でないとき、または新しい仕組み（状態の置き場所・受け口・定期処理）を作るときは、承認を求める前に前提の見直しを 1 回回す。
+
+1. 回すのは、経緯を持たない worker 1 人である。engine は PM と別にし、model と effort は `[SKILLS_PATH]/pdh-pm/_execution-team.md`「エンジン割り当て」の «前提の見直し» に従う。worker の手順は `.claude/agents/pdh-ticket-reviewer.md` の «前提を疑う» にある
+2. 渡すのは、依頼の原文・Why・AC の目的・Failure Tolerance・外の契約（API などの仕様）・いまの base のコードと文書だけである。ticket の `Design-Decisions` と、この ticket に出た review の finding は渡さない
+3. 問いと、案ごとに書かせる項目は `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」の S7 と同じものを prompt に書く
+4. 出た案と、選んだ案・外した理由を progress に書く。選んだ案が ticket の `Design-Decisions` と違えば、ticket を直してから先へ進む
+5. 回す条件に当たらないときは、当たらない理由を progress に 1 行書く
+
 ### AC の場面の頻度を測る
 
 この規則の目的: 承認者が、現実に起きる頻度と失敗のコストを知って AC の範囲を決められること。«必ず〜» «すべての〜» のように絶対の形で AC を書く前に、端の場面の頻度を測る手段・担当・コマンドを `Required-Probes` に書いて実行する。既存のログ・データで測れるなら実測し、期間・母数・件数を残す。実測できなければ推定と根拠・未確認の範囲を明記する。頻度と 1 回のコストが Failure Tolerance の目安に収まる場面は、AC の範囲から外すか、«止めて知らせる» 動作にして AC の承認で決める。
@@ -134,6 +144,7 @@ done) &&
 
 - [ ] PDH-ticket-review: 文書の frontmatter 検査を採用している場合、関係する文書の内容を ticket に反映し、節ごとの採否・照合記録を `related-docs.md` に残した
 
+- [ ] PDH-ticket-review: 前提の見直しを回し、出た案と選んだ理由が progress にある。回す条件に当たらなければ、当たらない理由を書いた
 - [ ] PDH-ticket-review: 絶対の形の AC は、Required-Probes に場面の頻度を測った結果と 1 回のコストがあり、Failure Tolerance と照合した範囲になっている
 - [ ] PDH-ticket-review: 変更箇所と制約の anchor を照合し、該当行を直すか残すかが progress にある。目安の変更時は全行、マイルストーンを閉じるときは «テストなし» の行も見直した
 - [ ] PDH-ticket-review: AC だけを読む worker が、全 AC に «復元できた» を返した。PM が結果を progress に残す

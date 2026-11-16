@@ -22,7 +22,7 @@ PM が worker を起動するときに読む。worker の手順は、役割ご�
 
 - **PM は自身の engine・model・profile・reasoning effort を変更しない。**その変更を許可できるのは、現在の作業に対する明示のユーザ指示だけである。worker への model 割り当ては別の話で、下の項目と `AGENTS.md`に従う
 - **実装（Coding Engineer）と review（reviewer）は、既定で別の engine にする。**同じ engine が実装と review の両方で見落とす欠陥を、別の engine に見つけさせるためである。engine が 1 つしか無い環境では、同じ engine で review したことと、その理由（別の engine が無い）を progress に記録する
-- **PDH-review の «収束» の S7 の前提の見直しは、PM と別の engine の速い model と `medium` にする。**PM と同じ見落としをせず、PM の考えた枠の外から案を出させるのが目的で、それを担うのは engine を分けることである。S7 が問うのは問題の立て方・AC・責任の置き場所の無理と、前提を変える案であって、コードを深く掘って不具合を見つける役ではない（それは reviewer の網羅探索の巡が行う）。S7 は review が収束しないときに止まって回すので、その時間は人の待ち時間になる。model の名前は `AGENTS.md`で指定でき、無ければ CLI の既定を使う
+- **前提の見直し（PDH-review の «収束» の S7 と、PDH-ticket-review の «前提を疑う»）は、PM と別の engine の速い model と `medium` にする。**PM と同じ見落としをせず、PM の考えた枠の外から案を出させるのが目的で、それを担うのは engine を分けることである。S7 が問うのは問題の立て方・AC・責任の置き場所の無理と、前提を変える案であって、コードを深く掘って不具合を見つける役ではない（それは reviewer の網羅探索の巡が行う）。S7 は review が収束しないときに止まって回すので、その時間は人の待ち時間になる。model の名前は `AGENTS.md`で指定でき、無ければ CLI の既定を使う
 - それ以外の worker の engine は、既定で PM と同じにする。役割ごとの engine / model の上書きは、`AGENTS.md`に明示された場合だけ許す
 - 実装と判断（review を含む）は標準以上の model を使う。比べるのは «1 回の単価» ではなく «完了 1 件までの合計» である — 取り違えればやり直し・review の巡数・人が承認や再実行の操作をする回数が増え、その合計は 1 回を安く済ませた差より大きい。**単価だけを見ると、必ず非力な側が勝つように見える**。列挙・抽出・出力の整理は軽量な model も使える。判断は任せた側が持つ。仕事に判断が含まれるかは内容で決まるため、機械では数えられず PM が割り当て時に確かめる
 - 委譲先の model は名前で固定しない。CLI の既定（codex は `-m` を付けない）か、CLI の alias（claude は `opus` など）を使う。名前を書くと、書いた側だけが古くなる。どの model と effort で動いたかは worker の出力（codex は stderr の冒頭の `model:` と `reasoning effort:`）から読む
@@ -31,8 +31,8 @@ PM が worker を起動するときに読む。worker の手順は、役割ご�
   - Coding Engineer: `medium`。統合・判断を含む難しい実装は `high`
   - reviewer・QA・AC 裏取り・Surface Observer・判断ボードの独立 reviewer・調査（architecture の検討、root cause の切り分け）: `xhigh`
   - AC だけを読む worker（`pdh-ac-reader`）: `high`。この役は effort を上げると、かえって AC を読み落とすことがある
-  - ticket の review（書いた ticket を、書き手と別の model に読ませる役）: `high`。PDH-ticket-review の手順には含めていないので、この役を起こすかは project が決める。ticket の誤りは実装・review・verify を通った後に見つかると最もやり直しが大きく、1 回で読む量は小さい
-  - S7 の前提の見直し: `medium`。上の項目のとおり、速い model と組にする
+  - ticket の review（書いた ticket の穴を、書き手と別の model に探させる役。`pdh-ticket-reviewer` の «穴を探す»）: `high`。PDH-ticket-review の手順には含めていないので、この役を起こすかは project が決める。ticket の誤りは実装・review・verify を通った後に見つかると最もやり直しが大きく、1 回で読む量は小さい
+  - 前提の見直し（PDH-review の S7 と、PDH-ticket-review の «前提を疑う»）: `medium`。上の項目のとおり、速い model と組にする
 - Coding Engineer の profile は、委譲された product / UX / AC の判断を «自分で決めて進む» のではなく «止めて差し戻す» 側を既定にする（`.codex/agents/pdh-coding-engineer.toml`「例外」の停止条件どおり）
   - 判断が残る ticket は、`PDH-ticket-human-review` で解消してから Coding Engineer を起動する
   - 判断を埋めさせるために «進む» model を worker へ当てない — 実装者が決める失敗になる
@@ -58,7 +58,7 @@ worker は CLI subprocess で起動し、結果を専用 file で回収する。
 
 ### worker prompt の組み立て
 
-worker の手順は、役割ごとの `.codex/agents/pdh-<役割>.toml` の本文にある（実装は `pdh-coding-engineer`、review は `pdh-reviewer`/`pdh-reviewer-lens1`、QA は `pdh-qa`、verify は `pdh-ac-verifier`/`pdh-surface-observer`、AC だけを読む worker は `pdh-ac-reader`）。本文は `<TICKET_FILE>`、`<NOTE_FILE>`、`<PROGRESS_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`、`<TESTS_DIR>`、`<TMP_DIR>` を参照するので、PM はその実値を prompt に書く。
+worker の手順は、役割ごとの `.codex/agents/pdh-<役割>.toml` の本文にある（実装は `pdh-coding-engineer`、review は `pdh-reviewer`/`pdh-reviewer-lens1`、QA は `pdh-qa`、verify は `pdh-ac-verifier`/`pdh-surface-observer`、AC だけを読む worker は `pdh-ac-reader`、ticket の review と前提の見直しは `pdh-ticket-reviewer`）。本文は `<TICKET_FILE>`、`<NOTE_FILE>`、`<PROGRESS_FILE>`、`<BRANCH>`、`<SCOPE>`、`<RESULT_FILE>`、`<TESTS_DIR>`、`<TMP_DIR>` を参照するので、PM はその実値を prompt に書く。
 
 - `<PROGRESS_FILE>` は `[TICKET_DIR]/progress.md`、`<TMP_DIR>` は `./ticket.sh start` の出力の `tmp_dir:` パス、`<TESTS_DIR>` は `[TICKET_DIR]/tests/`（legacy flat layout では `tests/tickets/<id>/`）で導出する
 - `<RESULT_FILE>` は worker が file tool で書く成果物 file であり、stdout とは別のパス（例: `$d/result.md`）を worker ごとに割り当てる

@@ -69,6 +69,7 @@ chmod +x ticket.sh
 | `tmp/pdh/codex/templates/agents/codex/pdh-reviewer-lens1.toml` | `.codex/agents/pdh-reviewer-lens1.toml` | PDH worker の役割定義 | 上書き |
 | `tmp/pdh/codex/templates/agents/codex/pdh-reviewer.toml` | `.codex/agents/pdh-reviewer.toml` | PDH worker の役割定義 | 上書き |
 | `tmp/pdh/codex/templates/agents/codex/pdh-surface-observer.toml` | `.codex/agents/pdh-surface-observer.toml` | PDH worker の役割定義 | 上書き |
+| `tmp/pdh/codex/templates/agents/codex/pdh-ticket-reviewer.toml` | `.codex/agents/pdh-ticket-reviewer.toml` | PDH worker の役割定義 | 上書き |
 | `tmp/pdh/codex/templates/check-pdh-ticket.sh` | `scripts/check-pdh-ticket.sh` | 共有 script | 上書き |
 | `tmp/pdh/codex/templates/check-ticket-template-drift.sh` | `scripts/check-ticket-template-drift.sh` | 共有 script | 上書き |
 | `tmp/pdh/codex/templates/checks/README.md` | `scripts/checks/README.md` | fast-check の定義・見本（project の独自 check は保持） | 上書き |
@@ -217,7 +218,7 @@ for skill in pdh-change pdh-check-writing pdh-close pdh-decision-board pdh-imple
   test -f ".agents/skills/$skill/SKILL.md" || exit 1
   test ! -L ".agents/skills/$skill" || exit 1
 done
-for agent in pdh-ac-reader pdh-ac-verifier pdh-coding-engineer pdh-qa pdh-reviewer-lens1 pdh-reviewer pdh-surface-observer; do
+for agent in pdh-ac-reader pdh-ac-verifier pdh-coding-engineer pdh-qa pdh-reviewer-lens1 pdh-reviewer pdh-surface-observer pdh-ticket-reviewer; do
   test -f ".codex/agents/$agent.toml" || exit 1
 done
 bash -n ticket.sh scripts/test-all.sh scripts/fast-checks.sh scripts/dev-server.sh scripts/seed-pdh-verify.sh scripts/test-ticket-local.sh scripts/check-pdh-ticket.sh scripts/pdh-review-range.sh scripts/check-ticket-template-drift.sh
@@ -371,6 +372,20 @@ if [ -e scripts/checks/findings-table-record-target.check ]; then
   echo '要適用: 旧い記録先の検査を削除'; pdh_tolerance_status=1
 fi
 exit "$pdh_tolerance_status"
+```
+
+
+#### ticket の review worker と前提の見直し
+
+`.codex/agents/pdh-ticket-reviewer.toml` が配置表で届く。既存の導入先は `scripts/checks/required-pdh-files.check` の `required_paths` にこの path を足す（この check は初回だけコピーされるので、上書きでは届かない）。`DB-changes:` か `API-changes:` が «なし» でない ticket と、新しい仕組みを作る ticket では、PDH-ticket-review で前提の見直しを 1 回回す。model と effort の既定は役割の表の «前提の見直し» の行にある。
+
+確認（冪等）:
+
+<!-- pdh-shell: ticket-reviewer-check -->
+```bash
+pdh_reviewer_status=0
+grep -qF 'pdh-ticket-reviewer' scripts/checks/required-pdh-files.check || { echo '要適用: required_paths の pdh-ticket-reviewer'; pdh_reviewer_status=1; }
+exit "$pdh_reviewer_status"
 ```
 
 
@@ -709,7 +724,7 @@ for skill in pdh-dev pdh-coding pdh-reviewing pdh-verifying pdh-rule-write pdh-c
   rm -rf ".claude/skills/$skill"
 done
 rm -rf .agents/skills/tmux-director
-for agent in pdh-ac-reader pdh-ac-verifier pdh-coding-engineer pdh-qa pdh-reviewer-lens1 pdh-reviewer pdh-surface-observer; do
+for agent in pdh-ac-reader pdh-ac-verifier pdh-coding-engineer pdh-qa pdh-reviewer-lens1 pdh-reviewer pdh-surface-observer pdh-ticket-reviewer; do
   rm -f ".claude/agents/$agent.md"
 done
 ```

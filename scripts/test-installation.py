@@ -288,6 +288,15 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         assert '冒頭の 2 文' in documented(target,engine,'failure-tolerance-check',code=1)
         tolerance.write_text('## Failure Tolerance\n許す失敗の範囲の不具合は、使っていて困るものから直す。許さない失敗は、頻度に関係なく直す。\n使う人と量: 社内 200 件/月\n許す失敗: 月 1 回・担当 2 分\n許さない失敗: データ喪失\n')
         documented(target,engine,'failure-tolerance-check')
+        reviewer_check=target/'scripts/checks/required-pdh-files.check'
+        saved_reviewer=reviewer_check.read_bytes() if reviewer_check.exists() else None
+        reviewer_check.parent.mkdir(parents=True,exist_ok=True)
+        reviewer_check.write_text('required_paths=scripts/pdh-stage-checklist.sh\n')
+        assert 'pdh-ticket-reviewer' in documented(target,engine,'ticket-reviewer-check',code=1)
+        reviewer_check.write_text('required_paths=scripts/pdh-stage-checklist.sh,.claude/agents/pdh-ticket-reviewer.md\n')
+        documented(target,engine,'ticket-reviewer-check')
+        if saved_reviewer is None: reviewer_check.unlink()
+        else: reviewer_check.write_bytes(saved_reviewer)
         obsolete=target/'scripts/checks/findings-table-record-target.check'
         obsolete.write_text('# old record-target check\n')
         assert '旧い記録先' in documented(target,engine,'failure-tolerance-check',code=1)
