@@ -20,7 +20,8 @@
 #      PDH-stage のチェックリスト（scripts/pdh-stage-checklist.sh が skill から出す行）がある
 #      PDH-human-review / PDH-close では、PDH-ticket-write〜PDH-verify の各 stage の行もすべてある
 #   8. close 時、ticket が変更した PDH の上書き対象が .pdh-lock と一致する
-#   9. 未完の ticket の現行 Findings 表の «頻度と 1 回のコスト» が空でない。旧表と done は見ない。
+#   9. 未完の ticket の現行 Findings 表の «頻度と 1 回のコスト» が空でない。done は見ない。旧 8 列の表は
+#      書き換えないが、印（findings_table_marker）より後に作った ticket では、現行 5 列の表が 1 つも無ければ落とす。
 #  10. この branch の ticket は close gate に review 記録があり、pdh-review「収束」の表に従っている:
 #      S7・S8 の行が未回答のまま
 #      次の巡へ進んでいない（S5）・PDH-verify 以降は S7・S8 の行がすべて回答済み
@@ -64,11 +65,13 @@ findings_issue_repos=" $(github_bot_value findings_issue_repos | tr ',[]' '   ')
 
 # derived-ticket-fields: v1
 # derived-ticket-fields: v2
+# findings-table: v1
 # 印を持つ版の scripts/check-pdh-ticket.sh で作った ticket から、その印の項目と後から足した PDH-stage の行を求める。
 # v1 は別件の項目（derived-from:・pickup-timing:）と late_stage_lines、v2 は on-symptom-report の observable-symptom: と late_stage_lines_v2。
-# 印の無い版で作った ticket は、作った時点の規則で閉じられる。
+# findings-table: v1 は現行 5 列の Findings 表。印の無い版で作った ticket は、作った時点の規則で閉じられる。
 derived_fields_marker='# derived-ticket-fields: v1'
 symptom_fields_marker='# derived-ticket-fields: v2'
+findings_table_marker='# findings-table: v1'
 late_stage_lines=$(cat <<'EOF'
 PDH-ticket-write: 同じ原因・対象・期待する修正の ticket を検索した。検索語と件数（該当 0 件を含む）と、新しく作るか既存へ集約するかの判断が progress にある
 PDH-ticket-review: この ticket を指す `起票:` の行と、`pickup-timing: when-touching` の ticket のうち同じ箇所に触るものを探し、コマンド・件数（0 件を含む）・取り込むかの判断が progress にある
@@ -444,12 +447,13 @@ check_stage_checklist() {
   fi
 }
 
-# 旧 8 列の記録は保持し、現行 5 列の頻度・コストだけを検査する。
+# 旧 8 列の記録は保持し、現行 5 列の頻度・コストだけを検査する。印より後に作った ticket では、
+# 旧 8 列の表しか無ければ落とす（互換の逃げ道が、移行しない project を無検査のままにしないため）。
 check_findings_cost() {
-  local f=$1
+  local f=$1 legacy_ok=${2:-1}
   [[ "$f" != "$tickets_dir/done/"* ]] || return 0
   [ -f "$f" ] || return 0
-  if ! ticket_visible_lines "$f" | awk -F '|' -v file="$f" '
+  if ! ticket_visible_lines "$f" | awk -F '|' -v file="$f" -v legacy_ok="$legacy_ok" '
     function trim(v) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v); return v }
     /^#+ / { findings=($0 ~ /^###+ Findings(-| ?(（|\())PDH-review-[0-9]+/); cost=0 }
     findings && /^\|[[:space:]]*#[[:space:]]*\|/ {
@@ -459,10 +463,13 @@ check_findings_cost() {
         if (label == "頻度と 1 回のコスト") cost=i
         if (label == "Sev" || label == "出した人" || label == "記録先") legacy=1
       }
-      if (legacy) cost=0
-      else if (!cost) {
-        printf "check-pdh-ticket: %s:%d: Findings 表の «頻度と 1 回のコスト» が無い\n", file, NR
-        bad=1
+      if (legacy) { cost=0; if (!legacy_ok && !legacy_line) legacy_line=NR }
+      else {
+        current=1
+        if (!cost) {
+          printf "check-pdh-ticket: %s:%d: Findings 表の «頻度と 1 回のコスト» が無い\n", file, NR
+          bad=1
+        }
       }
       next
     }
@@ -471,7 +478,13 @@ check_findings_cost() {
       printf "check-pdh-ticket: %s:%d: Findings 表の «頻度と 1 回のコスト» が空\n", file, NR
       bad=1
     }
-    END { exit bad ? 1 : 0 }
+    END {
+      if (legacy_line && !current) {
+        printf "check-pdh-ticket: %s:%d: Findings 表が旧 8 列だけ（この印より後に作った ticket は、次の巡から現行 5 列で追記する。旧表は書き換えない）\n", file, legacy_line
+        bad=1
+      }
+      exit bad ? 1 : 0
+    }
   ' >&2; then failed=1; fi
 }
 
@@ -581,7 +594,11 @@ for t in "$tickets_dir"/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
   check_ticket_review_handover "$t"
   # Why の根拠も、別の branch の ticket（旧い書式で起票されたものを含む）では落とさない。
   [[ "$t" == "$tickets_dir/done/"* ]] || check_ticket_why_intake_evidence "$t"
-  check_findings_cost "$d/progress.md"
+  if created_before_marker "$findings_table_marker" "$d/ticket.md" "$tickets_dir/${d##*/}/ticket.md"; then
+    check_findings_cost "$d/progress.md" 1
+  else
+    check_findings_cost "$d/progress.md" 0
+  fi
 
   n="$d/note.md"
   if [[ "$t" == "$tickets_dir/done/"* ]]; then

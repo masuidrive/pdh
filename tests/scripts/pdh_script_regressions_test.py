@@ -13,6 +13,7 @@ except ImportError:
 
 ROOT = Path(os.environ['PDH_TEST_ROOT'])
 STAGES = ('ticket-write', 'open', 'ticket-review', 'ticket-human-review', 'implement', 'review', 'verify', 'human-review', 'close')
+FINDINGS_TABLE_MARKER = '# findings-table: v1'
 
 
 class ScriptTests(unittest.TestCase):
@@ -44,7 +45,14 @@ class ScriptTests(unittest.TestCase):
             f.write(f'\nAC-approved: {hashed}\n')
         self.note('implement')
         self.write(f'{self.ticket}/progress.md', '')
+        # sample ticket は «findings-table» の印より前の版で作った ticket を再現する（旧 8 列の互換の側）。
+        # 印のある版で作った ticket は fresh_ticket() で足す。
+        check = (self.root / 'scripts/check-pdh-ticket.sh').read_text()
+        self.assertIn(FINDINGS_TABLE_MARKER, check)
+        self.write('scripts/check-pdh-ticket.sh', check.replace(FINDINGS_TABLE_MARKER + '\n', '', 1))
         self.commit('initial')
+        self.write('scripts/check-pdh-ticket.sh', check)
+        self.commit('adopt findings-table marker')
         self.run_cmd('git', 'checkout', '-qb', 'features/sample')
         self.write(f'{self.ticket}/progress.md', f'review-sha: {self.sha()}\nclose-gate-sha: {self.sha()}\n')
 
@@ -207,6 +215,27 @@ class ScriptTests(unittest.TestCase):
                 '| # | 要旨 | 頻度と 1 回のコスト | 判定 | 由来 |\n'
                 '|---|---|---|---|---|\n'
                 f'| 1 | 入力の欠落 | {cost} | いま直す | この ticket |\n')
+
+    def fresh_ticket(self, name='tickets/fresh'):
+        """«findings-table» の印のある版で作った ticket を足す（旧 8 列を認めない側）。"""
+        self.write(f'{name}/ticket.md', '---\nbranch: features/sample\n---\n### Why\nReproduction-or-measurement: fixture\nWhy-not-fix-now: 該当なし\n### What\n- [ ] 利用者が結果を読める\n')
+        hashed = self.run_cmd('bash', 'scripts/check-pdh-ticket.sh', '--ac-hash', f'{name}/ticket.md').stdout.strip()
+        with (self.root / name / 'ticket.md').open('a') as f:
+            f.write(f'\nAC-approved: {hashed}\n')
+        self.write(f'{name}/note.md', (self.root / self.ticket / 'note.md').read_text())
+        self.write(f'{name}/progress.md', '')
+        self.commit(f'add {name} after the findings-table marker')
+        return name
+
+    def test_findings_legacy_table_alone_is_rejected_after_marker(self):
+        name = self.fresh_ticket()
+        self.write(f'{name}/progress.md', self.findings(column=False))
+        self.commit('legacy findings table in a ticket created after the marker')
+        self.assertIn(f'{name}/progress.md:2: Findings 表が旧 8 列だけ', self.check(1))
+        with (self.root / name / 'progress.md').open('a') as f:
+            f.write('\n' + self.findings())
+        self.commit('append the current table')
+        self.check()
 
     def review_progress(self, count=2, heading='### Findings-PDH-review-2',
                         severity='Major', summary='修正が持ち込んだ欠陥', verdict='いま直す'):
