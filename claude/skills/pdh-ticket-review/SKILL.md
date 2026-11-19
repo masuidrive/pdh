@@ -88,7 +88,7 @@ python3 scripts/docs-policy.py record docs/example.md#scope --base <base> --note
 承認者が «この利益に、このコストを払うか» を判断できるように、次の 5 行を note の `## PDH-ticket-review. Ticket contract check` に書く。コストの数え方は `PDH-AGENTS.md`「変更のコストの数え方」に従う。
 
 - `Feasibility:` AC を技術的に達成できるか。確かめた方法（読んだコード・実行したコマンド）を添える
-- `DB-changes:` DB のスキーマの変更か既存データの変換が要るか。要るなら、AC がそれを求めるのか、作り方によっては避けられるのかを書く。要らなければ «なし»。`product-brief.md` の Solution・Constraints が挙げる対象（この ticket が扱わないものを含む）を後で足すとき、この DB の形を作り直すことになるかも書く
+- `DB-changes:` DB のスキーマの変更か既存データの変換が要るか。要るなら、AC がそれを求めるのか、作り方によっては避けられるのかを書く。要らなければ «なし»。`product-brief.md` の Solution・Constraints が挙げる対象（この ticket が扱わないものを含む）を後で足すとき、この DB の形を作り直すことになるかも書く（元の記録から作り直せる表は数えない）
 - `API-changes:` 他者が使う契約（HTTP API・SDK・CLI・webhook・設定ファイルの形式）が変わるか。変わるなら、使っている側と、互換を保てるかを書く。変わらなければ «なし»。DB と同じく、Brief が挙げる対象を後で足すとき、この契約（識別子・URL を含む）を作り直すことになるかも書く
 - `Complexity:` 変更する部分、増える（減る）行のおおよその規模、既存の仕組みで足りるか新しい仕組みが要るか。後に残る負債として、コストに数える
 - `Benefit:` 誰の何が良くなるか。Why と `Key-User-Journeys:` から書く
