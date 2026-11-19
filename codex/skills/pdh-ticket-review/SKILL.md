@@ -57,7 +57,7 @@ python3 scripts/docs-policy.py record docs/example.md#scope --base <base> --note
 この規則の目的: 戻しにくい判断を、PM が考えた作り方の中だけで決めないこと。note の `DB-changes:` か `API-changes:` が «なし» でないとき、または新しい仕組み（状態の置き場所・受け口・定期処理）を作るときは、承認を求める前に前提の見直しを 1 回回すことを勧める。回すかは PM が決める。どちらを選んでも、回した結果か回さなかった理由を progress に残す。
 
 1. 回すのは、経緯を持たない worker 1 人である。engine は PM と別にし、model と effort は `[SKILLS_PATH]/pdh-pm/_execution-team.md`「エンジン割り当て」の «前提の見直し» に従う。worker の手順は `.codex/agents/pdh-ticket-reviewer.toml` の «前提を疑う» にある
-2. 渡すのは、依頼の原文・Why・AC の目的・Failure Tolerance・外の契約（API などの仕様）・いまの base のコードと文書だけである。ticket の `Design-Decisions` と、この ticket に出た review の finding は渡さない
+2. 渡すのは、依頼の原文・Why・AC の目的・`product-brief.md` の全体・外の契約（API などの仕様）・いまの base のコードと文書だけである。ticket の `Design-Decisions` と、この ticket に出た review の finding は渡さない
 3. 問いと、案ごとに書かせる項目は `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」の S7 と同じものを prompt に書く
 4. 出た案と、選んだ案・外した理由を progress に書く。選んだ案が ticket の `Design-Decisions` と違えば、ticket を直してから先へ進む
 5. 回さなかったときは、その理由を progress に 1 行書く。条件に当たらないのか、当たるが回さないと決めたのかを分けて書く
@@ -88,8 +88,8 @@ python3 scripts/docs-policy.py record docs/example.md#scope --base <base> --note
 承認者が «この利益に、このコストを払うか» を判断できるように、次の 5 行を note の `## PDH-ticket-review. Ticket contract check` に書く。コストの数え方は `PDH-AGENTS.md`「変更のコストの数え方」に従う。
 
 - `Feasibility:` AC を技術的に達成できるか。確かめた方法（読んだコード・実行したコマンド）を添える
-- `DB-changes:` DB のスキーマの変更か既存データの変換が要るか。要るなら、AC がそれを求めるのか、作り方によっては避けられるのかを書く。要らなければ «なし»
-- `API-changes:` 他者が使う契約（HTTP API・SDK・CLI・webhook・設定ファイルの形式）が変わるか。変わるなら、使っている側と、互換を保てるかを書く。変わらなければ «なし»
+- `DB-changes:` DB のスキーマの変更か既存データの変換が要るか。要るなら、AC がそれを求めるのか、作り方によっては避けられるのかを書く。要らなければ «なし»。`product-brief.md` の Solution・Constraints が挙げる対象（この ticket が扱わないものを含む）を後で足すとき、この DB の形を作り直すことになるかも書く
+- `API-changes:` 他者が使う契約（HTTP API・SDK・CLI・webhook・設定ファイルの形式）が変わるか。変わるなら、使っている側と、互換を保てるかを書く。変わらなければ «なし»。DB と同じく、Brief が挙げる対象を後で足すとき、この契約（識別子・URL を含む）を作り直すことになるかも書く
 - `Complexity:` 変更する部分、増える（減る）行のおおよその規模、既存の仕組みで足りるか新しい仕組みが要るか。後に残る負債として、コストに数える
 - `Benefit:` 誰の何が良くなるか。Why と `Key-User-Journeys:` から書く
 

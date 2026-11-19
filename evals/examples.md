@@ -462,3 +462,7 @@ smoke 自体の穴も 1 つ: 毎回同じ要望を出していたので、claude
 
 `2ca0012`。`pdh-dev/_collaboration.md` に設問番号の規則を置き、判断ボード（`base.md` の判断カードの型、`html.md` の `data-label` 例）の選択肢を A/B/C から数字へ、設問の見出しを「判断 n」から「T<n>」へ変えた。**判断ボード skill の散文規則の変更だが、`evals/` のシナリオは回していない。**旧版との比較は無い。
 
+
+## 2026-11-19 — Brief との照合がジャーニーと AI だけで、Brief が挙げる別の接続先を塞ぐ DB と契約を承認まで通した
+
+導入先の 1 ticket（local の Codex の会話を読む画面）。Brief の Constraints は local / remote / cloud を区別すると書いていたが、PDH-ticket-review の照合は Key-User-Journeys と Architectural-Invariants だけで、`pdh-ticket-write` の «将来の要件向けの設計を入れない» を Brief が挙げる範囲にまで当てた。review の 4 巡目に利用者が指摘し、経緯を持たない別 engine の洗い直しで、接続先を含まない会話 ID・出所の無い原応答・ファイルを直接読む画像など、後の接続先で作り直しになる形が 16 項目出た。`DB-changes:` / `API-changes:` の行に Brief の範囲での作り直しを書かせ、前提の見直しに Brief の全体を渡し、ticket の review worker の «穴を探す» に同じ観点を足した。**1 件の事例で、eval は回していない。**利用者の指示で入れた。
