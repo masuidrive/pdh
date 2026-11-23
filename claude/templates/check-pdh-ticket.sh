@@ -389,7 +389,7 @@ check_ticket_review_handover() {
   done <<<"$result"
 }
 
-# pdh-stage-checklist.sh が足す先頭行と同じ形で読む。
+# note の雛形の先頭行を読む。
 note_format_v2() {
   sed -n '1p' "$1" | grep -Eq '^[[:space:]]*<!-- pdh-note-format: 2 -->[[:space:]]*$'
 }
@@ -425,7 +425,6 @@ check_ticket_review_evidence() {
     /^## / {
       contract=($0 ~ /^## PDH-ticket-review\. Ticket contract check[[:space:]]*$/)
       evidence=($0 ~ /^## 承認前の記録[[:space:]]*$/)
-      if ($0 ~ /^## AC の組の順番[[:space:]]*$/) table=1
       next
     }
     contract || evidence {
@@ -441,13 +440,13 @@ check_ticket_review_evidence() {
       if (db !~ /^(あり|なし)$/ || api !~ /^(あり|なし)$/)
         print "DB-changes:・API-changes: の値は あり か なし の1語だけを書く（例: DB-changes: なし ／ DB-changes の内容: 変更しない）"
       review=record["前提の見直し"]
-      if (!((review == "済み" && record["前提の見直しの記録"] != "") || (db == "なし" && api == "なし" && review == "不要")))
-        print "前提の見直し: は 済み か 不要、済みなら 前提の見直しの記録: を埋める（例: 前提の見直し: 済み ／ 前提の見直しの記録: progress.md。DB/API とも なし なら 不要 も可）"
-      if (record["いちばん悪い初期状態"] !~ /^(測った|当たらない)$/ || record["いちばん悪い初期状態の記録"] == "")
-        print "いちばん悪い初期状態: は 測った か 当たらない、いちばん悪い初期状態の記録: を埋める（例: いちばん悪い初期状態: 測った ／ いちばん悪い初期状態の記録: progress.md）"
+      if (!(review == "済み" || (db == "なし" && api == "なし" && review == "不要")))
+        print "前提の見直し: は 済み か 不要 の1語だけを書く（例: 前提の見直し: 済み ／ 前提の見直しの記録: progress.md。DB/API とも なし なら 不要 も可）"
+      if (record["いちばん悪い初期状態"] !~ /^(測った|当たらない)$/)
+        print "いちばん悪い初期状態: は 測った か 当たらない の1語だけを書く（例: いちばん悪い初期状態: 測った ／ いちばん悪い初期状態の記録: progress.md）"
       sequence=record["AC の組の順番"]
-      if (ac_count >= 2 && !((sequence == "表" && table) || (sequence == "当たる組なし" && record["AC の組の順番の理由"] != "")))
-        print "AC の組の順番: は 表 と ## AC の組の順番 の見出し、または 当たる組なし と AC の組の順番の理由: を埋める（例: AC の組の順番: 当たる組なし ／ AC の組の順番の理由: 別々の状態）"
+      if (ac_count >= 2 && sequence !~ /^(表|当たる組なし)$/)
+        print "AC の組の順番: は 表 か 当たる組なし の1語だけを書く（例: AC の組の順番: 当たる組なし ／ AC の組の順番の理由: 別々の状態）"
     }
   ') || { failed=1; return; }
   if [ -n "$result" ]; then
@@ -467,7 +466,7 @@ check_s8_decisions() {
       if (content !~ /^- \[[ xX-]\] S8 PDH-review-[0-9]+[[:space:]]+/) {print NR; next}
       sub(/^- \[[ xX-]\] S8 PDH-review-[0-9]+[[:space:]]+/, "", content)
       if (content ~ /^利用者の判断が要る理由:/ && content ~ /発行先:/) next
-      if (content ~ /^PM が決めた:/ && content ~ /覆す条件:[[:space:]]*[^[:space:]]/) next
+      if (content ~ /^PM が決めた:/ && content ~ /覆す条件:/) next
       print NR
     }
   ') || { failed=1; return; }

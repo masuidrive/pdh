@@ -118,29 +118,10 @@ fi
 note=${3:-}
 [ -f "$note" ] || { printf 'pdh-stage-checklist: note が無い: %s\n' "$note" >&2; exit 2; }
 grep -q '^## Checklist[[:space:]]*$' "$note" || { printf 'pdh-stage-checklist: %s に ## Checklist が無い\n' "$note" >&2; exit 1; }
-stamp='<!-- pdh-note-format: 2 -->'
-add_stamp=false
-if ! sed -n '1p' "$note" | grep -Eq '^[[:space:]]*<!-- pdh-note-format: 2 -->[[:space:]]*$'; then
-  if awk '
-    /^## Checklist[[:space:]]*$/ {inside=1; next}
-    /^##? / {inside=0}
-    inside && /^- \[[ xX-]\] S8([[:space:]:]|$)/ {found=1}
-    END {exit !found}
-  ' "$note"; then
-    printf 'pdh-stage-checklist: 旧 S8 の行があるので note の印を足さない: %s\n' "$note" >&2
-  else
-    add_stamp=true
-  fi
-fi
-add_evidence=false
-case "$stage" in
-  PDH-ticket-review|PDH-ticket-human-review)
-    grep -Eq '^## 承認前の記録[[:space:]]*$' "$note" || add_evidence=true ;;
-esac
 tmp=$(mktemp) || exit 1
-ADD="$lines" awk -v stage="$stage" -v add_stamp="$add_stamp" -v stamp="$stamp" -v add_evidence="$add_evidence" '
+ADD="$lines" awk -v stage="$stage" '
   # ## Checklist の節を溜め、同じ stage の行を除き、末尾の空行の前に skill の行を足す。
-  BEGIN { add = ENVIRON["ADD"]; if (add_stamp == "true") print stamp }
+  BEGIN { add = ENVIRON["ADD"] }
   function flush(   i, last) {
     last = n
     while (last > 0 && buf[last] ~ /^[[:space:]]*$/) last--
@@ -161,26 +142,9 @@ ADD="$lines" awk -v stage="$stage" -v add_stamp="$add_stamp" -v stamp="$stamp" -
   inside && $0 !~ /^[[:space:]]*$/ { continuation=0 }
   inside { buf[++n] = $0; next }
   { print }
-  END {
-    if (inside) flush()
-    if (add_evidence == "true") {
-      print "\n## 承認前の記録"
-      print "前提の見直し:"
-      print "前提の見直しの記録:"
-      print "いちばん悪い初期状態:"
-      print "いちばん悪い初期状態の記録:"
-      print "AC の組の順番:"
-      print "AC の組の順番の理由:"
-    }
-  }
+  END { if (inside) flush() }
 ' "$note" > "$tmp" && mv "$tmp" "$note"
 
 rc=$?
 [ "$rc" -eq 0 ] || exit "$rc"
-if "$add_evidence"; then
-  printf 'pdh-stage-checklist: 空の ## 承認前の記録 を足した: %s\n' "$note" >&2
-fi
-if "$add_stamp"; then
-  printf 'pdh-stage-checklist: note の印 %s を足した: %s\n' "$stamp" "$note" >&2
-fi
 printf '%s\n' 'pdh-stage-checklist: 写した行は印と skip 理由以外を変えず、補足は次の行に書く（行の完全一致で検査する）' >&2
