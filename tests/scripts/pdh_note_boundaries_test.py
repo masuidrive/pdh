@@ -88,21 +88,56 @@ class NoteBoundaries(NoteFixture):
         self.ready(marked=False, evidence=True)
         self.assertIn('印が欠けている', self.check(1))
 
-    def test_skip_requires_label_but_not_reason_content(self):
+    def test_review_wait_requires_answer(self):
         for kind in (7, 8):
             for stage, reviews in (('review', 1), ('review', 2), ('verify', 1)):
-                for mark, suffix, code in (('x', '', 0), ('-', '', 1), ('-', ' - skip:', 0), ('-', ' - skip: 撤回', 0)):
+                for mark, suffix, code in (('x', '', 0), ('X', '', 0), ('-', '', 1), ('-', ' - skip:', 1), ('-', ' - skip: 撤回', 1)):
                     with self.subTest(kind=kind, stage=stage, mark=mark, suffix=suffix):
                         self.ready(stage=stage)
                         self.edit('## Checklist', f'## Checklist\n- [{mark}] S{kind} PDH-review-1 利用者の判断が要る理由: 出力 発行先: /board{suffix}')
                         self.write(self.ticket + '/progress.md', ''.join(f'review-sha: {n:07x}\n' for n in range(1, reviews+1)))
                         self.check(0 if stage == 'review' and reviews == 1 else code)
-        for stage in ('ticket-human-review', 'implement'):
+    def test_general_skip_mentions_are_not_review_waits(self):
+        for row in ('AC の承認待ち', 'AC の承認待ち（S7 の結果を含む）', 'AC の承認待ち（S8 の結果を含む）'):
             for suffix, code in (('', 1), (' - skip:', 0)):
-                with self.subTest(gate=stage, suffix=suffix):
-                    self.ready(stage=stage)
-                    self.edit('## Checklist', '## Checklist\n- [-] PDH-ticket-human-review 回答待ち 発行先: /old' + suffix)
+                with self.subTest(row=row, suffix=suffix):
+                    self.ready(stage='implement')
+                    self.edit('## Checklist', '## Checklist\n- [-] ' + row + ' 発行先: /board' + suffix)
                     self.check(code)
+        self.ready(stage='review')
+        self.edit('## Checklist', '## Checklist\n- [-] S7 PDH-review-1 回答待ち 発行先: /board')
+        self.check()
+
+    def test_legacy_wait_rules_are_preserved(self):
+        for stage in ('ticket-human-review', 'human-review'):
+            for marked in (False, True):
+                with self.subTest(stage=stage, marked=marked):
+                    self.ready(stage=stage, marked=marked)
+                    self.check()
+                    self.edit('- [ ] 回答待ち 発行先: /board', '<!--\n- [ ] 回答待ち 発行先: /board\n-->')
+                    self.check(1 if marked else 0)
+        for marked in (False, True):
+            self.ready(stage='implement', marked=marked)
+            self.edit('## Checklist', '## Checklist\n- [-] 一般の待ち 発行先: /board')
+            self.check(1 if marked else 0)
+        for kind in (7, 8):
+            for mark, code in (('x', 0), ('X', 0), ('-', 1)):
+                self.ready(stage='verify', marked=False)
+                self.edit('## Checklist', f'## Checklist\n- [{mark}] S{kind} PDH-review-1 回答待ち 発行先: /board - skip: 撤回')
+                self.check(code)
+
+    def test_state_key_trailing_space_is_ignored(self):
+        for key, value in (('DB-changes', 'あり'), ('API-changes', 'なし'), ('前提の見直し', '済み'),
+                           ('いちばん悪い初期状態', '測った'), ('AC の組の順番', '表')):
+            with self.subTest(key=key):
+                self.ready()
+                self.edit(key + ':', key + ' \t:')
+                self.check()
+                self.edit(key + ' \t: ' + value, key + ' \t: ' + value + '\n' + key + ': ' + value)
+                self.assertIn('2回以上', self.check(1))
+        self.ready(db='なし', review='不要')
+        self.edit('DB-changes: なし', 'DB-changes : あり\nDB-changes: なし')
+        self.assertIn('2回以上', self.check(1))
 
     def test_gate_wait_only_counts_visible_rows(self):
         for stage in ('ticket-human-review', 'human-review'):
