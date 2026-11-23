@@ -78,6 +78,20 @@ class ReviewRoundTwo(unittest.TestCase):
         self.assertIn('警告', self.clone_check(self.clone('unknown-boundary', 1), 0))
         self.assertNotIn('警告', self.clone_check(self.clone('known-boundary', 3), 1))
 
+        # 導入直前まで届いても、当時 note が無かった場合は新規の行として検査する。
+        self.setUp()
+        check = self.root / 'scripts/check-pdh-ticket.sh'
+        current = check.read_text()
+        (self.root / self.ticket / 'note.md').unlink()
+        check.write_text(current.replace('# s8-decision: v2\n', '').replace('# s8-decision: v1\n', ''))
+        self.commit('before format without note')
+        check.write_text(current)
+        self.commit('adopt format without note')
+        self.note('review', '- [x] S8 PDH-review-1 新しい書式なし')
+        self.commit('new unmarked note after format')
+        self.assertIn('S8 の判断の記録', self.check(1))
+        self.assertNotIn('警告', self.clone_check(self.clone('known-boundary-without-note', 3), 1))
+
     def test_review_20_head_history_matches_fresh_clone(self):
         row = '- [x] S8 PDH-review-1 旧い回答 発行先: /old'
         self.note('review', '')

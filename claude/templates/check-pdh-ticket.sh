@@ -475,8 +475,7 @@ check_s8_decisions() {
       [ -n "$path" ] || continue
       while IFS= read -r revision; do
         [ -n "$revision" ] || continue
-        if ! git show "$revision:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF '# s8-decision: v2' >/dev/null &&
-           git cat-file -e "$revision:$path" 2>/dev/null; then
+        if ! git show "$revision:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF '# s8-decision: v2' >/dev/null; then
           candidates+=" $revision"
         fi
       done < <(git log --format=%H HEAD -- "$path" scripts/check-pdh-ticket.sh 2>/dev/null)
