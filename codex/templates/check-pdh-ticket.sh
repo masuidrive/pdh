@@ -86,7 +86,7 @@ EOF
 late_review_evidence_lines=$(cat <<'EOF'
 PDH-ticket-write: AC は結果で書き、比較の項目を分け、原文の見た目・相当の要求を AC か Out-of-scope と照合し、照合の差の検出と説明の付かない差が 0 の約束を分けた（「AC の書き方」）
 PDH-ticket-review: PM が承認前の記録の所在と中身・非該当の理由・AC の組の順番の表を照合し、DB/API の変更時の前提の見直しの結果が progress にある。絶対の形の約束と実装で測る値が矛盾せず、端の場面・順番でも約束が成り立つ根拠が note と progress にある
-PDH-review: PM が S7・S8 の各行の理由・決定・覆す条件の中身を確かめ、利用者の判断が要る理由か PM の決定が判断の基準と progress の結論に合っている
+PDH-review: PM が S7・S8 の各行の理由・決定・覆す条件・発行先の中身を確かめ、利用者の判断が要る理由か PM の決定が判断の基準と progress の結論に合っている
 EOF
 )
 # 引数（印・path…）の path を最初に追加した commit の版の検査 script に印が無ければ 0。未 commit なら 1。
@@ -340,14 +340,15 @@ check_ticket_why_intake_evidence() {
 
 # close gate の review 記録と、未回答の S7・S8 を残して進んでいないことを確かめる。
 check_ticket_review_handover() {
-  local d=${1%/ticket.md} reviews result kind round status
+  local d=${1%/ticket.md} reviews result kind round status marked=0
   [ -f "$d/progress.md" ] || return 0
   reviews=$(pdh_review_sha_records "$d/progress.md" review | awk 'NF && !seen[$0]++ { count++ } END { print count+0 }')
   if grep -Eq '^(- )?close-gate-sha:' "$d/progress.md" && [ "$reviews" -eq 0 ]; then
     printf 'check-pdh-ticket: %s は close-gate-sha: があるのに有効な review-sha: が 0 件（各巡で reviewer が読んだ SHA を progress.md に review-sha: <SHA> として追記する）\n' "$d" >&2
     failed=1
   fi
-  result=$(awk -F '|' -v reviews="$reviews" '
+  [ -f "$d/note.md" ] && note_format_v2 "$d/note.md" && marked=1
+  result=$(awk -F '|' -v reviews="$reviews" -v marked="$marked" '
     function trim(value) { sub(/^[[:space:]]+/, "", value); sub(/[[:space:]]+$/, "", value); return value }
     FILENAME == ARGV[1] {
       if ($0 ~ /^## Status: PDH-(verify|human-review|close)([^A-Za-z-]|$)/) {
@@ -355,12 +356,12 @@ check_ticket_review_handover() {
       }
       if ($0 ~ /^## Checklist[[:space:]]*$/) { checklist=1; next }
       if ($0 ~ /^##? /) checklist=0
-      if (checklist && /^- \[-\]/ && /発行先:/ && !/ - skip:/ && !/[^A-Za-z0-9_]S[78]([^0-9]|$)/) print "SKIP\t" FNR
+      if (marked && checklist && /^- \[-\]/ && /発行先:/ && !/ - skip:/ && !/^- \[-\] S[78] PDH-review-[0-9]+([[:space:]]|$)/) print "SKIP\t" FNR
       if (checklist && /^- \[[ xX-]\]/ && /発行先:/ && match($0, /[^A-Za-z0-9_]S[78]([^0-9]|$)/)) {
         kind=substr($0, RSTART + 2, 1)
         if (!match($0, /PDH-review-[0-9]+/)) next
         number=substr($0, RSTART, RLENGTH); sub(/^PDH-review-/, "", number); number+=0
-        done=($0 ~ /^- \[[xX]\]/ || ($0 ~ /^- \[-\]/ && $0 ~ / - skip:/))
+        done=($0 ~ /^- \[[xX]\]/)
         key=number SUBSEP kind
         if (!(key in gate)) gate[key]=1
         gate[key]=gate[key] && done
@@ -408,7 +409,7 @@ check_note_format() {
       failed=1
     fi
   elif ticket_visible_lines "$n" | grep -Eq '^## 承認前の記録[[:space:]]*$'; then
-    printf 'check-pdh-ticket: %s: 印が欠けている（承認前の記録がある note の先頭行に <!-- pdh-note-format: 2 --> を置く）\n' "$n" >&2
+    printf 'check-pdh-ticket: %s: 印が欠けている（新規の note なら先頭行の <!-- pdh-note-format: 2 --> を復元する。印の無い note なら節を消して記録を progress に書く）\n' "$n" >&2
     failed=1
   fi
 }
@@ -438,6 +439,7 @@ check_ticket_review_evidence() {
       line=$0; sub(/^[[:space:]]*(-[[:space:]]+)?/, "", line)
       if (!match(line, /:/)) next
       key=substr(line, 1, RSTART-1); value=substr(line, RSTART+1)
+      sub(/[[:space:]]+$/, "", key)
       sub(/^[[:space:]]+/, "", value); sub(/[[:space:]]+$/, "", value)
       if (contract && key ~ /^(DB-changes|API-changes)$/) {
         if (++cost_count[key] > 1) print key ": が同じ節に2回以上ある"
@@ -749,7 +751,7 @@ for t in "$tickets_dir"/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
   esac
   case "$st" in
     PDH-ticket-human-review|PDH-human-review)
-      waiting=$(ticket_visible_lines "$n" | awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f')
+      waiting=$({ if note_format_v2 "$n"; then ticket_visible_lines "$n"; else cat "$n"; fi; } | awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f')
       merge_wait=0
       if [ "$st" = PDH-human-review ] && [ "$close_mode" = pr-merge ] &&
          grep -Eq '^- \[-\].*発行先:.*(https?://|/).*- skip: close の承認は PR の merge で受ける' <<<"$waiting"; then
