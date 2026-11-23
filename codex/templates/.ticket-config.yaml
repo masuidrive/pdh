@@ -66,8 +66,8 @@ close_success_message: |
 
 # Note template — 作業記録用。プロセス通過の証跡はセクション構造が担う
 note_content: |
+  <!-- pdh-note-format: 2 -->
   # Note: $$TICKET_NAME$$
-  <!-- s8-decision: v2 -->
 
   ## Status: PDH-ticket-write
 
@@ -86,7 +86,7 @@ note_content: |
        Product Brief の目的・ジャーニー・Architectural-Invariants との突き合わせ、Dependencies、
        残した Open-Questions と残した理由、AC が触る consumer surface の一覧。
        下の 5 行はコストと利益（skill pdh-ticket-review「コストと利益を確かめる」）。値を書くまで出力の確認が通らない。
-       作り直しの見込みは «なし» の場合も書く。前提の見直しを求めるかは DB/API の値が «なし» で始まるかで決まる。
+       DB-changes:・API-changes: は値の先頭に あり か なし を書く。作り直しの見込みは «なし» の場合も書く。
        この PDH-stage で変えたことと理由は progress に書く。 -->
   Feasibility:
   DB-changes:
@@ -103,11 +103,17 @@ note_content: |
        途中で要求するときは `./ticket.sh check --require "Required-Probes"`。 -->
   - [ ] 測る対象を洗い出し、測れるものは測って結果を progress に書いた（測る対象が無いなら `- [-] ... - skip: <理由>`）
 
-  - [ ] いちばん悪い初期状態: <状態> 結果: <測った結果と progress の所在>
+  ## 承認前の記録
+  <!-- 前提の見直しは「済み <結果の所在>」、DB/API とも なし なら「不要」も可。
+       いちばん悪い初期状態は「測った <結果の所在>」か「当たらない <理由>」。
+       AC が 2 件以上なら、組の順番は「表」（下の見出しに記入）か「当たる組なし <理由>」。 -->
+  前提の見直し:
+  いちばん悪い初期状態:
+  AC の組の順番:
 
   ## AC の組の順番
   <!-- AC が 2 件以上なら、同じデータや状態を触る組（既存の経路を含む）の順番と約束を書く。
-       当たる組が無ければ「当たる組なし: <理由>」を書く。 -->
+       当たる組が無ければ、承認前の記録に理由を書く。 -->
   | AC の組 | 経路と順番 | 順番ごとの約束 |
   |---|---|---|
 

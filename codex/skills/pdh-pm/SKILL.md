@@ -144,9 +144,9 @@ AC の変更で選ぶ理由のある案が 1 つしか無いときは、選択�
 
 #### 処理
 
-1. 材料を作る。何を承認者が必ず読む本文に置き、何を根拠として閉じた `<details>` に入れるか、回答の返し方は `pdh-decision-board` の手順 0〜9 に従う（`PDH-ticket-human-review` は `ticket-gate.md`、`PDH-human-review` は `close-gate.md`）。前の PDH-stage の «出力» で確かめたもの（Required-Probes・未確定の洗い出し・verify の証拠）は、確かめ直さない
+1. 材料を作る。何を承認者が必ず読む本文に置き、何を根拠として閉じた `<details>` に入れるか、回答の返し方は `pdh-decision-board` の手順 0〜8 に従う（`PDH-ticket-human-review` は `ticket-gate.md`、`PDH-human-review` は `close-gate.md`）。前の PDH-stage の «出力» で確かめたもの（Required-Probes・未確定の洗い出し・verify の証拠）は、確かめ直さない
 2. note の Status を承認の PDH-stage へ進める変更と、Checklist に `発行先:` の待ち行を足す変更は、同じ commit に入れる。この commit の前に、Status が承認の PDH-stage で待ち行がある状態で `bash scripts/check-pdh-ticket.sh` を回し、終了コード 0 と出力を progress に残す
-3. 材料を渡す。処理 2 の検査と commit を終えてから、承認者に届ける
+3. 材料を渡す。処理 2 の検査と commit を終えてから、`pdh-decision-board` の手順 9 で発行する
    - 材料は受け渡し経路そのもの（会話、issue コメント）か、1 つに組み立てた文書（そのリンクかパスを、短い要約とともに受け渡し経路で渡す）で届ける。note は作業の記録であって承認者に渡すものではないので、note に書くだけでは渡したことにならない
 4. 答えを待つ間は、PM が決めて中断する（「中断するときと再開するとき」）。再開したら、待ち行の `発行先:` で答えを読む
 5. 答えを受けたら、`pdh-decision-board` の手順 10 で ticket へ反映し、progress に «何を聞き、何と答えられたか» を 1 行書き、待ち行を `[x]` にする。待ち行を `[x]` にする変更と、次の PDH-stage へ進む Status の変更は、同じ commit に入れる（2 と同じ理由。Status が承認の PDH-stage のまま待ち行が無い commit では `pdh-ticket` 段が落ちる）。追加質問・修正指示・未回答が残るなら、手順 10 のとおり同じ発行先へ出し直す
