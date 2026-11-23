@@ -32,7 +32,7 @@ class ReviewRoundTwo(unittest.TestCase):
     def clone(self, name, depth=None):
         target = self.root.parent / (self.root.name + '-' + name)
         self.addCleanup(__import__('shutil').rmtree, target, True)
-        args = ['git', 'clone', '-q'] + (['--depth', str(depth)] if depth else [])
+        args = ['git', 'clone', '-q', '--single-branch'] + (['--depth', str(depth)] if depth else [])
         self.run_cmd(*args, self.root.as_uri(), str(target))
         return target
 
@@ -101,7 +101,8 @@ class ReviewRoundTwo(unittest.TestCase):
             self.clone_check(target, 0)
             p.write_text(current)
             self.check()
-        self.commit('adopt note format after replay')
+        self.run_cmd('git', 'add', '.')
+        self.run_cmd('git', '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-qm', 'adopt note format after replay')
         # 捨てた別 branch の行を、今の HEAD の旧行として数えない。
         self.run_cmd('git', 'checkout', '-qb', 'discarded', baseline)
         self.edit_note('## Checklist', '## Checklist\n- [x] S8 PDH-review-1 消した行 発行先: /ghost')
