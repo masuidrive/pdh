@@ -40,8 +40,11 @@ class NoteStateContracts(NoteFixture):
             with self.subTest(stage=stage):
                 self.ready_state(stage)
                 self.check()
-                self.edit('前提の見直しの記録: progress.md', '前提の見直しの記録:')
-                self.assertIn('前提の見直し', self.check(1))
+                for key, value in (('前提の見直しの記録', 'progress.md'),
+                                   ('いちばん悪い初期状態の記録', 'progress.md'), ('AC の組の順番', '表')):
+                    self.ready_state(stage)
+                    self.edit(key+': '+value, key+':')
+                    self.assertIn(key, self.check(1))
         for stage in ('implement', 'review', 'verify'):
             self.note(stage)
             self.mark()
