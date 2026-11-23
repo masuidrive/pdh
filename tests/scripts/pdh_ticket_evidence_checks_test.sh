@@ -949,6 +949,12 @@ for row in '- [x] S8 PDH-review-3 発行先: /board' '- [ ] S8 PDH-review-3 未�
   expect 1 '新しい S8 の行は理由か決定と覆す条件が必要' bash scripts/check-pdh-ticket.sh
   contains 'S8 の判断の記録'
 done
+# 通常の stage のチェック行や依頼が S8 に言及しても、S8 の判断行ではない。
+for row in '- [x] PDH-review: S8 の各行に判断の記録がある' '- [ ] 依頼: S8 の規則を更新する'; do
+  must cp "$TMP_DIR/s8-old-note.md" tickets/sample/note.md
+  printf '%s\n' "$row" >> tickets/sample/note.md
+  expect 0 'S8 に言及する通常の Checklist 行は判断行に数えない' bash scripts/check-pdh-ticket.sh
+done
 # 同じ文面を新しい行として追加しても、旧 note 全体の免除にしない。
 must cp "$TMP_DIR/s8-old-note.md" tickets/sample/note.md
 printf -- '- [x] S8 PDH-review-1 旧い書式の回答済み 発行先: /old-board\n' >> tickets/sample/note.md

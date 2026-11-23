@@ -456,7 +456,7 @@ check_s8_decisions() {
   rows=$(ticket_visible_lines "$n" | awk '
     /^## Checklist[[:space:]]*$/ {section=1; next}
     /^##? / {section=0}
-    section && /^- \[[ xX-]\]/ && /[^A-Za-z0-9_]S8([^0-9]|$)/ {
+    section && /^- \[[ xX-]\] S8([^0-9]|$)/ {
       content=$0; sub(/[[:space:]]+発行先:.*/, "", content)
       if (content ~ /利用者の判断が要る理由:[[:space:]]*[^[:space:]]/) next
       if ($0 ~ /PM が決めた:[[:space:]]*[^[:space:]].* 覆す条件:[[:space:]]*[^[:space:]]/) next
