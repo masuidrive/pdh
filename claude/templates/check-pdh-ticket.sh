@@ -405,7 +405,7 @@ check_ticket_review_evidence() {
       key=$0; sub(/:.*/, "", key)
       sub(/^[^:]*:[[:space:]]*/, "")
       seen[key]=1
-      if ($0 !~ /^なし/ || $0 ~ /作り直/) changed=1
+      if ($0 !~ /^なし/) changed=1
     }
     END { print changed || !seen["DB-changes"] || !seen["API-changes"] ? 1 : 0 }
   ' <<< "$contract")
@@ -423,7 +423,7 @@ check_ticket_review_evidence() {
     }
     END {exit found ? 0 : 1}
   '; then
-    printf 'check-pdh-ticket: %s: 前提の見直しの結果が無い（DB/API の変更・後での作り直しには worker の結果が必要。例: - 前提の見直し: codex（medium）結果: 案 A を採用。詳細: /worker/result.md）\n' "$n" >&2
+    printf 'check-pdh-ticket: %s: 前提の見直しの結果が無い（DB/API の値が「なし」で始まらない場合は worker の結果が必要。例: - 前提の見直し: codex（medium）結果: 案 A を採用。詳細: /worker/result.md）\n' "$n" >&2
     failed=1
   fi
   if ! ticket_visible_lines "$n" | awk '

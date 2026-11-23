@@ -208,12 +208,12 @@ class ReviewContracts(unittest.TestCase):
         self.assertIn('AC 全件', text)
         self.assertIn('repo を探して読まない', text)
 
-    def test_review_13_future_rebuild_is_not_no_changes(self):
+    def test_review_13_none_prefix_can_describe_future_rebuild(self):
         for db, api in [('なし。後で作り直しになる', 'なし'), ('なし', 'なし。後で作り直す')]:
             self.ready(db, api)
             self.check()
             self.write(f'{self.ticket}/progress.md', '')
-            self.assertIn('前提の見直し', self.check(code=1))
+            self.check()
         self.ready('なし（説明）', 'なし。補足')
         self.write(f'{self.ticket}/progress.md', '')
         self.check()

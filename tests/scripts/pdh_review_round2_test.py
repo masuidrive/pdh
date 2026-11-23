@@ -133,6 +133,18 @@ class ReviewRoundTwo(unittest.TestCase):
 
 
 
+    def test_review_21_none_prefix_alone_controls_required_review(self):
+        for value, code in [('あり。後で表の形を変える', 1),
+                            ('なし。Brief の対象を後で足しても作り直しにはならない', 0),
+                            ('なし。Tower を足しても作り直しは要らない（元の記録から作り直せる表だけ）', 0),
+                            ('なし。Tower を足すときは表の形を変える必要がある', 0)]:
+            for field in ('db', 'api'):
+                with self.subTest(value=value, field=field):
+                    self.ready(**{'db': 'なし', 'api': 'なし'} | {field: value})
+                    self.write(f'{self.ticket}/progress.md', '')
+                    self.check(code)
+
+
 del Fixture
 
 if __name__ == '__main__':

@@ -86,6 +86,7 @@ note_content: |
        Product Brief の目的・ジャーニー・Architectural-Invariants との突き合わせ、Dependencies、
        残した Open-Questions と残した理由、AC が触る consumer surface の一覧。
        下の 5 行はコストと利益（skill pdh-ticket-review「コストと利益を確かめる」）。値を書くまで出力の確認が通らない。
+       作り直しの見込みは «なし» の場合も書く。前提の見直しを求めるかは DB/API の値が «なし» で始まるかで決まる。
        この PDH-stage で変えたことと理由は progress に書く。 -->
   Feasibility:
   DB-changes:

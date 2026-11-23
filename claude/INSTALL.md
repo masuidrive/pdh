@@ -345,7 +345,7 @@ exit "$pdh_tolerance_status"
 
 #### note の初期状態と経路の順番の記録
 
-`.ticket-config.yaml` の `note_content` の Required-Probes に `- [ ] いちばん悪い初期状態: <状態> 結果: <測った結果と progress の所在>` を足し、その後ろに `## AC の組の順番` と `| AC の組 | 経路と順番 | 順番ごとの約束 |` の空の表を置く。`note_content` の冒頭には `<!-- s8-decision: v2 -->` を 1 行入れる。印のある新しい note の S8 行は履歴なしで検査する。既存の ticket の note は書き換えず、印も足さない。適用済みかは、導入先で次の冪等な確認コマンドを実行する。
+`.ticket-config.yaml` の `note_content` の Required-Probes に `- [ ] いちばん悪い初期状態: <状態> 結果: <測った結果と progress の所在>` を足し、その後ろに `## AC の組の順番` と `| AC の組 | 経路と順番 | 順番ごとの約束 |` の空の表を置く。Ticket contract check のコメントは、作り直しの見込みを «なし» の場合も書き、前提の見直しを求めるかは DB/API の値が «なし» で始まるかで決まる文にする。`note_content` の冒頭には `<!-- s8-decision: v2 -->` を 1 行入れる。印のある新しい note の S8 行は履歴なしで検査する。既存の ticket の note は書き換えず、印も足さない。適用済みかは、導入先で次の冪等な確認コマンドを実行する。
 
 <!-- pdh-shell: note-evidence-check -->
 ```bash
@@ -353,7 +353,7 @@ python3 - <<'PY_CHECK'
 from pathlib import Path
 import yaml
 note = yaml.safe_load(Path('.ticket-config.yaml').read_text())['note_content']
-required = ('<!-- s8-decision: v2 -->', '- [ ] いちばん悪い初期状態:', '## AC の組の順番', '| AC の組 | 経路と順番 | 順番ごとの約束 |')
+required = ('作り直しの見込みは «なし» の場合も書く。', '<!-- s8-decision: v2 -->', '- [ ] いちばん悪い初期状態:', '## AC の組の順番', '| AC の組 | 経路と順番 | 順番ごとの約束 |')
 missing = [line for line in required if line not in note]
 print('要適用: ' + ' / '.join(missing) if missing else '適用済み: note の初期状態と経路の順番')
 raise SystemExit(bool(missing))
@@ -362,7 +362,7 @@ PY_CHECK
 
 #### ticket の review worker と前提の見直し
 
-`.claude/agents/pdh-ticket-reviewer.md` が配置表で届く。既存の導入先は `scripts/checks/required-pdh-files.check` の `required_paths` にこの path を足す（この check は初回だけコピーされるので、上書きでは届かない）。DB/API の変更か後での作り直しがある ticket は、PDH-ticket-review で前提の見直しが必須である。変更が無く新しい仕組みを作る場合は推奨とする。条件・渡すもの・記録先は skill の «前提を疑う» に従う。model と effort の既定は役割の表の «前提の見直し» の行にある。
+`.claude/agents/pdh-ticket-reviewer.md` が配置表で届く。既存の導入先は `scripts/checks/required-pdh-files.check` の `required_paths` にこの path を足す（この check は初回だけコピーされるので、上書きでは届かない）。DB/API の値が «なし» で始まらない ticket は、PDH-ticket-review で前提の見直しが必須である。変更が無く新しい仕組みを作る場合は推奨とする。条件・渡すもの・記録先は skill の «前提を疑う» に従う。model と effort の既定は役割の表の «前提の見直し» の行にある。
 
 確認（冪等）:
 
