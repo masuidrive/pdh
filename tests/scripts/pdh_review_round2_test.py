@@ -145,6 +145,29 @@ class ReviewRoundTwo(unittest.TestCase):
                     self.check(code)
 
 
+    def test_review_23_placeholder_and_unperformed_review_rejected(self):
+        self.ready()
+        self.check()
+        for engine in ('回さなかった', '未実施', 'skip', '省略', '<engine>'):
+            with self.subTest(engine=engine):
+                self.write(f'{self.ticket}/progress.md', f'前提の見直し: {engine} 結果: 案 A 詳細: /worker/result.md\n')
+                self.assertIn('前提の見直し', self.check(1))
+        for record in ('前提の見直し: codex 結果: <結果> 詳細: /worker/result.md',
+                       '前提の見直し: codex 結果: 案 A 詳細: /<worker>/result.md'):
+            with self.subTest(record=record):
+                self.write(f'{self.ticket}/progress.md', record + '\n')
+                self.check(1)
+        self.ready()
+        for value in ('<状態> 結果: 読める', '空 結果: <測った結果と progress の所在>'):
+            with self.subTest(value=value):
+                self.ready()
+                self.edit_note('空 結果: 読める', value)
+                self.assertIn('いちばん悪い初期状態', self.check(1))
+        self.ready()
+        self.edit_note('- [x] いちばん悪い初期状態: 空 結果: 読める', '- [-] いちばん悪い初期状態: 対象 - skip: 状態を持たない')
+        self.check()
+
+
 del Fixture
 
 if __name__ == '__main__':

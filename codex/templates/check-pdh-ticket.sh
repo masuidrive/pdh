@@ -412,11 +412,12 @@ check_ticket_review_evidence() {
   if [ "$changes" -eq 1 ] && ! ticket_visible_lines "${t%/ticket.md}/progress.md" | awk '
     {sub(/^[[:space:]]*(-[[:space:]]+)?/, "")}
     /^前提の見直し:/ {
+      if ($0 ~ /<[^>]*>/) next
       sub(/^前提の見直し:[[:space:]]*/, "")
       if (!match($0, /結果:/)) next
       engine=substr($0, 1, RSTART-1); sub(/[[:space:]]+$/, "", engine)
       result=substr($0, RSTART+RLENGTH); sub(/^[[:space:]]+/, "", result)
-      if (engine == "" || engine ~ /^(回さない|なし|不要)([[:space:]（(]|$)/) next
+      if (engine == "" || engine ~ /^(回さない|回さなかった|なし|不要|未実施|skip|省略)([[:space:]（(]|$)/) next
       if (result !~ /詳細:[[:space:]]*(https?:\/\/|\/)[^[:space:]]+/) next
       sub(/詳細:.*/, "", result); gsub(/[[:space:]]/, "", result)
       if (length(result)) found=1
@@ -432,6 +433,7 @@ check_ticket_review_evidence() {
     {sub(/^[[:space:]]+/, "")}
     section && /^- \[[ xX-]\] いちばん悪い初期状態:/ {
       seen=1
+      if ($0 ~ /<[^>]*>/) {bad=1; next}
       if ($0 ~ /^- \[[xX]\] いちばん悪い初期状態:[[:space:]]*[^[:space:]].* 結果:[[:space:]]*[^[:space:]]/) next
       if ($0 ~ /^- \[-\] いちばん悪い初期状態:[[:space:]]*[^[:space:]].* - skip:[[:space:]]*[^[:space:]]/) next
       bad=1
