@@ -79,3 +79,9 @@
 ### 2026-11-23T12:18:14Z — 判断の分類の参照を直した前後
 
 38bea3e と修正版の共通契約・decision-board の SKILL/base/ticket-gate/final-check を、それぞれ別の fresh Codex agent に同じ入力とタスクで渡した。expected_behavior と実行記録は渡していない。両版とも N=2 とし、保存ボタンと入口を利用者が見る結果の違いとして人の判断に出した。主線へのコードの行番号の露出を避け、提示されていない検証を未確認とした。分類の参照変更による判断の差は、この 1 ケースでは観測しなかった。旧 expected_behavior の N=0 とは基準が異なるため、上の現行基準の記録と同様に旧採点を流用しない。出力はこの作業の ticket の tmp/workers/coding-6/eval-{old,new}-result.md に保存した。別 engine での比較と private 実案件 replay は未実施。
+
+### 2026-11-23T13:00:20Z — Claude CLI での追加比較
+
+同じ旧38bea3eと修正版457788bの入力・タスク・規則群を、Claude CLIの独立プロセス（opus / xhigh / --bare / --tools空 / --no-session-persistence）へ渡した。両版ともexit 0で、旧347.68秒・新382.68秒。両版ともN=1とし、保存ボタンを人の判断に出し、入口はこのticketでは変えない扱いにした。旧版はPMの決定、新版はOut-of-scopeへ置いて承認する説明となった。分類の数の差はこの1ケースでは観測しなかった。Codexの比較は両版N=2で、engine間の入口の判断は一致しなかった。
+
+新版のClaude出力は、演習で測れない条件のA〜Eに仮の結果を置いたうえで主線を書き、一部を「実コードで確認済み」と表現した。この出力は実測の証拠として使わず、演習全体をPASSとは採点しない。旧版との単一比較から規則変更の改善・退行の因果は断定しない。実行出力は作業ticketのtmp/workers/coding-6/eval-claude-{old,new}-result.md、終了コードと時間は同名のstatus.jsonへ保存した。HTTPstatusと費用はCLIのtext出力から取得していない。
