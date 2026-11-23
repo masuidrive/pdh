@@ -363,8 +363,8 @@ check_ticket_review_handover() {
         number=substr($0, RSTART, RLENGTH); sub(/^PDH-review-/, "", number); number+=0
         done=($0 ~ /^- \[[xX]\]/)
         key=number SUBSEP kind
-        if (!(key in gate)) gate[key]=1
-        gate[key]=gate[key] && done
+        if (!(key in gate)) gate[key]=marked
+        gate[key]=marked ? (gate[key] && done) : (gate[key] || done)
         if (kind == 7 && (first7 == "" || number < first7)) first7=number
         if (number > last) last=number
       }
