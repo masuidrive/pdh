@@ -919,7 +919,7 @@ printf '### Why\nReproduction-or-measurement: fixture\nWhy-not-fix-now: 該当�
 : > tickets/sample/progress.md
 status PDH-review
 must cp scripts/check-pdh-ticket.sh "$TMP_DIR/s8-current.sh"
-grep -vxF '# s8-decision: v1' "$TMP_DIR/s8-current.sh" > scripts/check-pdh-ticket.sh
+grep -vxF '# s8-decision: v2' "$TMP_DIR/s8-current.sh" > scripts/check-pdh-ticket.sh
 printf -- '- [x] S8 PDH-review-1 旧い書式の回答済み 発行先: /old-board\n' >> tickets/sample/note.md
 commit 検査前のS8の行
 must git checkout -qb features/sample

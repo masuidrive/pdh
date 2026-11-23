@@ -68,7 +68,7 @@ findings_issue_repos=" $(github_bot_value findings_issue_repos | tr ',[]' '   ')
 # derived-ticket-fields: v2
 # findings-table: v1
 # ticket-review-evidence: v1
-# s8-decision: v1
+# s8-decision: v2
 # 印を持つ版の scripts/check-pdh-ticket.sh で作った ticket から、その印の項目と後から足した PDH-stage の行を求める。
 # v1 は別件の項目（derived-from:・pickup-timing:）と late_stage_lines、v2 は on-symptom-report の observable-symptom: と late_stage_lines_v2。
 # findings-table: v1 は現行 5 列の Findings 表。印の無い版で作った ticket は、作った時点の規則で閉じられる。
@@ -464,45 +464,42 @@ check_ticket_review_evidence() {
   fi
 }
 
-# 印の導入前の文面との対応を数える。rename と履歴の再生では元の path・reflog も読む。
+# 印の無い note だけ、HEAD の履歴から書式導入の直前の文面と対応づける。
 check_s8_decisions() {
-  local n=$1 rows line kind snapshot path revision marker candidates paths legacy='' shallow=0
-  if [ "${git_ready:-0}" -eq 1 ]; then
-    [ "$(git rev-parse --is-shallow-repository)" != true ] || shallow=1
-    paths=$({ printf '%s\n' "$n"; git log --follow --format= --name-only -- "$n" 2>/dev/null; } | sort -u)
-    marker="# s8-decision: v1"
-    candidates=''
+  local n=$1 rows line snapshot path revision candidates='' paths legacy='' uncertain=0
+  if ! grep -qxF '<!-- s8-decision: v2 -->' "$n" && [ "${git_ready:-0}" -eq 1 ]; then
+    paths=$({ printf '%s\n' "$n"; git log --follow --format= --name-only HEAD -- "$n" 2>/dev/null; } | sort -u)
     while IFS= read -r path; do
       [ -n "$path" ] || continue
       while IFS= read -r revision; do
         [ -n "$revision" ] || continue
-        if ! git show "$revision:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF "$marker" >/dev/null &&
+        if ! git show "$revision:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF '# s8-decision: v2' >/dev/null &&
            git cat-file -e "$revision:$path" 2>/dev/null; then
           candidates+=" $revision"
         fi
-      done < <(git log --all --reflog --format=%H -- "$path" 2>/dev/null)
+      done < <(git log --format=%H HEAD -- "$path" scripts/check-pdh-ticket.sh 2>/dev/null)
     done <<< "$paths"
-    [ -n "$candidates" ] || continue
-    # 各履歴の印の直前だけを使う。古い途中版で消した行を復活させない。
-    while IFS= read -r revision; do
-      while IFS= read -r path; do
-        snapshot=$(git show "$revision:$path" 2>/dev/null) || continue
-        legacy+=$(ticket_visible_lines <(printf '%s\n' "$snapshot") | awk -v revision="$revision" '
-          /^## Checklist[[:space:]]*$/ {section=1; next}
-          /^##? / {section=0}
-          section && /^- \[[ xX-]\] S8([^0-9]|$)/ {
-            print revision "\t" $0
-          }
-        ')
-        legacy+=$'\n'
-      done <<< "$paths"
-    done < <(git merge-base --independent $candidates)
+    if [ -n "$candidates" ]; then
+      # 各履歴の印の直前だけを使う。古い途中版で消した行を復活させない。
+      while IFS= read -r revision; do
+        while IFS= read -r path; do
+          snapshot=$(git show "$revision:$path" 2>/dev/null) || continue
+          legacy+=$(ticket_visible_lines <(printf '%s\n' "$snapshot") | awk -v revision="$revision" '
+            /^## Checklist[[:space:]]*$/ {section=1; next}
+            /^##? / {section=0}
+            section && /^- \[[ xX-]\] S8([^0-9]|$)/ {print revision "\t" $0}
+          ')
+          legacy+=$'\n'
+        done <<< "$paths"
+      done < <(git merge-base --independent $candidates)
+    elif [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+      uncertain=1
+    fi
   fi
   rows=$(awk '
     function key(v) {
       sub(/^- \[[ xX-]\]/, "- []", v)
-      # 回答の付記は発行先の後ろだけに書く。URL の手前までの文面は保つ。
-      if (v ~ /発行先:/) sub(/[[:space:]]+—.*/, "", v)
+      if (match(v, /発行先:[[:space:]]*[^[:space:]]+/)) v=substr(v, 1, RSTART+RLENGTH-1)
       sub(/[[:space:]]+$/, "", v)
       return v
     }
@@ -519,20 +516,19 @@ check_s8_decisions() {
     section && /^- \[[ xX-]\] S8([^0-9]|$)/ {
       v=key($0); seen[v]++
       if (seen[v] <= old[v]) next
-      kind=$0; sub(/^- \[[ xX-]\] /, "", kind); sub(/ .*/, "", kind)
       content=$0; sub(/[[:space:]]*発行先:.*/, "", content)
       if (content ~ /利用者の判断が要る理由:[[:space:]]*[^[:space:]]/) next
       if (content ~ /PM が決めた:[[:space:]]*[^[:space:]].* 覆す条件:[[:space:]]*[^[:space:]]/) next
-      print FNR " " kind
+      print FNR
     }
   ' <(printf '%s' "$legacy") <(ticket_visible_lines "$n")) || { failed=1; return; }
-  while read -r line kind; do
+  while read -r line; do
     [ -n "$line" ] || continue
-    if [ "$shallow" -eq 1 ]; then
-      printf 'check-pdh-ticket: 警告: %s:%s の %s は shallow clone なので旧行か確かめられなかった\n' "$n" "$line" "$kind" >&2
+    if [ "$uncertain" -eq 1 ]; then
+      printf 'check-pdh-ticket: 警告: %s:%s の S8 は shallow clone で書式導入の直前まで履歴が届かず旧行か確かめられなかった\n' "$n" "$line" >&2
       continue
     fi
-    printf 'check-pdh-ticket: %s:%s: %s の判断の記録が無い（「利用者の判断が要る理由: <理由>」か「PM が決めた: <決定> 覆す条件: <条件>」を書く）\n' "$n" "$line" "$kind" >&2
+    printf 'check-pdh-ticket: %s:%s: S8 の判断の記録が無い（「利用者の判断が要る理由: <理由>」か「PM が決めた: <決定> 覆す条件: <条件>」を書く）\n' "$n" "$line" >&2
     failed=1
   done <<< "$rows"
 }

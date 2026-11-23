@@ -41,7 +41,7 @@ class ReviewContracts(unittest.TestCase):
             f.write(self.row + '\n')
         p = self.root / 'scripts/check-pdh-ticket.sh'
         current = p.read_text()
-        p.write_text(current.replace('# s8-decision: v1\n', ''))
+        p.write_text(current.replace('# s8-decision: v2\n', ''))
         self.commit('legacy S8')
         if branch:
             self.run_cmd('git', 'checkout', '-qb', 'legacy')

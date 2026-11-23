@@ -345,7 +345,7 @@ exit "$pdh_tolerance_status"
 
 #### note の初期状態と経路の順番の記録
 
-`.ticket-config.yaml` の `note_content` の Required-Probes に `- [ ] いちばん悪い初期状態: <状態> 結果: <測った結果と progress の所在>` を足し、その後ろに `## AC の組の順番` と `| AC の組 | 経路と順番 | 順番ごとの約束 |` の空の表を置く。既存の ticket の note は書き換えない。適用済みかは、導入先で次の冪等な確認コマンドを実行する。
+`.ticket-config.yaml` の `note_content` の Required-Probes に `- [ ] いちばん悪い初期状態: <状態> 結果: <測った結果と progress の所在>` を足し、その後ろに `## AC の組の順番` と `| AC の組 | 経路と順番 | 順番ごとの約束 |` の空の表を置く。`note_content` の冒頭には `<!-- s8-decision: v2 -->` を 1 行入れる。印のある新しい note の S8 行は履歴なしで検査する。既存の ticket の note は書き換えず、印も足さない。適用済みかは、導入先で次の冪等な確認コマンドを実行する。
 
 <!-- pdh-shell: note-evidence-check -->
 ```bash
@@ -353,7 +353,7 @@ python3 - <<'PY_CHECK'
 from pathlib import Path
 import yaml
 note = yaml.safe_load(Path('.ticket-config.yaml').read_text())['note_content']
-required = ('- [ ] いちばん悪い初期状態:', '## AC の組の順番', '| AC の組 | 経路と順番 | 順番ごとの約束 |')
+required = ('<!-- s8-decision: v2 -->', '- [ ] いちばん悪い初期状態:', '## AC の組の順番', '| AC の組 | 経路と順番 | 順番ごとの約束 |')
 missing = [line for line in required if line not in note]
 print('要適用: ' + ' / '.join(missing) if missing else '適用済み: note の初期状態と経路の順番')
 raise SystemExit(bool(missing))

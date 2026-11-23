@@ -67,6 +67,7 @@ close_success_message: |
 # Note template — 作業記録用。プロセス通過の証跡はセクション構造が担う
 note_content: |
   # Note: $$TICKET_NAME$$
+  <!-- s8-decision: v2 -->
 
   ## Status: PDH-ticket-write
 
