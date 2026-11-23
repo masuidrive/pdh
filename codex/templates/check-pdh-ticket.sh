@@ -27,7 +27,7 @@
 #      次の巡へ進んでいない（S5）・PDH-verify 以降は S7・S8 の行がすべて回答済み
 #  11. close 時、説明対象を変えた docs は、更新か Checklist の済み行がある
 #
-#  12. 先頭に pdh-note-format: 2 の印がある note は、承認前の記録の節を持つ承認待ち以降の固定キーと S8 のラベルが埋まっている
+#  12. 先頭に pdh-note-format: 2 の印がある note は、承認待ち以降の承認前の記録の節と固定キーと S8 のラベルが埋まっている
 #
 #   bash scripts/check-pdh-ticket.sh --ac-hash <ticket.md>   # いまの AC と Out-of-scope のハッシュを出す
 #   bash scripts/check-pdh-ticket.sh --require-branch-ticket <base-ref>
@@ -85,8 +85,8 @@ EOF
 )
 late_review_evidence_lines=$(cat <<'EOF'
 PDH-ticket-write: AC は結果で書き、比較の項目を分け、原文の見た目・相当の要求を AC か Out-of-scope と照合し、照合の差の検出と説明の付かない差が 0 の約束を分けた（「AC の書き方」）
-PDH-ticket-review: DB/API の変更時の前提の見直しの結果があり、いちばん悪い初期状態と AC の組の順番を照合した。絶対の形の約束と実装で測る値が矛盾せず、端の場面・順番でも約束が成り立つ根拠が note と progress にある
-PDH-review: S7・S8 の各行に利用者の判断が要る理由か PM の決定と覆す条件があり、判断の基準と progress の結論が合っている
+PDH-ticket-review: PM が承認前の記録の所在と中身・非該当の理由・AC の組の順番の表を照合し、DB/API の変更時の前提の見直しの結果が progress にある。絶対の形の約束と実装で測る値が矛盾せず、端の場面・順番でも約束が成り立つ根拠が note と progress にある
+PDH-review: PM が S7・S8 の各行の理由・決定・覆す条件の中身を確かめ、利用者の判断が要る理由か PM の決定が判断の基準と progress の結論に合っている
 EOF
 )
 # 引数（印・path…）の path を最初に追加した commit の版の検査 script に印が無ければ 0。未 commit なら 1。
@@ -355,11 +355,12 @@ check_ticket_review_handover() {
       }
       if ($0 ~ /^## Checklist[[:space:]]*$/) { checklist=1; next }
       if ($0 ~ /^##? /) checklist=0
+      if (checklist && /^- \[-\]/ && /発行先:/ && !/ - skip:/) print "SKIP\t" FNR
       if (checklist && /^- \[[ xX-]\]/ && /発行先:/ && match($0, /[^A-Za-z0-9_]S[78]([^0-9]|$)/)) {
         kind=substr($0, RSTART + 2, 1)
         if (!match($0, /PDH-review-[0-9]+/)) next
         number=substr($0, RSTART, RLENGTH); sub(/^PDH-review-/, "", number); number+=0
-        done=($0 ~ /^- \[[xX-]\]/)
+        done=($0 ~ /^- \[[xX]\]/ || ($0 ~ /^- \[-\]/ && $0 ~ / - skip:/))
         key=number SUBSEP kind
         if (!(key in gate)) gate[key]=1
         gate[key]=gate[key] && done
@@ -381,6 +382,7 @@ check_ticket_review_handover() {
     <(ticket_visible_lines "$d/progress.md")) || { failed=1; return; }
   while IFS=$'\t' read -r kind round extra status; do
     case "$kind" in
+      SKIP) printf 'check-pdh-ticket: %s/note.md:%s: 発行先: のある [-] の待ち行には同じ行に - skip: を書く\n' "$d" "$round" >&2 ;;
       S5) printf 'check-pdh-ticket: %s は S5 で止まるべき: PDH-review-%s の S%s の行が未回答のまま、次の review-sha: が増えた（答えを反映して [x] にしてから次の巡へ進む）\n' "$d" "$round" "$extra" >&2 ;;
       WAIT) printf 'check-pdh-ticket: %s は S%s の答えを待ったまま %s に進んだ: PDH-review-%s の S%s の行が未回答（答えを反映して [x] にする）\n' "$d" "$extra" "$status" "$round" "$extra" >&2 ;;
       *) continue ;;
@@ -389,14 +391,18 @@ check_ticket_review_handover() {
   done <<<"$result"
 }
 
-# pdh-stage-checklist.sh が足す先頭行と同じ形で読む。
+# note の雛形の先頭行を読む。
 note_format_v2() {
   sed -n '1p' "$1" | grep -Eq '^[[:space:]]*<!-- pdh-note-format: 2 -->[[:space:]]*$'
 }
 
 check_note_format() {
   local n=$1
-  if grep -q 'pdh-note-format' "$n"; then
+  if awk '
+    /^#+[[:space:]]/ {exit}
+    /^[[:space:]]*<!-- pdh-note-format:/ {found=1}
+    END {exit !found}
+  ' "$n"; then
     if ! note_format_v2 "$n"; then
       printf 'check-pdh-ticket: %s: 印が壊れている（先頭行を <!-- pdh-note-format: 2 --> にする）\n' "$n" >&2
       failed=1
@@ -410,11 +416,11 @@ check_note_format() {
 # 固定キーだけを数える。結果の妥当性は skill の判断の Checklist で確かめる。
 check_ticket_review_evidence() {
   local t=$1 n=$2 st=$3 ac_count result
+  note_format_v2 "$n" || return 0
   case "$st" in
     PDH-ticket-human-review|PDH-implement|PDH-review|PDH-verify|PDH-human-review|PDH-close) ;;
     *) return 0 ;;
   esac
-  ticket_visible_lines "$n" | grep -Eq '^## 承認前の記録[[:space:]]*$' || return 0
   ac_count=$(ticket_visible_lines "$t" | awk '
     /^#+[[:space:]]/ {section=0}
     !seen_ac && /^#+[[:space:]]+(What([[:space:]]|$)|.*Acceptance Criteria)/ {section=1; seen_ac=1; next}
@@ -422,10 +428,10 @@ check_ticket_review_evidence() {
     END {print count+0}
   ') || { failed=1; return; }
   result=$(ticket_visible_lines "$n" | awk -v ac_count="$ac_count" '
-    /^## / {
+    /^##?[[:space:]]/ {
       contract=($0 ~ /^## PDH-ticket-review\. Ticket contract check[[:space:]]*$/)
       evidence=($0 ~ /^## 承認前の記録[[:space:]]*$/)
-      if ($0 ~ /^## AC の組の順番[[:space:]]*$/) table=1
+      if (evidence) found_evidence=1
       next
     }
     contract || evidence {
@@ -433,21 +439,28 @@ check_ticket_review_evidence() {
       if (!match(line, /:/)) next
       key=substr(line, 1, RSTART-1); value=substr(line, RSTART+1)
       sub(/^[[:space:]]+/, "", value); sub(/[[:space:]]+$/, "", value)
-      if (contract) cost[key]=value
-      if (evidence) record[key]=value
+      if (contract && key ~ /^(DB-changes|API-changes)$/) {
+        if (++cost_count[key] > 1) print key ": が同じ節に2回以上ある"
+        cost[key]=value
+      }
+      if (evidence && key ~ /^(前提の見直し|いちばん悪い初期状態|AC の組の順番)$/) {
+        if (++record_count[key] > 1) print key ": が同じ節に2回以上ある"
+        record[key]=value
+      }
     }
     END {
+      if (!found_evidence) print "## 承認前の記録 の節が無い（HTML コメントの外に書く）"
       db=cost["DB-changes"]; api=cost["API-changes"]
       if (db !~ /^(あり|なし)$/ || api !~ /^(あり|なし)$/)
         print "DB-changes:・API-changes: の値は あり か なし の1語だけを書く（例: DB-changes: なし ／ DB-changes の内容: 変更しない）"
       review=record["前提の見直し"]
-      if (!((review == "済み" && record["前提の見直しの記録"] != "") || (db == "なし" && api == "なし" && review == "不要")))
-        print "前提の見直し: は 済み か 不要、済みなら 前提の見直しの記録: を埋める（例: 前提の見直し: 済み ／ 前提の見直しの記録: progress.md。DB/API とも なし なら 不要 も可）"
-      if (record["いちばん悪い初期状態"] !~ /^(測った|当たらない)$/ || record["いちばん悪い初期状態の記録"] == "")
-        print "いちばん悪い初期状態: は 測った か 当たらない、いちばん悪い初期状態の記録: を埋める（例: いちばん悪い初期状態: 測った ／ いちばん悪い初期状態の記録: progress.md）"
+      if (!(review == "済み" || (db == "なし" && api == "なし" && review == "不要")))
+        print "前提の見直し: は 済み か 不要 の1語だけを書く（例: 前提の見直し: 済み ／ 前提の見直しの記録: progress.md。DB/API とも なし なら 不要 も可）"
+      if (record["いちばん悪い初期状態"] !~ /^(測った|当たらない)$/)
+        print "いちばん悪い初期状態: は 測った か 当たらない の1語だけを書く（例: いちばん悪い初期状態: 測った ／ いちばん悪い初期状態の記録: progress.md）"
       sequence=record["AC の組の順番"]
-      if (ac_count >= 2 && !((sequence == "表" && table) || (sequence == "当たる組なし" && record["AC の組の順番の理由"] != "")))
-        print "AC の組の順番: は 表 と ## AC の組の順番 の見出し、または 当たる組なし と AC の組の順番の理由: を埋める（例: AC の組の順番: 当たる組なし ／ AC の組の順番の理由: 別々の状態）"
+      if (ac_count >= 2 && sequence !~ /^(表|当たる組なし)$/)
+        print "AC の組の順番: は 表 か 当たる組なし の1語だけを書く（例: AC の組の順番: 当たる組なし ／ AC の組の順番の理由: 別々の状態）"
     }
   ') || { failed=1; return; }
   if [ -n "$result" ]; then
@@ -467,7 +480,7 @@ check_s8_decisions() {
       if (content !~ /^- \[[ xX-]\] S8 PDH-review-[0-9]+[[:space:]]+/) {print NR; next}
       sub(/^- \[[ xX-]\] S8 PDH-review-[0-9]+[[:space:]]+/, "", content)
       if (content ~ /^利用者の判断が要る理由:/ && content ~ /発行先:/) next
-      if (content ~ /^PM が決めた:/ && content ~ /覆す条件:[[:space:]]*[^[:space:]]/) next
+      if (content ~ /^PM が決めた:/ && content ~ /覆す条件:/) next
       print NR
     }
   ') || { failed=1; return; }
@@ -736,7 +749,7 @@ for t in "$tickets_dir"/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
   esac
   case "$st" in
     PDH-ticket-human-review|PDH-human-review)
-      waiting=$(awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f' "$n")
+      waiting=$(ticket_visible_lines "$n" | awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f')
       merge_wait=0
       if [ "$st" = PDH-human-review ] && [ "$close_mode" = pr-merge ] &&
          grep -Eq '^- \[-\].*発行先:.*(https?://|/).*- skip: close の承認は PR の merge で受ける' <<<"$waiting"; then
