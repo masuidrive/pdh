@@ -1,14 +1,15 @@
-"""承認の経路・記録の互換・読み手へ渡す契約を検証する。"""
+"""note の固定キーによる承認前の記録と S8 の書式の契約。"""
 import os
 from pathlib import Path
 import unittest
 from pdh_script_regressions_test import ScriptTests as Fixture
 
-ROOT = Path(os.environ['PDH_TEST_ROOT'])
 SOURCE = Path(os.environ['PDH_SOURCE_ROOT'])
 ENGINE = os.environ.get('PDH_TEST_ENGINE', 'claude')
+STAMP = '<!-- pdh-note-format: 2 -->'
 
-class ReviewContracts(unittest.TestCase):
+
+class NoteFixture(unittest.TestCase):
     setUp = Fixture.setUp
     write = Fixture.write
     run_cmd = Fixture.run_cmd
@@ -17,231 +18,179 @@ class ReviewContracts(unittest.TestCase):
     note = Fixture.note
     check = Fixture.check
 
-    def source(self, path):
-        return (SOURCE / path).read_text()
-
-    def skill(self, name):
-        return self.source(f'{ENGINE}/skills/{name}/SKILL.md')
-
-    def ready(self, db='あり', api='なし', heading='What / Acceptance Criteria', rows=None):
-        self.note('ticket-human-review')
-        self.write(f'{self.ticket}/ticket.md', '### Why\nReproduction-or-measurement: fixture\nWhy-not-fix-now: 該当なし\n### ' + heading + '\n' + (rows or '- [ ] AC 1: 一覧を読める\n- [ ] AC 2: 詳細を読める\n'))
-        with (self.root / self.ticket / 'note.md').open('a') as f:
-            f.write(f'## PDH-ticket-review. Ticket contract check\nDB-changes: {db}\nAPI-changes: {api}\n## Required-Probes\n- [x] いちばん悪い初期状態: 空 結果: 読める\n## AC の組の順番\n当たる組なし: 異なるデータ\n')
-        self.write(f'{self.ticket}/progress.md', '前提の見直し: codex 結果: A を採用、B は状態が増えるため外した。詳細: /worker/result.md\n')
-
-    def edit_note(self, before, after):
+    def edit(self, before, after):
         p = self.root / self.ticket / 'note.md'
         p.write_text(p.read_text().replace(before, after))
 
-    def old_s8(self, branch=False, pending=False):
-        self.note('review', '')
-        self.row = ('- [ ]' if pending else '- [x]') + ' S8 PDH-review-1 回答済み 発行先: /old'
-        with (self.root / self.ticket / 'note.md').open('a') as f:
-            f.write(self.row + '\n')
-        p = self.root / 'scripts/check-pdh-ticket.sh'
-        current = p.read_text()
-        p.write_text(current.replace('# s8-decision: v2\n', ''))
-        self.commit('legacy S8')
-        if branch:
-            self.run_cmd('git', 'checkout', '-qb', 'legacy')
-            self.write('legacy-file', 'branch\n')
-            self.commit('legacy branch')
-            self.run_cmd('git', 'checkout', 'features/sample')
-        p.write_text(current)
-        self.commit('adopt S8 marker')
-        return self.sha()
+    def mark(self):
+        p = self.root / self.ticket / 'note.md'
+        p.write_text(STAMP + '\n' + p.read_text())
 
-    def test_review_01_gate_checks_before_commit(self):
-        text = self.skill('pdh-pm')
-        processing = text.split('### 承認の PDH-stage')[1].split('#### 出力')[0]
-        step = processing.split('2. note の Status')[1].split('3. ')[0]
-        self.assertIn('bash scripts/check-pdh-ticket.sh', step)
-        self.assertIn('commit の前', step)
-        self.assertIn('bash scripts/check-pdh-ticket.sh', text.split('##### 機械で確かめるもの')[1].split('##### 判断')[0])
-        self.assertIn('承認者へ渡す前の `check-pdh-ticket.sh`', text)
-        self.ready()
-        self.check()
-        self.write(f'{self.ticket}/progress.md', '')
-        self.assertIn('前提の見直し', self.check(code=1))
-        self.note('implement')
-        # gate より後には記録を遡及要求しない（既存の AC hash のみ書く）。
+    def ready(self, db='あり', api='なし', review='済み progress.md',
+              initial='測った progress.md', sequence='表', heading=True,
+              count=2, prefix='', marked=True, stage='ticket-human-review'):
+        self.write(f'{self.ticket}/ticket.md',
+                   '### Why\nReproduction-or-measurement: fixture\nWhy-not-fix-now: 該当なし\n'
+                   '### What / Acceptance Criteria\n' +
+                   ''.join(f'- [ ] AC {n}: 結果 {n} を読める\n' for n in range(1, count + 1)))
         hashed = self.run_cmd('bash', 'scripts/check-pdh-ticket.sh', '--ac-hash', f'{self.ticket}/ticket.md').stdout.strip()
         with (self.root / self.ticket / 'ticket.md').open('a') as f:
             f.write(f'AC-approved: {hashed}\n')
-        self.check()
-
-    def test_review_02_decision_criteria_have_one_authority(self):
-        for name in ('base.md', 'final-check.md'):
-            text = self.source(f'{ENGINE}/skills/pdh-decision-board/{name}')
-            self.assertIn('PDH-AGENTS.md', text)
-            self.assertIn('確認が要るのは判断であって、調査ではない', text)
-            self.assertNotIn('「利用者が見る結果が違う」を判断化の根拠にしない', text)
-        self.assertNotIn('全案でゴールの達成のされ方が同じなら、その判断は承認者の判断ではない', self.source(f'{ENGINE}/skills/pdh-decision-board/base.md'))
-        self.assertNotIn('迷ったら、次の 3 つを全部満たすか', self.source(f'{ENGINE}/skills/pdh-decision-board/final-check.md'))
-        self.assertIn('照合の報告の件数', self.skill('pdh-ticket-write'))
-
-    def test_review_03_single_viable_ac_change_still_requires_approval(self):
-        text = self.skill('pdh-pm')
-        self.assertIn('選ぶ理由のある案が 1 つ', text)
-        self.assertIn('変わる約束', text)
-        self.assertIn('覆す条件', text)
-        self.assertIn('承認するか', text)
-        self.assertIn('AC と Out-of-scope の承認', text)
-
-    def test_review_04_cross_path_and_s7_decisions(self):
-        self.assertIn('既存の経路', self.skill('pdh-ticket-review'))
-        text = self.skill('pdh-review')
-        self.assertIn('S7・S8 の書式', text)
-        self.assertIn('S7 でも', text)
-        self.assertIn('S7・S8 の各行', text)
-        close = self.source(f'{ENGINE}/skills/pdh-decision-board/close-gate.md')
-        self.assertRegex(close, r'S7・S8.*決定サマリー')
-        self.note('review', '- [x] S7 PDH-review-1 PM が決めた: 修正に絞る 覆す条件: 新しい欠陥')
-        self.check()
-        self.note('review', '- [x] S7 PDH-review-1 PM が決めた: 修正に絞る')
-        self.check()
-        # S7 の判断の中身は PM の Checklist が確かめ、機械は S8 だけを見る。
-
-    def test_review_05_adjacent_new_s8_is_not_legacy(self):
-        self.old_s8()
-        self.check()
-        self.edit_note(self.row, self.row.replace('[x]', '[ ]') + '\n- [x] S8 PDH-review-2 発行先: /new')
-        self.commit('adjacent new row and old mark edit')
-        self.assertIn('S8 の判断の記録', self.check(code=1))
-        self.edit_note('- [x] S8 PDH-review-2 発行先: /new', '- [x] S8 PDH-review-2 PM が決めた: 修正 覆す条件: 再発')
-        self.check()
+        self.note(stage)
+        if marked:
+            self.mark()
         with (self.root / self.ticket / 'note.md').open('a') as f:
-            f.write(self.row + '\n')
-        self.commit('duplicate old row')
-        self.assertIn('S8 の判断の記録', self.check(code=1))
+            f.write('## PDH-ticket-review. Ticket contract check\n')
+            for key, value in [('DB-changes', db), ('API-changes', api)]:
+                if value is not None:
+                    f.write(f'{prefix}{key}: {value}\n')
+            f.write('## 承認前の記録\n')
+            for key, value in [('前提の見直し', review), ('いちばん悪い初期状態', initial), ('AC の組の順番', sequence)]:
+                if value is not None:
+                    f.write(f'{prefix}{key}: {value}\n')
+            if heading:
+                f.write('## AC の組の順番\n| AC の組 | 経路と順番 | 順番ごとの約束 |\n|---|---|---|\n')
 
-    def test_review_06_legacy_answers_rename_shallow_and_replayed_branch(self):
-        self.old_s8(branch=True, pending=True)
-        self.edit_note(self.row, self.row + ' — Q21=1')
-        self.check()
-        self.commit('answer append')
-        self.run_cmd('git', 'mv', self.ticket, 'tickets/renamed')
-        self.ticket = 'tickets/renamed'
-        self.commit('rename ticket')
-        self.check()
-        for depth in (1, 2):
-            with self.subTest(depth=depth):
-                target = self.root / f'shallow-{depth}'
-                self.run_cmd('git', 'clone', '-q', '--depth', str(depth), self.root.as_uri(), str(target))
-                self.assertIn('警告', self._shallow_check(target))
-        # rebase と同じ tree と parent を cherry-pick で再生（禁止された rebase は実行しない）。
-        self.run_cmd('git', 'checkout', 'legacy')
-        self.run_cmd('git', 'cherry-pick', 'features/sample~2')
-        self.check()
-        with (self.root / 'tickets/sample/note.md').open('a') as f:
-            f.write(self.row + '\n')
-        self.assertIn('S8 の判断の記録', self.check(code=1))
 
-    def _shallow_check(self, target):
-        import subprocess
-        r = subprocess.run(['bash', 'scripts/check-pdh-ticket.sh'], cwd=target, env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        self.assertEqual(r.returncode, 0, r.stdout)
-        return r.stdout
+class NoteFormatContracts(NoteFixture):
+    def test_note_format_v2_change_prefix(self):
+        for key in ('db', 'api'):
+            for value, code in [('あり', 0), ('あり。変更する', 0), ('なし', 0),
+                                ('なし。作り直しは要らない', 0), ('未定', 1), ('', 1), (None, 1)]:
+                with self.subTest(key=key, value=value):
+                    self.ready(**{key: value})
+                    out = self.check(code)
+                    if code:
+                        self.assertIn('先頭に あり か なし', out)
+                        self.assertIn('例:', out)
 
-    def test_review_07_record_layouts_and_actionable_diagnostics(self):
+    def test_note_format_v2_review_status_and_location(self):
+        for db, api in [('あり', 'なし'), ('なし', 'あり'), ('なし', 'なし')]:
+            for value in ['済み progress.md', '済み https://example.invalid/result', '済み /<UUID>/result.md',
+                          '済み', '不要', '', '未実施 progress.md', None]:
+                code = 0 if value and (value.startswith('済み ') or value == '不要' and db == api == 'なし') else 1
+                with self.subTest(db=db, api=api, value=value):
+                    self.ready(db=db, api=api, review=value)
+                    out = self.check(code)
+                    if code:
+                        self.assertIn('前提の見直し', out)
+                        self.assertIn('済み', out)
+                        self.assertIn('例:', out)
+
+    def test_note_format_v2_initial_state_status(self):
+        for value, code in [('測った progress.md', 0), ('当たらない 状態を持たない', 0),
+                            ('測った /<UUID>/probe', 0), ('測った', 1), ('当たらない', 1),
+                            ('', 1), ('完了 progress.md', 1), (None, 1)]:
+            with self.subTest(value=value):
+                self.ready(initial=value)
+                out = self.check(code)
+                if code:
+                    self.assertIn('いちばん悪い初期状態', out)
+                    self.assertIn('測った', out)
+                    self.assertIn('当たらない', out)
+                    self.assertIn('例:', out)
+
+    def test_note_format_v2_sequence_reference(self):
+        for count, value, heading, code in [(1, '', False, 0), (2, '表', True, 0),
+                                          (2, '表', False, 1), (2, '当たる組なし 別の状態', False, 0),
+                                          (2, '当たる組なし', True, 1), (2, '', True, 1),
+                                          (2, None, True, 1)]:
+            with self.subTest(count=count, value=value, heading=heading):
+                self.ready(count=count, sequence=value, heading=heading)
+                out = self.check(code)
+                if code:
+                    self.assertIn('AC の組の順番', out)
+                    self.assertIn('当たる組なし', out)
+                    self.assertIn('例:', out)
+
+    def test_note_format_v2_key_layout_and_opaque_descriptions(self):
+        for prefix in ('', '- ', '  - ', '  '):
+            with self.subTest(prefix=prefix):
+                self.ready(db='なし。後で作り直しにはならない', api='なし（API は変えない）',
+                           review='不要', initial='当たらない <UUID> は設定の記述だけ',
+                           sequence='当たる組なし 設定は別々', prefix=prefix)
+                self.write(f'{self.ticket}/progress.md', '前提の見直し: skip 結果: <結果>\n')
+                self.check()
         self.ready()
-        self.check()
-        self.write(f'{self.ticket}/progress.md', '  - 前提の見直し: codex（medium）結果: 案 A。詳細: /worker/result.md\n')
-        self.edit_note('- [x] いちばん', '  - [x] いちばん')
-        self.edit_note('当たる組なし:', '  - 当たる組なし:')
-        self.check()
-        self.edit_note('結果: 読める', '結果: ')
-        self.assertIn('- [x] いちばん悪い初期状態:', self.check(code=1))
+        self.edit('DB-changes:', 'DB-changes：')
+        self.assertIn('先頭に あり か なし', self.check(1))
 
-    def test_review_08_no_skip_engines_empty_decisions_or_hidden_ac(self):
-        self.ready()
-        self.check()
-        for engine in ('回さない', 'なし', '不要'):
-            with self.subTest(engine=engine):
-                self.write(f'{self.ticket}/progress.md', f'前提の見直し: {engine} 結果: 小さい変更。詳細: /worker/result.md\n')
-                self.assertIn('前提の見直し', self.check(code=1))
-        for heading, rows in [('Acceptance Criteria（AC）', None), ('AC（Acceptance Criteria）', '- AC 1: 一覧を読める\n- AC 2: 詳細を読める\n')]:
-            self.ready(heading=heading, rows=rows)
-            self.edit_note('当たる組なし: 異なるデータ', '')
-            self.assertIn('AC の組の順番', self.check(code=1))
-        hashed = self.run_cmd('bash', 'scripts/check-pdh-ticket.sh', '--ac-hash', f'{self.ticket}/ticket.md').stdout.strip()
-        with (self.root / self.ticket / 'ticket.md').open('a') as f:
-            f.write(f'AC-approved: {hashed}\n')
-        for text in ('PM が決めた: 修正 覆す条件: 発行先: /board', 'PM が決めた: 発行先: /board 覆す条件: 再発', 'PM が決めた:修正 覆す条件:発行先:/board', 'PM が決めた:発行先:/board 覆す条件:再発', '利用者の判断が要る理由:発行先:/board'):
-            self.note('review', '- [x] S8 PDH-review-2 ' + text)
-            self.assertIn('S8 の判断の記録', self.check(code=1))
-        self.note('review', '- [x] S8 PDH-review-2 PM が決めた: 修正 覆す条件: 再発')
-        self.check()
+    def test_note_format_v2_only_designated_section_counts(self):
+        for field in ('前提の見直し', 'いちばん悪い初期状態', 'AC の組の順番'):
+            with self.subTest(field=field):
+                self.ready()
+                p = self.root / self.ticket / 'note.md'
+                text = p.read_text()
+                row = next(r for r in text.splitlines() if r.startswith(field + ':'))
+                p.write_text(text.replace(row, '') + '\n## Other\n' + row + '\n')
+                self.assertIn(field, self.check(1))
 
-    def test_review_09_reference_docs_match_conditional_review(self):
-        install = self.source(f'{ENGINE}/INSTALL.md')
-        self.assertNotIn('必須ではない。回す条件', install)
-        self.assertIn('DB/API', install)
-        examples = self.source('evals/examples.md')
-        self.assertIn('3 件中 2 件', examples)
-        self.assertIn('再承認が 5 回', examples)
-        for path in ('docs/pdh-glossary.md', f'{ENGINE}/skills/pdh-review/SKILL.md', f'{ENGINE}/skills/pdh-decision-board/SKILL.md'):
-            text = self.source(path)
-            self.assertNotIn('S8 で結論を添えてユーザに次の手を選ばせる', text)
-            self.assertNotIn('「収束」の S8 で止まり、', text)
-        self.assertIn('S8 で利用者', self.skill('pdh-review'))
+    def test_note_format_v2_ac_count_matches_hash_heading(self):
+        for heading, rows in [('Acceptance Criteria（AC）', '- [ ] AC 1: 一覧\n- [ ] AC 2: 詳細\n'),
+                              ('AC（Acceptance Criteria）', '- AC 1: 一覧\n- AC 2: 詳細\n')]:
+            with self.subTest(heading=heading):
+                self.ready(sequence='', heading=False)
+                p = self.root / self.ticket / 'ticket.md'
+                p.write_text('### Why\nReproduction-or-measurement: fixture\nWhy-not-fix-now: 該当なし\n### ' + heading + '\n' + rows)
+                self.assertIn('AC の組の順番', self.check(1))
 
-    def test_review_10_bot_allows_pm_decisions_but_waits_for_human_answers(self):
-        for path in ('_issue.md', 'system.md'):
-            text = self.source(f'github-bot/.github/coding-bot/{path}')
-            self.assertIn('PM が決めた:', text)
-            self.assertIn('覆す条件:', text)
-            self.assertIn('利用者の判断が要る理由:', text)
-            self.assertIn('発行先:', text)
+    def test_note_format_v2_s8_labels(self):
+        cases = [('利用者の判断が要る理由: 出力を変える 発行先: /board', 0),
+                 ('PM が決めた: 修正 覆す条件: 再発', 0),
+                 ('PM が決めた: <UUID> は変更しない 覆す条件: 該当すると分かったら', 0),
+                 ('PM が決めた: 修正 覆す条件: ', 1), ('PM が決めた: 修正', 1),
+                 ('利用者の判断が要る理由: 出力を変える', 1),
+                 ('説明 PM が決めた: 修正 覆す条件: 再発', 1), ('書式なし', 1)]
+        for mark in (' ', 'x', '-'):
+            for value, code in cases:
+                with self.subTest(mark=mark, value=value):
+                    self.note('review', f'- [{mark}] S8 PDH-review-1 {value}')
+                    self.mark()
+                    out = self.check(code)
+                    if code:
+                        self.assertIn('書式どおりに書く', out)
+                        self.assertIn('例:', out)
 
-    def test_review_11_irreversible_changes_match_the_shared_criterion(self):
-        text = self.source('docs/PDH-AGENTS.md')
-        criterion = text.split('**利用者にしか決められない判断**')[1].split('\n')[0]
-        self.assertIn('戻しにくい変更（DB・他者が使う契約）', criterion)
-        self.assertIn('相談', criterion)
+    def test_note_format_v2_s8_requires_round(self):
+        for label in ('S8:', 'S8', 'S8: PDH-review-1', 'S8 PDH-review-x'):
+            with self.subTest(label=label):
+                self.note('review', f'- [x] {label} PM が決めた: 修正 覆す条件: 再発')
+                self.mark()
+                self.assertIn('書式どおりに書く', self.check(1))
 
-    def test_review_12_ac_reader_reports_means_instead_of_results(self):
-        text = self.source('claude/templates/agents/claude/pdh-ac-reader.md')
-        self.assertIn('(3)', text)
-        self.assertIn('結果ではなく手段', text)
-        self.assertIn('AC 全件', text)
-        self.assertIn('repo を探して読まない', text)
-
-    def test_review_13_none_prefix_can_describe_future_rebuild(self):
-        for db, api in [('なし。後で作り直しになる', 'なし'), ('なし', 'なし。後で作り直す')]:
-            self.ready(db, api)
-            self.check()
-            self.write(f'{self.ticket}/progress.md', '')
-            self.check()
-        self.ready('なし（説明）', 'なし。補足')
-        self.write(f'{self.ticket}/progress.md', '')
+    def test_note_format_v2_ignores_s7_and_mentions_outside_s8_rows(self):
+        for row in ('- [x] S7 PDH-review-1 修正に絞る',
+                    '- [x] PDH-review: S8 の判断を照合した',
+                    '- [x] 依頼: S8 の文を読む'):
+            with self.subTest(row=row):
+                self.note('review', row)
+                self.mark()
+                self.check()
+        self.note('review', '## Other\n- [x] S8 PDH-review-1 書式なし')
+        self.mark()
         self.check()
 
-    def test_review_14_note_template_and_migration_include_evidence_slots(self):
-        import yaml
-        config = yaml.safe_load(self.source(f'{ENGINE}/templates/.ticket-config.yaml'))
-        text = config['note_content']
-        self.assertIn('- [ ] いちばん悪い初期状態:', text)
-        self.assertIn('## AC の組の順番', text)
-        self.assertIn('AC の組の順番', self.source(f'{ENGINE}/INSTALL.md'))
+    def test_note_format_v2_handover_keeps_existing_wait_gates(self):
+        for kind in (7, 8):
+            for stage, reviews, code, message in [('review', 2, 1, 'S5 で止まるべき'),
+                                                 ('verify', 1, 1, f'S{kind} の答えを待ったまま'),
+                                                 ('review', 1, 0, '検査を通過')]:
+                with self.subTest(kind=kind, stage=stage, reviews=reviews):
+                    self.note(stage, f'- [ ] S{kind} PDH-review-1 利用者の判断が要る理由: 出力 発行先: /board')
+                    self.mark()
+                    self.write(f'{self.ticket}/progress.md', ''.join(f'review-sha: {n:07x}\n' for n in range(1, reviews+1)))
+                    self.assertIn(message, self.check(code))
 
-    def test_review_15_review_output_location_is_required(self):
-        self.ready()
-        for record in ('前提の見直し: codex 結果: 採用した', '前提の見直し: codex 結果: /worker/result.md'):
-            self.write(f'{self.ticket}/progress.md', record + '\n')
-            self.assertIn('前提の見直し', self.check(code=1))
-        for path in ('/worker/result.md', 'https://example.invalid/result'):
-            self.write(f'{self.ticket}/progress.md', f'前提の見直し: codex 結果: 案 A を採用。詳細: {path}\n')
-            self.check()
+    def test_note_format_v2_stamp_is_first_line_with_optional_whitespace(self):
+        self.ready(initial='')
+        self.edit(STAMP, '  ' + STAMP + '\t')
+        self.assertIn('いちばん悪い初期状態', self.check(1))
+        self.edit('  ' + STAMP + '\t\n', '')
+        self.check()
+        self.edit('## Checklist', '## Checklist\n' + STAMP)
+        self.check()
 
-    def test_review_16_generic_initial_state_examples(self):
-        text = self.skill('pdh-ticket-review').split('### 初期状態と、AC の組の順番を確かめる')[1].split('### 別件')[0]
-        self.assertNotIn('一度も写していない会話', text)
-        self.assertIn('未初期化', text)
-        self.assertIn('Required-Probes', text)
 
 del Fixture
-
 if __name__ == '__main__':
     unittest.main()
