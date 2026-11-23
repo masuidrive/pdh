@@ -90,13 +90,13 @@ class NoteBoundaries(NoteFixture):
 
     def test_skip_requires_label_but_not_reason_content(self):
         for kind in (7, 8):
-            for stage, reviews in (('review', 2), ('verify', 1)):
+            for stage, reviews in (('review', 1), ('review', 2), ('verify', 1)):
                 for mark, suffix, code in (('x', '', 0), ('-', '', 1), ('-', ' - skip:', 0), ('-', ' - skip: 撤回', 0)):
                     with self.subTest(kind=kind, stage=stage, mark=mark, suffix=suffix):
                         self.ready(stage=stage)
                         self.edit('## Checklist', f'## Checklist\n- [{mark}] S{kind} PDH-review-1 利用者の判断が要る理由: 出力 発行先: /board{suffix}')
                         self.write(self.ticket + '/progress.md', ''.join(f'review-sha: {n:07x}\n' for n in range(1, reviews+1)))
-                        self.check(code)
+                        self.check(0 if stage == 'review' and reviews == 1 else code)
         for stage in ('ticket-human-review', 'implement'):
             for suffix, code in (('', 1), (' - skip:', 0)):
                 with self.subTest(gate=stage, suffix=suffix):

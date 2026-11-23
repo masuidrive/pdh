@@ -355,7 +355,7 @@ check_ticket_review_handover() {
       }
       if ($0 ~ /^## Checklist[[:space:]]*$/) { checklist=1; next }
       if ($0 ~ /^##? /) checklist=0
-      if (checklist && /^- \[-\]/ && /発行先:/ && !/ - skip:/) print "SKIP\t" FNR
+      if (checklist && /^- \[-\]/ && /発行先:/ && !/ - skip:/ && !/[^A-Za-z0-9_]S[78]([^0-9]|$)/) print "SKIP\t" FNR
       if (checklist && /^- \[[ xX-]\]/ && /発行先:/ && match($0, /[^A-Za-z0-9_]S[78]([^0-9]|$)/)) {
         kind=substr($0, RSTART + 2, 1)
         if (!match($0, /PDH-review-[0-9]+/)) next
