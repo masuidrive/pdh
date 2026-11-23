@@ -52,16 +52,6 @@ python3 scripts/docs-policy.py record docs/example.md#scope --base <base> --note
   - 文面の無い «◯◯が入る»
   - 対象を列挙していない件数
 
-### 前提を疑う
-
-この規則の目的: 承認者が、戻しにくい判断の前提を別の engine が疑った結果で AC を承認できること。note の `DB-changes:` か `API-changes:` が «なし» で始まらないときは、承認を求める前に前提の見直しを必ず 1 回回す。回さない選択は無い。両方が «なし» で始まるときも、新しい仕組み（状態の置き場所・受け口・定期処理）を作るなら回すことを勧める。その場合だけ回すかは PM が決め、回した結果か回さなかった理由を progress に残す。
-
-1. 回すのは、経緯を持たない worker 1 人である。engine は PM と別にし、model と effort は `[SKILLS_PATH]/pdh-pm/_execution-team.md`「エンジン割り当て」の «前提の見直し» に従う。worker の手順は `.claude/agents/pdh-ticket-reviewer.md` の «前提を疑う» にある
-2. 渡すのは、依頼の原文・Why・AC の案・Required-Probes の結果・`product-brief.md` の全体・外の契約（API などの仕様）・いまの base のコードと文書だけである。ticket の `Design-Decisions` と、この ticket に出た review の finding は渡さない
-3. 問いと、案ごとに書かせる項目は `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」の S7 と同じものを prompt に書く
-4. progress に `前提の見直し: <worker の engine> 結果: <出た案・選んだ案と外した理由、詳細の所在>` の 1 行を残す。選んだ案が ticket の `Design-Decisions` と違えば、ticket を直してから先へ進む
-5. DB/API とも «なし» で始まるため任意で回さなかったときだけ、その理由を progress に 1 行書く。Status がちょうど PDH-ticket-human-review のとき、`scripts/check-pdh-ticket.sh` が必須の場合の結果行を数える
-
 ### AC の場面の頻度を測る
 
 この規則の目的: 承認者が、現実に起きる頻度と失敗のコストを知って AC の範囲を決められること。«必ず〜» «すべての〜» のように絶対の形で AC を書く前に、端の場面の頻度を測る手段・担当・コマンドを `Required-Probes` に書いて実行する。既存のログ・データで測れるなら実測し、期間・母数・件数を残す。実測できなければ推定と根拠・未確認の範囲を明記する。頻度と 1 回のコストが Failure Tolerance の目安に収まる場面は、AC の範囲から外すか、«止めて知らせる» 動作にして AC の承認で決める。
@@ -106,6 +96,16 @@ Status がちょうど PDH-ticket-human-review のとき、`scripts/check-pdh-ti
 - `Benefit:` 誰の何が良くなるか。Why と `Key-User-Journeys:` から書く
 
 コードは、この 5 行に答えられるところまで読み、実行する。作り方は決めない — テーブル・列・関数の形を選ばず、ticket の Design-Decisions にも書き足さない。作り方を決めるのは PDH-implement で、ここで決めると、実装で確かめていない制約が実装の前に入る。
+
+### 前提を疑う
+
+この規則の目的: 承認者が、戻しにくい判断の前提を別の engine が疑った結果で AC を承認できること。note の `DB-changes:` か `API-changes:` が «なし» で始まらないときは、承認を求める前に前提の見直しを必ず 1 回回す。回さない選択は無い。両方が «なし» で始まるときも、新しい仕組み（状態の置き場所・受け口・定期処理）を作るなら回すことを勧める。その場合だけ回すかは PM が決め、回した結果か回さなかった理由を progress に残す。
+
+1. 回すのは、経緯を持たない worker 1 人である。engine は PM と別にし、model と effort は `[SKILLS_PATH]/pdh-pm/_execution-team.md`「エンジン割り当て」の «前提の見直し» に従う。worker の手順は `.claude/agents/pdh-ticket-reviewer.md` の «前提を疑う» にある
+2. 渡すのは、依頼の原文・Why・AC の案・Required-Probes の結果・`product-brief.md` の全体・外の契約（API などの仕様）・いまの base のコードと文書だけである。ticket の `Design-Decisions` と、この ticket に出た review の finding は渡さない
+3. 問いと、案ごとに書かせる項目は `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」の S7 と同じものを prompt に書く
+4. progress に `前提の見直し: <worker の engine> 結果: <出た案・選んだ案と外した理由、詳細の所在>` の 1 行を残す。選んだ案が ticket の `Design-Decisions` と違えば、ticket を直してから先へ進む
+5. DB/API とも «なし» で始まるため任意で回さなかったときだけ、その理由を progress に 1 行書く。Status がちょうど PDH-ticket-human-review のとき、`scripts/check-pdh-ticket.sh` が必須の場合の結果行を数える
 
 ### AC が触る consumer surface を書く
 
