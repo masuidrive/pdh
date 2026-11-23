@@ -39,7 +39,7 @@ PDH-ticket-review では、書き手と別の model に review を頼んだ。
 `pdh-review` の «収束»（S7）にしか前提を疑う段が無く、そこは «いま直す» が尽きないときに初めて回る。
 一番戻しにくい判断（DB の変更、他者が使う契約）は、その前の AC の承認で決まる。
 
-**規則にした範囲**: `pdh-ticket-review` の «前提を疑う» は、必須ではなく «勧める» に留めている。
+**当時の規則にした範囲**: `pdh-ticket-review` の «前提を疑う» は、当時は必須ではなく «勧める» に留めた。現行の必須条件と追加の根拠は下の「DB/API の変更時の前提の見直し」を参照する。
 根拠がこの 1 件だけで、`CLAUDE.md`「1 件の事例から規則を作らない」に当たるため。
 load-bearing にしたのは記録の方（回した結果か、回さなかった理由を progress に残す）で、
 これは回数が増えれば必須にするか外すかを決める材料になる。
@@ -468,3 +468,7 @@ smoke 自体の穴も 1 つ: 毎回同じ要望を出していたので、claude
 導入先の 1 ticket（local の Codex の会話を読む画面）。Brief の Constraints は local / remote / cloud を区別すると書いていたが、PDH-ticket-review の照合は Key-User-Journeys と Architectural-Invariants だけで、`pdh-ticket-write` の «将来の要件向けの設計を入れない» を Brief が挙げる範囲にまで当てた。review の 4 巡目に利用者が指摘し、経緯を持たない別 engine の洗い直しで、接続先を含まない会話 ID・出所の無い原応答・ファイルを直接読む画像など、後の接続先で作り直しになる形が 16 項目出た。`DB-changes:` / `API-changes:` の行に Brief の範囲での作り直しを書かせ、前提の見直しに Brief の全体を渡し、ticket の review worker の «穴を探す» に同じ観点を足した。**1 件の事例で、eval は回していない。**利用者の指示で入れた。
 
 同じ ticket の続き: 上の規則だけで直させたところ、PM は Brief の全接続先に合わせた口・対応表・表示用の共通の形まで worker に作らせ、写しと原応答の表を二重にした（導入先の計画が記録していた前の版の失敗 «実物を見る前に抽象を固めた» «写しと旧仕組みの二重» の再現）。数えるのを後から作れない記録・他者の契約・移行が要る DB の変更に限り、作り直せる表とコードの形は数えず共通化は 2 つ目の実物で行う、と補った。
+
+## 2026-11-23 — DB/API の変更時の前提の見直し
+
+Linkdeck の done M1〜M3（261118-060229-codex-local-history-copy-verify・261118-142101-codex-local-read-ui・261122-050255-claude-history-copy-verify）の note / progress を読み、done 3 件中 2 件が DB/API の変更条件に当たり、M3 では AC の再承認が 5 回（T6→T7→T8/T9→T11→T12→T13）あった。出典: Linkdeck の 261123-064952-pdh-ac-review-and-delegation-rules/progress.md の P4 と、M3 progress の T14 の答え。対象の版は Linkdeck 60298fc4、旧い任意の規則は PDH 6d64bcb。端の初期状態・経路の順番・後の範囲を足すときの作り直しが承認後に見つかっていたため、根拠 1 件だった任意の指定を、DB/API の変更時には必須へ戻した。変更が無く新しい仕組みを作るときの推奨は保つ。この件数はこの 3 件を読んだ実測であり、導入先全体の頻度と worker による手戻り削減の効果は未測定である。

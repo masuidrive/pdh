@@ -375,9 +375,26 @@ exit "$pdh_tolerance_status"
 ```
 
 
+#### note の初期状態と経路の順番の記録
+
+`.ticket-config.yaml` の `note_content` の Required-Probes に `- [ ] いちばん悪い初期状態: <状態> 結果: <測った結果と progress の所在>` を足し、その後ろに `## AC の組の順番` と `| AC の組 | 経路と順番 | 順番ごとの約束 |` の空の表を置く。既存の ticket の note は書き換えない。適用済みかは、導入先で次の冪等な確認コマンドを実行する。
+
+<!-- pdh-shell: note-evidence-check -->
+```bash
+python3 - <<'PY_CHECK'
+from pathlib import Path
+import yaml
+note = yaml.safe_load(Path('.ticket-config.yaml').read_text())['note_content']
+required = ('- [ ] いちばん悪い初期状態:', '## AC の組の順番', '| AC の組 | 経路と順番 | 順番ごとの約束 |')
+missing = [line for line in required if line not in note]
+print('要適用: ' + ' / '.join(missing) if missing else '適用済み: note の初期状態と経路の順番')
+raise SystemExit(bool(missing))
+PY_CHECK
+```
+
 #### ticket の review worker と前提の見直し
 
-`.codex/agents/pdh-ticket-reviewer.toml` が配置表で届く。既存の導入先は `scripts/checks/required-pdh-files.check` の `required_paths` にこの path を足す（この check は初回だけコピーされるので、上書きでは届かない）。`DB-changes:` か `API-changes:` が «なし» でない ticket と、新しい仕組みを作る ticket では、PDH-ticket-review で前提の見直しを 1 回回すことを勧める（必須ではない。回す条件・渡すもの・記録先は skill の «前提を疑う» にある）。model と effort の既定は役割の表の «前提の見直し» の行にある。
+`.codex/agents/pdh-ticket-reviewer.toml` が配置表で届く。既存の導入先は `scripts/checks/required-pdh-files.check` の `required_paths` にこの path を足す（この check は初回だけコピーされるので、上書きでは届かない）。DB/API の変更か後での作り直しがある ticket は、PDH-ticket-review で前提の見直しが必須である。変更が無く新しい仕組みを作る場合は推奨とする。条件・渡すもの・記録先は skill の «前提を疑う» に従う。model と effort の既定は役割の表の «前提の見直し» の行にある。
 
 確認（冪等）:
 

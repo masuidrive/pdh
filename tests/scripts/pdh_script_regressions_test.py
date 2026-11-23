@@ -104,7 +104,7 @@ class ScriptTests(unittest.TestCase):
         self.run_cmd('bash', 'scripts/pdh-lock.sh', 'check', '--paths-from', 'HEAD..HEAD', code=1)
 
     def test_stage_checklist_accepts_legacy_command_references(self):
-        pairs = [('PDH-ticket-write: 上のコマンドが 0 で終わった', 'PDH-ticket-write: `pdh-ticket-write`「機械で確かめるもの」のコマンドが 0 で終わった'), ('PDH-ticket-write: `Key-User-Journeys:` の番号が Why の内容と合っている。«該当なし» なら、その理由が書いてある（形だけは上のコマンドが確かめる）', 'PDH-ticket-write: `Key-User-Journeys:` の番号が Why の内容と合っている。«該当なし» なら、その理由が書いてある（形だけは`pdh-ticket-write`「機械で確かめるもの」のコマンドが確かめる）'), ('PDH-ticket-review: 上のコマンドが 0 で終わった', 'PDH-ticket-review: `pdh-ticket-review`「機械で確かめるもの」のコマンドが 0 で終わった'), ('PDH-ticket-human-review: 上の 2 つのコマンドが 0 で終わった', 'PDH-ticket-human-review: `pdh-pm`「承認の PDH-stage」内の「機械で確かめるもの」の 2 つのコマンドが 0 で終わった'), ('PDH-human-review: 上の 1 つ目のコマンドが 0 で終わった', 'PDH-human-review: `pdh-pm`「承認の PDH-stage」内の「機械で確かめるもの」の 1 つ目のコマンドが 0 で終わった')]
+        pairs = [('PDH-ticket-write: 上のコマンドが 0 で終わった', 'PDH-ticket-write: `pdh-ticket-write`「機械で確かめるもの」のコマンドが 0 で終わった'), ('PDH-ticket-write: `Key-User-Journeys:` の番号が Why の内容と合っている。«該当なし» なら、その理由が書いてある（形だけは上のコマンドが確かめる）', 'PDH-ticket-write: `Key-User-Journeys:` の番号が Why の内容と合っている。«該当なし» なら、その理由が書いてある（形だけは`pdh-ticket-write`「機械で確かめるもの」のコマンドが確かめる）'), ('PDH-ticket-review: 上のコマンドが 0 で終わった', 'PDH-ticket-review: `pdh-ticket-review`「機械で確かめるもの」のコマンドが 0 で終わった'), ('PDH-ticket-human-review: 上の 2 つのコマンドが 0 で終わった', 'PDH-ticket-human-review: 承認者へ渡す前の `check-pdh-ticket.sh` と、回答反映後の 2 つのコマンドが 0 で終わった'), ('PDH-human-review: 上の 1 つ目のコマンドが 0 で終わった', 'PDH-human-review: `pdh-pm`「承認の PDH-stage」内の「機械で確かめるもの」の 1 つ目のコマンドが 0 で終わった')]
         self.note('human-review')
         for old, new in pairs:
             stage = old.split(':', 1)[0].removeprefix('PDH-')

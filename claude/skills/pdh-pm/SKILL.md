@@ -132,6 +132,8 @@ Next PDH-stage:
 
 ### 承認の PDH-stage
 
+AC の変更で選ぶ理由のある案が 1 つしか無いときは、選択肢を並べず、変わる約束を利用者の言葉で 1 行・覆す条件・承認するかを示す。承認を得るまで、その変更には進まない。
+
 承認の PDH-stage（`PDH-ticket-human-review` / `PDH-human-review`）は、承認者に材料を渡し、明示の答えを受け取って ticket へ反映する。承認の質は、承認者が受け取る材料の質まででしかない。承認者に、agent の推論の組み立て直し、diff の読み直し、足りない材料の請求を求めない。
 
 #### 入力
@@ -144,7 +146,7 @@ Next PDH-stage:
 
 1. 材料を作って渡す。何を承認者が必ず読む本文に置き、何を根拠として閉じた `<details>` に入れるか、回答の返し方は `pdh-decision-board` の手順 0〜9 に従う（`PDH-ticket-human-review` は `ticket-gate.md`、`PDH-human-review` は `close-gate.md`）。前の PDH-stage の «出力» で確かめたもの（Required-Probes・未確定の洗い出し・verify の証拠）は、確かめ直さない
    - 材料は受け渡し経路そのもの（会話、issue コメント）か、1 つに組み立てた文書（そのリンクかパスを、短い要約とともに受け渡し経路で渡す）で届ける。note は作業の記録であって承認者に渡すものではないので、note に書くだけでは渡したことにならない
-2. note の Status を承認の PDH-stage へ進める変更と、Checklist に `発行先:` の待ち行を足す変更は、同じ commit に入れる。分けると、その間の commit で回した `scripts/test-all.sh` の `pdh-ticket` 段が落ちる
+2. note の Status を承認の PDH-stage へ進める変更と、Checklist に `発行先:` の待ち行を足す変更は、同じ commit に入れる。この commit の前に、Status が承認の PDH-stage で待ち行がある状態で `bash scripts/check-pdh-ticket.sh` を回し、終了コード 0 と出力を progress に残す
 3. 答えを待つ間は、PM が決めて中断する（「中断するときと再開するとき」）。再開したら、待ち行の `発行先:` で答えを読む
 4. 答えを受けたら、`pdh-decision-board` の手順 10 で ticket へ反映し、progress に «何を聞き、何と答えられたか» を 1 行書き、待ち行を `[x]` にする。待ち行を `[x]` にする変更と、次の PDH-stage へ進む Status の変更は、同じ commit に入れる（2 と同じ理由。Status が承認の PDH-stage のまま待ち行が無い commit では `pdh-ticket` 段が落ちる）。追加質問・修正指示・未回答が残るなら、手順 10 のとおり同じ発行先へ出し直す
 5. `PDH-ticket-human-review` で AC と Out-of-scope の承認を得たら、承認した AC と Out-of-scope のハッシュ（`bash scripts/check-pdh-ticket.sh --ac-hash <ticket.md>` の出力）を ticket の `AC-approved:` の行に書く。progress の答えの行と同じ commit にする。AC か Out-of-scope を変えて承認を取り直したときも書き直す。`PDH-human-review` で «未確認のまま閉じる» と明示で承認された AC は、処置の変更として `[-] ... - skip: <未確認の理由・足りない証拠を示して close を承認した旨>` にし、`AC-approved:` を `--ac-hash` の値で書き直す。この書き直しを処置の承認の記録とし、回答の progress・ticket・待ち行の更新を同じ commit に入れる。承認を得ずに AC を `[-]` へ変えると、hash が一致せず検査が落ちる
@@ -160,7 +162,7 @@ Next PDH-stage:
 
 ##### 機械で確かめるもの
 
-worktree で、note と ticket のパスを入れて実行し、終了コードが 0 であることを確かめる。1 つ目は、note の Checklist に `発行先:` を含む未了の行が無いことを確かめる。2 つ目は `PDH-ticket-human-review` で AC と Out-of-scope を承認したときだけ実行し、ticket の `AC-approved:` の値が、いまの AC と Out-of-scope のハッシュと一致することを確かめる。
+worktree で、note と ticket のパスを入れて実行し、終了コードが 0 であることを確かめる。PDH-ticket-human-review では、承認者に渡す前に、処理 2 の Status と待ち行を用意して `bash scripts/check-pdh-ticket.sh` を実行する。次の 2 つは回答を反映した後に回す。1 つ目は、note の Checklist に `発行先:` を含む未了の行が無いことを確かめる。2 つ目は `PDH-ticket-human-review` で AC と Out-of-scope を承認したときだけ実行し、ticket の `AC-approved:` の値が、いまの AC と Out-of-scope のハッシュと一致することを確かめる。
 
 ```bash
 note='<note のパス>'
@@ -173,7 +175,7 @@ rec=$(sed -nE 's/^[[:space:]]*(- )?[Aa][Cc]-approved:[[:space:]]*([0-9a-f]{16}).
 test -n "$rec" && test "$rec" = "$(bash scripts/check-pdh-ticket.sh --ac-hash "$ticket")"
 ```
 
-- [ ] PDH-ticket-human-review: `pdh-pm`「承認の PDH-stage」内の「機械で確かめるもの」の 2 つのコマンドが 0 で終わった
+- [ ] PDH-ticket-human-review: 承認者へ渡す前の `check-pdh-ticket.sh` と、回答反映後の 2 つのコマンドが 0 で終わった
 - [ ] PDH-human-review: `pdh-pm`「承認の PDH-stage」内の「機械で確かめるもの」の 1 つ目のコマンドが 0 で終わった
 
 ##### 判断で確かめるもの

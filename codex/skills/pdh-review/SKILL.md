@@ -240,7 +240,7 @@ repo root で `source scripts/pdh-review-range.sh` と `pdh_review_tickets_dir` 
 
 ### 判断で確かめるもの
 
-- [ ] PDH-review: S8 の各行に利用者の判断が要る理由か PM の決定と覆す条件があり、判断の基準と progress の結論が合っている
+- [ ] PDH-review: S7・S8 の各行に利用者の判断が要る理由か PM の決定と覆す条件があり、判断の基準と progress の結論が合っている
 
 - [ ] PDH-review: finding の頻度と 1 回のコストを Failure Tolerance と照合し、受け入れた制約は 1 行の記録と今の振る舞いを確かめるテスト（再現できなければ「テストなし」）がある。AC を狭めた場合は再承認済みである
 - [ ] PDH-review: 直したことが同じ部品で次の «いま直す» を生んだかと根拠が progress にあり、生んだ場合は S7（見直し後なら S8）の回答を反映した。案に «作らない・止めて知らせる» と頻度・1 回のコストがある

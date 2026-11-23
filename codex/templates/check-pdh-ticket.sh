@@ -26,7 +26,7 @@
 #      S7・S8 の行が未回答のまま
 #      次の巡へ進んでいない（S5）・PDH-verify 以降は S7・S8 の行がすべて回答済み
 #  11. close 時、説明対象を変えた docs は、更新か Checklist の済み行がある
-#  12. 承認直前には前提の見直し・初期状態・AC の組の順番の記録があり、新しい S8 行には判断の理由がある
+#  12. 承認直前には前提の見直し・初期状態・AC の組の順番の記録があり、新しい S7・S8 行には判断の理由がある
 #
 #   bash scripts/check-pdh-ticket.sh --ac-hash <ticket.md>   # いまの AC と Out-of-scope のハッシュを出す
 #   bash scripts/check-pdh-ticket.sh --require-branch-ticket <base-ref>
@@ -89,7 +89,7 @@ review_evidence_marker='# ticket-review-evidence: v1'
 late_review_evidence_lines=$(cat <<'EOF'
 PDH-ticket-write: AC は結果で書き、比較の項目を分け、原文の見た目・相当の要求を AC か Out-of-scope と照合し、照合の差の検出と説明の付かない差が 0 の約束を分けた（「AC の書き方」）
 PDH-ticket-review: DB/API の変更時の前提の見直しの結果があり、いちばん悪い初期状態と AC の組の順番を照合した。絶対の形の約束と実装で測る値が矛盾せず、端の場面・順番でも約束が成り立つ根拠が note と progress にある
-PDH-review: S8 の各行に利用者の判断が要る理由か PM の決定と覆す条件があり、判断の基準と progress の結論が合っている
+PDH-review: S7・S8 の各行に利用者の判断が要る理由か PM の決定と覆す条件があり、判断の基準と progress の結論が合っている
 EOF
 )
 # 引数（印・path…）の path を最初に追加した commit の版の検査 script に印が無ければ 0。未 commit なら 1。
@@ -489,7 +489,7 @@ check_s8_decisions() {
       while IFS= read -r revision; do
         while IFS= read -r path; do
           snapshot=$(git show "$revision:$path" 2>/dev/null) || continue
-          legacy+=$(printf '%s\n' "$snapshot" | awk -v revision="$revision" -v kind="S$kind" '
+          legacy+=$(ticket_visible_lines <(printf '%s\n' "$snapshot") | awk -v revision="$revision" -v kind="S$kind" '
             /^## Checklist[[:space:]]*$/ {section=1; next}
             /^##? / {section=0}
             section && /^- \[[ xX-]\] S[78]([^0-9]|$)/ {
@@ -596,6 +596,8 @@ check_stage_checklist() {
     s|^PDH-ticket-write: `Key-User-Journeys:` の番号が Why の内容と合っている。«該当なし» なら、その理由が書いてある（形だけは上のコマンドが確かめる）$|PDH-ticket-write: `Key-User-Journeys:` の番号が Why の内容と合っている。«該当なし» なら、その理由が書いてある（形だけは`pdh-ticket-write`「機械で確かめるもの」のコマンドが確かめる）|
     s|^PDH-ticket-review: 上のコマンドが 0 で終わった$|PDH-ticket-review: `pdh-ticket-review`「機械で確かめるもの」のコマンドが 0 で終わった|
     s|^PDH-ticket-human-review: 上の 2 つのコマンドが 0 で終わった$|PDH-ticket-human-review: `pdh-pm`「承認の PDH-stage」内の「機械で確かめるもの」の 2 つのコマンドが 0 で終わった|
+    s|^PDH-ticket-human-review: `pdh-pm`「承認の PDH-stage」内の「機械で確かめるもの」の 2 つのコマンドが 0 で終わった$|PDH-ticket-human-review: 承認者へ渡す前の `check-pdh-ticket.sh` と、回答反映後の 2 つのコマンドが 0 で終わった|
+    s|^PDH-review: S8 の各行に利用者の判断が要る理由か PM の決定と覆す条件があり、判断の基準と progress の結論が合っている$|PDH-review: S7・S8 の各行に利用者の判断が要る理由か PM の決定と覆す条件があり、判断の基準と progress の結論が合っている|
     s|^PDH-human-review: 上の 1 つ目のコマンドが 0 で終わった$|PDH-human-review: `pdh-pm`「承認の PDH-stage」内の「機械で確かめるもの」の 1 つ目のコマンドが 0 で終わった|
   ')
   missing=$(printf '%s\n' "$expected" | while IFS= read -r line; do
