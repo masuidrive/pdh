@@ -82,11 +82,26 @@ class NoteBoundaries(NoteFixture):
                     self.note('review')
                     self.write(directory + '/note.md', '## Status: PDH-review\n## Checklist\n- [x] PDH-review: 証拠がある\n' + mention + '\n')
                     self.check()
+        # 新しい書式のものを含む note は AC 7 の対象外。壊れた印・印なしの新節は拒否する。
         self.note('review')
         self.edit('## Status:', '<!-- pdh-note-format: 1 -->\n## Status:')
         self.assertIn('印が壊れている', self.check(1))
         self.ready(marked=False, evidence=True)
         self.assertIn('印が欠けている', self.check(1))
+
+    def test_duplicate_review_waits_follow_note_format(self):
+        for marked in (False, True):
+            for kind in (7, 8):
+                for marks in ((' ', 'x'), ('x', ' '), (' ', ' '), ('x', 'X')):
+                    for stage, reviews in (('review', 1), ('review', 2), ('verify', 1)):
+                        with self.subTest(marked=marked, kind=kind, marks=marks, stage=stage, reviews=reviews):
+                            self.ready(stage=stage, marked=marked)
+                            rows = ''.join(f'\n- [{mark}] S{kind} PDH-review-1 利用者の判断が要る理由: 出力 発行先: /board' for mark in marks)
+                            self.edit('## Checklist', '## Checklist' + rows)
+                            self.write(self.ticket + '/progress.md', ''.join(f'review-sha: {n:07x}\n' for n in range(1, reviews + 1)))
+                            answered = all(mark in ('x', 'X') for mark in marks) if marked else any(mark in ('x', 'X') for mark in marks)
+                            code = int(not answered and (stage == 'verify' or reviews > 1))
+                            self.check(code)
 
     def test_review_wait_requires_answer(self):
         for kind in (7, 8):
