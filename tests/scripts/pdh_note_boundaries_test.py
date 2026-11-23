@@ -112,6 +112,22 @@ class NoteBoundaries(NoteFixture):
                         self.edit('## Checklist', f'## Checklist\n- [{mark}] S{kind} PDH-review-1 利用者の判断が要る理由: 出力 発行先: /board{suffix}')
                         self.write(self.ticket + '/progress.md', ''.join(f'review-sha: {n:07x}\n' for n in range(1, reviews+1)))
                         self.check(0 if stage == 'review' and reviews == 1 else code)
+    def test_free_form_review_wait_has_one_action(self):
+        for kind in (7, 8):
+            for mark, code in (('-', 1), ('x', 0)):
+                with self.subTest(kind=kind, mark=mark):
+                    self.ready(stage='implement')
+                    self.edit('## Checklist', f'## Checklist\n- [{mark}] PDH-review-1 の S{kind} 前提の見直し 発行先: /board')
+                    self.write(self.ticket + '/progress.md', 'review-sha: 0000001\nreview-sha: 0000002\n')
+                    out = self.check(code)
+                    self.assertNotIn('- skip:', out)
+                    self.assertEqual(out.count('S5 で止まるべき'), code)
+        self.ready(stage='implement')
+        self.edit('## Checklist', '## Checklist\n- [-] AC の承認待ち（S8 の結果を含む） 発行先: /board')
+        out = self.check(1)
+        self.assertIn('- skip:', out)
+        self.assertNotIn('S5 で止まるべき', out)
+
     def test_general_skip_mentions_are_not_review_waits(self):
         for row in ('AC の承認待ち', 'AC の承認待ち（S7 の結果を含む）', 'AC の承認待ち（S8 の結果を含む）'):
             for suffix, code in (('', 1), (' - skip:', 0)):
