@@ -927,6 +927,15 @@ must cp "$TMP_DIR/s8-current.sh" scripts/check-pdh-ticket.sh
 must git add .
 must git -c commit.gpgsign=false commit --allow-empty -qm S8の検査を導入
 expect 0 '旧い S8 の行は新しい書式を求めない' bash scripts/check-pdh-ticket.sh
+# 印を更新した commit ではなく、行を追加した commit で互換を決める。
+sed 's/^- \[x\] S8/- [ ] S8/' tickets/sample/note.md > "$TMP_DIR/s8-mark.md"
+must cp "$TMP_DIR/s8-mark.md" tickets/sample/note.md
+expect 0 '旧 S8 の印を未 commit で更新しても追加時点は変わらない' bash scripts/check-pdh-ticket.sh
+commit 旧S8の印の更新
+expect 0 '旧 S8 の印を commit しても追加時点は変わらない' bash scripts/check-pdh-ticket.sh
+sed 's/^- \[ \] S8/- [x] S8/' tickets/sample/note.md > "$TMP_DIR/s8-mark.md"
+must cp "$TMP_DIR/s8-mark.md" tickets/sample/note.md
+commit 旧S8への回答
 must cp tickets/sample/note.md "$TMP_DIR/s8-old-note.md"
 for row in '- [x] S8 PDH-review-2 利用者の判断が要る理由: 出力の形を変える 発行先: /new-board' '- [x] S8 PDH-review-2 PM が決めた: 必須の修正に絞る 覆す条件: 別の欠陥が実測された'; do
   must cp "$TMP_DIR/s8-old-note.md" tickets/sample/note.md

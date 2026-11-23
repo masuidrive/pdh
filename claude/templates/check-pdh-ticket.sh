@@ -450,9 +450,9 @@ check_ticket_review_evidence() {
   fi
 }
 
-# S8 の行だけを blame し、その行を記録した版で新しい書式が必須だったかを調べる。
+# S8 は印の更新でも追加時点を保ち、重複して足された行には現行の書式を求める。
 check_s8_decisions() {
-  local n=$1 rows line origin
+  local n=$1 rows line origin origin_line previous_line added
   rows=$(ticket_visible_lines "$n" | awk '
     /^## Checklist[[:space:]]*$/ {section=1; next}
     /^##? / {section=0}
@@ -466,10 +466,25 @@ check_s8_decisions() {
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     if [ "${git_ready:-0}" -eq 1 ]; then
-      origin=$(git blame --line-porcelain -L "$line,$line" -- "$n" 2>/dev/null | awk 'NR == 1 {print $1}')
-      if [[ "$origin" =~ ^[0-9a-f]{40}$ && "$origin" != 0000000000000000000000000000000000000000 ]] &&
-         ! git show "$origin:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF '# s8-decision: v1' >/dev/null; then
-        continue
+      read -r origin origin_line <<< "$(git blame --line-porcelain -L "$line,$line" -- "$n" 2>/dev/null | awk 'NR == 1 {print $1, $2}')"
+      if [ "$origin" = 0000000000000000000000000000000000000000 ]; then
+        # 未 commit の印の変更も、重複行の追加と区別して HEAD の行へ対応させる。
+        previous_line=$(awk -v target="$line" '
+          function key(v) {sub(/^- \[[ xX-]\]/, "- []", v); return v}
+          FILENAME == ARGV[1] {v=key($0); count[v]++; rows[v SUBSEP count[v]]=FNR; next}
+          {v=key($0); seen[v]++; if (FNR == target) print rows[v SUBSEP seen[v]]+0}
+        ' <(git show "HEAD:$n" 2>/dev/null) "$n")
+        if [[ "$previous_line" =~ ^[0-9]+$ ]] && [ "$previous_line" -gt 0 ]; then
+          origin=HEAD
+          origin_line=$previous_line
+        fi
+      fi
+      if [[ "$origin" = HEAD || ("$origin" =~ ^[0-9a-f]{40}$ && "$origin" != 0000000000000000000000000000000000000000) ]]; then
+        added=$(git log --format=%H --no-patch -L "$origin_line,$origin_line:$n" "$origin" 2>/dev/null | tail -n 1)
+        if [[ "$added" =~ ^[0-9a-f]{40}$ ]] &&
+           ! git show "$added:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF '# s8-decision: v1' >/dev/null; then
+          continue
+        fi
       fi
     fi
     printf 'check-pdh-ticket: %s:%s: S8 の判断の記録が無い（「利用者の判断が要る理由: <理由>」か「PM が決めた: <決定> 覆す条件: <条件>」を書く）\n' "$n" "$line" >&2
