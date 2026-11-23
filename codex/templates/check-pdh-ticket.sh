@@ -795,5 +795,5 @@ fi
 if [ "$seen" -eq 0 ]; then
   printf 'check-pdh-ticket: 検査対象の ticket なし・起票先の検査を通過\n'
 else
-  printf 'check-pdh-ticket: progress.md・gate の待ち行・close 前 review の記録と区間・起票先・起票した ticket の項目・Why の根拠・AC の承認の記録・PDH-stage のチェックリスト・承認直前の記録・S8 の判断の検査を通過\n'
+  printf 'check-pdh-ticket: progress.md・gate の待ち行・close 前 review の記録と区間・起票先・起票した ticket の項目・Why の根拠・AC の承認の記録・PDH-stage のチェックリストの検査を通過\n'
 fi
