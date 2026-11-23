@@ -54,7 +54,7 @@ NATIVE_TESTS
 
   cp "$root/tests/fixtures/ticket.sh" "$target/ticket.sh"
   git -C "$target" init -q -b fixture
-  export PDH_TEST_ENGINE=$engine PDH_TEST_ROOT=$target PYTHONDONTWRITEBYTECODE=1
+  export PDH_SOURCE_ROOT=$root PDH_TEST_ENGINE=$engine PDH_TEST_ROOT=$target PYTHONDONTWRITEBYTECODE=1
   for test in "$target/tests/scripts/"*_test.sh; do
     [[ -z ${PDH_TEST_FILTER:-} || ${test##*/} == $PDH_TEST_FILTER ]] || continue
     [[ "$engine" != codex || ${test##*/} != gen_agents_md_test.sh ]] || continue

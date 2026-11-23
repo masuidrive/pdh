@@ -69,6 +69,7 @@ findings_issue_repos=" $(github_bot_value findings_issue_repos | tr ',[]' '   ')
 # findings-table: v1
 # ticket-review-evidence: v1
 # s8-decision: v1
+# s7-decision: v1
 # 印を持つ版の scripts/check-pdh-ticket.sh で作った ticket から、その印の項目と後から足した PDH-stage の行を求める。
 # v1 は別件の項目（derived-from:・pickup-timing:）と late_stage_lines、v2 は on-symptom-report の observable-symptom: と late_stage_lines_v2。
 # findings-table: v1 は現行 5 列の Findings 表。印の無い版で作った ticket は、作った時点の規則で閉じられる。
@@ -405,18 +406,31 @@ check_ticket_review_evidence() {
       key=$0; sub(/:.*/, "", key)
       sub(/^[^:]*:[[:space:]]*/, "")
       seen[key]=1
-      if ($0 !~ /^なし/) changed=1
+      if ($0 !~ /^なし/ || $0 ~ /作り直/) changed=1
     }
     END { print changed || !seen["DB-changes"] || !seen["API-changes"] ? 1 : 0 }
   ' <<< "$contract")
-  if [ "$changes" -eq 1 ] && ! ticket_visible_lines "${t%/ticket.md}/progress.md" |
-      grep -E '^前提の見直し:[[:space:]]*[^[:space:]].* 結果:[[:space:]]*[^[:space:]]' >/dev/null; then
-    printf 'check-pdh-ticket: %s: 前提の見直しの結果が無い（DB-changes / API-changes が «なし» でない。progress に「前提の見直し: <worker の engine> 結果: <案と選択の理由>」を書く）\n' "$n" >&2
+  if [ "$changes" -eq 1 ] && ! ticket_visible_lines "${t%/ticket.md}/progress.md" | awk '
+    {sub(/^[[:space:]]*(-[[:space:]]+)?/, "")}
+    /^前提の見直し:/ {
+      sub(/^前提の見直し:[[:space:]]*/, "")
+      if (!match($0, /結果:/)) next
+      engine=substr($0, 1, RSTART-1); sub(/[[:space:]]+$/, "", engine)
+      result=substr($0, RSTART+RLENGTH); sub(/^[[:space:]]+/, "", result)
+      if (engine == "" || engine ~ /^(回さない|なし|不要)([[:space:]（(]|$)/) next
+      if (result !~ /詳細:[[:space:]]*(https?:\/\/|\/)[^[:space:]]+/) next
+      sub(/詳細:.*/, "", result); gsub(/[[:space:]]/, "", result)
+      if (length(result)) found=1
+    }
+    END {exit found ? 0 : 1}
+  '; then
+    printf 'check-pdh-ticket: %s: 前提の見直しの結果が無い（DB/API の変更・後での作り直しには worker の結果が必要。例: - 前提の見直し: codex（medium）結果: 案 A を採用。詳細: /worker/result.md）\n' "$n" >&2
     failed=1
   fi
   if ! ticket_visible_lines "$n" | awk '
     /^## Required-Probes[[:space:]]*$/ {section=1; next}
     /^## / {section=0}
+    {sub(/^[[:space:]]+/, "")}
     section && /^- \[[ xX-]\] いちばん悪い初期状態:/ {
       seen=1
       if ($0 ~ /^- \[[xX]\] いちばん悪い初期状態:[[:space:]]*[^[:space:]].* 結果:[[:space:]]*[^[:space:]]/) next
@@ -425,19 +439,20 @@ check_ticket_review_evidence() {
     }
     END { exit !seen || bad ? 1 : 0 }
   '; then
-    printf 'check-pdh-ticket: %s: Required-Probes の «いちばん悪い初期状態:» の行が無いか未了（[x] と「結果: <結果>」、または [-] と「- skip: <理由>」が必要）\n' "$n" >&2
+    printf 'check-pdh-ticket: %s: Required-Probes の «いちばん悪い初期状態:» の行が無いか未了（例: - [x] いちばん悪い初期状態: 空 結果: 読める ／ - [-] いちばん悪い初期状態: 対象 - skip: 理由）\n' "$n" >&2
     failed=1
   fi
   ac_count=$(ticket_visible_lines "$t" | awk '
-    /^#+[[:space:]]+(What|Acceptance Criteria)([[:space:]\/]|$)/ {section=1; next}
     /^#+[[:space:]]/ {section=0}
-    section && /^[[:space:]]*-[[:space:]]+\[[ xX]\]/ {count++}
+    !seen_ac && /^#+[[:space:]]+(What([[:space:]]|$)|.*Acceptance Criteria)/ {section=1; seen_ac=1; next}
+    section && /^[[:space:]]*-[[:space:]]+(\[[ xX-]\]|AC[[:space:]]+[0-9]+:)/ {count++}
     END {print count+0}
   ')
   if [ "$ac_count" -ge 2 ] && ! ticket_visible_lines "$n" | awk -F '|' '
     function trim(v) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v); return v }
     /^## AC の組の順番[[:space:]]*$/ {section=1; next}
     /^## / {section=0}
+    {sub(/^[[:space:]]*(-[[:space:]]+)?/, "")}
     section && /^当たる組なし:[[:space:]]*[^[:space:]]/ {none=1}
     section && /^\|/ {
       if (trim($2) == "AC の組" && trim($3) == "経路と順番" && trim($4) == "順番ごとの約束") {header=1; next}
@@ -450,44 +465,78 @@ check_ticket_review_evidence() {
   fi
 }
 
-# S8 は印の更新でも追加時点を保ち、重複して足された行には現行の書式を求める。
+# 印の導入前の文面との対応を数える。rename と履歴の再生では元の path・reflog も読む。
 check_s8_decisions() {
-  local n=$1 rows line origin origin_line previous_line added
-  rows=$(ticket_visible_lines "$n" | awk '
+  local n=$1 rows line kind snapshot path revision marker candidates paths legacy='' shallow=0
+  if [ "${git_ready:-0}" -eq 1 ]; then
+    [ "$(git rev-parse --is-shallow-repository)" != true ] || shallow=1
+    paths=$({ printf '%s\n' "$n"; git log --follow --format= --name-only -- "$n" 2>/dev/null; } | sort -u)
+    for kind in 7 8; do
+      marker="# s$kind-decision: v1"
+      candidates=''
+      while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        while IFS= read -r revision; do
+          [ -n "$revision" ] || continue
+          if ! git show "$revision:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF "$marker" >/dev/null &&
+             git cat-file -e "$revision:$path" 2>/dev/null; then
+            candidates+=" $revision"
+          fi
+        done < <(git log --all --reflog --format=%H -- "$path" 2>/dev/null)
+      done <<< "$paths"
+      [ -n "$candidates" ] || continue
+      # 各履歴の印の直前だけを使う。古い途中版で消した行を復活させない。
+      while IFS= read -r revision; do
+        while IFS= read -r path; do
+          snapshot=$(git show "$revision:$path" 2>/dev/null) || continue
+          legacy+=$(printf '%s\n' "$snapshot" | awk -v revision="$revision" -v kind="S$kind" '
+            /^## Checklist[[:space:]]*$/ {section=1; next}
+            /^##? / {section=0}
+            section && /^- \[[ xX-]\] S[78]([^0-9]|$)/ {
+              label=$0; sub(/^- \[[ xX-]\] /, "", label)
+              if (index(label, kind " ") == 1) print revision "\t" $0
+            }
+          ')
+          legacy+=$'\n'
+        done <<< "$paths"
+      done < <(git merge-base --independent $candidates)
+    done
+  fi
+  rows=$(awk '
+    function key(v) {
+      sub(/^- \[[ xX-]\]/, "- []", v)
+      # 回答の付記は発行先の後ろだけに書く。URL の手前までの文面は保つ。
+      if (v ~ /発行先:/) sub(/[[:space:]]+—.*/, "", v)
+      sub(/[[:space:]]+$/, "", v)
+      return v
+    }
+    FILENAME == ARGV[1] {
+      if ($0 == "") next
+      revision=$0; sub(/\t.*/, "", revision)
+      sub(/^[^\t]*\t/, "")
+      v=key($0); counts[revision SUBSEP v]++
+      if (counts[revision SUBSEP v] > old[v]) old[v]=counts[revision SUBSEP v]
+      next
+    }
     /^## Checklist[[:space:]]*$/ {section=1; next}
     /^##? / {section=0}
-    section && /^- \[[ xX-]\] S8([^0-9]|$)/ {
+    section && /^- \[[ xX-]\] S[78]([^0-9]|$)/ {
+      v=key($0); seen[v]++
+      if (seen[v] <= old[v]) next
+      kind=$0; sub(/^- \[[ xX-]\] /, "", kind); sub(/ .*/, "", kind)
       content=$0; sub(/[[:space:]]+発行先:.*/, "", content)
       if (content ~ /利用者の判断が要る理由:[[:space:]]*[^[:space:]]/) next
-      if ($0 ~ /PM が決めた:[[:space:]]*[^[:space:]].* 覆す条件:[[:space:]]*[^[:space:]]/) next
-      print NR
+      if (content ~ /PM が決めた:[[:space:]]*[^[:space:]].* 覆す条件:[[:space:]]*[^[:space:]]/) next
+      print FNR " " kind
     }
-  ') || { failed=1; return; }
-  while IFS= read -r line; do
+  ' <(printf '%s' "$legacy") <(ticket_visible_lines "$n")) || { failed=1; return; }
+  while read -r line kind; do
     [ -n "$line" ] || continue
-    if [ "${git_ready:-0}" -eq 1 ]; then
-      read -r origin origin_line <<< "$(git blame --line-porcelain -L "$line,$line" -- "$n" 2>/dev/null | awk 'NR == 1 {print $1, $2}')"
-      if [ "$origin" = 0000000000000000000000000000000000000000 ]; then
-        # 未 commit の印の変更も、重複行の追加と区別して HEAD の行へ対応させる。
-        previous_line=$(awk -v target="$line" '
-          function key(v) {sub(/^- \[[ xX-]\]/, "- []", v); return v}
-          FILENAME == ARGV[1] {v=key($0); count[v]++; rows[v SUBSEP count[v]]=FNR; next}
-          {v=key($0); seen[v]++; if (FNR == target) print rows[v SUBSEP seen[v]]+0}
-        ' <(git show "HEAD:$n" 2>/dev/null) "$n")
-        if [[ "$previous_line" =~ ^[0-9]+$ ]] && [ "$previous_line" -gt 0 ]; then
-          origin=HEAD
-          origin_line=$previous_line
-        fi
-      fi
-      if [[ "$origin" = HEAD || ("$origin" =~ ^[0-9a-f]{40}$ && "$origin" != 0000000000000000000000000000000000000000) ]]; then
-        added=$(git log --format=%H --no-patch -L "$origin_line,$origin_line:$n" "$origin" 2>/dev/null | tail -n 1)
-        if [[ "$added" =~ ^[0-9a-f]{40}$ ]] &&
-           ! git show "$added:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF '# s8-decision: v1' >/dev/null; then
-          continue
-        fi
-      fi
+    if [ "$shallow" -eq 1 ]; then
+      printf 'check-pdh-ticket: 警告: %s:%s の %s は shallow clone なので旧行か確かめられなかった\n' "$n" "$line" "$kind" >&2
+      continue
     fi
-    printf 'check-pdh-ticket: %s:%s: S8 の判断の記録が無い（「利用者の判断が要る理由: <理由>」か「PM が決めた: <決定> 覆す条件: <条件>」を書く）\n' "$n" "$line" >&2
+    printf 'check-pdh-ticket: %s:%s: %s の判断の記録が無い（「利用者の判断が要る理由: <理由>」か「PM が決めた: <決定> 覆す条件: <条件>」を書く）\n' "$n" "$line" "$kind" >&2
     failed=1
   done <<< "$rows"
 }

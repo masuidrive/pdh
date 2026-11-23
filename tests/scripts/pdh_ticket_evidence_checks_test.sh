@@ -842,7 +842,7 @@ review_ready() {
 for values in 'あり|なし' 'なし|あり' 'なし（説明）|なし。補足'; do
   IFS='|' read -r db api <<< "$values"
   review_ready "$db" "$api"
-  printf '前提の見直し: 別 engine 結果: 案 A を採用、案 B/C はアクセスが増えるため外した\n' > tickets/sample/progress.md
+  printf '前提の見直し: 別 engine 結果: 案 A を採用、案 B/C はアクセスが増えるため外した。詳細: /worker/result.md\n' > tickets/sample/progress.md
   expect 0 "前提の見直しの結果あり: $values" bash scripts/check-pdh-ticket.sh
   : > tickets/sample/progress.md
   if [[ "$db" == なし* && "$api" == なし* ]]; then
@@ -986,4 +986,5 @@ must git mv tickets/sample tickets/done/sample
 expect 0 'done の S8 は新しい書式の検査対象外' bash scripts/check-pdh-ticket.sh
 
 must python3 "$ROOT_DIR/tests/scripts/pdh_script_regressions_test.py"
+must python3 "$ROOT_DIR/tests/scripts/pdh_review_contracts_test.py"
 printf 'PASS: pdh ticket evidence checks (%s 件)\n' "$checks"
