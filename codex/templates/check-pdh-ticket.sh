@@ -23,11 +23,13 @@
 #   9. 未完の ticket の現行 Findings 表の «頻度と 1 回のコスト» が空でない。done は見ない。旧 8 列の表は
 #      書き換えないが、印（findings_table_marker）より後に作った ticket では、現行 5 列の表が 1 つも無ければ落とす。
 #  10. この branch の ticket は close gate に review 記録があり、pdh-review「収束」の表に従っている:
-#      S7・S8 の行が未回答のまま
-#      次の巡へ進んでいない（S5）・PDH-verify 以降は S7・S8 の行がすべて回答済み
+#      S7・S8 の待ちが未回答のまま次の巡へ進んでいない（S5）・PDH-verify 以降は回答済み。
+#      書式の印の無い note は、同じ巡に回答済みの行が 1 つあれば済みとする
 #  11. close 時、説明対象を変えた docs は、更新か Checklist の済み行がある
 #
-#  12. 先頭に pdh-note-format: 2 の印がある note は、承認待ち以降の承認前の記録の節と固定キーと S8 のラベルが埋まっている
+#  12. 先頭に pdh-note-format: 2 の書式の印がある note は、承認待ち以降の承認前の記録の節と固定キーと S8 のラベルが埋まっている。
+#      書式の印がある note だけ、一般の [-] の待ち行に skip ラベルを求め、S7・S8 は同じ巡の全部の行の回答を求め、
+#      承認の PDH-stage では見える行だけを待ち行と数える
 #
 #   bash scripts/check-pdh-ticket.sh --ac-hash <ticket.md>   # いまの AC と Out-of-scope のハッシュを出す
 #   bash scripts/check-pdh-ticket.sh --require-branch-ticket <base-ref>
@@ -356,7 +358,7 @@ check_ticket_review_handover() {
       }
       if ($0 ~ /^## Checklist[[:space:]]*$/) { checklist=1; next }
       if ($0 ~ /^##? /) checklist=0
-      if (marked && checklist && /^- \[-\]/ && /発行先:/ && !/ - skip:/ && !/^- \[-\] S[78] PDH-review-[0-9]+([[:space:]]|$)/) print "SKIP\t" FNR
+      if (marked && checklist && /^- \[-\]/ && /発行先:/ && !/ - skip:/ && !(/[^A-Za-z0-9_]S[78]([^0-9]|$)/ && /PDH-review-[0-9]+/)) print "SKIP\t" FNR
       if (checklist && /^- \[[ xX-]\]/ && /発行先:/ && match($0, /[^A-Za-z0-9_]S[78]([^0-9]|$)/)) {
         kind=substr($0, RSTART + 2, 1)
         if (!match($0, /PDH-review-[0-9]+/)) next
@@ -409,7 +411,7 @@ check_note_format() {
       failed=1
     fi
   elif ticket_visible_lines "$n" | grep -Eq '^## 承認前の記録[[:space:]]*$'; then
-    printf 'check-pdh-ticket: %s: 印が欠けている（新規の note なら先頭行の <!-- pdh-note-format: 2 --> を復元する。印の無い note なら節を消して記録を progress に書く）\n' "$n" >&2
+    printf 'check-pdh-ticket: %s: 印が欠けている（書式の印を置く雛形で作った note は先頭行に <!-- pdh-note-format: 2 --> を戻す。書式の印を置かない古い雛形で作った note だけ、節を消して記録を progress に書く）\n' "$n" >&2
     failed=1
   fi
 }

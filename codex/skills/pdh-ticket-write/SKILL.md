@@ -42,10 +42,10 @@ ticket の節は `.ticket-config.yaml` の `default_content`、note の節は `n
 
 既存の ticket 名と 3 ファイルのパスを保ち、`new` は実行しない。`./ticket.sh list` で start 済みかを確かめ、start 済みなら `pdh-resume` で確定したその ticket の worktree で移行だけを行う。次の順で移す。
 
-1. `.ticket-config.yaml` の `default_content` と `note_content` の節へ既存の内容を移す。ただし、印の無い note には印と «承認前の記録» の節を足さず、その記録は progress に書く。progress は書き換えず、移した内容と旧 Status を追記する
+1. `.ticket-config.yaml` の `default_content` と `note_content` の節へ既存の内容を移す。note の先頭行の `<!-- pdh-note-format: 2 -->`（書式の印）を置く雛形で作った note は、書式の印が欠けていたら先頭行へ戻す。ただし、書式の印を置かない古い雛形で作った note には書式の印と «承認前の記録» の節を足さず、その記録は progress に書く。progress は書き換えず、移した内容と旧 Status を追記する
 2. 旧 Checklist の依頼・判断待ちは済み・未了・skip と理由を保って移す。旧 PDH-stage の行も消さず、現行の行への対応と、対応しない行の扱いを progress に残す。対応しない未了の工程行は理由付き `[-]` にし、ユーザの依頼と判断待ちは未了のまま残す
 3. 承認済みの AC と Out-of-scope は文を変えずに写し、承認の記録も保つ。未承認の仮置き AC と Out-of-scope は、この skill の完成条件に従って書く。承認が読み取れないものは未承認として扱い、通常の実装前の承認を受ける
-4. まだ start していない ticket は、Status を `PDH-ticket-write` にし、その stage の `--enter` で現行の行を写す。start 済みの ticket は Status を戻さず、現在の PDH-stage の Checklist と済んだ印を保つ。現在の PDH-stage の行が一つも無い場合だけ、その stage の `--enter` で写す。一部だけ欠けている場合は足りない行を手で足す。旧記録と現行の行の対応を照合した結果を progress に残す
+4. まだ start していない ticket は、Status を `PDH-ticket-write` にし、その stage の `--enter` で現行の行を写す。start 済みの ticket は Status を戻さず、現在の PDH-stage の Checklist と済んだ行を保つ。現在の PDH-stage の行が一つも無い場合だけ、その stage の `--enter` で写す。一部だけ欠けている場合は足りない行を手で足す。旧記録と現行の行の対応を照合した結果を progress に残す
 
 移行の照合は下の出力の Checklist 行で数える。start 済みなら「旧書式からの移行では依頼・判断待ち・承認済みの約束を照合した」の行だけを note の Checklist へ手で足し、移行の結果を判定する。内容の対応と承認の有無は文章の意味によるため、PM が判断する。
 
