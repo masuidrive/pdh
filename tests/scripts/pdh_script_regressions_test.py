@@ -404,12 +404,13 @@ class ScriptTests(unittest.TestCase):
     def test_review_handover_s5_stops_the_next_round_until_s7_is_answered(self):
         progress = self.review_progress(3) + '### Findings-PDH-review-3\n' + self.table(severity='Minor')
         self.write(f'{self.ticket}/progress.md', progress)
-        for mark in (' ', '-'):
+        self.note('implement', self.s7(2, ' '))
+        self.assertIn('S5 で止まるべき: PDH-review-2 の S7 の行が未回答', self.check(1))
+        for mark in ('x', 'X', '-'):
             with self.subTest(mark=mark):
-                self.note('implement', self.s7(2, mark))
-                self.assertIn('S5 で止まるべき: PDH-review-2 の S7 の行が未回答', self.check(1))
-        self.note('implement', self.s7(2))
-        self.check()
+                reason = ' - skip: 判断待ちを撤回した' if mark == '-' else ''
+                self.note('implement', self.s7(2, mark) + reason)
+                self.check()
         self.write(f'{self.ticket}/progress.md', self.review_progress(2))
         self.note('implement', self.s7(2, ' '))
         self.check()
