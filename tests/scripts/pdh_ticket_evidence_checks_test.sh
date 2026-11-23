@@ -987,4 +987,5 @@ expect 0 'done の S8 は新しい書式の検査対象外' bash scripts/check-p
 
 must python3 "$ROOT_DIR/tests/scripts/pdh_script_regressions_test.py"
 must python3 "$ROOT_DIR/tests/scripts/pdh_review_contracts_test.py"
+must python3 "$ROOT_DIR/tests/scripts/pdh_review_round2_test.py"
 printf 'PASS: pdh ticket evidence checks (%s 件)\n' "$checks"

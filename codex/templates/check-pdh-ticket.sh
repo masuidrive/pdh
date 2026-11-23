@@ -26,7 +26,7 @@
 #      S7・S8 の行が未回答のまま
 #      次の巡へ進んでいない（S5）・PDH-verify 以降は S7・S8 の行がすべて回答済み
 #  11. close 時、説明対象を変えた docs は、更新か Checklist の済み行がある
-#  12. 承認直前には前提の見直し・初期状態・AC の組の順番の記録があり、新しい S7・S8 行には判断の理由がある
+#  12. 承認直前には前提の見直し・初期状態・AC の組の順番の記録があり、新しい S8 行には判断の理由がある
 #
 #   bash scripts/check-pdh-ticket.sh --ac-hash <ticket.md>   # いまの AC と Out-of-scope のハッシュを出す
 #   bash scripts/check-pdh-ticket.sh --require-branch-ticket <base-ref>
@@ -69,7 +69,6 @@ findings_issue_repos=" $(github_bot_value findings_issue_repos | tr ',[]' '   ')
 # findings-table: v1
 # ticket-review-evidence: v1
 # s8-decision: v1
-# s7-decision: v1
 # 印を持つ版の scripts/check-pdh-ticket.sh で作った ticket から、その印の項目と後から足した PDH-stage の行を求める。
 # v1 は別件の項目（derived-from:・pickup-timing:）と late_stage_lines、v2 は on-symptom-report の observable-symptom: と late_stage_lines_v2。
 # findings-table: v1 は現行 5 列の Findings 表。印の無い版で作った ticket は、作った時点の規則で閉じられる。
@@ -471,36 +470,33 @@ check_s8_decisions() {
   if [ "${git_ready:-0}" -eq 1 ]; then
     [ "$(git rev-parse --is-shallow-repository)" != true ] || shallow=1
     paths=$({ printf '%s\n' "$n"; git log --follow --format= --name-only -- "$n" 2>/dev/null; } | sort -u)
-    for kind in 7 8; do
-      marker="# s$kind-decision: v1"
-      candidates=''
-      while IFS= read -r path; do
-        [ -n "$path" ] || continue
-        while IFS= read -r revision; do
-          [ -n "$revision" ] || continue
-          if ! git show "$revision:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF "$marker" >/dev/null &&
-             git cat-file -e "$revision:$path" 2>/dev/null; then
-            candidates+=" $revision"
-          fi
-        done < <(git log --all --reflog --format=%H -- "$path" 2>/dev/null)
-      done <<< "$paths"
-      [ -n "$candidates" ] || continue
-      # 各履歴の印の直前だけを使う。古い途中版で消した行を復活させない。
+    marker="# s8-decision: v1"
+    candidates=''
+    while IFS= read -r path; do
+      [ -n "$path" ] || continue
       while IFS= read -r revision; do
-        while IFS= read -r path; do
-          snapshot=$(git show "$revision:$path" 2>/dev/null) || continue
-          legacy+=$(ticket_visible_lines <(printf '%s\n' "$snapshot") | awk -v revision="$revision" -v kind="S$kind" '
-            /^## Checklist[[:space:]]*$/ {section=1; next}
-            /^##? / {section=0}
-            section && /^- \[[ xX-]\] S[78]([^0-9]|$)/ {
-              label=$0; sub(/^- \[[ xX-]\] /, "", label)
-              if (index(label, kind " ") == 1) print revision "\t" $0
-            }
-          ')
-          legacy+=$'\n'
-        done <<< "$paths"
-      done < <(git merge-base --independent $candidates)
-    done
+        [ -n "$revision" ] || continue
+        if ! git show "$revision:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF "$marker" >/dev/null &&
+           git cat-file -e "$revision:$path" 2>/dev/null; then
+          candidates+=" $revision"
+        fi
+      done < <(git log --all --reflog --format=%H -- "$path" 2>/dev/null)
+    done <<< "$paths"
+    [ -n "$candidates" ] || continue
+    # 各履歴の印の直前だけを使う。古い途中版で消した行を復活させない。
+    while IFS= read -r revision; do
+      while IFS= read -r path; do
+        snapshot=$(git show "$revision:$path" 2>/dev/null) || continue
+        legacy+=$(ticket_visible_lines <(printf '%s\n' "$snapshot") | awk -v revision="$revision" '
+          /^## Checklist[[:space:]]*$/ {section=1; next}
+          /^##? / {section=0}
+          section && /^- \[[ xX-]\] S8([^0-9]|$)/ {
+            print revision "\t" $0
+          }
+        ')
+        legacy+=$'\n'
+      done <<< "$paths"
+    done < <(git merge-base --independent $candidates)
   fi
   rows=$(awk '
     function key(v) {
@@ -520,7 +516,7 @@ check_s8_decisions() {
     }
     /^## Checklist[[:space:]]*$/ {section=1; next}
     /^##? / {section=0}
-    section && /^- \[[ xX-]\] S[78]([^0-9]|$)/ {
+    section && /^- \[[ xX-]\] S8([^0-9]|$)/ {
       v=key($0); seen[v]++
       if (seen[v] <= old[v]) next
       kind=$0; sub(/^- \[[ xX-]\] /, "", kind); sub(/ .*/, "", kind)

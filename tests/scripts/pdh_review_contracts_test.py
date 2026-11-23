@@ -100,7 +100,8 @@ class ReviewContracts(unittest.TestCase):
         self.note('review', '- [x] S7 PDH-review-1 PM が決めた: 修正に絞る 覆す条件: 新しい欠陥')
         self.check()
         self.note('review', '- [x] S7 PDH-review-1 PM が決めた: 修正に絞る')
-        self.assertIn('S7 の判断の記録', self.check(code=1))
+        self.check()
+        # S7 の判断の中身は PM の Checklist が確かめ、機械は S8 だけを見る。
 
     def test_review_05_adjacent_new_s8_is_not_legacy(self):
         self.old_s8()

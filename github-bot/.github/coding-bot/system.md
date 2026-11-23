@@ -365,7 +365,8 @@ breaks if it is guessed wrong.]
   Record the waiting line as `- [ ] S8 PDH-review-<round> 利用者の判断が要る理由: <change> 発行先: <URL or path>`;
   keep it unchecked until the answer is reflected. For a PM decision, record
   `- [x] S8 PDH-review-<round> PM が決めた: <decision> 覆す条件: <condition>`
-  and the same conclusion in progress, without 発行先. Use S7 instead of S8 for S7 decisions.
+  and the same conclusion in progress, without 発行先. Use S7 instead of S8 when the PM decides at S7. Only S8 lines have a machine-checked decision format.
+  For pending S7 conclusions, follow the convergence table: include S7, the round, and 発行先:.
 - For **time**: propose `🤖 続行` to pick up where you left off, plus
   any prep the user can do (env var, secret, larger budget) to reduce
   the next-run risk.
