@@ -40,8 +40,8 @@ class NoteStateContracts(NoteFixture):
             with self.subTest(stage=stage):
                 self.ready_state(stage)
                 self.check()
-                for key, value in (('前提の見直しの記録', 'progress.md'),
-                                   ('いちばん悪い初期状態の記録', 'progress.md'), ('AC の組の順番', '表')):
+                for key, value in (('前提の見直し', '済み'),
+                                   ('いちばん悪い初期状態', '測った'), ('AC の組の順番', '表')):
                     self.ready_state(stage)
                     self.edit(key+': '+value, key+':')
                     self.assertIn(key, self.check(1))
@@ -50,22 +50,20 @@ class NoteStateContracts(NoteFixture):
             self.mark()
             self.check()
 
-    def test_enter_adds_empty_evidence_only_at_review_or_gate(self):
+    def test_enter_preserves_note_format_at_every_stage(self):
         for stage in ('ticket-write', 'open', 'ticket-review', 'ticket-human-review', 'implement', 'review', 'verify', 'human-review', 'close'):
-            with self.subTest(stage=stage):
-                self.note(stage)
-                out=self.run_cmd('bash', 'scripts/pdh-stage-checklist.sh', 'PDH-'+stage, '--enter', f'{self.ticket}/note.md').stdout
-                p=self.root/self.ticket/'note.md'
-                added=stage in ('ticket-review', 'ticket-human-review')
-                self.assertEqual('## 承認前の記録' in p.read_text(), added)
-                self.assertTrue(p.read_text().startswith(STAMP))
-                if added:
-                    self.assertIn('承認前の記録', out)
-                    for key in ('前提の見直し', '前提の見直しの記録', 'いちばん悪い初期状態', 'いちばん悪い初期状態の記録', 'AC の組の順番', 'AC の組の順番の理由'):
-                        self.assertIn(key+':\n', p.read_text())
-                first=p.read_text()
-                self.run_cmd('bash', 'scripts/pdh-stage-checklist.sh', 'PDH-'+stage, '--enter', f'{self.ticket}/note.md')
-                self.assertEqual(first, p.read_text())
+            for marked in (False, True):
+                with self.subTest(stage=stage, marked=marked):
+                    self.note(stage)
+                    if marked:
+                        self.mark()
+                    p = self.root / self.ticket / 'note.md'
+                    before = p.read_text()
+                    for _ in range(2):
+                        self.run_cmd('bash', 'scripts/pdh-stage-checklist.sh', 'PDH-'+stage, '--enter', f'{self.ticket}/note.md')
+                        self.assertEqual(p.read_text().startswith(STAMP), marked)
+                        self.assertEqual('## 承認前の記録' in p.read_text(), marked)
+                    self.assertEqual(p.read_text().count('## 承認前の記録'), before.count('## 承認前の記録'))
 
     def test_states_are_whole_values_and_descriptions_are_separate(self):
         cases=[('DB-changes', 'あり', 0), ('API-changes', 'なし', 0),
@@ -89,7 +87,7 @@ class NoteStateContracts(NoteFixture):
             self.edit('AC の組の順番: 表', 'AC の組の順番: 当たる組なし')
             self.edit('AC の組の順番の理由: 別の状態', 'AC の組の順番の理由: 別々')
             self.edit(key+': '+('別々' if key.endswith('理由') else 'progress.md'), key+':   ')
-            self.assertIn(key, self.check(1))
+            self.check()
         self.ready_state()
         self.edit('DB-changes: あり', 'DB-changes: なし\nDB-changes の内容: 作り直しは不要')
         self.edit('API-changes: なし', 'API-changes: なし\nAPI-changes の内容: 不明な文でも状態にはしない')

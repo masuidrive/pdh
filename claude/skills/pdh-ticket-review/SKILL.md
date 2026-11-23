@@ -72,7 +72,7 @@ AC が 2 件以上なら、同じデータや状態を別の経路で触る AC �
 |---|---|---|
 | <AC の番号> | <CLI → 画面 → CLI など> | <各順番で約束が成り立つ根拠> |
 
-PDH-ticket-human-review へ Status を進めたら、承認者に渡す前に `pdh-pm`「承認の PDH-stage」の処理 2 で `bash scripts/check-pdh-ticket.sh` を回す。初期状態が端の場面に当たるか、組を漏らしていないか、約束が成り立つかは下の Checklist で PM が判断する。
+PDH-ticket-human-review へ Status を進めたら、承認者に渡す前に `pdh-pm`「承認の PDH-stage」の処理 2 で `bash scripts/check-pdh-ticket.sh` を回す。機械は決まった欄の決まった語だけを数え、記録の所在・非該当の理由・順番の表の中身は下の判断の Checklist で PM が確かめる。
 
 ### 別件として残された finding を拾う
 
@@ -157,7 +157,7 @@ done) &&
 - [ ] PDH-ticket-review: 文書の frontmatter 検査を採用している場合、関係する文書の内容を ticket に反映し、節ごとの採否・照合記録を `related-docs.md` に残した
 
 - [ ] PDH-ticket-review: 前提の見直しを回したなら、出た案と選んだ理由が progress にある。回さなかったなら、その理由を書いた
-- [ ] PDH-ticket-review: DB/API の変更時の前提の見直しの結果があり、いちばん悪い初期状態と AC の組の順番を照合した。絶対の形の約束と実装で測る値が矛盾せず、端の場面・順番でも約束が成り立つ根拠が note と progress にある
+- [ ] PDH-ticket-review: PM が承認前の記録の所在と中身・非該当の理由・AC の組の順番の表を照合し、DB/API の変更時の前提の見直しの結果が progress にある。絶対の形の約束と実装で測る値が矛盾せず、端の場面・順番でも約束が成り立つ根拠が note と progress にある
 - [ ] PDH-ticket-review: 絶対の形の AC は、Required-Probes に場面の頻度を測った結果と 1 回のコストがあり、Failure Tolerance と照合した範囲になっている
 - [ ] PDH-ticket-review: 変更箇所と制約の anchor を照合し、該当行を直すか残すかが progress にある。目安の変更時は全行、マイルストーンを閉じるときは «テストなし» の行も見直した
 - [ ] PDH-ticket-review: AC だけを読む worker が、全 AC に «復元できた» を返した。PM が結果を progress に残す

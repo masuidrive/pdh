@@ -347,7 +347,7 @@ exit "$pdh_tolerance_status"
 
 `.ticket-config.yaml` の `note_content` の先頭行を `<!-- pdh-note-format: 2 -->` にする（前後の空白は許す）。`## 承認前の記録` と、配布版の空の状態・記録・理由の6欄を置く。状態の値は列挙語だけとし、所在と理由は別欄に書く。Required-Probes の旧い初期状態の雛形の行は除き、`## AC の組の順番` と表の見出しは残す。Ticket contract check の DB/API の説明に «値は あり か なし の1語だけ» を入れ、`DB-changes の内容:`・`API-changes の内容:` を別の行に置く。
 
-既存の note は一括で書き換えない。`pdh-stage-checklist.sh <stage> --enter <note>` は、Checklist に S8 の行が無い場合だけ印を足す。PDH-ticket-review と PDH-ticket-human-review への --enter は、無ければ空の `## 承認前の記録` も足す。後の stage では節を足さず、節の無い旧 ticket に承認前の記録を遡及要求しない。節のある ticket は承認待ち以降も記録を数える（done を除く）。`pdh-note-format` を含むのに先頭行が指定の印でない note と、節があるのに印が無い note は検査で落ちる。適用済みかは、導入先で次の冪等な確認コマンドを実行する。
+印の無い進行中の ticket には新しい検査を当てない。後から印を付けない。印と `## 承認前の記録` の節は note の雛形だけが入れ、`pdh-stage-checklist.sh --enter` はどちらも足さない。印のある note は、承認待ち以降に見える記録の節と状態の語を数える（done を除く）。先頭から最初の見出しまでに `<!-- pdh-note-format:` で始まる行があるのに先頭行が指定の印でない note と、見える節があるのに印が無い note は検査で落ちる。適用済みかは、導入先で次の冪等な確認コマンドを実行する。
 
 <!-- pdh-shell: note-evidence-check -->
 ```bash

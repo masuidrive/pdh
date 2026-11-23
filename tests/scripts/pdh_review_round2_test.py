@@ -22,7 +22,7 @@ class NoteFormatCompatibility(NoteFixture):
     def test_note_format_v2_absent_section_keeps_legacy_evidence_behavior(self):
         for stage in ('ticket-review', 'implement', 'review', 'verify', 'human-review'):
             with self.subTest(stage=stage):
-                self.ready(db=None, api=None, review=None, initial=None, sequence=None, heading=False, stage=stage, evidence=False)
+                self.ready(db=None, api=None, review=None, initial=None, sequence=None, heading=False, stage=stage, evidence=False, marked=False)
                 self.check()
 
     def test_note_format_v2_done_excludes_new_checks(self):
@@ -42,21 +42,21 @@ class NoteFormatCompatibility(NoteFixture):
                 self.edit('## Checklist', '## Checklist\n- [x] S8 PDH-review-1 書式なし')
                 self.assertIn('書式どおりに書く', self.check(1))
 
-    def test_note_format_v2_enter_stamps_only_without_existing_s8(self):
+    def test_note_format_v2_enter_never_stamps_legacy_notes(self):
         for row in ('', '- [x] S8 PDH-review-1 旧い回答', '- [ ] S8: 旧い結論',
                     '- [-] S8 PDH-review-1 - skip: 理由'):
             with self.subTest(row=row):
                 self.note('review', row)
                 result = self.run_cmd('bash', 'scripts/pdh-stage-checklist.sh', 'PDH-review', '--enter', f'{self.ticket}/note.md')
                 p = self.root / self.ticket / 'note.md'
-                self.assertEqual(p.read_text().startswith(STAMP), not bool(row))
-                self.assertIn('印', result.stdout)
+                self.assertFalse(p.read_text().startswith(STAMP))
+                self.assertNotIn('を足した', result.stdout)
                 first = p.read_text()
                 self.run_cmd('bash', 'scripts/pdh-stage-checklist.sh', 'PDH-review', '--enter', f'{self.ticket}/note.md')
                 self.assertEqual(first, p.read_text())
         self.note('review', '## Other\n- [x] S8 ここは Checklist でない')
         self.run_cmd('bash', 'scripts/pdh-stage-checklist.sh', 'PDH-review', '--enter', f'{self.ticket}/note.md')
-        self.assertTrue((self.root / self.ticket / 'note.md').read_text().startswith(STAMP))
+        self.assertFalse((self.root / self.ticket / 'note.md').read_text().startswith(STAMP))
 
     def test_note_format_v2_enter_preserves_existing_marked_s8(self):
         self.note('review', '- [x] S8 PDH-review-1 書式なし')

@@ -22,9 +22,13 @@ class NoteFixture(unittest.TestCase):
         p = self.root / self.ticket / 'note.md'
         p.write_text(p.read_text().replace(before, after))
 
-    def mark(self):
+    def mark(self, evidence=True):
         p = self.root / self.ticket / 'note.md'
-        p.write_text(STAMP + '\n' + p.read_text())
+        text = p.read_text()
+        if evidence:
+            text += ('## PDH-ticket-review. Ticket contract check\nDB-changes: なし\nAPI-changes: なし\n'
+                     '## 承認前の記録\n前提の見直し: 不要\nいちばん悪い初期状態: 当たらない\nAC の組の順番: 当たる組なし\n')
+        p.write_text(STAMP + '\n' + text)
 
     def ready(self, db='あり', api='なし', review='済み',
               initial='測った', sequence='表', heading=True,
@@ -39,7 +43,7 @@ class NoteFixture(unittest.TestCase):
             f.write(f'AC-approved: {hashed}\n')
         self.note(stage)
         if marked:
-            self.mark()
+            self.mark(evidence=False)
         with (self.root / self.ticket / 'note.md').open('a') as f:
             f.write('## PDH-ticket-review. Ticket contract check\n')
             for key, value in [('DB-changes', db), ('API-changes', api)]:
@@ -73,7 +77,7 @@ class NoteFormatContracts(NoteFixture):
             for value, location in [('済み', 'progress.md'), ('済み', 'https://example.invalid/result'),
                                     ('済み', '/<UUID>/result.md'), ('済み', ''),
                                     ('済み progress.md', 'progress.md'), ('不要', ''), ('', ''), (None, '')]:
-                code = 0 if (value == '済み' and location or value == '不要' and db == api == 'なし') else 1
+                code = 0 if (value == '済み' or value == '不要' and db == api == 'なし') else 1
                 with self.subTest(db=db, api=api, value=value, location=location):
                     self.ready(db=db, api=api, review=value, review_record=location)
                     out = self.check(code)
@@ -83,7 +87,7 @@ class NoteFormatContracts(NoteFixture):
 
     def test_note_format_v2_initial_state_status(self):
         for value, location, code in [('測った', 'progress.md', 0), ('当たらない', '状態を持たない', 0),
-                                      ('測った', '/<UUID>/probe', 0), ('測った', '', 1), ('当たらない', '', 1),
+                                      ('測った', '/<UUID>/probe', 0), ('測った', '', 0), ('当たらない', '', 0),
                                       ('測った progress.md', '所在', 1), ('', '所在', 1), (None, '所在', 1)]:
             with self.subTest(value=value, location=location):
                 self.ready(initial=value, initial_record=location)
@@ -94,8 +98,8 @@ class NoteFormatContracts(NoteFixture):
 
     def test_note_format_v2_sequence_reference(self):
         for count, value, heading, reason, code in [(1, '', False, '', 0), (2, '表', True, '', 0),
-                                          (2, '表', False, '', 1), (2, '当たる組なし', False, '別の状態', 0),
-                                          (2, '当たる組なし', True, '', 1), (2, '', True, '', 1),
+                                          (2, '表', False, '', 0), (2, '当たる組なし', False, '別の状態', 0),
+                                          (2, '当たる組なし', True, '', 0), (2, '', True, '', 1),
                                           (2, '当たる組なし 理由', True, '理由', 1), (2, None, True, '', 1)]:
             with self.subTest(count=count, value=value, heading=heading):
                 self.ready(count=count, sequence=value, heading=heading, sequence_reason=reason)
@@ -139,13 +143,13 @@ class NoteFormatContracts(NoteFixture):
         cases = [('利用者の判断が要る理由: 出力を変える 発行先: /board', 0),
                  ('PM が決めた: 修正 覆す条件: 再発', 0),
                  ('PM が決めた: <UUID> は変更しない 覆す条件: 該当すると分かったら', 0),
-                 ('PM が決めた: 修正 覆す条件: ', 1), ('PM が決めた: 修正', 1),
+                 ('PM が決めた: 修正 覆す条件: ', 0), ('PM が決めた: 修正', 1),
                  ('利用者の判断が要る理由: 出力を変える', 1),
                  ('説明 PM が決めた: 修正 覆す条件: 再発', 1), ('書式なし', 1)]
         for mark in (' ', 'x', '-'):
             for value, code in cases:
                 with self.subTest(mark=mark, value=value):
-                    self.note('review', f'- [{mark}] S8 PDH-review-1 {value}')
+                    self.note('review', f'- [{mark}] S8 PDH-review-1 {value}' + (' - skip:' if mark == '-' else ''))
                     self.mark()
                     out = self.check(code)
                     if code:
@@ -204,7 +208,7 @@ class NoteFormatContracts(NoteFixture):
         self.edit('  ' + STAMP + '\t\n', '')
         self.assertIn('印が欠けている', self.check(1))
         self.edit('## Checklist', '## Checklist\n' + STAMP)
-        self.assertIn('印が壊れている', self.check(1))
+        self.assertIn('印が欠けている', self.check(1))
 
 
 del Fixture
