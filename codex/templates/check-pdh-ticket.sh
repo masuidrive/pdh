@@ -524,7 +524,7 @@ check_s8_decisions() {
       v=key($0); seen[v]++
       if (seen[v] <= old[v]) next
       kind=$0; sub(/^- \[[ xX-]\] /, "", kind); sub(/ .*/, "", kind)
-      content=$0; sub(/[[:space:]]+発行先:.*/, "", content)
+      content=$0; sub(/[[:space:]]*発行先:.*/, "", content)
       if (content ~ /利用者の判断が要る理由:[[:space:]]*[^[:space:]]/) next
       if (content ~ /PM が決めた:[[:space:]]*[^[:space:]].* 覆す条件:[[:space:]]*[^[:space:]]/) next
       print FNR " " kind

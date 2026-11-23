@@ -167,7 +167,7 @@ class ReviewContracts(unittest.TestCase):
         hashed = self.run_cmd('bash', 'scripts/check-pdh-ticket.sh', '--ac-hash', f'{self.ticket}/ticket.md').stdout.strip()
         with (self.root / self.ticket / 'ticket.md').open('a') as f:
             f.write(f'AC-approved: {hashed}\n')
-        for text in ('PM が決めた: 修正 覆す条件: 発行先: /board', 'PM が決めた: 発行先: /board 覆す条件: 再発'):
+        for text in ('PM が決めた: 修正 覆す条件: 発行先: /board', 'PM が決めた: 発行先: /board 覆す条件: 再発', 'PM が決めた:修正 覆す条件:発行先:/board', 'PM が決めた:発行先:/board 覆す条件:再発', '利用者の判断が要る理由:発行先:/board'):
             self.note('review', '- [x] S8 PDH-review-2 ' + text)
             self.assertIn('S8 の判断の記録', self.check(code=1))
         self.note('review', '- [x] S8 PDH-review-2 PM が決めた: 修正 覆す条件: 再発')
