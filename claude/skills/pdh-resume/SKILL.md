@@ -31,7 +31,7 @@ pdh-resume は、作業が中断している ticket を受け取り、作業す�
 
 `[SKILLS_PATH]/pdh-pm/_open-ticket.md` の手順で開く。Status が `PDH-open` なら、PDH-open の途中で作業が中断している ticket なので、skill `pdh-open` に従う。
 
-旧い書式の ticket・note なら、`pdh-ticket-write`「旧書式を移す」の start 済みの手順で、その worktree 内の移行だけを行う。Status と済んだ Checklist の印を保ち、PDH-ticket-write へは戻さない。
+旧い書式の ticket・note なら、`pdh-ticket-write`「旧書式を移す」の start 済みの手順で、その worktree 内の移行だけを行う。印の無い note は印と «承認前の記録» の節を足さず、同じ記録を progress に書く。Status と済んだ Checklist の印を保ち、PDH-ticket-write へは戻さない。
 
 ### どこまで進んでいたかを読み取る
 
