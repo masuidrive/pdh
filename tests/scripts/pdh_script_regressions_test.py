@@ -250,7 +250,7 @@ class ScriptTests(unittest.TestCase):
         return f'- [{mark}] S7 PDH-review-{round} 前提の見直しの回答待ち 発行先: /review-{round}'
 
     def s8(self, round, mark='x'):
-        return f'- [{mark}] S8 PDH-review-{round} 人の答え待ち 発行先: /board-{round}'
+        return f'- [{mark}] S8 PDH-review-{round} 人の答え待ち 利用者の判断が要る理由: 出力が変わる 発行先: /board-{round}'
 
     def test_review_range_excludes_ticket_evidence_and_keeps_source_changes(self):
         anchor = self.sha()

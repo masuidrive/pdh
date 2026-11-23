@@ -26,6 +26,7 @@
 #      S7・S8 の行が未回答のまま
 #      次の巡へ進んでいない（S5）・PDH-verify 以降は S7・S8 の行がすべて回答済み
 #  11. close 時、説明対象を変えた docs は、更新か Checklist の済み行がある
+#  12. 承認直前には前提の見直し・初期状態・AC の組の順番の記録があり、新しい S8 行には判断の理由がある
 #
 #   bash scripts/check-pdh-ticket.sh --ac-hash <ticket.md>   # いまの AC と Out-of-scope のハッシュを出す
 #   bash scripts/check-pdh-ticket.sh --require-branch-ticket <base-ref>
@@ -67,6 +68,7 @@ findings_issue_repos=" $(github_bot_value findings_issue_repos | tr ',[]' '   ')
 # derived-ticket-fields: v2
 # findings-table: v1
 # ticket-review-evidence: v1
+# s8-decision: v1
 # 印を持つ版の scripts/check-pdh-ticket.sh で作った ticket から、その印の項目と後から足した PDH-stage の行を求める。
 # v1 は別件の項目（derived-from:・pickup-timing:）と late_stage_lines、v2 は on-symptom-report の observable-symptom: と late_stage_lines_v2。
 # findings-table: v1 は現行 5 列の Findings 表。印の無い版で作った ticket は、作った時点の規則で閉じられる。
@@ -86,6 +88,7 @@ review_evidence_marker='# ticket-review-evidence: v1'
 late_review_evidence_lines=$(cat <<'EOF'
 PDH-ticket-write: AC は結果で書き、比較の項目を分け、原文の見た目・相当の要求を AC か Out-of-scope と照合し、照合の差の検出と説明の付かない差が 0 の約束を分けた（「AC の書き方」）
 PDH-ticket-review: DB/API の変更時の前提の見直しの結果があり、いちばん悪い初期状態と AC の組の順番を照合した。絶対の形の約束と実装で測る値が矛盾せず、端の場面・順番でも約束が成り立つ根拠が note と progress にある
+PDH-review: S8 の各行に利用者の判断が要る理由か PM の決定と覆す条件があり、判断の基準と progress の結論が合っている
 EOF
 )
 # 引数（印・path…）の path を最初に追加した commit の版の検査 script に印が無ければ 0。未 commit なら 1。
@@ -447,6 +450,32 @@ check_ticket_review_evidence() {
   fi
 }
 
+# S8 の行だけを blame し、その行を記録した版で新しい書式が必須だったかを調べる。
+check_s8_decisions() {
+  local n=$1 rows line origin
+  rows=$(ticket_visible_lines "$n" | awk '
+    /^## Checklist[[:space:]]*$/ {section=1; next}
+    /^##? / {section=0}
+    section && /^- \[[ xX-]\]/ && /[^A-Za-z0-9_]S8([^0-9]|$)/ {
+      if ($0 ~ /利用者の判断が要る理由:[[:space:]]*[^[:space:]]/) next
+      if ($0 ~ /PM が決めた:[[:space:]]*[^[:space:]].* 覆す条件:[[:space:]]*[^[:space:]]/) next
+      print NR
+    }
+  ') || { failed=1; return; }
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    if [ "${git_ready:-0}" -eq 1 ]; then
+      origin=$(git blame --line-porcelain -L "$line,$line" -- "$n" 2>/dev/null | awk 'NR == 1 {print $1}')
+      if [[ "$origin" =~ ^[0-9a-f]{40}$ && "$origin" != 0000000000000000000000000000000000000000 ]] &&
+         ! git show "$origin:scripts/check-pdh-ticket.sh" 2>/dev/null | grep -xF '# s8-decision: v1' >/dev/null; then
+        continue
+      fi
+    fi
+    printf 'check-pdh-ticket: %s:%s: S8 の判断の記録が無い（「利用者の判断が要る理由: <理由>」か「PM が決めた: <決定> 覆す条件: <条件>」を書く）\n' "$n" "$line" >&2
+    failed=1
+  done <<< "$rows"
+}
+
 # AC と Out-of-scope の承認の記録（«AC-approved: <いまの AC と Out-of-scope のハッシュ>»）を確かめる。
 check_ac_approved() {
   local t=$1 st=$2 rec cur
@@ -679,6 +708,7 @@ for t in "$tickets_dir"/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
     st=$(awk '/^## Status:/{sub(/^## Status:[[:space:]]*/,""); print; exit}' "$n" \
          | sed -E 's/^[[:space:]]*(PDH-[a-z-]+).*/\1/')
   fi
+  [[ "$t" == "$tickets_dir/done/"* ]] || check_s8_decisions "$n"
   [[ "$t" == "$tickets_dir/done/"* ]] || check_ticket_review_evidence "$t" "$n" "$st"
   check_ac_approved "$t" "$st"
   case "$st" in
@@ -765,5 +795,5 @@ fi
 if [ "$seen" -eq 0 ]; then
   printf 'check-pdh-ticket: 検査対象の ticket なし・起票先の検査を通過\n'
 else
-  printf 'check-pdh-ticket: progress.md・gate の待ち行・close 前 review の記録と区間・起票先・起票した ticket の項目・Why の根拠・AC の承認の記録・PDH-stage のチェックリストの検査を通過\n'
+  printf 'check-pdh-ticket: progress.md・gate の待ち行・close 前 review の記録と区間・起票先・起票した ticket の項目・Why の根拠・AC の承認の記録・PDH-stage のチェックリスト・承認直前の記録・S8 の判断の検査を通過\n'
 fi

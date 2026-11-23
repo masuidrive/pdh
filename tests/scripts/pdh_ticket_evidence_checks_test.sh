@@ -909,5 +909,66 @@ must git -c commit.gpgsign=false commit -qm 承認後の記録
 must git mv tickets/sample tickets/done/sample
 expect 0 'done は新しい ticket-review 記録の検査対象外' bash scripts/check-pdh-ticket.sh
 
+# S8 は行を追加した版で互換を決める。同じ note に旧行と新行を混在させる。
+must mkdir -p "$TMP_DIR/s8-evidence/scripts" "$TMP_DIR/s8-evidence/tickets/sample"
+must cp "$ROOT_DIR/scripts/check-pdh-ticket.sh" "$ROOT_DIR/scripts/pdh-review-range.sh" "$TMP_DIR/s8-evidence/scripts/"
+install_stage_fixture "$TMP_DIR/s8-evidence"
+must cd "$TMP_DIR/s8-evidence"
+must git init -q -b main
+printf '### Why\nReproduction-or-measurement: fixture\nWhy-not-fix-now: 該当なし\n### What\n- [ ] 結果を読める\nAC-approved: ebdc012f008a4f1d\n' > tickets/sample/ticket.md
+: > tickets/sample/progress.md
+status PDH-review
+must cp scripts/check-pdh-ticket.sh "$TMP_DIR/s8-current.sh"
+grep -vxF '# s8-decision: v1' "$TMP_DIR/s8-current.sh" > scripts/check-pdh-ticket.sh
+printf -- '- [x] S8 PDH-review-1 旧い書式の回答済み 発行先: /old-board\n' >> tickets/sample/note.md
+commit 検査前のS8の行
+must git checkout -qb features/sample
+must cp "$TMP_DIR/s8-current.sh" scripts/check-pdh-ticket.sh
+must git add .
+must git -c commit.gpgsign=false commit --allow-empty -qm S8の検査を導入
+expect 0 '旧い S8 の行は新しい書式を求めない' bash scripts/check-pdh-ticket.sh
+must cp tickets/sample/note.md "$TMP_DIR/s8-old-note.md"
+for row in '- [x] S8 PDH-review-2 利用者の判断が要る理由: 出力の形を変える 発行先: /new-board' '- [x] S8 PDH-review-2 PM が決めた: 必須の修正に絞る 覆す条件: 別の欠陥が実測された'; do
+  must cp "$TMP_DIR/s8-old-note.md" tickets/sample/note.md
+  printf '%s\n' "$row" >> tickets/sample/note.md
+  expect 0 '旧行と新行の混在: 人の理由と PM の決定' bash scripts/check-pdh-ticket.sh
+  commit 判断を記録
+done
+for row in '- [x] S8 PDH-review-3 発行先: /board' '- [ ] S8 PDH-review-3 未了' '- [-] S8 PDH-review-3 - skip: 任意' '- [x] S8 PDH-review-3 利用者の判断が要る理由: ' '- [x] S8 PDH-review-3 PM が決めた:  覆す条件: 失敗' '- [x] S8 PDH-review-3 PM が決めた: 修正'; do
+  must cp "$TMP_DIR/s8-old-note.md" tickets/sample/note.md
+  printf '%s\n' "$row" >> tickets/sample/note.md
+  expect 1 '新しい S8 の行は理由か決定と覆す条件が必要' bash scripts/check-pdh-ticket.sh
+  contains 'S8 の判断の記録'
+done
+# 同じ文面を新しい行として追加しても、旧 note 全体の免除にしない。
+must cp "$TMP_DIR/s8-old-note.md" tickets/sample/note.md
+printf -- '- [x] S8 PDH-review-1 旧い書式の回答済み 発行先: /old-board\n' >> tickets/sample/note.md
+expect 1 '旧行と同じ文面でも追加した行は新規則の対象' bash scripts/check-pdh-ticket.sh
+contains 'S8 の判断の記録'
+# 行番号のずれだけでは旧行を新行としない。
+{ printf '前に挿入した説明\n'; cat "$TMP_DIR/s8-old-note.md"; } > tickets/sample/note.md
+expect 0 '挿入で行番号がずれても旧行は互換を保つ' bash scripts/check-pdh-ticket.sh
+# 理由があっても、外へ渡した未回答の S7/S8 は既存の検査で止める。
+for kind in 7 8; do
+  status PDH-verify
+  printf -- '- [ ] S%s PDH-review-1 利用者の判断が要る理由: 出力を変える 発行先: /board\n' "$kind" >> tickets/sample/note.md
+  expect 1 "S$kind の発行先つき未回答は verify を拒否" bash scripts/check-pdh-ticket.sh
+  contains "S$kind の答えを待ったまま PDH-verify"
+done
+status PDH-review
+printf -- '- [ ] S8 PDH-review-1 利用者の判断が要る理由: 出力を変える 発行先: /board\n' >> tickets/sample/note.md
+printf 'review-sha: 1111111\nreview-sha: 2222222\n' > tickets/sample/progress.md
+expect 1 'S8 の未回答を残した次の巡は S5 で止める' bash scripts/check-pdh-ticket.sh
+contains 'S5 で止まるべき'
+# done に移した後も新規則は過去の S8 行に当てない。
+status PDH-close
+printf -- '- [x] S8 PDH-review-2 書式なしの行\n' >> tickets/sample/note.md
+must mkdir tickets/done
+must git add tickets/sample
+must git -c commit.gpgsign=false commit -qm done前の記録
+gate "$(git rev-parse HEAD)"
+must git mv tickets/sample tickets/done/sample
+expect 0 'done の S8 は新しい書式の検査対象外' bash scripts/check-pdh-ticket.sh
+
 must python3 "$ROOT_DIR/tests/scripts/pdh_script_regressions_test.py"
 printf 'PASS: pdh ticket evidence checks (%s 件)\n' "$checks"
