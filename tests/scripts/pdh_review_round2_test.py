@@ -31,6 +31,7 @@ class NoteFormatCompatibility(NoteFixture):
         self.mark()
         self.commit('ticket before done')
         self.write(f'{self.ticket}/progress.md', f'review-sha: {self.sha()}\nclose-gate-sha: {self.sha()}\n')
+        (self.root / 'tickets/done').mkdir()
         self.run_cmd('git', 'mv', self.ticket, 'tickets/done/sample')
         self.check()
 

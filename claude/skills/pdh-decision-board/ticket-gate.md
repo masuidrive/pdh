@@ -18,7 +18,7 @@
 
 あちらの表に無い検索だけ、この PDH-stage が足す。**英語と記号のマーカー** — `draft`、`TBD`、`TODO`、`FIXME`、`needs-*`、`(?)`。その repo が使う独自マーカーは、既存 ticket を数件開いて見つける。
 
-洗い出した項目は、[base.md](base.md)「判断の分類」で 3 つに分ける。**測定結果が scope・影響範囲・AC を変えたら、ticket を直してから decision-board を作る。**
+洗い出した項目は、[base.md](base.md)「判断の分類」の基準で、人に聞くか PM が決めるかを分ける。**測定結果が scope・影響範囲・AC を変えたら、ticket を直してから decision-board を作る。**
 
 ## 本文の固定部 — 5 節〔手順 4〕
 

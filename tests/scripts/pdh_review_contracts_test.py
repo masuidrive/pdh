@@ -181,6 +181,21 @@ class NoteFormatContracts(NoteFixture):
                     self.write(f'{self.ticket}/progress.md', ''.join(f'review-sha: {n:07x}\n' for n in range(1, reviews+1)))
                     self.assertIn(message, self.check(code))
 
+    def test_note_format_v2_new_checklist_rows_follow_note_format(self):
+        import re
+        script = (SOURCE / ENGINE / 'templates/check-pdh-ticket.sh').read_text()
+        rows = re.search(r"late_review_evidence_lines=\$\(cat <<'EOF'\n(.*?)\nEOF", script, re.S).group(1).splitlines()
+        for row in rows:
+            stage = row.split(':', 1)[0].removeprefix('PDH-')
+            skill = self.root / f'.claude/skills/pdh-{stage}/SKILL.md'
+            skill.write_text(skill.read_text() + '- [ ] ' + row + '\n')
+            self.note(stage)
+            self.check()
+            self.mark()
+            self.assertIn(row, self.check(1))
+            self.edit('## Checklist', '## Checklist\n- [-] ' + row + ' - skip: 対象外')
+            self.check()
+
     def test_note_format_v2_stamp_is_first_line_with_optional_whitespace(self):
         self.ready(initial='')
         self.edit(STAMP, '  ' + STAMP + '\t')

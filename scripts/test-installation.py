@@ -281,7 +281,7 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         documented(target,engine,'note-evidence-check')
         documented(target,engine,'note-evidence-check')
         assert payload(target)==before_evidence,'note evidence check changed project files'
-        for required in ('作り直しの見込みは «なし» の場合も書く。', '<!-- s8-decision: v2 -->', '- [ ] いちばん悪い初期状態:', '## AC の組の順番', '| AC の組 | 経路と順番 | 順番ごとの約束 |'):
+        for required in ('値の先頭に あり か なし', '<!-- pdh-note-format: 2 -->', '## 承認前の記録', '前提の見直し:', 'いちばん悪い初期状態:', 'AC の組の順番:', '済み', '不要', '測った', '当たらない', '当たる組なし', '## AC の組の順番'):
             config.write_text(evidence_config.decode().replace(required,'REMOVED'))
             assert '要適用:' in documented(target,engine,'note-evidence-check',code=1)
         config.write_bytes(evidence_config)

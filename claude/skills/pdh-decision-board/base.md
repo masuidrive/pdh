@@ -231,6 +231,8 @@ decision-board は 1 つにする。同じ中身を手で 2 つ書かない（HT
 
 ## 発行〔手順 9〕
 
+承認の PDH-stage では `pdh-pm` の処理 2 の検査と commit の後に発行する。
+
 **発行先は受け渡し経路が定める。**優先順は、起動側が `<Human-Agent-Interface>` で囲んで渡した指定 → `CLAUDE.md`（codex では `AGENTS.md`） → 既定。既定は、ticket の dir の `boards/` へファイルで書いて commit し、会話に絶対 path を示す。ticket の一時領域（`tmp_dir`）と engine の scratchpad は git に残らないので、そこへ置くと note の待ち行の `発行先:` が、session が終わった後に指す先を失う。発行手段は engine の能力で選ぶ — **選択 UI を持つ HTML や登録済みの発行先が使えないことを理由に材料を省かない。**公開 URL や共有ツールへ新しく発行すると取り消せない場合は、試作やサンプルを発行する前に承認を得る。機微な情報には [risk-overlay.md](risk-overlay.md) の規則を優先する。
 
 **発行したら、発行を記録する同じ commit で note の `## Checklist` へ待ち行を書き、手順 10 で回答を反映する同じ commit で `[x]` にする**（行の形は `PDH-AGENTS.md`「受け渡し経路」）。

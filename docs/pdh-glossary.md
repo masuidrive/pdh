@@ -304,8 +304,8 @@ skill の分け方は skill `pdh-change` にある。
   - 定義する場所: `[SKILLS_PATH]/pdh-verify/SKILL.md`
   - 使わない語: 最終 code-review gate
 - **前提の見直し**
-  - 意味: PDH-review の «収束» の表の S7 で review を止め、経緯と今の差分を渡さない、PM と別の engine の worker 1 人に前提を疑わせて案を出させ、PM がその結論から次の手を選ぶこと。立て直した後も同じ部品の修正が次の «いま直す» を生んだら、S8 で結論を照合し、利用者にしか決められない判断の基準に当たる案はユーザに渡し、それ以外は PM が決定と覆す条件を記録して次の手を選ぶ。
-  - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」
+  - 意味: PDH-ticket-review では、AC の承認前に依頼・Why・AC の案・測定結果から、戻しにくい作り方の前提を別の engine が疑うこと。PDH-review では «収束» の表の S7 で review を止め、経緯と今の差分を渡さない、PM と別の engine の worker 1 人に前提を疑わせて案を出させ、PM がその結論から次の手を選ぶこと。立て直した後も同じ部品の修正が次の «いま直す» を生んだら、S8 で結論を照合し、利用者にしか決められない判断の基準に当たる案はユーザに渡し、それ以外は PM が決定と覆す条件を記録して次の手を選ぶ。
+  - 定義する場所: `[SKILLS_PATH]/pdh-ticket-review/SKILL.md`「前提を疑う」、`[SKILLS_PATH]/pdh-review/SKILL.md`「収束」
   - 使わない語: 遮断器、circuit breaker、設計の見直し、2 巡目で設計を見直して人に戻す
 - **user journey**
   - 意味: 利用者が通る操作の流れ。

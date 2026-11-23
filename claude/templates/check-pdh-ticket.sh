@@ -27,6 +27,8 @@
 #      次の巡へ進んでいない（S5）・PDH-verify 以降は S7・S8 の行がすべて回答済み
 #  11. close 時、説明対象を変えた docs は、更新か Checklist の済み行がある
 #
+#  12. 先頭に pdh-note-format: 2 の印がある note は、承認直前の固定キーと S8 のラベルが埋まっている
+#
 #   bash scripts/check-pdh-ticket.sh --ac-hash <ticket.md>   # いまの AC と Out-of-scope のハッシュを出す
 #   bash scripts/check-pdh-ticket.sh --require-branch-ticket <base-ref>
 #     bot の pre-push 用。PDH repo の ticket 外の変更には、その branch の ticket を要する。
@@ -386,6 +388,79 @@ check_ticket_review_handover() {
   done <<<"$result"
 }
 
+# pdh-stage-checklist.sh が足す先頭行と同じ形で読む。
+note_format_v2() {
+  sed -n '1p' "$1" | grep -Eq '^[[:space:]]*<!-- pdh-note-format: 2 -->[[:space:]]*$'
+}
+
+# 承認直前の固定キーだけを数える。結果の妥当性は skill の判断の Checklist で確かめる。
+check_ticket_review_evidence() {
+  local t=$1 n=$2 st=$3 ac_count result
+  [ "$st" = PDH-ticket-human-review ] || return 0
+  note_format_v2 "$n" || return 0
+  ac_count=$(ticket_visible_lines "$t" | awk '
+    /^#+[[:space:]]/ {section=0}
+    !seen_ac && /^#+[[:space:]]+(What([[:space:]]|$)|.*Acceptance Criteria)/ {section=1; seen_ac=1; next}
+    section && /^[[:space:]]*-[[:space:]]+(\[[ xX-]\]|AC[[:space:]]+[0-9]+:)/ {count++}
+    END {print count+0}
+  ') || { failed=1; return; }
+  result=$(ticket_visible_lines "$n" | awk -v ac_count="$ac_count" '
+    /^## / {
+      contract=($0 ~ /^## PDH-ticket-review\. Ticket contract check[[:space:]]*$/)
+      evidence=($0 ~ /^## 承認前の記録[[:space:]]*$/)
+      if ($0 ~ /^## AC の組の順番[[:space:]]*$/) table=1
+      next
+    }
+    contract || evidence {
+      line=$0; sub(/^[[:space:]]*(-[[:space:]]+)?/, "", line)
+      if (!match(line, /:/)) next
+      key=substr(line, 1, RSTART-1); value=substr(line, RSTART+1)
+      sub(/^[[:space:]]+/, "", value); sub(/[[:space:]]+$/, "", value)
+      if (contract) cost[key]=value
+      if (evidence) record[key]=value
+    }
+    END {
+      db=cost["DB-changes"]; api=cost["API-changes"]
+      if (db !~ /^(あり|なし)/ || api !~ /^(あり|なし)/)
+        print "DB-changes:・API-changes: の値の先頭に あり か なし を書く（例: DB-changes: なし ／ API-changes: あり。CLI の形式を変える）"
+      review=record["前提の見直し"]
+      if (!(review ~ /^済み[[:space:]]+[^[:space:]]/ || (db ~ /^なし/ && api ~ /^なし/ && review == "不要")))
+        print "前提の見直し: に 済み と結果の所在を書く（例: 前提の見直し: 済み progress.md。DB/API とも なし なら 前提の見直し: 不要 も可）"
+      if (record["いちばん悪い初期状態"] !~ /^(測った|当たらない)[[:space:]]+[^[:space:]]/)
+        print "いちばん悪い初期状態: に 測った と所在、または 当たらない と理由を書く（例: いちばん悪い初期状態: 測った progress.md ／ いちばん悪い初期状態: 当たらない 状態を持たない）"
+      sequence=record["AC の組の順番"]
+      if (ac_count >= 2 && !((sequence == "表" && table) || sequence ~ /^当たる組なし[[:space:]]+[^[:space:]]/))
+        print "AC の組の順番: に 表 と ## AC の組の順番 の見出し、または 当たる組なし と理由を書く（例: AC の組の順番: 表 ／ AC の組の順番: 当たる組なし 別々の状態を扱う）"
+    }
+  ') || { failed=1; return; }
+  if [ -n "$result" ]; then
+    printf 'check-pdh-ticket: %s: 承認前の記録:\n%s\n' "$n" "$result" >&2
+    failed=1
+  fi
+}
+
+check_s8_decisions() {
+  local n=$1 rows line
+  note_format_v2 "$n" || return 0
+  rows=$(ticket_visible_lines "$n" | awk '
+    /^## Checklist[[:space:]]*$/ {section=1; next}
+    /^##? / {section=0}
+    section && /^- \[[ xX-]\] S8([^0-9]|$)/ {
+      content=$0
+      if (content !~ /^- \[[ xX-]\] S8 PDH-review-[0-9]+[[:space:]]+/) {print NR; next}
+      sub(/^- \[[ xX-]\] S8 PDH-review-[0-9]+[[:space:]]+/, "", content)
+      if (content ~ /^利用者の判断が要る理由:/ && content ~ /発行先:/) next
+      if (content ~ /^PM が決めた:/ && content ~ /覆す条件:[[:space:]]*[^[:space:]]/) next
+      print NR
+    }
+  ') || { failed=1; return; }
+  while read -r line; do
+    [ -n "$line" ] || continue
+    printf 'check-pdh-ticket: %s:%s: S8 の行を書式どおりに書く（例: - [ ] S8 PDH-review-1 利用者の判断が要る理由: 出力を変える 発行先: /board ／ - [x] S8 PDH-review-1 PM が決めた: 修正する 覆す条件: 再発）\n' "$n" "$line" >&2
+    failed=1
+  done <<< "$rows"
+}
+
 # AC と Out-of-scope の承認の記録（«AC-approved: <いまの AC と Out-of-scope のハッシュ>»）を確かめる。
 check_ac_approved() {
   local t=$1 st=$2 rec cur
@@ -431,8 +506,10 @@ check_stage_checklist() {
     expected=$(printf '%s\n' "$expected" | grep -vxF -- "$late_stage_lines_v2")
     [ -n "$expected" ] || return 0
   fi
-  expected=$(printf '%s\n' "$expected" | grep -vxF -- "$late_review_evidence_lines")
-  [ -n "$expected" ] || return 0
+  if ! note_format_v2 "$n"; then
+    expected=$(printf '%s\n' "$expected" | grep -vxF -- "$late_review_evidence_lines")
+    [ -n "$expected" ] || return 0
+  fi
   have=$(awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f' "$n" | sed -n 's/^- \[[ xX-]\] //p' | sed 's/ - skip: .*$//; s/[[:space:]]*$//')
   have=$(printf '%s\n' "$have" | sed '
     s|^PDH-ticket-write: 上のコマンドが 0 で終わった$|PDH-ticket-write: `pdh-ticket-write`「機械で確かめるもの」のコマンドが 0 で終わった|
@@ -616,6 +693,10 @@ for t in "$tickets_dir"/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
     [ -f "$n" ] || continue
     st=$(awk '/^## Status:/{sub(/^## Status:[[:space:]]*/,""); print; exit}' "$n" \
          | sed -E 's/^[[:space:]]*(PDH-[a-z-]+).*/\1/')
+  fi
+  if [[ "$t" != "$tickets_dir/done/"* ]]; then
+    check_s8_decisions "$n"
+    check_ticket_review_evidence "$t" "$n" "$st"
   fi
   check_ac_approved "$t" "$st"
   case "$st" in

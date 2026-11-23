@@ -360,13 +360,8 @@ breaks if it is guessed wrong.]
   > 3. 取りやめ
 - For **blocker**: state the choice as fix / deferred / cancel (per
   `[SKILLS_PATH]/pdh-review/SKILL.md` 処置の判断) with context for each.
-- For **non-convergence** in PDH-review: follow `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」.
-  Ask only when the shared human-decision criterion applies, attaching S7 conclusions and viable choices.
-  Record the waiting line as `- [ ] S8 PDH-review-<round> 利用者の判断が要る理由: <change> 発行先: <URL or path>`;
-  keep it unchecked until the answer is reflected. For a PM decision, record
-  `- [x] S8 PDH-review-<round> PM が決めた: <decision> 覆す条件: <condition>`
-  and the same conclusion in progress, without 発行先. Use S7 instead of S8 when the PM decides at S7. Only S8 lines have a machine-checked decision format.
-  For pending S7 conclusions, follow the convergence table: include S7, the round, and 発行先:.
+- For **non-convergence** in PDH-review: follow `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」
+  for the decision criterion, S7/S8 records, and when to ask the user.
 - For **time**: propose `🤖 続行` to pick up where you left off, plus
   any prep the user can do (env var, secret, larger budget) to reduce
   the next-run risk.
