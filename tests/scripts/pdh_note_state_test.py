@@ -20,7 +20,7 @@ class NoteStateContracts(NoteFixture):
                 self.note(stage, rows)
                 self.mark()
                 self.write(f'{self.ticket}/progress.md', ''.join(f'review-sha: {n:07x}\n' for n in range(1, reviews+1)))
-                blocked = ' ' in marks and (reviews > 1 or stage == 'verify')
+                blocked = any(mark not in ('x', 'X') for mark in marks) and (reviews > 1 or stage == 'verify')
                 out = self.check(int(blocked))
                 if blocked:
                     self.assertIn('S5 で止まるべき' if reviews > 1 else '答えを待ったまま', out)
