@@ -168,6 +168,25 @@ class ReviewRoundTwo(unittest.TestCase):
         self.check()
 
 
+    def test_review_24_material_is_delivered_after_check_and_commit(self):
+        processing = self.skill('pdh-pm').split('### 承認の PDH-stage')[1].split('#### 出力')[0]
+        self.assertNotIn('材料を作って渡す', processing)
+        self.assertLess(processing.index('1. 材料を作る'), processing.index('2. note の Status'))
+        self.assertLess(processing.index('bash scripts/check-pdh-ticket.sh'), processing.index('3. 材料を渡す'))
+        self.assertIn('同じ commit', processing)
+        self.assertIn('答えを受けたら', processing)
+
+    def test_review_25_current_references_and_reader_means_response(self):
+        engine = os.environ.get('PDH_TEST_ENGINE', 'claude')
+        close = self.source(f'{engine}/skills/pdh-decision-board/close-gate.md')
+        self.assertNotIn('「判断の分類」の最初の問い', close)
+        self.assertIn('PDH-AGENTS.md', close)
+        flow = self.skill('pdh-pm').split('### 進め方')[1].split('\n##')[0]
+        self.assertIn('承認の PDH-stage', flow.split('2. ')[1].split('3. ')[0])
+        step = self.skill('pdh-ticket-review').split('### AC だけで伝わるかを確かめる')[1].split('### ')[0]
+        self.assertRegex(step, r'3\..*\(3\).*結果.*書き直')
+        self.assertIn('書き直した AC だけをもう一度渡す', step)
+
 del Fixture
 
 if __name__ == '__main__':

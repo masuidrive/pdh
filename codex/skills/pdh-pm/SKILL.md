@@ -45,7 +45,7 @@ PDH-stage の skill は PM の手順である。worker の手順は `.codex/agen
    - 同じ PDH-stage を 2 回目以降に通るとき（差し戻し・review の巡など）も、写し直す。前に通ったときの印は未了に戻り、確かめ直す。前の証拠は progress に残っている
    - 作業が中断している ticket を再開することは遷移ではないので、Status を変えない。再開するときは skill `pdh-resume` を使い、Status は中断したときの PDH-stage のまま残す
    - Status がずれると起きること: pdh-resume が再開する PDH-stage を間違える。`scripts/check-pdh-ticket.sh` が承認の PDH-stage の待ち行と close 前 review を確かめ損なう。bot では `pdh-hooks.sh` が issue に違う stage ラベルを付ける
-2. その PDH-stage の skill に従って作業する。AC やユーザが選んだ確定判断を変える必要があれば、影響する経路を止め、変更案と影響を示してユーザと合意し、ticket を更新してからその経路の code と review を再開する。依存しない承認済みの作業は続ける
+2. その PDH-stage の skill に従って作業する。AC やユーザが選んだ確定判断を変える必要があれば、影響する経路を止め、変更案と影響を示してユーザと合意し、ticket を更新してからその経路の code と review を再開する。依存しない承認済みの作業は続ける。選ぶ理由のある案が 1 つだけの AC の変更は、[承認の PDH-stage](#承認の-pdh-stage) の出し方に従う
 3. PDH-stage の最後に、その skill の «出力» の節を確かめ、note の `## Checklist` にあるその PDH-stage の行を `[x]`（当てはまらないものは `- [-] ... - skip: <理由>`）にして、«通った» か «通らない（欠けているもの）» かを決める
    - 通ったら次の PDH-stage へ進む
    - 通らなければ、欠けているものを埋めるか、差し戻す
@@ -144,13 +144,14 @@ AC の変更で選ぶ理由のある案が 1 つしか無いときは、選択�
 
 #### 処理
 
-1. 材料を作って渡す。何を承認者が必ず読む本文に置き、何を根拠として閉じた `<details>` に入れるか、回答の返し方は `pdh-decision-board` の手順 0〜9 に従う（`PDH-ticket-human-review` は `ticket-gate.md`、`PDH-human-review` は `close-gate.md`）。前の PDH-stage の «出力» で確かめたもの（Required-Probes・未確定の洗い出し・verify の証拠）は、確かめ直さない
-   - 材料は受け渡し経路そのもの（会話、issue コメント）か、1 つに組み立てた文書（そのリンクかパスを、短い要約とともに受け渡し経路で渡す）で届ける。note は作業の記録であって承認者に渡すものではないので、note に書くだけでは渡したことにならない
+1. 材料を作る。何を承認者が必ず読む本文に置き、何を根拠として閉じた `<details>` に入れるか、回答の返し方は `pdh-decision-board` の手順 0〜9 に従う（`PDH-ticket-human-review` は `ticket-gate.md`、`PDH-human-review` は `close-gate.md`）。前の PDH-stage の «出力» で確かめたもの（Required-Probes・未確定の洗い出し・verify の証拠）は、確かめ直さない
 2. note の Status を承認の PDH-stage へ進める変更と、Checklist に `発行先:` の待ち行を足す変更は、同じ commit に入れる。この commit の前に、Status が承認の PDH-stage で待ち行がある状態で `bash scripts/check-pdh-ticket.sh` を回し、終了コード 0 と出力を progress に残す
-3. 答えを待つ間は、PM が決めて中断する（「中断するときと再開するとき」）。再開したら、待ち行の `発行先:` で答えを読む
-4. 答えを受けたら、`pdh-decision-board` の手順 10 で ticket へ反映し、progress に «何を聞き、何と答えられたか» を 1 行書き、待ち行を `[x]` にする。待ち行を `[x]` にする変更と、次の PDH-stage へ進む Status の変更は、同じ commit に入れる（2 と同じ理由。Status が承認の PDH-stage のまま待ち行が無い commit では `pdh-ticket` 段が落ちる）。追加質問・修正指示・未回答が残るなら、手順 10 のとおり同じ発行先へ出し直す
-5. `PDH-ticket-human-review` で AC と Out-of-scope の承認を得たら、承認した AC と Out-of-scope のハッシュ（`bash scripts/check-pdh-ticket.sh --ac-hash <ticket.md>` の出力）を ticket の `AC-approved:` の行に書く。progress の答えの行と同じ commit にする。AC か Out-of-scope を変えて承認を取り直したときも書き直す。`PDH-human-review` で «未確認のまま閉じる» と明示で承認された AC は、処置の変更として `[-] ... - skip: <未確認の理由・足りない証拠を示して close を承認した旨>` にし、`AC-approved:` を `--ac-hash` の値で書き直す。この書き直しを処置の承認の記録とし、回答の progress・ticket・待ち行の更新を同じ commit に入れる。承認を得ずに AC を `[-]` へ変えると、hash が一致せず検査が落ちる
-6. 何が承認になるかは `PDH-AGENTS.md`「PDH-flow」の承認の規則に従う。進む先は次のとおりで、遷移は「進め方」4 の 1 行で宣言する
+3. 材料を渡す。処理 2 の検査と commit を終えてから、承認者に届ける
+   - 材料は受け渡し経路そのもの（会話、issue コメント）か、1 つに組み立てた文書（そのリンクかパスを、短い要約とともに受け渡し経路で渡す）で届ける。note は作業の記録であって承認者に渡すものではないので、note に書くだけでは渡したことにならない
+4. 答えを待つ間は、PM が決めて中断する（「中断するときと再開するとき」）。再開したら、待ち行の `発行先:` で答えを読む
+5. 答えを受けたら、`pdh-decision-board` の手順 10 で ticket へ反映し、progress に «何を聞き、何と答えられたか» を 1 行書き、待ち行を `[x]` にする。待ち行を `[x]` にする変更と、次の PDH-stage へ進む Status の変更は、同じ commit に入れる（2 と同じ理由。Status が承認の PDH-stage のまま待ち行が無い commit では `pdh-ticket` 段が落ちる）。追加質問・修正指示・未回答が残るなら、手順 10 のとおり同じ発行先へ出し直す
+6. `PDH-ticket-human-review` で AC と Out-of-scope の承認を得たら、承認した AC と Out-of-scope のハッシュ（`bash scripts/check-pdh-ticket.sh --ac-hash <ticket.md>` の出力）を ticket の `AC-approved:` の行に書く。progress の答えの行と同じ commit にする。AC か Out-of-scope を変えて承認を取り直したときも書き直す。`PDH-human-review` で «未確認のまま閉じる» と明示で承認された AC は、処置の変更として `[-] ... - skip: <未確認の理由・足りない証拠を示して close を承認した旨>` にし、`AC-approved:` を `--ac-hash` の値で書き直す。この書き直しを処置の承認の記録とし、回答の progress・ticket・待ち行の更新を同じ commit に入れる。承認を得ずに AC を `[-]` へ変えると、hash が一致せず検査が落ちる
+7. 何が承認になるかは `PDH-AGENTS.md`「PDH-flow」の承認の規則に従う。進む先は次のとおりで、遷移は「進め方」4 の 1 行で宣言する
    - `PDH-ticket-human-review`: AC の承認 → `PDH-implement`。差し戻し → `PDH-ticket-review`
    - `PDH-human-review`: close の承認 → `PDH-close`。差し戻し → `PDH-implement`
 

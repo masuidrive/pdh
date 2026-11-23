@@ -115,7 +115,7 @@ AC が触る consumer surface（UI・HTTP API・SDK・CLI・設定・生成物�
 
 1. この PDH-stage で書き換えた AC が、`[SKILLS_PATH]/pdh-ticket-write/SKILL.md`「AC の書き方」を満たしているかを確かめ直す。書き換えていない AC は、PDH-ticket-write の «出力» で確かめてある
 2. What 冒頭の 1 文と AC 全件だけを、AC だけを読む worker（agent 定義 `pdh-ac-reader`）に渡し、«終わると誰が何をできるようになるか» を答えさせる。この worker は repo を読む tool を持たない。CLI で起動するとき（`claude -p`・`codex exec`）は、`.claude/agents/pdh-ac-reader.md` の本文から frontmatter を除いたものを、What 冒頭の 1 文・AC 全件と一緒に prompt に転記して渡す。Claude Code の in-process spawn で定義名 `pdh-ac-reader` を指定して起動するときは、本文が worker 自身の指示として読み込まれるので転記せず、What 冒頭の 1 文と AC 全件だけを渡す（転記すると本文が 2 重になる）
-3. 答えが意図と合わない AC を書き直し、書き直した AC だけをもう一度渡す
+3. 答えが意図と合わない AC と、答え (3) の «結果ではなく手段を書いた AC» を、得たい結果を書く AC へ書き直し、書き直した AC だけをもう一度渡す
 4. worker の答えに合わせて AC を足さない。worker が復元できないのは AC の書き方の問題で、AC を足すと、ユーザが頼んでいない約束が増える
 
 ### 確かめた結果と、変えたことを書く
