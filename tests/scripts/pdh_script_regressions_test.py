@@ -410,7 +410,7 @@ class ScriptTests(unittest.TestCase):
             with self.subTest(mark=mark):
                 reason = ' - skip: 判断待ちを撤回した' if mark == '-' else ''
                 self.note('implement', self.s7(2, mark) + reason)
-                self.check()
+                self.check(1 if mark == '-' else 0)
         self.write(f'{self.ticket}/progress.md', self.review_progress(2))
         self.note('implement', self.s7(2, ' '))
         self.check()
