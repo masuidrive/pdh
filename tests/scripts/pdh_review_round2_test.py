@@ -66,11 +66,16 @@ class NoteFormatCompatibility(NoteFixture):
         self.assertIn('書式どおりに書く', self.check(1))
 
     def test_note_format_v2_clone_depth_does_not_change_results(self):
-        for marked, valid in [(False, False), (True, False), (True, True)]:
-            with self.subTest(marked=marked, valid=valid):
-                self.note('review', '- [x] S8 PDH-review-1 ' + ('PM が決めた: 修正 覆す条件: 再発' if valid else '書式なし'))
-                if marked:
-                    self.mark()
+        cases = [(stage, marked, valid) for stage in ('review', 'ticket-human-review')
+                 for marked, valid in [(False, False), (True, False), (True, True)]]
+        for stage, marked, valid in cases:
+            with self.subTest(stage=stage, marked=marked, valid=valid):
+                if stage == 'review':
+                    self.note(stage, '- [x] S8 PDH-review-1 ' + ('PM が決めた: 修正 覆す条件: 再発' if valid else '書式なし'))
+                    if marked:
+                        self.mark()
+                else:
+                    self.ready(marked=marked, review='済み progress.md' if valid else None)
                 self.commit('note format case')
                 outputs = []
                 for depth in (None, 1):
