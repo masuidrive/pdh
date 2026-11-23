@@ -457,7 +457,8 @@ check_s8_decisions() {
     /^## Checklist[[:space:]]*$/ {section=1; next}
     /^##? / {section=0}
     section && /^- \[[ xX-]\]/ && /[^A-Za-z0-9_]S8([^0-9]|$)/ {
-      if ($0 ~ /利用者の判断が要る理由:[[:space:]]*[^[:space:]]/) next
+      content=$0; sub(/[[:space:]]+発行先:.*/, "", content)
+      if (content ~ /利用者の判断が要る理由:[[:space:]]*[^[:space:]]/) next
       if ($0 ~ /PM が決めた:[[:space:]]*[^[:space:]].* 覆す条件:[[:space:]]*[^[:space:]]/) next
       print NR
     }

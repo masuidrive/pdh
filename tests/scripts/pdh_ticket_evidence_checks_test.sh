@@ -934,7 +934,7 @@ for row in '- [x] S8 PDH-review-2 利用者の判断が要る理由: 出力の�
   expect 0 '旧行と新行の混在: 人の理由と PM の決定' bash scripts/check-pdh-ticket.sh
   commit 判断を記録
 done
-for row in '- [x] S8 PDH-review-3 発行先: /board' '- [ ] S8 PDH-review-3 未了' '- [-] S8 PDH-review-3 - skip: 任意' '- [x] S8 PDH-review-3 利用者の判断が要る理由: ' '- [x] S8 PDH-review-3 PM が決めた:  覆す条件: 失敗' '- [x] S8 PDH-review-3 PM が決めた: 修正'; do
+for row in '- [x] S8 PDH-review-3 発行先: /board' '- [ ] S8 PDH-review-3 未了' '- [-] S8 PDH-review-3 - skip: 任意' '- [x] S8 PDH-review-3 利用者の判断が要る理由: ' '- [x] S8 PDH-review-3 利用者の判断が要る理由: 発行先: /board' '- [x] S8 PDH-review-3 PM が決めた:  覆す条件: 失敗' '- [x] S8 PDH-review-3 PM が決めた: 修正'; do
   must cp "$TMP_DIR/s8-old-note.md" tickets/sample/note.md
   printf '%s\n' "$row" >> tickets/sample/note.md
   expect 1 '新しい S8 の行は理由か決定と覆す条件が必要' bash scripts/check-pdh-ticket.sh
