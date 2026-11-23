@@ -47,7 +47,7 @@ printf '# a\n### Why\nReproduction-or-measurement: fixture\nWhy-not-fix-now: 該
 : > "${n%/*}/progress.md"
 printf '## Status: PDH-implement\n\n## Checklist\n<!-- c -->\n- [ ] 頼まれたこと\n- [x] PDH-open: 開けた\n\n## Open-Questions\n- [ ] 未決\n' > "$n"
 expect 0 '写す' bash scripts/pdh-stage-checklist.sh PDH-implement --enter "$n"
-[ "$(cat "$n")" = $'<!-- pdh-note-format: 2 -->\n## Status: PDH-implement\n\n## Checklist\n<!-- c -->\n- [ ] 頼まれたこと\n- [x] PDH-open: 開けた\n- [ ] PDH-implement: 仮定を測った\n- [ ] PDH-implement: test-all が通った\n\n## Open-Questions\n- [ ] 未決' ] || fail "写した結果が違う: $(cat "$n")"
+[ "$(cat "$n")" = $'## Status: PDH-implement\n\n## Checklist\n<!-- c -->\n- [ ] 頼まれたこと\n- [x] PDH-open: 開けた\n- [ ] PDH-implement: 仮定を測った\n- [ ] PDH-implement: test-all が通った\n\n## Open-Questions\n- [ ] 未決' ] || fail "写した結果が違う: $(cat "$n")"
 sed -e 's/^- \[ \] PDH-implement: 仮定を測った/- [x] PDH-implement: 仮定を測った/' \
     -e 's/^- \[ \] PDH-implement: test-all が通った/- [-] PDH-implement: test-all が通った - skip: 理由/' "$n" > "$n.t" && mv "$n.t" "$n"
 expect 0 '2 回目に通るときは印を未了に戻し、重ねない' bash scripts/pdh-stage-checklist.sh PDH-implement --enter "$n"
