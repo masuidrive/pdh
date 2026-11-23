@@ -66,6 +66,7 @@ findings_issue_repos=" $(github_bot_value findings_issue_repos | tr ',[]' '   ')
 # derived-ticket-fields: v1
 # derived-ticket-fields: v2
 # findings-table: v1
+# ticket-review-evidence: v1
 # 印を持つ版の scripts/check-pdh-ticket.sh で作った ticket から、その印の項目と後から足した PDH-stage の行を求める。
 # v1 は別件の項目（derived-from:・pickup-timing:）と late_stage_lines、v2 は on-symptom-report の observable-symptom: と late_stage_lines_v2。
 # findings-table: v1 は現行 5 列の Findings 表。印の無い版で作った ticket は、作った時点の規則で閉じられる。
@@ -79,6 +80,12 @@ EOF
 )
 late_stage_lines_v2=$(cat <<'EOF'
 PDH-ticket-write: 報告から書くなら、制約の文書と ticket を症状の言葉で探し、検索語・候補ごとの判断と残すか直すかが progress にある
+EOF
+)
+review_evidence_marker='# ticket-review-evidence: v1'
+late_review_evidence_lines=$(cat <<'EOF'
+PDH-ticket-write: AC は結果で書き、比較の項目を分け、原文の見た目・相当の要求を AC か Out-of-scope と照合し、照合の差の検出と説明の付かない差が 0 の約束を分けた（「AC の書き方」）
+PDH-ticket-review: DB/API の変更時の前提の見直しの結果があり、いちばん悪い初期状態と AC の組の順番を照合した。絶対の形の約束と実装で測る値が矛盾せず、端の場面・順番でも約束が成り立つ根拠が note と progress にある
 EOF
 )
 # 引数（印・path…）の path を最初に追加した commit の版の検査 script に印が無ければ 0。未 commit なら 1。
@@ -380,6 +387,66 @@ check_ticket_review_handover() {
   done <<<"$result"
 }
 
+# 承認直前の記録だけを数える。過ぎた stage の記録は作り直させない。
+check_ticket_review_evidence() {
+  local t=$1 n=$2 st=$3 contract changes ac_count
+  [ "$st" = PDH-ticket-human-review ] || return 0
+  contract=$(ticket_visible_lines "$n" | awk '
+    /^## PDH-ticket-review\. Ticket contract check[[:space:]]*$/ {section=1; next}
+    /^## / {section=0}
+    section { print }
+  ') || { failed=1; return; }
+  changes=$(awk '
+    { sub(/^[[:space:]]*(-[[:space:]]+)?/, "") }
+    /^(DB|API)-changes:/ {
+      key=$0; sub(/:.*/, "", key)
+      sub(/^[^:]*:[[:space:]]*/, "")
+      seen[key]=1
+      if ($0 !~ /^なし/) changed=1
+    }
+    END { print changed || !seen["DB-changes"] || !seen["API-changes"] ? 1 : 0 }
+  ' <<< "$contract")
+  if [ "$changes" -eq 1 ] && ! ticket_visible_lines "${t%/ticket.md}/progress.md" |
+      grep -E '^前提の見直し:[[:space:]]*[^[:space:]].* 結果:[[:space:]]*[^[:space:]]' >/dev/null; then
+    printf 'check-pdh-ticket: %s: 前提の見直しの結果が無い（DB-changes / API-changes が «なし» でない。progress に「前提の見直し: <worker の engine> 結果: <案と選択の理由>」を書く）\n' "$n" >&2
+    failed=1
+  fi
+  if ! ticket_visible_lines "$n" | awk '
+    /^## Required-Probes[[:space:]]*$/ {section=1; next}
+    /^## / {section=0}
+    section && /^- \[[ xX-]\] いちばん悪い初期状態:/ {
+      seen=1
+      if ($0 ~ /^- \[[xX]\] いちばん悪い初期状態:[[:space:]]*[^[:space:]].* 結果:[[:space:]]*[^[:space:]]/) next
+      if ($0 ~ /^- \[-\] いちばん悪い初期状態:[[:space:]]*[^[:space:]].* - skip:[[:space:]]*[^[:space:]]/) next
+      bad=1
+    }
+    END { exit !seen || bad ? 1 : 0 }
+  '; then
+    printf 'check-pdh-ticket: %s: Required-Probes の «いちばん悪い初期状態:» の行が無いか未了（[x] と「結果: <結果>」、または [-] と「- skip: <理由>」が必要）\n' "$n" >&2
+    failed=1
+  fi
+  ac_count=$(ticket_visible_lines "$t" | awk '
+    /^#+[[:space:]]+(What|Acceptance Criteria)([[:space:]\/]|$)/ {section=1; next}
+    /^#+[[:space:]]/ {section=0}
+    section && /^[[:space:]]*-[[:space:]]+\[[ xX]\]/ {count++}
+    END {print count+0}
+  ')
+  if [ "$ac_count" -ge 2 ] && ! ticket_visible_lines "$n" | awk -F '|' '
+    function trim(v) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v); return v }
+    /^## AC の組の順番[[:space:]]*$/ {section=1; next}
+    /^## / {section=0}
+    section && /^当たる組なし:[[:space:]]*[^[:space:]]/ {none=1}
+    section && /^\|/ {
+      if (trim($2) == "AC の組" && trim($3) == "経路と順番" && trim($4) == "順番ごとの約束") {header=1; next}
+      if (header && $0 !~ /^[[:space:]|:-]+$/ && NF == 5 && trim($2) != "" && trim($3) != "" && trim($4) != "") rows++
+    }
+    END {exit none || (header && rows) ? 0 : 1}
+  '; then
+    printf 'check-pdh-ticket: %s: «AC の組の順番» の節に表が無い（複数 AC の経路と順番・約束を書く。当たる組が無ければ「当たる組なし: <理由>」）\n' "$n" >&2
+    failed=1
+  fi
+}
+
 # AC と Out-of-scope の承認の記録（«AC-approved: <いまの AC と Out-of-scope のハッシュ>»）を確かめる。
 check_ac_approved() {
   local t=$1 st=$2 rec cur
@@ -423,6 +490,10 @@ check_stage_checklist() {
   fi
   if created_before_marker "$symptom_fields_marker" "$d/ticket.md" "$tickets_dir/${d##*/}/ticket.md"; then
     expected=$(printf '%s\n' "$expected" | grep -vxF -- "$late_stage_lines_v2")
+    [ -n "$expected" ] || return 0
+  fi
+  if created_before_marker "$review_evidence_marker" "$d/ticket.md" "$tickets_dir/${d##*/}/ticket.md"; then
+    expected=$(printf '%s\n' "$expected" | grep -vxF -- "$late_review_evidence_lines")
     [ -n "$expected" ] || return 0
   fi
   have=$(awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f' "$n" | sed -n 's/^- \[[ xX-]\] //p' | sed 's/ - skip: .*$//; s/[[:space:]]*$//')
@@ -608,6 +679,7 @@ for t in "$tickets_dir"/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
     st=$(awk '/^## Status:/{sub(/^## Status:[[:space:]]*/,""); print; exit}' "$n" \
          | sed -E 's/^[[:space:]]*(PDH-[a-z-]+).*/\1/')
   fi
+  [[ "$t" == "$tickets_dir/done/"* ]] || check_ticket_review_evidence "$t" "$n" "$st"
   check_ac_approved "$t" "$st"
   case "$st" in
     PDH-review|PDH-verify|PDH-human-review|PDH-close)

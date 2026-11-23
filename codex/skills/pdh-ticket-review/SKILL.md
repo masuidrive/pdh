@@ -54,13 +54,13 @@ python3 scripts/docs-policy.py record docs/example.md#scope --base <base> --note
 
 ### 前提を疑う
 
-この規則の目的: 戻しにくい判断を、PM が考えた作り方の中だけで決めないこと。note の `DB-changes:` か `API-changes:` が «なし» でないとき、または新しい仕組み（状態の置き場所・受け口・定期処理）を作るときは、承認を求める前に前提の見直しを 1 回回すことを勧める。回すかは PM が決める。どちらを選んでも、回した結果か回さなかった理由を progress に残す。
+この規則の目的: 承認者が、戻しにくい判断の前提を別の engine が疑った結果で AC を承認できること。note の `DB-changes:` か `API-changes:` が «なし» で始まらないときは、承認を求める前に前提の見直しを必ず 1 回回す。回さない選択は無い。両方が «なし» で始まるときも、新しい仕組み（状態の置き場所・受け口・定期処理）を作るなら回すことを勧める。その場合だけ回すかは PM が決め、回した結果か回さなかった理由を progress に残す。
 
 1. 回すのは、経緯を持たない worker 1 人である。engine は PM と別にし、model と effort は `[SKILLS_PATH]/pdh-pm/_execution-team.md`「エンジン割り当て」の «前提の見直し» に従う。worker の手順は `.codex/agents/pdh-ticket-reviewer.toml` の «前提を疑う» にある
-2. 渡すのは、依頼の原文・Why・AC の目的・`product-brief.md` の全体・外の契約（API などの仕様）・いまの base のコードと文書だけである。ticket の `Design-Decisions` と、この ticket に出た review の finding は渡さない
+2. 渡すのは、依頼の原文・Why・AC の案・Required-Probes の結果・`product-brief.md` の全体・外の契約（API などの仕様）・いまの base のコードと文書だけである。ticket の `Design-Decisions` と、この ticket に出た review の finding は渡さない
 3. 問いと、案ごとに書かせる項目は `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」の S7 と同じものを prompt に書く
-4. 出た案と、選んだ案・外した理由を progress に書く。選んだ案が ticket の `Design-Decisions` と違えば、ticket を直してから先へ進む
-5. 回さなかったときは、その理由を progress に 1 行書く。条件に当たらないのか、当たるが回さないと決めたのかを分けて書く
+4. progress に `前提の見直し: <worker の engine> 結果: <出た案・選んだ案と外した理由、詳細の所在>` の 1 行を残す。選んだ案が ticket の `Design-Decisions` と違えば、ticket を直してから先へ進む
+5. DB/API とも «なし» で始まるため任意で回さなかったときだけ、その理由を progress に 1 行書く。Status がちょうど PDH-ticket-human-review のとき、`scripts/check-pdh-ticket.sh` が必須の場合の結果行を数える
 
 ### AC の場面の頻度を測る
 
@@ -71,6 +71,18 @@ python3 scripts/docs-policy.py record docs/example.md#scope --base <base> --note
 - 実行する前に担当を分ける。PM は読み取り・検索・使い捨てコマンドによる事実の測定を行い、test runner・E2E・doc 再生成は調査用の worker に委譲する。Required-Probes の各行には担当とコマンドを書く。実行結果は同じ行の証拠として progress へ残す
 - 達成できると確かめていない AC は、確かめる手段を note の `## Required-Probes` に書き、この PDH-stage の中で実行する。実行した command と output を progress に書いてから、note の行を `[x]` にする（`[SKILLS_PATH]/pdh-pm/_records.md`）
 - 実装しないと分からない AC は、«測って記録する＋この値を下回ったら止めて報告する» の形に書き直す
+
+### 初期状態と、AC の組の順番を確かめる
+
+この規則の目的: 承認者が、いちばん悪い初期状態と経路をまたぐ操作でも AC の約束が成り立つと確かめられること。Required-Probes に `- [x] いちばん悪い初期状態: <状態> 結果: <測った結果と progress の所在>` を必ず残す。測る前は `[ ]` とし、一度も写していない会話や空の DB などを測ってから結果を埋める。当たる場面が無ければ `- [-] いちばん悪い初期状態: <対象> - skip: <理由>` とする。
+
+AC が 2 件以上なら、同じデータや状態を別の経路で触る AC の組ごとに、note の `## AC の組の順番` へ次の表を書く。各順番で、回数の上限や同じ結果になる約束を照合する。当たる組が無ければ、同じ節に `当たる組なし: <理由>` と書く。
+
+| AC の組 | 経路と順番 | 順番ごとの約束 |
+|---|---|---|
+| <AC の番号> | <CLI → 画面 → CLI など> | <各順番で約束が成り立つ根拠> |
+
+Status がちょうど PDH-ticket-human-review のとき、`scripts/check-pdh-ticket.sh` が結果行・理由つき skip・表の存在を数える。初期状態が端の場面に当たるか、組を漏らしていないか、約束が成り立つかは下の Checklist で PM が判断する。
 
 ### 別件として残された finding を拾う
 
@@ -145,6 +157,7 @@ done) &&
 - [ ] PDH-ticket-review: 文書の frontmatter 検査を採用している場合、関係する文書の内容を ticket に反映し、節ごとの採否・照合記録を `related-docs.md` に残した
 
 - [ ] PDH-ticket-review: 前提の見直しを回したなら、出た案と選んだ理由が progress にある。回さなかったなら、その理由を書いた
+- [ ] PDH-ticket-review: DB/API の変更時の前提の見直しの結果があり、いちばん悪い初期状態と AC の組の順番を照合した。絶対の形の約束と実装で測る値が矛盾せず、端の場面・順番でも約束が成り立つ根拠が note と progress にある
 - [ ] PDH-ticket-review: 絶対の形の AC は、Required-Probes に場面の頻度を測った結果と 1 回のコストがあり、Failure Tolerance と照合した範囲になっている
 - [ ] PDH-ticket-review: 変更箇所と制約の anchor を照合し、該当行を直すか残すかが progress にある。目安の変更時は全行、マイルストーンを閉じるときは «テストなし» の行も見直した
 - [ ] PDH-ticket-review: AC だけを読む worker が、全 AC に «復元できた» を返した。PM が結果を progress に残す

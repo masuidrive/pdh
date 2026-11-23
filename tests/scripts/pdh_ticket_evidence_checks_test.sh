@@ -815,5 +815,99 @@ output=$(git grep -lE "$pattern" -- tickets | sort | tr '\n' ' ')
   fail "when-touching の検索が想定と違う: $output"
 checks=$((checks + 1))
 
+# 承認直前の記録は、ticket の作成日ではなく Status によって求める。
+must mkdir -p "$TMP_DIR/review-evidence/scripts" "$TMP_DIR/review-evidence/tickets/sample"
+must cp "$ROOT_DIR/scripts/check-pdh-ticket.sh" "$ROOT_DIR/scripts/pdh-review-range.sh" "$TMP_DIR/review-evidence/scripts/"
+install_stage_fixture "$TMP_DIR/review-evidence"
+must cd "$TMP_DIR/review-evidence"
+must git init -q -b main
+printf '### Why\nReproduction-or-measurement: fixture\nWhy-not-fix-now: 該当なし\n### What / Acceptance Criteria\n- [ ] AC 1: 一覧を読める\n- [ ] AC 2: 詳細を読める\n' > tickets/sample/ticket.md
+: > tickets/sample/progress.md
+status PDH-ticket-review
+commit 旧ticketの起票
+must git checkout -qb features/sample
+review_note() {
+  status "${3:-PDH-ticket-human-review}"
+  printf '## PDH-ticket-review. Ticket contract check\nDB-changes: %s\nAPI-changes: %s\n' "$1" "$2" >> tickets/sample/note.md
+}
+probe='- [x] いちばん悪い初期状態: 空の DB 結果: 読める（progress の probe-1）'
+sequence='## AC の組の順番
+| AC の組 | 経路と順番 | 順番ごとの約束 |
+|---|---|---|
+| AC 1・2 | CLI → 画面 → CLI | 各段階で 1 要求以内 |'
+review_ready() {
+  review_note "$1" "$2"
+  printf '## Required-Probes\n%s\n%s\n' "$probe" "$sequence" >> tickets/sample/note.md
+}
+for values in 'あり|なし' 'なし|あり' 'なし（説明）|なし。補足'; do
+  IFS='|' read -r db api <<< "$values"
+  review_ready "$db" "$api"
+  printf '前提の見直し: 別 engine 結果: 案 A を採用、案 B/C はアクセスが増えるため外した\n' > tickets/sample/progress.md
+  expect 0 "前提の見直しの結果あり: $values" bash scripts/check-pdh-ticket.sh
+  : > tickets/sample/progress.md
+  if [[ "$db" == なし* && "$api" == なし* ]]; then
+    expect 0 'なしで始まる値は見直し不要' bash scripts/check-pdh-ticket.sh
+  else
+    expect 1 "前提の見直しの結果なし: $values" bash scripts/check-pdh-ticket.sh
+    contains '前提の見直し'
+  fi
+done
+review_ready あり なし
+for record in '前提の見直し: 別 engine 結果: ' '<!-- 前提の見直し: 別 engine 結果: ある -->' '前提の見直しを回さない: 対象外'; do
+  printf '%s\n' "$record" > tickets/sample/progress.md
+  expect 1 '空・コメント・回さないは前提の見直しの結果に数えない' bash scripts/check-pdh-ticket.sh
+  contains '前提の見直し'
+done
+: > tickets/sample/progress.md
+for row in "$probe" '- [-] いちばん悪い初期状態: 対象なし - skip: データを持たない規則の変更'; do
+  review_note なし なし
+  printf '## Required-Probes\n%s\n%s\n' "$row" "$sequence" >> tickets/sample/note.md
+  expect 0 '初期状態の結果か理由つき skip' bash scripts/check-pdh-ticket.sh
+done
+for row in '' '- [ ] いちばん悪い初期状態: 空の DB' '- [x] いちばん悪い初期状態: 空の DB 結果: ' '- [-] いちばん悪い初期状態: 対象なし - skip: ' '<!-- - [x] いちばん悪い初期状態: 空の DB 結果: 成功 -->'; do
+  review_note なし なし
+  printf '## Required-Probes\n%s\n%s\n' "$row" "$sequence" >> tickets/sample/note.md
+  expect 1 '初期状態の行なし・未了・結果なし・理由なしを拒否' bash scripts/check-pdh-ticket.sh
+  contains 'いちばん悪い初期状態'
+done
+for seq in "$sequence" '## AC の組の順番
+当たる組なし: 別々のデータを扱う'; do
+  review_note なし なし
+  printf '## Required-Probes\n%s\n%s\n' "$probe" "$seq" >> tickets/sample/note.md
+  expect 0 '順番の表か当たる組なしと理由' bash scripts/check-pdh-ticket.sh
+done
+for seq in '' '## AC の組の順番' '## AC の組の順番
+当たる組なし: ' '## AC の組の順番
+| AC の組 | 経路と順番 | 順番ごとの約束 |
+|---|---|---|'; do
+  review_note なし なし
+  printf '## Required-Probes\n%s\n%s\n' "$probe" "$seq" >> tickets/sample/note.md
+  expect 1 '複数 AC の順番の節なし・空・理由なしを拒否' bash scripts/check-pdh-ticket.sh
+  contains 'AC の組の順番'
+done
+# AC が 1 件なら、同じ状態に触る組は無い。
+must cp tickets/sample/ticket.md "$TMP_DIR/two-ac.md"
+sed '/AC 2:/d' "$TMP_DIR/two-ac.md" > tickets/sample/ticket.md
+review_note なし なし
+printf '## Required-Probes\n%s\n' "$probe" >> tickets/sample/note.md
+expect 0 'AC 1 件では順番の表は不要' bash scripts/check-pdh-ticket.sh
+must cp "$TMP_DIR/two-ac.md" tickets/sample/ticket.md
+# 作成済み ticket でも gate に到達すれば新規則を求める。gate より後では求めない。
+for stage in PDH-implement PDH-review PDH-verify PDH-human-review PDH-close; do
+  review_note あり あり "$stage"
+  hash=$(bash scripts/check-pdh-ticket.sh --ac-hash tickets/sample/ticket.md)
+  sed '/^AC-approved:/d' tickets/sample/ticket.md > "$TMP_DIR/ac.md"
+  must cp "$TMP_DIR/ac.md" tickets/sample/ticket.md
+  printf 'AC-approved: %s\n' "$hash" >> tickets/sample/ticket.md
+  gate "$(git rev-parse HEAD)"
+  expect 0 "gate より後の $stage は記録を遡及要求しない" bash scripts/check-pdh-ticket.sh
+done
+# done は branch 上で移されたものも新規則では検査しない。
+must mkdir -p tickets/done
+must git add tickets/sample
+must git -c commit.gpgsign=false commit -qm 承認後の記録
+must git mv tickets/sample tickets/done/sample
+expect 0 'done は新しい ticket-review 記録の検査対象外' bash scripts/check-pdh-ticket.sh
+
 must python3 "$ROOT_DIR/tests/scripts/pdh_script_regressions_test.py"
 printf 'PASS: pdh ticket evidence checks (%s 件)\n' "$checks"
