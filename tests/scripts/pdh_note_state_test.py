@@ -8,9 +8,7 @@ from pdh_review_contracts_test import NoteFixture, STAMP
 
 class NoteStateContracts(NoteFixture):
     def ready_state(self, stage='ticket-human-review'):
-        self.ready(stage=stage, review='済み', initial='測った')
-        self.edit('前提の見直し: 済み', '前提の見直し: 済み\n前提の見直しの記録: progress.md')
-        self.edit('いちばん悪い初期状態: 測った', 'いちばん悪い初期状態: 測った\nいちばん悪い初期状態の記録: progress.md')
+        self.ready(stage=stage)
 
     def test_every_handover_row_must_be_answered(self):
         for kind, stage, reviews, marks in itertools.product(
@@ -79,15 +77,14 @@ class NoteStateContracts(NoteFixture):
                 self.ready_state()
                 p=self.root/self.ticket/'note.md'
                 rows=[key+': \t'+value+'  ' if row.startswith(key+':') else row for row in p.read_text().splitlines()]
-                p.write_text('\n'.join(rows)+'\nAC の組の順番の理由: 別の状態\n')
-                # 理由を読む節は固定されている。
-                self.edit('## AC の組の順番\n', 'AC の組の順番の理由: 別の状態\n## AC の組の順番\n')
+                p.write_text('\n'.join(rows)+'\n')
                 out=self.check(code)
                 if code:
                     self.assertIn(key, out)
         for key in ('前提の見直しの記録', 'いちばん悪い初期状態の記録', 'AC の組の順番の理由'):
             self.ready_state()
-            self.edit('AC の組の順番: 表', 'AC の組の順番: 当たる組なし\nAC の組の順番の理由: 別々')
+            self.edit('AC の組の順番: 表', 'AC の組の順番: 当たる組なし')
+            self.edit('AC の組の順番の理由: 別の状態', 'AC の組の順番の理由: 別々')
             self.edit(key+': '+('別々' if key.endswith('理由') else 'progress.md'), key+':   ')
             self.assertIn(key, self.check(1))
         self.ready_state()
@@ -95,6 +92,16 @@ class NoteStateContracts(NoteFixture):
         self.edit('API-changes: なし', 'API-changes: なし\nAPI-changes の内容: 不明な文でも状態にはしない')
         self.edit('前提の見直し: 済み', '前提の見直し: 不要')
         self.check()
+
+    def test_stamp_integrity_also_applies_to_other_branches_and_done(self):
+        self.note('review')
+        for directory in ('tickets/other', 'tickets/done/old'):
+            self.write(directory+'/note.md', '<!-- pdh-note-format: 1 -->\n## Status: done\n')
+            self.assertIn('印が壊れている', self.check(1))
+            self.write(directory+'/note.md', '## Status: done\n## 承認前の記録\n')
+            self.assertIn('印が欠けている', self.check(1))
+            self.write(directory+'/note.md', '## Status: done\n')
+            self.check()
 
     def test_broken_or_missing_stamp_is_rejected_independent_of_status_and_git(self):
         for stage,stamp in itertools.product(('ticket-write', 'ticket-human-review', 'implement', 'review', 'verify'),
@@ -109,7 +116,8 @@ class NoteStateContracts(NoteFixture):
         for clone_depth in (None, 1):
             self.ready_state('review')
             self.edit(STAMP, '<!-- pdh-note-format: 3 -->')
-            self.commit('broken stamp')
+            if clone_depth is None:
+                self.commit('broken stamp')
             target=self.root/'clone'
             args=['git','clone','-q']+(['--depth',str(clone_depth)] if clone_depth else [])
             self.run_cmd(*args, self.root.as_uri(), str(target))
@@ -121,6 +129,10 @@ class NoteStateContracts(NoteFixture):
         self.edit(STAMP+'\n', '')
         self.edit('## 承認前の記録', '## 旧記録')
         self.check()
+        self.edit('## Status:', '<!-- pdh-note-format: 1 -->\n## Status:')
+        self.env['GIT_CEILING_DIRECTORIES'] = str(self.root.parent)
+        shutil.rmtree(self.root / '.git')
+        self.assertIn('印が壊れている', self.check(1))
 
 
 del NoteFixture

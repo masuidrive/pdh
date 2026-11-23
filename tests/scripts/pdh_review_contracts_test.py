@@ -26,9 +26,10 @@ class NoteFixture(unittest.TestCase):
         p = self.root / self.ticket / 'note.md'
         p.write_text(STAMP + '\n' + p.read_text())
 
-    def ready(self, db='あり', api='なし', review='済み progress.md',
-              initial='測った progress.md', sequence='表', heading=True,
-              count=2, prefix='', marked=True, stage='ticket-human-review'):
+    def ready(self, db='あり', api='なし', review='済み',
+              initial='測った', sequence='表', heading=True,
+              count=2, prefix='', marked=True, stage='ticket-human-review',
+              review_record='progress.md', initial_record='progress.md', sequence_reason='別の状態', evidence=None):
         self.write(f'{self.ticket}/ticket.md',
                    '### Why\nReproduction-or-measurement: fixture\nWhy-not-fix-now: 該当なし\n'
                    '### What / Acceptance Criteria\n' +
@@ -44,76 +45,76 @@ class NoteFixture(unittest.TestCase):
             for key, value in [('DB-changes', db), ('API-changes', api)]:
                 if value is not None:
                     f.write(f'{prefix}{key}: {value}\n')
-            f.write('## 承認前の記録\n')
-            for key, value in [('前提の見直し', review), ('いちばん悪い初期状態', initial), ('AC の組の順番', sequence)]:
-                if value is not None:
-                    f.write(f'{prefix}{key}: {value}\n')
+            if evidence if evidence is not None else marked:
+                f.write('## 承認前の記録\n')
+                for key, value in [('前提の見直し', review), ('前提の見直しの記録', review_record),
+                                   ('いちばん悪い初期状態', initial), ('いちばん悪い初期状態の記録', initial_record),
+                                   ('AC の組の順番', sequence), ('AC の組の順番の理由', sequence_reason)]:
+                    if value is not None:
+                        f.write(f'{prefix}{key}: {value}\n')
             if heading:
                 f.write('## AC の組の順番\n| AC の組 | 経路と順番 | 順番ごとの約束 |\n|---|---|---|\n')
 
 
 class NoteFormatContracts(NoteFixture):
-    def test_note_format_v2_change_prefix(self):
+    def test_note_format_v2_change_value(self):
         for key in ('db', 'api'):
-            for value, code in [('あり', 0), ('あり。変更する', 0), ('なし', 0),
-                                ('なし。作り直しは要らない', 0), ('未定', 1), ('', 1), (None, 1)]:
+            for value, code in [('あり', 0), ('あり。変更する', 1), ('なし', 0),
+                                ('なし。作り直しは要らない', 1), ('未定', 1), ('', 1), (None, 1)]:
                 with self.subTest(key=key, value=value):
                     self.ready(**{key: value})
                     out = self.check(code)
                     if code:
-                        self.assertIn('先頭に あり か なし', out)
+                        self.assertIn('あり か なし の1語だけ', out)
                         self.assertIn('例:', out)
 
     def test_note_format_v2_review_status_and_location(self):
         for db, api in [('あり', 'なし'), ('なし', 'あり'), ('なし', 'なし')]:
-            for value in ['済み progress.md', '済み https://example.invalid/result', '済み /<UUID>/result.md',
-                          '済み', '不要', '', '未実施 progress.md', None]:
-                code = 0 if value and (value.startswith('済み ') or value == '不要' and db == api == 'なし') else 1
-                with self.subTest(db=db, api=api, value=value):
-                    self.ready(db=db, api=api, review=value)
+            for value, location in [('済み', 'progress.md'), ('済み', 'https://example.invalid/result'),
+                                    ('済み', '/<UUID>/result.md'), ('済み', ''),
+                                    ('済み progress.md', 'progress.md'), ('不要', ''), ('', ''), (None, '')]:
+                code = 0 if (value == '済み' and location or value == '不要' and db == api == 'なし') else 1
+                with self.subTest(db=db, api=api, value=value, location=location):
+                    self.ready(db=db, api=api, review=value, review_record=location)
                     out = self.check(code)
                     if code:
                         self.assertIn('前提の見直し', out)
-                        self.assertIn('済み', out)
                         self.assertIn('例:', out)
 
     def test_note_format_v2_initial_state_status(self):
-        for value, code in [('測った progress.md', 0), ('当たらない 状態を持たない', 0),
-                            ('測った /<UUID>/probe', 0), ('測った', 1), ('当たらない', 1),
-                            ('', 1), ('完了 progress.md', 1), (None, 1)]:
-            with self.subTest(value=value):
-                self.ready(initial=value)
+        for value, location, code in [('測った', 'progress.md', 0), ('当たらない', '状態を持たない', 0),
+                                      ('測った', '/<UUID>/probe', 0), ('測った', '', 1), ('当たらない', '', 1),
+                                      ('測った progress.md', '所在', 1), ('', '所在', 1), (None, '所在', 1)]:
+            with self.subTest(value=value, location=location):
+                self.ready(initial=value, initial_record=location)
                 out = self.check(code)
                 if code:
                     self.assertIn('いちばん悪い初期状態', out)
-                    self.assertIn('測った', out)
-                    self.assertIn('当たらない', out)
                     self.assertIn('例:', out)
 
     def test_note_format_v2_sequence_reference(self):
-        for count, value, heading, code in [(1, '', False, 0), (2, '表', True, 0),
-                                          (2, '表', False, 1), (2, '当たる組なし 別の状態', False, 0),
-                                          (2, '当たる組なし', True, 1), (2, '', True, 1),
-                                          (2, None, True, 1)]:
+        for count, value, heading, reason, code in [(1, '', False, '', 0), (2, '表', True, '', 0),
+                                          (2, '表', False, '', 1), (2, '当たる組なし', False, '別の状態', 0),
+                                          (2, '当たる組なし', True, '', 1), (2, '', True, '', 1),
+                                          (2, '当たる組なし 理由', True, '理由', 1), (2, None, True, '', 1)]:
             with self.subTest(count=count, value=value, heading=heading):
-                self.ready(count=count, sequence=value, heading=heading)
+                self.ready(count=count, sequence=value, heading=heading, sequence_reason=reason)
                 out = self.check(code)
                 if code:
                     self.assertIn('AC の組の順番', out)
-                    self.assertIn('当たる組なし', out)
                     self.assertIn('例:', out)
 
     def test_note_format_v2_key_layout_and_opaque_descriptions(self):
         for prefix in ('', '- ', '  - ', '  '):
             with self.subTest(prefix=prefix):
-                self.ready(db='なし。後で作り直しにはならない', api='なし（API は変えない）',
-                           review='不要', initial='当たらない <UUID> は設定の記述だけ',
-                           sequence='当たる組なし 設定は別々', prefix=prefix)
+                self.ready(db='なし', api='なし', review='不要', initial='当たらない',
+                           initial_record='<UUID> は設定の記述だけ', sequence='当たる組なし',
+                           sequence_reason='設定は別々', prefix=prefix)
                 self.write(f'{self.ticket}/progress.md', '前提の見直し: skip 結果: <結果>\n')
                 self.check()
         self.ready()
         self.edit('DB-changes:', 'DB-changes：')
-        self.assertIn('先頭に あり か なし', self.check(1))
+        self.assertIn('あり か なし の1語だけ', self.check(1))
 
     def test_note_format_v2_only_designated_section_counts(self):
         for field in ('前提の見直し', 'いちばん悪い初期状態', 'AC の組の順番'):
@@ -201,9 +202,9 @@ class NoteFormatContracts(NoteFixture):
         self.edit(STAMP, '  ' + STAMP + '\t')
         self.assertIn('いちばん悪い初期状態', self.check(1))
         self.edit('  ' + STAMP + '\t\n', '')
-        self.check()
+        self.assertIn('印が欠けている', self.check(1))
         self.edit('## Checklist', '## Checklist\n' + STAMP)
-        self.check()
+        self.assertIn('印が壊れている', self.check(1))
 
 
 del Fixture

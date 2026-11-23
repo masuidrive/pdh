@@ -345,9 +345,9 @@ exit "$pdh_tolerance_status"
 
 #### note の承認前の記録
 
-`.ticket-config.yaml` の `note_content` の先頭行を `<!-- pdh-note-format: 2 -->` にする（前後の空白は許す）。`## 承認前の記録` と空の `前提の見直し:`・`いちばん悪い初期状態:`・`AC の組の順番:` を置き、決まった語の説明を配布版のコメントから写す。Required-Probes の旧い初期状態の雛形の行は除き、`## AC の組の順番` と表の見出しは残す。Ticket contract check の DB/API の説明に «値の先頭に あり か なし» を入れる。
+`.ticket-config.yaml` の `note_content` の先頭行を `<!-- pdh-note-format: 2 -->` にする（前後の空白は許す）。`## 承認前の記録` と、配布版の空の状態・記録・理由の6欄を置く。状態の値は列挙語だけとし、所在と理由は別欄に書く。Required-Probes の旧い初期状態の雛形の行は除き、`## AC の組の順番` と表の見出しは残す。Ticket contract check の DB/API の説明に «値は あり か なし の1語だけ» を入れ、`DB-changes の内容:`・`API-changes の内容:` を別の行に置く。
 
-既存の note は一括で書き換えない。次の `pdh-stage-checklist.sh <stage> --enter <note>` が、Checklist に S8 の行が無い場合だけ印を足す。旧 S8 があれば印を足さず、新しい検査も当てない。gate より後の Status には承認前の記録を遡及要求しない。適用済みかは、導入先で次の冪等な確認コマンドを実行する。
+既存の note は一括で書き換えない。`pdh-stage-checklist.sh <stage> --enter <note>` は、Checklist に S8 の行が無い場合だけ印を足す。PDH-ticket-review と PDH-ticket-human-review への --enter は、無ければ空の `## 承認前の記録` も足す。後の stage では節を足さず、節の無い旧 ticket に承認前の記録を遡及要求しない。節のある ticket は承認待ち以降も記録を数える（done を除く）。印を含む行の書き崩し・先頭以外の位置、節があるのに印が無い状態は検査で落ちる。適用済みかは、導入先で次の冪等な確認コマンドを実行する。
 
 <!-- pdh-shell: note-evidence-check -->
 ```bash
@@ -355,7 +355,7 @@ python3 - <<'PY_CHECK'
 from pathlib import Path
 import yaml
 note = yaml.safe_load(Path('.ticket-config.yaml').read_text())['note_content']
-required = ('値の先頭に あり か なし', '## 承認前の記録', '前提の見直し:', 'いちばん悪い初期状態:', 'AC の組の順番:', '済み', '不要', '測った', '当たらない', '当たる組なし', '## AC の組の順番')
+required = ('値は あり か なし の1語だけ', 'DB-changes の内容:', 'API-changes の内容:', '前提の見直しの記録:', 'いちばん悪い初期状態の記録:', 'AC の組の順番の理由:', '## 承認前の記録', '前提の見直し:', 'いちばん悪い初期状態:', 'AC の組の順番:', '済み', '不要', '測った', '当たらない', '当たる組なし', '## AC の組の順番')
 missing = [line for line in required if line not in note]
 if note.splitlines()[0].strip() != '<!-- pdh-note-format: 2 -->':
     missing.append('先頭行の note の印')
@@ -366,7 +366,7 @@ PY_CHECK
 
 #### ticket の review worker と前提の見直し
 
-`.claude/agents/pdh-ticket-reviewer.md` が配置表で届く。既存の導入先は `scripts/checks/required-pdh-files.check` の `required_paths` にこの path を足す（この check は初回だけコピーされるので、上書きでは届かない）。DB/API の値の先頭が «あり» の ticket は、PDH-ticket-review で前提の見直しが必須である。変更が無く新しい仕組みを作る場合は推奨とする。条件・渡すもの・記録先は skill の «前提を疑う» に従う。model と effort の既定は役割の表の «前提の見直し» の行にある。
+`.claude/agents/pdh-ticket-reviewer.md` が配置表で届く。既存の導入先は `scripts/checks/required-pdh-files.check` の `required_paths` にこの path を足す（この check は初回だけコピーされるので、上書きでは届かない）。DB/API の値が «あり» の ticket は、PDH-ticket-review で前提の見直しが必須である。変更が無く新しい仕組みを作る場合は推奨とする。条件・渡すもの・記録先は skill の «前提を疑う» に従う。model と effort の既定は役割の表の «前提の見直し» の行にある。
 
 確認（冪等）:
 

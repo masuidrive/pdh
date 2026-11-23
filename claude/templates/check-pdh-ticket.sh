@@ -27,7 +27,7 @@
 #      次の巡へ進んでいない（S5）・PDH-verify 以降は S7・S8 の行がすべて回答済み
 #  11. close 時、説明対象を変えた docs は、更新か Checklist の済み行がある
 #
-#  12. 先頭に pdh-note-format: 2 の印がある note は、承認直前の固定キーと S8 のラベルが埋まっている
+#  12. 先頭に pdh-note-format: 2 の印がある note は、承認前の記録の節を持つ承認待ち以降の固定キーと S8 のラベルが埋まっている
 #
 #   bash scripts/check-pdh-ticket.sh --ac-hash <ticket.md>   # いまの AC と Out-of-scope のハッシュを出す
 #   bash scripts/check-pdh-ticket.sh --require-branch-ticket <base-ref>
@@ -359,9 +359,10 @@ check_ticket_review_handover() {
         kind=substr($0, RSTART + 2, 1)
         if (!match($0, /PDH-review-[0-9]+/)) next
         number=substr($0, RSTART, RLENGTH); sub(/^PDH-review-/, "", number); number+=0
-        done=($0 ~ /^- \[[xX]\]/)
+        done=($0 ~ /^- \[[xX-]\]/)
         key=number SUBSEP kind
-        if (!(key in gate) || done) gate[key]=done
+        if (!(key in gate)) gate[key]=1
+        gate[key]=gate[key] && done
         if (kind == 7 && (first7 == "" || number < first7)) first7=number
         if (number > last) last=number
       }
@@ -393,11 +394,27 @@ note_format_v2() {
   sed -n '1p' "$1" | grep -Eq '^[[:space:]]*<!-- pdh-note-format: 2 -->[[:space:]]*$'
 }
 
-# 承認直前の固定キーだけを数える。結果の妥当性は skill の判断の Checklist で確かめる。
+check_note_format() {
+  local n=$1
+  if grep -q 'pdh-note-format' "$n"; then
+    if ! note_format_v2 "$n"; then
+      printf 'check-pdh-ticket: %s: 印が壊れている（先頭行を <!-- pdh-note-format: 2 --> にする）\n' "$n" >&2
+      failed=1
+    fi
+  elif ticket_visible_lines "$n" | grep -Eq '^## 承認前の記録[[:space:]]*$'; then
+    printf 'check-pdh-ticket: %s: 印が欠けている（承認前の記録がある note の先頭行に <!-- pdh-note-format: 2 --> を置く）\n' "$n" >&2
+    failed=1
+  fi
+}
+
+# 固定キーだけを数える。結果の妥当性は skill の判断の Checklist で確かめる。
 check_ticket_review_evidence() {
   local t=$1 n=$2 st=$3 ac_count result
-  [ "$st" = PDH-ticket-human-review ] || return 0
-  note_format_v2 "$n" || return 0
+  case "$st" in
+    PDH-ticket-human-review|PDH-implement|PDH-review|PDH-verify|PDH-human-review|PDH-close) ;;
+    *) return 0 ;;
+  esac
+  ticket_visible_lines "$n" | grep -Eq '^## 承認前の記録[[:space:]]*$' || return 0
   ac_count=$(ticket_visible_lines "$t" | awk '
     /^#+[[:space:]]/ {section=0}
     !seen_ac && /^#+[[:space:]]+(What([[:space:]]|$)|.*Acceptance Criteria)/ {section=1; seen_ac=1; next}
@@ -421,16 +438,16 @@ check_ticket_review_evidence() {
     }
     END {
       db=cost["DB-changes"]; api=cost["API-changes"]
-      if (db !~ /^(あり|なし)/ || api !~ /^(あり|なし)/)
-        print "DB-changes:・API-changes: の値の先頭に あり か なし を書く（例: DB-changes: なし ／ API-changes: あり。CLI の形式を変える）"
+      if (db !~ /^(あり|なし)$/ || api !~ /^(あり|なし)$/)
+        print "DB-changes:・API-changes: の値は あり か なし の1語だけを書く（例: DB-changes: なし ／ DB-changes の内容: 変更しない）"
       review=record["前提の見直し"]
-      if (!(review ~ /^済み[[:space:]]+[^[:space:]]/ || (db ~ /^なし/ && api ~ /^なし/ && review == "不要")))
-        print "前提の見直し: に 済み と結果の所在を書く（例: 前提の見直し: 済み progress.md。DB/API とも なし なら 前提の見直し: 不要 も可）"
-      if (record["いちばん悪い初期状態"] !~ /^(測った|当たらない)[[:space:]]+[^[:space:]]/)
-        print "いちばん悪い初期状態: に 測った と所在、または 当たらない と理由を書く（例: いちばん悪い初期状態: 測った progress.md ／ いちばん悪い初期状態: 当たらない 状態を持たない）"
+      if (!((review == "済み" && record["前提の見直しの記録"] != "") || (db == "なし" && api == "なし" && review == "不要")))
+        print "前提の見直し: は 済み か 不要、済みなら 前提の見直しの記録: を埋める（例: 前提の見直し: 済み ／ 前提の見直しの記録: progress.md。DB/API とも なし なら 不要 も可）"
+      if (record["いちばん悪い初期状態"] !~ /^(測った|当たらない)$/ || record["いちばん悪い初期状態の記録"] == "")
+        print "いちばん悪い初期状態: は 測った か 当たらない、いちばん悪い初期状態の記録: を埋める（例: いちばん悪い初期状態: 測った ／ いちばん悪い初期状態の記録: progress.md）"
       sequence=record["AC の組の順番"]
-      if (ac_count >= 2 && !((sequence == "表" && table) || sequence ~ /^当たる組なし[[:space:]]+[^[:space:]]/))
-        print "AC の組の順番: に 表 と ## AC の組の順番 の見出し、または 当たる組なし と理由を書く（例: AC の組の順番: 表 ／ AC の組の順番: 当たる組なし 別々の状態を扱う）"
+      if (ac_count >= 2 && !((sequence == "表" && table) || (sequence == "当たる組なし" && record["AC の組の順番の理由"] != "")))
+        print "AC の組の順番: は 表 と ## AC の組の順番 の見出し、または 当たる組なし と AC の組の順番の理由: を埋める（例: AC の組の順番: 当たる組なし ／ AC の組の順番の理由: 別々の状態）"
     }
   ') || { failed=1; return; }
   if [ -n "$result" ]; then
@@ -601,6 +618,10 @@ if [ "$git_ready" -eq 1 ] && [ -n "$pdh_review_base" ]; then
     done_tickets+=("$t")
   done <<< "$(printf '%s\n' "$added" | awk 'NF && !seen[$0]++')"
 fi
+
+for n in "$tickets_dir"/*/note.md "$tickets_dir"/done/*/note.md; do
+  [ ! -f "$n" ] || check_note_format "$n"
+done
 
 for n in "$tickets_dir"/*/note.md; do
   [ -f "$n" ] || continue

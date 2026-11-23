@@ -11,7 +11,7 @@ class NoteFormatCompatibility(NoteFixture):
         for stage in ('ticket-human-review', 'implement', 'review', 'verify', 'human-review'):
             with self.subTest(stage=stage):
                 self.ready(db=None, api=None, review=None, initial=None, sequence=None,
-                           marked=False, heading=False, stage=stage)
+                           marked=False, heading=False, stage=stage, evidence=False)
                 self.check()
         for row in ('- [x] S8 PDH-review-1 旧い回答 発行先: /old', '- [x] S8: 旧い回答',
                     '- [ ] S8 PDH-review-1 旧い結論'):
@@ -19,10 +19,10 @@ class NoteFormatCompatibility(NoteFixture):
                 self.note('review', row)
                 self.check()
 
-    def test_note_format_v2_gate_evidence_does_not_apply_after_gate(self):
+    def test_note_format_v2_absent_section_keeps_legacy_evidence_behavior(self):
         for stage in ('ticket-review', 'implement', 'review', 'verify', 'human-review'):
             with self.subTest(stage=stage):
-                self.ready(db=None, api=None, review=None, initial=None, sequence=None, heading=False, stage=stage)
+                self.ready(db=None, api=None, review=None, initial=None, sequence=None, heading=False, stage=stage, evidence=False)
                 self.check()
 
     def test_note_format_v2_done_excludes_new_checks(self):
@@ -75,7 +75,7 @@ class NoteFormatCompatibility(NoteFixture):
                     if marked:
                         self.mark()
                 else:
-                    self.ready(marked=marked, review='済み progress.md' if valid else None)
+                    self.ready(marked=marked, review='済み' if valid else None)
                 self.commit('note format case')
                 outputs = []
                 for depth in (None, 1):
@@ -105,9 +105,10 @@ class NoteFormatCompatibility(NoteFixture):
             f.write('\n- [ ] 回答待ち 発行先: /board\n')
         # 待ち行は Checklist に置く。
         self.edit('## Checklist', '## Checklist\n- [ ] 回答待ち 発行先: /board')
-        self.assertIn('先頭に あり か なし', self.check(1))
+        self.assertIn('あり か なし の1語だけ', self.check(1))
         for before, after in [('DB-changes:', 'DB-changes: なし'), ('API-changes:', 'API-changes: なし'),
-                              ('前提の見直し:', '前提の見直し: 不要'), ('いちばん悪い初期状態:', 'いちばん悪い初期状態: 測った progress.md'),
+                              ('前提の見直し:', '前提の見直し: 不要'), ('いちばん悪い初期状態:', 'いちばん悪い初期状態: 測った'),
+                              ('いちばん悪い初期状態の記録:', 'いちばん悪い初期状態の記録: progress.md'),
                               ('AC の組の順番:', 'AC の組の順番: 表')]:
             self.edit('\n' + before + '\n', '\n' + after + '\n')
         self.check()
