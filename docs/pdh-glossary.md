@@ -196,7 +196,7 @@ skill の分け方は skill `pdh-change` にある。
   - 使わない語: Director、main agent、main、上位（Coding Engineer から見た PM）
 - **worker**
   - 意味: PM が起動する、会話の状態を引き継がない別の実行単位。
-  - 定義する場所: `[SKILLS_PATH]/pdh-pm/_execution-team.md`（各役の手順は `.claude/agents/pdh-<役割>.md`（Codex は `.codex/agents/pdh-<役割>.toml`） の本文）
+  - 定義する場所: `[SKILLS_PATH]/pdh-pm/_execution-team.md`（各役の手順は `.claude/agents/pdh-<役割>.md`（Codex は `.codex/agents/pdh-<役割>.toml`）の本文）
   - 使わない語: subagent、Agent
   - 注意: tmux の別 window で動くセッションは「window」と呼び、worker と書かない。
 - **PM だけでの実行**

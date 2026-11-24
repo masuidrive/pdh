@@ -165,3 +165,31 @@ make_note ticket-write
 expect 1 'missing tolerance checklist rejected'
 printf -- '- [x] PDH-ticket-write: Failure Tolerance が埋まっている。無いか空だった場合は、3 つの問いへの回答と brief 変更への承認が progress にある\n' >> "$note"
 expect 0 'legacy tolerance checklist recognized'
+
+# 旧 Checklist は既知の行だけ読み替え、欠落と異綴りは拒否する。
+for stage in ticket-review review; do
+  case "$stage" in
+    ticket-review)
+      old_line='PDH-ticket-review: 変更箇所と制約の anchor を照合し、該当行を直すか残すかが progress にある。目安の変更時は全行、マイルストーンを閉じるときは «テストなし» の行も見直した'
+      new_line='PDH-ticket-review: 変更箇所と制約の anchor を照合し、該当行を直すか残すかが progress にある。目安の変更時は全行を見直した'
+      ;;
+    review)
+      old_line='PDH-review: PM が整備だけで修正確認の巡を起こしておらず、AC と Out-of-scope の外の要求を起票か AC の再承認へ回したことを Findings 表と巡の記録で照合した'
+      new_line='PDH-review: PM が整備だけで修正確認の巡を起こしておらず、AC と Out-of-scope の外の要求の処置を「処置の判断」に従って決め、この ticket で直す場合は AC の再承認を得たことを Findings 表と巡の記録で照合した'
+      ;;
+  esac
+  printf -- '- [ ] %s\n' "$new_line" >> ".claude/skills/pdh-$stage/SKILL.md"
+  make_note "$stage"
+  if [ "$stage" = review ]; then
+    printf '<!-- pdh-review-loop: 1 -->\n- [x] %s\n' "$review_line" >> "$note"
+  fi
+  make_progress 1
+  expect 1 "$stage missing legacy row rejected"
+  grep -qF "$new_line" output
+  printf -- '- [x] %s\n' "$old_line" >> "$note"
+  expect 0 "$stage exact legacy row recognized"
+  sed '$d' "$note" > p; mv p "$note"
+  printf -- '- [x] %s\n' "${old_line/照合/昭合}" >> "$note"
+  expect 1 "$stage one-character typo rejected"
+  grep -qF "$new_line" output
+done

@@ -193,7 +193,7 @@ bot は PDH-stage の遷移に応じて **issue の PDH stage ラベルを更新
   ```bash
   gh issue create --repo <owner/repo> --title "<症状と対象 1 行>" --body-file <本文のファイル>
   ```
-- **報告から ticket を書くとき**（`pdh-ticket-write`「報告から書くとき」）は、`findings_issue_repos` の各 repo でも症状・対象・到達条件の語で issue を検索し、原因・対象・期待する修正を既存の証拠と照合する。同じ欠陥なら note の `起票:` の行にその issue を書く。受け入れた制約は起票せず、直すと決めたものだけを issue にする
+- **報告から ticket を書くとき**（`pdh-ticket-write`「報告から書くとき」）は、`findings_issue_repos` の各 repo でも症状・対象・到達条件の語で issue を検索し、原因・対象・期待する修正を既存の証拠と照合する。同じ欠陥なら note の `起票:` の行にその issue を書く。受け入れた制約に当たる報告も、`pdh-review`「処置の判断」の «起票する» の基準に従う。実データで起きた項目は起票し直す。PDH 自身の ticket にも同じ節の条件を当てる
 - note の `## Checklist` には `- [ ] 起票: <anchor> → <owner/repo>#<N>` と書き、issue の URL を progress に書く。`check-pdh-ticket.sh` は `findings_issue_repos` に無い repo の参照を落とす。issue があるかは GitHub に問い合わせないと分からないので、検査は形と起票先の設定だけを数え、実在は起票した PM が `gh issue view` で確かめる
 - ⚠ 起票した issue のタイトルには `🤖 ` を付けない。`pickup-timing: immediate` でも、着手するかは人が決める（上の «依頼として起票するとき» は、bot に作業させると人が決めたときだけ）
 
