@@ -49,7 +49,7 @@ PDH-stage の skill は PM の手順である。worker の手順は `.codex/agen
 3. PDH-stage の最後に、その skill の «出力» の節を確かめ、note の `## Checklist` にあるその PDH-stage の行を `[x]`（当てはまらないものは `- [-] ... - skip: <理由>`）にして、«通った» か «通らない（欠けているもの）» かを決める
    - 通ったら次の PDH-stage へ進む
    - 通らなければ、欠けているものを埋めるか、差し戻す
-   - **PM は PDH-stage ごとの確かめ方を覚えない。**確かめ方は各 skill の «出力» の節にだけ書いてある
+   - 確かめ方は各 skill の «出力» の節にだけ書いてある
 4. 遷移と差し戻しは、毎回 `[前 PDH-stage] -> [次 PDH-stage] — 理由` の 1 行で宣言し、progress へ追記する。暗黙の遷移をしない。Status の書き換え、チェックリストの写し、この 1 行は、同じ commit にする。分けると、その間で作業が中断したとき、Status とチェックリストの印が食い違ったまま残る。PDH-ticket-write から PDH-open へ進むときも、`./ticket.sh start` の前に commit する（commit していない変更を base branch に残したまま `start` しない）
 
 通常は `PDH-review` と `PDH-verify` まで自動で進める。承認の PDH-stage では止まり、ユーザの明示の回答を待つ。
@@ -194,7 +194,7 @@ test -n "$rec" && test "$rec" = "$(bash scripts/check-pdh-ticket.sh --ac-hash "$
 
 ## 共有ファイル
 
-PM の仕事ではないが、複数の PDH-stage の skill が参照するので、ここに置く。
+複数の PDH-stage の skill が参照するファイル。
 
 - `[SKILLS_PATH]/pdh-pm/_records.md` — ticket / note / progress に何を書くか
 - `[SKILLS_PATH]/pdh-pm/_execution-team.md` — worker の役割・engine・起動の仕方と、PM が worker の prompt に入れるもの

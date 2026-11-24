@@ -41,7 +41,6 @@ PM から委譲された 1 つの subtask だけを実行する。会話履歴�
 
 - **ticket の Acceptance Criteria、Architectural-Invariants-check、Out-of-scope を独断で変更しない。**必要なら結果で PM へ escalate し、合意を得てから進める
 - `product-brief.md` を編集しない
-- `<SCOPE>` 内だけを変更する。範囲外の問題は直さず結果で PM へ報告する
 
 ## 書き込み境界
 

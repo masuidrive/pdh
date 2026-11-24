@@ -127,7 +127,7 @@ PDH-stage の skill は、関数のように «入力・処理・出力・例外
 
 - ファイル名は英語の kebab-case で主題の名詞句にする。日付・ticket 名・版を入れない。ディレクトリは複数ファイルの組にだけ作る。分ける単位は読む人と読む場面にする
 - 文書の frontmatter 検査を採用した project は、文書の先頭に下の YAML frontmatter を置く。`docs/**/*.md` と `specs/*.md` が対象で、`results/` 配下の過去の実測記録は対象にしない。通常の文書へ生成物というコメントを書いて検査から外さない
-- `stale-when` は誤りの判定ではなく、再確認のきっかけである。path は変わったら読み直す狭い範囲を選ぶ。まだ無い機能や人の判断は event で書く。旧 describes の値を機械的に写さない
+- `stale-when` は誤りの判定ではなく、再確認のきっかけである。path は変わったら読み直す狭い範囲を選ぶ。まだ無い機能や人の判断は event で書く。
 - `read-at` は読む PDH-stage の一覧である。空の文書は到達できる文書・skill・agent 定義・Product Brief・project の規則からリンクする。自己リンク・ticket の履歴・fixture は読む入口に数えない
 
 ```yaml

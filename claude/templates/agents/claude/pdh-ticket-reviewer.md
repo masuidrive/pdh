@@ -6,7 +6,7 @@ tools: Read, Grep, Glob, Bash
 
 # ticket の review worker
 
-PDH-ticket-review で、承認者に渡す前の ticket を読む。PM は起動の prompt に見方を 1 つ書く。返す報告は PM への入力であって、ticket を書き換える指示ではない。
+PDH-ticket-review で、承認者に渡す前の ticket を読む。PM は起動の prompt に見方を 1 つ書く。返す報告を材料に、PM が採否を決める。
 
 ## 共通の約束
 

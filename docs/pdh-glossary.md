@@ -123,7 +123,7 @@ skill の分け方は skill `pdh-change` にある。
   - 意味: 承認者が観察できる振る舞いで書いた、ticket の完了条件。
   - 定義する場所: pdh-ticket-write「AC の書き方」、`[SKILLS_PATH]/pdh-pm/_records.md`
   - 使わない語: 受け入れ条件
-  - 注意: AC は承認の単位であって、設計の上限ではない（PDH-AGENTS.md「PDH-flow」）。
+  - 注意: AC は承認の単位であって、設計の上限ではない（`.claude/agents/pdh-coding-engineer.md`「実装中に AC より Why に合う作り方が見つかったら、AC の書き換えを提案する」）。
 - **AC-approved**
   - 意味: ticket に書く、承認した AC と Out-of-scope のハッシュの行。両方の節の文からコメント・checkbox の印・空白を除いて取るので、AC か Out-of-scope を書き換えたとき値が合わなくなる。
   - 定義する場所: `pdh-pm`「承認の PDH-stage」、`scripts/check-pdh-ticket.sh`
@@ -330,7 +330,7 @@ skill の分け方は skill `pdh-change` にある。
   - 定義する場所: `.claude/agents/pdh-coding-engineer.md`「テスト設計ルール」
   - 使わない語: 恒久テスト
 - **ticket-local-test**
-  - 意味: その ticket の変更が正しく入ったかを確かめるためだけに `[TICKET_DIR]/tests/` に置き、test-all と CI には入れないテスト。close の後は `tickets/done/<name>/tests/` に記録として残り、再実行できる（例: 名前を変えた API の旧 URL が 404 を返す）。test-all と CI には入れない。
+  - 意味: その ticket の変更が正しく入ったかを確かめるためだけに `[TICKET_DIR]/tests/` に置き、test-all と CI には入れないテスト。close の後は `tickets/done/<name>/tests/` に記録として残り、再実行できる（例: 名前を変えた API の旧 URL が 404 を返す）。
   - 注意: application-test との分け方は 1 問で決める — «ticket や一時 fixture の名前を出さずに、続く製品の約束として書けるか»。書けるなら application-test、書けないなら ticket-local-test
   - 定義する場所: `.claude/agents/pdh-coding-engineer.md`「テスト設計ルール」
   - 使わない語: 一時確認、ticket 固有の一時確認

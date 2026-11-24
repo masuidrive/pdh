@@ -54,7 +54,6 @@ PM から委譲された 1 つの subtask だけを実行する。会話履歴�
 
 - **ticket の Acceptance Criteria、Architectural-Invariants-check、Out-of-scope を独断で変更しない。**必要なら結果で PM へ escalate し、合意を得てから進める
 - `product-brief.md` を編集しない
-- `<SCOPE>` 内だけを変更する。範囲外の問題は直さず結果で PM へ報告する
 
 ## HEAD と index
 
@@ -138,7 +137,7 @@ diff は変わった行しか見せない。欠陥の多くは、変わった行
 `<RESULT_FILE>` に次を書く。
 
 - 対象の commit SHA と、「diff の外を読む」で読んだ commit（hash と件名）
-- AC と作り方の判断（Design-Decisions）の対応表。各 AC と各判断を 1 件 1 行にし、実装と検証の両方を `file:行` または節名で示す。未実装・未確認なら、その列にそう書き、足りないものを添える。Why だけを渡す `pdh-reviewer-lens1` は対象外である。修正確認の巡では、渡された項目の対応先を更新し、ほかの項目は前の報告の表を参照する
+- AC と作り方の判断（Design-Decisions）の対応表。各 AC と各判断を 1 件 1 行にし、実装と検証の両方を `file:行` または節名で示す。未実装・未確認なら、その列にそう書き、足りないものを添える。修正確認の巡では、渡された項目の対応先を更新し、ほかの項目は前の報告の表を参照する
 
 | 種別 | AC / Design-Decisions の項目 | 対応する実装（file:箇所） | 対応する検証（file:箇所・実行結果） |
 |---|---|---|---|

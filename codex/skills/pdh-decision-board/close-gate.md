@@ -1,7 +1,5 @@
 # `PDH-human-review` の decision-board
 
-（ファイル名の `close-gate` は、PDH-human-review を指す古い呼び名である。リンクが参照するので名前は変えない。）
-
 同じ主題について [base.md](base.md) と両方に規則があるときは、このファイルに従う。
 
 - **この PDH-stage の承認文は «この達成で ticket を閉じてよいか» であり、AC の承認は求めない。既定は `N = 0`。**
