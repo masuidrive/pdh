@@ -8,7 +8,7 @@ function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); ret
 {
   line=$0
   if (fence != "") {
-    close_line=line; sub(/^ ? ? ?/, "", close_line)
+    close_line=line; sub(/^[[:space:]]*/, "", close_line)
     if (match(close_line, /^(```+|~~~+)[[:space:]]*$/) && substr(close_line,1,1) == fence) {
       sub(/[[:space:]]*$/, "", close_line)
       if (length(close_line) >= fence_length) fence=""
@@ -27,10 +27,13 @@ function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); ret
     }
   }
   line=visible
-  if (match(line, /^ ? ? ?(```+|~~~+)/)) {
-    marker=substr(line,RSTART,RLENGTH); sub(/^ */, "", marker)
+  if (match(line, /^[[:space:]]*(```+|~~~+)/)) {
+    marker=substr(line,RSTART,RLENGTH); sub(/^[[:space:]]*/, "", marker)
     fence=substr(marker,1,1); fence_length=length(marker); next
   }
+  if (line ~ /^[[:space:]]*$/) { blank=1; next }
+  if (line ~ /^(    |\t)/ && (blank || indented)) { indented=1; next }
+  blank=indented=0
   if (line ~ /^## /) { inside=(line ~ /^## Failure Tolerance[[:space:]]*$/); next }
 }
 inside {
