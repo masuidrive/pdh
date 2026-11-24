@@ -343,7 +343,9 @@ git diff --no-index -- scripts/test-all.sh tmp/pdh/codex/templates/test-all.sh |
 
 #### Failure Tolerance と制約の記録
 
-`product-brief.md` の Constraints の前に Failure Tolerance（許す失敗の範囲の不具合は使っていて困るものから直し、許さない失敗は頻度に関係なく直す／使う人と量／許す失敗の頻度と 1 回のコスト／許さない失敗）を置く。無いか空なら `pdh-ticket-write` でユーザと決め、変更案への承認後に書く。`AGENTS.md` のディレクトリ構造に、受け入れた制約の置き場所 `docs/known-limits.md`（別の場所ならその path）を指定する。役割の表の上にある «割り当てを変えたら、その理由も 1 行添えておくと後から検証できる» は削除する。理由と経緯は commit message に書く。`.ticket-config.yaml` の Why のガイドから `on-symptom-report` と `observable-symptom:` を外す。既に Failure Tolerance を書いてある場合は、冒頭の «バグを 0 にすることは目指さない。使っていて困るものから直す。» を template の 2 文（«許す失敗の範囲の不具合は、使っていて困るものから直す。許さない失敗は、頻度に関係なく直す。»）に置き換える。1 文だけだと、許さない失敗も困るまで後回しにしてよいと読める。
+更新を実行する worker は、取り込んだ `pdh-brief-writing` を読み、`product-brief.md` と `AGENTS.md` を取り込んだ雛形と skill に照らして見直す。見直しの結果とずれの変更案を起動した側（PM）へ返す。PM が利用者へ変更案を出し、Brief は承認の後に直す。古い `pdh-update` で最初の取り込みを行う場合も、この段を実行する。以下の確認コマンドは繰り返してもファイルを変えない。値の意味と規則のずれは、PM が返された見直しの結果で確かめる。
+
+`product-brief.md` の Constraints の前に Failure Tolerance（許す失敗の範囲の不具合は使っていて困るものから直し、許さない失敗は頻度に関係なく直す／使う人と量／許す失敗の頻度と 1 回のコスト／許さない失敗）を置く。欄が欠ける・空・雛形のまま、または許す失敗に数字が無ければ `pdh-brief-writing` でユーザと決め、変更案への承認後に書く。`AGENTS.md` のディレクトリ構造に、受け入れた制約の置き場所 `docs/known-limits.md`（別の場所ならその path）を指定する。役割の表の上にある «割り当てを変えたら、その理由も 1 行添えておくと後から検証できる» は削除する。理由と経緯は commit message に書く。`.ticket-config.yaml` の Why のガイドから `on-symptom-report` と `observable-symptom:` を外す。既に Failure Tolerance を書いてある場合は、冒頭の «バグを 0 にすることは目指さない。使っていて困るものから直す。» を template の 2 文（«許す失敗の範囲の不具合は、使っていて困るものから直す。許さない失敗は、頻度に関係なく直す。»）に置き換える。1 文だけだと、許さない失敗も困るまで後回しにしてよいと読める。
 
 未完の ticket の次の巡から 5 列の Findings 表を追記し、旧 8 列と `constraint-accepted:` の記録は書き換えない。頻度・コストの検査は現行表だけを対象にし、`tickets/done/` は検査しない。旧 8 列を認めるのは、この版の `scripts/check-pdh-ticket.sh`（印 `# findings-table: v1`）より前に作った ticket だけである — 更新後に作った ticket の progress に現行 5 列の表が 1 つも無ければ検査が落ちる。進行中の ticket は、旧表を書き換えずに次の巡から 5 列で追記する。旧い `scripts/checks/findings-table-record-target.check` が残っていれば削除する。出した人の検査は配布 script の上書きで置き換わる。`pdh-review-tally.sh` は現行表の判定と巡だけを集計する。
 
@@ -356,9 +358,7 @@ git diff --no-index -- scripts/test-all.sh tmp/pdh/codex/templates/test-all.sh |
 <!-- pdh-shell: failure-tolerance-check -->
 ```bash
 pdh_tolerance_status=0
-for pdh_label in '## Failure Tolerance' '使う人と量:' '許す失敗:' '許さない失敗:'; do
-  grep -qF "$pdh_label" product-brief.md || { printf '要適用: %s\n' "$pdh_label"; pdh_tolerance_status=1; }
-done
+bash .agents/skills/pdh-brief-writing/scripts/check-brief.sh product-brief.md || pdh_tolerance_status=1
 if grep -qF 'バグを 0 にすることは目指さない。使っていて困るものから直す。' product-brief.md; then
   echo '要適用: Failure Tolerance の冒頭の 2 文'; pdh_tolerance_status=1
 fi

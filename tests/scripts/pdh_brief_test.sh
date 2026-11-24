@@ -9,7 +9,7 @@ cp "$root/scripts/pdh-stage-checklist.sh" "$tmp/scripts/"
 cp -R "$root/.claude/skills/pdh-ticket-write" "$root/.claude/skills/pdh-brief-writing" "$tmp/.claude/skills/"
 printf '## Status: PDH-ticket-write\n\n## Checklist\n' > "$tmp/tickets/sample/note.md"
 cd "$tmp"
-for kind in valid missing empty placeholder nondigit alternate; do
+for kind in valid missing empty placeholder nondigit alternate comment fence inline-comment; do
   printf '## Failure Tolerance\n- 使う人と量: 本人\n- 許さない失敗: 記録の喪失\n' > product-brief.md
   expected=1
   case "$kind" in
@@ -17,6 +17,9 @@ for kind in valid missing empty placeholder nondigit alternate; do
     empty) printf '%s\n' '- 許す失敗: ' >> product-brief.md ;;
     placeholder) printf '%s\n' '- 許す失敗: <月1回>' >> product-brief.md ;;
     nondigit) printf '%s\n' '- 許す失敗: 稀に本人の短時間' >> product-brief.md ;;
+    comment) printf '%s\n' '<!--' '- 許す失敗: 月1回・本人1分' '-->' >> product-brief.md ;;
+    fence) printf '%s\n' '~~~md' '- 許す失敗: 月1回・本人1分' '~~~' >> product-brief.md ;;
+    inline-comment) printf '%s\n' '- 許す失敗: <!-- 月1回・本人1分 -->' >> product-brief.md ;;
     alternate) printf '%s\n' '- 許す失敗: 月２回、本人１分' >> product-brief.md; expected=0 ;;
   esac
   for entry in check enter; do
