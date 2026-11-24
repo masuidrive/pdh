@@ -25,7 +25,7 @@ class ScriptTests(unittest.TestCase):
         self.env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL='/dev/null', GIT_TEMPLATE_DIR='',
                         GIT_AUTHOR_NAME='Test', GIT_AUTHOR_EMAIL='test@example.invalid',
                         GIT_COMMITTER_NAME='Test', GIT_COMMITTER_EMAIL='test@example.invalid')
-        for name in ('check-pdh-ticket', 'pdh-stage-checklist', 'pdh-review-range', 'pdh-lock'):
+        for name in ('check-pdh-ticket', 'pdh-stage-checklist', 'pdh-review-range', 'pdh-review-tally', 'pdh-lock'):
             self.write(f'scripts/{name}.sh', (ROOT / f'scripts/{name}.sh').read_text())
         self.write('scripts/checks/docs-metadata.check', '# opted in\n')
         self.write('scripts/docs-policy.py', (ROOT / 'scripts/docs-policy.py').read_text())
@@ -38,6 +38,9 @@ class ScriptTests(unittest.TestCase):
             file = self.root / path
             content = file.read_text() if file.exists() else ''
             self.write(path, content + f'- [ ] PDH-{stage}: 証拠がある\n')
+        brief_check = '.claude/skills/pdh-brief-writing/scripts/check-brief.sh'
+        self.write(brief_check, (ROOT / brief_check).read_text())
+        self.write('product-brief.md', '## Failure Tolerance\n- 使う人と量: 本人\n- 許す失敗: 月1回、本人1分\n- 許さない失敗: データの喪失\n')
         self.write('code', 'initial\n')
         self.write(f'{self.ticket}/ticket.md', '---\nbranch: features/sample\n---\n### Why\nReproduction-or-measurement: fixture\nWhy-not-fix-now: 該当なし\n### What\n- [ ] 利用者が結果を読める\n')
         hashed = self.run_cmd('bash', 'scripts/check-pdh-ticket.sh', '--ac-hash', f'{self.ticket}/ticket.md').stdout.strip()
