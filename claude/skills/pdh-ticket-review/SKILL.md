@@ -85,7 +85,7 @@ PDH-ticket-human-review へ Status を進めたら、承認者に渡す前に `p
 
 0 件でも、実行したコマンドと «0 件» を progress に書く。
 
-`CLAUDE.md` が定める制約の文書（既定 `docs/known-limits.md`）の anchor と、この ticket が触るファイルを突き合わせ、当たる行だけ一緒に直すか残すかを決める。Failure Tolerance の目安を変えたときは全行を見直す。PLAN の段（マイルストーン）を閉じる ticket では «テストなし» の行も見直す。
+`CLAUDE.md` が定める制約の文書（既定 `docs/known-limits.md`）の anchor と、この ticket が触るファイルを突き合わせ、当たる行だけ一緒に直すか残すかを決める。Failure Tolerance の目安を変えたときは全行を見直す。
 
 ### コストと利益を確かめる
 
@@ -163,7 +163,7 @@ done) &&
 - [ ] PDH-ticket-review: 前提の見直しを回したなら、出た案と選んだ理由が progress にある。回さなかったなら、その理由を書いた
 - [ ] PDH-ticket-review: PM が承認前の記録の所在と中身・非該当の理由・AC の組の順番の表を照合し、DB/API の変更時の前提の見直しの結果が progress にある。絶対の形の約束と実装で測る値が矛盾せず、端の場面・順番でも約束が成り立つ根拠が note と progress にある
 - [ ] PDH-ticket-review: 絶対の形の AC は、Required-Probes に場面の頻度を測った結果と 1 回のコストがあり、Failure Tolerance と照合した範囲になっている
-- [ ] PDH-ticket-review: 変更箇所と制約の anchor を照合し、該当行を直すか残すかが progress にある。目安の変更時は全行、マイルストーンを閉じるときは «テストなし» の行も見直した
+- [ ] PDH-ticket-review: 変更箇所と制約の anchor を照合し、該当行を直すか残すかが progress にある。目安の変更時は全行を見直した
 - [ ] PDH-ticket-review: AC だけを読む worker が、全 AC に «復元できた» を返した。PM が結果を progress に残す
 - [ ] PDH-ticket-review: 残っている `Open-Questions` が、承認者にしか決められないものと、実装しないと分からないものだけである。PM が判断し、残した理由を note の `## PDH-ticket-review. Ticket contract check` の節に書く
 - [ ] PDH-ticket-review: Design-Decisions の各項を AC と 1 件ずつ突き合わせ、AC と食い違う項（ある条件で AC が求める振る舞いを壊す作り方）が無いか確かめた。あれば Open-Questions に残した

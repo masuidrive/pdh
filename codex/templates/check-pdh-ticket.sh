@@ -98,7 +98,7 @@ PDH-review: PM が S7・S8 の各行の理由・決定・覆す条件・発行�
 EOF
 )
 late_loop_lines=$(cat <<'EOF'
-PDH-review: PM が整備だけで修正確認の巡を起こしておらず、AC と Out-of-scope の外の要求を起票か AC の再承認へ回したことを Findings 表と巡の記録で照合した
+PDH-review: PM が整備だけで修正確認の巡を起こしておらず、AC と Out-of-scope の外の要求の処置を「処置の判断」に従って決め、この ticket で直す場合は AC の再承認を得たことを Findings 表と巡の記録で照合した
 PDH-review: PM が Findings 全件を「処置の判断」の 4 つの規則で照合し、同じ種類の参照・母数と期間・判定を変えた証拠が progress にある
 PDH-review: 修正の証拠の対応表があり、修正確認の巡の reviewer が行ごとの確認結果を返した
 PDH-review: PM が収束の選択の前の仮説・外れ方・次に変えるものを照合し、前の手と次の手が本当に違うと判断した根拠が progress にある
@@ -595,6 +595,7 @@ check_stage_checklist() {
   fi
   have=$(awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f' "$n" | sed -n 's/^- \[[ xX-]\] //p' | sed 's/ - skip: .*$//; s/[[:space:]]*$//')
   have=$(printf '%s\n' "$have" | sed '
+    s|^PDH-ticket-review: 変更箇所と制約の anchor を照合し、該当行を直すか残すかが progress にある。目安の変更時は全行、マイルストーンを閉じるときは «テストなし» の行も見直した$|PDH-ticket-review: 変更箇所と制約の anchor を照合し、該当行を直すか残すかが progress にある。目安の変更時は全行を見直した|
     s|^PDH-review: PM が整備だけで修正確認の巡を起こしておらず、AC と Out-of-scope の外の要求を起票か AC の再承認へ回したことを Findings 表と巡の記録で照合した$|PDH-review: PM が整備だけで修正確認の巡を起こしておらず、AC と Out-of-scope の外の要求の処置を「処置の判断」に従って決め、この ticket で直す場合は AC の再承認を得たことを Findings 表と巡の記録で照合した|
     s|^PDH-ticket-write: Failure Tolerance が埋まっている。無いか空だった場合は、3 つの問いへの回答と brief 変更への承認が progress にある$|PDH-ticket-write: Failure Tolerance の 3 欄が埋まり、許す失敗の頻度と誰の何分かが数字で、許さない失敗が絞られている。変更した場合は回答と Brief 変更への承認が progress にある|
     s|^PDH-ticket-write: 上のコマンドが 0 で終わった$|PDH-ticket-write: `pdh-ticket-write`「機械で確かめるもの」のコマンドが 0 で終わった|
