@@ -47,6 +47,8 @@ if [ "${1:-}" = --ac-hash ]; then
 fi
 cd "$(cd "$(dirname "$0")/.." && pwd)" || exit 1
 
+source scripts/pdh-review-range.sh || exit 1
+
 failed=0
 seen=0
 tickets_dir=tickets
@@ -111,43 +113,7 @@ created_before_marker() {
 
 # HTML コメントを除き、inline code と元の行番号を保つ。
 ticket_visible_lines() {
-  awk '
-    {
-      rest = $0
-      visible = ""
-      while (length(rest)) {
-        if (comment) {
-          end = index(rest, "-->")
-          if (!end) break
-          rest = substr(rest, end + 3)
-          comment = 0
-        } else {
-          start = index(rest, "<!--")
-          # 同じ長さの backtick で囲んだ inline code は、そのまま残す。
-          # 閉じていない backtick は通常の文字として扱う。
-          if (match(rest, /`+/) && (!start || RSTART < start)) {
-            ticks = RLENGTH
-            head = RSTART + ticks - 1
-            tail = substr(rest, head + 1)
-            offset = head
-            while (match(tail, /`+/)) {
-              offset += RSTART + RLENGTH - 1
-              if (RLENGTH == ticks) { head = offset; break }
-              tail = substr(rest, offset + 1)
-            }
-            visible = visible substr(rest, 1, head)
-            rest = substr(rest, head + 1)
-            continue
-          }
-          if (!start) { visible = visible rest; break }
-          visible = visible substr(rest, 1, start - 1)
-          rest = substr(rest, start + 4)
-          comment = 1
-        }
-      }
-      print visible
-    }
-  ' "$1"
+  awk "$(pdh_visible_lines_awk)"' { print visible_line($0) }' "$1"
 }
 
 # AC 節（«What» または «Acceptance Criteria»）と Out-of-scope 節を、次の見出しまで読む。

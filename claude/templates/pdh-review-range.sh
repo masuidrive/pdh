@@ -2,6 +2,46 @@
 # close 前 review と検査が、同じ ticket 自身の commit 区間を見るための入口。
 set -uo pipefail
 
+# 検査と集計が同じ可視文字と行番号を読む。inline code はコメントにしない。
+pdh_visible_lines_awk() {
+  cat <<'AWK'
+    function visible_line(rest,    visible,end,start,ticks,head,tail,offset) {
+      visible = ""
+      while (length(rest)) {
+        if (comment) {
+          end = index(rest, "-->")
+          if (!end) break
+          rest = substr(rest, end + 3)
+          comment = 0
+        } else {
+          start = index(rest, "<!--")
+          # 同じ長さの backtick で囲んだ inline code は、そのまま残す。
+          # 閉じていない backtick は通常の文字として扱う。
+          if (match(rest, /`+/) && (!start || RSTART < start)) {
+            ticks = RLENGTH
+            head = RSTART + ticks - 1
+            tail = substr(rest, head + 1)
+            offset = head
+            while (match(tail, /`+/)) {
+              offset += RSTART + RLENGTH - 1
+              if (RLENGTH == ticks) { head = offset; break }
+              tail = substr(rest, offset + 1)
+            }
+            visible = visible substr(rest, 1, head)
+            rest = substr(rest, head + 1)
+            continue
+          }
+          if (!start) { visible = visible rest; break }
+          visible = visible substr(rest, 1, start - 1)
+          rest = substr(rest, start + 4)
+          comment = 1
+        }
+      }
+      return visible
+    }
+AWK
+}
+
 # 記録行ごとに、値の先頭の 7〜40 桁の 16 進並びだけを返す。
 # 不正な値も空行で残すので、最後の起点が不正なら以前の SHA に戻らない。
 pdh_review_sha_records() {
