@@ -92,6 +92,7 @@ PDH-review: PM が S7・S8 の各行の理由・決定・覆す条件・発行�
 EOF
 )
 late_loop_lines=$(cat <<'EOF'
+PDH-review: PM が整備だけで修正確認の巡を起こしておらず、AC と Out-of-scope の外の要求を起票か AC の再承認へ回したことを Findings 表と巡の記録で照合した
 PDH-review: PM が Findings 全件を「処置の判断」の 4 つの規則で照合し、同じ種類の参照・母数と期間・判定を変えた証拠が progress にある
 PDH-review: 修正の証拠の対応表があり、修正確認の巡の reviewer が行ごとの確認結果を返した
 PDH-review: PM が収束の選択の前の仮説・外れ方・次に変えるものを照合し、前の手と次の手が本当に違うと判断した根拠が progress にある
@@ -508,7 +509,7 @@ check_loop_records() {
   [ -f "$d/progress.md" ] || return 0
   visible=$(ticket_visible_lines "$d/progress.md") || { failed=1; return; }
   if grep -qxF '<!-- pdh-effect: 1 -->' "$n" && [ "$st" = PDH-close ] &&
-     ! grep -Eq '^効果:[[:space:]]+判断=.+[[:space:]]+答え待ち=.+[[:space:]]+codex=.+[[:space:]]+claude=.+[[:space:]]+退行=.+' <<< "$visible"; then
+     ! grep -Eq '^(- )?効果:[[:space:]]+判断=.+[[:space:]]+答え待ち=.+[[:space:]]+codex=.+[[:space:]]+claude=.+[[:space:]]+退行=.+' <<< "$visible"; then
     printf 'check-pdh-ticket: %s: 効果: の行が無い（判断・答え待ち・codex・claude・退行を書く）\n' "$d" >&2
     failed=1
   fi
@@ -518,7 +519,7 @@ check_loop_records() {
     [ -n "$round" ] || continue
     if [ "$original" -ge 8 ] || [ "$current" -ge 8 ]; then
       if [ "$reviews" -gt "${round#PDH-review-}" ] || [[ "$st" = PDH-verify || "$st" = PDH-human-review || "$st" = PDH-close ]]; then
-        if ! grep -Eq "^処置の照らし直し: ${round}([[:space:]]|$)" <<< "$visible"; then
+        if ! grep -Eq "^(- )?処置の照らし直し: ${round}([[:space:]]|$)" <<< "$visible"; then
           printf 'check-pdh-ticket: %s: 処置の照らし直し: %s が無い（いま直すが8件以上）\n' "$d" "$round" >&2
           failed=1
         fi
@@ -533,8 +534,9 @@ check_loop_records() {
       if (section && /^- \[[xX]\] S8 PDH-review-[0-9]+[[:space:]]/) done[$4]=1
       next
     }
+    { sub(/^- /, "") }
     /^収束の選択: PDH-review-[0-9]+[[:space:]]/ {
-      round=$2; line=$0
+      round=$2; line=$0; component=""
       n=split("部品 前の仮説 外れ方 次に変えるもの 外れの条件", fields, " ")
       valid=1
       for (i=1; i<=n; i++) {
@@ -542,12 +544,17 @@ check_loop_records() {
         if (!pos) {valid=0; break}
         line=substr(line,pos+length(key))
         end=(i<n ? index(line, fields[i+1] "=") : length(line)+1)
-        if (!end || trim(substr(line,1,end-1)) == "") valid=0
+        value=trim(substr(line,1,end-1))
+        if (i == 1) component=value
+        if (!end || value == "") valid=0
       }
-      if (valid) found[round]=1
-      else bad[round]=1
+      choices[round SUBSEP component]=valid
+      found[round]=1
     }
-    END { for (round in done) if (!found[round] || bad[round]) print round }
+    END {
+      for (key in choices) if (!choices[key]) { split(key,parts,SUBSEP); bad[parts[1]]=1 }
+      for (round in done) if (!found[round] || bad[round]) print round
+    }
   ' <(ticket_visible_lines "$n") <(printf '%s\n' "$visible")) || { failed=1; return; }
   while read -r round; do
     [ -n "$round" ] || continue
@@ -638,10 +645,11 @@ check_stage_checklist() {
 # 旧 8 列の記録は保持し、現行 5 列の頻度・コストだけを検査する。印より後に作った ticket では、
 # 旧 8 列の表しか無ければ落とす（互換の逃げ道が、移行しない project を無検査のままにしないため）。
 check_findings_cost() {
-  local f=$1 legacy_ok=${2:-1}
+  local f=$1 legacy_ok=${2:-1} loop=0
   [[ "$f" != "$tickets_dir/done/"* ]] || return 0
   [ -f "$f" ] || return 0
-  if ! ticket_visible_lines "$f" | awk -F '|' -v file="$f" -v legacy_ok="$legacy_ok" '
+  grep -qxF '<!-- pdh-review-loop: 1 -->' "${f%/progress.md}/note.md" && loop=1
+  if ! ticket_visible_lines "$f" | awk -v loop="$loop" -F '|' -v file="$f" -v legacy_ok="$legacy_ok" '
     function trim(v) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v); return v }
     /^#+ / { findings=($0 ~ /^###+ Findings(-| ?(（|\())PDH-review-[0-9]+/); cost=0 }
     findings && /^\|[[:space:]]*#[[:space:]]*\|/ {
@@ -662,7 +670,7 @@ check_findings_cost() {
       next
     }
     !/^\|/ { cost=0 }
-    cost && $0 !~ /^[[:space:]|:-]+$/ && trim($cost) == "" {
+    !loop && cost && $0 !~ /^[[:space:]|:-]+$/ && trim($cost) == "" {
       printf "check-pdh-ticket: %s:%d: Findings 表の «頻度と 1 回のコスト» が空\n", file, NR
       bad=1
     }

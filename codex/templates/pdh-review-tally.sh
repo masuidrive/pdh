@@ -37,6 +37,20 @@ done
 awk -v round_counts="$round_counts" '
 function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
 function valid(s) { return s == "受け入れる" || s == "いま直す" || s == "起票する" || s == "記録だけ残す" || s == "棄却する" }
+function cells(body, cols,    i,n,c,backslashes) {
+  n=1; cols[n]=""; backslashes=0
+  for (i=1; i<=length(body); i++) {
+    c=substr(body,i,1)
+    if (c == "|" && backslashes % 2 == 0) cols[++n]=""
+    else cols[n]=cols[n] c
+    if (c == "\\") backslashes++; else backslashes=0
+  }
+  return n
+}
+function unreadable(reason) {
+  printf "pdh-review-tally: %s:%d: %s: %s\n", FILENAME,FNR,round,reason > "/dev/stderr"
+  errors=1
+}
 function sorted(a, keys,    k,n,i,j,v) {
   n=0
   for (k in a) keys[++n]=k
@@ -54,6 +68,11 @@ BEGIN {
     if (f in names) { ARGV[i]=""; continue }
     count=split(f, path, "/"); names[f]=path[count-1]; tickets[++ticket_count]=f
     if (count>2 && path[count-2] == "done") shipped[names[f]]=1
+    else {
+      note=f; sub(/progress.md$/, "note.md", note)
+      while ((getline marker < note)>0) if (marker == "<!-- pdh-review-loop: 1 -->") strict[f]=1
+      close(note)
+    }
   }
 }
 FILENAME == ARGV[1] {
@@ -64,7 +83,7 @@ FILENAME == ARGV[1] {
   }
   next
 }
-FNR == 1 { state=0; round="" }
+FNR == 1 { state=0; round=""; findings=0 }
 {
   # pdh_review_sha_records と同じ規則: 行頭の任意の「- 」と、先頭 7〜40 桁だけ。
   line=$0; sub(/^- /, "", line)
@@ -93,6 +112,12 @@ FNR == 1 { state=0; round="" }
       }
     }
   }
+  if (strict[FILENAME] && /^#+ /) {
+    findings=($0 ~ /^###+ Findings(-| ?(（|\())PDH-review-[0-9]+/)
+    state=0
+    if (findings) { match($0,/PDH-review-[0-9]+/); round=substr($0,RSTART,RLENGTH) }
+  }
+  if (strict[FILENAME] && findings && /^\|[[:space:]]*#[[:space:]]*\|/) state=1
   if ($0 ~ /^### Findings-PDH-review-[0-9]+[[:space:]]*$/) {
     round=trim($0); sub(/^### Findings-/, "", round); state=1; next
   }
@@ -101,14 +126,24 @@ FNR == 1 { state=0; round="" }
   if (state == 1 && line == "") next
   if (line !~ /^\|/) { state=0; next }
   body=line; sub(/^\|/, "", body); sub(/\|$/, "", body)
-  n=split(body, cols, "|"); joined=""
+  n=strict[FILENAME] ? cells(body, cols) : split(body, cols, "|"); joined=""
   for (i=1; i<=n; i++) { cols[i]=trim(cols[i]); joined=joined (i>1 ? "|" : "") cols[i] }
   if (state == 1) {
-    if (joined == header) { state=2; has_table[FILENAME]=1 } else state=0
+    if (joined == header) { state=2; has_table[FILENAME]=1 }
+    else {
+      legacy=0
+      for (i=1; i<=n; i++) if (cols[i] == "Sev" || cols[i] == "出した人" || cols[i] == "記録先") legacy=1
+      if (strict[FILENAME] && !legacy) unreadable("現行 Findings 表を集計できない（#・要旨・頻度と 1 回のコスト・判定・由来の5列が必要）")
+      state=0
+    }
     next
   }
   if (body ~ /^[[:space:]:|\-]+$/) next
-  if (n != 5 || !valid(cols[4])) next
+  if (n != 5 || !valid(cols[4])) {
+    if (strict[FILENAME]) unreadable("Findings 行の列数か判定を読めない: " line)
+    next
+  }
+  if (strict[FILENAME] && cols[3] == "") unreadable("Findings 表の «頻度と 1 回のコスト» が空")
   key=FILENAME SUBSEP round SUBSEP cols[1]
   finding_round[key]=round
   if (cols[4] == "いま直す") original[FILENAME SUBSEP round]++
@@ -117,15 +152,19 @@ FNR == 1 { state=0; round="" }
   decisions[key]=cols[4]; owner[key]=FILENAME; origins[key]=cols[5]
 }
 END {
+  if (errors) exit 2
   for (i=1; i<=finding_count; i++) {
     key=finding_keys[i]; f=owner[key]
     decision=(key in overrides) ? overrides[key] : decisions[key]
     verdicts[decision]++
     if (!round_counts && decision != "棄却する" && decision != "記録だけ残す") {
-      text=origins[key]; gsub(/[^0-9a-fA-F]/," ",text); count=split(text, refs, /[[:space:]]+/)
-      for (j=1;j<=count;j++) if (length(refs[j])>=7 && length(refs[j])<=40) {
+      text=origins[key]
+      while (match(text, /(持ち込み:[[:space:]]*|上流[[:space:]]+)[0-9a-fA-F]+/)) {
+        ref=substr(text,RSTART,RLENGTH); text=substr(text,RSTART+RLENGTH)
+        sub(/^(持ち込み:[[:space:]]*|上流[[:space:]]+)/,"",ref)
+        if (length(ref)<7 || length(ref)>40) continue
         target=""; matches=0
-        for (sha in commits) if (index(sha,tolower(refs[j])) == 1) {target=commits[sha]; matches++}
+        for (sha in commits) if (index(sha,tolower(ref)) == 1) {target=commits[sha]; matches++}
         if (matches == 1 && target in shipped && target != names[f] && !defect_seen[key SUBSEP target]++) defects[target]++
       }
     }

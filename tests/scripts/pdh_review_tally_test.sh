@@ -82,8 +82,10 @@ origin=$(git rev-parse HEAD)
 {
   printf '\n'
   header 3
-  printf '| 1 | shipped defect | 月1回・1分 | いま直す | %s と %s |\n' "$origin" "${origin:0:8}"
-  printf '| 2 | false report | 0 | 棄却する | %s |\n' "$origin"
+  printf '| 1 | shipped defect | 月1回・1分 | いま直す | 持ち込み: %s と 持ち込み: %s |\n' "$origin" "${origin:0:8}"
+  printf '| 2 | false report | 0 | 棄却する | 上流 %s |\n' "$origin"
+  printf '| 3 | starting revision | 月1回・1分 | 受け入れる | 既存 %s |\n' "$origin"
+  printf '| 4 | bare revision | 月1回・1分 | 受け入れる | %s |\n' "$origin"
 } >> 'work items/alpha/progress.md'
 expect 0 '出荷後の欠陥を元 ticket へ一度だけ数える' bash scripts/pdh-review-tally.sh
 contains '| beta | 1 |'
@@ -93,6 +95,12 @@ expect 0 '照らし直しの件数は同じ表の parser を使う' bash scripts
 contains $'PDH-review-1\t0\t1\t3'
 contains $'PDH-review-3\t1\t1\t3'
 printf 'PASS: AC12 shipped defect count=1 (duplicate SHA and rejected finding excluded)\n'
+printf '| 5 | upstream defect | 月1回・1分 | 受け入れる | 上流 %s |\n' "$origin" >> 'work items/alpha/progress.md'
+expect 0 '上流の持ち込みも数える' bash scripts/pdh-review-tally.sh
+section=${output##*'### ticket ごとの出荷後の欠陥'}
+[[ "$section" == *'| beta | 2 |'* ]] || fail "$section"
+printf 'PASS: explicit origin keys count=2 (starting and bare SHA excluded)\n'
+
 printf 'tickets_dir: absent\n' > .ticket-config.yaml
 expect 2 'tickets_dir の欠落' bash scripts/pdh-review-tally.sh
 must mkdir absent
