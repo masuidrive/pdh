@@ -20,13 +20,7 @@ ticket を書く人は全部を読み、PDH-ticket-review で AC を直す人は
 
 ### 失敗の許容を決める
 
-この規則の目的: ticket の AC と review が、利用者の許す失敗を基準にできること。`product-brief.md` の `Failure Tolerance` が無いか空（未記入の雛形を含む）なら、PM は ticket を書き進める前に、ユーザと次の 3 つを話して決める。
-
-1. 誰が、どれくらいの量で使うか
-2. 許す失敗の頻度（% か月の回数）と、1 回のコスト（誰の何分・いくら）の目安
-3. 頻度に関係なく許さない失敗（invariant の破れ・秘密の漏えい・データの喪失など）
-
-決めた内容は brief の変更案として見せ、ユーザの承認を得てから brief に書く（`PDH-AGENTS.md`「PDH の構造」）。細かい review 基準は project の `AGENTS.md` に置く。承認と記入の結果は下の Checklist に残す。
+この規則の目的: ticket の AC と review が、利用者の許す失敗を基準にできること。PM は skill `pdh-brief-writing` を読み、既存の `Failure Tolerance` も 3 欄の中身まで照合する。欠けていれば同 skill の手順で変更案と承認を扱う。
 
 ### ticket を作る
 
@@ -144,6 +138,7 @@ ticket・note・`progress.md` が base branch に commit されていて、ticke
 
 ```bash
 ticket_dir='<ticket のディレクトリ>'
+bash [SKILLS_PATH]/pdh-brief-writing/scripts/check-brief.sh product-brief.md &&
 test -f "$ticket_dir/ticket.md" &&
 test -f "$ticket_dir/note.md" &&
 test -f "$ticket_dir/progress.md" &&
@@ -168,7 +163,7 @@ test -z "$(git status --porcelain -- "$ticket_dir")"
 - [ ] PDH-ticket-write: 実装の詳細、今回要らない拡張、将来の要件向けの設計が入っていない
 - [ ] PDH-ticket-write: 未決の事項が note の `Open-Questions` に `- [ ]` で残っている
 - [ ] PDH-ticket-write: 同じ原因・対象・期待する修正の ticket を検索した。検索語と件数（該当 0 件を含む）と、新しく作るか既存へ集約するかの判断が progress にある
-- [ ] PDH-ticket-write: Failure Tolerance が埋まっている。無いか空だった場合は、3 つの問いへの回答と brief 変更への承認が progress にある
+- [ ] PDH-ticket-write: Failure Tolerance の 3 欄が埋まり、許す失敗の頻度と誰の何分かが数字で、許さない失敗が絞られている。変更した場合は回答と Brief 変更への承認が progress にある
 - [ ] PDH-ticket-write: 報告から書くなら、制約の文書と ticket を症状の言葉で探し、検索語・候補ごとの判断と残すか直すかが progress にある
 
 満たさない項目があれば直す。

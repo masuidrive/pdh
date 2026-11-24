@@ -48,7 +48,7 @@ pdh/
       pdh-pm/                # SKILL.md / _execution-team.md / _open-ticket.md / _records.md
       pdh-ticket-write/  pdh-open/  pdh-resume/  pdh-ticket-review/
       pdh-implement/  pdh-review/  pdh-verify/  pdh-close/
-      pdh-change/  pdh-check-writing/  pdh-update/  pdh-decision-board/
+      pdh-brief-writing/  pdh-change/  pdh-check-writing/  pdh-update/  pdh-decision-board/
     templates/
       CLAUDE.md  AGENTS.md  product-brief.md  .ticket-config.yaml
       agents/claude/  agents/codex/  # pdh-* の役割ファイルだけを配置・lock する

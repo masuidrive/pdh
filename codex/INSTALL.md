@@ -47,6 +47,7 @@ chmod +x ticket.sh
 | `tmp/pdh/docs/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH の共通契約・用語 | 上書き |
 | `tmp/pdh/docs/pdh-glossary.md` | `docs/pdh-glossary.md` | PDH の共通契約・用語 | 上書き |
 | `tmp/pdh/codex/skills/pdh-change/` | `.agents/skills/pdh-change/` | pdh-change skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/codex/skills/pdh-brief-writing/` | `.agents/skills/pdh-brief-writing/` | pdh-brief-writing skill（分冊・kit・tools を含む） | 上書き |
 | `tmp/pdh/codex/skills/pdh-check-writing/` | `.agents/skills/pdh-check-writing/` | pdh-check-writing skill（分冊・kit・tools を含む） | 上書き |
 | `tmp/pdh/codex/skills/pdh-close/` | `.agents/skills/pdh-close/` | pdh-close skill（分冊・kit・tools を含む） | 上書き |
 | `tmp/pdh/codex/skills/pdh-decision-board/` | `.agents/skills/pdh-decision-board/` | pdh-decision-board skill（分冊・kit・tools を含む） | 上書き |
@@ -214,7 +215,7 @@ bash scripts/fast-checks.sh
 ```bash
 test -f AGENTS.md
 test -f PDH-AGENTS.md
-for skill in pdh-change pdh-check-writing pdh-close pdh-decision-board pdh-implement pdh-open pdh-pm pdh-resume pdh-review pdh-ticket-review pdh-ticket-write pdh-update pdh-verify; do
+for skill in pdh-brief-writing pdh-change pdh-check-writing pdh-close pdh-decision-board pdh-implement pdh-open pdh-pm pdh-resume pdh-review pdh-ticket-review pdh-ticket-write pdh-update pdh-verify; do
   test -f ".agents/skills/$skill/SKILL.md" || exit 1
   test ! -L ".agents/skills/$skill" || exit 1
 done

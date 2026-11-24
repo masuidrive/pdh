@@ -546,6 +546,7 @@ check_stage_checklist() {
   fi
   have=$(awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f' "$n" | sed -n 's/^- \[[ xX-]\] //p' | sed 's/ - skip: .*$//; s/[[:space:]]*$//')
   have=$(printf '%s\n' "$have" | sed '
+    s|^PDH-ticket-write: Failure Tolerance が埋まっている。無いか空だった場合は、3 つの問いへの回答と brief 変更への承認が progress にある$|PDH-ticket-write: Failure Tolerance の 3 欄が埋まり、許す失敗の頻度と誰の何分かが数字で、許さない失敗が絞られている。変更した場合は回答と Brief 変更への承認が progress にある|
     s|^PDH-ticket-write: 上のコマンドが 0 で終わった$|PDH-ticket-write: `pdh-ticket-write`「機械で確かめるもの」のコマンドが 0 で終わった|
     s|^PDH-ticket-write: `Key-User-Journeys:` の番号が Why の内容と合っている。«該当なし» なら、その理由が書いてある（形だけは上のコマンドが確かめる）$|PDH-ticket-write: `Key-User-Journeys:` の番号が Why の内容と合っている。«該当なし» なら、その理由が書いてある（形だけは`pdh-ticket-write`「機械で確かめるもの」のコマンドが確かめる）|
     s|^PDH-ticket-review: 上のコマンドが 0 で終わった$|PDH-ticket-review: `pdh-ticket-review`「機械で確かめるもの」のコマンドが 0 で終わった|

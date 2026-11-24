@@ -30,6 +30,7 @@ chmod +x ticket.sh
 | `tmp/pdh/docs/PDH-AGENTS.md` | `PDH-AGENTS.md` | PDH の共通契約・用語 | 上書き |
 | `tmp/pdh/docs/pdh-glossary.md` | `docs/pdh-glossary.md` | PDH の共通契約・用語 | 上書き |
 | `tmp/pdh/claude/skills/pdh-change/` | `.claude/skills/pdh-change/` | pdh-change skill（分冊・kit・tools を含む） | 上書き |
+| `tmp/pdh/claude/skills/pdh-brief-writing/` | `.claude/skills/pdh-brief-writing/` | pdh-brief-writing skill（分冊・kit・tools を含む） | 上書き |
 | `tmp/pdh/claude/skills/pdh-check-writing/` | `.claude/skills/pdh-check-writing/` | pdh-check-writing skill（分冊・kit・tools を含む） | 上書き |
 | `tmp/pdh/claude/skills/pdh-close/` | `.claude/skills/pdh-close/` | pdh-close skill（分冊・kit・tools を含む） | 上書き |
 | `tmp/pdh/claude/skills/pdh-decision-board/` | `.claude/skills/pdh-decision-board/` | pdh-decision-board skill（分冊・kit・tools を含む） | 上書き |

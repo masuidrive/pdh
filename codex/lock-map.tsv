@@ -41,3 +41,4 @@ codex/templates/pdh-stage-checklist.sh	scripts/pdh-stage-checklist.sh
 codex/templates/pdh-verify-lib.sh	scripts/pdh-verify-lib.sh
 codex/templates/spawn-worker.sh	scripts/spawn-worker.sh
 codex/templates/test-ticket-local.sh	scripts/test-ticket-local.sh
+codex/skills/pdh-brief-writing/	.agents/skills/pdh-brief-writing/

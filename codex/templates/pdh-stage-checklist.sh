@@ -118,6 +118,9 @@ fi
 note=${3:-}
 [ -f "$note" ] || { printf 'pdh-stage-checklist: note が無い: %s\n' "$note" >&2; exit 2; }
 grep -q '^## Checklist[[:space:]]*$' "$note" || { printf 'pdh-stage-checklist: %s に ## Checklist が無い\n' "$note" >&2; exit 1; }
+if [ "$stage" = PDH-ticket-write ]; then
+  bash "$(dirname "$(dirname "$file")")/pdh-brief-writing/scripts/check-brief.sh" "$root/product-brief.md" || exit 1
+fi
 tmp=$(mktemp) || exit 1
 ADD="$lines" awk -v stage="$stage" '
   # ## Checklist の節を溜め、同じ stage の行を除き、末尾の空行の前に skill の行を足す。

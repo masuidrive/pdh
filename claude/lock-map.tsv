@@ -51,3 +51,4 @@ claude/templates/pdh-stage-checklist.sh	scripts/pdh-stage-checklist.sh
 claude/templates/pdh-verify-lib.sh	scripts/pdh-verify-lib.sh
 claude/templates/spawn-worker.sh	scripts/spawn-worker.sh
 claude/templates/test-ticket-local.sh	scripts/test-ticket-local.sh
+claude/skills/pdh-brief-writing/	.claude/skills/pdh-brief-writing/
