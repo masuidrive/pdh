@@ -121,14 +121,24 @@ grep -q '^## Checklist[[:space:]]*$' "$note" || { printf 'pdh-stage-checklist: %
 if [ "$stage" = PDH-ticket-write ]; then
   bash "$(dirname "$(dirname "$file")")/pdh-brief-writing/scripts/check-brief.sh" "$root/product-brief.md" || exit 1
 fi
+# review を既に始めた note は、新しい記録の対象へ移さない。
+markers=''
+if [ "$stage" = PDH-ticket-write ] && ! grep -qxF '<!-- pdh-effect: 1 -->' "$note"; then
+  markers='<!-- pdh-effect: 1 -->'
+fi
+if [ "$stage" = PDH-review ] && ! grep -qxF '<!-- pdh-review-loop: 1 -->' "$note" &&
+   ! grep -Eq '^(- )?review-sha:' "${note%/*}/progress.md"; then
+  markers='<!-- pdh-review-loop: 1 -->'
+fi
 tmp=$(mktemp) || exit 1
-ADD="$lines" awk -v stage="$stage" '
+ADD="$lines" awk -v stage="$stage" -v markers="$markers" '
   # ## Checklist の節を溜め、同じ stage の行を除き、末尾の空行の前に skill の行を足す。
   BEGIN { add = ENVIRON["ADD"] }
   function flush(   i, last) {
     last = n
     while (last > 0 && buf[last] ~ /^[[:space:]]*$/) last--
     for (i = 1; i <= last; i++) print buf[i]
+    if (markers != "") print markers
     print add
     for (i = last + 1; i <= n; i++) print buf[i]
     n = 0; inside = 0

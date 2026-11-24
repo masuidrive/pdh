@@ -74,6 +74,25 @@ expect 2 '不明な引数' bash scripts/pdh-review-tally.sh --other
 expect 2 '存在しない ticket' bash scripts/pdh-review-tally.sh --ticket missing
 must mkdir no-progress
 expect 2 'progress の欠落' bash scripts/pdh-review-tally.sh --ticket no-progress
+# 出荷済みの commit を指す後続の欠陥を元の ticket ごとに数える。
+export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
+must git add .
+must git -c commit.gpgsign=false commit -qm '[beta] shipped behavior'
+origin=$(git rev-parse HEAD)
+{
+  printf '\n'
+  header 3
+  printf '| 1 | shipped defect | 月1回・1分 | いま直す | %s と %s |\n' "$origin" "${origin:0:8}"
+  printf '| 2 | false report | 0 | 棄却する | %s |\n' "$origin"
+} >> 'work items/alpha/progress.md'
+expect 0 '出荷後の欠陥を元 ticket へ一度だけ数える' bash scripts/pdh-review-tally.sh
+contains '| beta | 1 |'
+section=${output##*'### ticket ごとの出荷後の欠陥'}
+[[ "$section" == *'| beta | 1 |'* && "$section" == *'| alpha | 0 |'* ]] || fail "$section"
+expect 0 '照らし直しの件数は同じ表の parser を使う' bash scripts/pdh-review-tally.sh --round-counts --ticket 'work items/alpha'
+contains $'PDH-review-1\t0\t1\t2'
+contains $'PDH-review-3\t1\t1\t2'
+printf 'PASS: AC12 shipped defect count=1 (duplicate SHA and rejected finding excluded)\n'
 printf 'tickets_dir: absent\n' > .ticket-config.yaml
 expect 2 'tickets_dir の欠落' bash scripts/pdh-review-tally.sh
 must mkdir absent

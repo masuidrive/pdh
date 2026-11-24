@@ -5,12 +5,14 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd) || exit 2
 # tickets_dir の解決は review 区間の検査と共通にする。
 source "$SCRIPT_DIR/pdh-review-range.sh"
 usage() {
-  printf '使い方: bash scripts/pdh-review-tally.sh [--ticket <dir>]...\n引数なし: tickets_dir 直下と done の全 ticket。--ticket は繰り返し指定できます。\n'
+  printf '使い方: bash scripts/pdh-review-tally.sh [--ticket <dir>]... [--round-counts]\n引数なし: tickets_dir 直下と done の全 ticket。--ticket は繰り返し指定できます。\n'
 }
 fail() { printf 'pdh-review-tally: %s\n' "$*" >&2; exit 2; }
+round_counts=0
 files=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --round-counts) round_counts=1; shift ;;
     -h|--help) usage; exit 0 ;;
     --ticket)
       [ "$#" -ge 2 ] && [ -n "$2" ] || fail '--ticket <dir> が必要です'
@@ -32,7 +34,7 @@ for file in ${files[@]+"${files[@]}"}; do
   [ -f "$file" ] && [ -r "$file" ] || fail "progress.md が読めません: $file"
 done
 # 空の対象は stdin の EOF で処理する。ファイル名を argv で渡すので空白も保持する。
-awk '
+awk -v round_counts="$round_counts" '
 function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
 function valid(s) { return s == "受け入れる" || s == "いま直す" || s == "起票する" || s == "記録だけ残す" || s == "棄却する" }
 function sorted(a, keys,    k,n,i,j,v) {
@@ -47,11 +49,20 @@ function sorted(a, keys,    k,n,i,j,v) {
 }
 BEGIN {
   header="#|要旨|頻度と 1 回のコスト|判定|由来"
-  for (i=1; i<ARGC; i++) {
+  for (i=2; i<ARGC; i++) {
     f=ARGV[i]
     if (f in names) { ARGV[i]=""; continue }
     count=split(f, path, "/"); names[f]=path[count-1]; tickets[++ticket_count]=f
+    if (count>2 && path[count-2] == "done") shipped[names[f]]=1
   }
+}
+FILENAME == ARGV[1] {
+  sha=$1; subject=substr($0,length(sha)+2)
+  if (subject ~ /^\[[^]]+\]/) {
+    sub(/^\[/,"",subject); sub(/\].*$/,"",subject)
+    commits[sha]=subject
+  }
+  next
 }
 FNR == 1 { state=0; round="" }
 {
@@ -98,14 +109,34 @@ FNR == 1 { state=0; round="" }
   if (body ~ /^[[:space:]:|\-]+$/) next
   if (n != 5 || !valid(cols[4])) next
   key=FILENAME SUBSEP round SUBSEP cols[1]
+  finding_round[key]=round
+  if (cols[4] == "いま直す") original[FILENAME SUBSEP round]++
+  round_seen[FILENAME SUBSEP round]=1
   finding_keys[++finding_count]=key
-  decisions[key]=cols[4]; owner[key]=FILENAME
+  decisions[key]=cols[4]; owner[key]=FILENAME; origins[key]=cols[5]
 }
 END {
   for (i=1; i<=finding_count; i++) {
     key=finding_keys[i]; f=owner[key]
     decision=(key in overrides) ? overrides[key] : decisions[key]
     verdicts[decision]++
+    if (!round_counts && decision != "棄却する" && decision != "記録だけ残す") {
+      text=origins[key]; gsub(/[^0-9a-fA-F]/," ",text); count=split(text, refs, /[[:space:]]+/)
+      for (j=1;j<=count;j++) if (length(refs[j])>=7 && length(refs[j])<=40) {
+        target=""; matches=0
+        for (sha in commits) if (index(sha,tolower(refs[j])) == 1) {target=commits[sha]; matches++}
+        if (matches == 1 && target in shipped && target != names[f] && !defect_seen[key SUBSEP target]++) defects[target]++
+      }
+    }
+    if (decision == "いま直す") current[f SUBSEP finding_round[key]]++
+  }
+  if (round_counts) {
+    n=sorted(round_seen, keys)
+    for (i=1; i<=n; i++) {
+      split(keys[i], parts, SUBSEP)
+      printf "%s\t%d\t%d\t%d\n", parts[2], original[keys[i]], current[keys[i]], rounds[parts[1]]
+    }
+    exit
   }
   print "### 判定ごと"
   print "| 判定 | finding |"
@@ -125,6 +156,12 @@ END {
   }
   printf "1 巡で抜けた ticket: %d / %d (%.1f%%)\n",single,measured,measured ? 100*single/measured : 0
   printf "\n現行表がない ticket の数: %d\n",skipped
+  if (!round_counts) {
+    print "\n### ticket ごとの出荷後の欠陥"
+    print "| ticket | 出荷後の欠陥 |"
+    print "|---|---|"
+    for (i=1; i<=ticket_count; i++) {f=tickets[i]; printf "| %s | %d |\n", names[f], defects[names[f]]}
+  }
 }
-' ${files[@]+"${files[@]}"} < /dev/null || exit 2
+' <(if [ "$round_counts" -eq 0 ]; then git log --format='%H%x09%s' HEAD 2>/dev/null; fi) ${files[@]+"${files[@]}"} < /dev/null || exit 2
 exit 0

@@ -91,6 +91,12 @@ PDH-ticket-review: PM が承認前の記録の所在と中身・非該当の理�
 PDH-review: PM が S7・S8 の各行の理由・決定・覆す条件・発行先の中身を確かめ、利用者の判断が要る理由か PM の決定が判断の基準と progress の結論に合っている
 EOF
 )
+late_loop_lines=$(cat <<'EOF'
+PDH-review: PM が Findings 全件を「処置の判断」の 4 つの規則で照合し、同じ種類の参照・母数と期間・判定を変えた証拠が progress にある
+PDH-review: 修正の証拠の対応表があり、修正確認の巡の reviewer が行ごとの確認結果を返した
+PDH-review: PM が収束の選択の前の仮説・外れ方・次に変えるものを照合し、前の手と次の手が本当に違うと判断した根拠が progress にある
+EOF
+)
 # 引数（印・path…）の path を最初に追加した commit の版の検査 script に印が無ければ 0。未 commit なら 1。
 created_before_marker() {
   local marker=$1 first
@@ -495,6 +501,61 @@ check_s8_decisions() {
   done <<< "$rows"
 }
 
+# 新しい入口を通った note だけに、review と close の記録を求める。
+check_loop_records() {
+  local n=$1 st=$2 d=${1%/note.md} counts round original current reviews visible result
+  [[ "$d" != "$tickets_dir/done/"* ]] || return 0
+  [ -f "$d/progress.md" ] || return 0
+  visible=$(ticket_visible_lines "$d/progress.md") || { failed=1; return; }
+  if grep -qxF '<!-- pdh-effect: 1 -->' "$n" && [ "$st" = PDH-close ] &&
+     ! grep -Eq '^効果:[[:space:]]+判断=.+[[:space:]]+答え待ち=.+[[:space:]]+codex=.+[[:space:]]+claude=.+[[:space:]]+退行=.+' <<< "$visible"; then
+    printf 'check-pdh-ticket: %s: 効果: の行が無い（判断・答え待ち・codex・claude・退行を書く）\n' "$d" >&2
+    failed=1
+  fi
+  grep -qxF '<!-- pdh-review-loop: 1 -->' "$n" || return 0
+  counts=$(bash scripts/pdh-review-tally.sh --round-counts --ticket "$d") || { failed=1; return; }
+  while IFS=$'\t' read -r round original current reviews; do
+    [ -n "$round" ] || continue
+    if [ "$original" -ge 8 ] || [ "$current" -ge 8 ]; then
+      if [ "$reviews" -gt "${round#PDH-review-}" ] || [[ "$st" = PDH-verify || "$st" = PDH-human-review || "$st" = PDH-close ]]; then
+        if ! grep -Eq "^処置の照らし直し: ${round}([[:space:]]|$)" <<< "$visible"; then
+          printf 'check-pdh-ticket: %s: 処置の照らし直し: %s が無い（いま直すが8件以上）\n' "$d" "$round" >&2
+          failed=1
+        fi
+      fi
+    fi
+  done <<< "$counts"
+  result=$(awk '
+    function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+    FILENAME == ARGV[1] {
+      if (/^## Checklist[[:space:]]*$/) { section=1; next }
+      if (/^##? /) section=0
+      if (section && /^- \[[xX]\] S8 PDH-review-[0-9]+[[:space:]]/) done[$4]=1
+      next
+    }
+    /^収束の選択: PDH-review-[0-9]+[[:space:]]/ {
+      round=$2; line=$0
+      n=split("部品 前の仮説 外れ方 次に変えるもの 外れの条件", fields, " ")
+      valid=1
+      for (i=1; i<=n; i++) {
+        key=fields[i] "="; pos=index(line,key)
+        if (!pos) {valid=0; break}
+        line=substr(line,pos+length(key))
+        end=(i<n ? index(line, fields[i+1] "=") : length(line)+1)
+        if (!end || trim(substr(line,1,end-1)) == "") valid=0
+      }
+      if (valid) found[round]=1
+      else bad[round]=1
+    }
+    END { for (round in done) if (!found[round] || bad[round]) print round }
+  ' <(ticket_visible_lines "$n") <(printf '%s\n' "$visible")) || { failed=1; return; }
+  while read -r round; do
+    [ -n "$round" ] || continue
+    printf 'check-pdh-ticket: %s: 収束の選択: %s が無いか欄が空（部品・前の仮説・外れ方・次に変えるもの・外れの条件）\n' "$d" "$round" >&2
+    failed=1
+  done <<< "$result"
+}
+
 # AC と Out-of-scope の承認の記録（«AC-approved: <いまの AC と Out-of-scope のハッシュ>»）を確かめる。
 check_ac_approved() {
   local t=$1 st=$2 rec cur
@@ -543,6 +604,12 @@ check_stage_checklist() {
   if ! note_format_v2 "$n"; then
     expected=$(printf '%s\n' "$expected" | grep -vxF -- "$late_review_evidence_lines")
     [ -n "$expected" ] || return 0
+  fi
+  if ! grep -qxF '<!-- pdh-review-loop: 1 -->' "$n"; then
+    expected=$(printf '%s\n' "$expected" | grep -vxF -- "$late_loop_lines")
+  fi
+  if ! grep -qxF '<!-- pdh-effect: 1 -->' "$n"; then
+    expected=$(printf '%s\n' "$expected" | grep -v '^PDH-close: 効果:')
   fi
   have=$(awk '/^## Checklist[[:space:]]*$/{f=1;next} /^##? /{f=0} f' "$n" | sed -n 's/^- \[[ xX-]\] //p' | sed 's/ - skip: .*$//; s/[[:space:]]*$//')
   have=$(printf '%s\n' "$have" | sed '
@@ -734,6 +801,7 @@ for t in "$tickets_dir"/*/ticket.md ${done_tickets[@]+"${done_tickets[@]}"}; do
          | sed -E 's/^[[:space:]]*(PDH-[a-z-]+).*/\1/')
   fi
   if [[ "$t" != "$tickets_dir/done/"* ]]; then
+    check_loop_records "$n" "$st"
     check_s8_decisions "$n"
     check_ticket_review_evidence "$t" "$n" "$st"
   fi
