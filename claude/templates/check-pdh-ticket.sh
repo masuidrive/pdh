@@ -47,6 +47,10 @@ if [ "${1:-}" = --ac-hash ]; then
 fi
 cd "$(cd "$(dirname "$0")/.." && pwd)" || exit 1
 
+if [ ! -f scripts/pdh-review-range.sh ]; then
+  printf 'check-pdh-ticket: scripts/pdh-review-range.sh がありません。INSTALL.md の配置表どおりに置いてください\n' >&2
+  exit 1
+fi
 source scripts/pdh-review-range.sh || exit 1
 
 failed=0
@@ -662,11 +666,6 @@ done_tickets=()
 git_ready=0
 if git rev-parse --verify HEAD >/dev/null 2>&1; then
   git_ready=1
-  if [ ! -f scripts/pdh-review-range.sh ]; then
-    printf 'check-pdh-ticket: scripts/pdh-review-range.sh がありません。INSTALL.md の配置表どおりに置いてください\n' >&2
-    exit 1
-  fi
-  source scripts/pdh-review-range.sh
   pdh_review_base_tip || exit 1
 fi
 if [ "$git_ready" -eq 1 ] && [ -n "$pdh_review_base" ]; then
