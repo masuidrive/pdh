@@ -14,10 +14,15 @@ description: "PDH アップデート: PDH-repoの最新版を取り込み、プ�
 4. 更新手順には `bash ./ticket.sh selfupdate`（ticket.sh 本体を配布元の repo の最新版へ更新）が含まれる。
 5. **「既知の移行手順」の確認コマンドを、適用後にもう一度ぜんぶ実行する**。「要追加」「要改名」が残っていたら直してから次へ進む。
 5.5. `bash scripts/check-ticket-template-drift.sh --upstream-file tmp/pdh/codex/templates/.ticket-config.yaml` で `.ticket-config.yaml` のテンプレ本文（`default_content` / `note_content`）と PDH-repo の版の差を数え、**出力を完了報告に貼る。**差があれば、その行が導入先の独自の節か、取り込み漏れかを分けて報告する
+5.6. PM は取り込んだ `pdh-brief-writing` を読み、`product-brief.md` と `AGENTS.md`（Codex 単独では `AGENTS.md`）を、取り込んだ雛形と skill に照らして見直す。ずれは変更案として利用者へ出し、Brief は承認を得てから直す。変更案・承認・反映結果を記録する。
 6. 完了報告には、どの項目を適用したか（または該当なしと判断したか）に加えて、**手順 5 の再実行の出力をそのまま貼る。**
 
 6.5. 上書きしたファイルの版を記録する: `bash scripts/pdh-lock.sh write --upstream tmp/pdh --map tmp/pdh/codex/lock-map.tsv`。coding-bot を導入済みなら、その共有ファイルも記録する。上書きしたファイルが PDH-repo の版と 1 つでも違えば、lock を書かずに止まる。その一覧を完了報告に貼る
 
 `Based on` 行を持つのは、差分をマージするファイル（`AGENTS.md`・`product-brief.md`・`.ticket-config.yaml` など）だけである。上書きするファイルの版は `.pdh-lock` が持つ。取り込んでいない PDH-repo の変更が残っているファイルは、`Based on` 行の commit ID を進めない。進めると «その版を取り込んだ» という誤った表示になる。版はファイルごとに違ってよい。
+
+## 出力
+
+Brief と project の規則の照合結果、ずれの変更案、Brief の承認と反映結果を報告する。承認待ちなら、待っている内容と発行先を note の Checklist に残す。
 
 Codex 単独版へ切り替える場合は、INSTALL.md「Claude 併用版からの移行」に従う。旧 `CLAUDE.md` と `.claude/` の固有変更を backup・マージし、検査後に旧 PDH 配布物だけを名前で指定して退役させる。`.claude/` 全体や user の設定・agent・skill を削除しない。

@@ -23,7 +23,7 @@ PM は次の順に回す。test 結果・AC の判定・consumer surface の観�
 
 1. AC 裏取りの worker を 1 人起動し、各 AC の実質的な達成を検証させる（手順は `.claude/agents/pdh-ac-verifier.md`）。`NOT VERIFIED` は証拠を補うのが既定である。権限・環境の制約で補えないと AC 裏取りの worker が理由と足りない証拠を示した AC だけは、下の「未確認の出口」で承認者へ渡す
 2. ticket の各 AC と note の Checklist を、1 項目ずつ確認して check する。未確認の AC を達成済みの `[x]` にしない
-3. 最終 HEAD で `scripts/test-all.sh` を再実行し、結果を progress へ残す。実行する場所（手元か CI か）は `CLAUDE.md` が決める。手元なら実出力を貼り（貼り方は `.claude/agents/pdh-qa.md`「結果の貼り方」）、CI なら run の URL と結果を書く。最終 SHA のフルスイートを PR の CI に委ね、verify の時点ではまだ走らない運用（`CLAUDE.md` か bot の手順書が決める）では、委ねた先の workflow 名・対象の SHA・merge を止める必須のチェックの名前を書く。⚠ **まだ走っていない run を成功と書かない**
+3. QA Engineer へ Coding Engineer の «修正の証拠の対応表» を渡し、行ごとの確認結果を受け取る。最終 HEAD で `scripts/test-all.sh` を再実行し、結果を progress へ残す。実行する場所（手元か CI か）は `CLAUDE.md` が決める。手元なら実出力を貼り（貼り方は `.claude/agents/pdh-qa.md`「結果の貼り方」）、CI なら run の URL と結果を書く。最終 SHA のフルスイートを PR の CI に委ね、verify の時点ではまだ走らない運用（`CLAUDE.md` か bot の手順書が決める）では、委ねた先の workflow 名・対象の SHA・merge を止める必須のチェックの名前を書く。⚠ **まだ走っていない run を成功と書かない**
 4. 利用者から観察できる変更（画面・HTTP API・CLI・SDK）があるなら、`./scripts/dev-server.sh --seed` を実行してから Surface Observer を起動し、利用者の視点で観察させる（手順は `.claude/agents/pdh-surface-observer.md`）。変更した層で決めない — backend だけの変更でも HTTP API が変われば観察する。利用者から観察できる変更が無いときだけ、progress に 1 行残して skip する
 5. AC を check した ticket file を含めて commit する
 6. close 前 review: 最後に review した SHA の後に入った ticket 自身の commit を review する。**この規則の目的: close へ進む ticket 自身の commit を、すべて review が読んでいること**

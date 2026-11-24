@@ -96,6 +96,7 @@ PM の prompt にある検査と実行場所に従い、影響範囲を横断す
 - **doc の旧名の洗い出し** — 変更した identifier / field / API path / enum 値の旧名を、doc・spec・README・sample・comment で grep する
 - **実 provider / 外部 API を経由する経路** — project の規則が指す「実 API 確認の範囲と上限」に従い、1 経路以上を実 API で叩き、回数・概算の金額・対象の経路を記録する。credential が無ければ「無い」と書く（自分の判断で skip しない）
 - **最後の画面・結果まで利用者と同じ操作をする** — リンク・通知・画面遷移・外部への副作用が目的なら、最後の画面・結果まで実際に操作する。「描画された」で終えない。途中で URL や port を手で書き換えたなら、それは finding である（書き換えないと最後の画面・結果まで届かない状態が出荷される）
+- **修正の証拠の対応表** — Coding Engineer が作ったものを受け取り、各行の状態・入口・条件・テストを照合し、行ごとに結果を返す。外部の境界に依る行は修正前の probe の command と出力も照合する
 - **修正の前後出力** — 処置を「いま直す」とした finding の修正について、`.claude/agents/pdh-coding-engineer.md`「finding を直すときは、壊していないことを反例で固定する」が要求する前後の出力が揃っているか確かめる
 - **追加・変更された application-test** — そのテスト自身を検査する（下の「追加された application-test の検査」）
 
