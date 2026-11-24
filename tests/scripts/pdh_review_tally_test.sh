@@ -144,6 +144,24 @@ printf '| 1 | visible | `<!-- literal 1 minute -->` | いま直す | 既存 |\n'
 expect 0 'inline code remains visible when correcting cost' bash scripts/pdh-review-tally.sh --ticket 'work items/done/alpha'
 printf 'PASS: append corrections, comments and marked done records\n'
 
+{
+  header 1 | sed 's/| 判定 |/| 補足 | 判定 |/'
+  printf '| 1 | ignored | | bad | |\n'
+} > 'work items/old/progress.md'
+printf '<!-- pdh-review-loop: 1 -->\n' > 'work items/old/note.md'
+expect 2 'uncorrected header rejected' bash scripts/pdh-review-tally.sh --ticket 'work items/old'
+contains 'progress.md:3: PDH-review-1'
+contains '同じ巡に正しい見出し'
+header 2 >> 'work items/old/progress.md'
+expect 2 'other round cannot correct header' bash scripts/pdh-review-tally.sh --ticket 'work items/old'
+{
+  header 1
+  printf '| 1 | corrected | 月1回・1分 | いま直す | 既存 |\n'
+} >> 'work items/old/progress.md'
+expect 0 'same round corrects header by append' bash scripts/pdh-review-tally.sh --round-counts --ticket 'work items/old'
+contains $'PDH-review-1\t1\t1\t0'
+printf 'PASS: header correction by append, unresolved and other round rejected\n'
+
 printf 'tickets_dir: absent\n' > .ticket-config.yaml
 expect 2 'tickets_dir の欠落' bash scripts/pdh-review-tally.sh
 must mkdir absent

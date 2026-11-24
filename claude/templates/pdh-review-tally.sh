@@ -47,10 +47,6 @@ function cells(body, cols,    i,n,c,backslashes) {
   }
   return n
 }
-function unreadable(reason) {
-  printf "pdh-review-tally: %s:%d: %s: %s\n", FILENAME,FNR,round,reason > "/dev/stderr"
-  errors=1
-}
 function sorted(a, keys,    k,n,i,j,v) {
   n=0
   for (k in a) keys[++n]=k
@@ -131,11 +127,11 @@ FNR == 1 { state=0; round=""; findings=0; comment=0 }
   n=strict[FILENAME] ? cells(body, cols) : split(body, cols, "|"); joined=""
   for (i=1; i<=n; i++) { cols[i]=trim(cols[i]); joined=joined (i>1 ? "|" : "") cols[i] }
   if (state == 1) {
-    if (joined == header) { state=2; has_table[FILENAME]=1 }
+    if (joined == header) { state=2; has_table[FILENAME]=1; readable_header[FILENAME SUBSEP round]=FNR }
     else {
       legacy=0
       for (i=1; i<=n; i++) if (cols[i] == "Sev" || cols[i] == "出した人" || cols[i] == "記録先") legacy=1
-      if (strict[FILENAME] && !legacy) unreadable("現行 Findings 表を集計できない（#・要旨・頻度と 1 回のコスト・判定・由来の5列が必要）")
+      if (strict[FILENAME] && !legacy) bad_headers[FILENAME SUBSEP round]=FNR
       state=0
     }
     next
@@ -162,6 +158,11 @@ FNR == 1 { state=0; round=""; findings=0; comment=0 }
 }
 
 END {
+  for (key in bad_headers) if (bad_headers[key] > readable_header[key]) {
+    split(key,parts,SUBSEP)
+    printf "pdh-review-tally: %s:%d: %s: 現行 Findings 表を集計できない。同じ巡に正しい見出し（| # | 要旨 | 頻度と 1 回のコスト | 判定 | 由来 |）の表を追記する\n", parts[1],bad_headers[key],parts[2] > "/dev/stderr"
+    errors=1
+  }
   for (key in bad_rows) if (bad_rows[key] > readable_line[key]) {
     split(key,parts,SUBSEP)
     printf "pdh-review-tally: %s:%d: %s: Findings 行の列数・判定か頻度と 1 回のコストを読めない。同じ巡に `| %s | …` の正しい行を追記する\n", parts[1],bad_rows[key],parts[2],parts[3] > "/dev/stderr"
