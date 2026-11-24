@@ -89,11 +89,8 @@
   {
     "line": "- `<SCOPE>` 内だけを変更する。範囲外の問題は直さず結果で PM へ報告する",
     "files": [
-      "claude/templates/agents/claude/pdh-ac-verifier.md",
       "claude/templates/agents/claude/pdh-coding-engineer.md",
-      "claude/templates/agents/claude/pdh-qa.md",
-      "claude/templates/agents/claude/pdh-reviewer.md",
-      "claude/templates/agents/claude/pdh-surface-observer.md"
+      "claude/templates/agents/claude/pdh-qa.md"
     ],
     "reason": "各 worker は役割本文だけで単独起動するため共通の境界・報告契約も持つ。"
   },
