@@ -79,7 +79,7 @@ skill の構成:
 - **`pdh-pm`** — PM が読む。持つのは PDH-flow の状態遷移と、人とのやり取りだけ。承認の PDH-stage（`PDH-ticket-human-review`・`PDH-human-review`）は人とのやり取りなので、ここで扱う。ほかの PDH-stage に入るたびに、その PDH-stage の skill を呼ぶ
 - **PDH-stage の skill** — PDH-stage ごとに 1 つ（`pdh-open`・`pdh-ticket-review`・`pdh-implement`・`pdh-review`・`pdh-verify`・`pdh-close`）。ticket を書くときは `pdh-ticket-write`。作業が中断している ticket を再開するときは `pdh-resume`（PDH-stage ではないが、同じ «入力・処理・出力・例外» の形で書く）。PDH-stage の skill は PM の手順である。出力の条件もその skill が決め、PM が worker の本文を開かずに完了を判定できる形で書く
 - **worker の agent 定義** — worker の手順は `.codex/agents/pdh-<役割>.toml` の本文に、1 役割 1 本で置く。Claude の subagent は本文を自分の指示として読み込み、codex の worker には PM がdeveloper_instructions の本文を prompt に入れて渡す。本文の冒頭には共通の約束（push・`./ticket.sh close`・`gh pr merge`・`gh` での issue / PR / comment の書き込みをしない、note の Status を書き換えない、担当の範囲の外を書き換えない、決められた形で報告を返す）を置く。本文は Claude 固有の tool 名ではなく、操作の意味で書く
-- **道具の skill** — 複数の PDH-stage で使う。`pdh-decision-board`（承認者へ渡す材料）・`pdh-check-writing`（fast-check の書き手）・`pdh-change`（PDH を変える人。この skill）
+- **道具の skill** — 複数の PDH-stage で使う。`pdh-brief-writing`（Brief を書く・直す PM）・`pdh-decision-board`（承認者へ渡す材料）・`pdh-check-writing`（fast-check の書き手）・`pdh-change`（PDH を変える人。この skill）
 - **複数の skill が使う中身は 1 か所に置き、ほかの skill からはそのファイルを参照させる。**置き場所は、先に読み込まれる skill の中の `_xxx.md` か、`pdh-pm` の下。同じ中身を 2 つの skill に写さない
 
 ## PDH-stage の skill の形
