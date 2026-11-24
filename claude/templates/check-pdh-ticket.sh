@@ -470,7 +470,7 @@ check_s8_decisions() {
 
 # 新しい入口を通った note だけに、review と close の記録を求める。
 check_loop_records() {
-  local n=$1 st=$2 d=${1%/note.md} counts round original current reviews visible result
+  local n=$1 st=$2 d=${1%/note.md} counts round original current reviews visible result line
   [[ "$d" != "$tickets_dir/done/"* ]] || return 0
   [ -f "$d/progress.md" ] || return 0
   visible=$(ticket_visible_lines "$d/progress.md") || { failed=1; return; }
@@ -500,31 +500,35 @@ check_loop_records() {
       if (section && /^- \[[xX]\] S8 PDH-review-[0-9]+[[:space:]]/) done[$4]=1
       next
     }
-    { sub(/^- /, "") }
-    /^収束の選択: PDH-review-[0-9]+[[:space:]]/ {
+    /^収束の選択: PDH-review-[0-9]+[[:space:]]+部品=/ {
       round=$2; line=$0; component=""
+      sub(/^収束の選択: PDH-review-[0-9]+[[:space:]]+部品=/, "", line)
+      component=line; sub(/[[:space:]]+(前の仮説|外れ方|次に変えるもの|外れの条件)=.*$/, "", component)
+      component=trim(component)
       n=split("部品 前の仮説 外れ方 次に変えるもの 外れの条件", fields, " ")
-      valid=1
+      line=$0; valid=1
       for (i=1; i<=n; i++) {
         key=fields[i] "="; pos=index(line,key)
         if (!pos) {valid=0; break}
         line=substr(line,pos+length(key))
         end=(i<n ? index(line, fields[i+1] "=") : length(line)+1)
-        value=trim(substr(line,1,end-1))
-        if (i == 1) component=value
-        if (!end || value == "") valid=0
+        if (!end || trim(substr(line,1,end-1)) == "") valid=0
       }
-      choices[round SUBSEP component]=valid
-      found[round]=1
+      if (component == "") { unknown[round]=FNR; next }
+      key=round SUBSEP component
+      if (valid) { choices[key]=1; complete[round]=FNR }
+      else choices[key]=0
+      choice_line[key]=FNR
     }
     END {
-      for (key in choices) if (!choices[key]) { split(key,parts,SUBSEP); bad[parts[1]]=1 }
-      for (round in done) if (!found[round] || bad[round]) print round
+      for (key in choices) if (!choices[key]) { split(key,parts,SUBSEP); bad[parts[1]]=choice_line[key] }
+      for (round in unknown) if (unknown[round] > complete[round]) bad[round]=unknown[round]
+      for (round in done) if (!complete[round] || bad[round]) printf "%s\t%d\n", round,bad[round]
     }
   ' <(ticket_visible_lines "$n") <(printf '%s\n' "$visible")) || { failed=1; return; }
-  while read -r round; do
+  while IFS=$'\t' read -r round line; do
     [ -n "$round" ] || continue
-    printf 'check-pdh-ticket: %s: 収束の選択: %s が無いか欄が空（部品・前の仮説・外れ方・次に変えるもの・外れの条件）\n' "$d" "$round" >&2
+    printf 'check-pdh-ticket: %s: 収束の選択: %s が無いか欄が空（部品・前の仮説・外れ方・次に変えるもの・外れの条件）。progress.md:%s 同じ巡と部品の完全な行を追記する（0 は記録なし）\n' "$d" "$round" "$line" >&2
     failed=1
   done <<< "$result"
 }
@@ -614,7 +618,10 @@ check_findings_cost() {
   local f=$1 legacy_ok=${2:-1} loop=0
   [[ "$f" != "$tickets_dir/done/"* ]] || return 0
   [ -f "$f" ] || return 0
-  grep -qxF '<!-- pdh-review-loop: 1 -->' "${f%/progress.md}/note.md" && loop=1
+  if grep -qxF '<!-- pdh-review-loop: 1 -->' "${f%/progress.md}/note.md"; then
+    loop=1
+    bash scripts/pdh-review-tally.sh --round-counts --ticket "${f%/progress.md}" >/dev/null || failed=1
+  fi
   if ! ticket_visible_lines "$f" | awk -v loop="$loop" -F '|' -v file="$f" -v legacy_ok="$legacy_ok" '
     function trim(v) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v); return v }
     /^#+ / { findings=($0 ~ /^###+ Findings(-| ?(（|\())PDH-review-[0-9]+/); cost=0 }
@@ -628,7 +635,7 @@ check_findings_cost() {
       if (legacy) { cost=0; if (!legacy_ok && !legacy_line) legacy_line=NR }
       else {
         current=1
-        if (!cost) {
+        if (!loop && !cost) {
           printf "check-pdh-ticket: %s:%d: Findings 表の «頻度と 1 回のコスト» が無い\n", file, NR
           bad=1
         }

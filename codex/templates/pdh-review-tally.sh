@@ -34,7 +34,7 @@ for file in ${files[@]+"${files[@]}"}; do
   [ -f "$file" ] && [ -r "$file" ] || fail "progress.md が読めません: $file"
 done
 # 空の対象は stdin の EOF で処理する。ファイル名を argv で渡すので空白も保持する。
-awk -v round_counts="$round_counts" '
+awk -v round_counts="$round_counts" "$(pdh_visible_lines_awk)"'
 function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
 function valid(s) { return s == "受け入れる" || s == "いま直す" || s == "起票する" || s == "記録だけ残す" || s == "棄却する" }
 function cells(body, cols,    i,n,c,backslashes) {
@@ -68,11 +68,9 @@ BEGIN {
     if (f in names) { ARGV[i]=""; continue }
     count=split(f, path, "/"); names[f]=path[count-1]; tickets[++ticket_count]=f
     if (count>2 && path[count-2] == "done") shipped[names[f]]=1
-    else {
-      note=f; sub(/progress.md$/, "note.md", note)
-      while ((getline marker < note)>0) if (marker == "<!-- pdh-review-loop: 1 -->") strict[f]=1
-      close(note)
-    }
+    note=f; sub(/progress.md$/, "note.md", note)
+    while ((getline marker < note)>0) if (marker == "<!-- pdh-review-loop: 1 -->") strict[f]=1
+    close(note)
   }
 }
 FILENAME == ARGV[1] {
@@ -83,8 +81,12 @@ FILENAME == ARGV[1] {
   }
   next
 }
-FNR == 1 { state=0; round=""; findings=0 }
+FNR == 1 { state=0; round=""; findings=0; comment=0 }
 {
+  if (strict[FILENAME]) {
+    raw=$0; $0=visible_line($0)
+    if (raw != $0 && trim($0) == "") next
+  }
   # pdh_review_sha_records と同じ規則: 行頭の任意の「- 」と、先頭 7〜40 桁だけ。
   line=$0; sub(/^- /, "", line)
   if (line ~ /^review-sha:/) {
@@ -139,22 +141,36 @@ FNR == 1 { state=0; round=""; findings=0 }
     next
   }
   if (body ~ /^[[:space:]:|\-]+$/) next
-  if (n != 5 || !valid(cols[4])) {
-    if (strict[FILENAME]) unreadable("Findings 行の列数か判定を読めない: " line)
-    next
+  if (strict[FILENAME]) {
+    if (cols[1] !~ /^[0-9]+$/) next
+    key=FILENAME SUBSEP round SUBSEP cols[1]
+    if (n != 5 || !valid(cols[4]) || cols[3] == "") {
+      bad_rows[key]=FNR
+      next
+    }
+    if (!(key in decisions)) finding_keys[++finding_count]=key
+    readable_line[key]=FNR
+  } else {
+    if (n != 5 || !valid(cols[4])) next
+    key=FILENAME SUBSEP round SUBSEP cols[1]
+    if (cols[4] == "いま直す") original[FILENAME SUBSEP round]++
+    finding_keys[++finding_count]=key
   }
-  if (strict[FILENAME] && cols[3] == "") unreadable("Findings 表の «頻度と 1 回のコスト» が空")
-  key=FILENAME SUBSEP round SUBSEP cols[1]
   finding_round[key]=round
-  if (cols[4] == "いま直す") original[FILENAME SUBSEP round]++
   round_seen[FILENAME SUBSEP round]=1
-  finding_keys[++finding_count]=key
   decisions[key]=cols[4]; owner[key]=FILENAME; origins[key]=cols[5]
 }
+
 END {
+  for (key in bad_rows) if (bad_rows[key] > readable_line[key]) {
+    split(key,parts,SUBSEP)
+    printf "pdh-review-tally: %s:%d: %s: Findings 行の列数・判定か頻度と 1 回のコストを読めない。同じ巡に `| %s | …` の正しい行を追記する\n", parts[1],bad_rows[key],parts[2],parts[3] > "/dev/stderr"
+    errors=1
+  }
   if (errors) exit 2
   for (i=1; i<=finding_count; i++) {
     key=finding_keys[i]; f=owner[key]
+    if (strict[f] && decisions[key] == "いま直す") original[f SUBSEP finding_round[key]]++
     decision=(key in overrides) ? overrides[key] : decisions[key]
     verdicts[decision]++
     if (!round_counts && decision != "棄却する" && decision != "記録だけ残す") {

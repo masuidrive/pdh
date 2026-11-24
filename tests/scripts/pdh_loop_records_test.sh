@@ -121,8 +121,20 @@ printf '\n%s\n' "${choice/前の仮説=局所/前の仮説=}" >> "$progress"
 expect 1 'incomplete component rejected'
 printf '%s\n' "${choice/部品=保存/部品=取得}" >> "$progress"
 expect 1 'other component cannot hide incomplete choice'
-printf -- '- %s\n' "$choice" >> "$progress"
-expect 0 'same component corrected by append with bullet'
+printf '%s\n' "$choice" >> "$progress"
+expect 0 'same component corrected by append'
+make_progress 1
+printf '\n%s\n' "${choice/部品=保存/部品=}" >> "$progress"
+expect 1 'component missing is diagnosed'
+grep -q 'progress.md:7' output
+printf '%s\n' "$choice" >> "$progress"
+expect 0 'complete append resolves unknown component'
+printf '%s\n' "${choice/前の仮説=局所/前の仮説=}" >> "$progress"
+expect 1 'malformed append needs a later correction'
+printf '%s\n' "$choice" >> "$progress"
+expect 0 'later readable append corrects the key'
+printf -- '- 収束の選択: PDH-review-1 の説明である\n' >> "$progress"
+expect 0 'prose bullet is not a record'
 make_note close
 printf '<!-- pdh-effect: 1 -->\n' >> "$note"
 make_progress 1

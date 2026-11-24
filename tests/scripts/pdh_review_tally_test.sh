@@ -101,6 +101,49 @@ section=${output##*'### ticket ごとの出荷後の欠陥'}
 [[ "$section" == *'| beta | 2 |'* ]] || fail "$section"
 printf 'PASS: explicit origin keys count=2 (starting and bare SHA excluded)\n'
 
+# 記録は巡と番号ごとの最後の読める行。コメントと保存場所は値を変えない。
+printf '<!-- pdh-review-loop: 1 -->\n' > 'work items/alpha/note.md'
+{
+  printf 'review-sha: abcdef0\n'
+  header 1
+  printf '| 1 | invalid | 月1回・1分 | **いま直す** | 既存 |\n'
+} > 'work items/alpha/progress.md'
+expect 2 'unresolved row reports correction key' bash scripts/pdh-review-tally.sh --ticket 'work items/alpha'
+contains 'progress.md:6: PDH-review-1'
+contains '同じ巡に `| 1 |'
+printf '| 2 | other | 月1回・1分 | いま直す | 既存 |\n' >> 'work items/alpha/progress.md'
+expect 2 'different number cannot correct row' bash scripts/pdh-review-tally.sh --ticket 'work items/alpha'
+{
+  printf '\n'
+  header 1
+  printf '| 1 | a \| b | 月1回・1分 | いま直す | 持ち込み: %s |\n' "$origin"
+  printf '| 1 | a \| b | 月1回・1分 | いま直す | 持ち込み: %s |\n' "$origin"
+  printf '| <n> | example | | <decision> | |\n'
+  printf '<!--\n'
+  header 2
+  printf '| 1 | hidden | | いま直す | 既存 |\n-->\n'
+  printf '処置の変更: PDH-review-1 #1 いま直す → 受け入れる — 許容内\n'
+} >> 'work items/alpha/progress.md'
+expect 0 'append correction and override choose one value' bash scripts/pdh-review-tally.sh --round-counts --ticket 'work items/alpha'
+contains $'PDH-review-1\t2\t1\t1'
+excludes 'PDH-review-2'
+before=$output
+must mv 'work items/alpha' 'work items/done/alpha'
+expect 0 'marked done uses same records' bash scripts/pdh-review-tally.sh --round-counts --ticket 'work items/done/alpha'
+[ "$output" = "$before" ] || fail 'done changed counts'
+expect 0 'marked done preserves shipped defects' bash scripts/pdh-review-tally.sh
+section=${output##*'### ticket ごとの出荷後の欠陥'}
+[[ "$section" == *'| beta | 1 |'* ]] || fail "$section"
+{
+  header 3
+  printf '| 1 | visible | <!-- hidden cost --> | いま直す | 既存 |\n'
+} >> 'work items/done/alpha/progress.md'
+expect 2 'comment alone is not a cost' bash scripts/pdh-review-tally.sh --ticket 'work items/done/alpha'
+contains '同じ巡に `| 1 |'
+printf '| 1 | visible | `<!-- literal 1 minute -->` | いま直す | 既存 |\n' >> 'work items/done/alpha/progress.md'
+expect 0 'inline code remains visible when correcting cost' bash scripts/pdh-review-tally.sh --ticket 'work items/done/alpha'
+printf 'PASS: append corrections, comments and marked done records\n'
+
 printf 'tickets_dir: absent\n' > .ticket-config.yaml
 expect 2 'tickets_dir の欠落' bash scripts/pdh-review-tally.sh
 must mkdir absent
