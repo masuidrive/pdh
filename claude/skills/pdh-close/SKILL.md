@@ -29,7 +29,7 @@ close の承認は PDH-human-review で得ている。ここで承認を取り�
 
 判断は発行した設問を数え、答え待ちは回答を待っていた期間の重なりを除いて日数へ直す。使用割合はアカウント全体で並行作業を含むため概算の目安であり、ticket ごとの使用量とは扱わない。週の上限の期間をまたいだら `不明` とする。Codex は `~/.codex/sessions` の記録の `rate_limits` から開始時と close 時の週の値を読み、どちらかを取れなければ `不明` とする。Claude Code からは読めないので通常 `不明`。本文や資格情報は記録へ写さない。
 
-`PDH-ticket-write --enter` が note に `<!-- pdh-effect: 1 -->` を付けた ticket は、効果の行が無いと close の検査が落ちる。既存の ticket に印を追加せず、done の記録は書き直さない。出荷後の欠陥は `bash scripts/pdh-review-tally.sh` の ticket ごとの集計で読む。
+PDH-ticket-write か PDH-open の `--enter` が note に `<!-- pdh-effect: 1 -->` を付けた ticket は、効果の行が無いと close の検査が落ちる。PDH-open を過ぎた ticket に印を後から付けず、done の記録は書き直さない。出荷後の欠陥は `bash scripts/pdh-review-tally.sh` の ticket ごとの集計で読む。
 
 ## 出力
 
