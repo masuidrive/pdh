@@ -123,7 +123,7 @@ if [ "$stage" = PDH-ticket-write ]; then
 fi
 # review を既に始めた note は、新しい記録の対象へ移さない。
 markers=''
-if [ "$stage" = PDH-ticket-write ] && ! grep -qxF '<!-- pdh-effect: 1 -->' "$note"; then
+if { [ "$stage" = PDH-ticket-write ] || [ "$stage" = PDH-open ]; } && ! grep -qxF '<!-- pdh-effect: 1 -->' "$note"; then
   markers='<!-- pdh-effect: 1 -->'
 fi
 if [ "$stage" = PDH-review ] && ! grep -qxF '<!-- pdh-review-loop: 1 -->' "$note" &&

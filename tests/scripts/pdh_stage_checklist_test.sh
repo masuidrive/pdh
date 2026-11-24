@@ -16,6 +16,43 @@ expect() {
 }
 contains() { [[ "$output" == *"$1"* ]] || fail "出力に $1 がありません: $output"; }
 
+
+# Stage entry assigns each record contract only at its adoption boundary.
+marker_repo="$TMP_DIR/markers"
+must mkdir -p "$marker_repo/scripts" "$marker_repo/.claude/skills" "$marker_repo/tickets/sample"
+must cp "$ROOT_DIR/scripts/pdh-stage-checklist.sh" "$marker_repo/scripts/"
+must cp -R "$ROOT_DIR/.claude/skills/." "$marker_repo/.claude/skills/"
+cat > "$marker_repo/product-brief.md" <<'BRIEF'
+## Failure Tolerance
+- 使う人と量: 本人1人
+- 許す失敗: 月1回、本人1分
+- 許さない失敗: データ喪失
+BRIEF
+for case in write review-new review-old open; do
+  marker_note="$marker_repo/tickets/sample/note.md"
+  printf '## Checklist\n' > "$marker_note"
+  : > "$marker_repo/tickets/sample/progress.md"
+  expected_marker='<!-- pdh-effect: 1 -->'
+  case "$case" in
+    write) marker_stage=PDH-ticket-write ;;
+    open) marker_stage=PDH-open ;;
+    review-new|review-old)
+      marker_stage=PDH-review
+      expected_marker='<!-- pdh-review-loop: 1 -->'
+      [ "$case" != review-old ] || printf 'review-sha: abcdef\n' > "$marker_repo/tickets/sample/progress.md"
+      ;;
+  esac
+  expect 0 "$case entry" bash "$marker_repo/scripts/pdh-stage-checklist.sh" "$marker_stage" --enter "$marker_note"
+  if [ "$case" = review-old ]; then
+    ! grep -qxF "$expected_marker" "$marker_note" || fail "$case adopted new contract"
+  else
+    grep -qxF "$expected_marker" "$marker_note" || fail "$case marker missing"
+    expect 0 "$case repeat" bash "$marker_repo/scripts/pdh-stage-checklist.sh" "$marker_stage" --enter "$marker_note"
+    [ "$(grep -xcF "$expected_marker" "$marker_note")" -eq 1 ] || fail "$case duplicated marker"
+  fi
+  printf 'PASS: marker %s\n' "$case"
+done
+
 # この repo の skill: 既知の PDH-stage はすべて、チェックリストの行を持つ。
 for st in PDH-ticket-write PDH-open PDH-ticket-review PDH-ticket-human-review PDH-implement PDH-review PDH-verify PDH-human-review PDH-close; do
   expect 0 "$st の行を出す" bash "$ROOT_DIR/scripts/pdh-stage-checklist.sh" "$st"
