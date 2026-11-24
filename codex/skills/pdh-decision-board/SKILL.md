@@ -59,12 +59,12 @@ decision-board のすべての段落に、次の 1 問を当てる。
 | 2 判断の分類 | [base.md](base.md)「判断の分類」 |
 | 3 判断を数えてモードを選ぶ | [base.md](base.md)「判断の数でモードを選ぶ」 |
 | 4 承認者が必ず読む本文を組む | PDH-stage 側のファイルが定める本文の固定部、[base.md](base.md)「承認者が必ず読む本文の構成」「決定サマリー」「Acceptance Criteria の書き方」 |
-| 5 推奨と選択肢を書く | [base.md](base.md)「判断カードの型」、PDH-stage 側のファイルの「選択肢と ticket を一対一にする」 |
+| 5 推奨と選択肢を書く | [base.md](base.md)「判断カードの型」、PDH-ticket-human-review は [ticket-gate.md](ticket-gate.md)「選択肢と ticket を一対一にする」、PDH-human-review は `[SKILLS_PATH]/pdh-pm/SKILL.md`「承認の PDH-stage」の «処理» |
 | 6 全体を推敲する | [base.md](base.md)「読み手の仕事を増やさない」「数と断定の扱い」「読み手を決める」 |
 | 7 媒体を選んで組み上げる | [base.md](base.md)「媒体を選ぶ」、HTML なら [html.md](html.md) |
 | 8 完成検査 | [final-check.md](final-check.md) |
 | 9 発行 | [base.md](base.md)「発行」 |
-| 10 回答を ticket へ反映 | PDH-stage 側のファイルの「選択肢と ticket を一対一にする」 |
+| 10 回答を ticket へ反映 | PDH-ticket-human-review は [ticket-gate.md](ticket-gate.md)「選択肢と ticket を一対一にする」、PDH-human-review は `[SKILLS_PATH]/pdh-pm/SKILL.md`「承認の PDH-stage」の «処理» |
 
 **作り始めるときに、手順 0〜10 を engine の task 管理機構へ 1 手順 1 項目で登録し、手順を終えるたびに完了へ更新する**（Claude Code は task list、codex は plan。機構の無い engine では note に `- [ ] 手順 0 …` を書いて消し込む）。
 

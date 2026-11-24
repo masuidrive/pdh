@@ -67,7 +67,7 @@ skill の分け方は skill `pdh-change` にある。
 - **実装の事実**
   - 意味: いまの実装がどうなっているかを、変更する場所で読める形で書いたもの。
   - 定義する場所: PDH-AGENTS.md「PDH の構造」
-  - 注意: 製品はコメント・テスト・`specs/`、開発基盤の記録は skill `pdh-change`「文書を書くとき」に従って置く（`CLAUDE.md`「実装の記録の置き場所」）。
+  - 注意: 製品はコメント・テスト・`specs/`、開発基盤の記録は skill `pdh-change`「文書を書くとき」に従って置く。
 - **`CLAUDE.md`（codex では `AGENTS.md`）**
   - 意味: project の入口のファイル。project 固有の規則を置く。
   - 定義する場所: PDH-AGENTS.md 冒頭
@@ -107,7 +107,7 @@ skill の分け方は skill `pdh-change` にある。
   - 定義する場所: pdh-change「規則の文の書き方」
 - **知らずに変えると壊れる前提**
   - 意味: コードが黙って依存していて、知らずに変えると壊れる前提。コメントかテストか `scripts/checks/` に書いて残す。
-  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`「変えるファイルの最近の変更を読む」、`.claude/agents/pdh-reviewer.md`
+  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`（Codex は `.codex/agents/pdh-coding-engineer.toml`）「変えるファイルの最近の変更を読む」、`.claude/agents/pdh-reviewer.md`（Codex は `.codex/agents/pdh-reviewer.toml`）
   - 使わない語: 地雷、踏む（«知らずに変えて壊す» «Architectural-Invariants に反しない» «Out-of-scope に入らざるを得ない» のように、何が起きるかで書く。«踏まえて» は別の語なので使ってよい）
 
 ## ticket の中身
@@ -123,20 +123,20 @@ skill の分け方は skill `pdh-change` にある。
   - 意味: 承認者が観察できる振る舞いで書いた、ticket の完了条件。
   - 定義する場所: pdh-ticket-write「AC の書き方」、`[SKILLS_PATH]/pdh-pm/_records.md`
   - 使わない語: 受け入れ条件
-  - 注意: AC は承認の単位であって、設計の上限ではない（`.claude/agents/pdh-coding-engineer.md`「実装中に AC より Why に合う作り方が見つかったら、AC の書き換えを提案する」）。
+  - 注意: AC は承認の単位であって、設計の上限ではない（`.claude/agents/pdh-coding-engineer.md`（Codex は `.codex/agents/pdh-coding-engineer.toml`）「実装中に AC より Why に合う作り方が見つかったら、AC の書き換えを提案する」）。
 - **AC-approved**
   - 意味: ticket に書く、承認した AC と Out-of-scope のハッシュの行。両方の節の文からコメント・checkbox の印・空白を除いて取るので、AC か Out-of-scope を書き換えたとき値が合わなくなる。
   - 定義する場所: `pdh-pm`「承認の PDH-stage」、`scripts/check-pdh-ticket.sh`
 - **作り方の判断**
   - 意味: ticket の書き手が実装前に決めた、どう作るかの選択とその理由（例: 「保存形式は data URI にする」）。AC が «何ができるようになるか» なのに対し、こちらは «どう作るか»。記録を残せば、再合意なしで書き換えてよい。
-  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`「ticket の変更は再合意で行う」
+  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`（Codex は `.codex/agents/pdh-coding-engineer.toml`）「ticket の変更は再合意で行う」
   - 使わない語: 確定判断、解き方、設計判断（ticket の節の見出しは `Design-Decisions`）
 - **Out-of-scope**
   - 意味: この ticket で扱わないこと。
   - 定義する場所: PDH-AGENTS.md「PDH の構造」
 - **再合意**
   - 意味: AC・Architectural-Invariants-check・Out-of-scope を変えるときに、ユーザの承認を取り直すこと。
-  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`「ticket の変更は再合意で行う」
+  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`（Codex は `.codex/agents/pdh-coding-engineer.toml`）「ticket の変更は再合意で行う」
 - **PDH-stage のチェックリスト**
   - 意味: 各 PDH-stage の skill の «出力» にある `- [ ] <PDH-stage>: …` の行。PDH-stage に入るとき `scripts/pdh-stage-checklist.sh <PDH-stage> --enter` が note の `## Checklist` へ写し、確かめたら `[x]` にする。同じ PDH-stage を 2 回目以降に通るときは写し直して未了に戻す。再開では写さない。
   - 定義する場所: pdh-change「PDH-stage の skill の形」、pdh-pm「進め方」
@@ -196,7 +196,7 @@ skill の分け方は skill `pdh-change` にある。
   - 使わない語: Director、main agent、main、上位（Coding Engineer から見た PM）
 - **worker**
   - 意味: PM が起動する、会話の状態を引き継がない別の実行単位。
-  - 定義する場所: `[SKILLS_PATH]/pdh-pm/_execution-team.md`（各役の手順は `.claude/agents/pdh-<役割>.md` の本文）
+  - 定義する場所: `[SKILLS_PATH]/pdh-pm/_execution-team.md`（各役の手順は `.claude/agents/pdh-<役割>.md`（Codex は `.codex/agents/pdh-<役割>.toml`） の本文）
   - 使わない語: subagent、Agent
   - 注意: tmux の別 window で動くセッションは「window」と呼び、worker と書かない。
 - **PM だけでの実行**
@@ -211,7 +211,7 @@ skill の分け方は skill `pdh-change` にある。
 - **reviewer**
   - 意味: diff を review する worker の総称。
   - 使わない語: 独立 reviewer、レビュアー
-  - 注意: Devil's Advocate（DA）と Code Reviewer（CR）は reviewer の役割の名前。違いは `.claude/agents/pdh-reviewer.md`「役割」にある。DA は振る舞いを AC・ユーザの判断・利用場面に照らし、CR はコードと周辺の細部を見る
+  - 注意: Devil's Advocate（DA）と Code Reviewer（CR）は reviewer の役割の名前。違いは `.claude/agents/pdh-reviewer.md`（Codex は `.codex/agents/pdh-reviewer.toml`）「役割」にある。DA は振る舞いを AC・ユーザの判断・利用場面に照らし、CR はコードと周辺の細部を見る
 - **見方**
   - 意味: PDH-review で diff を確かめる見方。Why の見方 は Why が端から端まで成り立つかを追う見方、AC の見方 は AC と作り方の判断を diff と突き合わせる見方。
   - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`「2 つの見方」
@@ -219,7 +219,7 @@ skill の分け方は skill `pdh-change` にある。
   - 注意: agent の名前 `pdh-reviewer-lens1` は起動に使う識別子なので変えない
 - **Why の見方の reviewer**
   - 意味: Why と作業ツリーだけを渡され、Why が端から端まで成立するかを追う reviewer。
-  - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`「2 つの見方」、`.claude/agents/pdh-reviewer-lens1.md`
+  - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`「2 つの見方」、`.claude/agents/pdh-reviewer-lens1.md`（Codex は `.codex/agents/pdh-reviewer-lens1.toml`）
 - **AC 裏取り**
   - 意味: 各 AC が実際に達成されたかを判定する worker。
 - **Surface Observer**
@@ -231,7 +231,7 @@ skill の分け方は skill `pdh-change` にある。
   - 使わない語: 復元テスト、AC 読み手
 - **AC だけを読む worker**
   - 意味: 上の確認で、What 冒頭の 1 文と AC だけを渡されて答える worker。
-  - 定義する場所: `.claude/agents/pdh-ac-reader.md`
+  - 定義する場所: `.claude/agents/pdh-ac-reader.md`（Codex は `.codex/agents/pdh-ac-reader.toml`）
   - 使わない語: AC 読み手、«書いていない agent»、`pdh-ac-reader`（agent 定義のファイル名としてだけ残る）
 - **承認者**
   - 意味: ticket と承認の PDH-stage でユーザとして判断する人。AC を読むのもこの人。
@@ -282,7 +282,7 @@ skill の分け方は skill `pdh-change` にある。
   - 使わない語: 指摘、指摘事項
 - **Critical / Major / Minor**
   - 意味: 頻度 × 1 回のコストと Failure Tolerance で付ける重大さ。
-  - 定義する場所: `.claude/agents/pdh-reviewer.md`「報告」
+  - 定義する場所: `.claude/agents/pdh-reviewer.md`（Codex は `.codex/agents/pdh-reviewer.toml`）「報告」
 - **処置**
   - 意味: finding ごとに決める扱い。
   - とりうる値: いま直す / 受け入れる / 起票する / 記録だけ残す / 棄却する（Findings 表の判定の列には、この 5 つの文字列だけを書く）
@@ -299,7 +299,7 @@ skill の分け方は skill `pdh-change` にある。
   - 定義する場所: `[SKILLS_PATH]/pdh-review/SKILL.md`「収束」
 - **修正の証拠の対応表**
   - 意味: 修正した状態と読み書きする入口、守る条件、修正前後の検査結果を結ぶ表。
-  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`「finding を直すときは、壊していないことを反例で固定する」
+  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`（Codex は `.codex/agents/pdh-coding-engineer.toml`）「finding を直すときは、壊していないことを反例で固定する」
 - **効果**
   - 意味: ticket を閉じるときに記録する、利用者の判断と答え待ち、アカウント全体の使用割合、修正が持ち込んだ欠陥の値。
   - 定義する場所: `[SKILLS_PATH]/pdh-close/SKILL.md`「処理」
@@ -309,7 +309,7 @@ skill の分け方は skill `pdh-change` にある。
   - 使わない語: いま直すかの判断、scope gate、Scope boundary、triage
 - **修正前に落ちるテスト**
   - 意味: finding の欠陥があるために、修正前は落ち、修正後は通る ticket-local-test。
-  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`「finding を直すときは、壊していないことを反例で固定する」
+  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`（Codex は `.codex/agents/pdh-coding-engineer.toml`）「finding を直すときは、壊していないことを反例で固定する」
   - 使わない語: pin、再現テスト、Pin before fix
 - **close 前 review**
   - 意味: PDH-verify の最後に、最後に review した commit より後に入った ticket 自身の commit を review すること。
@@ -327,12 +327,12 @@ skill の分け方は skill `pdh-change` にある。
 
 - **application-test**
   - 意味: `scripts/test-all.sh` と CI に常に置き、製品の約束・Architectural-Invariants・一般化した regression を守るテスト。ticket や一時 fixture の名前を出さずに、続く製品の約束として書けるものだけがこれになる。
-  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`「テスト設計ルール」
+  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`（Codex は `.codex/agents/pdh-coding-engineer.toml`）「テスト設計ルール」
   - 使わない語: 恒久テスト
 - **ticket-local-test**
   - 意味: その ticket の変更が正しく入ったかを確かめるためだけに `[TICKET_DIR]/tests/` に置き、test-all と CI には入れないテスト。close の後は `tickets/done/<name>/tests/` に記録として残り、再実行できる（例: 名前を変えた API の旧 URL が 404 を返す）。
   - 注意: application-test との分け方は 1 問で決める — «ticket や一時 fixture の名前を出さずに、続く製品の約束として書けるか»。書けるなら application-test、書けないなら ticket-local-test
-  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`「テスト設計ルール」
+  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`（Codex は `.codex/agents/pdh-coding-engineer.toml`）「テスト設計ルール」
   - 使わない語: 一時確認、ticket 固有の一時確認
 - **fast-check**
   - 意味: ミリ秒で終わる、grep による決定論的な検査。
@@ -342,10 +342,10 @@ skill の分け方は skill `pdh-change` にある。
   - 使わない語: 全体スイート、全スイート
 - **retry-pass**
   - 意味: 再実行でだけ通ったテスト。件数と名前を付けて報告する。
-  - 定義する場所: `.claude/agents/pdh-qa.md`「結果の貼り方」
+  - 定義する場所: `.claude/agents/pdh-qa.md`（Codex は `.codex/agents/pdh-qa.toml`）「結果の貼り方」
 - **固定する**（テストで）
   - 意味: その振る舞いが変わると落ちるテストを置くこと。
-  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`「テスト設計ルール」
+  - 定義する場所: `.claude/agents/pdh-coding-engineer.md`（Codex は `.codex/agents/pdh-coding-engineer.toml`）「テスト設計ルール」
   - 注意: テストで使う値・role を選ぶ意味では使わない（«低い権限の role で確かめるテスト» のように書く）。
 - **守れたかを数える仕組み**
   - 意味: 規則が守られたかを機械が数えるもの。fast-check・`require_checklist` が数える checkbox・テスト・`check-pdh-ticket.sh`。

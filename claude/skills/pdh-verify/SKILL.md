@@ -38,7 +38,7 @@ PM は次の順に回す。test 結果・AC の判定・consumer surface の観�
 
 この規則の目的: 承認者が、権限・環境の制約で補えなかった証拠を把握し、未確認の AC を残して閉じるかを決められること。
 
-PM は、AC 裏取りの worker が書いた権限・環境の制約の理由と足りない証拠を progress に残す。その AC は close の板（`pdh-decision-board/close-gate.md`「AC ごとの達成」）へ «未確認（理由・足りない証拠）» として出し、VERIFIED には数えない。
+PM は、AC 裏取りの worker が書いた権限・環境の制約の理由と足りない証拠を progress に残す。その AC は close の板（`pdh-decision-board/close-gate.md`「本文は 4 節 — 残りは根拠」の «AC ごとの達成»）へ «未確認（理由・足りない証拠）» として出し、VERIFIED には数えない。
 
 板の待ち行は、`pdh-pm`「承認の PDH-stage」の手順どおり note の Checklist に置く。`check-pdh-ticket.sh` の一般の待ち行検査が数える。PR の merge を close の承認とする運用では、`- [-] close の回答待ち 発行先: <板の URL か絶対 path> - skip: close の承認は PR の merge で受ける` とする。この待ち行は回答済みを意味しない。
 

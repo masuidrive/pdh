@@ -21,7 +21,7 @@ PDH-ticket-human-review から差し戻されたときは、progress にある�
 ### Product Brief と矛盾しないかを確かめる
 
 1. Why が `product-brief.md` のどの目的とジャーニーにつながるかを、ticket の `Key-User-Journeys:` の行と突き合わせる
-2. ticket の Architectural-Invariants-check を、`product-brief.md` の Architectural-Invariants と 1 つずつ突き合わせる
+2. ticket の Architectural-Invariants-check を、`product-brief.md` の Architectural Invariants と 1 つずつ突き合わせる
 
 矛盾があれば「例外」へ。
 
@@ -172,7 +172,7 @@ done) &&
 
 ## 例外
 
-- Why・AC が `product-brief.md` の目的や Architectural-Invariants と矛盾する → AC を書き進めず、ユーザに聞く。Product Brief を先に直すかを決めてもらう（`PDH-AGENTS.md`「PDH の構造」）
+- Why・AC が `product-brief.md` の目的や Architectural Invariants と矛盾する → AC を書き進めず、ユーザに聞く。Product Brief を先に直すかを決めてもらう（`PDH-AGENTS.md`「PDH の構造」）
 - `Dependencies` が終わっていない → 待つか、scope を変えるかを、ユーザに聞く
 - Required-Probes の実行に、課金 API・本番データ・外部への送信が要る → 実行する前にユーザに聞く（`PDH-AGENTS.md`「確認が要るのは判断であって、調査ではない」）
 - 2 回書き直しても、worker が復元できない AC が残る → 残った AC と worker の答えを示して、ユーザに聞く

@@ -184,13 +184,13 @@ finding は、処置の判断で判定と理由まで決めてから、progress 
 |---|---|---|---|---|
 ```
 
-要旨には部品と問題、由来には「由来を記録する」の根拠を書く。頻度は実測か推定か、% か月の回数と根拠を、1 回のコストは誰の何分・いくらかを書く。誤検出や観察も、問題とした場面の頻度とコストを書く（該当しなければ 0 とその理由）。列名は空白も含めて上の表から写す。誤記を訂正するときは、同じ巡の見出しと表に同じ番号の正しい行を追記する。検査と集計は同じ巡・番号の最後の読める行を使い、読めない番号は行として数えない。番号は読めて他の欄が崩れた行は、同じ番号の正しい行を後から追記するまで検査が止まる。HTML コメント内は記録に数えず、印のある ticket は done へ移した後も同じ読み方を使う。判定のセルには いま直す / 受け入れる / 起票する / 記録だけ残す / 棄却する のいずれかだけを書く。判断の理由と根拠は要旨か表の後ろに finding の識別子を添えて残す。承認者にもこの 5 列の表をそのまま見せる。
+要旨には部品と問題、由来には「処置の判断」の «由来を記録する»の根拠を書く。頻度は実測か推定か、% か月の回数と根拠を、1 回のコストは誰の何分・いくらかを書く。誤検出や観察も、問題とした場面の頻度とコストを書く（該当しなければ 0 とその理由）。列名は空白も含めて上の表から写す。誤記を訂正するときは、同じ巡の見出しと表に同じ番号の正しい行を追記する。検査と集計は同じ巡・番号の最後の読める行を使い、読めない番号は行として数えない。番号は読めて他の欄が崩れた行は、同じ番号の正しい行を後から追記するまで検査が止まる。HTML コメント内は記録に数えず、印のある ticket は done へ移した後も同じ読み方を使う。判定のセルには いま直す / 受け入れる / 起票する / 記録だけ残す / 棄却する のいずれかだけを書く。判断の理由と根拠は要旨か表の後ろに finding の識別子を添えて残す。承認者にもこの 5 列の表をそのまま見せる。
 
 `scripts/check-pdh-ticket.sh` は現行の表の «頻度と 1 回のコスト» が空なら落とす。旧 8 列の表は書き換えないが、認めるのはこの検査が入る前に作った ticket だけである — それより後に作った ticket の progress に現行 5 列の表が 1 つも無ければ落ちるので、次の巡から 5 列で追記する。`bash scripts/pdh-review-tally.sh` は現行表の判定と巡を数える。出荷後の欠陥は、別 ticket の由来の `持ち込み: <commit>` と `上流 <commit>` の SHA だけを読み、件名の `[ticket 名]` で done の ticket を指す行を数える（棄却と観察を除く。同じ行が同じ ticket を複数回指しても 1 件）。集計する ticket を指定するときは起票元と欠陥を記録した後続の両方を含める。
 
 過去の欠陥と対照の評価セットは、`bash scripts/pdh-review-eval.sh --cases <cases.json> --measured`（1 件だけなら `--case <id>`）で reviewer ごとに測る。評価の実行は CI に入れない。
 
-判定が `起票する` の行は、close の前に同じ欠陥を検索し、`./ticket.sh new` で新しく作るか既存へ集約するかで行き先を確定する（下の「同じ欠陥の ticket があるとき」）。GitHub の issue を起票先にする project では、`github-bot/_github-issue.md`「review の finding を issue にする」の手順に従う。そのうえで note の `## Checklist` に `- [ ] 起票: <anchor> → <ticket 名>` を 1 行書く。`scripts/check-pdh-ticket.sh` が `→` の後の名前の ticket が `tickets/` か `tickets/done/` に実在するかを確かめ、`require_checklist` が未了の間 close を拒否する。
+判定が `起票する` の行は、close の前に同じ欠陥を検索し、`./ticket.sh new` で新しく作るか既存へ集約するかで行き先を確定する（下の「同じ欠陥の ticket があるとき」）。GitHub の issue を起票先にする project では、`.github/coding-bot/_github-issue.md`「review の finding を issue にする」の手順に従う。そのうえで note の `## Checklist` に `- [ ] 起票: <anchor> → <ticket 名>` を 1 行書く。`scripts/check-pdh-ticket.sh` が `→` の後の名前の ticket が `tickets/` か `tickets/done/` に実在するかを確かめ、`require_checklist` が未了の間 close を拒否する。
 
 #### 制約の受け入れの記録
 
@@ -217,7 +217,7 @@ finding は、処置の判断で判定と理由まで決めてから、progress 
 
 #### 同じ欠陥の ticket があるとき
 
-この規則の目的: 同じ欠陥の ticket が増えず、違う欠陥が既存の ticket に吸い込まれないこと。新しく作る前に、tickets と tickets/done を検索する（GitHub の issue を起票先にする project では、issue も。`github-bot/_github-issue.md`）。
+この規則の目的: 同じ欠陥の ticket が増えず、違う欠陥が既存の ticket に吸い込まれないこと。新しく作る前に、tickets と tickets/done を検索する（GitHub の issue を起票先にする project では、issue も。`.github/coding-bot/_github-issue.md`）。
 
 - 同じかどうかは、原因・対象（anchor）・期待する修正の 3 つが同じかで決める。症状が似ているだけでは同じにしない
 - 同じ ticket が見つかったら、その状態で分ける
@@ -226,7 +226,7 @@ finding は、処置の判断で判定と理由まで決めてから、progress 
   - 中止（CANCELED）・却下 — 中止した理由を読む。理由がいまも当てはまるなら新しく作らず、当てはまらなくなったなら、その差を書いて新しく作る
   - 重複として閉じた — 重複先の ticket をたどり、その状態で上の分け方を当てる
 - 集約するとき、ほかの ticket のファイル（ticket・note・progress）は書き換えない。その ticket の担当の作業と競合するからである。証拠と anchor は起票元の progress に書き、Checklist の `起票:` の行で結ぶ。その ticket を拾う人は、`git grep -n '起票:.*→ <ticket 名>'` で tickets と tickets/done から集約された finding を見つける
-- 共有するコード（別の repo が持つライブラリ・配布物）の欠陥は、修正を持つ repo へ起票するのが基本である。手元の repo には、その起票先への参照を残す（GitHub の issue なら `github-bot/_github-issue.md`「review の finding を issue にする」）
+- 共有するコード（別の repo が持つライブラリ・配布物）の欠陥は、修正を持つ repo へ起票するのが基本である。手元の repo には、その起票先への参照を残す（GitHub の issue なら `.github/coding-bot/_github-issue.md`「review の finding を issue にする」）
 
 この PDH-stage の最後に、下の「出力」を確かめる。
 

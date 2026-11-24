@@ -4,7 +4,7 @@ HTML を選んだときだけ読む。**HTML は 1 枚に文書とスライド�
 
 ## kit を埋め込む
 
-`kit/tokens.css` + `kit/board.css`（デッキはさらに `kit/deck.css`）を `<style>` へ、`kit/page.js` + `kit/board.js`（デッキは `kit/deck.js` + `kit/board.js`）を body の後の `<script>` へ、この順でインラインに埋め込む（`page.js` は目次・現在地。目次を置かない decision-board では省いてよい）。**発行先は外部への通信を遮断するため、CSS / JS / 画像は link や CDN ではなく 1 枚の HTML へ埋める。**
+`kit/tokens.css` + `kit/board.css`（デッキはさらに `kit/deck.css`）を `<style>` へ、`kit/page.js` + `kit/board.js`（デッキは `kit/deck.js` + `kit/board.js`）を body の後の `<script>` へ、この順でインラインに埋め込む（`page.js` は目次・現在地。目次を置かない decision-board では省いてよい）。**外部への通信を遮断する発行先では、CSS / JS / 画像は link や CDN ではなく 1 枚の HTML へ埋める。**
 
 **必ず kit を使うのは回答 UI（`board.js`）だけである。`board.js` をその場で改変しない** — 足りない機能は «何が足りなかったか» を報告する。**それ以外の見た目の CSS / JS は decision-board ごとに設計して書いてよい。**自分で書く場合は、色・寸法を token の 1 か所で持ち、明るいテーマと暗いテーマの両方で読め、狭い画面で横 overflow が無いようにする（**色の定義を media query の中«だけ»に置かない**）。
 

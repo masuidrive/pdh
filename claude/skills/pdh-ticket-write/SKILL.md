@@ -106,7 +106,7 @@ AC には得たい結果（回数の上限など）を書き、手段（«取り
 
 ### 作り方の判断と対象外を書く
 
-- `Architectural-Invariants-check` には、`product-brief.md` の `Architectural-Invariants` と矛盾しないことを 1 行で宣言する
+- `Architectural-Invariants-check` には、`product-brief.md` の `Architectural Invariants` と矛盾しないことを 1 行で宣言する
 - `Design-Decisions` には、作り方の判断と理由を書く。変更の影響範囲（区切り方は `CLAUDE.md` が決める。例: backend・frontend・SDK・docs）もここに挙げる
 - `Out-of-scope` には、この ticket でやらないことを書く
 
@@ -170,7 +170,7 @@ test -z "$(git status --porcelain -- "$ticket_dir")"
 
 ## 例外
 
-- 要望が `product-brief.md` の Architectural-Invariants と矛盾する、または Product Brief の前提が崩れている → ticket を書き進めず、ユーザに確認する。Product Brief を先に直す（`PDH-AGENTS.md`「PDH の構造」）
+- 要望が `product-brief.md` の Architectural Invariants と矛盾する、または Product Brief の前提が崩れている → ticket を書き進めず、ユーザに確認する。Product Brief を先に直す（`PDH-AGENTS.md`「PDH の構造」）
 - 決めないと AC が書けない判断が残る → note の `Open-Questions` に書いたうえで、ユーザに聞く。聞き方と再開は `pdh-pm`「中断するときと再開するとき」に従う
 - 添付・リンクされた資料が開けない（権限が無い・リンクが切れている）→ 資料が決めていることを推測で埋めず、開けないことと AC・範囲への影響を note の `Open-Questions` に書き、直ちにユーザに聞く。実装前の承認まで質問を保留しない。答えに依存しない調査だけは続けてよい。聞き方と再開は `pdh-pm`「中断するときと再開するとき」に従う
 - `./ticket.sh new` か`pdh-ticket-write`「機械で確かめるもの」のコマンドが失敗する → 原因を調べる。解決できなければユーザに聞く
