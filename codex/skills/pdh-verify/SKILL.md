@@ -1,6 +1,6 @@
 ---
 name: pdh-verify
-description: "PM 専用。PDH-verify で読む。出荷する commit で AC と consumer surface が実際に動くことを、QA Engineer・AC 裏取り・Surface Observer に証拠で確かめさせ、close 前 review を回す。各 worker の手順は .claude/agents/ の pdh-qa.md・pdh-ac-verifier.md・pdh-surface-observer.md の本文にある。"
+description: "PM 専用。PDH-verify で読む。出荷する commit で AC と consumer surface が実際に動くことを、QA Engineer・AC 裏取り・Surface Observer に証拠で確かめさせ、close 前 review を回す。各 worker の手順は .codex/agents/pdh-qa.toml・.codex/agents/pdh-ac-verifier.toml・.codex/agents/pdh-surface-observer.toml の本文にある。"
 ---
 
 # PDH-verify
