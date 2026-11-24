@@ -71,6 +71,7 @@ FNR == 1 { state=0; round="" }
   if (line ~ /^review-sha:/) {
     sub(/^[^:]*:[[:space:]]*/, "", line)
     if (match(line, /^[0-9a-fA-F]+/) && RLENGTH>=7 && RLENGTH<=40) {
+      review_records[FILENAME]++
       sha=tolower(substr(line,1,RLENGTH)); key=FILENAME SUBSEP sha
       if (!sha_seen[key]++) rounds[FILENAME]++
     }
@@ -134,7 +135,7 @@ END {
     n=sorted(round_seen, keys)
     for (i=1; i<=n; i++) {
       split(keys[i], parts, SUBSEP)
-      printf "%s\t%d\t%d\t%d\n", parts[2], original[keys[i]], current[keys[i]], rounds[parts[1]]
+      printf "%s\t%d\t%d\t%d\n", parts[2], original[keys[i]], current[keys[i]], review_records[parts[1]]
     }
     exit
   }

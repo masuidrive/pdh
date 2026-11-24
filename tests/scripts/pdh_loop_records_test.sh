@@ -61,6 +61,9 @@ make_note review
 printf '<!-- pdh-review-loop: 1 -->\n' >> "$note"
 make_progress 8
 expect 0 'AC4 before next round'
+printf '\nreview-sha: %s\n' "$sha" >> "$progress"
+expect 1 'AC4 next round on same SHA'
+make_progress 8
 printf '\nreview-sha: 1234567\n' >> "$progress"
 expect 1 'AC4 next round'
 # 旧 note は同じ記録でも新しい検査を要求しない。

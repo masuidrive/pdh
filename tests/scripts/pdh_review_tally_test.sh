@@ -90,8 +90,8 @@ contains '| beta | 1 |'
 section=${output##*'### ticket ごとの出荷後の欠陥'}
 [[ "$section" == *'| beta | 1 |'* && "$section" == *'| alpha | 0 |'* ]] || fail "$section"
 expect 0 '照らし直しの件数は同じ表の parser を使う' bash scripts/pdh-review-tally.sh --round-counts --ticket 'work items/alpha'
-contains $'PDH-review-1\t0\t1\t2'
-contains $'PDH-review-3\t1\t1\t2'
+contains $'PDH-review-1\t0\t1\t3'
+contains $'PDH-review-3\t1\t1\t3'
 printf 'PASS: AC12 shipped defect count=1 (duplicate SHA and rejected finding excluded)\n'
 printf 'tickets_dir: absent\n' > .ticket-config.yaml
 expect 2 'tickets_dir の欠落' bash scripts/pdh-review-tally.sh
