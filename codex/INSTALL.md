@@ -278,7 +278,7 @@ done < tmp/pdh/codex/lock-map.tsv
 
 上の `rm -rf` は lock-map に列挙した PDH skill だけを置き換える。`.agents/skills/` 全体や、`pdh-` で始まらない user skill / agent 定義は削除しない。
 
-github-bot レイヤーを導入済み（`.github/workflows/` に coding-bot の workflow がある。改名前の配置も含む）なら、先に [改名手順](../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)と同文書の「導入先固有の secret」を確認し、該当する移行と確認コマンドの再実行を行う。その後、PDH 保守分（下の 4 つ）も同じく上流の版で置き換える。
+github-bot レイヤーを導入済み（`.github/workflows/` に coding-bot の workflow がある。改名前の配置も含む）なら、先に [改名手順](../github-bot/INSTALL.md#既知の移行手順-coding-robot-を-coding-bot-に改名する2026-09-27-以降)と`github-bot/INSTALL.md`「既知の移行手順: 導入先固有の secret を `CODING_BOT_ENV_JSON` へ移す（2026-09-27 以降）」を確認し、該当する移行と確認コマンドの再実行を行う。その後、PDH 保守分（下の 4 つ）も同じく上流の版で置き換える。
 
 ⚠ **残りの machinery は «diff してから» 反映する** — `.github/coding-bot/system.md` `_issue.md` `_pr.md` `run-action.sh` `engines/`、`.github/workflows/coding-bot*.yml`、`.devcontainer/`。**丸ごと上書きしない。**導入先はここを意図して変えていることがある（repo 固有の規則を書いた節・action の SHA 固定・timeout・既存 devcontainer とのマージ結果）。⚠ **2026-09-17 に所有者が変わってから、この節は «触らない» ではなくなった** — それまでは外部 repo からの vendoring で「この手順では触らない」ものだったので、導入先の書き足しも自動的に守られていた。**いまは守られない。**
 
@@ -680,7 +680,7 @@ progress・引用（`>` の行とコードブロック）・説明文の中の�
 
 ### 3.5 close 済みでない ticket
 
-close 済みでない（todo / doing）ticket は、見出しの改名など AC の中身に触れない変更だけを一括で揃える。**AC の書き方が変わっても、AC は一括で書き直さない** — その ticket に着手するときの `PDH-ticket-review` で 1 件ずつ直し、`PDH-ticket-human-review` で承認を受ける（`PDH-AGENTS.md`「Stage Flow」）。`tickets/done/` は触らない。
+close 済みでない（todo / doing）ticket は、見出しの改名など AC の中身に触れない変更だけを一括で揃える。**AC の書き方が変わっても、AC は一括で書き直さない** — その ticket に着手するときの `PDH-ticket-review` で 1 件ずつ直し、`PDH-ticket-human-review` で承認を受ける（`PDH-AGENTS.md`「PDH-flow」）。`tickets/done/` は触らない。
 
 ### 4. commit ID と結果を検査する
 

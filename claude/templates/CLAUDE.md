@@ -40,8 +40,8 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 
 ## テスト
 
-- **完了報告前のテスト実行ルールは `PDH-AGENTS.md`「Reporting」に従う**（未実行での完了報告禁止。コマンド未インストール・依存不足・環境エラーも「テスト失敗」とみなす）。ここには project 固有のテストコマンドと確認観点だけを書く
-- **完了判定に使う「動作確認」の基準は pdh-coding-engineer agent「動作確認 gate」に従う。** 実データ + 終端操作で確認し、stub での pass を完了としない
+- **完了報告前のテスト実行ルールは `PDH-AGENTS.md`「文章と報告」に従う**（未実行での完了報告禁止。コマンド未インストール・依存不足・環境エラーも「テスト失敗」とみなす）。ここには project 固有のテストコマンドと確認観点だけを書く
+- **完了判定に使う「動作確認」の基準は `.claude/agents/pdh-coding-engineer.md`「動作確認の検査」に従う。** 実データ + 終端操作で確認し、stub での pass を完了としない
 
 <!-- プロジェクトに合わせてテストコマンドを記述すること -->
 
@@ -50,7 +50,7 @@ tickets/                    # Ticket（実行作業。ticket.sh が管理）
 `scripts/test-all.sh` で全テストスイートを一括実行できる。`--parallel` で並列実行可。
 
 - **段階的実行を推奨**: まず高速なテスト（例: `pytest -x -q`）で早期フィードバックを得る → 修正があれば対応 → 全スイートは `scripts/test-all.sh` で一括実行
-- **E2E 実環境確認の証拠要件は `PDH-AGENTS.md`「Browser And Surface Checks」に従う**（ビルド成功・テストパスだけで完了としない）
+- **E2E 実環境確認の証拠要件は `.claude/agents/pdh-surface-observer.md`「証拠と commit SHA」と「観察」に従う**（ビルド成功・テストパスだけで完了としない）
 
 ### テスト設計ルール
 
