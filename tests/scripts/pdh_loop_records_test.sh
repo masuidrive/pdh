@@ -135,6 +135,9 @@ printf '%s\n' "$choice" >> "$progress"
 expect 0 'later readable append corrects the key'
 printf -- '- 収束の選択: PDH-review-1 の説明である\n' >> "$progress"
 expect 0 'prose bullet is not a record'
+make_progress 1
+printf -- '- %s\n' "$choice" >> "$progress"
+expect 0 'complete bullet is a record' 
 make_note close
 printf '<!-- pdh-effect: 1 -->\n' >> "$note"
 make_progress 1

@@ -504,6 +504,7 @@ check_loop_records() {
       if (section && /^- \[[xX]\] S8 PDH-review-[0-9]+[[:space:]]/) done[$4]=1
       next
     }
+    { sub(/^- /, "") }
     /^収束の選択: PDH-review-[0-9]+[[:space:]]+部品=/ {
       round=$2; line=$0; component=""
       sub(/^収束の選択: PDH-review-[0-9]+[[:space:]]+部品=/, "", line)
