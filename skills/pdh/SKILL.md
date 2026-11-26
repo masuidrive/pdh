@@ -5,8 +5,11 @@ description: Product Brief にある製品の利用場面を実装し、実際�
 
 # Brief の利用場面を完成させる
 
+PM（親エージェント）が全体の進行を担う。各ステップの結果を人間（依頼者）に報告し、続けて次の作業に着手する。人の判断が必要なときは会話で質問し、回答を待つ間も独立した作業を進める。
+
 ```mermaid
 flowchart TD
+    subgraph flow["PM が進めるチケット"]
     agree["agree-scope<br/>利用者に約束する結果を決める"]
     plan["plan-tests<br/>試す操作と期待結果を決める"]
     build["implement-change<br/>利用者の入口から動くようにする"]
@@ -21,7 +24,12 @@ flowchart TD
     review -->|反例で違反を確認| build
     ready -.->|初回 hold| verify
     verify -.->|再確認の証拠がそろった| ready
-    ready -->|ready 通過| close
+    end
+    human["人間（依頼者）"]
+    flow -.->|各ステップの結果を報告・必要な判断を質問| human
+    ready -->|作業内容・証拠・対象版を提示| human
+    human -->|対象版の close を承認| close
+    human -->|実装の差し戻し| build
 ```
 
 新規の実装は `agree-scope` から始める。再開時は `./ticket.sh start <名前>` で既存の worktree に戻り、`progress.md` と候補版の証拠から、残っているステップを続ける。worktree のリンクは `./ticket.sh restore` で復元できる。実行履歴についての質問なら、記録を読んで答える。
@@ -105,7 +113,7 @@ flowchart TD
 
 **目的**　利用者が確認できた版について、人が完了を判断する。
 
-**作業**　候補版・証拠・残る制約を示し、その版の完了承認を求める。差し戻しなら理由に対応するステップへ戻る。
+**作業**　`ready` が通ったら、PM はその場で利用者ができるようになったこと、候補版、確認の証拠、残る制約を伝え、その版の完了承認を求める。差し戻しなら理由に対応するステップへ戻る。
 
 **成果物と終了条件**　対象版への明示の承認を得たら、返答と版を `progress.md` に記録して commit する。チケットの worktree で `./ticket.sh close` を実行し、成功したら完了。通常の close は `ready` を呼ぶ。
 
