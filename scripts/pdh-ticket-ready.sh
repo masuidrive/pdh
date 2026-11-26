@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.."
 
 command=ready
 if [[ ${1:-} == decision ]]; then
@@ -30,4 +30,4 @@ if [[ ! "$agreed" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
     printf '%s\n' "$work/progress.md: commit one '- 初回合意 | <full SHA>' entry before close." >&2
     exit 1
 fi
-exec python3 scripts/pdh.py "$command" "$work" "$agreed" "$@"
+exec python3 pdh/scripts/pdh.py "$command" "$work" "$agreed" "$@"

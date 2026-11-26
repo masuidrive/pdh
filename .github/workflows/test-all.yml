@@ -24,5 +24,5 @@ jobs:
           python-version: "3.12"
       - name: Install script test dependencies
         run: python3 -m pip install "PyYAML>=6,<7"
-      - name: scripts/test-all.sh
-        run: bash scripts/test-all.sh
+      - name: tools/test-all.sh
+        run: bash tools/test-all.sh

@@ -15,17 +15,21 @@ git -C "$project" status --short
 
 旧テンプレートの由来をGit履歴で照合するため、配布元は履歴を含めて取得する。適用前に表示された対象を読み、適用後の再検査で変更予定が空であることを確かめる。配布元の版と導入差分をプロジェクトのGitに記録する。製品の目的と完了条件は `product-brief.md`、製品の通常試験は `scripts/test-all.sh` に用意する。必要な開発環境やテスト用の接続先は各製品の手順に従う。
 
-## ファイルを配置する
+## 導入後の配置
 
-| 配布元 | プロジェクトで使う入口 |
+配布元の指定コミットで追跡するファイルを、同じ相対パス・内容・実行権限で製品の `pdh/` に配置する。導入先の Git がこれらを通常のファイルとして管理する。製品を clone した人は、同じコミットの製品と PDH をそのまま使える。
+
+| 導入先 | 用途 |
 |---|---|
-| `shared/.claude/skills/pdh/` | Claude Code の `.claude/skills/pdh` と Codex の `.agents/skills/pdh`。実装と試験のプロンプト・手法の索引を含む |
-| `shared/.claude/skills/pdh-update/` | 両方のエンジンの `pdh-update` |
-| `shared/ticket.sh`、`shared/.ticket-config.yaml` | `ticket.sh new/start/restore/decision/close` と新しいチケットの帳票 |
-| `shared/pdh-flow.md` | プロジェクトの指示から読む共通スキルの入口 |
-| `shared/tickets/PDH.md` | チケットの操作、試験結果の記録、独立検収 |
-| `shared/scripts/` | 検収・試験・チケット名の確認。共通ゲートは `scripts/pdh-checks/` |
-| `install.py`、`migration.py` | 配布元で実行。プロジェクトの入口・設定・既存チケットを確認して適用 |
+| `pdh/skills/pdh/`、`pdh/skills/pdh-update/` | 両エンジンが使うスキルの原本 |
+| `.claude/skills/`、`.agents/skills/` | それぞれの `pdh` と `pdh-update` が原本を指す相対シンボリックリンク |
+| `pdh/scripts/`、`pdh/checks/` | チケットの実行・検収と共通チェック |
+| `pdh/AGENTS.md`、`pdh/CLAUDE.md` | 管理範囲と配布元に修正を反映する手順 |
+| `ticket.sh`、`.ticket-config.yaml`、`pdh-flow.md` | 製品ルートから使う入口。原本は配布元の `integration/` |
+| `.pdh-install.lock` | 配布元の版と導入ファイルの記録 |
+| `product-brief.md`、`tickets/`、`scripts/test-all.sh` | 製品側で管理する目的・チケット・通常試験 |
+
+配布元の開発用テストや GitHub coding-bot の原本も `pdh/` に含まれる。製品で bot を有効化する手順は [bot の導入ガイド](github-bot/INSTALL.md) にある。
 
 ## 既知の移行手順
 

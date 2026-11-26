@@ -5,7 +5,7 @@ auto_push: false
 delete_remote_on_close: false
 default_content: |
   [完了条件](scope.md)
-pre_close_command: "bash scripts/pdh-ticket-ready.sh"
+pre_close_command: "bash pdh/scripts/pdh-ticket-ready.sh"
 ticket_files:
   - path: scope.md
     content: |

@@ -6,7 +6,7 @@ target=$(mktemp -d)
 trap 'rm -rf "$target"' EXIT
 cp -R "$root/github-bot/.github" "$target/.github"
 cp "$root/github-bot/"{pdh-hooks.sh,_pdh.md,_github-issue.md} "$target/.github/coding-bot/"
-cp "$root/shared/ticket.sh" "$target/"
+cp "$root/integration/ticket.sh" "$target/"
 mkdir -p "$target/tests"
 cp -R "$root/tests/scripts" "$target/tests/"
 # These scripts are already installed in projects running the stage-based bot.

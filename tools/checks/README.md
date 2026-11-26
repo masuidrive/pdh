@@ -1,7 +1,7 @@
-# scripts/checks — fast-check registry
+# tools/checks — fast-check registry
 
 Each `*.check` file here is one declarative, deterministic invariant check run by
-`scripts/fast-checks.sh` (wired into `scripts/test-all.sh` as a cheap first stage,
+`tools/fast-checks.sh` (wired into `tools/test-all.sh` as a cheap first stage,
 and typically into CI). A fast-check is a **super-lightweight, language-agnostic
 lint rule**: it greps the repo for one forbidden pattern, rejects files that
 exceed a declared line-count ceiling, delegates the selected files to a

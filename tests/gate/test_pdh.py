@@ -36,10 +36,12 @@ class GateTest(unittest.TestCase):
         self.write("scripts/test-all.sh", "#!/usr/bin/env bash\nexit 0\n")
         self.write("scripts/pdh.py", '# Previous gate\nREAGREEMENT_FORMAT = ()\n')
         self.agreed = self.commit("Original agreement")
-        (self.repo / "scripts/pdh-checks").mkdir()
-        for script in ("scripts/pdh.py", "scripts/check_ticket_name.py",
-                       "scripts/pdh-checks/ticket-name.sh", "scripts/pdh-checks/check-headers.sh",
-                       "scripts/pdh-checks/verify-checklist.sh"):
+        (self.repo / "pdh/checks").mkdir(parents=True)
+        (self.repo / "pdh/scripts").mkdir()
+        (self.repo / "scripts/pdh.py").unlink()
+        for script in ("pdh/scripts/pdh.py", "pdh/scripts/check_ticket_name.py",
+                       "pdh/checks/ticket-name.sh", "pdh/checks/check-headers.sh",
+                       "pdh/checks/verify-checklist.sh"):
             shutil.copyfile(ROOT / script, self.repo / script)
         self.record_progress(f"当初の合意は {self.agreed}。\n")
         self.commit("Record original agreement")
@@ -62,7 +64,7 @@ class GateTest(unittest.TestCase):
 
     def gate(self, command, *, success=True):
         result = subprocess.run(
-            [sys.executable, "scripts/pdh.py", command, self.ticket, self.agreed],
+            [sys.executable, "pdh/scripts/pdh.py", command, self.ticket, self.agreed],
             cwd=self.repo,
             capture_output=True,
             text=True,
@@ -173,7 +175,7 @@ class GateTest(unittest.TestCase):
         }
         for path, expected in cases.items():
             with self.subTest(path=path):
-                result = subprocess.run([sys.executable, "scripts/check_ticket_name.py", path],
+                result = subprocess.run([sys.executable, "pdh/scripts/check_ticket_name.py", path],
                                         cwd=self.repo, capture_output=True)
                 self.assertEqual(result.returncode, expected, result.stderr)
 
@@ -219,7 +221,7 @@ class GateTest(unittest.TestCase):
         self.write(f"{self.ticket}/scope.md", f"- {CRITERION}\n")
         self.write(f"{self.ticket}/checklist.md", CHECKED)
         self.write("tickets/ignore.md", "- custom\n")
-        check = "scripts/pdh-checks/verify-arguments.sh"
+        check = "pdh/checks/verify-arguments.sh"
         header = '# 検査: 渡された引数を記録する。\n# 理由: 呼び出し規約を確認する。\n'
         self.write(check, header + 'printf "%s %s\\n" "$1" "$2" >> .git/check-runs\n')
         self.agreed = self.commit("Add a check alongside the ticket-name check")
@@ -254,7 +256,7 @@ class GateTest(unittest.TestCase):
         self.gate("ready")
 
     def test_check_headers_reject_missing_empty_or_misplaced_explanations(self):
-        path = "scripts/pdh-checks/check-headers.sh"
+        path = "pdh/checks/check-headers.sh"
         script = (self.repo / path).read_text()
         shebang, rule, reason, body = script.split("\n", 3)
         for header in ([shebang, rule], [rule, "# 理由:   "], [reason, rule], [":", rule, reason]):
@@ -319,17 +321,20 @@ class GateTest(unittest.TestCase):
                 self.gate("test", success=False)
 
     def test_ticket_started_with_previous_gate_reads_previous_approval(self):
-        script = "scripts/pdh.py"
-        checker = "scripts/check_ticket_name.py"
-        entry = "scripts/pdh-checks/ticket-name.sh"
+        script = "pdh/scripts/pdh.py"
+        checker = "pdh/scripts/check_ticket_name.py"
+        entry = "pdh/checks/ticket-name.sh"
         (self.repo / entry).unlink()
         (self.repo / checker).unlink()
-        self.write(script, "# gate from before the re-agreement format change\n")
+        legacy = "scripts/pdh.py"
+        (self.repo / script).unlink()
+        self.write(legacy, "# gate from before the re-agreement format change\n")
         self.agreed = self.commit("Start ticket with the previous gate")
         self.write("product-brief.md", "# Revised brief\n")
         revised = self.commit("Revise brief")
         self.record_reagreement(revised, "改訂を承認", ())
         self.commit("Record approval under the previous format")
+        (self.repo / legacy).unlink()
         shutil.copyfile(ROOT / script, self.repo / script)
         shutil.copyfile(ROOT / checker, self.repo / checker)
         (self.repo / entry).parent.mkdir(exist_ok=True)

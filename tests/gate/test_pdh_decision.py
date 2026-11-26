@@ -13,6 +13,8 @@ from unittest.mock import patch
 
 import test_pdh as fixture
 
+sys.path.insert(0, str(fixture.ROOT / "pdh/scripts"))
+
 
 class DecisionTest(unittest.TestCase):
     git = fixture.GateTest.git
@@ -26,7 +28,7 @@ class DecisionTest(unittest.TestCase):
 
     def setUp(self):
         fixture.GateTest.setUp(self)
-        scripts = ("scripts/pdh_decision.py", "scripts/pdh_judge_api.py", "scripts/pdh-ticket-ready.sh")
+        scripts = ("pdh/scripts/pdh_decision.py", "pdh/scripts/pdh_judge_api.py", "pdh/scripts/pdh-ticket-ready.sh")
         for script in scripts:
             shutil.copyfile(fixture.ROOT / script, self.repo / script)
         transport = self.repo / scripts[1]
@@ -42,8 +44,8 @@ def judge(packet, criteria):
         "next": "担当者に判定を渡す",
     }}
 ''')
-        self.write("scripts/pdh_judge_codex.py", "from pdh_judge_api import judge\n")
-        shutil.copyfile(fixture.ROOT / "scripts/pdh-prose.txt", self.repo / "scripts/pdh-prose.txt")
+        self.write("pdh/scripts/pdh_judge_codex.py", "from pdh_judge_api import judge\n")
+        shutil.copyfile(fixture.ROOT / "pdh/scripts/pdh-prose.txt", self.repo / "pdh/scripts/pdh-prose.txt")
         self.move_ticket()
         self.write("docs/known-limits.md", "# 現在の制約\n")
         self.commit("Install judge with isolated transport")
@@ -62,7 +64,7 @@ def judge(packet, criteria):
 
     def decision(self, *args, verdict="present", success=True):
         result = subprocess.run(
-            [sys.executable, "scripts/pdh.py", "decision", self.ticket, self.agreed, *args],
+            [sys.executable, "pdh/scripts/pdh.py", "decision", self.ticket, self.agreed, *args],
             cwd=self.repo,
             capture_output=True,
             text=True,
@@ -77,7 +79,7 @@ def judge(packet, criteria):
 
     def close_hook(self, *, success):
         result = subprocess.run(
-            ["bash", "scripts/pdh-ticket-ready.sh"],
+            ["bash", "pdh/scripts/pdh-ticket-ready.sh"],
             cwd=self.repo,
             capture_output=True,
             text=True,
@@ -140,8 +142,6 @@ def judge(packet, criteria):
         self.write(results, json.dumps({"rows": [row]}, ensure_ascii=False))
         self.commit("Record coverage")
 
-        sys.path.insert(0, str(fixture.ROOT / "scripts"))
-        self.addCleanup(sys.path.remove, str(fixture.ROOT / "scripts"))
         import pdh_decision
         import pdh_judge_api
 
@@ -309,6 +309,18 @@ def judge(packet, criteria):
         self.gate("ready")
         self.assertEqual(json.loads(self.record.read_text())[-1]["backend"], "codex")
 
+    def test_agreement_with_legacy_judge_path_requires_review_after_move(self):
+        judge = "pdh/scripts/pdh_judge_codex.py"
+        legacy = "scripts/pdh_judge_codex.py"
+        self.git("mv", judge, legacy)
+        self.agreed = self.commit("Agree on scope with the pre-migration judge")
+        self.git("mv", legacy, judge)
+        self.commit("Move the judge into the current namespace")
+        self.refresh_evidence()
+        self.assertIn("decision.json", self.gate("ready", success=False))
+        self.submit()
+        self.gate("ready")
+
     def test_backend_is_bound_to_preview_and_agreement(self):
         self.prepare()
         default_hash = self.preview()
@@ -334,7 +346,7 @@ def judge(packet, criteria):
         row = rows[-1]
         del row["backend"], row["effort"], row["criterion_id"]
         del packet["criteria"]
-        from scripts.pdh_judge_api import INSTRUCTIONS, MODEL
+        from pdh_judge_api import INSTRUCTIONS, MODEL
         def encode(value):
             return json.dumps(value, sort_keys=True, ensure_ascii=False, indent=2)
         def digest(value):

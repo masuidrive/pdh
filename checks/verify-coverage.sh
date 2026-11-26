@@ -3,4 +3,4 @@
 # 理由: 未実施や別の製品版に対する試験で確認済みとすることを防ぐ。
 set -euo pipefail
 [[ ${PDH_PHASE:-ready} != test ]] || exit 0
-exec python3 -B scripts/pdh_coverage.py verify "$1" "$2"
+exec python3 -B pdh/scripts/pdh_coverage.py verify "$1" "$2"

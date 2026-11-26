@@ -5,21 +5,21 @@
 # These artifacts are intentionally not part of scripts/test-all.sh or CI.
 #
 # Usage:
-#   scripts/test-ticket-local.sh                         # infer current ticket
-#   scripts/test-ticket-local.sh <ticket-id>             # explicit ticket
-#   scripts/test-ticket-local.sh <ticket-id> -- <args>   # pass args through
+#   pdh/scripts/test-ticket-local.sh                         # infer current ticket
+#   pdh/scripts/test-ticket-local.sh <ticket-id>             # explicit ticket
+#   pdh/scripts/test-ticket-local.sh <ticket-id> -- <args>   # pass args through
 #
 # Script path resolution (active ticket first, then done):
 #   tickets/<ticket-id>/tests/test-ticket-local.sh
 #   tickets/done/<ticket-id>/tests/test-ticket-local.sh
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/test-ticket-local.sh [ticket-id] [-- ticket-local-args...]
+Usage: ./pdh/scripts/test-ticket-local.sh [ticket-id] [-- ticket-local-args...]
 
 Runs a ticket-local-test script without adding it to scripts/test-all.sh or CI.
 
@@ -78,7 +78,7 @@ ticket_id="${ticket_id#tickets/}"
 ticket_id="${ticket_id%.md}"
 
 if [[ -z "$ticket_id" ]]; then
-  echo "Could not infer ticket id. Pass it explicitly: ./scripts/test-ticket-local.sh <ticket-id>" >&2
+  echo "Could not infer ticket id. Pass it explicitly: ./pdh/scripts/test-ticket-local.sh <ticket-id>" >&2
   exit 2
 fi
 

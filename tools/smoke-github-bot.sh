@@ -11,7 +11,7 @@
 #     （.ticket-config.yaml の github_bot.close は対象 repo 側で合わせておく）
 #
 # Actions の分数と時間（engine により 30〜60 分）を使うので test-all.sh には入れない。
-# usage: scripts/smoke-github-bot.sh <owner/repo> <claude|codex> [title-suffix]
+# usage: tools/smoke-github-bot.sh <owner/repo> <claude|codex> [title-suffix]
 # 依存: gh（対象 repo に issues/PR の write）。engine 変数を書き換えるので、終了時に元へ戻す。
 set -uo pipefail
 R="${1:?owner/repo}"; ENGINE="${2:?claude|codex}"; SUFFIX="${3:-$(date -u +%H%M)}"

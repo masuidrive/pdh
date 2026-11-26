@@ -1,6 +1,6 @@
 # チケット
 
-今回扱う利用場面ごとに `tickets/<名前>/` を作る。着手から完了までの手順は [PDH スキル](../.claude/skills/pdh/SKILL.md) を参照する。
+今回扱う利用場面ごとに `tickets/<名前>/` を作る。着手から完了までの手順は [PDH スキル](skills/pdh/SKILL.md) を参照する。
 
 ## チケットの命名規則
 
@@ -9,7 +9,7 @@
 例は `tickets/261118-103129-export-report/`。新しい名前はディレクトリを作る前に、リポジトリ直下から次のように検査できる。
 
 ```sh
-bash scripts/pdh-checks/ticket-name.sh tickets/261118-103129-export-report
+bash pdh/checks/ticket-name.sh tickets/261118-103129-export-report
 ```
 
 `pdh.py test` と `ready` でも実際のチケットパスを同じ方法で検査する。日時は実在する日付・時刻かを調べる。作成時にその時計がUTCを指していたかは名前からは確認できない。
@@ -22,7 +22,7 @@ bash scripts/pdh-checks/ticket-name.sh tickets/261118-103129-export-report
 
    ```sh
    created_at=$(date -u '+%y%m%d-%H%M%S')
-   bash scripts/pdh-checks/ticket-name.sh "tickets/${created_at}-example" &&
+   bash pdh/checks/ticket-name.sh "tickets/${created_at}-example" &&
      ./ticket.sh new example --created-at "$created_at"
    ```
 
@@ -34,7 +34,7 @@ bash scripts/pdh-checks/ticket-name.sh tickets/261118-103129-export-report
 
 ## チェックスクリプト
 
-チケットごとのACと観察結果はこのディレクトリに残す。全チケットに共通する機械検査は [scripts/pdh-checks/](../scripts/pdh-checks/) 直下の `*.sh` に1規則ずつ置いて commit する。`pdh.py test` と `ready` は、リポジトリ直下からファイル名順に各スクリプトを1回実行する。呼び出しは `bash scripts/pdh-checks/<名前>.sh "$WORK" "$AGREED"`。環境変数 `PDH_PHASE` は呼び出したコマンド（`test` または `ready`）。第1引数は対象チケットの相対パス、第2引数は最初に合意した完全なコミットSHA。成功は終了値0、失敗は理由を標準エラーに出して非0で終了し、その段階で判定を止める。
+チケットごとのACと観察結果は製品の `tickets/<名前>/` に残す。全チケットに共通する機械検査は [pdh/checks/](checks/) 直下の `*.sh` に1規則ずつ置いて commit する。`pdh.py test` と `ready` は、リポジトリ直下からファイル名順に各スクリプトを1回実行する。呼び出しは `bash pdh/checks/<名前>.sh "$WORK" "$AGREED"`。環境変数 `PDH_PHASE` は呼び出したコマンド（`test` または `ready`）。第1引数は対象チケットの相対パス、第2引数は最初に合意した完全なコミットSHA。成功は終了値0、失敗は理由を標準エラーに出して非0で終了し、その段階で判定を止める。
 
 各スクリプトの先頭に次の2行をこの順で書く。shebang（`#!/usr/bin/env bash` など）を使う場合はその直後に置く。
 
@@ -43,9 +43,9 @@ bash scripts/pdh-checks/ticket-name.sh tickets/261118-103129-export-report
 # 理由: その状態を見逃すと誰が何に困るか。
 ```
 
-[check-headers.sh](../scripts/pdh-checks/check-headers.sh) が自分自身を含めて両行の位置・順番・本文の有無を検査する。説明と実装が一致するかはコードレビューで確かめる。
+[check-headers.sh](checks/check-headers.sh) が自分自身を含めて両行の位置・順番・本文の有無を検査する。説明と実装が一致するかはコードレビューで確かめる。
 
-`tickets/ignore.md` を参照するのは [ticket-name.sh](../scripts/pdh-checks/ticket-name.sh) だけ。各チケットの実機確認や製品の試験は、ここには登録しない。
+`tickets/ignore.md` を参照するのは [ticket-name.sh](checks/ticket-name.sh) だけ。各チケットの実機確認や製品の試験は、ここには登録しない。
 
 ## 独立検収
 
@@ -54,7 +54,7 @@ bash scripts/pdh-checks/ticket-name.sh tickets/261118-103129-export-report
 1. チケットの worktree で `./ticket.sh decision` を実行する。チケットと初回合意の SHA を自動で特定する。標準出力が送信する資料の全文、標準エラーが送信に指定する SHA-256。ローカルで確認する。新方式ではシナリオ対応表・実行結果・指定した試験ソースも渡す。共通の対象は Brief、scope、evidence、checklist、suite-pass、docs/known-limits.md（存在時）、当該 ticket tests と製品差分、該当コミットの件名・版。再合意時は元の約束と再合意行も含む。画像は送られない。画像で観察したことは evidence.md に書く。送信先は OpenAI。会話本文・識別情報・資格情報など送れない内容が含まれるときは送信を止め、機密を含まない証拠に整えるか人に戻す。
 2. 確認した同じコマンドに `--send <表示されたSHA-256>` を付ける。既定は Codex の ChatGPT ログインで `gpt-6.2-astra`、effort `medium` の独立セッションを1回使う。Linux の bubblewrap、ログイン済みの Codex CLI、ファイル形式の認証が必要。必要ならネイティブ実行ファイルを `PDH_CODEX_BIN` で指定できる。Responses API を選ぶときは最初のプレビューと送信に `--backend responses` を付ける。同じ合意の途中で実行方式は変えず、利用枠不足や通信失敗は人に返す。判定には合意したACごとに番号を振り、モデルは候補から1つ選ぶ。スクリプトが番号とAC原文を対応付け、両方を `$WORK/decision.json` に残す。保留時も記録を commit する。同じ資料と指示に対する保存済みの判定は再利用する。通信失敗・不正な応答では新しい判定は記録されない。
 3. 保留なら、記録にあるACと指摘の操作を一度確かめる。ACに反すれば修正、ACが成立する制約なら影響・回避・再判断条件を known-limits に残す。該当ACまたは反例の観察を evidence.md に具体的に書き直し、変更を commit して再確認する。再確認でも保留ならそこで人に戻す。同じACのまま再開するよう人が明示した場合だけ、progress.md に `- 独立検収再開 | 直前のreceipt_sha256 | 人の回答と再開理由` を記録・commit する。この回答はその保留に対してだけ有効で、再実行には新しい観察が必要。合意を変える場合は、維持案と変更案の得失を示して再承認を取る。
-4. `python3 scripts/pdh.py ready "$WORK" "$AGREED"` と通常の `./ticket.sh close` は通信せず、commit 済み判定の入力・結果を照合する。今回の版に対応する `present` があれば人に提出できる。人の完了承認は引き続き必要。ハッシュは版の照合に使う。APIの署名や人の承認を証明するものではない。
+4. `python3 pdh/scripts/pdh.py ready "$WORK" "$AGREED"` と通常の `./ticket.sh close` は通信せず、commit 済み判定の入力・結果を照合する。今回の版に対応する `present` があれば人に提出できる。人の完了承認は引き続き必要。ハッシュは版の照合に使う。APIの署名や人の承認を証明するものではない。
 
 ## 試験計画
 
@@ -72,8 +72,8 @@ PMは実装前にBrief・scopeと同じ利用場面の既存試験、分かっ�
 1. **利用場面で試す。** 着手時に合意するのはscopeの完了条件。起票で用意した `tests/coverage.tsv` は見出しだけのまま、まず既存の試験や新しく必要な試験でシナリオを実行する。チケットのパスを `WORK` とし、次のように結果を収集する。例はpytest。テストコードは先にcommitする。
 
    ```sh
-   python3 scripts/pdh_coverage.py collect "$WORK" --source tests/test_export.py -- pytest tests/test_export.py --junitxml={junit}
-   python3 scripts/pdh_coverage.py observe "$WORK" print-layout 'この版で行った操作、比較相手、実測結果'
+   python3 pdh/scripts/pdh_coverage.py collect "$WORK" --source tests/test_export.py -- pytest tests/test_export.py --junitxml={junit}
+   python3 pdh/scripts/pdh_coverage.py observe "$WORK" print-layout 'この版で行った操作、比較相手、実測結果'
    ```
 
 2. **実測から対応を付ける。** 合意したscopeの箇条書きを上から `C1`、`C2` と数え、実際に確かめた場面をタブ区切りで `tests/coverage.tsv` に書く。試験名はランナーのJUnit XMLの `classname::name`（classnameが空ならname）。一つの試験で複数のACを確認できる。下は記入例。
@@ -85,7 +85,7 @@ PMは実装前にBrief・scopeと同じ利用場面の既存試験、分かっ�
    C2	紙に出した帳票の可読性	manual	print-layout
    ```
 
-3. **不足を埋める。** 各ACの約束に対して結果が足りるかを見直し、未確認の場面だけ追加で試す。対応表をcommitして `python3 scripts/pdh_coverage.py bind "$WORK"` を実行すると、保存された試験結果を実施版付きで結び付ける。表の記入だけで同じ操作を再実行する必要はない。
+3. **不足を埋める。** 各ACの約束に対して結果が足りるかを見直し、未確認の場面だけ追加で試す。対応表をcommitして `python3 pdh/scripts/pdh_coverage.py bind "$WORK"` を実行すると、保存された試験結果を実施版付きで結び付ける。表の記入だけで同じ操作を再実行する必要はない。
 
 自動実行は初回から `collect` 経由で行う。以前に端末へ出したPASS表示だけを後から取り込むことはできない。収集中の一覧はそのworktreeのGit管理領域に置き、検収に使う行だけをチケットに保存する。ランナーがJUnitで成功・失敗の両方を報告した場合、成功したケースの観測を保持し、コマンドの失敗も返す。試験が別ファイルのアサーションを使うときは、そのファイルも `--source` で渡す。独立検収には対象のソースと実行引数を送るので、資格情報や会話本文が入っていないことをプレビューで確かめる。手動行にはその版で実際に観察した事実を書く。以前の実機観察は実施版とともにevidenceに残し、新しい版で未実施なら未確認とする。
 
@@ -97,5 +97,5 @@ PMは実装前にBrief・scopeと同じ利用場面の既存試験、分かっ�
 - `progress.md` に、合意の基点となる完全な commit SHA、作業の経緯、中断時の次の一手、人による完了承認を記録する。
 - `evidence.md` に、条件ごとの観察と反例確認の結果を記録する。
 - `checklist.md` に定性的な判断を1項目1行で書く。見出しと空行でまとめてよい。作業中は `- [ ] 確認事項`。確認済みは `- [x] 確認事項`、対象外は `- [-] 確認事項` とし、直下に半角スペース2個で字下げした `根拠: …` を1行書く。確認済みなら観察と判断、対象外なら理由を書く。詳しい観察は evidence.md の該当箇所を指せる。記録を commit してから `ready` を実行する。
-- 再実行する ticket test は、実行できるコードとして `tests/` に保存する。チケットの worktree では `./current_ticket/tests/` から使える。実行可能な `tests/test-ticket-local.sh` を置けば、`./scripts/test-ticket-local.sh` が作業中のチケットを選んで実行する。チケット名を引数で渡せば完了済みのチケットも指定できる。専用スクリプト・実データ操作の結果は機微データを除いて `evidence.md` に残す。手動で足りる場合は手順も書く。close 後も検査する application test は製品の通常スイートに置く。
+- 再実行する ticket test は、実行できるコードとして `tests/` に保存する。チケットの worktree では `./current_ticket/tests/` から使える。実行可能な `tests/test-ticket-local.sh` を置けば、`./pdh/scripts/test-ticket-local.sh` が作業中のチケットを選んで実行する。チケット名を引数で渡せば完了済みのチケットも指定できる。専用スクリプト・実データ操作の結果は機微データを除いて `evidence.md` に残す。手動で足りる場合は手順も書く。close 後も検査する application test は製品の通常スイートに置く。
 - `suite-pass` には、全体試験に通った版が記録される。

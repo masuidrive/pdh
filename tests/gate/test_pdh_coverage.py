@@ -21,7 +21,7 @@ class CoverageTest(unittest.TestCase):
         self.result = self.repo / self.ticket / "coverage-results.json"
         self.header = "ac\tscenario\tkind\ttest\n"
         self.rows = self.header + "C1\topen\tauto\tcase\nC1\trefresh\tmanual\treader\n"
-        for rel in ["scripts/pdh_coverage.py", "scripts/pdh-checks/verify-coverage.sh"]:
+        for rel in ["pdh/scripts/pdh_coverage.py", "pdh/checks/verify-coverage.sh"]:
             shutil.copyfile(fixture.ROOT / rel, self.repo / rel)
         # Isolated report generator exercises the boundary to heterogeneous JUnit runners.
         self.source = self.ticket + "/tests/runner.py"
@@ -34,7 +34,7 @@ sys.exit(int(os.environ.get("EXIT", 0)))
         self.commit("Install coverage gate")
 
     def cli(self, *args, ok=True, env=None):
-        proc = subprocess.run([sys.executable, "-B", "scripts/pdh_coverage.py", *args],
+        proc = subprocess.run([sys.executable, "-B", "pdh/scripts/pdh_coverage.py", *args],
                               cwd=self.repo, capture_output=True, text=True,
                               env={**os.environ, **(env or {})})
         self.assertEqual(proc.returncode == 0, ok, proc.stdout + proc.stderr)
@@ -162,6 +162,21 @@ sys.exit(int(os.environ.get("EXIT", 0)))
     def test_new_agreement_requires_matrix(self):
         self.agreed = self.git("rev-parse", "HEAD")
         self.assertIn(self.matrix, self.verify(ok=False))
+
+    def test_agreement_with_legacy_check_path_requires_coverage_after_move(self):
+        check = "pdh/checks/verify-coverage.sh"
+        legacy = "scripts/pdh-checks/verify-coverage.sh"
+        (self.repo / legacy).parent.mkdir()
+        self.git("mv", check, legacy)
+        self.agreed = self.commit("Agree while coverage lives at the pre-migration path")
+        self.git("mv", legacy, check)
+        self.commit("Move the coverage check into the current namespace")
+        self.assertIn(self.matrix, self.verify(ok=False))
+
+        (self.repo / check).unlink()
+        self.commit("Delete the coverage check")
+        self.assertIn("agreed coverage check is missing",
+                      fixture.GateTest.gate(self, "ready", success=False))
 
     def test_unmapped_and_duplicate_results(self):
         self.prepare()

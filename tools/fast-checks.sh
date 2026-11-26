@@ -2,7 +2,7 @@
 # fast-checks.sh — declarative, deterministic invariant checks for PDH projects.
 #
 # A "fast-check" is a super-lightweight, language-agnostic lint rule: one forbidden
-# pattern per file under scripts/checks/*.check. It is NOT a general style linter
+# pattern per file under tools/checks/*.check. It is NOT a general style linter
 # (that is tsc/eslint/ruff, run separately); it encodes institutional memory —
 # "this exact bad pattern shipped once, never again" — as a cheap grep the whole
 # team's CI runs on every change, in the same deterministic gate as the type
@@ -12,7 +12,7 @@
 # NOTE: the npm library `fast-check` (property-based testing) is a DIFFERENT thing
 # that only shares the name. This script is a bash grep runner, not that library.
 #
-# Each scripts/checks/<id>.check is key=value:
+# Each tools/checks/<id>.check is key=value:
 #   reason=<human explanation printed on failure>   (required)
 #   glob=<dir>/** or <dir>/**/*.<ext>[,<more>]      (required, comma-separated;
 #                                                    not used by required_paths)
@@ -24,7 +24,7 @@
 #   required_paths=<exact repo-relative file paths that must exist>
 # A source line may opt out with a `checks-allow: <id>` comment (token-bounded).
 #
-# See scripts/checks/README.md for the format in full.
+# See tools/checks/README.md for the format in full.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

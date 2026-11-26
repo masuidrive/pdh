@@ -5972,7 +5972,7 @@ cmd_decision() {
     yaml_parse "$CONFIG_FILE" || return 1
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
-    if [[ ! -f scripts/pdh-ticket-ready.sh ]]; then
+    if [[ ! -f pdh/scripts/pdh-ticket-ready.sh ]]; then
         echo "Error: This project does not provide PDH decision." >&2
         return 1
     fi
@@ -5983,7 +5983,7 @@ cmd_decision() {
         work="$tickets_dir/$ticket_name"
         if [[ -f "$work/ticket.md" ]] &&
            [[ "$(ticket_branch_name "$work/ticket.md" "$branch_prefix" "$ticket_name")" == "$current_branch" ]]; then
-            bash scripts/pdh-ticket-ready.sh decision "$work" "$@"
+            bash pdh/scripts/pdh-ticket-ready.sh decision "$work" "$@"
             return $?
         fi
     fi
@@ -6003,14 +6003,18 @@ pdh_requires_feature_close() {
     local agreed
     agreed=$(git show "HEAD:$work/progress.md" 2>/dev/null | sed -n 's/^- 初回合意 | //p')
     if [[ "$agreed" =~ ^([a-f0-9]{40}|[a-f0-9]{64})$ ]]; then
-        if git cat-file -e "$agreed:scripts/pdh_judge_codex.py" 2>/dev/null ||
+        if git cat-file -e "$agreed:pdh/scripts/pdh_judge_codex.py" 2>/dev/null ||
+           git cat-file -e "$agreed:scripts/pdh_judge_codex.py" 2>/dev/null ||
            git grep -q -x '## 独立検収' "$agreed" -- "$scope" 2>/dev/null; then
             return 0
         fi
     fi
     local created
     created=$(git log --diff-filter=A --format=%H -- "$ticket_file" | tail -n 1)
-    [[ -n "$created" ]] && git cat-file -e "$created:scripts/pdh_judge_codex.py"
+    [[ -n "$created" ]] && {
+        git cat-file -e "$created:pdh/scripts/pdh_judge_codex.py" 2>/dev/null ||
+        git cat-file -e "$created:scripts/pdh_judge_codex.py" 2>/dev/null
+    }
 }
 
 # Finalize a ticket without merging (close --no-merge).
@@ -6206,7 +6210,8 @@ EOF
     fi
 
     if [[ "$_gated" == "false" && "$is_new_format" == "true" &&
-          "$pre_close_command" == "bash scripts/pdh-ticket-ready.sh" ]] &&
+          ( "$pre_close_command" == "bash pdh/scripts/pdh-ticket-ready.sh" ||
+            "$pre_close_command" == "bash scripts/pdh-ticket-ready.sh" ) ]] &&
        pdh_requires_feature_close "$ticket_file"; then
         echo "Error: PDH independent acceptance requires $SCRIPT_COMMAND close in the ticket's feature worktree." >&2
         echo "Nothing was closed." >&2

@@ -32,7 +32,7 @@ def check_ticket_name(work: str, root: Path) -> None:
             entry = line.strip()
             if entry and not entry.startswith("#") and entry.removeprefix("- ") == name:
                 return
-    raise ValueError(f"{work!r}: expected tickets/YYMMDD-HHMMSS-<slug>; see tickets/PDH.md")
+    raise ValueError(f"{work!r}: expected tickets/YYMMDD-HHMMSS-<slug>; see pdh/USAGE.md")
 
 
 def main() -> int:
@@ -40,7 +40,7 @@ def main() -> int:
     parser.add_argument("ticket", help="repository-relative ticket directory")
     args = parser.parse_args()
     try:
-        check_ticket_name(args.ticket.removesuffix("/"), Path(__file__).resolve().parents[1])
+        check_ticket_name(args.ticket.removesuffix("/"), Path(__file__).resolve().parents[2])
     except (OSError, ValueError) as error:
         parser.exit(1, f"{error}\n")
     print(f"Ticket name OK: {args.ticket}")

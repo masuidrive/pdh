@@ -15,11 +15,13 @@ class GateError(Exception):
     pass
 
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 SHA = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 # Older approvals retain the record format in use when they were committed.
 REAGREEMENT_FORMAT = ("変更を提案する根拠", "維持案の得失", "変更案の得失", "人の明示回答")
-PROSE = "scripts/pdh-prose.txt"
+SCRIPTS = "pdh/scripts"
+CHECKS = "pdh/checks"
+PROSE = f"{SCRIPTS}/pdh-prose.txt"
 BRIEF = "product-brief.md"
 TICKET_NAME_EXCEPTIONS = "tickets/ignore.md"
 RECORDS = ("scope.md", "evidence.md", "checklist.md", "suite-pass", "progress.md", "decision.json", "coverage-results.json")
@@ -32,6 +34,15 @@ def git(*args):
     if result.returncode:
         raise GateError(result.stderr.decode(errors="replace").strip() or f"git {args[0]} failed")
     return result.stdout
+
+
+def tracked_at(revision, *paths):
+    # Tracked capabilities stay in force regardless of where PDH lived at agreement.
+    # If both locations exist, use the current namespace for the source.
+    for path in paths:
+        if git("ls-tree", "--name-only", revision, "--", path):
+            return path
+    return None
 
 
 def ancestor(older, newer):
@@ -116,8 +127,9 @@ def revised_agreement(work, agreed, head):
         if len(fields) == 4:
             recorded = git("blame", "--porcelain", "-L", f"{number},{number}", head, "--", progress)
             approval_commit = recorded.split(maxsplit=1)[0].decode("ascii")
-            if git("ls-tree", "--name-only", approval_commit, "--", "scripts/pdh.py"):
-                previous_gate = git("show", f"{approval_commit}:scripts/pdh.py")
+            gate_path = tracked_at(approval_commit, f"{SCRIPTS}/pdh.py", "scripts/pdh.py")
+            if gate_path:
+                previous_gate = git("show", f"{approval_commit}:{gate_path}")
                 legacy = b"\nREAGREEMENT_FORMAT = " not in previous_gate
         if ((len(fields) != 3 + len(REAGREEMENT_FORMAT) and not legacy) or not all(fields) or fields[0] != "- 再合意"
                 or fields[1] != agreed or fields[2] == revision):
@@ -150,18 +162,19 @@ def coverage_required(work, agreed, head):
     locations = [f"{work}/tests/coverage.tsv"]
     if work.startswith("tickets/"):
         locations.append(f"work/{Path(work).name}/tests/coverage.tsv")
-    return bool(git("ls-tree", agreed, "--", "scripts/pdh-checks/verify-coverage.sh")
-                or git("log", "-1", "--format=%H", head, "--", *locations))
+    agreed_check = tracked_at(agreed, f"{CHECKS}/verify-coverage.sh",
+                              "scripts/pdh-checks/verify-coverage.sh")
+    return bool(agreed_check or git("log", "-1", "--format=%H", head, "--", *locations))
 
 
 def run_ticket_checks(work, agreed, head, command):
     environment = {**os.environ, "PDH_PHASE": "ready" if command == "decision" else command}
     if command == "decision":
         environment.pop("OPENAI_API_KEY", None)
-    checks_dir = Path("scripts/pdh-checks")
+    checks_dir = Path(CHECKS)
     files = git("ls-tree", "-r", "--name-only", "-z", head, "--", str(checks_dir))
     coverage = command != "test" and coverage_required(work, agreed, head)
-    if coverage and b"scripts/pdh-checks/verify-coverage.sh" not in files.split(b"\0"):
+    if coverage and os.fsencode(checks_dir / "verify-coverage.sh") not in files.split(b"\0"):
         raise GateError("the agreed coverage check is missing")
     for name in sorted(path for path in files.split(b"\0") if path):
         path = Path(os.fsdecode(name))
@@ -326,8 +339,8 @@ def run(command, work, agreed, send=None, backend=None):
             if check_tree(work, agreed)[0] != head:
                 raise GateError("HEAD changed during readiness validation")
             named_ticket = ticket_tests_prefix(work) is not None
-            standard_review = named_ticket and git("ls-tree", "--name-only", agreed, "--",
-                                                   "scripts/pdh_judge_codex.py")
+            standard_review = named_ticket and tracked_at(agreed, f"{SCRIPTS}/pdh_judge_codex.py",
+                                                          "scripts/pdh_judge_codex.py")
             selected_review = "## 独立検収" in (directory / "scope.md").read_text(encoding="utf-8").splitlines()
             if command == "decision" and not (standard_review or selected_review):
                 raise GateError("以前のチケットで独立検収を使うには scope.md の再合意が必要です")

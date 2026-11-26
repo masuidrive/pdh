@@ -27,14 +27,14 @@
 .devcontainer/Dockerfile  docker-compose.yml  devcontainer.json
 ```
 
-⚠ **`_pdh.md` はここに置かない。**PDH mode の定義は `github-bot/_pdh.md`（親ディレクトリ）が持ち、INSTALL がそれを `.github/coding-bot/_pdh.md` として配る。github-bots にも同名ファイルがあったが、旧 stage 名を使う古い版なので取り込んでいない。`scripts/check-github-bot.sh` が「ここに `_pdh.md` が無いこと」を検査する。
+⚠ **`_pdh.md` はここに置かない。**PDH mode の定義は `github-bot/_pdh.md`（親ディレクトリ）が持ち、INSTALL がそれを `.github/coding-bot/_pdh.md` として配る。github-bots にも同名ファイルがあったが、旧 stage 名を使う古い版なので取り込んでいない。`tools/check-github-bot.sh` が「ここに `_pdh.md` が無いこと」を検査する。
 
 同じ理由で、PDH 側が持ち続けるものが 3 つある — `_github-issue.md`（issue が会話面であることの定義）・`pdh-hooks.sh`（run の終わりに progress・ラベル・承認導線・待ち行を保証する hook）・`pdh-gh-pull/`（端末から issue を読む skill）。
 
 ## 設計上の決め事（消さないこと）
 
 - **`.devcontainer/devcontainer.json` の `workspaceFolder` は `/workspaces/project` 固定である。**repo 名（`${localWorkspaceFolderBasename}`）にすると、compose 側の `/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-project}` が env 未設定で `project` へ落ちたときに食い違い、`devcontainer exec` が «no such file or directory» で落ちる。**実測**: smoke（`pdh-ghbot-smoke`）の 1 回目がこの mismatch で失敗し、固定にした 2 回目が成功した。
-- **`run-action.sh` は最終レポートの投稿直前に `$SCRIPT_DIR/pdh-hooks.sh final` を通す。**hook が無い環境では何もしない。`scripts/check-github-bot.sh` がこの呼び出し行を守る。
+- **`run-action.sh` は最終レポートの投稿直前に `$SCRIPT_DIR/pdh-hooks.sh final` を通す。**hook が無い環境では何もしない。`tools/check-github-bot.sh` がこの呼び出し行を守る。
 - **branch への push は `CODING_BOT_GH_PAT`（fine-grained PAT）で行う。**`GITHUB_TOKEN` で押すと、その SHA の `pull_request` run が `action_required`（承認待ち）になり、人が «Approve and run» を押すまで走らない。run の最後の push がこれだと、**PR は «緑にできない» 状態で人に渡る。**
 
 - **coding-bot は compose を直接起動する。**prebuilt があればビルドせず、無ければ Dockerfile から作る。features に依存せず、テンプレートの Dockerfile が runner の共通ツールを入れる。

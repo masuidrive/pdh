@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "pdh/scripts"))
 import pdh_judge_codex as codex
 from pdh_judge_api import COVERAGE_INSTRUCTIONS, ID_INSTRUCTIONS
 

@@ -44,14 +44,14 @@ class TicketIntegrationTest(unittest.TestCase):
             self.run_command(base, "git", "config", "user.name", "PDH Test")
             self.run_command(base, "git", "config", "user.email", "pdh@example.invalid")
             self.run_command(base, "git", "config", "commit.gpgsign", "false")
-            for name in ("ticket.sh", ".gitignore", "tickets/.gitignore", "scripts/pdh.py",
-                         "scripts/pdh-ticket-ready.sh", "scripts/pdh_decision.py", "scripts/pdh_coverage.py",
-                         "scripts/pdh_judge_api.py", "scripts/pdh-prose.txt",
-                         "scripts/check_ticket_name.py", "scripts/test-ticket-local.sh"):
+            for name in ("ticket.sh", ".gitignore", "tickets/.gitignore", "pdh/scripts/pdh.py",
+                         "pdh/scripts/pdh-ticket-ready.sh", "pdh/scripts/pdh_decision.py", "pdh/scripts/pdh_coverage.py",
+                         "pdh/scripts/pdh_judge_api.py", "pdh/scripts/pdh-prose.txt",
+                         "pdh/scripts/check_ticket_name.py", "pdh/scripts/test-ticket-local.sh"):
                 target = base / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / name, target)
-            shutil.copytree(ROOT / "scripts/pdh-checks", base / "scripts/pdh-checks")
+            shutil.copytree(ROOT / "pdh/checks", base / "pdh/checks")
             self.write(base, ".ticket-config.yaml",
                        config + 'post_start_command: "echo run >> .post-start"\n')
             (base / "current_ticket").symlink_to((ROOT / "current_ticket").readlink())
@@ -60,7 +60,7 @@ class TicketIntegrationTest(unittest.TestCase):
             self.write(base, "scripts/test-all.sh", "exit 0\n")
             verdict = {"verdict": "present", "criterion": CRITERION,
                        "reason": "結果が表示された", "next": "承認を依頼する"}
-            self.write(base, "scripts/pdh_judge_codex.py",
+            self.write(base, "pdh/scripts/pdh_judge_codex.py",
                        f"def judge(packet, criteria):\n    assert {CRITERION!r} in packet\n    return {verdict!r}\n")
             self.commit(base, "Set up isolated PDH")
             self.run_command(base, "./ticket.sh", "new", "pdh-close",
@@ -111,18 +111,18 @@ class TicketIntegrationTest(unittest.TestCase):
                 "direct\n",
             )
             self.assertEqual(
-                self.run_command(worktree, "./scripts/test-ticket-local.sh", "--", "active"),
+                self.run_command(worktree, "./pdh/scripts/test-ticket-local.sh", "--", "active"),
                 "active\n",
             )
 
             self.write(worktree, WORK / "checklist.md", "- [ ] 確認する。\n")
             revision = self.commit(worktree, "Add a repeatable ticket test")
-            self.run_command(worktree, sys.executable, "scripts/pdh.py", "test", str(WORK), agreed)
-            self.run_command(worktree, sys.executable, "scripts/pdh_coverage.py", "observe", str(WORK),
+            self.run_command(worktree, sys.executable, "pdh/scripts/pdh.py", "test", str(WORK), agreed)
+            self.run_command(worktree, sys.executable, "pdh/scripts/pdh_coverage.py", "observe", str(WORK),
                              "一覧の表示", "一覧に結果の名前が表示された")
             self.write(worktree, table, header + "C1\t一覧を開く\tmanual\t一覧の表示\n")
             self.commit(worktree, "Map the observed result to the agreement")
-            self.run_command(worktree, sys.executable, "scripts/pdh_coverage.py", "bind", str(WORK))
+            self.run_command(worktree, sys.executable, "pdh/scripts/pdh_coverage.py", "bind", str(WORK))
             self.write(worktree, WORK / "evidence.md",
                        f"- {CRITERION} | {revision} | 専用試験で結果が表示された\n"
                        f"\n## 反例確認\n- 問題なし | {revision} | 再読込 | 結果が残った | 継続\n")
@@ -161,6 +161,6 @@ class TicketIntegrationTest(unittest.TestCase):
             closed = self.run_command(worktree, "./ticket.sh", "close")
             self.assertIn("Evidence and full suite recorded", closed)
             self.assertEqual(
-                self.run_command(base, "./scripts/test-ticket-local.sh", TICKET, "--", "archived"),
+                self.run_command(base, "./pdh/scripts/test-ticket-local.sh", TICKET, "--", "archived"),
                 "archived\n",
             )

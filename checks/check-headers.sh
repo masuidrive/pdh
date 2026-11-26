@@ -4,8 +4,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-git ls-tree --name-only -z HEAD:scripts/pdh-checks | while IFS= read -r -d '' name; do
-    path="scripts/pdh-checks/$name"
+git ls-tree --name-only -z HEAD:pdh/checks | while IFS= read -r -d '' name; do
+    path="pdh/checks/$name"
     [[ $name == *.sh ]] || continue
     if [[ -L $path ]]; then
         echo "$path: expected a regular check script" >&2

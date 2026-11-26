@@ -1,4 +1,4 @@
 # Catches leftover Git merge-conflict markers committed by accident.
 reason=leftover Git merge-conflict marker committed
 pattern=^(<<<<<<<|>>>>>>>)
-glob=scripts/**,shared/**,github-bot/**
+glob=scripts/**,checks/**,tools/**,integration/**,skills/**,github-bot/**

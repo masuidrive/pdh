@@ -8,4 +8,4 @@
 - 人が検収結果を読み、対象の版を明示してチケットを閉じられる。
 - Claude Code と Codex CLI で同じ手順を使え、継続中の製品に固有の開発手順や通常試験を保って更新できる。
 
-[現在の手順](shared/.claude/skills/pdh/SKILL.md) · [stage 版当時の Product Brief](https://github.com/masuidrive/pdh/blob/5bd6cf936e4f69bc8dd18fc443d7074ee3f7dd41/product-brief.md)
+[現在の手順](skills/pdh/SKILL.md) · [stage 版当時の Product Brief](https://github.com/masuidrive/pdh/blob/5bd6cf936e4f69bc8dd18fc443d7074ee3f7dd41/product-brief.md)

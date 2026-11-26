@@ -1,6 +1,7 @@
 """Exercise the release's ordinary installer and its ticket entrypoints."""
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -8,8 +9,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
+FORMER_RELEASE = "cc95056cc1cd59958fbbcf1125e3c9d1eb21161e"
 CONFIG = """default_branch: "trunk"
 branch_prefix: "features/"
 repository: "product-remote"
@@ -60,9 +63,11 @@ class InstallerTest(unittest.TestCase):
         self.work = Path(self.scratch.name)
         self.release = self.work / "release"
         self.release.mkdir()
-        for name in ("install.py", "migration.py"):
+        for name in ("install.py", "migration.py", "README.md", "USAGE.md"):
             shutil.copyfile(ROOT / name, self.release / name)
-        shutil.copytree(ROOT / "shared", self.release / "shared")
+        for name in ("integration", "scripts", "checks", "skills"):
+            shutil.copytree(ROOT / name, self.release / name, symlinks=True,
+                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         self.init_repo(self.release)
         template = self.release / "claude/templates/.ticket-config.yaml"
         self.write(template, CONFIG)
@@ -108,6 +113,17 @@ class InstallerTest(unittest.TestCase):
         self.assertEqual(result.returncode, expect, result.stdout + result.stderr)
         return result
 
+    def install_former(self, *, real_agents=False):
+        former = self.work / "former-release"
+        former.mkdir()
+        archive = subprocess.check_output(["git", "-C", str(ROOT), "archive", FORMER_RELEASE])
+        subprocess.run(["tar", "-xf", "-"], cwd=former, input=archive, check=True)
+        if real_agents:
+            (self.project / ".agents/skills/pdh").mkdir(parents=True)
+        subprocess.run([sys.executable, str(former / "install.py"), "--target", str(self.project)],
+                       check=True, capture_output=True)
+        self.commit(self.project, "install the previous shared distribution")
+
     def ticket(self, *args, extra=None):
         return subprocess.run(
             ["bash", "ticket.sh", *args], cwd=self.project, capture_output=True, text=True,
@@ -145,8 +161,11 @@ class InstallerTest(unittest.TestCase):
         self.assertEqual(checked.stdout, self.install().stdout)
         self.assertIn('default_branch: "trunk"', (self.project / ".ticket-config.yaml").read_text())
         self.assertEqual(os.readlink(self.project / "current_ticket"), "current-ticket")
-        self.assertEqual(os.readlink(self.project / ".agents/skills/pdh"), "../../.claude/skills/pdh")
-        self.assertEqual(os.readlink(self.project / ".agents/skills/pdh-update"), "../../.claude/skills/pdh-update")
+        for engine in (".agents", ".claude"):
+            for skill in ("pdh", "pdh-update"):
+                alias = self.project / engine / "skills" / skill
+                self.assertEqual(os.readlink(alias), f"../../pdh/skills/{skill}")
+                self.assertTrue((alias / "SKILL.md").is_file())
         self.assertTrue(os.access(self.project / "ticket.sh", os.X_OK))
         self.assertEqual((self.project / "tickets/README.md").read_text(), "Product-specific ticket notes.\n")
         self.assertEqual((self.project / "scripts/checks/product.sh").read_text(), "local check\n")
@@ -162,12 +181,13 @@ class InstallerTest(unittest.TestCase):
     def test_versions_update_only_owned_bytes(self):
         self.install()
         self.commit(self.project, "install")
-        new = self.release / "shared/.claude/skills/pdh/SKILL.md"
+        new = self.release / "skills/pdh/SKILL.md"
         new.write_text(new.read_text() + "\nA second release.\n")
-        config = self.release / "shared/.ticket-config.yaml"
+        config = self.release / "integration/.ticket-config.yaml"
         config.write_text(config.read_text().replace("## 独立検収", "## 独立検収\n      New shared template line"))
+        self.commit(self.release, "update the distribution")
         checked = self.install("--check").stdout
-        self.assertIn("update\t.claude/skills/pdh/SKILL.md", checked)
+        self.assertIn("update\tpdh/skills/pdh/SKILL.md", checked)
         self.assertIn("update\t.ticket-config.yaml", checked)
         self.install()
         self.assertIn("New shared template line", (self.project / ".ticket-config.yaml").read_text())
@@ -230,7 +250,7 @@ worktree_copy_files:
         configuration = (self.project / ".ticket-config.yaml").read_text()
         self.assertIn('post_start_command: "printf preparing"', configuration)
         self.assertIn('repository: "product-remote"', configuration)
-        self.assertIn('pre_close_command: "bash scripts/pdh-ticket-ready.sh"', configuration)
+        self.assertIn('pre_close_command: "bash pdh/scripts/pdh-ticket-ready.sh"', configuration)
         self.assertIn('require_checklist_groups:', (self.project / ".pdh-legacy/ticket-config.yaml").read_text())
         self.assertTrue((self.project / "tickets" / name / "ticket.md").is_file())
         self.assertFalse((self.project / ".pdh-legacy/tickets").exists())
@@ -267,8 +287,162 @@ worktree_copy_files:
         self.commit(self.project, "simulate missing scope and edited marker")
         result = self.ticket("close", "--dry-run", "--no-push", extra={"PDH_USE_LEGACY_TICKETS": "1"})
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("bash scripts/pdh-ticket-ready.sh", result.stdout)
+        self.assertIn("bash pdh/scripts/pdh-ticket-ready.sh", result.stdout)
         self.assertNotIn("legacy-pre-close", result.stdout)
+
+    def test_installs_the_committed_git_snapshot_with_modes_and_links(self):
+        self.write(self.release / "tools/pdh-extra", "#!/bin/sh\nexit 0\n", 0o755)
+        (self.release / "tools/pdh-link").symlink_to("pdh-extra")
+        self.write(self.release / ".github/pdh-example.md", "downstream must get tracked files\n")
+        self.commit(self.release, "commit all fixture paths")
+        self.write(self.release / "tools/pdh-extra", "local source edit\n")
+        self.write(self.release / "tools/untracked", "untracked source data\n")
+        self.install()
+        paths = self.run_git(self.release, "ls-tree", "-r", "--name-only", "HEAD").splitlines()
+        snapshot = self.project / "pdh"
+        observed = sorted(path.relative_to(snapshot).as_posix()
+                          for path in snapshot.rglob("*") if path.is_file() or path.is_symlink())
+        self.assertEqual(observed, sorted(paths))
+        for name in paths:
+            path = snapshot / name
+            mode = self.run_git(self.release, "ls-tree", "HEAD", "--", name).split()[0]
+            expected = subprocess.check_output(["git", "-C", str(self.release), "show", f"HEAD:{name}"])
+            if mode == "120000":
+                self.assertEqual(os.fsencode(os.readlink(path)), expected)
+            else:
+                self.assertEqual(path.read_bytes(), expected)
+                self.assertEqual(path.stat().st_mode & 0o777, 0o755 if mode == "100755" else 0o644)
+        state = json.loads((self.project / ".pdh-install.lock").read_text())
+        self.assertEqual(state["release"], self.run_git(self.release, "rev-parse", "HEAD").strip())
+        self.assertFalse((snapshot / ".git").exists())
+        self.assertFalse((snapshot / "install.lock").exists())
+        self.assertEqual(self.install("--check").stdout, "PDH already up to date\n")
+
+    def test_previous_shared_installation_removes_only_proven_old_distribution_paths(self):
+        self.install_former(real_agents=True)
+        custom = "scripts/test-ticket-local.sh"
+        self.write(self.project / custom, "#!/bin/sh\nprintf project\n", 0o755)
+        harmless = self.project / "scripts/local-kept.sh"
+        self.write(harmless, "project check\n")
+        known_stage = "scripts/pdh.py"
+        stage_data = (self.project / known_stage).read_bytes()
+        legacy = (
+            f"# upstream: masuidrive/pdh@{self.old_revision}\n"
+            f"{known_stage}\tclaude/templates/pdh.py\t{hashlib.sha256(stage_data).hexdigest()}\n"
+        )
+        self.write(self.project / ".pdh-lock", legacy)
+        evidence = self.project / "tickets/261125-090000-old/evidence.md"
+        self.write(evidence, "Existing signed-off observation\n")
+        self.commit(self.project, "retain project-owned work and legacy inventory")
+        staged = "scripts/pdh_judge_api.py"
+        staged_file = self.project / staged
+        prior_bytes = staged_file.read_bytes()
+        staged_file.write_bytes(b"staged custom edit\n")
+        self.run_git(self.project, "add", staged)
+        staged_file.write_bytes(prior_bytes)
+
+        before = self.run_git(self.project, "status", "--porcelain")
+        check = self.install("--check").stdout
+        self.assertIn("delete\tscripts/pdh_coverage.py\n", check)
+        self.assertIn("delete\tscripts/pdh-checks/ticket-name.sh\n", check)
+        self.assertIn("delete\ttickets/PDH.md\n", check)
+        for preserved in (known_stage, custom, staged):
+            self.assertIn(f"retain\t{preserved}\n", check)
+        self.assertEqual(self.run_git(self.project, "status", "--porcelain"), before)
+        self.assertFalse((self.project / "pdh").exists())
+        self.assertEqual(self.install().stdout, check)
+        self.assertEqual((self.project / ".pdh-lock").read_text(), legacy)
+        self.assertEqual((self.project / known_stage).read_bytes(), stage_data)
+        self.assertIn("printf project", (self.project / custom).read_text())
+        self.assertEqual(staged_file.read_bytes(), prior_bytes)
+        self.assertEqual(self.run_git(self.project, "show", f":{staged}"), "staged custom edit\n")
+        self.assertEqual(evidence.read_text(), "Existing signed-off observation\n")
+        self.assertEqual(harmless.read_text(), "project check\n")
+        self.assertFalse((self.project / "scripts/pdh_coverage.py").exists())
+        self.assertTrue((self.project / "pdh/scripts/pdh_coverage.py").is_file())
+        self.assertEqual(os.readlink(self.project / ".claude/skills/pdh"), "../../pdh/skills/pdh")
+        self.assertEqual(os.readlink(self.project / ".agents/skills/pdh"), "../../pdh/skills/pdh")
+        lock = json.loads((self.project / ".pdh-install.lock").read_text())
+        for preserved in (known_stage, custom, staged):
+            self.assertNotIn(preserved, lock["files"])
+        self.assertEqual(self.install("--check").stdout, "PDH already up to date\n")
+
+    def test_existing_private_skill_file_prevents_alias_swap_without_changes(self):
+        self.install_former(real_agents=True)
+        extra = self.project / ".agents/skills/pdh/project-notes.md"
+        self.write(extra, "private instructions\n")
+        before = self.run_git(self.project, "status", "--porcelain")
+        for flags in (("--check",), ()):
+            stopped = self.install(*flags, expect=1)
+            self.assertIn(".agents/skills/pdh/project-notes.md", stopped.stderr)
+            self.assertEqual(self.run_git(self.project, "status", "--porcelain"), before)
+            self.assertFalse((self.project / "pdh").exists())
+            self.assertEqual(extra.read_text(), "private instructions\n")
+
+    def test_snapshot_retirement_preserves_custom_content(self):
+        self.write(self.release / "tools/old.sh", "old tool\n")
+        self.write(self.release / "tools/editable.sh", "unchanged source\n")
+        self.commit(self.release, "two old paths")
+        self.install()
+        self.commit(self.project, "initial snapshot")
+        custom = self.project / "pdh/tools/editable.sh"
+        self.write(custom, "local project adaptation\n")
+        self.write(self.project / "pdh/project-notes.md", "local notes outside the inventory\n")
+        self.run_git(self.release, "rm", "tools/old.sh", "tools/editable.sh")
+        self.run_git(self.release, "commit", "-m", "drop obsolete tool files")
+
+        result = self.install("--check").stdout
+        self.assertIn("delete\tpdh/tools/old.sh\n", result)
+        self.assertIn("retain\tpdh/tools/editable.sh\n", result)
+        self.assertEqual(self.install().stdout, result)
+        self.assertFalse((self.project / "pdh/tools/old.sh").exists())
+        self.assertEqual(custom.read_text(), "local project adaptation\n")
+        self.assertEqual((self.project / "pdh/project-notes.md").read_text(), "local notes outside the inventory\n")
+        self.assertEqual(self.install("--check").stdout, "PDH already up to date\n")
+
+    def test_rejects_nested_git_data_and_uninitialized_gitlink_before_writing(self):
+        metadata = self.project / "pdh/.git"
+        self.write(metadata, "gitdir: ../unrelated-worktree\n")
+        self.assertIn("without its own Git data", self.install("--check", expect=1).stderr)
+        self.assertEqual(metadata.read_text(), "gitdir: ../unrelated-worktree\n")
+        self.assertFalse((self.project / "ticket.sh").exists())
+        metadata.unlink()
+        metadata.parent.rmdir()
+        project_commit = self.run_git(self.project, "rev-parse", "HEAD").strip()
+        self.run_git(self.project, "update-index", "--add", "--cacheinfo", f"160000,{project_commit},pdh")
+        self.assertIn("contains a Git submodule", self.install("--check", expect=1).stderr)
+        self.run_git(self.project, "commit", "-m", "track a gitlink")
+        self.run_git(self.project, "rm", "--cached", "pdh")
+        self.assertIn("contains a Git submodule", self.install(expect=1).stderr)
+        self.assertFalse((self.project / "pdh").exists())
+        self.assertFalse((self.project / "ticket.sh").exists())
+
+    def test_apply_failure_restores_removed_assets_and_real_skill_directory(self):
+        from install import File, Plan, read_file
+
+        former = "scripts/obsolete-pdh.sh"
+        skill = ".agents/skills/pdh"
+        self.write(self.project / former, "removed only on success\n")
+        self.write(self.project / skill / "SKILL.md", "skill backup\n")
+        plan = Plan(self.project)
+        plan.add(former, None, read_file(self.project, former))
+        plan.add(skill, File(b"../../pdh/skills/pdh", 0, True), read_file(self.project, skill, directory_ok=True))
+        plan.add("simulate-write-failure", File(b"new"), None)
+        import install
+        put = install._put
+
+        def fail_last(path, file, directories):
+            if path.name == "simulate-write-failure":
+                raise OSError("injected write failure")
+            return put(path, file, directories)
+
+        with patch("install._put", side_effect=fail_last):
+            with self.assertRaisesRegex(OSError, "injected write failure"):
+                plan.apply()
+        self.assertEqual((self.project / former).read_text(), "removed only on success\n")
+        self.assertFalse((self.project / skill).is_symlink())
+        self.assertEqual((self.project / skill / "SKILL.md").read_text(), "skill backup\n")
+        self.assertFalse(list(self.project.glob(".pdh-install-backup-*")))
 
 
 if __name__ == "__main__":

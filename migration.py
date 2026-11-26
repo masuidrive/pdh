@@ -1,6 +1,7 @@
 """Prepare the agent entrypoints while retaining a project's own instructions."""
 from pathlib import Path
 import hashlib
+import json
 import re
 
 ENTRY = "pdh-flow.md"
@@ -8,6 +9,49 @@ IMPORT_ROUTE = f"@{ENTRY}"
 MARKER = "<!-- pdh-workflow -->"
 IMPORT = re.compile(r"^@(\S+)")
 GENERATED = "<!-- この file は scripts/gen-agents-md.sh が CLAUDE.md から作る。"
+COMMAND = re.compile(r'("command"\s*:\s*)("(?:[^"\\]|\\.)*")')
+SESSION_HELPER = r"scripts/pdh-session-(?:hook|context)\.sh(?=$|[\s\"';|&)])"
+
+
+def invoked_session_helper(command, target):
+    project_root = (
+        r"(?:\$CLAUDE_PROJECT_DIR|\$\{CLAUDE_PROJECT_DIR\}|\$PWD|\$\{PWD\}|"
+        r"\$\(git rev-parse --show-toplevel\)|" + re.escape(str(target)) + ")"
+    )
+    rooted = re.sub(rf"({project_root}/){SESSION_HELPER}",
+                    r"\1pdh/scripts/pdh-session-context.sh", command)
+    return re.sub(rf"(^|[\s\"';|&])((?:\./)?){SESSION_HELPER}",
+                  r"\1\2pdh/scripts/pdh-session-context.sh", rooted)
+
+
+def hook_commands(value, path=()):
+    if isinstance(value, dict):
+        for name, child in value.items():
+            if name == "command" and isinstance(child, str):
+                yield path[:2] == ("hooks", "SessionStart"), child
+            yield from hook_commands(child, (*path, name))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from hook_commands(child, (*path, index))
+
+
+def migrate_session_hooks(text, target):
+    if "pdh-session-hook.sh" not in text and "pdh-session-context.sh" not in text:
+        return text
+    parsed = list(hook_commands(json.loads(text)))
+    commands = [invoked_session_helper(command, target) if session else command
+                for session, command in parsed]
+    if commands == [command for _, command in parsed]:
+        return text
+    # Replace just the selected JSON values. Other hook commands and project
+    # settings keep their original spelling, escaping and formatting.
+    matches = list(COMMAND.finditer(text))
+    if [json.loads(match[2]) for match in matches] != [command for _, command in parsed]:
+        raise ValueError("cannot identify the SessionStart hook commands")
+    for match, (_, old), new in reversed(list(zip(matches, parsed, commands))):
+        if old != new:
+            text = text[:match.start(2)] + json.dumps(new, ensure_ascii=False) + text[match.end(2):]
+    return text
 
 
 def routed(text, route, previous=None):
@@ -46,7 +90,7 @@ def expanded(target, source, changed, stack=()):
     return "".join(lines)
 
 
-def plan_migration(target: Path, release: Path, engines: tuple[str, ...]):
+def plan_migration(target: Path, usage: bytes):
     target = target.resolve()
     plan = {}
     changed = {}
@@ -57,7 +101,8 @@ def plan_migration(target: Path, release: Path, engines: tuple[str, ...]):
             if path.resolve() not in (claude, agents) or not path.is_file():
                 raise ValueError(f"unsupported project entrypoint symlink: {path.name}")
     before = claude.read_text() if claude.exists() else ""
-    route = (release / "shared" / ENTRY).read_text().rstrip()
+    entry = usage.decode()
+    route = entry.rstrip()
     installed = target / ENTRY
     previous = installed.read_text().rstrip() if installed.is_file() else None
     if not claude.is_symlink():
@@ -81,19 +126,19 @@ def plan_migration(target: Path, release: Path, engines: tuple[str, ...]):
 
         if render({}) != old_agents:
             raise ValueError("AGENTS.md differs from its inputs; run bash scripts/gen-agents-md.sh first")
-        changed[agents] = render({**changed, target / ENTRY: (release / "shared" / ENTRY).read_text()})
+        changed[agents] = render({**changed, target / ENTRY: entry})
     else:
         changed[agents] = routed(old_agents, route, previous)
     for path, value in changed.items():
         if not path.exists() or value != path.read_text():
             plan[path.name] = value.encode()
 
-    # The previous SessionStart helper only understands stage tickets. Preserve other hooks verbatim.
+    # Old stage and earlier shared releases used the project's scripts directory.
     for name in (".claude/settings.json", ".codex/hooks.json"):
         path = target / name
         if path.is_file():
             old = path.read_text()
-            new = old.replace("/scripts/pdh-session-hook.sh", "/scripts/pdh-session-context.sh")
+            new = migrate_session_hooks(old, target)
             if new != old:
                 plan[name] = new.encode()
     return plan

@@ -1,11 +1,14 @@
 import io
 import json
 import os
+from pathlib import Path
+import sys
 import unittest
 from urllib.error import HTTPError, URLError
 from unittest.mock import patch
 
-from scripts import pdh_judge_api
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "pdh/scripts"))
+import pdh_judge_api
 
 
 PRESENT = {
@@ -40,7 +43,7 @@ class JudgeAPITest(unittest.TestCase):
         self.addCleanup(credentials.stop)
         credentials.start()
 
-    @patch("scripts.pdh_judge_api.build_opener")
+    @patch("pdh_judge_api.build_opener")
     def test_sends_packet_to_independent_structured_judge(self, opener):
         send = opener.return_value.open
         send.return_value = io.BytesIO(json.dumps(response(PRESENT_ID)).encode())
@@ -63,7 +66,7 @@ class JudgeAPITest(unittest.TestCase):
         self.assertNotIn("enum", pdh_judge_api.VERDICT_SCHEMA["properties"]["criterion"])
         self.assertLessEqual(payload["max_output_tokens"], 4096)
 
-    @patch("scripts.pdh_judge_api.build_opener")
+    @patch("pdh_judge_api.build_opener")
     def test_sends_coverage_instructions_when_packet_contains_test_sources(self, opener):
         send = opener.return_value.open
         send.return_value = io.BytesIO(json.dumps(response(PRESENT_ID)).encode())
@@ -73,14 +76,14 @@ class JudgeAPITest(unittest.TestCase):
         self.assertEqual(payload["input"], packet)
         self.assertEqual(payload["instructions"], pdh_judge_api.COVERAGE_INSTRUCTIONS)
 
-    @patch("scripts.pdh_judge_api.build_opener")
+    @patch("pdh_judge_api.build_opener")
     def test_missing_key_skips_network(self, opener):
         del os.environ["OPENAI_API_KEY"]
         with self.assertRaisesRegex(RuntimeError, "OPENAI_API_KEY"):
             pdh_judge_api.judge("checked evidence", CRITERIA)
         opener.assert_not_called()
 
-    @patch("scripts.pdh_judge_api.build_opener")
+    @patch("pdh_judge_api.build_opener")
     def test_network_failure_is_sanitized_and_not_retried(self, opener):
         send = opener.return_value.open
         send.side_effect = URLError("test-key and checked evidence")
@@ -89,7 +92,7 @@ class JudgeAPITest(unittest.TestCase):
         self.assertTrue(error.exception.__suppress_context__)
         send.assert_called_once()
 
-    @patch("scripts.pdh_judge_api.build_opener")
+    @patch("pdh_judge_api.build_opener")
     def test_http_error_reports_only_status(self, opener):
         body = io.BytesIO(b"test-key and checked evidence")
         send = opener.return_value.open
@@ -99,7 +102,7 @@ class JudgeAPITest(unittest.TestCase):
         self.assertTrue(body.closed)
         send.assert_called_once()
 
-    @patch("scripts.pdh_judge_api.build_opener")
+    @patch("pdh_judge_api.build_opener")
     def test_limits_response_size(self, opener):
         response_body = opener.return_value.open.return_value.__enter__.return_value
         response_body.read.return_value = b" " * (64 * 1024 + 1)
@@ -107,7 +110,7 @@ class JudgeAPITest(unittest.TestCase):
             pdh_judge_api.judge("checked evidence", CRITERIA)
         response_body.read.assert_called_once_with(64 * 1024 + 1)
 
-    @patch("scripts.pdh_judge_api.build_opener")
+    @patch("pdh_judge_api.build_opener")
     def test_rejects_incomplete_refused_and_invalid_answers(self, opener):
         refused = response(PRESENT_ID)
         refused["output"][1]["content"] = [{"type": "refusal", "refusal": "secret"}]
