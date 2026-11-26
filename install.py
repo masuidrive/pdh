@@ -22,7 +22,6 @@ RELEASE = Path(__file__).resolve().parent
 INSTALL_LOCK = ".pdh-install.lock"
 OLD_LOCK = ".pdh-lock"
 OLD_CONFIG = ".pdh-legacy/ticket-config.yaml"
-OLD_TICKETS = ".pdh-legacy/tickets"
 OLD_CLOSE = "bash scripts/check-pdh-ticket.sh"
 NEW_CLOSE = "bash scripts/pdh-ticket-ready.sh"
 UPSTREAM = "https://github.com/masuidrive/pdh/blob/"
@@ -146,17 +145,15 @@ def adapt_legacy_checker(current):
         raise ValueError("Cannot identify the legacy ticket checker loop")
     route = b"""  pdh_name=${d##*/}
   pdh_ticket_path="$tickets_dir/$pdh_name/ticket.md"
-  if [ -f .pdh-legacy/tickets ] && ! grep -Fxq -- "$pdh_name" .pdh-legacy/tickets; then
-    pdh_first=$(git log --diff-filter=A --format=%H HEAD -- "$pdh_ticket_path" | tail -1)
-    if [ -n "$pdh_first" ] &&
-       git show "$pdh_first:$pdh_ticket_path" | awk '
-         NR == 1 && $0 != "---" { exit }
-         NR > 1 && $0 == "---" { exit }
-         $0 == "pdh_workflow: shared" { found=1 }
-         END { exit !found }
-       '; then
-      continue
-    fi
+  pdh_first=$(git log --diff-filter=A --format=%H HEAD -- "$pdh_ticket_path" | tail -1)
+  if [ -n "$pdh_first" ] &&
+     git show "$pdh_first:$pdh_ticket_path" | awk '
+       NR == 1 && $0 != "---" { exit }
+       NR > 1 && $0 == "---" { exit }
+       $0 == "pdh_workflow: shared" { found=1 }
+       END { exit !found }
+     '; then
+    continue
   fi
 """
     data = current.data.replace(target, target + route, 1)
@@ -323,30 +320,6 @@ def installation_lock(file):
     return state
 
 
-def legacy_names(target):
-    # Membership comes from the already tracked pre-migration layout. A new
-    # ticket cannot acquire the old close rules by removing its scope file.
-    entries = git(target, "ls-files", "-z", "--", "tickets").decode().split("\0")
-    names = set()
-    for entry in entries:
-        parts = entry.split("/")
-        if len(parts) >= 3 and parts[1] == "done":
-            continue
-        if len(parts) == 3 and parts[2] == "ticket.md":
-            name = parts[1]
-        elif len(parts) == 2 and re.fullmatch(r"\d{6}-\d{6}-.+\.md", parts[1]) and not parts[1].endswith("-note.md"):
-            name = parts[1][:-3]
-        else:
-            continue
-        if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
-            raise ValueError(f"Cannot record existing ticket {name!r}")
-        file = read_file(target, entry)
-        if file is None or not file.data.startswith(b"---\n"):
-            raise ValueError(f"Cannot identify tracked ticket {entry}")
-        names.add(name)
-    return "".join(name + "\n" for name in sorted(names)).encode()
-
-
 def shared_files(release):
     root = release / "shared"
     if root.is_symlink() or not root.is_dir():
@@ -468,19 +441,15 @@ def build_plan(release, target):
         if old_checker is None or old_checker.lock() != saved["files"][checker]:
             raise ValueError(f"{checker}: legacy checker changed")
         files[checker] = old_checker
-    if legacy:
-        old_config = read_file(target, OLD_CONFIG)
-        old_tickets = read_file(target, OLD_TICKETS)
-        if old_config is not None or old_tickets is not None:
-            raise ValueError("Legacy installation artifacts already exist with an active legacy configuration")
+    if legacy and (target / ".github/workflows/coding-bot.yml").is_file():
+        if read_file(target, OLD_CONFIG) is not None:
+            raise ValueError("The installed bot already has a saved ticket configuration")
         files[OLD_CONFIG] = File(config.data, config.mode)
-        files[OLD_TICKETS] = File(legacy_names(target))
-    for name in (OLD_CONFIG, OLD_TICKETS):
-        if name in saved["files"] and name not in files:
-            current = read_file(target, name)
-            if current is None or current.lock() != saved["files"][name]:
-                raise ValueError(f"{name}: legacy installation record changed")
-            files[name] = current
+    elif OLD_CONFIG in saved["files"]:
+        current = read_file(target, OLD_CONFIG)
+        if current is None or current.lock() != saved["files"][OLD_CONFIG]:
+            raise ValueError(f"{OLD_CONFIG}: installed configuration changed")
+        files[OLD_CONFIG] = current
 
     files.update(assets)
     for skill in ("pdh", "pdh-update"):

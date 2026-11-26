@@ -214,7 +214,17 @@ worktree_copy_files:
         self.assertNotIn("/product-local.txt", ignored)
         self.assertEqual((self.project / ".env").read_text(), "untracked private fixture\n")
 
-    def test_existing_ticket_and_bot_keep_the_old_close_path(self):
+    def test_non_bot_upgrade_keeps_records_without_installing_the_stage_workflow(self):
+        name = self.legacy()
+        old_ticket = self.project / "tickets" / name / "ticket.md"
+        before = old_ticket.read_bytes()
+        self.install()
+        self.assertEqual(before, old_ticket.read_bytes())
+        self.assertFalse((self.project / ".pdh-legacy").exists())
+        self.assertIn("pdh-ticket-ready.sh", (self.project / ".ticket-config.yaml").read_text())
+        self.assertEqual(self.install("--check").stdout, "PDH already up to date\n")
+
+    def test_migration_preserves_ticket_records_and_the_installed_bot(self):
         name = self.legacy(bot=True)
         self.install()
         configuration = (self.project / ".ticket-config.yaml").read_text()
@@ -222,14 +232,9 @@ worktree_copy_files:
         self.assertIn('repository: "product-remote"', configuration)
         self.assertIn('pre_close_command: "bash scripts/pdh-ticket-ready.sh"', configuration)
         self.assertIn('require_checklist_groups:', (self.project / ".pdh-legacy/ticket-config.yaml").read_text())
-        self.assertIn(name, (self.project / ".pdh-legacy/tickets").read_text().splitlines())
+        self.assertTrue((self.project / "tickets" / name / "ticket.md").is_file())
+        self.assertFalse((self.project / ".pdh-legacy/tickets").exists())
         self.commit(self.project, "migrate")
-        started = self.ticket("start", name, "--no-worktree", "--no-post-start")
-        self.assertEqual(started.returncode, 0, started.stdout + started.stderr)
-        closed = self.ticket("close", "--dry-run", "--no-push")
-        self.assertEqual(closed.returncode, 0, closed.stdout + closed.stderr)
-        self.assertIn("legacy-pre-close", closed.stdout)
-        self.run_git(self.project, "switch", "trunk")
         new = self.ticket("new", "issue-12", "--created-at", "261126-093000", "--branch", "agent/issue-12",
                           extra={"GITHUB_ACTIONS": "true", "ISSUE_NUMBER": "12"})
         self.assertEqual(new.returncode, 0, new.stdout + new.stderr)

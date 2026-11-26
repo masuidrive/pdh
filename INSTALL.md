@@ -22,15 +22,15 @@ git -C "$project" status --short
 | `shared/.claude/skills/pdh/` | Claude Code の `.claude/skills/pdh` と Codex の `.agents/skills/pdh`。実装と試験のプロンプト・手法の索引を含む |
 | `shared/.claude/skills/pdh-update/` | 両方のエンジンの `pdh-update` |
 | `shared/ticket.sh`、`shared/.ticket-config.yaml` | `ticket.sh new/start/restore/decision/close` と新しいチケットの帳票 |
-| `shared/pdh-flow.md` | プロジェクトの指示から読む新旧チケットの案内 |
+| `shared/pdh-flow.md` | プロジェクトの指示から読む共通スキルの入口 |
 | `shared/tickets/PDH.md` | チケットの操作、試験結果の記録、独立検収 |
 | `shared/scripts/` | 検収・試験・チケット名の確認。共通ゲートは `scripts/pdh-checks/` |
 | `install.py`、`migration.py` | 配布元で実行。プロジェクトの入口・設定・既存チケットを確認して適用 |
 
 ## 既知の移行手順
 
-新しいチケットは `pdh` を使う。導入前から進行中のstageチケットと、導入済みのstageラベルを扱うGitHub coding-botは従来の手順で継続する。旧チケットの履歴・技能・検査、製品の開発サーバー、通常試験、Gitのブランチ設定や起動時の処理は移行先で使用する。旧stageの配布物を照合する場合は [Claude用の旧配置表](claude/INSTALL-stage.md) と [Codex用の旧配置表](codex/INSTALL-stage.md) がある。
+新しいチケットは `pdh` を使う。進行中の旧チケットは更新前のプロジェクトの worktree で完了する。当時の配置表・手順・試験は [固定した stage 版](https://github.com/masuidrive/pdh/tree/5bd6cf936e4f69bc8dd18fc443d7074ee3f7dd41) にある。GitHub coding-bot を導入済みのプロジェクトでは、その bot が新たに作る Issue チケットにプロジェクト内の設定を使う。[bot の手順](github-bot/INSTALL.md)
 
 PDHの次の更新も `pdh-update` を使う。単体の `ticket.sh selfupdate` はPDH用の検収機能を含む版を置き換えるので使用しない。独立検収を送信する前に `ticket.sh decision` のプレビューを読み、外部へ送ってよい資料か確認する。最終的なcloseは対象の版への人の承認を得てから実行する。
 
-更新した共通ファイルの記録は `.pdh-install.lock` に置く。既存のstage方式は移行時の対象チケット名と設定を `.pdh-legacy/` に保持し、従来配布物の検査には `.pdh-lock` を引き続き使う。製品が独自に編集した共有ファイルや未コミットの設定を自動で置き換えられない場合は、表示されたパスの差分を調べてから再実行する。仕事用worktreeへ複製する認証ファイルはGitの管理外に置く。
+更新した共通ファイルの記録は `.pdh-install.lock` に置く。導入済みの bot が使う設定は導入先に保持する。以前の配布ファイルを検査する導入先では `.pdh-lock` を引き続き使う。製品が独自に編集した共有ファイルや未コミットの設定を自動で置き換えられない場合は、表示されたパスの差分を調べてから再実行する。仕事用worktreeへ複製する認証ファイルはGitの管理外に置く。

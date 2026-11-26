@@ -1,14 +1,5 @@
 #!/usr/bin/env bash
-# check-github-bot.sh — opt-in github-bot レイヤーの load-bearing な不変条件を検査する。
-#
-# なぜ要るか: github-bot/ は engine 中立の単一コピー（claude/ と codex/ に割れない）なので
-# check-guard-parity.sh の cross-set 検査は当たらない。だが «cloud agent は human gate で
-# 自己承認せず停止する» は、engine で変えてはならない安全核（docs/PDH-AGENTS.md の gate
-# 規則を Actions に写したもの）。単一コピーなので divergence は起きないが、**消えても既存
-# 検査は落ちない**。この検査が、その 1 文の存在と、レイヤーの骨格ファイルの存在を守る。
-#
-# 検査するのは «在るか» だけ（文面の完全一致は見ない。自由文の網羅性は測らない ―
-# CLAUDE.md「自由文は、行数や件数で機械的に評価できない」）。
+# Verify the installed GitHub bot keeps its human approval step and runner wiring.
 set -uo pipefail
 cd "$(cd "$(dirname "$0")/.." && pwd)" || exit 1
 
@@ -50,19 +41,13 @@ for f in github-bot/_pdh.md github-bot/_github-issue.md; do
   fi
 done
 
-# --- 経路の囲い: 起動側が system prompt に置く <Human-Agent-Interface> が _pdh.md に在り、
-# その優先規則が契約（docs/PDH-AGENTS.md）に在るか。片方だけだと、囲いが無視されるか、
-# 囲いの無い指定が経路を上書きしうる。再開時に note の Checklist を読む規則も同様に守る。
+# The route and resume instructions must reach the bot prompt.
 for tag in '<Human-Agent-Interface>' '</Human-Agent-Interface>'; do
   if [ -f github-bot/_pdh.md ] && ! grep -qF -- "$tag" github-bot/_pdh.md; then
     printf 'github-bot: MISSING route block %s in github-bot/_pdh.md\n' "$tag" >&2
     failed=1
   fi
 done
-if ! grep -qF -- 'Human-Agent-Interface' claude/skills/pdh-pm/SKILL.md; then
-  printf 'github-bot: pdh-pm/SKILL.md に <Human-Agent-Interface> の優先規則が無い（囲いが契約で裏付けられていない）\n' >&2
-  failed=1
-fi
 if [ -f github-bot/_github-issue.md ] && ! grep -qF -- '## Checklist' github-bot/_github-issue.md; then
   printf 'github-bot: _github-issue.md に再開時 note の ## Checklist を読む規則が無い\n' >&2
   failed=1

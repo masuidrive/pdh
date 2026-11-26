@@ -28,7 +28,7 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 # "links" are placeholders the agent fills in at runtime ([label](path), (url)).
 # They are not documentation links, so resolving them here is meaningless.
 # PDH's own prose for that layer lives at github-bot/*.md and IS checked.
-SKIP_PREFIXES = ("claude/templates/", "codex/templates/", "github-bot/.github/")
+SKIP_PREFIXES = ("github-bot/.github/",)
 
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 FENCE = re.compile(r"^\s*(```|~~~)")

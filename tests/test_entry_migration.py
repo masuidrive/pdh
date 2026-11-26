@@ -15,7 +15,9 @@ class ProjectEntrypointTest(unittest.TestCase):
             project = Path(temp)
             (project / "scripts").mkdir()
             generator = project / "scripts/gen-agents-md.sh"
-            shutil.copyfile(ROOT / "claude/templates/gen-agents-md.sh", generator)
+            generator.write_bytes(subprocess.check_output([
+                "git", "show", "5bd6cf936e4f69bc8dd18fc443d7074ee3f7dd41:claude/templates/gen-agents-md.sh"
+            ], cwd=ROOT))
             (project / ".codex").mkdir()
             (project / ".codex/config.toml").write_text("")
             (project / "CLAUDE.md").write_text("@product-brief.md\n@PDH-AGENTS.md\nUse our disposable test database.\n")
@@ -34,6 +36,19 @@ class ProjectEntrypointTest(unittest.TestCase):
                 self.assertIn("Use our disposable test database.", data.decode())
             subprocess.run(["bash", str(generator), "--check"], check=True)
             self.assertEqual(plan_migration(project, ROOT, ("claude", "codex")), {})
+
+    def test_upgrade_refreshes_the_installed_inline_instructions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project = Path(temp)
+            former = MARKER + "\nPrior release instructions.\n<!-- /pdh-workflow -->"
+            (project / ENTRY).write_text(former + "\n")
+            (project / "AGENTS.md").write_text(former + "\n\nOur project instructions.\n")
+            (project / "CLAUDE.md").symlink_to("AGENTS.md")
+            updated = plan_migration(project, ROOT, ("claude", "codex"))["AGENTS.md"].decode()
+            self.assertEqual(updated, (ROOT / "shared" / ENTRY).read_text() + "\nOur project instructions.\n")
+            (project / "AGENTS.md").write_text(updated.replace("製品の変更", "User customization"))
+            with self.assertRaisesRegex(ValueError, "workflow block was edited"):
+                plan_migration(project, ROOT, ("claude", "codex"))
 
     def test_existing_entrypoint_symlink_is_preserved(self):
         with tempfile.TemporaryDirectory() as temp:

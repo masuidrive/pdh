@@ -2,11 +2,11 @@
 
 PDH の **オプション**。GitHub Issue を «エンジニアとの会話面» にし、🤖 コメントで続きの処理を GitHub Actions 上の agent（PDH が配布する coding-bot）に回す。**このレイヤーを入れなくても PDH core は完全に動く。** 入れるかは任意で、入れたプロジェクトだけが GitHub Actions を要求する。
 
-これは core の `claude/INSTALL.md` / `codex/INSTALL.md` とは別経路。導入後は `pdh-update` が PDH 保守分（`_pdh.md` / `_github-issue.md` / `pdh-hooks.sh` / `pdh-gh-pull/`）を毎回上流の版で置き換える。machinery（`github-bot/.github/` と `github-bot/.devcontainer/`）は同じ更新で diff を確認して反映する。repo 固有の値は変数へ、追加検査は `smoke-local.sh` へ置く。
+導入済み bot の保守用手順。共通の `pdh-update` はプロジェクトに配置済みの bot を利用する。ここに記した stage 版のテンプレート、lock-map と更新コマンドを使う場合は、[当時の配布一式](https://github.com/masuidrive/pdh/tree/5bd6cf936e4f69bc8dd18fc443d7074ee3f7dd41) を参照する。
 
 ## 前提
 
-- PDH core が導入済み（` .claude/skills/pdh-pm/` か `.agents/skills/pdh-pm/` がある）。無ければ先に core を入れる。
+- PDH core が導入済み（` .claude/skills/pdh-pm/` か `.agents/skills/pdh-pm/` がある）。当時の core の要件は [stage 版の導入手順](https://github.com/masuidrive/pdh/blob/5bd6cf936e4f69bc8dd18fc443d7074ee3f7dd41/claude/INSTALL.md) を参照する。
 - `gh` CLI が使えて、対象が GitHub repo であること。**このレイヤーでは `gh` を必須にする。**
 - ticket.sh が 20260916.084455 以降であること（`new --branch` / `ticket_files` / `append_only_files`、ticket 自身の branch 上での `start`。`bash ./ticket.sh selfupdate`）。
 - project root に `product-brief.md` と `tickets/` がある（bot はこれで PDH mode を判定する）。
@@ -36,9 +36,9 @@ PDH の **オプション**。GitHub Issue を «エンジニアとの会話面�
 | Claude と Codex CLI の併用 | `.claude/skills/pdh-gh-pull/SKILL.md` と `.agents/skills/pdh-gh-pull`（symlink そのもの。required_paths は symlink の先のファイルを数えない） |
 | Codex 単独 | `.agents/skills/pdh-gh-pull/SKILL.md` |
 
-Codex は repo の skill を `.agents/skills/`（起動した場所から repo root まで）でしか探さない。`.codex/skills/` に置いた skill は見つからない。以前の版のこの表に従って Codex 単独で `.codex/skills/pdh-gh-pull/` に置いた repo は、`codex/INSTALL.md` の既知の移行手順「pdh-gh-pull を .agents/skills へ移す」で移す。
+Codex は repo の skill を `.agents/skills/`（起動した場所から repo root まで）でしか探さない。`.codex/skills/` に置いた skill は見つからない。以前の版のこの表に従って Codex 単独で `.codex/skills/pdh-gh-pull/` に置いた repo は、[固定版の Codex 導入手順](https://github.com/masuidrive/pdh/blob/5bd6cf936e4f69bc8dd18fc443d7074ee3f7dd41/codex/INSTALL.md) の「pdh-gh-pull を .agents/skills へ移す」に従う。
 
-配置したら、core の INSTALL の「版を記録して検査する」を回す。`.github/workflows/coding-bot.yml` がある repo では、`pdh-lock.sh write` が上の 4 つを `.pdh-lock` に記録する（`<engine>/lock-map.github-bot.tsv`）。上流の版と違うファイルがあると記録せずに止まる。
+stage 版の配置を照合するときは、そのタグまたはコミットにある INSTALL の「版を記録して検査する」を実行する。`.github/workflows/coding-bot.yml` がある repo では、`pdh-lock.sh write` が上の 4 つを `.pdh-lock` に記録する（`<engine>/lock-map.github-bot.tsv`）。上流の版と違うファイルがあると記録せずに止まる。
 
 ## 1.5 既存の devcontainer とマージするとき
 

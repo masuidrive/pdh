@@ -30,7 +30,7 @@ bash scripts/pdh-checks/ticket-name.sh tickets/261118-103129-export-report
 3. `./ticket.sh start <名前>` を実行し、表示されたチケットの worktree に移る。再開も同じ `start` で既存の worktree に戻れる。作業場所でリンクを復元するには `./ticket.sh restore` を実行する。`./current_ticket/` は `current-ticket/` の固定の別名。どのチケットを指すかは worktree ごとに ticket.sh が設定する。プロジェクトの準備に `post_start_command` を設定すると、worktree を新設したときだけ実行される。
 4. チケットの相対パスと初回合意の完全 SHA を `pdh.py test` と `ready` に渡す。明示の完了承認を受け、対象の版と返事を `progress.md` に記録・commit した後、チケットの worktree で `./ticket.sh close` を実行する。通常の close は commit 済みの初回合意を読み `ready` を実行する。新方式のチケットはチケットの worktree で通常の close を使う。既定ではリモートへの push・リモートブランチの削除は無効。
 
-新しい手順は `ticket.sh` が管理するディレクトリ形式のチケットに適用する。過去の記録は従来どおり参照できる。旧記録を通常の close に渡すには `ticket.md` の管理情報と、既存の最初の合意 SHA を使った上記の記録行が必要。
+この手順は `ticket.sh` が作るディレクトリ形式のチケットに適用する。stage 版の途中だったチケットを完了するときは、プロジェクトの更新前の worktree と [当時の手順](https://github.com/masuidrive/pdh/tree/5bd6cf936e4f69bc8dd18fc443d7074ee3f7dd41) を使う。
 
 ## チェックスクリプト
 

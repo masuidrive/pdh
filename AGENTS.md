@@ -1,1 +1,1 @@
-PDH配布元の作業方針は [CLAUDE.md](CLAUDE.md)、製品の目的は [Product Brief](product-brief.md) を読む。現行の配布物は `shared/`、新規導入・更新は [INSTALL.md](INSTALL.md)。従来のstageチケットと既存のGitHub coding-botは `claude/`・`codex/`・`github-bot/` の資産を使う。
+PDH 配布元の作業方針は [CLAUDE.md](CLAUDE.md)、利用者向けの入口は [README.md](README.md)。

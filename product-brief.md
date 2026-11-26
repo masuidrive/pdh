@@ -1,91 +1,11 @@
-# Product Brief: PDH — Product Delivery Hierarchy
+# PDH の目的
 
-## Background
+少人数の開発チームが coding agent に製品の実装を任せ、人が「この版で利用者が目的を達成できるか」を証拠から判断できるようにする。
 
-coding agent を使った開発では、「なぜ作るか」と「いま何をやるか」が会話の中に散らばり、context が切れるたびに失われる。人間側も agent 側も、判断の根拠を毎回作り直すことになる。
+- 人と agent が Product Brief からチケットの利用場面と完了条件を決め、合意時点の版を Git に残せる。
+- 実装者は変更に応じて設計とテストを選べる。別の読み手が、利用者が困る操作とその確認方法を検討できる。
+- 利用者と同じ入口で観察した結果と通常試験を、各完了条件と対象コミットに結びつけられる。確認できていない条件を残したまま完了を提示しない。
+- 人が検収結果を読み、対象の版を明示してチケットを閉じられる。
+- Claude Code と Codex CLI で同じ手順を使え、継続中の製品に固有の開発手順や通常試験を保って更新できる。
 
-PDH は、その 2 つを Git 管理された Markdown として構造化する仕組み。当初は Product Brief / Epic / Ticket の 3 層 + Light/Full の 2 段階 flow だったが、1 user + AI 体制では Epic の同期 / coordination 価値より overhead cost が上回ると実証され、Product Brief / Ticket の 2 層 + PDH stage flow (1 ticket = 1 work unit) に統一した。
-
-## Who
-
-- **PDH を自分のプロジェクトへ導入する開発者**: 既存リポジトリで coding agent を使い始め、ticket 運用の型が欲しい場面。README を agent に読ませて導入する。
-- **PDH 導入済プロジェクトで日々開発する開発者 + その coding agent**: ticket を開き、実装し、review / verify を通して閉じる場面。読むのは配布先にコピーされた `PDH-AGENTS.md`、project ルール（`CLAUDE.md` か `AGENTS.md`）、skills であって、この repo ではない。
-- **PDH 自体をメンテナンスする人**: 実プロジェクトで得た知見を templates / skills に還流させる場面。読み手は上の 2 者。
-
-## Problem
-
-- coding agent は context が切れると判断根拠を失い、同じ議論を繰り返す。Acceptance Criteria の暗黙変更や、「動作確認しました」の水増しが起きる。
-- 型を持たないと、agent の review は「指摘の量」に流れ、ticket の scope が際限なく膨らむ。
-- 各プロジェクトで似たルールを毎回書き直すことになり、改善が他プロジェクトへ伝播しない。
-
-## Solution
-
-配布物として次を提供する。特別なツールやサービスは持たず、Markdown + bash + Git だけで完結させる。
-
-- **2 層構造**: Product Brief (why) → Ticket (what + how)
-- **PDH stage flow**: `PDH-open` → `PDH-ticket-review` → `PDH-ticket-human-review` → `PDH-implement` → `PDH-review` → `PDH-verify` → `PDH-human-review` → `PDH-close`。実装前と close 前に人間の gate を置く
-- **契約（engine 共通）**: `docs/PDH-AGENTS.md`（PDH の構造と agent の規則）。stage flow・gate・AC の扱い・検証の証拠要件はここにあり、engine で変えない
-- **配布セット（engine ごと）**: `claude/`（Claude Code 用）と `codex/`（Codex CLI 用）。それぞれ `skills/`・`templates/`（入口ファイルの雛形、agent 定義、script）・`INSTALL.md` を持つ。skill と worker 本文は Claude 版から Codex 版を生成し、Codex 単独の導入・更新・退避・移行の経路は保つ
-- **評価データ（engine 共通）**: 実案件の切り出し再生と harness は private repo `masuidrive/pdh-eval`（この repo では `evals/private/` として checkout）。どちらの配布セットの規則変更も、同じ切り出しで両 engine を測ってから入れる
-- **導入・更新経路**: 使う engine の `INSTALL.md`（`claude/INSTALL.md` / `codex/INSTALL.md`）を coding agent に読ませて導入。更新は `pdh-update` skill（内部で同じ `INSTALL.md` を辿る）
-
-主要フロー:
-1. 開発者が自プロジェクトで agent に「PDH の `claude/INSTALL.md`（または `codex/INSTALL.md`）を読んで導入して」と指示 → ticket.sh 導入 + ファイル配置 + Product Brief 雛形作成まで完了する
-2. 実プロジェクトで得た改善を PDH repo に還流 → 各プロジェクトが `pdh-update` で取り込む
-
-## Appetite
-
-小さく保つ。PDH 自身がツールやランタイムを持ち始めたら行き過ぎ。配布物はコピーして読めるテキストであり続ける。大工事になる解決策は提案止まりにする。
-
-## Constraints
-
-- 配布物が動くのに要るのは、`bash` / `git` / `awk` / `grep` / `sed` と、その周辺の標準コマンド、文書・生成の検査用の Python 3.11 以降と PyYAML。BSD 系と GNU 系の両方で動くこと
-- **閲覧者のブラウザが実行する JavaScript は、この制限の対象外。**判断ボードに埋め込む JS は、閲覧者にも配布先にも install を強いないため
-- **opt-in の配布レイヤーも、この実行依存の制限の外に置く。**既定では配置されず、有効化した利用者だけが追加依存を要求する（`github-bot/` なら GitHub Actions と devcontainer）。core の配布物は上記の標準コマンドと Python / PyYAML、ticket.sh で動くこと
-- **契約は engine 中立、配布は engine ごと**: `docs/` の契約は Claude Code / Codex CLI のどちらでも同じに読めること。engine 固有の起動手順・model 指定は配布セットの中に置き、`docs/` に書かない
-- 差分マージ対象の `Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/...` 行は導入時に取り込んだ commit へ置換される。上書き対象の版は `.pdh-lock` に置く
-- ticket のライフサイクルは [ticket.sh](https://github.com/masuidrive/ticket.sh) に委ねる。PDH 側で再実装しない
-- モデル名は時間で古びる。ドキュメントでは役割プロファイル（`strong-judge` 等）に従い、具体的なモデル名は上書き例として扱う
-- 本文は日本語、`AGENTS.md` など他 agent platform が読む入口は英語
-
-## Architectural Invariants
-
-- `AI-1` PDH 汎用ルールは `docs/PDH-AGENTS.md`、project 固有ルールは配布セットの入口テンプレート（`claude/templates/CLAUDE.md` / `codex/templates/AGENTS.md`）。両者の内容を重複させない
-- `AI-2` skill の実体は配布セットごとに 1 つ置く（`claude/skills/` / `codex/skills/`）。1 つの配布セットの中で別 engine 向けの入口を作るなら symlink とし、内容を複製した wrapper を作らない
-- `AI-3` 配布テンプレートには、テンプレート自身の使い方説明を書かない。導入・更新手順は `INSTALL.md`、運用ルールは `docs/PDH-AGENTS.md` と stage skill にある
-- `AI-4` 配布物の実行依存は、標準的な Unix コマンドと ticket.sh、文書・生成の検査用の Python 3.11 以降と PyYAML に限る。BSD / GNU 両対応で書く。閲覧者のブラウザが実行する JavaScript と、明示的に有効化する github-bot・review 評価の追加依存はこの制限の対象外。
-- `AI-5` `docs/PDH-AGENTS.md` の契約は engine 中立に記述し、入口ファイルや subagent 機構を engine の名前で指定しない。engine 固有の起動手順・model 指定は配布セットの skill と agent 定義に置く
-
-## Done
-
-- 新規プロジェクトで `INSTALL.md` を agent に読ませるだけで導入が完了する
-- `claude/` と `codex/` のどちらの配布セットを導入しても、同じ `docs/` の契約で stage flow が回る
-- 配布セットの規則変更は、共有の評価データ（`pdh-eval`）で両 engine を測ってから入る
-- 実プロジェクトで得た改善が `pdh-update` で他プロジェクトへ伝播する
-- PDH repo 自身が PDH で運用されている（2026-07-18 着手: root `product-brief.md` / `CLAUDE.md` を追加）
-
-## Non-goals
-
-- Web UI / SaaS / ダッシュボードを持つこと。Git + Markdown で完結させる
-- ticket のライフサイクル管理を自前実装すること（ticket.sh に委ねる）
-- どちらかの engine 専用にすること。契約（`docs/`）を engine ごとに分けること
-- Product Brief と Ticket の間に中間層を挟むこと。1 user + AI 体制では同期・調整のコストが価値を上回ると実証済み（経緯は Background）
-
-## Open Questions
-
-（現時点で未解決の問いはない）
-
-決定済み:
-
-- **配布セットを engine ごとに分け、契約と評価データを共有する**（2026-09-06）。切り出し再生で、同じ規則文に対して Claude Code と Codex の振る舞いが逆になる例が複数出た（codex は reviewer を回さずに「回した」と書く、gpt-5.6-sol は委譲された判断で止まり opus は default で進む）。「両方に効く 1 文」を 2 回試してどちらも外れたため、skill・agent 定義・起動手順は `claude/` と `codex/` に分けて engine ごとに最適化する。stage flow・gate・AC の扱いは `docs/` に 1 つだけ置き、規則変更は `pdh-eval` の同じ切り出しで両 engine を測ってから入れる。Codex 側の初版は `codex/pdh-codex-tuning` branch（Codex 専用に作り直したもの）を `codex/` に移して作る
-
-  **改訂（2026-09-06、測定後）**: Astra が書いた `codex/` の «中身» を split ベンチ（26 run、`evals/private/results/2026-09-06-split.md`）で測ったところ、共通版を越えず、判断ルールを緩めた箇所で共通版が踏まなかった禁止操作（F2）を踏んだ。独立検討（Astra 反証パス + Fable）でも芯は変わらず、次のように分割の «粒度» を是正した。**engine ごとに分けるのは «起動機構（worker spawn / agent 定義）» と «model / effort 選択» だけ**。**停止条件・実装許可・禁止操作・AC 承認・証拠要件などの判断/契約ルールは engine で変えない «利用者との契約» であり、両セットで同一に保つ**（同じ依頼が model 違いで許される操作を変えてはならない）。共通化は宣言だけでは drift するため（`scripts/check-guard-parity.sh` が両セットの guard 同一を検査）機構で守る。model / effort の «逆符号» は配布内容の分岐ではなく switch（実装工程で役割 profile を選ぶ。`pdh-dev/_execution-team.md`）で扱う。skills の物理 1 本化（overlay 化）はより根治的だが appetite 超のため見送り、当面は 2 セット + guard-parity 検査で運用する。codex/ の個別規則は `evals/private/variants/codex-branch-candidates/` に Tier B 候補として保存し、単独で測ってから採用する。
-- **GitHub bot を opt-in 配布レイヤーとして取り込む**（2026-09-07）。GitHub Issue を «エンジニアとの会話面» にし、🤖 コメントで続きの処理を GitHub Actions 上の agent（[masuidrive/github-bots](https://github.com/masuidrive/github-bots) の coding-bot）に回す。**engine 中立の単一コンポーネント `github-bot/`**（top-level）に置き、core の `claude/` / `codex/` / `docs/` には GitHub の語を入れない。有効化した利用者だけが配置し、そのとき初めて GitHub Actions を要求する（`AI-4` の carve-out。上の Constraints）。machinery（workflow・runner・devcontainer）は当初 [masuidrive/github-bots](https://github.com/masuidrive/github-bots) から vendoring していたが、**2026-09-17 に同 repo の廃止が決まり PDH が所有者になった**（`github-bot/.github/` と `github-bot/.devcontainer/`。由来と決め事は `github-bot/ROBOT.md`）。**PDH は «PDH mode 定義（`_pdh.md`）と gate→issue プロトコル（`_github-issue.md`）» を持つ** — github-bots 同梱の `_pdh.md` は旧 stage 名 `PD-C-*` 等で古いため取り込まない。**安全核: cloud（Actions）の agent は human gate（`PDH-ticket-human-review` / `PDH-human-review`）で自己承認せず、要点を issue にコメントして停止する**（承認は 🤖 を含むコメント）。engine で変えない契約なので `scripts/check-github-bot.sh` が gate 停止句の存在を検査する。ローカルで issue を取り込む `pdh-gh-pull` skill は発話が入口
-- **ticket 運用はしない**（2026-07-18）。PDH repo 自身への適用は `product-brief.md` / `CLAUDE.md` / 自動検査までとし、`ticket.sh` は導入しない
-- **自動検査は持つ**（2026-07-18）。`scripts/test-all.sh` = fast-checks + check-distribution + shell 構文
-- **Markdown リンク / アンカーの検査も自動化する**（2026-07-18）。見出しの改名で他ファイルからのリンクが静かに切れるため。Unicode を含む見出しの slug 化が必要で bash では書きづらいので `scripts/check-links.py` として Python で実装した（配布物ではないため `AI-4` の対象外）
-- **配布物の実行依存は「標準的な Unix 環境に入っているもの」に限る**（2026-08-26）。判断ボード skill の `kit/` が Node・Playwright・Python を要求しており、`AI-4` を破ったまま配布されていた。**閲覧者のブラウザが実行する JS は対象外**（install を強いないため）とし、開発機に install を求める側だけを外した。`check.js`（Playwright）は**配布物から外して PDH repo 側の `scripts/check-board-render.sh` へ移した** — kit を作るのは PDH repo の作業で、配布しないので `AI-4` の対象外である（`check-links.py` と同じ扱い）。`check-contrast.py` は awk へ書き換えた。あわせて BSD / GNU 両対応を要求に加えた（`base64 -d` / `-D`、bash 3.2 に無い `declare -A` が実在の非互換だった）
-- **Python 3.11 以降と PyYAML を core の実行依存に加えた**（2026-10-18、ユーザ承認 2026-10-18）。文書の照合（docs-policy）と Codex の worker 起動（tomllib）のため。
-- **配布物間の重複検出も自動化する**（2026-07-18）。当初は「grep で表現できない」として見送ったが、行単位の完全一致に限れば検出可能だった。`check-distribution.sh` に実装（80 バイト以上の同一行が複数の配布物に現れたら失敗、意図的な重複は理由付きで allowlist）。導入時点で 2 件の実在する重複を検出し、うち 1 件は既に内容が食い違っていた
-
-Based on https://github.com/masuidrive/pdh/blob/XXXXXXX/templates/product-brief.md
+[現在の手順](shared/.claude/skills/pdh/SKILL.md) · [stage 版当時の Product Brief](https://github.com/masuidrive/pdh/blob/5bd6cf936e4f69bc8dd18fc443d7074ee3f7dd41/product-brief.md)

@@ -1583,9 +1583,9 @@ pdh_allow_legacy_bot_new() {
        "$slug" == "issue-$issue" && "$branch" == "agent/issue-$issue" ]]
 }
 
-pdh_legacy_select() {
+pdh_select_bot_config() {
     local input=${1:-} mode=${2:-committed} name path first
-    [[ -f .pdh-legacy/ticket-config.yaml ]] || return 0
+    [[ -f .github/workflows/coding-bot.yml && -f .pdh-legacy/ticket-config.yaml ]] || return 0
     if [[ -z "$input" && -L "$CURRENT_TICKET_LINK" ]]; then
         input=$(readlink "$CURRENT_TICKET_LINK")
     fi
@@ -1594,10 +1594,6 @@ pdh_legacy_select() {
     fi
     name=$(extract_ticket_name "$input")
     [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || return 0
-    if [[ -f .pdh-legacy/tickets ]] && grep -Fxq -- "$name" .pdh-legacy/tickets; then
-        pdh_legacy_config=.pdh-legacy/ticket-config.yaml
-        return 0
-    fi
     # A later edit, a missing scope, or the new-command environment cannot make
     # a newly created ticket eligible for the old close rules.
     [[ "$name" =~ ^[0-9]{6}-[0-9]{6}-issue-[1-9][0-9]*$ ]] || return 0
@@ -4744,7 +4740,7 @@ cmd_start() {
         return 1
     fi
 
-    pdh_legacy_select "$ticket_input" start
+    pdh_select_bot_config "$ticket_input" start
     # Check prerequisites
     check_git_repo || return 1
     check_config || return 1
@@ -5562,7 +5558,7 @@ EOF
 
 # Restore current ticket link
 cmd_restore() {
-    pdh_legacy_select
+    pdh_select_bot_config
     # Check prerequisites
     check_git_repo || return 1
     check_config || return 1
@@ -5717,7 +5713,7 @@ cmd_check() {
     # block at the end knows which note to read.
     local checklist_ticket=""
 
-    pdh_legacy_select
+    pdh_select_bot_config
     # Check prerequisites
     check_git_repo || return 1
     check_config || return 1
@@ -6435,7 +6431,7 @@ cmd_close() {
         esac
     done
 
-    pdh_legacy_select "$ticket_name_arg"
+    pdh_select_bot_config "$ticket_name_arg"
     # Check prerequisites
     check_git_repo || return 1
     check_config || return 1

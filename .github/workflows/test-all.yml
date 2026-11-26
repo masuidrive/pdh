@@ -1,12 +1,4 @@
-# Exercise the distribution, upgrades, and ticket gates with the same suite as local releases.
-#
-# It matters that this runs somewhere automatic. The FORCE_COLOR stage inside
-# test-all.sh exists because a colorized clock reading once took the whole gate
-# down in a consuming project, and that class of breakage is invisible until
-# someone happens to run the script in a shell that sets FORCE_COLOR.
-#
-# ripgrep is deliberately not installed: fast-checks.sh falls back to grep, and
-# running CI without rg keeps that fallback path exercised.
+# Exercise releases and upgrades using the same checks as a local checkout.
 name: test-all
 
 on:

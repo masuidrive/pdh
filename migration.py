@@ -1,5 +1,6 @@
 """Prepare the agent entrypoints while retaining a project's own instructions."""
 from pathlib import Path
+import hashlib
 import re
 
 ENTRY = "pdh-flow.md"
@@ -9,10 +10,12 @@ IMPORT = re.compile(r"^@(\S+)")
 GENERATED = "<!-- この file は scripts/gen-agents-md.sh が CLAUDE.md から作る。"
 
 
-def routed(text, route):
+def routed(text, route, previous=None):
     if route == IMPORT_ROUTE and route in text.splitlines():
         return text
     if route != IMPORT_ROUTE and MARKER in text:
+        if previous and previous in text and route not in text:
+            return text.replace(previous, route, 1)
         if route not in text:
             raise ValueError("PDH workflow block was edited; reconcile the entrypoint first")
         return text
@@ -55,15 +58,19 @@ def plan_migration(target: Path, release: Path, engines: tuple[str, ...]):
                 raise ValueError(f"unsupported project entrypoint symlink: {path.name}")
     before = claude.read_text() if claude.exists() else ""
     route = (release / "shared" / ENTRY).read_text().rstrip()
+    installed = target / ENTRY
+    previous = installed.read_text().rstrip() if installed.is_file() else None
     if not claude.is_symlink():
-        changed[claude] = routed(before, route if agents.is_symlink() else IMPORT_ROUTE)
+        changed[claude] = routed(before, route if agents.is_symlink() else IMPORT_ROUTE, previous)
     old_agents = agents.read_text() if agents.exists() else ""
     if agents.is_symlink():
         pass  # The canonical Claude entrypoint is updated above.
     elif old_agents.startswith(GENERATED):
         script = target / "scripts/gen-agents-md.sh"
-        original = release / "claude/templates/gen-agents-md.sh"
-        if script.is_symlink() or script.read_bytes() != original.read_bytes():
+        # Digest of the generator from the archived stage distribution.
+        if script.is_symlink() or hashlib.sha256(script.read_bytes()).hexdigest() != (
+            "d12a31476a23b4b45d37899b674468de9afe54e55d5685a1bf0f0433ed08832e"
+        ):
             raise ValueError("custom AGENTS generator: update its input and run it before installation")
         header, separator, _ = old_agents.partition("\n\n")
         rules = sorted((target / ".claude/rules").glob("*.md"))
@@ -76,7 +83,7 @@ def plan_migration(target: Path, release: Path, engines: tuple[str, ...]):
             raise ValueError("AGENTS.md differs from its inputs; run bash scripts/gen-agents-md.sh first")
         changed[agents] = render({**changed, target / ENTRY: (release / "shared" / ENTRY).read_text()})
     else:
-        changed[agents] = routed(old_agents, route)
+        changed[agents] = routed(old_agents, route, previous)
     for path, value in changed.items():
         if not path.exists() or value != path.read_text():
             plan[path.name] = value.encode()

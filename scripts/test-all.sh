@@ -1,97 +1,17 @@
 #!/usr/bin/env bash
-# test-all.sh — checks for the PDH repository itself.
-#
-# This repo ships text, not a running product, so "tests" here mean: the
-# distribution set is internally consistent, and the shipped shell scripts parse.
-# Documented installation/update commands also run in isolated consuming repos.
-# Interactive engine behavior is covered separately — see CLAUDE.md「テスト・検証」.
-#
-# This is NOT the distributed template; that is templates/test-all.sh.
-set -uo pipefail
-
-cd "$(cd "$(dirname "$0")/.." && pwd)" || exit 1
-
-failed=0
-run() {
-  printf '\n=== %s ===\n' "$1"
-  shift
-  "$@"
-  local status=$?
-  printf "exit-code: %s\n" "$status"
-  if [[ "$status" -ne 0 ]]; then failed=1; fi
-}
-
-run "shared PDH gates" bash scripts/test-shared-gate.sh
-run "project agent instructions" python3 -B -m unittest discover -s tests -p 'test_entry_migration.py'
-run "minimal installer" python3 -B -m unittest discover -s tests -p 'test_install_minimal.py'
-
-run "fast-checks" bash scripts/fast-checks.sh
-# Agent shells commonly export FORCE_COLOR, which makes Node colorize numbers.
-# The runner's own clock captures one, so a regression here breaks the whole gate
-# with a shell syntax error rather than a check failure. Run it under color once.
-run "fast-checks (FORCE_COLOR=3)" env FORCE_COLOR=3 bash scripts/fast-checks.sh
-run "Codex generated payload" python3 scripts/gen-codex-distribution.py --check
-run "documented installation/update and lock lifecycle" python3 scripts/test-installation.py
-run "distributed script contracts" bash scripts/test-distributed-scripts.sh
-run "distribution consistency" bash scripts/check-distribution.sh
-run "guard parity (claude/ ↔ codex/)" bash scripts/check-guard-parity.sh
-run "github-bot layer" bash scripts/check-github-bot.sh
-run "pdh-hooks awaiting-reply" bash scripts/test-pdh-hooks-awaiting.sh
-run "bot attachments" bash scripts/test-bot-attachments.sh
-run "spawn-worker capacity resume" bash scripts/test-spawn-worker-resume.sh
-
-# Link checking needs Unicode-aware slugification, so it is Python rather than
-# bash. This script is not distributed, so it does not fall under the
-# Markdown/bash-only constraint (product-brief.md AI-4).
-printf '\n=== links ===\n'
-if command -v python3 >/dev/null 2>&1; then
-  if ! python3 scripts/check-links.py; then
-    failed=1
-  fi
-else
-  printf 'check-links: python3 not found; cannot verify Markdown links\n' >&2
-  failed=1
-fi
-
-if command -v python3 >/dev/null 2>&1; then
-  run "Codex evaluation evidence" python3 scripts/test-codex-eval.py
-else
-  printf 'Codex evaluation evidence: skipped (python3 unavailable)\n'
-fi
-
-# 配布 kit の selftest を、素の環境と BSD を模した環境の 2 回走らせる。
-# 配布物は BSD / GNU の両方で動くことを要求している（product-brief.md AI-4）が、
-# この repo も CI も GNU なので、GNU でしか動かない書き方は素の実行では通ってしまう。
-# 実際に build.sh が `base64 "$file"`（BSD が受け付けない位置引数）のまま配布された。
-# shim は scripts/bsd-shim/ にあり、配布しない。
-for distribution_set in claude codex; do
-  kit_selftest="$distribution_set/skills/pdh-decision-board/tools/selftest.sh"
-  if [[ -x "$kit_selftest" ]]; then
-    run "$distribution_set kit selftest" bash "$kit_selftest"
-    run "$distribution_set kit selftest (BSD 相当)" env PATH="$PWD/scripts/bsd-shim:$PATH" bash "$kit_selftest"
-  fi
-done
-
-for distribution_set in claude codex; do
-  run "$distribution_set ticket template drift" bash scripts/test-ticket-template-drift.sh "$distribution_set"
-done
-
-printf '\n=== shell syntax (shipped scripts) ===\n'
-syntax_failed=0
-while IFS= read -r script; do
-  if ! bash -n "$script"; then
-    syntax_failed=1
-  fi
-done < <(git ls-files --cached --others --exclude-standard -- '*.sh')
-if [[ "$syntax_failed" -ne 0 ]]; then
-  failed=1
-else
-  printf 'shell syntax: all *.sh parse\n'
-fi
-
-printf '\n'
-if [[ "$failed" -ne 0 ]]; then
-  printf 'test-all: FAILED\n' >&2
-  exit 1
-fi
-printf 'test-all: all checks passed\n'
+# Run the release's shared workflow, installer, and installed GitHub bot contracts.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+bash scripts/test-shared-gate.sh
+python3 -B -m unittest discover -s tests -p 'test_*.py'
+bash scripts/fast-checks.sh
+FORCE_COLOR=3 bash scripts/fast-checks.sh
+python3 scripts/check-links.py
+bash scripts/check-github-bot.sh
+bash scripts/test-pdh-hooks-awaiting.sh
+bash scripts/test-bot-attachments.sh
+bash scripts/test-distributed-scripts.sh
+while IFS= read -r -d '' script; do
+  bash -n "$script"
+done < <(git ls-files -z --cached --others --exclude-standard -- '*.sh')
+echo 'test-all: all checks passed'

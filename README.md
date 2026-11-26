@@ -14,4 +14,6 @@ Product Brief と利用者に約束する完了条件を合意した版に残し
 
 - `shared/` が現行の共通配布物です。Claude Code・Codex CLIから同じ `pdh` を使えます。Claudeが進行し、作業範囲と製品の条件を渡してCodexに実装・実装中のテストを任せる構成も選べます。
 - `install.py` と `migration.py` は新規導入・更新の入口です。実行にはGit、Bash、Python 3.11以降が必要です。既定の独立検収はLinuxのbubblewrapとサインイン済みのCodex CLIを使います。Responses APIを選ぶ環境はチケット手順の `--backend responses` を参照してください。
-- `claude/`・`codex/` は従来のstageチケットの互換資産と既存の導入URLです。`github-bot/` は導入済みのGitHub coding-bot用、`scripts/`・`tests/` は配布元の検査です。
+- `github-bot/` は導入済みの GitHub coding-bot の実装、`scripts/`・`tests/` は配布元の試験です。
+
+旧チケット用のスキル・テンプレート・評価資料は [stage 版の最終コミット](https://github.com/masuidrive/pdh/tree/5bd6cf936e4f69bc8dd18fc443d7074ee3f7dd41) にあります。進行中の旧チケットは、更新前のプロジェクトの worktree で扱ってください。
