@@ -13,4 +13,5 @@ printf '*/tmp/\ndone/*/tmp/\n' > "$test_root/tickets/.gitignore"
 cd "$test_root"
 export GIT_AUTHOR_NAME='PDH test' GIT_COMMITTER_NAME='PDH test'
 export GIT_AUTHOR_EMAIL='pdh@example.invalid' GIT_COMMITTER_EMAIL='pdh@example.invalid'
+unset CLAUDECODE  # Tests set the invoking engine explicitly when needed.
 python3 -B -m unittest discover -s tests/gate -p 'test_pdh*.py'

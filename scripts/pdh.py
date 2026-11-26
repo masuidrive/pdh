@@ -368,7 +368,7 @@ def main():
     parser.add_argument("work")
     parser.add_argument("agreed")
     parser.add_argument("--send", metavar="SHA256", help="send the previewed decision packet")
-    parser.add_argument("--backend", choices=("codex", "responses"), help="select the first judge transport")
+    parser.add_argument("--backend", choices=("codex", "responses", "claude"), help="select the first judge transport")
     args = parser.parse_args()
     if (args.send is not None or args.backend) and args.command != "decision":
         parser.error("--send and --backend are valid only for decision")

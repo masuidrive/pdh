@@ -28,7 +28,7 @@ description: Product Brief にある製品の利用場面を実装し、実際�
 
 1. `python3 pdh/scripts/pdh.py test "$WORK" "$AGREED"` でその製品の scripts/test-all.sh を1回実行する。成功時に WORK/suite-pass ができる。
 2. WORK/evidence.md に `- 条件の原文 | 観察した完全な commit SHA | どの入口で何と比べ何を観測したか` を1条件1行で書く。続けて見出し `## 反例確認` の下に1行、`- 判定 | 製品の完全SHA | 試した操作 | 観察結果 | 処置` を書く。`問題なし` は観察した範囲、`許容` の処置は `影響 / 回避 / 再判断条件`（回避できなければその旨）。`要修正`・`約束変更`・`未確認` の間は提出を止める。記録を commit する。
-3. 新しく合意したチケットは、worktree で `./ticket.sh decision` を実行し、[送信内容を確認して判定を記録する](../../USAGE.md#独立検収)。既定は独立した Codex セッション。保留なら該当ACか反例を一度確かめ、新しい観察で再確認は1回まで。ACを満たす制約は known-limits に残す。
+3. 新しく合意したチケットは、worktree で `./ticket.sh decision` を実行し、[送信内容を確認して判定を記録する](../../USAGE.md#独立検収)。Claude 単独ではプレビューと送信の両方に `--backend claude` を付け、実装の会話を引き継がない Claude に検収を任せる。Codex 単独や Claude・Codex の混成では `--backend codex` を使う。保留なら該当ACか反例を一度確かめ、新しい観察で再確認は1回まで。ACを満たす制約は known-limits に残す。
 4. `python3 pdh/scripts/pdh.py ready "$WORK" "$AGREED"` を実行する。未確認の結果を書いて通さない。
 
 製品・application test・通常スイートの実行条件を変えたら最終候補で全体試験を1回通す。ticket test は使う版を commit してから観察する。それだけを変えたときは通常スイートの成功を使えるが、ready には変更後の版での各ACと反例の観察が要る。独立した説明の修正は pdh/scripts/pdh-prose.txt に列挙されたファイルだけが対象で、同じ製品の結果を使える。証拠と残る制約を人に渡す。試行中は、選んだ場面・追加で見つかったこと・提出判断の変化・所要時間を progress.md に残す。人から対象の版への明示の完了承認を受けたら、返事と版を progress.md に記録・commit し、チケットの worktree で `./ticket.sh close` を実行する。通常の close は `ready` を呼ぶ。新方式ではチケットの worktree から通常の close を使う。中断時は基点、最後に動いた場面、残る条件、次の一手を同じファイルに残す。

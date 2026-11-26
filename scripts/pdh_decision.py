@@ -1,6 +1,7 @@
 """Build and verify one ticket's independent acceptance review."""
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 import sys
@@ -41,7 +42,7 @@ def load_rows(path):
             raise ValueError("判定対象の commit SHA が不正です")
         if digest(encode({k: v for k, v in row.items() if k != "receipt_sha256"})) != row["receipt_sha256"]:
             raise ValueError("検収記録が保存時と一致しません")
-        if "backend" in row and (row["backend"] not in ("codex", "responses") or row["effort"] != EFFORT):
+        if "backend" in row and (row["backend"] not in ("codex", "responses", "claude") or row["effort"] != EFFORT):
             raise ValueError("検収記録の実行方式または effort が不正です")
         validate(row["result"])
     return rows
@@ -230,16 +231,20 @@ def review(command, root, work, agreed, agreement, head, scope, send, git, chang
         if backend and backend != recorded:
             raise ValueError("同じ合意の判定方式は変更できません")
         backend = recorded
-    backend = backend or "codex"
+    backend = backend or ("claude" if os.environ.get("CLAUDECODE") == "1" else "codex")
+    if backend == "claude":
+        from pdh_judge_claude import MODEL as model
+    else:
+        model = MODEL
     instructions = packet_instructions(packet) if use_ids else INSTRUCTIONS
-    request = {"model": MODEL, "instructions": instructions, "packet": packet}
+    request = {"model": model, "instructions": instructions, "packet": packet}
     if not (same and "backend" not in last):
         request.update(backend=backend, effort=EFFORT, schema=verdict_schema(choices) if use_ids else VERDICT_SCHEMA)
     signature = digest(encode(request))
     if same and last["request_sha256"] != signature:
         raise ValueError("判定の指示またはモデルが変わりました。検収条件を再合意してください")
 
-    if same and (last["result"]["criterion"] not in scope or last["model"] != MODEL
+    if same and (last["result"]["criterion"] not in scope or last["model"] != model
                  or last["scope_sha256"] != digest(payload["materials"][f"{work}/scope.md"])):
         raise ValueError("検収記録のACまたはモデルが一致しません")
 
@@ -251,7 +256,7 @@ def review(command, root, work, agreed, agreement, head, scope, send, git, chang
             raise ValueError("現在の版・証拠に対応する decision.json を生成して commit してください")
     elif send is None:
         print(packet)
-        print(f"{backend} / {MODEL} / {EFFORT}。資料を確認後、同じコマンドに --send {signature} を付けて実行", file=sys.stderr)
+        print(f"{backend} / {model} / {EFFORT}。資料を確認後、同じコマンドに --backend {backend} --send {signature} を付けて実行", file=sys.stderr)
         return
     elif send != signature:
         raise ValueError("プレビューのハッシュと送信資料が一致しません")
@@ -259,6 +264,9 @@ def review(command, root, work, agreed, agreement, head, scope, send, git, chang
         if backend == "codex":
             from pdh_judge_codex import judge as judge_codex
             result = validate(judge_codex(packet, choices))
+        elif backend == "claude":
+            from pdh_judge_claude import judge as judge_claude
+            result = validate(judge_claude(packet, choices))
         else:
             result = validate(judge(packet, choices))
         if result["criterion"] not in scope:
@@ -267,7 +275,7 @@ def review(command, root, work, agreed, agreement, head, scope, send, git, chang
         committed_materials(root, work, head, git, coverage)
         if load_rows(path) != rows:
             raise ValueError("実行中に検収記録が変わりました")
-        row = {"model": MODEL, "effort": EFFORT, "backend": backend, "agreement": agreement, "candidate": candidate,
+        row = {"model": model, "effort": EFFORT, "backend": backend, "agreement": agreement, "candidate": candidate,
                "scope_sha256": digest(payload["materials"][f"{work}/scope.md"]), "input_sha256": base_hash,
                "request_sha256": signature, "followup": bool(followup), "result": result}
         row["criterion_id"] = next(k for k, v in choices.items() if v == result["criterion"])

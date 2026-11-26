@@ -46,6 +46,7 @@ def judge(packet, criteria):
 ''')
         self.write("pdh/scripts/pdh_judge_codex.py", "from pdh_judge_api import judge\n")
         shutil.copyfile(fixture.ROOT / "pdh/scripts/pdh-prose.txt", self.repo / "pdh/scripts/pdh-prose.txt")
+        self.write("pdh/scripts/pdh_judge_claude.py", 'from pdh_judge_api import judge\nMODEL = "claude-opus-5-5"\n')
         self.move_ticket()
         self.write("docs/known-limits.md", "# 現在の制約\n")
         self.commit("Install judge with isolated transport")
@@ -336,6 +337,24 @@ def judge(packet, criteria):
         self.decision("--backend", "codex", success=False)
         self.gate("ready")
         self.assertEqual(self.calls(), ["sent"])
+
+    def test_claude_solo_selects_claude_and_reuses_its_receipt_outside_claude(self):
+        self.prepare()
+        with patch.dict(os.environ, {"CLAUDECODE": "1"}):
+            preview = self.decision()
+            self.assertIn("claude / claude-opus-5-5 / medium", preview.stderr)
+            signature = re.search(r"--send ([0-9a-f]{64})", preview.stderr)[1]
+            self.assertEqual(self.calls(), [])
+            self.decision("--backend", "codex", "--send", signature, success=False)
+            self.decision("--send", signature)
+        self.commit("Save Claude acceptance")
+        self.gate("ready")
+        self.decision("--backend", "claude", "--send", signature)
+        self.decision("--backend", "responses", success=False)
+        self.assertEqual(self.calls(), ["sent"])
+        row = json.loads(self.record.read_text())[0]
+        self.assertEqual((row["backend"], row["model"], row["effort"], row["criterion_id"]),
+                         ("claude", "claude-opus-5-5", "medium", "C1"))
 
     def test_legacy_api_receipt_is_verified_offline(self):
         import hashlib
