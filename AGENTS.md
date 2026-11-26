@@ -1,5 +1,1 @@
-# AGENTS.md
-
-This repository's coding-agent instructions live in `CLAUDE.md` (project rules for the PDH repo itself) and `product-brief.md`. Read both before making changes. `docs/PDH-AGENTS.md` is a distributed file; this repo reads it as the shared PDH contract but does not copy it to the root.
-
-Distribution sets are per engine: `claude/` (Claude Code) and `codex/` (Codex CLI). Shared between them: `docs/` (the contract) and `evals/` (measurement). See `CLAUDE.md`「ディレクトリ構造」.
+PDH配布元の作業方針は [CLAUDE.md](CLAUDE.md)、製品の目的は [Product Brief](product-brief.md) を読む。現行の配布物は `shared/`、新規導入・更新は [INSTALL.md](INSTALL.md)。従来のstageチケットと既存のGitHub coding-botは `claude/`・`codex/`・`github-bot/` の資産を使う。

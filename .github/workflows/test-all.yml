@@ -1,5 +1,4 @@
-# This repository ships text, not a running product, so CI runs the same
-# consistency checks a maintainer would run locally: scripts/test-all.sh.
+# Exercise the distribution, upgrades, and ticket gates with the same suite as local releases.
 #
 # It matters that this runs somewhere automatic. The FORCE_COLOR stage inside
 # test-all.sh exists because a colorized clock reading once took the whole gate
@@ -23,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

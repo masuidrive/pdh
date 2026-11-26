@@ -178,3 +178,7 @@ rg '検査に入れない|測らない|数えない|数や有無|入力であっ
 チケット作成・実装計画・検証計画では、影響するレイヤーを必ず列挙する。
 
 `docs` · `claude`（skills / templates / INSTALL） · `codex`（同） · `scripts` · `README` · `product-brief.md` · `evals`
+
+## 現行の共通配布
+
+新規チケットに配る現行版は `shared/` にある。導入・更新はルートの INSTALL.md、配布検査は scripts/test-all.sh に従う。上記のengineごとの生成規則と旧stageの検査は、互換資産を扱うときに使う。

@@ -7,13 +7,13 @@ import sys
 root=Path(__file__).resolve().parents[1]
 errors=[]
 for engine in ('claude','codex'):
-    text=(root/engine/'INSTALL.md').read_text()
+    text=(root/engine/'INSTALL-stage.md').read_text()
     rows=[]
     for line in text.splitlines():
         if not line.startswith('| `tmp/pdh/'): continue
         match=re.fullmatch(r'\| `tmp/pdh/([^`]+)` \| `([^`]+)` \| [^|]+ \| (上書き|差分マージ|初回だけ) \|',line)
         if not match:
-            errors.append(f'{engine}/INSTALL.md: invalid update policy: {line}')
+            errors.append(f'{engine}/INSTALL-stage.md: invalid update policy: {line}')
         else: rows.append(match.groups())
     expected={(src,dst) for src,dst,mode in rows if mode=='上書き'}
     actual=set()

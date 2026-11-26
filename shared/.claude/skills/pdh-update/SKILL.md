@@ -1,0 +1,8 @@
+---
+name: pdh-update
+description: 既存プロジェクトのPDHを配布元の最新版へ更新する。pdh-update と依頼されたときに使う。
+---
+
+# PDHを更新する
+
+対象プロジェクトのGitルートで [配布元の更新手順](https://github.com/masuidrive/pdh/blob/main/INSTALL.md) を読む。配布元を新しい作業用ディレクトリに取得し、同じ版の install.py で変更予定を確認して適用する。製品のBrief・固有の試験・進行中のチケットを保ち、再実行で追加の差分が出ないことを確かめる。報告には配布元の版、変わった入口、未確認の利用場面を記す。

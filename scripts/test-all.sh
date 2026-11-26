@@ -21,6 +21,10 @@ run() {
   if [[ "$status" -ne 0 ]]; then failed=1; fi
 }
 
+run "shared PDH gates" bash scripts/test-shared-gate.sh
+run "project agent instructions" python3 -B -m unittest discover -s tests -p 'test_entry_migration.py'
+run "minimal installer" python3 -B -m unittest discover -s tests -p 'test_install_minimal.py'
+
 run "fast-checks" bash scripts/fast-checks.sh
 # Agent shells commonly export FORCE_COLOR, which makes Node colorize numbers.
 # The runner's own clock captures one, so a regression here breaks the whole gate

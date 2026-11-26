@@ -3,12 +3,12 @@
 #
 # fast-checks.sh can only forbid a pattern. These checks assert *presence* and
 # *agreement between two lists*, which a grep rule cannot express. They run once
-# per distribution set (claude/, codex/ — each has its own INSTALL.md), plus the
+# per distribution set (claude/, codex/ — each has its own INSTALL-stage.md), plus the
 # shared docs/ that every set distributes:
 #
 #   1. every file declared as a "Based on" target carries that line, with a
 #      path matching its own location in this repo
-#   2. every copy-source named in the set's INSTALL.md placement table exists
+#   2. every copy-source named in the set's INSTALL-stage.md placement table exists
 #   3. every distributable file under <set>/templates/, <set>/skills/,
 #      <set>/scripts/ and docs/ appears in that set's table
 #   4. no rule is duplicated verbatim across the files one set distributes
@@ -28,12 +28,12 @@ fail() {
 
 SETS=()
 for d in claude codex; do
-  [[ -f "$d/INSTALL.md" ]] && SETS+=("$d")
+  [[ -f "$d/INSTALL-stage.md" ]] && SETS+=("$d")
 done
-[[ "${#SETS[@]}" -gt 0 ]] || fail "no distribution set found (expected claude/INSTALL.md or codex/INSTALL.md)"
+[[ "${#SETS[@]}" -gt 0 ]] || fail "no distribution set found (expected claude/INSTALL-stage.md or codex/INSTALL-stage.md)"
 
 # --- 1. `Based on` lines ------------------------------------------------------
-# Source-repo paths of the files each INSTALL.md declares as substitution
+# Source-repo paths of the files each INSTALL-stage.md declares as substitution
 # targets. Shared docs are listed once; set files are relative to the set dir.
 # Merged templates retain ancestry; overwritten payloads use .pdh-lock.
 python3 scripts/check-placement.py || failed=1
@@ -48,7 +48,7 @@ dup_pair_allowed() {
 }
 
 check_set() {
-  local set="$1" install="$1/INSTALL.md"
+  local set="$1" install="$1/INSTALL-stage.md"
 
   # --- placement table: rows look like | `tmp/pdh/<src>` | `<dst>` | <description> |
   local install_sources

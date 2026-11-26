@@ -1,0 +1,18 @@
+default_branch: "main"
+branch_prefix: "features/"
+worktree_mode: true
+auto_push: false
+delete_remote_on_close: false
+default_content: |
+  [完了条件](scope.md)
+pre_close_command: "bash scripts/pdh-ticket-ready.sh"
+ticket_files:
+  - path: scope.md
+    content: |
+      ## 独立検収
+  - path: tests/coverage.tsv
+    content: |
+      ac	scenario	kind	test
+  - path: checklist.md
+    content: |
+      ## 利用場面の試験計画

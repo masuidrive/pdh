@@ -25,7 +25,7 @@ def run(cwd,*args,code=0):
 
 
 def shell_block(engine, name):
-    guide=(ROOT/engine/'INSTALL.md').read_text()
+    guide=(ROOT/engine/'INSTALL-stage.md').read_text()
     blocks=re.findall(r'<!-- pdh-shell: '+re.escape(name)+r' -->\n```bash\n(.*?)\n```',guide,re.S)
     assert len(blocks)==1, (engine,name,'requires exactly one marked shell block')
     return blocks[0]
@@ -112,7 +112,7 @@ with tempfile.TemporaryDirectory(prefix='pdh-install-') as temporary:
     (upstream/'scripts').mkdir()
     shutil.copy2(ROOT/'scripts/check-placement.py', upstream/'scripts/check-placement.py')
     run(upstream,'python3','scripts/check-placement.py')
-    guide=upstream/'claude/INSTALL.md'; original=guide.read_text()
+    guide=upstream/'claude/INSTALL-stage.md'; original=guide.read_text()
     guide.write_text(original.replace('| 上書き |', '| invalid |', 1))
     run(upstream,'python3','scripts/check-placement.py',code=1)
     guide.write_text(original)
@@ -265,7 +265,7 @@ cp "$PDH_TICKET_FIXTURE" "$4"
         print(engine+': bot-update judges by the workflow, stops on customizations, replaces only the four shared files')
         skill_dir=target/('.claude/skills' if engine=='claude' else '.agents/skills')
         # Placement is a separate assertion; the installer is never synthesized from it.
-        for src,dst,mode in re.findall(r'^\| `tmp/pdh/([^`]+)` \| `([^`]+)` \| [^|]+ \| (上書き|差分マージ|初回だけ) \|$', (ROOT/engine/'INSTALL.md').read_text(), re.M):
+        for src,dst,mode in re.findall(r'^\| `tmp/pdh/([^`]+)` \| `([^`]+)` \| [^|]+ \| (上書き|差分マージ|初回だけ) \|$', (ROOT/engine/'INSTALL-stage.md').read_text(), re.M):
             assert (target/dst).exists(), (engine,dst,'documented install omitted placement')
         # Preserved project entrypoints must explicitly load the PDH contract.
         entry_name='CLAUDE.md' if engine=='claude' else 'AGENTS.md'
@@ -652,7 +652,7 @@ cp "$PDH_TICKET_FIXTURE" "$4"
 
     # Every executable block must be marked and reached by a scenario above.
     for engine in ('claude','codex'):
-        guide=(ROOT/engine/'INSTALL.md').read_text()
+        guide=(ROOT/engine/'INSTALL-stage.md').read_text()
         names=re.findall(r'<!-- pdh-shell: ([\w-]+) -->\n```bash\n',guide)
         assert len(names)==guide.count('```bash\n'),(engine,'unmarked executable block')
         assert len(names)==len(set(names)),(engine,'duplicate marker')
