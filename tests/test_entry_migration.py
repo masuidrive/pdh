@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from migration import MARKER, plan_migration
+from migration import ENTRY, IMPORT_ROUTE, MARKER, plan_migration
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -26,9 +26,11 @@ class ProjectEntrypointTest(unittest.TestCase):
             plan = plan_migration(project, ROOT, ("claude", "codex"))
             self.assertEqual(set(plan), {"AGENTS.md", "CLAUDE.md"})
             self.assertNotIn("Detailed legacy stage rules", plan["AGENTS.md"].decode())
+            self.assertLessEqual(len(plan["CLAUDE.md"].decode()), len((project / "CLAUDE.md").read_text()))
+            shutil.copyfile(ROOT / "shared" / ENTRY, project / ENTRY)
             for name, data in plan.items():
                 (project / name).write_bytes(data)
-                self.assertIn(MARKER, data.decode())
+                self.assertIn(IMPORT_ROUTE if name == "CLAUDE.md" else MARKER, data.decode())
                 self.assertIn("Use our disposable test database.", data.decode())
             subprocess.run(["bash", str(generator), "--check"], check=True)
             self.assertEqual(plan_migration(project, ROOT, ("claude", "codex")), {})

@@ -22,6 +22,7 @@ git -C "$project" status --short
 | `shared/.claude/skills/pdh/` | Claude Code の `.claude/skills/pdh` と Codex の `.agents/skills/pdh`。実装と試験のプロンプト・手法の索引を含む |
 | `shared/.claude/skills/pdh-update/` | 両方のエンジンの `pdh-update` |
 | `shared/ticket.sh`、`shared/.ticket-config.yaml` | `ticket.sh new/start/restore/decision/close` と新しいチケットの帳票 |
+| `shared/pdh-flow.md` | プロジェクトの指示から読む新旧チケットの案内 |
 | `shared/tickets/PDH.md` | チケットの操作、試験結果の記録、独立検収 |
 | `shared/scripts/` | 検収・試験・チケット名の確認。共通ゲートは `scripts/pdh-checks/` |
 | `install.py`、`migration.py` | 配布元で実行。プロジェクトの入口・設定・既存チケットを確認して適用 |

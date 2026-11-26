@@ -396,7 +396,7 @@ class Plan:
             for path, (before, after) in self.changes.items():
                 _put(self.target / path, after, directories)
                 installed.append((path, before))
-        except (OSError, ValueError):
+        except BaseException:
             for path, previous in reversed(installed):
                 if previous is None:
                     (self.target / path).unlink()
@@ -551,7 +551,6 @@ def main():
         root = Path(os.fsdecode(git(target, "rev-parse", "--show-toplevel")).strip()).resolve()
         if root != target or target == RELEASE:
             raise ValueError("--target must name a separate Git project root")
-        git(target, "rev-parse", "--verify", "HEAD")
         descriptor = os.open(target, os.O_RDONLY | os.O_DIRECTORY)
         try:
             if not args.check:
@@ -567,7 +566,9 @@ def main():
             return 0
         finally:
             os.close(descriptor)
-    except (OSError, ValueError, UnicodeError) as error:
+    except KeyboardInterrupt:
+        return 130
+    except (OSError, ValueError) as error:
         print(f"PDH installation stopped: {error}", file=sys.stderr)
         return 1
 

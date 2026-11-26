@@ -2,27 +2,24 @@
 from pathlib import Path
 import re
 
+ENTRY = "pdh-flow.md"
+IMPORT_ROUTE = f"@{ENTRY}"
 MARKER = "<!-- pdh-workflow -->"
-ROUTE = f"""{MARKER}
-# 新しいチケットを開くとき
-
-製品の変更・再開は `.claude/skills/pdh/SKILL.md`、共通の操作は `tickets/PDH.md` に従う。製品固有の制約・試験・利用中の環境に関する規則はこのファイルの記述を使う。旧stage、チェックリスト、役割への指示は移行前からあるチケットと旧方式のGitHub coding-botで使う。
-<!-- /pdh-workflow -->
-"""
 IMPORT = re.compile(r"^@(\S+)")
 GENERATED = "<!-- この file は scripts/gen-agents-md.sh が CLAUDE.md から作る。"
 
 
-def routed(text):
-    if MARKER in text:
-        if ROUTE.rstrip() not in text:
+def routed(text, route):
+    if route == IMPORT_ROUTE and route in text.splitlines():
+        return text
+    if route != IMPORT_ROUTE and MARKER in text:
+        if route not in text:
             raise ValueError("PDH workflow block was edited; reconcile the entrypoint first")
         return text
-    # Keep the old contract available to existing work without importing it into every session.
-    text = re.sub(r"^@(?:\./)?PDH-AGENTS\.md(?=\s|$).*?$",
-                  "旧チケットの共通手順は [PDH-AGENTS.md](PDH-AGENTS.md) を読む。", text, flags=re.M)
-    text = text.replace("**再開するとき・context の compaction の後は、作業を続ける前に `bash scripts/pdh-stage-checklist.sh --show`", "**旧stageチケットを再開するとき・その context の compaction の後は、作業を続ける前に `bash scripts/pdh-stage-checklist.sh --show`")
-    return ROUTE + "\n" + text
+    # Fit inside consumers' existing instruction budgets by replacing the old import.
+    text, count = re.subn(r"^@(?:\./)?PDH-AGENTS\.md[ \t]*$", lambda _: route, text, flags=re.M)
+    text = text.replace("**再開するとき・context の compaction の後は、作業を続ける前に `bash scripts/pdh-stage-checklist.sh --show`", "**旧stageの再開・compaction後は作業前に `bash scripts/pdh-stage-checklist.sh --show`")
+    return text if count else route + "\n\n" + text
 
 
 def expanded(target, source, changed, stack=()):
@@ -57,8 +54,9 @@ def plan_migration(target: Path, release: Path, engines: tuple[str, ...]):
             if path.resolve() not in (claude, agents) or not path.is_file():
                 raise ValueError(f"unsupported project entrypoint symlink: {path.name}")
     before = claude.read_text() if claude.exists() else ""
+    route = (release / "shared" / ENTRY).read_text().rstrip()
     if not claude.is_symlink():
-        changed[claude] = routed(before)
+        changed[claude] = routed(before, route if agents.is_symlink() else IMPORT_ROUTE)
     old_agents = agents.read_text() if agents.exists() else ""
     if agents.is_symlink():
         pass  # The canonical Claude entrypoint is updated above.
@@ -76,11 +74,9 @@ def plan_migration(target: Path, release: Path, engines: tuple[str, ...]):
 
         if render({}) != old_agents:
             raise ValueError("AGENTS.md differs from its inputs; run bash scripts/gen-agents-md.sh first")
-        changed[agents] = render(changed)
-    elif old_agents.strip() in ("@CLAUDE.md", "@./CLAUDE.md"):
-        pass
+        changed[agents] = render({**changed, target / ENTRY: (release / "shared" / ENTRY).read_text()})
     else:
-        changed[agents] = routed(old_agents)
+        changed[agents] = routed(old_agents, route)
     for path, value in changed.items():
         if not path.exists() or value != path.read_text():
             plan[path.name] = value.encode()

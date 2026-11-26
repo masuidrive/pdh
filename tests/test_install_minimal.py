@@ -152,6 +152,13 @@ class InstallerTest(unittest.TestCase):
         self.assertEqual((self.project / "scripts/checks/product.sh").read_text(), "local check\n")
         self.assertEqual(self.install().stdout, "PDH already up to date\n")
 
+    def test_fresh_project_can_use_its_unborn_branch(self):
+        self.project = self.work / "unborn"
+        self.init_repo(self.project)
+        self.install()
+        self.assertIn('default_branch: "trunk"', (self.project / ".ticket-config.yaml").read_text())
+        self.assertEqual(self.install("--check").stdout, "PDH already up to date\n")
+
     def test_versions_update_only_owned_bytes(self):
         self.install()
         self.commit(self.project, "install")
