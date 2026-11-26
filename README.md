@@ -12,22 +12,41 @@ Product Brief と利用者に約束する完了条件を合意した版に残し
 
 ## scripts/ の中身
 
-このリポジトリの `scripts/` は、導入先では `pdh/scripts/` に置かれます。普段のチケット操作には製品ルートの `./ticket.sh` を使います。たとえば `./ticket.sh decision` は独立検収の資料を準備し、`./ticket.sh close` は人が承認した版を閉じる前に `ready` を呼びます。[チケット操作とコマンド例](USAGE.md)
+普段のチケット操作にはプロジェクト直下の `./ticket.sh` を使います。このリポジトリの `scripts/` には、製品のテストやチケットを閉じる前の確認に使うファイルがあります。導入すると `pdh/scripts/` に入ります。製品全体のテストはプロジェクト側の `scripts/test-all.sh` に置きます。
 
-| 作業で使う入口 | 何をするか |
-| --- | --- |
-| [pdh.py](scripts/pdh.py) | `test` は製品側の `scripts/test-all.sh` を実行し、通った版をチケットの `suite-pass` に記録します。`decision` は独立検収を扱い、`ready` は合意・試験結果・観察記録・必要な判定が提出する版に対応しているかを照合します。 |
-| [test-ticket-local.sh](scripts/test-ticket-local.sh) | 今回のチケット専用の試験を実行する入口です。引数を省くと作業中のチケットを選び、その中の `tests/test-ticket-local.sh` を呼びます。 |
-| [pdh_coverage.py](scripts/pdh_coverage.py) | 完了条件（AC）ごとの証拠をまとめます。`collect` は試験を実行して JUnit の結果を収集し、`observe` は手動観察を記録します。`bind` はそれらを `tests/coverage.tsv` の各行に結び付け、`verify` は対応と実行版を検査します。 |
+### テストを実行して結果を残す
 
-| PDH が内部で使うファイル | 呼び出し元と役割 |
+| やりたいこと | 使うファイル |
 | --- | --- |
-| [pdh-ticket-ready.sh](scripts/pdh-ticket-ready.sh) | `ticket.sh decision` と close 前のフックが使います。対象チケットと初回合意の SHA を特定して `pdh.py` に渡します。 |
-| [pdh_decision.py](scripts/pdh_decision.py) | `pdh.py` から呼ばれ、合意・差分・証拠から送信資料を組み立てます。選んだ検収先の判定を `decision.json` に保存し、`ready` では保存済みの記録を照合します。 |
-| [pdh_judge_claude.py](scripts/pdh_judge_claude.py)・[pdh_judge_codex.py](scripts/pdh_judge_codex.py)・[pdh_judge_api.py](scripts/pdh_judge_api.py) | 独立検収で選べる3つの送信先（Claude Code、Codex CLI、OpenAI Responses API）に対応します。1回の送信で使うのは指定した1方式です。API 用ファイルには3方式に共通する判定指示と応答形式もあります。 |
-| [check_ticket_name.py](scripts/check_ticket_name.py) | [ticket-name.sh](checks/ticket-name.sh) が呼ぶ名前検査です。チケットのパスと、名前に含まれる作成日時・slug を確認します。 |
-| [pdh-prose.txt](scripts/pdh-prose.txt) | `pdh.py` が読む設定ファイルです。説明文だけを変更したときに同じ製品版の試験結果を使える文書を列挙します。現在の対象は `docs/known-limits.md` です。 |
-| [pdh-session-context.sh](scripts/pdh-session-context.sh) | 旧版から移行したプロジェクトに残るセッション開始フックの入口です。旧 stage 方式の GitHub bot 用チケットを扱う条件がそろうと、既存の `pdh-session-hook.sh` に処理を渡します。 |
+| 製品全体をテストする | [pdh.py](scripts/pdh.py) の `test` が製品の `scripts/test-all.sh` を実行します。成功すると、テストが通ったコミットをチケットの `suite-pass` に記録します。 |
+| 今回のチケットだけをテストする | [test-ticket-local.sh](scripts/test-ticket-local.sh) を引数なしで実行すると、作業中のチケットの `tests/test-ticket-local.sh` が動きます。 |
+| 完了条件ごとに何を確かめたかを記録する | [pdh_coverage.py](scripts/pdh_coverage.py) の `collect` はテストを実行して JUnit 形式の結果を集め、`observe` は手動で確かめた結果を記録します。`bind` はそれぞれの結果を `tests/coverage.tsv` の該当する条件に結び付け、`verify` はその対応とテストした版を確かめます。 |
+
+### 検収してチケットを閉じる
+
+`./ticket.sh decision` を実行すると、実装時の会話を引き継がずに判定するための資料を確認できます。人が対象の版を承認して `./ticket.sh close` を実行すると、PDH はチケットを閉じる前にその版の記録を確認します。[コマンドの使い方](USAGE.md)
+
+| PDH が呼ぶファイル | 役割 |
+| --- | --- |
+| [pdh-ticket-ready.sh](scripts/pdh-ticket-ready.sh) | `decision` と `close` の両方が使います。対象のチケットと、最初に完了条件に合意したコミットの SHA を調べて `pdh.py` に渡します。 |
+| [pdh.py](scripts/pdh.py) | `decision` は下の `pdh_decision.py` を呼びます。`ready` は合意した条件、テスト結果、手動で確かめた記録、必要な判定が提出する版に対応しているかを確認します。 |
+| [pdh_decision.py](scripts/pdh_decision.py) | 合意した条件、コードの変更内容、テストや観察の記録をまとめます。検収を依頼すると、返ってきた判定を `decision.json` に保存します。`ready` のときは保存済みの判定を照合します。 |
+
+`pdh_judge_` で始まる3ファイルは検収の依頼先ごとに分かれています。1回の検収で使うのは選んだ依頼先の1つです。
+
+| 依頼先 | ファイル |
+| --- | --- |
+| Claude Code | [pdh_judge_claude.py](scripts/pdh_judge_claude.py) |
+| Codex CLI | [pdh_judge_codex.py](scripts/pdh_judge_codex.py) |
+| OpenAI Responses API | [pdh_judge_api.py](scripts/pdh_judge_api.py)（3方式に共通する判定の指示と回答形式もここにあります） |
+
+### 命名規則・設定・旧版との互換性
+
+| ファイル | 用途 |
+| --- | --- |
+| [check_ticket_name.py](scripts/check_ticket_name.py) | [ticket-name.sh](checks/ticket-name.sh) が呼び出します。チケットのパスと、名前に含まれる作成日時・短い名前（slug）が命名規則に合っているかを調べます。 |
+| [pdh-prose.txt](scripts/pdh-prose.txt) | `pdh.py` が読む設定です。ここに載っている文書だけを変更した場合は、同じ製品版のテスト結果を使えます。現在の対象は `docs/known-limits.md` です。 |
+| [pdh-session-context.sh](scripts/pdh-session-context.sh) | 旧版から更新したプロジェクト用です。セッション開始時に旧 stage 方式の GitHub bot 用チケットを使う条件がそろっていれば、既存の `scripts/pdh-session-hook.sh` を実行します。 |
 
 ## エンジンと配布ファイル
 
