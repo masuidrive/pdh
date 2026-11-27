@@ -18,7 +18,7 @@ bash pdh/checks/ticket-name.sh tickets/261118-103129-export-report
 
 ## 起票・再開・完了
 
-1. PDH のベースブランチ（この設計版では `pdh-minimal`）で、新しい名前を検査してから `./ticket.sh new` で起票する。下記は `example` を slug にした例。
+1. 導入先の `.ticket-config.yaml` の `default_branch` が指定するブランチで、新しい名前を検査してから `./ticket.sh new` で起票する。下記は `example` を slug にした例。
 
    ```sh
    created_at=$(date -u '+%y%m%d-%H%M%S')
@@ -78,8 +78,8 @@ bash pdh/checks/ticket-name.sh tickets/261118-103129-export-report
 
 新しく起票したチケットには `ticket.sh new` が `scope.md` に見出し `## 独立検収` を用意する。新方式で合意したチケットは見出しが抜けても提出前に判定が必要。導入前に合意したチケットは当時の方式で扱う。ACの箇条書きはこれまで通り。全体試験の成功後、`suite-pass`、ACごとの観察、反例確認、チェックリストを commit する。人が evidence.md から結果を開けるように、見出し `## [独立検収の判定](decision.json)` を添えられる。
 
-1. チケットの worktree で `./ticket.sh decision` を実行する。チケットと初回合意の SHA を自動で特定する。標準出力が送信する資料の全文、標準エラーが送信に指定する SHA-256。ローカルで確認する。新方式ではシナリオ対応表・実行結果・指定した試験ソースも渡す。共通の対象は Brief、scope、evidence、checklist、suite-pass、docs/known-limits.md（存在時）、当該 ticket tests と製品差分、該当コミットの件名・版。再合意時は元の約束と再合意行も含む。画像は送られない。画像で観察したことは evidence.md に書く。送信先は OpenAI。会話本文・識別情報・資格情報など送れない内容が含まれるときは送信を止め、機密を含まない証拠に整えるか人に戻す。
-2. 確認した同じコマンドに `--send <表示されたSHA-256>` を付ける。Claude 単独で進める場合はプレビューと送信に `--backend claude` を付ける。Claude Code のシェル（`CLAUDECODE=1`）では初回の既定も Claude。それ以外のシェルでは Codex が既定。混成の試行で Codex を検収者にする場合は両方に `--backend codex` を指定する。Claude は Claude Code のログインで `claude-opus-5-5`、Codex は ChatGPT ログインで `gpt-6.2-astra` を使い、どちらも effort は `medium`。Linux の bubblewrap で空の作業場所に新規セッションを起こす。Claude はネイティブ CLI と `~/.claude/.credentials.json`（または `CLAUDE_CONFIG_DIR` 以下）、Codex はネイティブ CLI とファイル形式の認証を使う。実行ファイルは `PDH_CLAUDE_BIN` または `PDH_CODEX_BIN` でも指定できる。OpenAI Responses API を使う場合は `--backend responses` を指定する。同じ合意の途中で実行方式は変えず、利用枠不足や通信失敗は人に返す。判定には合意したACごとに番号を振り、モデルは候補から1つ選ぶ。スクリプトが番号とAC原文を対応付け、両方を `$WORK/decision.json` に残す。保留時も記録を commit する。同じ資料と指示に対する保存済みの判定は再利用する。通信失敗・不正な応答では新しい判定は記録されない。
+1. チケットの worktree で `./ticket.sh decision` を実行する。チケットと初回合意の SHA を自動で特定する。標準出力が送信する資料の全文、標準エラーが送信に指定する SHA-256。ローカルで確認する。新方式ではシナリオ対応表・実行結果・指定した試験ソースも渡す。共通の対象は Brief、scope、evidence、checklist、suite-pass、docs/known-limits.md（存在時）、当該 ticket tests と製品差分、該当コミットの件名・版。再合意時は元の約束と再合意行も含む。画像は送られない。画像で観察したことは evidence.md に書く。Claude backend は隔離した Claude Code の claude.ai ログインで Anthropic に、Codex と Responses backend は OpenAI に資料を送る。会話本文・識別情報・資格情報など送れない内容が含まれるときは送信を止め、機密を含まない証拠に整えるか人に戻す。
+2. 確認した同じコマンドに `--send <表示されたSHA-256>` を付ける。Claude 単独で進める場合はプレビューと送信に `--backend claude` を付ける。Claude Code のシェル（`CLAUDECODE=1`）では初回の既定も Claude。それ以外のシェルでは Codex が既定。混成の試行で Codex を検収者にする場合は両方に `--backend codex` を指定する。Claude は Claude Code のログインで `claude-opus-5-5`、Codex は ChatGPT ログインで `gpt-6.2-astra` を使い、どちらも effort は `medium`。Linux の bubblewrap で空の作業場所に新規セッションを起こす。Claude はネイティブ CLI と `~/.claude/.credentials.json`（または `CLAUDE_CONFIG_DIR` 以下）、Codex はネイティブ CLI とファイル形式の認証を使う。実行ファイルは `PDH_CLAUDE_BIN` または `PDH_CODEX_BIN` でも指定できる。macOS ではプレビューと送信の両方で `--backend responses` を指定し、`OPENAI_API_KEY` を用意する。Linux でもこの方式を選べる。同じ合意の途中で実行方式は変えず、利用枠不足や通信失敗は人に返す。判定には合意したACごとに番号を振り、モデルは候補から1つ選ぶ。スクリプトが番号とAC原文を対応付け、両方を `$WORK/decision.json` に残す。保留時も記録を commit する。同じ資料と指示に対する保存済みの判定は再利用する。通信失敗・不正な応答では新しい判定は記録されない。
 3. 保留なら、記録にあるACと指摘の操作を一度確かめる。ACに反すれば修正、ACが成立する制約なら影響・回避・再判断条件を known-limits に残す。該当ACまたは反例の観察を evidence.md に具体的に書き直し、変更を commit して再確認する。再確認でも保留ならそこで人に戻す。同じACのまま再開するよう人が明示した場合だけ、progress.md に `- 独立検収再開 | 直前のreceipt_sha256 | 人の回答と再開理由` を記録・commit する。この回答はその保留に対してだけ有効で、再実行には新しい観察が必要。合意を変える場合は、維持案と変更案の得失を示して再承認を取る。
 4. `python3 pdh/scripts/pdh.py ready "$WORK" "$AGREED"` と通常の `./ticket.sh close` は通信せず、commit 済み判定の入力・結果を照合する。今回の版に対応する `present` があれば人に提出できる。人の完了承認は引き続き必要。ハッシュは版の照合に使う。APIの署名や人の承認を証明するものではない。
 
@@ -87,6 +87,7 @@ bash pdh/checks/ticket-name.sh tickets/261118-103129-export-report
 
 PMは実装前にBrief・scopeと同じ利用場面の既存試験、分かっている過去の失敗を読む。チケットの `checklist.md` を使い、利用者が行う操作に沿って試験を選ぶ。
 
+- たとえば、端末で始めた作業をスマートフォンから続けるなら、端末で作業を開始して開いたままにする。試験用サーバーが自分で作業を開始すると、誰に書き込み権があるかという条件が変わる。
 - まず、利用者がどの表示や応答を見て次に何をするかを一往復たどる。正解が分かる比較相手を決める。例として、画面に表示された順序なら上流が受け付けた記録の順序と比べる。
 - 結果が間違っていても成功に見える瞬間を探す。境界の片方だけを遅らせる、操作の順を入れ替えるなど、実際に判断を変える条件だけ選ぶ。最後に追いついたかに加えて、途中で何が見えれば失敗かを書く。失敗とする根拠はBriefや合意した振る舞いに求める。計画で独自の合格条件を足さない。
 - どこまで既存の自動試験で見え、どこから提出候補の実機が要るかを決める。人が必要な場面は専用環境と観測方法を先に準備し、本人の都合で実行できるようにする。実装中の確認と提出版の検収を区別する。

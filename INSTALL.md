@@ -29,7 +29,7 @@ git -C "$project" status --short
 | `.pdh-install.lock` | 配布元の版と導入ファイルの記録 |
 | `product-brief.md`、`tickets/`、`scripts/test-all.sh` | 製品側で管理する目的・チケット・通常試験 |
 
-配布元の開発用テストや GitHub coding-bot の原本も `pdh/` に含まれる。製品で bot を有効化する手順は [bot の導入ガイド](github-bot/INSTALL.md) にある。
+配布元の開発用テストや GitHub coding-bot の原本も `pdh/` に含まれる。この版のインストーラーは新規プロジェクトに bot を設定しない。導入済みの stage 版 bot の保守範囲と対応版は [bot のガイド](github-bot/INSTALL.md) にある。
 
 ## 既知の移行手順
 

@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, TemporaryFile
 import unittest
 from unittest.mock import patch
 
@@ -107,6 +107,9 @@ class CodexJudgeTest(unittest.TestCase):
                 )
 
             with (
+                TemporaryFile() as schema_file,
+                patch.object(codex.os, "memfd_create", create=True,
+                             side_effect=lambda name: os.dup(schema_file.fileno())),
                 patch.object(codex.Path, "home", return_value=home),
                 patch.object(codex, "_codex_binary", return_value=Path("/native/codex")),
                 patch.object(codex.shutil, "which", return_value="/usr/bin/bwrap"),
